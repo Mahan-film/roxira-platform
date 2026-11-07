@@ -53,10 +53,25 @@ export interface NewGoodsReceiptLine {
   fifoBatchId: number | null;
 }
 
-const NUMBER_TABLE: Record<'PR' | 'PO' | 'GR', string> = {
+/** Facts of a receipt line needed by the supplier-invoice match: which order, what arrived, PO price. */
+export interface ReceiptLineForInvoice {
+  receiptLineId: string;
+  receiptId: string;
+  orderId: string;
+  sku: string;
+  /** Quantity on the receipt line, hundredths of a unit. */
+  receivedQuantity: bigint;
+  /** PO price of the matching order line, minor units per whole unit. */
+  orderUnitPrice: bigint;
+}
+
+export type PurchaseDocumentPrefix = 'PR' | 'PO' | 'GR' | 'SI';
+
+const NUMBER_TABLE: Record<PurchaseDocumentPrefix, string> = {
   PR: 'erp_purchase_requests',
   PO: 'erp_purchase_orders',
   GR: 'erp_goods_receipts',
+  SI: 'erp_supplier_invoices',
 };
 
 function text(value: unknown): string {
@@ -232,7 +247,7 @@ export class PurchaseRepository {
    * Next document number for the tenant and prefix. The transaction-scoped advisory lock serialises
    * concurrent callers for the same tenant/prefix, so `count(*) + 1` cannot hand out the same number.
    */
-  async nextNumber(tenantId: string, prefix: 'PR' | 'PO' | 'GR', manager: EntityManager): Promise<string> {
+  async nextNumber(tenantId: string, prefix: PurchaseDocumentPrefix, manager: EntityManager): Promise<string> {
     await manager.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`${tenantId}:${prefix}`]);
     const table = NUMBER_TABLE[prefix];
     const rows: Row[] = await manager.query(
@@ -534,6 +549,43 @@ export class PurchaseRepository {
       `UPDATE "erp_goods_receipts" SET "journal_entry_id" = $1 WHERE "tenant_id" = $2 AND "id" = $3`,
       [journalEntryId, tenantId, id],
     );
+  }
+
+  /**
+   * A receipt line with the order it belongs to and the PO price of its order line, for the supplier
+   * invoice match. Returns null when the line does not exist in the tenant.
+   */
+  async findReceiptLineForInvoice(
+    tenantId: string,
+    receiptLineId: string,
+    manager: EntityManager,
+  ): Promise<ReceiptLineForInvoice | null> {
+    const rows: Row[] = await manager.query(
+      `SELECT rl."id" AS receipt_line_id,
+              rl."receipt_id" AS receipt_id,
+              r."order_id" AS order_id,
+              rl."sku" AS sku,
+              rl."quantity" AS quantity,
+              ol."unit_price" AS unit_price
+         FROM "erp_goods_receipt_lines" rl
+         JOIN "erp_goods_receipts" r
+           ON r."id" = rl."receipt_id" AND r."tenant_id" = rl."tenant_id"
+         JOIN "erp_purchase_order_lines" ol
+           ON ol."id" = rl."order_line_id" AND ol."tenant_id" = rl."tenant_id"
+          AND ol."order_id" = r."order_id"
+        WHERE rl."tenant_id" = $1 AND rl."id" = $2`,
+      [tenantId, receiptLineId],
+    );
+    if (!rows[0]) return null;
+    const row = rows[0];
+    return {
+      receiptLineId: text(row.receipt_line_id),
+      receiptId: text(row.receipt_id),
+      orderId: text(row.order_id),
+      sku: text(row.sku),
+      receivedQuantity: toBigInt(row.quantity),
+      orderUnitPrice: toBigInt(row.unit_price),
+    };
   }
 
   private async withLines(tenantId: string, row: Row, manager: EntityManager): Promise<GoodsReceipt> {

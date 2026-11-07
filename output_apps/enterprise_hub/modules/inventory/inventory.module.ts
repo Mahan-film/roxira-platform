@@ -10,6 +10,9 @@ import { StockReportsController } from './controllers/stock-reports.controller';
 import { PurchaseController } from './purchasing/purchase.controller';
 import { PurchaseCycleService } from './purchasing/purchase-cycle.service';
 import { PurchaseRepository } from './purchasing/purchase.repository';
+import { SupplierInvoiceController } from './purchasing/supplier-invoice.controller';
+import { SupplierInvoiceService } from './purchasing/supplier-invoice.service';
+import { SupplierInvoiceRepository } from './purchasing/supplier-invoice.repository';
 import { StoresController } from './controllers/stores.controller';
 import { StockDocumentEntity, StockDocumentLineEntity } from './entities/stock-document.entity';
 import { StoreEntity } from './entities/store.entity';
@@ -60,6 +63,7 @@ import { InventoryService } from './services/inventory.service';
     OpeningBalanceController,
     StockReportsController,
     PurchaseController,
+    SupplierInvoiceController,
   ],
   providers: [
     InventoryService,
@@ -71,6 +75,8 @@ import { InventoryService } from './services/inventory.service';
     StockReportService,
     PurchaseCycleService,
     PurchaseRepository,
+    SupplierInvoiceService,
+    SupplierInvoiceRepository,
     TenantScope,
   ],
   exports: [
@@ -80,6 +86,8 @@ import { InventoryService } from './services/inventory.service';
     StockDocumentsRepository,
     PurchaseCycleService,
     PurchaseRepository,
+    SupplierInvoiceService,
+    SupplierInvoiceRepository,
   ],
 })
 export class InventoryModule {}
