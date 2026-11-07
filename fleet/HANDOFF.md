@@ -1,5 +1,20 @@
 # Coordinator handoff (read first after any compaction or new session)
 
+## Current state 11-07 05:50 Tehran: read this first
+Done: M1 on main and gate passed (end condition 2). Merged this round: #515 #524 #530 #531 #534 #537 #539 #541 #544 #545 #550 #552 #554 #557 #559.
+Running, not reviewed: OpenCode builds, logs `_fleet/oc-561-asset-disposal.log` and `oc-563-t1-invoice-from-delivery.log`; PRs #562 and #564. On finish: read the whole diff, fix, `git add` in the worktree, `push.sh`, `gh pr ready`, CI, `review.sh N --post`, `merge-loop.sh N`.
+Note: OPENROUTER_API_KEY_AGENTS returned 403 for DeepSeek on 11-07; both builds fell to gateway rungs. Investigate (cap or location), names only.
+Next, in order:
+1. T1 slices 5-6, T2 slices 3-6: read `gh issue view 227`; use `_fleet/oc.sh`, DeepSeek first.
+2. Hotspot nav via `.hotspot-lock` in `frontend/src/lib/nav-menu.ts`: /app/accounting/recurring-vouchers, /app/contracting. Test lines: sales-invoice, contracting-ui.
+3. #555 final voucher number: confirm legal text in docs/legal_sources first.
+4. #230 per `_fleet/AUDIT_230.md`: combined report, report builder, trial balance by cost centre UI, property tests; tick items that fully meet the standard.
+5. #475 RLS batches with non-superuser pg specs; #500 quantity scale; print forms #256 #258-#262; design #526 #535 #518 #519; #440; #301; #560 list; #248; #296; #548.
+6. Tour rehearsal locally; then the owner runs it on roxira.ir; then write DONE on #227.
+Wait for owner Deep Research: budgets, approvals, access model. Keep rules behind tenant settings with safe defaults. The owner gets research prompts as text in chat and sends results; check results against code.
+Owner may still run on the Mac: `claude auth login`, Remote Login, public key; none confirmed. Never raise hosting or internet topics.
+Style: reply in Persian, short. Do not reply to interim agent notices. Keep agents Haiku unless hard; retire above 150k tokens. Keep report on #227 twice daily.
+
 Repo: Mahan-film/roxira-platform. Laptop WSL. Owner replies in Persian. Owner gave full authority for this push.
 Owner's rules that stand: never print or commit a key; no customer data to free models; lowest cost; no new server.
 My own limits regardless of authority: no account creation on production, no permanent deletes of user files.
