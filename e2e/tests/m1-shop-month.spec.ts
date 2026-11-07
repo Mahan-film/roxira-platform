@@ -17,6 +17,7 @@ import {
   toRial,
 } from './m1/fixture-data';
 import { T1_GATE } from './m1/sales-cycle-expected';
+import { T2_GATE } from './m1/purchase-cycle-expected';
 import { apiGet, apiPost, apiPut, importFile, issueAndWait, payAndWait, persianise, rials } from './m1/import-ui';
 
 /**
@@ -1663,5 +1664,208 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
       `accounting/reports/ledger?accountCode=1201&partyCode=${T1_GATE.partyCode}&from=2026-03-21&to=2027-03-20`,
     );
     expect(rials(ledger.closing), 'the customer owes 5,500,000 in the party ledger').toBe(T1_GATE.customerBalance);
+  });
+
+  // ---- Purchase cycle gate (#227 T2): PO -> 2 receipts -> invoice with a price difference -> late freight ----
+  // Hand numbers in m1/purchase-cycle-expected.ts. The purchasing API counts in hundredths ("minor units").
+  const t2 = {
+    warehouseId: 0,
+    itemId: 0,
+    orderId: '',
+    orderLineId: '',
+    receipt1: { id: '', lineId: '' },
+    receipt2: { id: '', lineId: '' },
+    accountsBefore: [] as Array<{ code: string; balance: number | string }>,
+  };
+  const PURCHASING = 'inventory/purchasing';
+  /** Whole rials of a minor-unit string such as "300000000". */
+  const fromMinor = (text: string): bigint => {
+    const value = BigInt(text);
+    expect(value % 100n, `${text} is whole rials`).toBe(0n);
+    return value / 100n;
+  };
+  /** Non-zero amounts of one side of a voucher, ascending, whatever the account codes are. */
+  const sideAmounts = (lines: VoucherLine[], side: 'debit' | 'credit'): bigint[] =>
+    lines
+      .map((l) => rials(l[side]))
+      .filter((amount) => amount !== 0n)
+      .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  const layersOf = (page: Page) =>
+    apiGet<Array<{ quantityRemaining: number; unitPurchaseCost: number; remainingValue: number }>>(
+      page,
+      `inventory/items/${T2_GATE.sku}/batches`,
+    );
+
+  test('23 purchase cycle: supplier, item, tolerance setting and an approved order [E2]', async ({ page }) => {
+    await loginAsTestTenant(page, '/app/invoicing');
+    await apiPost(page, 'parties', { code: T2_GATE.supplierCode, name: 'تأمین‌کننده آزمون چرخه خرید', role: 'supplier' });
+    const warehouse = await apiPost<{ id: number }>(page, 'inventory/warehouses', {
+      name: 'انبار آزمون چرخه خرید',
+      locationCode: 'T2-GATE-W',
+    });
+    t2.warehouseId = Number(warehouse.id);
+    const item = await apiPost<{ id: number }>(page, 'inventory/items', {
+      sku: T2_GATE.sku,
+      barcode: T2_GATE.barcode,
+      name: 'کالای آزمون چرخه خرید',
+    });
+    t2.itemId = Number(item.id);
+    const settings = await apiPut<{ priceToleranceBp: number }>(page, `${PURCHASING}/settings`, { priceToleranceBp: 500 });
+    expect(settings.priceToleranceBp, 'a price difference of up to 5% is accepted without a reviewer').toBe(500);
+    t2.accountsBefore = await apiGet(page, 'accounting/accounts');
+
+    const order = await apiPost<{ id: string; status: string; lines: Array<{ id: string }> }>(page, `${PURCHASING}/orders`, {
+      supplierCode: T2_GATE.supplierCode,
+      warehouseId: t2.warehouseId,
+      orderDate: '2026-05-01',
+      lines: [{ sku: T2_GATE.sku, quantity: T2_GATE.orderQuantity, unitPrice: T2_GATE.unitPrice }],
+    });
+    t2.orderId = order.id;
+    t2.orderLineId = order.lines[0].id;
+    const approved = await apiPost<{ status: string }>(page, `${PURCHASING}/orders/${t2.orderId}/approve`, {});
+    expect(approved.status).toBe('APPROVED');
+  });
+
+  test('24 purchase cycle: receipt 1 of 60 units, then 20 sold from its FIFO layer [E2]', async ({ page }) => {
+    await loginAsTestTenant(page, '/app/invoicing');
+    const receipt = await apiPost<{ id: string; totalValue: string; journalEntryId: string; lines: Array<{ id: string; unitCost: string }> }>(
+      page,
+      `${PURCHASING}/orders/${t2.orderId}/receipts`,
+      {
+        receivedAt: '2026-05-03T09:00:00.000Z',
+        idempotencyKey: 't2-gate-r1',
+        lines: [{ orderLineId: t2.orderLineId, quantity: T2_GATE.receipt1.quantity }],
+      },
+    );
+    t2.receipt1 = { id: receipt.id, lineId: receipt.lines[0].id };
+    expect(fromMinor(receipt.totalValue), '60 x 50,000').toBe(T2_GATE.receipt1.value);
+    const voucher = await journalVoucher(page, Number(receipt.journalEntryId));
+    expect(debitOf(voucher.lines, '1301'), 'stock in at the order price').toBe(T2_GATE.receipt1.value);
+    expect(sideAmounts(voucher.lines, 'credit'), 'goods received not invoiced').toEqual([T2_GATE.receipt1.value]);
+
+    // Sell 20 units through the sales cycle so the delivery books their cost from layer 1.
+    const sale = await apiPost<{ id: number; lines: Array<{ id: number }> }>(page, 'sales/orders', {
+      partyCode: T1_GATE.partyCode,
+      warehouseId: t2.warehouseId,
+      orderDate: '2026-05-03',
+      lines: [{ itemId: t2.itemId, quantity: T2_GATE.sale.quantity, unitPrice: T2_GATE.sale.unitPrice }],
+    });
+    await apiPost(page, `sales/orders/${sale.id}/confirm`, {});
+    const delivery = await apiPost<{ totalCost: number | string }>(
+      page,
+      `sales/orders/${sale.id}/deliveries`,
+      {
+        deliveryDate: '2026-05-03',
+        idempotencyKey: 't2-gate-sale',
+        lines: [{ orderLineId: sale.lines[0].id, quantity: T2_GATE.sale.quantity }],
+      },
+      200,
+    );
+    expect(rials(delivery.totalCost), '20 x 50,000 from layer 1').toBe(T2_GATE.sale.cost);
+    const [layer] = await layersOf(page);
+    expect(layer, 'layer 1 keeps 40 of its 60 units').toMatchObject({ quantityRemaining: 40, unitPurchaseCost: 50_000 });
+  });
+
+  test('25 purchase cycle: receipt 2 of 40 units opens a second layer; the order is fully received [E2]', async ({ page }) => {
+    await loginAsTestTenant(page, '/app/invoicing');
+    const receipt = await apiPost<{ id: string; totalValue: string; lines: Array<{ id: string }> }>(
+      page,
+      `${PURCHASING}/orders/${t2.orderId}/receipts`,
+      {
+        receivedAt: '2026-05-04T09:00:00.000Z',
+        idempotencyKey: 't2-gate-r2',
+        lines: [{ orderLineId: t2.orderLineId, quantity: T2_GATE.receipt2.quantity }],
+      },
+    );
+    t2.receipt2 = { id: receipt.id, lineId: receipt.lines[0].id };
+    expect(fromMinor(receipt.totalValue), '40 x 50,000').toBe(T2_GATE.receipt2.value);
+    const order = await apiGet<{ lines: Array<{ receivedQuantity: string }> }>(page, `${PURCHASING}/orders/${t2.orderId}`);
+    expect(order.lines[0].receivedQuantity, '100.00 received in two parts').toBe('10000');
+    const layers = await layersOf(page);
+    expect(layers.map((l) => [l.quantityRemaining, l.unitPurchaseCost])).toEqual([
+      [40, 50_000],
+      [40, 50_000],
+    ]);
+  });
+
+  test('26 purchase cycle: invoice with a 2% price difference posts the variance; a mismatch is held [E2]', async ({ page }) => {
+    await loginAsTestTenant(page, '/app/invoicing');
+    const invoice = await apiPost<{
+      id: string;
+      status: string;
+      subtotal: string;
+      vat: string;
+      total: string;
+      lines: Array<{ matchStatus: string; priceDifference: string }>;
+    }>(page, `${PURCHASING}/orders/${t2.orderId}/invoices`, {
+      supplierRef: 'T2-GATE-SUP-INV-1',
+      invoiceDate: '2026-05-06',
+      vat: '50600000',
+      lines: [
+        { receiptLineId: t2.receipt1.lineId, quantity: T2_GATE.receipt1.quantity, unitPrice: T2_GATE.invoice.receipt1UnitPrice },
+        { receiptLineId: t2.receipt2.lineId, quantity: T2_GATE.receipt2.quantity, unitPrice: T2_GATE.invoice.receipt2UnitPrice },
+      ],
+    });
+    expect(invoice.status, 'inside the tolerance: matched without a reviewer').toBe('MATCHED');
+    expect(invoice.lines.map((l) => fromMinor(l.priceDifference)), 'the 2% is on receipt 1 only').toEqual([T2_GATE.invoice.variance, 0n]);
+    expect(fromMinor(invoice.subtotal)).toBe(T2_GATE.invoice.subtotal);
+    expect(fromMinor(invoice.total)).toBe(T2_GATE.invoice.payable);
+
+    const posted = await apiPost<{ status: string; journalEntryId: string }>(page, `${PURCHASING}/invoices/${invoice.id}/post`, {});
+    expect(posted.status).toBe('POSTED');
+    const voucher = await journalVoucher(page, Number(posted.journalEntryId));
+    test.info().annotations.push({ type: 'voucher', description: `T2 invoice: ${voucherLineText(voucher)}` });
+    expect(sideAmounts(voucher.lines, 'debit'), 'GRNI 5,000,000, variance 60,000, VAT 506,000').toEqual([
+      T2_GATE.invoice.variance,
+      T2_GATE.invoice.vat,
+      T2_GATE.invoice.grni,
+    ]);
+    expect(creditOf(voucher.lines, '2101'), 'supplier payable').toBe(T2_GATE.invoice.payable);
+
+    // A second bill for a unit that was already invoiced does not match: held, not postable, and the creator cannot accept it.
+    const held = await apiPost<{ id: string; status: string }>(page, `${PURCHASING}/orders/${t2.orderId}/invoices`, {
+      supplierRef: 'T2-GATE-SUP-INV-2',
+      invoiceDate: '2026-05-07',
+      lines: [{ receiptLineId: t2.receipt2.lineId, quantity: '100', unitPrice: T2_GATE.invoice.receipt2UnitPrice }],
+    });
+    expect(held.status, 'more than was received and not yet invoiced').toBe('HELD');
+    await apiPost(page, `${PURCHASING}/invoices/${held.id}/post`, {}, 409);
+    await apiPost(page, `${PURCHASING}/invoices/${held.id}/accept`, { note: 'checked with the supplier' }, 403);
+  });
+
+  test('27 purchase cycle: late freight splits between the FIFO layer and cost of goods sold [E2]', async ({ page }) => {
+    await loginAsTestTenant(page, '/app/invoicing');
+    const landed = await apiPost<{
+      inventoryAmount: string;
+      cogsAmount: string;
+      journalEntryId: string;
+      allocations: Array<{ toInventory: string; toCogs: string }>;
+    }>(page, `${PURCHASING}/receipts/${t2.receipt1.id}/landed-costs`, {
+      category: 'FREIGHT',
+      amount: `${T2_GATE.freight.amount * 100n}`,
+      basis: 'VALUE',
+      date: '2026-05-09',
+      supplierCode: T2_GATE.supplierCode,
+      reference: 'T2-GATE-WAYBILL-1',
+      idempotencyKey: 't2-gate-freight',
+    });
+    expect(fromMinor(landed.inventoryAmount), '40 of 60 units are still on hand').toBe(T2_GATE.freight.toInventory);
+    expect(fromMinor(landed.cogsAmount), '20 of 60 units were already sold').toBe(T2_GATE.freight.toCogs);
+    const voucher = await journalVoucher(page, Number(landed.journalEntryId));
+    expect(debitOf(voucher.lines, '1301'), 'into stock').toBe(T2_GATE.freight.toInventory);
+    expect(debitOf(voucher.lines, '5101'), 'into cost of goods sold').toBe(T2_GATE.freight.toCogs);
+    expect(creditOf(voucher.lines, '2101'), 'owed to the supplier').toBe(T2_GATE.freight.amount);
+
+    const layers = await layersOf(page);
+    expect(layers.map((l) => [l.quantityRemaining, l.unitPurchaseCost, BigInt(Math.round(l.remainingValue))])).toEqual([
+      [T2_GATE.layer1.quantity, T2_GATE.layer1.unitCost, T2_GATE.layer1.value],
+      [T2_GATE.layer2.quantity, T2_GATE.layer2.unitCost, T2_GATE.layer2.value],
+    ]);
+
+    const after = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
+    const moved = (code: string) => balanceOf(after, code) - balanceOf(t2.accountsBefore, code);
+    expect(moved('1301'), 'stock 3,000,000 + 2,000,000 - 1,000,000 + 600,000 = the two layers').toBe(T2_GATE.stockDelta);
+    expect(moved('5101'), 'cost of goods sold 1,000,000 + 300,000').toBe(T2_GATE.cogsDelta);
+    expect(moved('2101'), 'payable (credit) 5,566,000 + 900,000').toBe(T2_GATE.payableDelta);
   });
 });
