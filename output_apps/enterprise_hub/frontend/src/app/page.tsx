@@ -139,12 +139,12 @@ export default function HomePage() {
               ROXIRA
             </span>
             <h1 className="mt-6 max-w-3xl text-3xl font-black leading-tight text-white sm:text-4xl">
-              نرم‌افزار ماژولار مدیریت کسب‌وکار؛ هر ماژول را جداگانه بخرید
+              نرم‌افزار مدیریت کسب‌وکار
             </h1>
             <p className="mt-5 max-w-2xl text-sm leading-relaxed text-slate-400">
               حسابداری، صورتحساب و مالیات، انبار، منابع انسانی و CRM در یک مجموعه یکپارچه.
-              فقط ماژول‌هایی را که نیاز دارید فعال می‌کنید و هر زمان بخواهید ماژول بعدی را
-              اضافه می‌کنید. همه ماژول‌ها اکنون در نسخه آزمایشی قابل بررسی هستند.
+              داده‌ها بین بخش‌ها مشترک است و هر بخش را می‌توان جدا فعال کرد. این نرم‌افزار
+              اکنون در نسخه آزمایشی است.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link
