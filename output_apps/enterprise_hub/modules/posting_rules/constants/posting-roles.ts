@@ -40,6 +40,9 @@ export const POSTING_ROLES = {
   advance_received: { label: 'پیش‌دریافت قرارداد', types: [AccountType.LIABILITY] },
   advance_paid: { label: 'پیش‌پرداخت قرارداد', types: [AccountType.ASSET] },
   contract_insurance_expense: { label: 'هزینه بیمه کسرشده از صورت وضعیت', types: [AccountType.EXPENSE] },
+  fixed_asset: { label: 'دارایی ثابت', types: [AccountType.ASSET] },
+  asset_disposal_gain: { label: 'سود حاصل از فروش دارایی', types: [AccountType.REVENUE] },
+  asset_disposal_loss: { label: 'زیان حاصل از فروش دارایی', types: [AccountType.EXPENSE] },
 } as const;
 
 export type PostingRole = keyof typeof POSTING_ROLES;
@@ -84,4 +87,7 @@ export const DEFAULT_ROLE_ACCOUNTS: Readonly<Partial<Record<PostingRole, string>
   income_tax_payable: '2021',
   opening_equity: '3030',
   stock_adjustment: '5030',
+  fixed_asset: '1110',
+  asset_disposal_gain: '4050',
+  asset_disposal_loss: '5070',
 };

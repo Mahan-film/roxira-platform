@@ -181,6 +181,22 @@ export const POSTING_TEMPLATES: readonly PostingTemplate[] = [
     amounts: ['charge'],
     lines: [dr('depreciation_expense', 'charge', 'هزینه استهلاک'), cr('accumulated_depreciation', 'charge', 'استهلاک انباشته')],
   },
+  // #561: sale of one fixed asset. The engine drops zero lines, so exactly one of gain/loss
+  // (or neither when proceeds equal the book value) reaches the voucher. Balance:
+  // accumulated + proceeds + loss = cost + gain, with loss = cost - accumulated - proceeds
+  // and gain = proceeds - (cost - accumulated).
+  {
+    docType: 'fixed_asset.disposal',
+    title: 'فروش دارایی ثابت',
+    amounts: ['cost', 'accumulated', 'proceeds', 'gain', 'loss'],
+    lines: [
+      dr('accumulated_depreciation', 'accumulated', 'استهلاک انباشته دارایی فروش‌رفته'),
+      dr('counter', 'proceeds', 'عواید فروش دارایی'),
+      cr('fixed_asset', 'cost', 'بهای تمام‌شده دارایی فروش‌رفته'),
+      cr('asset_disposal_gain', 'gain', 'سود فروش دارایی'),
+      dr('asset_disposal_loss', 'loss', 'زیان فروش دارایی'),
+    ],
+  },
   {
     docType: 'purchase.receipt',
     title: 'رسید کالا (بدون صورتحساب)',

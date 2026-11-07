@@ -66,6 +66,15 @@ export class FixedAssetEntity {
   @Column({ type: 'varchar', length: 20, default: 'ACTIVE' })
   status: 'ACTIVE' | 'FULLY_DEPRECIATED' | 'DISPOSED';
 
+  @Column({ type: 'date', name: 'disposal_date', nullable: true })
+  disposalDate: string | null;
+
+  @Column({ type: 'numeric', precision: 18, scale: 2, name: 'disposal_proceeds', nullable: true })
+  disposalProceeds: string | null;
+
+  @Column({ type: 'integer', name: 'disposal_journal_entry_id', nullable: true })
+  disposalJournalEntryId: number | null;
+
   @Column({ type: 'varchar', length: 64, name: 'created_by' })
   createdBy: string;
 

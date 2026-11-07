@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { CreateFixedAssetDto, DepreciationRunDto } from '../dto/fixed-asset.dto';
+import { CreateFixedAssetDto, DepreciationRunDto, DisposeFixedAssetDto } from '../dto/fixed-asset.dto';
 import { assetRegister, depreciationSchedule } from '../assets/asset-register';
 import { nextMonthCharge, periodIndex } from '../assets/depreciation';
 import { FixedAssetEntity } from '../entities/fixed-asset.entity';
@@ -7,6 +7,7 @@ import { AccountLevel } from '../enums/accounting.enum';
 import { fromDb, minorToDecimal, MoneyFormatError, toMinor } from '../money';
 import { AccountingRepository } from '../repositories/accounting.repository';
 import { FixedAssetRepository } from '../repositories/fixed-asset.repository';
+import { LockedPeriodError, PeriodLockedException } from '../exceptions/ledger.exceptions';
 import { gregorianToJalali, isoDate, jalaliMonthEnd } from '../../hr/services/jalali-period';
 import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
 
@@ -24,12 +25,29 @@ export interface DepreciationRunResult {
   skipped: Array<{ code: string; reason: 'ALREADY_DONE' | 'NOT_ACQUIRED_YET' | 'PREVIOUS_MONTH_MISSING' }>;
 }
 
+/** The numbers a disposal posted; exactly one of gain and loss is non-zero. */
+export interface FixedAssetDisposalResult {
+  id: number;
+  code: string;
+  name: string;
+  status: 'DISPOSED';
+  date: string;
+  cost: string;
+  accumulatedDepreciation: string;
+  netBookValue: string;
+  proceeds: string;
+  gain: string;
+  loss: string;
+  journalEntryId: number;
+  journalEntryNumber: string;
+}
+
 /**
  * Posting port. PostingRulesModule imports AccountingModule, so AccountingModule cannot import it
  * back; the engine is looked up lazily through ModuleRef (see accounting.module.ts).
  */
 export const FIXED_ASSET_POSTING = Symbol('FIXED_ASSET_POSTING');
-export type FixedAssetPosting = Pick<PostingRulesService, 'post'>;
+export type FixedAssetPosting = Pick<PostingRulesService, 'post' | 'accountForRole'>;
 
 const realDay = (day: string): void => {
   const parsed = new Date(`${day}T00:00:00.000Z`);
@@ -218,6 +236,103 @@ export class FixedAssetService {
   /** The register (#250): every asset of the tenant with cost, accumulated depreciation and book value. */
   async register(tenantId: string) {
     return assetRegister(await this.assets.list(tenantId));
+  }
+
+  /**
+   * Sells one asset out of the books. One tenant transaction holds the row locked, so a disposal
+   * and a depreciation run of the same asset serialise. The refusal rules: an already disposed
+   * asset (409), a day inside a locked period or a closed fiscal year (the existing 423 of the
+   * ledger), and a day before the newest posted depreciation run of the asset. The accumulated
+   * depreciation is summed from the POSTED runs only, never from the running column. The engine
+   * posts one voucher whose source is the asset id, so the same disposal cannot post twice.
+   */
+  async dispose(tenantId: string, id: number, dto: DisposeFixedAssetDto): Promise<FixedAssetDisposalResult> {
+    realDay(dto.date);
+    if ((dto.cashAccountRole != null) === (dto.settlementAccountCode != null)) {
+      throw new BadRequestException('دقیقاً یکی از نقش حساب تسویه یا کد حساب تسویه را انتخاب کنید.');
+    }
+    let proceeds: bigint;
+    try {
+      proceeds = toMinor(dto.proceeds);
+    } catch (error) {
+      if (error instanceof MoneyFormatError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
+    if (proceeds < 0n) {
+      throw new BadRequestException('عواید فروش نمی‌تواند منفی باشد.');
+    }
+    return this.assets.scoped(tenantId, async (manager) => {
+      const asset = await this.assets.lockById(tenantId, id, manager);
+      if (!asset) {
+        throw new NotFoundException('دارایی یافت نشد.');
+      }
+      if (asset.status === 'DISPOSED') {
+        throw new ConflictException('این دارایی قبلاً فروش رفته است.');
+      }
+      try {
+        await this.ledger.assertDateOpen(tenantId, new Date(`${dto.date}T00:00:00.000Z`), manager);
+      } catch (error) {
+        if (error instanceof LockedPeriodError) {
+          throw new PeriodLockedException(
+            `فروش دارایی مجاز نیست: تاریخ ${error.date} در دورهٔ قفل‌شده یا سال مالی بسته قرار دارد.`,
+          );
+        }
+        throw error;
+      }
+      const lastPosted = await this.assets.lastPostedDepreciationDate(tenantId, id, manager);
+      if (lastPosted && dto.date < lastPosted) {
+        throw new BadRequestException(`تاریخ فروش نمی‌تواند پیش از آخرین سند استهلاک ثبت‌شده (${lastPosted}) باشد.`);
+      }
+      const settlement = dto.settlementAccountCode ?? (await this.posting.accountForRole(tenantId, dto.cashAccountRole!));
+      if (!settlement) {
+        throw new BadRequestException('حساب تسویه تعیین نشده است؛ نقش آن را در تنظیمات ثبت خودکار نگاشت کنید.');
+      }
+      const cost = fromDb(asset.cost);
+      const accumulated = await this.assets.postedAccumulated(tenantId, id, manager);
+      const bookValue = cost - accumulated;
+      const gain = proceeds > bookValue ? proceeds - bookValue : 0n;
+      const loss = proceeds < bookValue ? bookValue - proceeds : 0n;
+      const voucher = await this.posting.post(
+        tenantId,
+        {
+          docType: 'fixed_asset.disposal',
+          sourceType: 'fixed_asset_disposal',
+          sourceId: String(asset.id),
+          date: dto.date,
+          amounts: { cost, accumulated, proceeds, gain, loss },
+          description: `فروش دارایی ثابت ${asset.code}${dto.note?.trim() ? ` — ${dto.note.trim()}` : ''}`,
+          overrides: {
+            accumulated_depreciation: asset.accumulatedAccountCode,
+            fixed_asset: asset.assetAccountCode,
+            counter: settlement,
+          },
+        },
+        manager,
+      );
+      await this.assets.markDisposed(
+        tenantId,
+        asset,
+        { disposalDate: dto.date, disposalProceeds: minorToDecimal(proceeds), journalEntryId: voucher.entryId },
+        manager,
+      );
+      return {
+        id: asset.id,
+        code: asset.code,
+        name: asset.name,
+        status: 'DISPOSED',
+        date: dto.date,
+        cost: minorToDecimal(cost),
+        accumulatedDepreciation: minorToDecimal(accumulated),
+        netBookValue: minorToDecimal(bookValue),
+        proceeds: minorToDecimal(proceeds),
+        gain: minorToDecimal(gain),
+        loss: minorToDecimal(loss),
+        journalEntryId: voucher.entryId,
+        journalEntryNumber: voucher.entryNumber,
+      };
+    });
   }
 
   /** The month-by-month plan of one asset, from its running totals. */

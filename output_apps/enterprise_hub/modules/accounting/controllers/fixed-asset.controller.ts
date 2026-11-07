@@ -1,11 +1,11 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AccessAction, AccessModule } from '../../access/catalogue';
 import { ModuleAccess, RequireAction } from '../../access/decorators';
 import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
 import { requireTenantId } from '../../tenants/tenant-context';
 import { assetRegisterTable, depreciationScheduleTable } from '../assets/asset-register';
-import { CreateFixedAssetDto, DepreciationRunDto, FixedAssetReportQueryDto } from '../dto/fixed-asset.dto';
+import { CreateFixedAssetDto, DepreciationRunDto, DisposeFixedAssetDto, FixedAssetReportQueryDto } from '../dto/fixed-asset.dto';
 import { jalali } from '../reports/report-tables';
 import { FixedAssetService } from '../services/fixed-asset.service';
 import { moneyJson } from '../services/financial-reports.service';
@@ -85,5 +85,20 @@ export class FixedAssetController {
   @ApiResponse({ status: 423, description: 'دوره قفل است' })
   run(@Req() request: AuthenticatedRequest, @Body() dto: DepreciationRunDto) {
     return this.assets.runMonth(requireTenantId(request), dto);
+  }
+
+  @RequireAction(AccessAction.POST)
+  @Post(':id/dispose')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'فروش دارایی ثابت',
+    description:
+      'بهای تمام‌شده، استهلاک انباشته سندهای ثبت‌شده و عواید فروش در یک سند تراز ثبت می‌شود؛ سود یا زیان فروش خودکار محاسبه می‌شود.',
+  })
+  @ApiResponse({ status: HttpStatus.OK })
+  @ApiResponse({ status: HttpStatus.CONFLICT, description: 'دارایی قبلاً فروش رفته است' })
+  @ApiResponse({ status: 423, description: 'دوره قفل است یا سال مالی بسته است' })
+  dispose(@Req() request: AuthenticatedRequest, @Param('id', ParseIntPipe) id: number, @Body() dto: DisposeFixedAssetDto) {
+    return this.assets.dispose(requireTenantId(request), id, dto);
   }
 }

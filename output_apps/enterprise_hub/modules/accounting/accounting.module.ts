@@ -103,9 +103,13 @@ import { VoucherToolsService } from './services/voucher-tools.service';
     {
       provide: FIXED_ASSET_POSTING,
       inject: [ModuleRef],
-      useFactory: (ref: ModuleRef): FixedAssetPosting => ({
-        post: (...args) => ref.get(PostingRulesService, { strict: false }).post(...args),
-      }),
+      useFactory: (ref: ModuleRef): FixedAssetPosting => {
+        const engine = () => ref.get(PostingRulesService, { strict: false });
+        return {
+          post: (...args) => engine().post(...args),
+          accountForRole: (...args) => engine().accountForRole(...args),
+        };
+      },
     },
     {
       provide: PETTY_CASH_POSTING,
