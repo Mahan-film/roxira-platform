@@ -69,6 +69,12 @@ test("renders the amount in words", () => {
   assert.equal(data.totalInWords, "یک میلیون و صد هزار");
 });
 
+test("amount in words is built from the integer part of a decimal-string amount", () => {
+  const data = mapChequeToReceiptData(fixture({ amount: "1100000.00" }));
+  assert.equal(data.totalInWords, "یک میلیون و صد هزار");
+  assert.equal(data.total, "۱٬۱۰۰٬۰۰۰");
+});
+
 test("shows the due date in Jalali", () => {
   const data = mapChequeToReceiptData(fixture());
   const row = (data.cheques as Row[])[0];

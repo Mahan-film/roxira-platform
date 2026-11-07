@@ -31,7 +31,7 @@ export function mapChequeToReceiptData(cheque: Cheque): Record<string, unknown> 
     invoiceRefs: "",
     chequeCount: formatNumber(1),
     total: formatNumber(amount),
-    totalInWords: integerToPersianWords(BigInt(Math.round(amount))),
+    totalInWords: integerToPersianWords(BigInt(String(cheque.amount).split(".")[0])),
     currencyLabel: "ریال",
     company: { name: "" },
     isDraft: false,
