@@ -81,3 +81,8 @@ Coordinator session is over 500k tokens, and no tool here can open a new chat. W
 
 ## Research 11-07 (fleet research/ folder; do not re-read whole files, grep the section you need)
 Plan issue #584, cost verdicts in #560. Builds are paid DeepSeek only (OC_ALLOW_FREE=1 restores free). No law found for gapless numbering in docs/legal_sources/iran/aeinnameh-mavad-95-owner-copy.md: never cite Article 95 for it.
+
+## Budget plan 11-07 14:15 Tehran (weekly 82%, resets 11-12 06:00 UTC)
+Merged today besides earlier: #566 #572 #573 #574 #583 #586 (policy settings, /app/settings/policies) #588 (permanent voucher number). Running: Track B print forms #578-#581, #256 rerun.
+Quota rule until reset: no new Claude agents beyond one Haiku at a time; builds through OpenCode only; coordinator wakes rarely. The colleague's account (free from Tuesday 11-10) should open a NEW coordinator session: say "continue", the SessionStart hook points here. That fresh session is far cheaper than this 700k one.
+Next for that session: #584 items 2-9 (group B dual approval, custom roles with salary visibility from the payslip finding, access page, approvals); #230 report items; recurring TZ issue; then #475, #500, design PRs, tour rehearsal, DONE on #227.
