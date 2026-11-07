@@ -367,8 +367,15 @@ export class MoadianService {
   /**
    * ارسال بسته. خطای قابل‌تکرار (شبکه/5xx) دوباره پرتاب می‌شود تا BullMQ با
    * backoff تکرار کند؛ در آخرین تلاش وضعیت ERROR ثبت می‌شود.
+   * از تلاش دوم به بعد، پیش از ارسال دوباره با استعلام بر اساس uid بررسی می‌شود
+   * که آیا بسته قبلاً رسیده است (پاسخ گمشده)؛ در آن صورت فقط وضعیت SENT ثبت و
+   * polling برنامه‌ریزی می‌شود. خطای استعلام هم مثل خطای انتقال رفتار می‌کند.
    */
-  async processSend(data: MoadianJobData, isFinalAttempt: boolean): Promise<MoadianJobOutcome> {
+  async processSend(
+    data: MoadianJobData,
+    isFinalAttempt: boolean,
+    attemptsMade = 0,
+  ): Promise<MoadianJobOutcome> {
     if (!this.isEnabled()) {
       this.logger.warn('Moadian send skipped: MOADIAN_ENABLED is not true.');
       return 'done';
@@ -381,6 +388,21 @@ export class MoadianService {
 
     try {
       const auth = await this.loadAuth(tenantId);
+      if (attemptsMade > 0) {
+        const rows = await this.client.inquiryByUid(auth, [submission.uid]);
+        const known =
+          rows.find((r) => r.uid === submission.uid && r.referenceNumber !== null) ?? null;
+        if (known) {
+          await this.repository.updateSubmission(tenantId, submissionId, {
+            status: MoadianSubmissionStatus.SENT,
+            referenceNumber: known.referenceNumber,
+            sentAt: new Date(),
+            errors: [],
+          });
+          await this.schedulePoll(data, 0);
+          return 'poll';
+        }
+      }
       const result = await this.client.sendInvoice(auth, submission.uid, submission.packet);
       await this.repository.updateSubmission(tenantId, submissionId, {
         status: MoadianSubmissionStatus.SENT,
