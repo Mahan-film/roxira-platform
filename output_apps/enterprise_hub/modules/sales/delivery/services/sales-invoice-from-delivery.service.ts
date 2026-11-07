@@ -6,7 +6,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
-import { fromMinor, parseMinor, parseScaled } from '../../../accounting/money';
+import { fromMinor, Money, parseMinor, parseScaled } from '../../../accounting/money';
 import { Currency } from '../../../currency/enums/currency.enum';
 import { TenantsRepository } from '../../../tenants/repositories/tenants.repository';
 import { CreateInvoiceDto } from '../../../invoicing/dto/create-invoice.dto';
@@ -62,9 +62,15 @@ interface InvoiceSummary {
   id: string;
   taxInvoiceNumber: string;
   status: string;
-  totalAmount: number;
-  totalTax: number;
-  finalPayable: number;
+  totalAmount: Money;
+  totalTax: Money;
+  finalPayable: Money;
+}
+
+/** A stored or fresh money amount as the response carries it: exact, via `money.ts` (no float maths). */
+function moneyOut(value: Money): Money {
+  const text = typeof value === 'number' ? value.toFixed(2) : value;
+  return fromMinor(parseMinor(text));
 }
 
 /** One planned invoice line: a locked delivery line, its quantity, its price and its description. */
@@ -308,9 +314,11 @@ export class SalesInvoiceFromDeliveryService {
       status: String(invoice.status),
       partyCode,
       invoiceDate,
-      totalAmount: invoice.totalAmount,
-      totalTax: invoice.totalTax,
-      finalPayable: invoice.finalPayable,
+      // The stored numeric(18,2) comes back as text on a replay and as a number on a fresh save;
+      // both go through the same exact conversion so the response is identical either way.
+      totalAmount: moneyOut(invoice.totalAmount),
+      totalTax: moneyOut(invoice.totalTax),
+      finalPayable: moneyOut(invoice.finalPayable),
       replayed,
       lines: links.map((link) => this.toLinkResponse(link)),
     };

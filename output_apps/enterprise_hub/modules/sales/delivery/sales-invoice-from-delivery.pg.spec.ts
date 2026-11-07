@@ -229,13 +229,14 @@ describePg('Sales invoice from delivery lines on PostgreSQL (non-superuser, real
       batchNumber: 'L2',
     } as never);
 
-    // Statutory VAT rates of fiscal year 1405: two made-up versions by effective date.
+    // Statutory VAT rates of fiscal year 1405. The migrations seed 0.1 (RATE_SPRING) from the
+    // start of the year; this spec adds one later version (0.08 from 2026-09-23, RATE_AUTUMN) so
+    // that a second invoice date resolves to a different statutory row.
     await owner.query(
       `INSERT INTO statutory_parameters
          (tenant_id, country, fiscal_year, param_key, effective_from, version, value, source, source_kind, verified, created_by)
-       VALUES (NULL, 'IR', 1405, 'vat_general_rate', '2026-03-21', 1, $1::jsonb, 'pg spec', 'REPORT', false, 'spec'),
-              (NULL, 'IR', 1405, 'vat_general_rate', '2026-09-23', 1, $2::jsonb, 'pg spec', 'REPORT', false, 'spec')`,
-      [JSON.stringify(String(RATE_SPRING)), JSON.stringify(String(RATE_AUTUMN))],
+       VALUES (NULL, 'IR', 1405, 'vat_general_rate', '2026-09-23', 1, $1::jsonb, 'pg spec', 'REPORT', false, 'spec')`,
+      [JSON.stringify(String(RATE_AUTUMN))],
     );
 
     // Order O for 10.00 of A at 1,000,000 (the sale price, distinct from the FIFO cost).
@@ -310,18 +311,22 @@ describePg('Sales invoice from delivery lines on PostgreSQL (non-superuser, real
       },
     ]);
 
-    const [row] = await q<Array<Record<string, unknown>>>(
-      `SELECT status, issued_at::text AS issued_at, idempotency_key, total_amount, total_tax, final_payable, items
+    const [row] = await q<Record<string, unknown>>(
+      `SELECT status, issued_at::text AS issued_at, idempotency_key, "totalAmount", "totalTax", "finalPayable", items
          FROM invoices WHERE id = $1 AND tenant_id = $2`,
       [invoice.invoiceId, T1],
     );
     expect(row.status).toBe('ISSUED');
-    // The invoice is dated on the invoice date (Tehran midnight = 20:30 UTC), not on "now"; the
-    // column is a naive timestamp, so the text form is timezone-independent.
-    expect(row.issued_at).toBe('2026-05-03 20:30:00');
+    // The invoice is dated on the invoice date (Tehran midnight), not on "now". The column is a
+    // naive timestamp that node-pg fills with the process's local wall clock, so the expected text
+    // is the local wall clock of that instant (20:30 UTC when the process runs in UTC).
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const wall = (d: Date) =>
+      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    expect(row.issued_at).toBe(wall(new Date('2026-05-04T00:00:00+03:30')));
     expect(row.idempotency_key).toBe('DINV-inv-1');
-    expect(Number(row.total_amount)).toBe(5_000_000);
-    expect(Number(row.final_payable)).toBe(5_500_000);
+    expect(Number(row.totalAmount)).toBe(5_000_000);
+    expect(Number(row.finalPayable)).toBe(5_500_000);
     const invoiceItems = row.items as Array<Record<string, unknown>>;
     expect(invoiceItems.map((item) => [item.description, item.quantity, item.unitPrice, item.vatRate, item.tax])).toEqual([
       ['کالا A', 3, 1_000_000, RATE_SPRING, 300_000],
@@ -330,17 +335,17 @@ describePg('Sales invoice from delivery lines on PostgreSQL (non-superuser, real
     // No stock link: posting must never move stock or post COGS for this invoice.
     expect(invoiceItems.every((item) => item.itemId === null && item.sku === null)).toBe(true);
 
-    const deliveryLines = await scoped<Array<Record<string, string>>>(
+    const deliveryLines = await scoped<Record<string, string>>(
       `SELECT id, invoiced_quantity FROM erp_sales_delivery_lines WHERE tenant_id=$1 AND id = ANY($2::int[]) ORDER BY id`,
       [T1, [deliveryA.lineId, deliveryB.lineId]],
     );
     expect(deliveryLines.map((line) => line.invoiced_quantity)).toEqual(['3.00', '2.00']);
-    const [orderLine] = await scoped<Array<Record<string, string>>>(
+    const [orderLine] = await scoped<Record<string, string>>(
       `SELECT invoiced_quantity FROM erp_sales_order_lines WHERE tenant_id=$1 AND order_id=$2`,
       [T1, orderId],
     );
     expect(orderLine.invoiced_quantity).toBe('5.00');
-    const links = await scoped<Array<Record<string, unknown>>>(
+    const links = await scoped<Record<string, unknown>>(
       `SELECT invoice_id, delivery_line_id, invoice_line_no, quantity
          FROM erp_sales_invoice_delivery_lines WHERE tenant_id=$1 ORDER BY invoice_line_no`,
       [T1],
@@ -352,12 +357,12 @@ describePg('Sales invoice from delivery lines on PostgreSQL (non-superuser, real
   });
 
   it('posting the invoice books revenue and VAT only: no stock movement, no COGS, no stock document', async () => {
-    const [row] = await q<Array<Record<string, string>>>(
+    const [row] = await q<Record<string, string>>(
       `SELECT id, status FROM invoices WHERE tenant_id=$1 AND idempotency_key=$2`,
       [T1, 'DINV-inv-1'],
     );
     await posting.postIssued({ tenantId: T1, invoiceId: row.id, status: 'ISSUED' });
-    const [posted] = await q<Array<Record<string, unknown>>>(
+    const [posted] = await q<Record<string, unknown>>(
       `SELECT journal_entry_id, posting_error, posting_meta FROM invoices WHERE id = $1 AND tenant_id = $2`,
       [row.id, T1],
     );
@@ -374,9 +379,9 @@ describePg('Sales invoice from delivery lines on PostgreSQL (non-superuser, real
       [Number(posted.journal_entry_id)],
     );
     expect(entryLines.map((line) => [line.code, Number(line.debit), Number(line.credit)])).toEqual([
-      ['1201', 5_500_000, 0],
-      ['4101', 0, 5_000_000],
-      ['2301', 0, 500_000],
+      ['1020', 5_500_000, 0],
+      ['4010', 0, 5_000_000],
+      ['2020', 0, 500_000],
     ]);
 
     expect(await qty('A')).toBe(5);
@@ -421,7 +426,7 @@ describePg('Sales invoice from delivery lines on PostgreSQL (non-superuser, real
         deliveryLines: [{ deliveryLineId: deliveryA.lineId, quantity: 2 }],
       }),
     ).rejects.toBeInstanceOf(ConflictException);
-    const lines = await scoped<Array<Record<string, string>>>(
+    const lines = await scoped<Record<string, string>>(
       `SELECT id, invoiced_quantity FROM erp_sales_delivery_lines WHERE tenant_id=$1 AND id = ANY($2::int[]) ORDER BY id`,
       [T1, [deliveryA.lineId, deliveryB.lineId]],
     );
@@ -465,7 +470,7 @@ describePg('Sales invoice from delivery lines on PostgreSQL (non-superuser, real
       ],
     };
     const replay = await invoices.createFromDeliveries(T1, body);
-    const stored = await q<Array<{ id: string }>>(`SELECT id FROM invoices WHERE tenant_id=$1 AND idempotency_key=$2`, [
+    const stored = await q<{ id: string }>(`SELECT id FROM invoices WHERE tenant_id=$1 AND idempotency_key=$2`, [
       T1,
       'DINV-inv-1',
     ]);
@@ -474,7 +479,7 @@ describePg('Sales invoice from delivery lines on PostgreSQL (non-superuser, real
     expect(replay.totalAmount).toBe(5_000_000);
     expect(replay.finalPayable).toBe(5_500_000);
     expect(await invoiceCount()).toBe(1);
-    const lines = await scoped<Array<Record<string, string>>>(
+    const lines = await scoped<Record<string, string>>(
       `SELECT invoiced_quantity FROM erp_sales_delivery_lines WHERE tenant_id=$1 AND id = ANY($2::int[]) ORDER BY id`,
       [T1, [deliveryA.lineId, deliveryB.lineId]],
     );
@@ -499,7 +504,7 @@ describePg('Sales invoice from delivery lines on PostgreSQL (non-superuser, real
     ]);
 
     await posting.postIssued({ tenantId: T1, invoiceId: invoice.invoiceId, status: 'ISSUED' });
-    const [posted] = await q<Array<Record<string, string>>>(
+    const [posted] = await q<Record<string, string>>(
       `SELECT journal_entry_id, posting_error FROM invoices WHERE id = $1 AND tenant_id = $2`,
       [invoice.invoiceId, T1],
     );
