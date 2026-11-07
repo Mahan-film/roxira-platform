@@ -9,6 +9,9 @@ import { EntityManager } from 'typeorm';
 import { mergeRoleAccounts } from '../../invoicing/services/invoice-voucher';
 import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
 import { TenantScope } from '../../access/services/tenant-scope';
+import { AccessService } from '../../access/services/access.service';
+import { AuditService } from '../../access/services/audit.service';
+import { PolicyService } from '../../tenants/policy/policy.service';
 import { StockDocumentsService } from '../services/stock-documents.service';
 import { invoicePostingTotals, matchInvoice, matchInvoiceLine } from './invoice-match.domain';
 import { PurchaseAccountRole, resolvePurchaseRole } from './purchase-posting.adapter';
@@ -59,6 +62,7 @@ function toInvoiceResponse(invoice: SupplierInvoice): SupplierInvoiceResponseDto
     acceptedAt: invoice.acceptedAt,
     acceptNote: invoice.acceptNote,
     createdBy: invoice.createdBy,
+    acceptedByCreator: invoice.accepted === true && invoice.acceptedBy === invoice.createdBy,
     vat: invoice.vat.toString(),
     subtotal: invoice.subtotal.toString(),
     total: invoice.total.toString(),
@@ -91,6 +95,9 @@ export class SupplierInvoiceService {
     private readonly invoices: SupplierInvoiceRepository,
     private readonly stockDocuments: StockDocumentsService,
     private readonly postingRules: PostingRulesService,
+    private readonly policy: PolicyService,
+    private readonly audit: AuditService,
+    private readonly access: AccessService,
   ) {}
 
   // --------------------------------------------------------------- invoices
@@ -111,6 +118,9 @@ export class SupplierInvoiceService {
       }
 
       const settings = await this.purchases.getSettings(tenantId, manager);
+      const qtyExcessToleranceBp = Number(
+        await this.policy.get(tenantId, 'purchase.three_way.qty_excess_tolerance_bp', manager),
+      );
       const supplierRef = dto.supplierRef.trim();
       const existing = await this.invoices.findIdBySupplierRef(
         tenantId,
@@ -159,7 +169,7 @@ export class SupplierInvoiceService {
             quantity,
             unitPrice,
           },
-          settings,
+          { ...settings, qtyExcessToleranceBp },
         );
         matched.push({
           receiptLineId: receiptLine.receiptLineId,
@@ -243,12 +253,40 @@ export class SupplierInvoiceService {
       if (invoice.status !== 'HELD') {
         throw new ConflictException('فقط صورتحساب معلق (HELD) قابل تأیید است.');
       }
-      if (invoice.createdBy === userId) {
-        throw new ForbiddenException('reviewer must differ from the creator');
-      }
       const note = dto.note.trim();
+      let creatorAccept: { rule: string; otherApprovers: number } | null = null;
+      if (invoice.createdBy === userId) {
+        const rule = String(
+          await this.policy.get(tenantId, 'purchase.invoice_review.reviewer_rule', manager),
+        );
+        if (rule === 'always_differs') {
+          throw new ForbiddenException('reviewer must differ from the creator');
+        }
+        const otherApprovers = await this.access.countEligibleApprovers(
+          tenantId,
+          userId,
+          'inventory:approve',
+        );
+        if (rule === 'differs_unless_sole_approver' && otherApprovers > 0) {
+          throw new ForbiddenException('reviewer must differ from the creator');
+        }
+        creatorAccept = { rule, otherApprovers };
+      }
       if (note.length < 3) {
         throw new BadRequestException('یادداشت تأیید باید دست‌کم ۳ نویسه باشد.');
+      }
+      if (creatorAccept) {
+        await this.audit.record(
+          {
+            tenantId,
+            actorUserId: userId,
+            action: 'purchase.invoice.accepted_by_creator',
+            resourceType: 'supplier_invoice',
+            resourceId: invoice.id,
+            metadata: { rule: creatorAccept.rule, otherApprovers: creatorAccept.otherApprovers, note },
+          },
+          manager,
+        );
       }
 
       const acceptedAt = new Date();

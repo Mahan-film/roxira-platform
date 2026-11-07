@@ -88,7 +88,7 @@ describePg('Fixed assets on PostgreSQL', () => {
     const currency = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
     const repo = new AccountingRepository(new TenantScope(app));
     accounting = new AccountingService(repo, currency);
-    assets = new FixedAssetService(new FixedAssetRepository(ds), repo, new PostingRulesService(new PostingRulesRepository(new TenantScope(ds)), accounting));
+    assets = new FixedAssetService(new FixedAssetRepository(ds), repo, new PostingRulesService(new PostingRulesRepository(new TenantScope(ds)), accounting), { get: async () => 'refuse' } as never);
     const templates = new ChartTemplateService(repo);
     await templates.apply(T1, 'iran-trading');
     await templates.apply(T2, 'iran-trading');

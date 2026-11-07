@@ -207,6 +207,12 @@ export const MENU_GROUPS: MenuGroup[] = [
         module: "accounting",
       },
       {
+        href: "/app/settings/policies",
+        label: "قواعد سازمان",
+        icon: "Settings",
+        module: "members",
+      },
+      {
         href: "/app/settings/audit",
         label: "گزارش رخدادها",
         icon: "ClipboardList",

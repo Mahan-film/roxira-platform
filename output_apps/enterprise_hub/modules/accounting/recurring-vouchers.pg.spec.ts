@@ -68,7 +68,7 @@ describePg('Recurring vouchers on PostgreSQL', () => {
     const scope = new TenantScope(ds);
     const accountingRepo = new AccountingRepository(scope);
     accounting = new AccountingService(accountingRepo, currency);
-    service = new RecurringVoucherService(new RecurringVoucherRepository(scope, ds), accounting);
+    service = new RecurringVoucherService(new RecurringVoucherRepository(scope, ds), accounting, { get: async () => 'draft_unless_auto_reverse' } as never);
   }, 120000);
 
   afterAll(async () => {

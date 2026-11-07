@@ -100,6 +100,8 @@ export class SupplierInvoiceResponseDto {
   @ApiPropertyOptional({ nullable: true }) acceptedBy: string | null;
   @ApiPropertyOptional({ nullable: true }) acceptedAt: Date | null;
   @ApiPropertyOptional({ nullable: true }) acceptNote: string | null;
+  @ApiProperty({ description: 'درست وقتی ثبت‌کننده خودش صورتحساب معلق را پذیرفته است' })
+  acceptedByCreator: boolean;
   @ApiProperty() createdBy: string;
   @ApiProperty() vat: string;
   @ApiProperty() subtotal: string;
