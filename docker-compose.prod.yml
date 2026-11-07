@@ -146,8 +146,8 @@ services:
   # می‌شوند تا تعداد اتصال واقعی به Postgres کنترل شود.
   # ------------------------------------------------------------------
   pgbouncer_prod:
-    # pinned 2026-10-14 to the running digest; bump deliberately
-    image: edoburu/pgbouncer@sha256:4c1ca296ef525f108f5d3552cc337c0c09587cf8dae7f0067fd93349e47dc1cd
+    # pinned 2026-11-07 to the running version v1.25.2-p0; bump deliberately
+    image: edoburu/pgbouncer:v1.25.2-p0
     container_name: roxira_pgbouncer
     restart: always
     mem_limit: 128m

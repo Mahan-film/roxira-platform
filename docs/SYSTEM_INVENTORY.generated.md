@@ -10,7 +10,7 @@ run `python3 scripts/gen_system_inventory.py` (CI-style check: `--check`).
 | docker-socket-proxy | tecnativa/docker-socket-proxy:v0.5.0@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459 | - |
 | enterprise_app | build | 127.0.0.1:8000:8000 |
 | nginx_gateway | nginx:alpine@sha256:db35bfc6b2951e7f8a72db5db120288c127ffaeeb4a6d4b95a26fead017d5913 | 443:443<br>80:80 |
-| pgbouncer_prod | edoburu/pgbouncer@sha256:4c1ca296ef525f108f5d3552cc337c0c09587cf8dae7f0067fd93349e47dc1cd | 127.0.0.1:6432:6432 |
+| pgbouncer_prod | edoburu/pgbouncer:v1.25.2-p0 | 127.0.0.1:6432:6432 |
 | postgres_prod | postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73 | 127.0.0.1:5432:5432 |
 | qdrant_prod | qdrant/qdrant:v1.19.0@sha256:057ee3a8da769fe7310dd3537b4dc7583bf87a95ce8ac43c0af5a46bc580d1fc | 127.0.0.1:6333:6333 |
 | redis_prod | redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf | 127.0.0.1:6379:6379 |

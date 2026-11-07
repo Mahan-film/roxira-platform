@@ -7,7 +7,7 @@
 # ------------------------------------------------------------------------------
 # Stage 1: deps — نصب کامل وابستگی‌ها برای مرحله بیلد
 # ------------------------------------------------------------------------------
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 WORKDIR /app
 
 RUN apk add --no-cache libc6-compat
@@ -18,7 +18,7 @@ RUN npm ci
 # ------------------------------------------------------------------------------
 # Stage 2: builder — بیلد پروداکشن Next.js با خروجی standalone
 # ------------------------------------------------------------------------------
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 
 # آدرس واقعی سرویس NestJS در زمان بیلد برای rewrites (قابل override در ران‌تایم)
@@ -46,7 +46,7 @@ RUN npm run build
 # ------------------------------------------------------------------------------
 # Stage 3: runner — ایمیج نهایی سبک، فقط شامل خروجی standalone
 # ------------------------------------------------------------------------------
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
