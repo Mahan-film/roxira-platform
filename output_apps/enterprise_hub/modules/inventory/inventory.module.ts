@@ -7,6 +7,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { InventoryController } from './controllers/inventory.controller';
 import { StockDocumentsController } from './controllers/stock-documents.controller';
 import { StockReportsController } from './controllers/stock-reports.controller';
+import { LandedCostController } from './purchasing/landed-cost.controller';
+import { LandedCostService } from './purchasing/landed-cost.service';
+import { LandedCostRepository } from './purchasing/landed-cost.repository';
 import { PurchaseController } from './purchasing/purchase.controller';
 import { PurchaseCycleService } from './purchasing/purchase-cycle.service';
 import { PurchaseRepository } from './purchasing/purchase.repository';
@@ -64,6 +67,7 @@ import { InventoryService } from './services/inventory.service';
     StockReportsController,
     PurchaseController,
     SupplierInvoiceController,
+    LandedCostController,
   ],
   providers: [
     InventoryService,
@@ -77,6 +81,8 @@ import { InventoryService } from './services/inventory.service';
     PurchaseRepository,
     SupplierInvoiceService,
     SupplierInvoiceRepository,
+    LandedCostService,
+    LandedCostRepository,
     TenantScope,
   ],
   exports: [
@@ -88,6 +94,8 @@ import { InventoryService } from './services/inventory.service';
     PurchaseRepository,
     SupplierInvoiceService,
     SupplierInvoiceRepository,
+    LandedCostService,
+    LandedCostRepository,
   ],
 })
 export class InventoryModule {}

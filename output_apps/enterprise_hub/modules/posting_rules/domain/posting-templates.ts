@@ -218,6 +218,16 @@ export const POSTING_TEMPLATES: readonly PostingTemplate[] = [
     defaults: { grni: '2013', price_variance: '5120' },
   },
   {
+    docType: 'purchase.landed_cost',
+    title: 'هزینه سربار خرید (حمل، گمرک، بیمه)',
+    amounts: ['inventory', 'cogs', 'payable'],
+    lines: [
+      dr('inventory', 'inventory', 'سربار خرید سهم موجودی کالا'),
+      dr('cogs', 'cogs', 'سربار خرید کالای فروش‌رفته'),
+      cr('payable', 'payable', 'بدهکاری به تأمین‌کننده', true),
+    ],
+  },
+  {
     docType: 'stock.opening',
     title: 'موجودی اول دوره',
     amounts: ['amount'],

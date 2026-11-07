@@ -500,9 +500,9 @@ export class PurchaseRepository {
     return rows[0] ? this.withLines(tenantId, rows[0], manager) : null;
   }
 
-  async findReceipt(tenantId: string, id: string, manager: EntityManager): Promise<GoodsReceipt | null> {
+  async findReceipt(tenantId: string, id: string, manager: EntityManager, forUpdate = false): Promise<GoodsReceipt | null> {
     const rows: Row[] = await manager.query(
-      `SELECT * FROM "erp_goods_receipts" WHERE "tenant_id" = $1 AND "id" = $2`,
+      `SELECT * FROM "erp_goods_receipts" WHERE "tenant_id" = $1 AND "id" = $2${forUpdate ? ' FOR UPDATE' : ''}`,
       [tenantId, id],
     );
     return rows[0] ? this.withLines(tenantId, rows[0], manager) : null;
