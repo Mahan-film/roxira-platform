@@ -45,7 +45,12 @@ interface Draft {
   lines: DraftLine[];
 }
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
+/** Local calendar day as YYYY-MM-DD (toISOString would give the UTC day, one day behind in Tehran after midnight). */
+const todayIso = () => {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+};
 const emptyLine = (): DraftLine => ({ accountCode: "", debit: "", credit: "", description: "" });
 const emptyDraft = (): Draft => ({
   name: "",
