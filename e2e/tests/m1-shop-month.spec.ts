@@ -1233,7 +1233,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
       chequeNumber: 'M1-CHQ-0001',
       amount: Number(cheque.amount),
       issueDate: '2024-05-02',
-      dueDate: '2024-06-01',
+      dueDate: '2026-05-01',
       partyName: 'بهرام آذرخش نمونه',
       partyCode: cheque.partyCode,
       bankName: 'بانک ملت نمونه',
@@ -1504,7 +1504,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
 
     const quote = await apiPost<{ id: number; totalAmount: number | string; status: string }>(page, 'sales/quotations', {
       partyCode: T1_GATE.partyCode,
-      quoteDate: '2024-06-01',
+      quoteDate: '2026-05-01',
       lines: [{ itemId: t1.itemId, quantity: T1_GATE.orderQuantity, unitPrice: T1_GATE.unitPrice }],
     });
     expect(rials(quote.totalAmount), '8.00 x 1,000,000').toBe(T1_GATE.quoteTotal);
@@ -1513,7 +1513,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     const order = await apiPost<{ id: number; status: string; quotationId: number; totalAmount: number | string; lines: Array<{ id: number }> }>(
       page,
       `sales/quotations/${quote.id}/convert`,
-      { warehouseId: t1.warehouseId, orderDate: '2024-06-02' },
+      { warehouseId: t1.warehouseId, orderDate: '2026-05-02' },
     );
     expect(order.quotationId, 'the order comes from the quote').toBe(quote.id);
     expect(rials(order.totalAmount), 'the order total equals the quote').toBe(T1_GATE.quoteTotal);
@@ -1537,7 +1537,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
         200,
       );
 
-    const d1 = await deliver(T1_GATE.delivery1.quantity, '2024-06-05', 't1-gate-d1');
+    const d1 = await deliver(T1_GATE.delivery1.quantity, '2026-05-04', 't1-gate-d1');
     expect(rials(d1.totalCost), '3 x 500,000 from layer 1').toBe(T1_GATE.delivery1.cost);
     t1.delivery1Line = d1.lines[0].id;
     const v1 = await journalVoucher(page, d1.journalEntryId!);
@@ -1545,7 +1545,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     expect(creditOf(v1.lines, '1301'), 'and takes it out of stock').toBe(T1_GATE.delivery1.cost);
     expect(await availabilityOf(page)).toMatchObject({ onHand: 7, reserved: 5, available: 2 });
 
-    const d2 = await deliver(T1_GATE.delivery2.quantity, '2024-06-08', 't1-gate-d2');
+    const d2 = await deliver(T1_GATE.delivery2.quantity, '2026-05-05', 't1-gate-d2');
     expect(rials(d2.totalCost), '1 x 500,000 + 3 x 700,000').toBe(T1_GATE.delivery2.cost);
     expect(rials(d2.lines[0].unitCost), 'a unit of delivery 2 costs 650,000').toBe(T1_GATE.delivery2.unitCost);
     t1.delivery2Line = d2.lines[0].id;
@@ -1568,7 +1568,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
       page,
       'sales/invoices/from-deliveries',
       {
-        invoiceDate: '2024-06-09',
+        invoiceDate: '2026-05-06',
         idempotencyKey: 't1-gate-inv',
         deliveryLines: [
           { deliveryLineId: t1.delivery1Line, quantity: T1_GATE.delivery1.quantity },
@@ -1600,7 +1600,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
       page,
       'sales/invoices/from-deliveries',
       {
-        invoiceDate: '2024-06-09',
+        invoiceDate: '2026-05-06',
         idempotencyKey: 't1-gate-inv',
         deliveryLines: [
           { deliveryLineId: t1.delivery1Line, quantity: T1_GATE.delivery1.quantity },
@@ -1617,7 +1617,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
       page,
       `sales/invoices/${t1.invoiceId}/returns`,
       {
-        returnDate: '2024-06-12',
+        returnDate: '2026-05-10',
         idempotencyKey: 't1-gate-ret',
         lines: [{ deliveryLineId: t1.delivery2Line, quantity: T1_GATE.salesReturn.quantity }],
       },
@@ -1636,7 +1636,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
 
     const tooMuch = await page.request.post(`/api/backend/enterprise-hub/sales/invoices/${t1.invoiceId}/returns`, {
       headers: { Authorization: `Bearer ${await sessionToken(page)}` },
-      data: { returnDate: '2024-06-13', lines: [{ deliveryLineId: t1.delivery2Line, quantity: 3 }] },
+      data: { returnDate: '2026-05-11', lines: [{ deliveryLineId: t1.delivery2Line, quantity: 3 }] },
     });
     expect(tooMuch.status(), 'only 2 of the 4 are still returnable: 3 is refused with 409').toBe(409);
   });
@@ -1660,7 +1660,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
 
     const ledger = await apiGet<{ closing: number | string }>(
       page,
-      `accounting/reports/ledger?accountCode=1201&partyCode=${T1_GATE.partyCode}&from=2024-03-20&to=2025-03-20`,
+      `accounting/reports/ledger?accountCode=1201&partyCode=${T1_GATE.partyCode}&from=2026-03-21&to=2027-03-20`,
     );
     expect(rials(ledger.closing), 'the customer owes 5,500,000 in the party ledger').toBe(T1_GATE.customerBalance);
   });

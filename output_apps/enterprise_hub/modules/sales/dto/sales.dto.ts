@@ -14,6 +14,7 @@ import {
   Max,
   MaxLength,
   Min,
+  MinLength,
   ValidateNested,
 } from 'class-validator';
 import { IsMoneyAmount } from '../../accounting/dto/money.validator';
@@ -82,7 +83,7 @@ export class SalesLineDto {
 export class CreateSalesQuotationDto {
   @ApiProperty({ description: 'کد طرف حساب (مشتری یا «both»)' })
   @IsString()
-  @Min(1)
+  @MinLength(1)
   @MaxLength(64)
   partyCode: string;
 
@@ -116,7 +117,7 @@ export class UpdateSalesQuotationDto extends CreateSalesQuotationDto {}
 export class CreateSalesOrderDto {
   @ApiProperty({ description: 'کد طرف حساب (مشتری یا «both»)' })
   @IsString()
-  @Min(1)
+  @MinLength(1)
   @MaxLength(64)
   partyCode: string;
 
