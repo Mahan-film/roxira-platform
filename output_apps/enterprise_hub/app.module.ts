@@ -35,6 +35,7 @@ import { CalendarModule } from './modules/calendar/calendar.module';
 import { PostingRulesModule } from './modules/posting_rules/posting-rules.module';
 import { SalesModule } from './modules/sales/sales.module';
 import { SalesDeliveryModule } from './modules/sales/delivery/sales-delivery.module';
+import { SalesReturnModule } from './modules/sales/returns/sales-return.module';
 import { ContractingModule } from './modules/contracting/contracting.module';
 
 const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(process.cwd(), '.env')].filter(
@@ -110,6 +111,7 @@ const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(proce
     PostingRulesModule,
     SalesModule,
     SalesDeliveryModule,
+    SalesReturnModule,
     ContractingModule,
   ],
 })

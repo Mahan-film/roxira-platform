@@ -66,6 +66,6 @@ import { VatRateResolver } from './services/vat-rate.resolver';
     PurchasesReportService,
     GrossProfitReportService,
   ],
-  exports: [InvoicingService],
+  exports: [InvoicingService, InvoicingRepository],
 })
 export class InvoicingModule {}

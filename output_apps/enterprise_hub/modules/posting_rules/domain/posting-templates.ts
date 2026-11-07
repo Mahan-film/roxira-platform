@@ -127,6 +127,12 @@ export const POSTING_TEMPLATES: readonly PostingTemplate[] = [
     lines: [dr('cogs', 'cost', 'بهای تمام‌شده کالای فروش‌رفته'), cr('inventory', 'cost', 'خروج از موجودی کالا')],
   },
   {
+    docType: 'invoice.sale_cogs_return',
+    title: 'برگشت بهای تمام‌شده فروش',
+    amounts: ['cost'],
+    lines: [dr('inventory', 'cost', 'برگشت کالا به انبار'), cr('cogs', 'cost', 'برگشت بهای تمام‌شده')],
+  },
+  {
     docType: 'invoice.purchase',
     title: 'فاکتور خرید',
     amounts: ['total', 'net', 'vat'],

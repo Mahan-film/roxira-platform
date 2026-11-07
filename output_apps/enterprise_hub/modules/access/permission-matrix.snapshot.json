@@ -3705,6 +3705,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/sales/invoices/:invoiceId/returns (SalesReturnController.createReturn)": {
+    "policy": "invoicing:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/sales/orders (SalesController.createOrder)": {
     "policy": "invoicing:create",
     "owner": true,
