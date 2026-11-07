@@ -48,6 +48,7 @@ import { createJournalEntry } from "@/lib/api/accounting-client";
 import { ApiClientError } from "@/lib/api/http-client";
 import { inferServiceDomain } from "@/lib/api/auth-client";
 import { useAuth } from "@/components/auth/auth-provider";
+import { VoucherAttachments } from "@/components/accounting/voucher-attachments";
 import { formatRial } from "@/lib/format";
 import {
   ACCOUNT_TYPE_LABELS,
@@ -456,6 +457,8 @@ export function JournalEntryForm({
               </AlertDescription>
             </Alert>
           )}
+
+          {createdEntry && <VoucherAttachments journalEntryId={createdEntry.id} />}
 
           {!isAuthenticated && (
             <Alert className="border-indigo-500/30 bg-indigo-500/5">

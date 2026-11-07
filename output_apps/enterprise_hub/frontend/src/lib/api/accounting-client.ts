@@ -8,8 +8,9 @@ import {
   QueryAccountLedgerDto,
   QueryJournalEntryDto,
   TrialBalanceResponse,
+  VoucherAttachment,
 } from "@/types/accounting";
-import { apiRequest } from "@/lib/api/http-client";
+import { apiDownload, apiRequest, apiUpload } from "@/lib/api/http-client";
 import {
   ACCOUNTING_RESOURCE_PATH,
   API_PROXY_BASE_PATH,
@@ -116,5 +117,55 @@ export async function getAccountLedger(
       },
       signal,
     },
+  );
+}
+
+/** فهرست پیوست‌های سند — GET /enterprise-hub/accounting/journal-entries/:id/attachments */
+export async function listVoucherAttachments(
+  journalEntryId: number,
+  signal?: AbortSignal,
+): Promise<VoucherAttachment[]> {
+  return apiRequest<VoucherAttachment[]>(
+    `${ACCOUNTING_ENDPOINT}/journal-entries/${journalEntryId}/attachments`,
+    { method: "GET", signal },
+  );
+}
+
+/** بارگذاری پیوست سند — POST /enterprise-hub/accounting/journal-entries/:id/attachments */
+export async function uploadVoucherAttachment(
+  journalEntryId: number,
+  file: File,
+  signal?: AbortSignal,
+): Promise<VoucherAttachment> {
+  const form = new FormData();
+  form.append("file", file);
+  return apiUpload<VoucherAttachment>(
+    `${ACCOUNTING_ENDPOINT}/journal-entries/${journalEntryId}/attachments`,
+    form,
+    signal,
+  );
+}
+
+/** دانلود پیوست سند — GET .../journal-entries/:id/attachments/:attachmentId/download */
+export async function downloadVoucherAttachment(
+  journalEntryId: number,
+  attachmentId: number,
+  signal?: AbortSignal,
+): Promise<Blob> {
+  return apiDownload(
+    `${ACCOUNTING_ENDPOINT}/journal-entries/${journalEntryId}/attachments/${attachmentId}/download`,
+    signal,
+  );
+}
+
+/** حذف نرم پیوست سند — DELETE /enterprise-hub/accounting/journal-entries/:id/attachments/:attachmentId */
+export async function deleteVoucherAttachment(
+  journalEntryId: number,
+  attachmentId: number,
+  signal?: AbortSignal,
+): Promise<void> {
+  return apiRequest<void>(
+    `${ACCOUNTING_ENDPOINT}/journal-entries/${journalEntryId}/attachments/${attachmentId}`,
+    { method: "DELETE", signal },
   );
 }
