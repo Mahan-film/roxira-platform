@@ -136,6 +136,24 @@ export const MENU_GROUPS: MenuGroup[] = [
         icon: "CalendarRange",
         module: "accounting",
       },
+      {
+        href: "/app/accounting/recurring-vouchers",
+        label: "اسناد دوره‌ای",
+        icon: "ReceiptText",
+        module: "accounting",
+      },
+      {
+        href: "/app/accounting/fixed-assets",
+        label: "دارایی‌های ثابت",
+        icon: "Building2",
+        module: "accounting",
+      },
+      {
+        href: "/app/contracting",
+        label: "قراردادها و پروژه‌ها",
+        icon: "ClipboardList",
+        module: "accounting",
+      },
     ],
   },
   {
