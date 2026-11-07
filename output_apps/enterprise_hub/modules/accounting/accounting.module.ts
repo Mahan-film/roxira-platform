@@ -1,4 +1,5 @@
 import { AccessModule } from '../access/access.module';
+import { BullModule } from '@nestjs/bullmq';
 import { FixedAssetController } from './controllers/fixed-asset.controller';
 import { DepreciationLineEntity, FixedAssetEntity } from './entities/fixed-asset.entity';
 import { FixedAssetRepository } from './repositories/fixed-asset.repository';
@@ -10,6 +11,15 @@ import { DimensionController } from './controllers/dimension.controller';
 import { DimensionEntity } from './entities/dimension.entity';
 import { DimensionRepository } from './repositories/dimension.repository';
 import { DimensionService } from './services/dimension.service';
+import { RecurringVoucherController } from './controllers/recurring-voucher.controller';
+import { RecurringVoucherProcessor } from './processors/recurring-voucher.processor';
+import { RECURRING_VOUCHERS_QUEUE } from './constants/recurring-voucher.constants';
+import {
+  RecurringVoucherEntity,
+  RecurringVoucherRunEntity,
+} from './entities/recurring-voucher.entity';
+import { RecurringVoucherRepository } from './repositories/recurring-voucher.repository';
+import { RecurringVoucherService } from './services/recurring-voucher.service';
 import { TenantScope } from '../access/services/tenant-scope';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -61,16 +71,22 @@ import { ReportExportService } from './services/report-export.service';
       DepreciationLineEntity,
       PettyCashFundEntity,
       PettyCashTransactionEntity,
+      RecurringVoucherEntity,
+      RecurringVoucherRunEntity,
     ]),
     CurrencyModule,
     AccessModule,
+    BullModule.registerQueue({ name: RECURRING_VOUCHERS_QUEUE }),
   ],
-  controllers: [AccountingController, DimensionController, FixedAssetController, FiscalYearController, PettyCashController, ReportsController],
+  controllers: [AccountingController, DimensionController, FixedAssetController, FiscalYearController, PettyCashController, ReportsController, RecurringVoucherController],
   providers: [
     AccountingService,
     AccountingRepository,
     DimensionRepository,
     DimensionService,
+    RecurringVoucherRepository,
+    RecurringVoucherService,
+    RecurringVoucherProcessor,
     TenantScope,
     FixedAssetRepository,
     FixedAssetService,
