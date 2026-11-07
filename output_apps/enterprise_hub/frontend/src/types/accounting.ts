@@ -154,3 +154,14 @@ export interface QueryAccountLedgerDto {
   toDate?: string;
   limit?: number;
 }
+
+/** یک پیوست سند حسابداری — منطبق بر `VoucherAttachmentResponseDto` در بک‌اند. */
+export interface VoucherAttachment {
+  id: number;
+  journalEntryId: number;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  uploadedBy: string;
+  createdAt: string;
+}

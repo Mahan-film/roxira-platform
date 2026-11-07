@@ -15,12 +15,14 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CurrencyModule } from '../currency/currency.module';
 import { AccountingController } from './controllers/accounting.controller';
+import { VoucherAttachmentController } from './controllers/voucher-attachment.controller';
 import { FiscalYearController } from './controllers/fiscal-year.controller';
 import { PettyCashController } from './controllers/petty-cash.controller';
 import { ReportsController } from './controllers/reports.controller';
 import { ChartOfAccountEntity } from './entities/chart-of-account.entity';
 import { FiscalYearEntity } from './entities/fiscal-year.entity';
 import { JournalEntryLineEntity } from './entities/journal-entry-line.entity';
+import { JournalEntryAttachmentEntity } from './entities/journal-entry-attachment.entity';
 import { JournalEntryEntity } from './entities/journal-entry.entity';
 import { PeriodLockEntity } from './entities/period-lock.entity';
 import { PettyCashFundEntity, PettyCashTransactionEntity } from './entities/petty-cash.entity';
@@ -28,7 +30,9 @@ import { AccountingRepository } from './repositories/accounting.repository';
 import { FiscalYearRepository } from './repositories/fiscal-year.repository';
 import { LedgerReportRepository } from './repositories/ledger-report.repository';
 import { PettyCashRepository } from './repositories/petty-cash.repository';
+import { VoucherAttachmentRepository } from './repositories/voucher-attachment.repository';
 import { AccountingService } from './services/accounting.service';
+import { VoucherAttachmentService } from './services/voucher-attachment.service';
 import { ChartTemplateService } from './services/chart-template.service';
 import { CostCentreReportService } from './services/cost-centre-report.service';
 import { FinancialReportsService } from './services/financial-reports.service';
@@ -61,11 +65,12 @@ import { ReportExportService } from './services/report-export.service';
       DepreciationLineEntity,
       PettyCashFundEntity,
       PettyCashTransactionEntity,
+      JournalEntryAttachmentEntity,
     ]),
     CurrencyModule,
     AccessModule,
   ],
-  controllers: [AccountingController, DimensionController, FixedAssetController, FiscalYearController, PettyCashController, ReportsController],
+  controllers: [AccountingController, DimensionController, FixedAssetController, FiscalYearController, PettyCashController, ReportsController, VoucherAttachmentController],
   providers: [
     AccountingService,
     AccountingRepository,
@@ -74,6 +79,8 @@ import { ReportExportService } from './services/report-export.service';
     TenantScope,
     FixedAssetRepository,
     FixedAssetService,
+    VoucherAttachmentRepository,
+    VoucherAttachmentService,
     // PostingRulesModule imports AccountingModule, so importing it here would be a cycle: the engine
     // is resolved lazily from the application container at call time instead.
     {
