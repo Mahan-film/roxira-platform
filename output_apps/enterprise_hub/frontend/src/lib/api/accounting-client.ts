@@ -1,6 +1,7 @@
 import {
   AccountLedgerResponse,
   ChartOfAccount,
+  CopyJournalEntryDto,
   CreateAccountDto,
   CreateJournalEntryDto,
   JournalEntryResponse,
@@ -8,6 +9,7 @@ import {
   QueryAccountLedgerDto,
   QueryJournalEntryDto,
   TrialBalanceResponse,
+  UpdateJournalEntryDto,
 } from "@/types/accounting";
 import { apiRequest } from "@/lib/api/http-client";
 import {
@@ -48,6 +50,38 @@ export async function createJournalEntry(
 ): Promise<JournalEntryResponse> {
   return apiRequest<JournalEntryResponse>(
     `${ACCOUNTING_ENDPOINT}/journal-entries`,
+    {
+      method: "POST",
+      body: payload,
+      signal,
+    },
+  );
+}
+
+/** ویرایش سند پیش‌نویس یا موقت — PUT /enterprise-hub/accounting/journal-entries/:id */
+export async function updateJournalEntry(
+  id: number,
+  payload: UpdateJournalEntryDto,
+  signal?: AbortSignal,
+): Promise<JournalEntryResponse> {
+  return apiRequest<JournalEntryResponse>(
+    `${ACCOUNTING_ENDPOINT}/journal-entries/${id}`,
+    {
+      method: "PUT",
+      body: payload,
+      signal,
+    },
+  );
+}
+
+/** کپی سند به‌صورت پیش‌نویس — POST /enterprise-hub/accounting/journal-entries/:id/copy */
+export async function copyJournalEntry(
+  id: number,
+  payload: CopyJournalEntryDto = {},
+  signal?: AbortSignal,
+): Promise<JournalEntryResponse> {
+  return apiRequest<JournalEntryResponse>(
+    `${ACCOUNTING_ENDPOINT}/journal-entries/${id}/copy`,
     {
       method: "POST",
       body: payload,

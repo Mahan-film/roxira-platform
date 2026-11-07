@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   CheckCircle2Icon,
   CirclePlusIcon,
@@ -44,7 +44,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-import { createJournalEntry } from "@/lib/api/accounting-client";
+import { createJournalEntry, updateJournalEntry } from "@/lib/api/accounting-client";
 import { ApiClientError } from "@/lib/api/http-client";
 import { inferServiceDomain } from "@/lib/api/auth-client";
 import { useAuth } from "@/components/auth/auth-provider";
@@ -67,6 +67,10 @@ interface FormLine {
 interface JournalEntryFormProps {
   accounts: ChartOfAccount[];
   onCreated?: (entry: JournalEntryResponse) => void;
+  /** When set, the form edits this voucher (PUT with its version) instead of creating one. */
+  entry?: JournalEntryResponse | null;
+  onUpdated?: (entry: JournalEntryResponse) => void;
+  onCancel?: () => void;
 }
 
 function createEmptyLine(uid: string): FormLine {
@@ -91,9 +95,13 @@ function todayIso(): string {
 export function JournalEntryForm({
   accounts,
   onCreated,
+  entry = null,
+  onUpdated,
+  onCancel,
 }: JournalEntryFormProps) {
   const { isAuthenticated, openLogin } = useAuth();
   const nextLineId = useRef(2);
+  const isEditing = entry != null;
   const [entryNumber, setEntryNumber] = useState("");
   const [date, setDate] = useState(todayIso);
   // Remounts the date field after a reset so it shows the new value.
@@ -106,9 +114,31 @@ export function JournalEntryForm({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string[] | null>(null);
+  const [conflictError, setConflictError] = useState<string | null>(null);
   const [createdEntry, setCreatedEntry] = useState<JournalEntryResponse | null>(
     null,
   );
+
+  // Load the edited voucher into the form whenever the target changes.
+  useEffect(() => {
+    if (!entry) return;
+    setEntryNumber(entry.entryNumber);
+    setDescription(entry.description);
+    setDate(entry.date.slice(0, 10));
+    setDateKey((key) => key + 1);
+    setLines(
+      entry.lines.map((line, index) => ({
+        uid: `edit-${index}`,
+        accountCode: line.accountCode,
+        debit: Number(line.debit) ? String(line.debit) : "",
+        credit: Number(line.credit) ? String(line.credit) : "",
+        description: line.description ?? "",
+      })),
+    );
+    setSubmitError(null);
+    setConflictError(null);
+    setCreatedEntry(null);
+  }, [entry]);
 
   function updateLine(uid: string, patch: Partial<FormLine>) {
     setLines((prev) =>
@@ -171,6 +201,7 @@ export function JournalEntryForm({
 
   async function submitEntry() {
     setSubmitError(null);
+    setConflictError(null);
     setCreatedEntry(null);
 
     const validationErrors = validate();
@@ -217,6 +248,15 @@ export function JournalEntryForm({
 
     setIsSubmitting(true);
     try {
+      if (entry) {
+        const result = await updateJournalEntry(entry.id, {
+          ...payload,
+          expectedVersion: entry.version,
+        });
+        setCreatedEntry(result);
+        onUpdated?.(result);
+        return;
+      }
       const result = await createJournalEntry(payload);
       setCreatedEntry(result);
       setEntryNumber("");
@@ -230,7 +270,12 @@ export function JournalEntryForm({
       onCreated?.(result);
     } catch (error) {
       if (error instanceof ApiClientError) {
-        setSubmitError(error.details);
+        // 409 is the optimistic-lock conflict: another user saved after this form loaded.
+        if (error.statusCode === 409) {
+          setConflictError(error.details.join(" | "));
+        } else {
+          setSubmitError(error.details);
+        }
       } else {
         setSubmitError([
           "ارتباط با سرور برقرار نشد. لطفاً چند لحظه بعد دوباره تلاش کنید.",
@@ -253,10 +298,12 @@ export function JournalEntryForm({
           <div>
             <CardTitle className="flex items-center gap-2">
               <ScaleIcon className="size-4 text-indigo-500" />
-              ثبت سند دوطرفه
+              {isEditing ? "ویرایش سند دوطرفه" : "ثبت سند دوطرفه"}
             </CardTitle>
             <CardDescription className="mt-1">
-              آرتیکل‌های بدهکار/بستانکار با کنترل آنی تراز و اعتبارسنجی سرور.
+              {isEditing
+                ? "ویرایش پیش‌نویس یا موقت؛ در صورت تغییر هم‌زمان توسط کاربر دیگر، پیام تعارض نمایش داده می‌شود."
+                : "آرتیکل‌های بدهکار/بستانکار با کنترل آنی تراز و اعتبارسنجی سرور."}
             </CardDescription>
           </div>
           <Badge variant={isBalanced || (totalDebit === 0 && totalCredit === 0) ? "default" : "destructive"} className="text-xs">
@@ -432,6 +479,13 @@ export function JournalEntryForm({
             </div>
           </div>
 
+          {conflictError && (
+            <Alert variant="destructive">
+              <AlertTitle>تعارض ویرایش</AlertTitle>
+              <AlertDescription>{conflictError}</AlertDescription>
+            </Alert>
+          )}
+
           {submitError && (
             <Alert variant="destructive">
               <AlertTitle>خطا در ثبت سند</AlertTitle>
@@ -448,7 +502,9 @@ export function JournalEntryForm({
           {createdEntry && (
             <Alert>
               <CheckCircle2Icon className="size-4 text-emerald-500" />
-              <AlertTitle>سند با موفقیت ثبت شد</AlertTitle>
+              <AlertTitle>
+                {isEditing ? "سند با موفقیت ویرایش شد" : "سند با موفقیت ثبت شد"}
+              </AlertTitle>
               <AlertDescription>
                 شماره {createdEntry.entryNumber} — جمع بدهکار{" "}
                 {formatRial(createdEntry.totalDebit)} / جمع بستانکار{" "}
@@ -467,19 +523,35 @@ export function JournalEntryForm({
             </Alert>
           )}
 
-          <Button type="submit" disabled={isSubmitting} className="self-start">
-            {isSubmitting ? (
-              <>
-                <Loader2Icon className="animate-spin" />
-                در حال ثبت...
-              </>
-            ) : (
-              <>
-                <SendHorizonalIcon />
-                {isAuthenticated ? "ثبت سند" : "ورود و ثبت سند"}
-              </>
+          <div className="flex items-center gap-2 self-start">
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2Icon className="animate-spin" />
+                  {isEditing ? "در حال ویرایش..." : "در حال ثبت..."}
+                </>
+              ) : (
+                <>
+                  <SendHorizonalIcon />
+                  {isEditing
+                    ? "ذخیره تغییرات"
+                    : isAuthenticated
+                      ? "ثبت سند"
+                      : "ورود و ثبت سند"}
+                </>
+              )}
+            </Button>
+            {isEditing && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onCancel?.()}
+                disabled={isSubmitting}
+              >
+                انصراف
+              </Button>
             )}
-          </Button>
+          </div>
         </form>
       </CardContent>
     </Card>

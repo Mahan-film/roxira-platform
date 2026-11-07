@@ -67,6 +67,8 @@ export interface JournalEntryResponse {
   date: string;
   description: string;
   status: JournalEntryStatus;
+  /** Optimistic edit lock: the version the UI must send back when it saves an edit. */
+  version: number;
   currency: Currency;
   totalDebit: number;
   totalCredit: number;
@@ -88,6 +90,20 @@ export interface CreateJournalEntryDto {
   date?: string;
   description: string;
   lines: CreateJournalLineDto[];
+}
+
+/** Body of `PUT /journal-entries/:id`; `expectedVersion` is the version the form loaded. */
+export interface UpdateJournalEntryDto {
+  entryNumber: string;
+  date?: string;
+  description: string;
+  lines: CreateJournalLineDto[];
+  expectedVersion?: number;
+}
+
+/** Body of `POST /journal-entries/:id/copy`; the date defaults to today on the server. */
+export interface CopyJournalEntryDto {
+  date?: string;
 }
 
 export interface QueryJournalEntryDto {

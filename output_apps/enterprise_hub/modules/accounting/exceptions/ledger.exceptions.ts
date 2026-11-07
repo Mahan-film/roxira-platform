@@ -29,3 +29,13 @@ export class UnknownDimensionError extends Error {
     super(`Unknown or inactive ${kind} ${code}.`);
   }
 }
+
+/**
+ * An optimistic-lock UPDATE matched zero rows because the voucher's `version` moved after the
+ * caller read it. The service turns this into 409 with a refresh message.
+ */
+export class VoucherVersionConflictError extends Error {
+  constructor(readonly entryId: number) {
+    super(`Voucher ${entryId} was changed by another user.`);
+  }
+}
