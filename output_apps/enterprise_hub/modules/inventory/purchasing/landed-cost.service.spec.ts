@@ -94,6 +94,10 @@ class FakePurchaseRepository {
 class FakeLandedCostRepository {
   constructor(private readonly state: FakeState) {}
 
+  async lockIdempotencyKey(): Promise<void> {
+    // The advisory lock is a database concern; the fake runs requests one at a time.
+  }
+
   async findByIdempotencyKey(tenantId: string, idempotencyKey: string): Promise<LandedCost | null> {
     const found = this.state.landedCosts.find(
       (cost) => cost.tenantId === tenantId && cost.idempotencyKey === idempotencyKey,
@@ -356,6 +360,25 @@ describe('LandedCostService (#227 T2)', () => {
     expect(state.landedCosts).toHaveLength(1);
     expect(state.journals).toHaveLength(1);
     expect(state.raises).toEqual([{ tenantId: T1, batchId: 21, deltaMinor: 100_000n }]);
+  });
+
+  it('refuses a repeated key that names another receipt (409); the on-hand share stays whole in the voucher', async () => {
+    seedReceipt(state, T1, 'receipt-1', [{ id: 'l1', quantity: 300n, value: 1_000_000n, fifoBatchId: 31 }]);
+    seedReceipt(state, T1, 'receipt-2', [{ id: 'l2', quantity: 300n, value: 1_000_000n, fifoBatchId: 32 }]);
+    seedLayer(state, T1, 31, 300n);
+    seedLayer(state, T1, 32, 300n);
+
+    const first = await service.createLandedCost(T1, 'u1', 'receipt-1', { ...BODY, amount: '100' });
+    // 100 minor units over 3 units: the layer can raise 33 per unit (99 in all); the voucher keeps 100.
+    expect(first.allocations[0]).toMatchObject({ toInventory: '100', toCogs: '0' });
+    expect(first.inventoryAmount).toBe('100');
+    expect(state.raises).toEqual([{ tenantId: T1, batchId: 31, deltaMinor: 33n }]);
+    expect(state.journals[0].amounts).toMatchObject({ inventory: 100n, cogs: 0n, payable: 100n });
+
+    await expect(service.createLandedCost(T1, 'u1', 'receipt-2', { ...BODY, amount: '100' })).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(state.landedCosts).toHaveLength(1);
   });
 
   it('hides a receipt from another tenant (404) and refuses a weightless WEIGHT allocation (400)', async () => {

@@ -3578,6 +3578,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/inventory/purchasing/receipts/:id/landed-costs (LandedCostController.createLandedCost)": {
+    "policy": "inventory:post",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/inventory/purchasing/requests (PurchaseController.createRequest)": {
     "policy": "inventory:create",
     "owner": true,

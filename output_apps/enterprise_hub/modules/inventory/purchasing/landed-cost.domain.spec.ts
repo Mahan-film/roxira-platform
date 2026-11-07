@@ -72,11 +72,17 @@ describe('landed cost allocation (#227 T2)', () => {
       expect(shares.reduce((sum, share) => sum + share.share, 0n)).toBe(100n);
     });
 
-    it('always sums exactly to the amount, even when the remainder is larger than one', () => {
-      // 1,000,000 over weights 1 and 999,999: the first line keeps its full 1 minor unit.
+    it('always sums exactly to the amount on a lopsided split (1 and 999,999 of 1,000,000)', () => {
+      // Exact proportions 1 and 999,999: no remainder at all.
       const lines = [line({ id: 'l1', value: 1n }), line({ id: 'l2', value: 999_999n })];
       const shares = allocateLandedCost(1_000_000n, lines, LandedCostBasis.VALUE);
       expect(shares.map((share) => share.share)).toEqual([1n, 999_999n]);
+    });
+
+    it('gives a remainder larger than one to the first lines in order (7 over four equal lines: 2/2/2/1)', () => {
+      const lines = [1, 2, 3, 4].map((n) => line({ id: `l${n}`, value: 1_000_000n }));
+      const shares = allocateLandedCost(7n, lines, LandedCostBasis.VALUE);
+      expect(shares.map((share) => share.share)).toEqual([2n, 2n, 2n, 1n]);
     });
 
     it('refuses a non-positive amount and lines that cannot carry the cost', () => {

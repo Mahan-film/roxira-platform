@@ -111,7 +111,11 @@ describePg('Landed cost on PostgreSQL (non-superuser, FORCE RLS)', () => {
     // engine, its templates and the role mappings are the real ones.
     accounting = {
       listAccounts: async (_tenantId: string) => ['1030', '2013', '5110', '2010'].map((code) => ({ code })),
-      createJournalEntry: async (tenant: string, dto: { entryNumber: string; lines: Array<{ accountCode: string; debit: string; credit: string }> }) => {
+      createJournalEntry: async (
+        tenant: string,
+        dto: { entryNumber: string; lines: Array<{ accountCode: string; debit: string; credit: string }> },
+        manager?: { query: (sql: string, params: unknown[]) => Promise<Array<{ id: string }>> },
+      ) => {
         const mapped = dto.lines.map((l: { accountCode: string; debit: string; credit: string }) => ({
           tenant,
           docType: dto.entryNumber.startsWith('LC-') ? 'purchase.landed_cost' : 'purchase.receipt',
@@ -123,7 +127,8 @@ describePg('Landed cost on PostgreSQL (non-superuser, FORCE RLS)', () => {
           mapped.reduce((s: bigint, l: { credit: bigint }) => s + l.credit, 0n),
         );
         lines.push(...mapped);
-        const [row] = await app.query(
+        // Runs in the posting transaction of the tenant (RLS needs app.tenant_id on that connection).
+        const [row] = await (manager ?? app).query(
           `INSERT INTO fin_journal_entries (tenant_id, entry_number, description) VALUES ($1, $2, 'test') RETURNING id`,
           [tenant, dto.entryNumber],
         );
@@ -476,6 +481,15 @@ describePg('Landed cost on PostgreSQL (non-superuser, FORCE RLS)', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(ledger).toHaveLength(2);
 
+    // Two parallel first requests with one new key (the unique-violation race): one document, one voucher.
+    const raced = await Promise.all([
+      landed.createLandedCost(T1, 'u1', receipt.id, landedCostInput(receipt.id, { idempotencyKey: 'lc-race' })),
+      landed.createLandedCost(T1, 'u1', receipt.id, landedCostInput(receipt.id, { idempotencyKey: 'lc-race' })),
+    ]);
+    expect(raced[1].id).toBe(raced[0].id);
+    expect(raced[1].journalEntryId).toBe(raced[0].journalEntryId);
+    expect(ledger).toHaveLength(3);
+
     // A locked period is refused before anything is written.
     (accounting as unknown as { isPeriodLocked: () => Promise<boolean> }).isPeriodLocked = async () => true;
     await expect(
@@ -486,7 +500,7 @@ describePg('Landed cost on PostgreSQL (non-superuser, FORCE RLS)', () => {
       `SELECT count(*)::int AS count FROM erp_landed_costs WHERE receipt_id = $1`,
       [receipt.id],
     );
-    expect(rows[0].count).toBe(1);
-    expect(ledger).toHaveLength(2);
+    expect(rows[0].count).toBe(2);
+    expect(ledger).toHaveLength(3);
   });
 });

@@ -114,18 +114,29 @@ export class LandedCostService {
     return this.scope.run(tenantId, async (manager) => {
       const idempotencyKey = dto.idempotencyKey ?? null;
       if (idempotencyKey) {
+        // Same key: one request at a time, so the replay check below sees a committed first attempt.
+        await this.landedCosts.lockIdempotencyKey(tenantId, idempotencyKey, manager);
         const existing = await this.landedCosts.findByIdempotencyKey(tenantId, idempotencyKey, manager);
-        if (existing) return toResponse(existing);
+        if (existing) {
+          if (existing.receiptId !== receiptId) {
+            throw new ConflictException('این کلید تکرار برای سند هزینهٔ سربار رسید دیگری ثبت شده است.');
+          }
+          return toResponse(existing);
+        }
       }
 
       // Refused before anything is written: a locked period takes no landed cost.
       const date = new Date(`${dto.date}T00:00:00.000Z`);
+      if (Number.isNaN(date.getTime())) {
+        throw new BadRequestException('تاریخ هزینه سربار معتبر نیست.');
+      }
       if (await this.accounting.isPeriodLocked(tenantId, date)) {
         throw new PeriodLockedException(
           `ثبت سند در دورهٔ قفل‌شده مجاز نیست: تاریخ ${dto.date} در دوره یا سال مالی بسته قرار دارد.`,
         );
       }
 
+      // The receipt row is locked first: two different keys on one receipt run one after another.
       const receipt = await this.purchases.findReceipt(tenantId, receiptId, manager, true);
       if (!receipt) throw new NotFoundException(NOT_FOUND_RECEIPT);
       const shares = this.allocateOrThrow(BigInt(dto.amount), receipt.lines, dto.basis);

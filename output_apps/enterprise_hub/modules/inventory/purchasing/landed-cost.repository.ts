@@ -179,6 +179,17 @@ export class LandedCostRepository {
     return mapLandedCost(rows[0], stored);
   }
 
+  /**
+   * Serialises every request that carries the same idempotency key in this tenant (transaction
+   * scoped advisory lock). The second request then waits here, and its lookup below sees the row
+   * the first one committed, so a race can never reach the unique index and fail with a 500.
+   */
+  async lockIdempotencyKey(tenantId: string, idempotencyKey: string, manager: EntityManager): Promise<void> {
+    await manager.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [
+      `landed_cost:${tenantId}:${idempotencyKey}`,
+    ]);
+  }
+
   async findByIdempotencyKey(
     tenantId: string,
     idempotencyKey: string,
