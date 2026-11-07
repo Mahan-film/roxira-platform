@@ -90,6 +90,36 @@ export class DepreciationRunDto {
   month: number;
 }
 
+/** Roles whose account can receive the sale proceeds of a fixed asset (asset-type roles). */
+export const CASH_ACCOUNT_ROLES = ['cash', 'bank', 'pos_clearing', 'petty_cash'] as const;
+
+export class DisposeFixedAssetDto {
+  @ApiProperty({ example: '2026-10-22', description: 'تاریخ فروش (میلادی ISO)' })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'تاریخ باید به‌صورت YYYY-MM-DD باشد.' })
+  date: string;
+
+  @ApiProperty({ example: '100000000.00', description: 'عواید فروش؛ ۰ مجاز است (رشته اعشاری)' })
+  @IsMoneyAmount()
+  proceeds: number | string;
+
+  @ApiPropertyOptional({ enum: CASH_ACCOUNT_ROLES, description: 'نقش حساب تسویه (صندوق/بانک/پوز/تنخواه)؛ یا کد حساب' })
+  @IsOptional()
+  @IsIn(CASH_ACCOUNT_ROLES)
+  cashAccountRole?: (typeof CASH_ACCOUNT_ROLES)[number];
+
+  @ApiPropertyOptional({ description: 'کد حساب تسویه؛ وقتی نقش انتخاب نشده باشد' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  settlementAccountCode?: string;
+
+  @ApiPropertyOptional({ description: 'یادداشت اختیاری' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
+}
+
 /** Query of the register and schedule routes: JSON by default, or a file download. */
 export class FixedAssetReportQueryDto {
   @ApiPropertyOptional({ enum: ['xlsx', 'pdf'] })

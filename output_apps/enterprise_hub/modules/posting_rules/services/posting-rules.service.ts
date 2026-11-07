@@ -50,6 +50,16 @@ export class PostingRulesService {
     return mapping;
   }
 
+  /**
+   * The tenant's account for a role chosen by a caller (e.g. the settlement account of a fixed-asset
+   * disposal by its cash role): the tenant-wide mapping first, then the engine default, else null.
+   */
+  async accountForRole(tenantId: string, role: PostingRole, manager?: EntityManager): Promise<string | null> {
+    const rows = await this.repository.listMappings(tenantId, [ALL_DOC_TYPES], manager);
+    const mapped = rows.find((row) => row.role === role)?.accountCode;
+    return mapped ?? DEFAULT_ROLE_ACCOUNTS[role] ?? null;
+  }
+
   /** Refuses codes that are not in the tenant's chart or are header (group / kol) accounts. */
   private async assertPostable(tenantId: string, proposal: VoucherProposal): Promise<void> {
     const accounts = new Map((await this.accounting.listAccounts(tenantId)).map((a) => [a.code, a]));
