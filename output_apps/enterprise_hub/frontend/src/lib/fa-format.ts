@@ -98,16 +98,16 @@ export const UNIT_SUFFIX: Record<MoneyUnit, string> = { rial: "ریال", toman:
 
 /** Rials per display unit, and how many decimals of that unit are kept. */
 const UNIT_STEP: Record<MoneyUnit, { divisor: bigint; decimals: number }> = {
-  rial: { divisor: 1n, decimals: 0 },
-  toman: { divisor: 10n, decimals: 1 },
-  million: { divisor: 1_000_000n, decimals: 1 },
+  rial: { divisor: BigInt(1), decimals: 0 },
+  toman: { divisor: BigInt(10), decimals: 1 },
+  million: { divisor: BigInt(1_000_000), decimals: 1 },
 };
 
 /** Tile abbreviations, largest first. */
 const SCALES: ReadonlyArray<{ size: bigint; word: string }> = [
-  { size: 1_000_000_000_000n, word: "هزار میلیارد" },
-  { size: 1_000_000_000n, word: "میلیارد" },
-  { size: 1_000_000n, word: "میلیون" },
+  { size: BigInt(1_000_000_000_000), word: "هزار میلیارد" },
+  { size: BigInt(1_000_000_000), word: "میلیارد" },
+  { size: BigInt(1_000_000), word: "میلیون" },
 ];
 
 function toPersianDigits(text: string): string {
@@ -127,15 +127,15 @@ function toCents(value: number | string | null | undefined): bigint | null {
   const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(value.trim());
   if (!match) return null;
   const [, sign, integer, fraction = ""] = match;
-  const cents = BigInt(integer) * 100n + BigInt(fraction.slice(0, 2).padEnd(2, "0"));
+  const cents = BigInt(integer) * BigInt(100) + BigInt(fraction.slice(0, 2).padEnd(2, "0"));
   return sign === "-" ? -cents : cents;
 }
 
 /** `cents / divisor` rounded half away from zero to `decimals` places, as grouped Persian text. */
 function scaled(abs: bigint, divisor: bigint, decimals: number, trim = true): string {
-  const factor = 10n ** BigInt(decimals);
-  const denominator = divisor * 100n;
-  const units = (abs * factor * 2n + denominator) / (denominator * 2n);
+  const factor = BigInt(10) ** BigInt(decimals);
+  const denominator = divisor * BigInt(100);
+  const units = (abs * factor * BigInt(2) + denominator) / (denominator * BigInt(2));
   const integer = (units / factor).toString().replace(/\B(?=(\d{3})+(?!\d))/g, "٬");
   const fraction = decimals > 0 ? (units % factor).toString().padStart(decimals, "0") : "";
   const shown = trim ? fraction.replace(/0+$/, "") : fraction;
@@ -162,21 +162,21 @@ export function formatAmount(
 ): string {
   const cents = toCents(value);
   if (cents === null) return "—";
-  const negative = cents < 0n;
+  const negative = cents < BigInt(0);
   const abs = negative ? -cents : cents;
   const { suffix = true, brackets = false } = options;
   let text: string;
   let word = UNIT_SUFFIX[unit];
   if (options.abbreviate) {
     // Abbreviate in the base unit (rial or toman); «میلیون ریال» abbreviates like rials.
-    const base = unit === "toman" ? 10n : 1n;
+    const base = unit === "toman" ? BigInt(10) : BigInt(1);
     word = unit === "toman" ? "تومان" : "ریال";
-    const scale = SCALES.find((entry) => abs >= entry.size * base * 100n);
+    const scale = SCALES.find((entry) => abs >= entry.size * base * BigInt(100));
     text = scale ? `${scaled(abs, scale.size * base, 1)} ${scale.word}` : scaled(abs, base, 0);
   } else {
     const step = UNIT_STEP[unit];
     // Rials keep a real fraction (API decimals); other units round to their own step.
-    text = unit === "rial" && abs % 100n !== 0n ? scaled(abs, 1n, 2, false) : scaled(abs, step.divisor, step.decimals);
+    text = unit === "rial" && abs % BigInt(100) !== BigInt(0) ? scaled(abs, BigInt(1), 2, false) : scaled(abs, step.divisor, step.decimals);
   }
   const signed = negative ? (brackets ? `(${text})` : `−${text}`) : text;
   return suffix ? `${signed} ${word}` : signed;
