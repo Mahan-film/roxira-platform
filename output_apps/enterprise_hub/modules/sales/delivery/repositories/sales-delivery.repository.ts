@@ -188,4 +188,98 @@ export class SalesDeliveryRepository {
       [tenantId, partyCode],
     );
   }
+
+  /**
+   * Locks delivery lines for update and returns them for processing returns.
+   * Includes validation that lines are on the invoice and have sufficient quantity to return.
+   */
+  async lockDeliveryLinesForReturn(
+    tenantId: string,
+    invoiceId: string,
+    lines: Array<{ deliveryLineId: number; quantity: number }>,
+    manager: EntityManager,
+  ): Promise<{
+    deliveryLines: SalesDeliveryLineEntity[];
+    errors: Array<{ deliveryLineId: number; code: string; message: string }>;
+  }> {
+    const errors: Array<{ deliveryLineId: number; code: string; message: string }> = [];
+    const errorMessages: { [key: number]: string } = {
+      400: 'خط برگشتی به صورتحساب مرجع تعلق ندارد.',
+      409: 'مقدار برگشتی از مقدار فروخته‌شده منهای برگشتی قبلی بیشتر است.',
+    };
+
+    const deliveryLineIds = lines.map((line) => line.deliveryLineId);
+    const deliveryLines = await manager
+      .getRepository(SalesDeliveryLineEntity)
+      .createQueryBuilder('dl')
+      .innerJoin('erp_sales_deliveries', 'd', 'd.id = dl.deliveryId')
+      .innerJoin('invoices', 'i', 'i.id = d.orderId')
+      .where('dl.tenantId = :tenantId', { tenantId })
+      .andWhere('dl.id IN (:...deliveryLineIds)', { deliveryLineIds })
+      .andWhere('i.relatedInvoiceId = :invoiceId', { invoiceId })
+      .setLock('pessimistic_write')
+      .getMany();
+
+    if (deliveryLines.length !== deliveryLineIds.length) {
+      errors.push({
+        deliveryLineId: deliveryLineIds.find((id) => !deliveryLines.some((dl) => dl.id === id)),
+        code: '400',
+        message: errorMessages[400],
+      });
+    }
+
+    for (const line of lines) {
+      const deliveryLine = deliveryLines.find((dl) => dl.id === line.deliveryLineId);
+      if (!deliveryLine) continue;
+
+      const invoicedQuantity = parseFloat(deliveryLine.invoicedQuantity);
+      const returnedQuantity = parseFloat(deliveryLine.returnedQuantity);
+      const maxReturnable = invoicedQuantity - returnedQuantity;
+      const requested = line.quantity;
+
+      if (requested > maxReturnable + 1e-9) {
+        errors.push({
+          deliveryLineId: line.deliveryLineId,
+          code: '409',
+          message: errorMessages[409],
+        });
+      }
+    }
+
+    return { deliveryLines, errors };
+  }
+
+  /** Updates returned_quantity for delivery lines in a transaction. */
+  async updateReturnedQuantities(
+    tenantId: string,
+    manager: EntityManager,
+    updates: Array<{ deliveryLineId: number; returnedQuantity: string }>,
+  ): Promise<void> {
+    for (const update of updates) {
+      await manager
+        .getRepository(SalesDeliveryLineEntity)
+        .update(
+          { tenantId, id: update.deliveryLineId },
+          { returnedQuantity: update.returnedQuantity },
+        );
+    }
+  }
+
+  /** Gets a delivery line entity for a return operation. */
+  async findDeliveryLineForReturn(
+    tenantId: string,
+    manager: EntityManager,
+    deliveryLineId: number,
+  ): Promise<SalesDeliveryLineEntity | null> {
+    return manager
+      .getRepository(SalesDeliveryLineEntity)
+      .createQueryBuilder('dl')
+      .innerJoin('erp_sales_deliveries', 'd', 'd.id = dl.deliveryId')
+      .innerJoin('invoices', 'i', 'i.id = d.orderId')
+      .where('dl.tenantId = :tenantId', { tenantId })
+      .andWhere('dl.id = :deliveryLineId', { deliveryLineId })
+      .andWhere('i.relatedInvoiceId IS NULL')
+      .setLock('pessimistic_write')
+      .getOne();
+  }
 }
