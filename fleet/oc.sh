@@ -29,6 +29,12 @@ RUNGS+=("openrouter/deepseek/deepseek-v4.1-flash|OPENROUTER_API_KEY_AGENTS|$OR|d
 # OC_FIRST=<pattern>: try matching rungs first, for tasks the weaker free models keep failing.
 # Default order since 2026-11-06 (owner: use the keys): DeepSeek Flash first. It finished 10 of 10 runs here at about $0.05/$0.57 per million;
 # the free rungs failed about 40% and waste supervising tokens. OC_FIRST=- restores the plain ladder.
+# 2026-11-07 (research plus measured results): free and gateway-free rungs produced broken code that cost more Claude
+# tokens to repair than a paid run. Paid DeepSeek only by default, retried across rounds. OC_ALLOW_FREE=1 restores the ladder.
+if [ "${OC_ALLOW_FREE:-0}" != 1 ]; then
+  P=(); for r in "${RUNGS[@]}"; do [[ "$r" == *deepseek* ]] && P+=("$r"); done; RUNGS=("${P[@]}")
+  [ "${OC_ROUNDS:-60}" -lt 6 ] && OC_ROUNDS=6
+fi
 OC_FIRST="${OC_FIRST:-deepseek}"; [ "$OC_FIRST" = "-" ] && OC_FIRST=""
 if [ -n "${OC_FIRST:-}" ]; then
   A=(); B=(); for r in "${RUNGS[@]}"; do if [[ "$r" == *$OC_FIRST* ]]; then A+=("$r"); else B+=("$r"); fi; done; RUNGS=("${A[@]}" "${B[@]}")
