@@ -78,3 +78,6 @@ Decisions and measurements: https://github.com/Mahan-film/roxira-platform/issues
 
 ## Delegation 11-07 11:15 Tehran
 Coordinator session is over 500k tokens, and no tool here can open a new chat. Work moved to fresh track agents (each retires at 150k with a note in QUEUE.md). Merged since last note: #562 #564 #568. Track A sales/purchase/ledger, Track B UI. Use review-merge.sh; verify any blocker in code.
+
+## Research 11-07 (fleet research/ folder; do not re-read whole files, grep the section you need)
+Plan issue #584, cost verdicts in #560. Builds are paid DeepSeek only (OC_ALLOW_FREE=1 restores free). No law found for gapless numbering in docs/legal_sources/iran/aeinnameh-mavad-95-owner-copy.md: never cite Article 95 for it.
