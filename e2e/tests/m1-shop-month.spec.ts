@@ -1477,7 +1477,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     );
 
   test('18 sales cycle: stock in two FIFO layers, quote accepted, order confirmed and reserved [E1]', async ({ page }) => {
-    await loginAsTestTenant(page, '/app/sales');
+    await loginAsTestTenant(page, '/app/invoicing');
     await apiPost(page, 'parties', { code: T1_GATE.partyCode, name: 'مشتری آزمون چرخه فروش', role: 'customer' });
     const warehouse = await apiPost<{ id: number }>(page, 'inventory/warehouses', {
       name: 'انبار آزمون چرخه فروش',
@@ -1528,7 +1528,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
   });
 
   test('19 sales cycle: two partial deliveries take FIFO cost and leave a backorder [E1]', async ({ page }) => {
-    await loginAsTestTenant(page, '/app/sales');
+    await loginAsTestTenant(page, '/app/invoicing');
     const deliver = async (quantity: number, date: string, key: string) =>
       apiPost<{ id: number; totalCost: number | string; journalEntryId: number | null; lines: Array<{ id: number; unitCost: number | string }> }>(
         page,
@@ -1563,7 +1563,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
   });
 
   test('20 sales cycle: one invoice bills both deliveries, revenue and VAT only [E1]', async ({ page }) => {
-    await loginAsTestTenant(page, '/app/sales');
+    await loginAsTestTenant(page, '/app/invoicing');
     const invoice = await apiPost<{ invoiceId: string; partyCode: string; totalAmount: number | string; totalTax: number | string; finalPayable: number | string; lines: unknown[] }>(
       page,
       'sales/invoices/from-deliveries',
@@ -1612,7 +1612,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
   });
 
   test('21 sales cycle: partial return of 2 units credits the customer and restocks at cost [E1]', async ({ page }) => {
-    await loginAsTestTenant(page, '/app/sales');
+    await loginAsTestTenant(page, '/app/invoicing');
     const returned = await apiPost<{ id: string; finalPayable: number | string; relatedInvoiceId: string }>(
       page,
       `sales/invoices/${t1.invoiceId}/returns`,
@@ -1642,7 +1642,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
   });
 
   test('22 sales cycle: ledger, stock and customer balance match the hand numbers [E1]', async ({ page }) => {
-    await loginAsTestTenant(page, '/app/sales');
+    await loginAsTestTenant(page, '/app/invoicing');
     const after = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
     const moved = (code: string) => balanceOf(after, code) - balanceOf(t1.accountsBefore, code);
     expect(moved('1201'), 'receivables up by 7,700,000 - 2,200,000').toBe(T1_GATE.customerBalance);
