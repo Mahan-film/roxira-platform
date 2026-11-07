@@ -64,6 +64,9 @@ export interface JournalEntryLine {
 export interface JournalEntryResponse {
   id: number;
   entryNumber: string;
+  /** «شمارهٔ قطعی» (bigint as string); null until the voucher is POSTED. */
+  permanentNumber?: string | null;
+  permanentFiscalYearId?: number | null;
   date: string;
   description: string;
   status: JournalEntryStatus;
@@ -86,7 +89,8 @@ export interface CreateJournalLineDto {
 }
 
 export interface CreateJournalEntryDto {
-  entryNumber: string;
+  /** Optional; when omitted the server generates `JV-<date>-<8 random hex>`. */
+  entryNumber?: string;
   date?: string;
   description: string;
   lines: CreateJournalLineDto[];
@@ -94,7 +98,8 @@ export interface CreateJournalEntryDto {
 
 /** Body of `PUT /journal-entries/:id`; `expectedVersion` is the version the form loaded. */
 export interface UpdateJournalEntryDto {
-  entryNumber: string;
+  /** Optional; when omitted the server keeps the voucher's current working number. */
+  entryNumber?: string;
   date?: string;
   description: string;
   lines: CreateJournalLineDto[];

@@ -171,6 +171,7 @@ export function JournalEntriesTable({ refreshKey = 0, onEdit }: JournalEntriesTa
             <TableRow>
               <TableHead className="w-10" />
               <TableHead className="w-36">شماره سند</TableHead>
+              <TableHead className="w-28">شمارهٔ قطعی</TableHead>
               <TableHead className="w-28">تاریخ</TableHead>
               <TableHead className="min-w-56">شرح</TableHead>
               <TableHead className="w-36">جمع بدهکار</TableHead>
@@ -183,7 +184,7 @@ export function JournalEntriesTable({ refreshKey = 0, onEdit }: JournalEntriesTa
             {isPending ? (
               Array.from({ length: 5 }).map((_, index) => (
                 <TableRow key={`skeleton-${index}`}>
-                  {Array.from({ length: 8 }).map((__, cellIndex) => (
+                  {Array.from({ length: 9 }).map((__, cellIndex) => (
                     <TableCell key={cellIndex}>
                       <Skeleton className="h-4 w-full" />
                     </TableCell>
@@ -217,6 +218,9 @@ export function JournalEntriesTable({ refreshKey = 0, onEdit }: JournalEntriesTa
                       </TableCell>
                       <TableCell className="whitespace-nowrap font-mono text-xs">
                         {entry.entryNumber}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap font-mono text-xs">
+                        {entry.permanentNumber ?? "—"}
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
                         {formatPersianDate(entry.date)}
@@ -265,7 +269,7 @@ export function JournalEntriesTable({ refreshKey = 0, onEdit }: JournalEntriesTa
                     {isExpanded && (
                       <TableRow key={`${entry.id}-lines`} className="bg-muted/30">
                         <TableCell />
-                        <TableCell colSpan={7}>
+                        <TableCell colSpan={8}>
                           <div className="flex flex-col gap-2 py-1">
                             {entry.lines.map((line) => (
                               <div
@@ -303,7 +307,7 @@ export function JournalEntriesTable({ refreshKey = 0, onEdit }: JournalEntriesTa
             ) : (
               <TableRow>
                 <TableCell
-                  colSpan={8}
+                  colSpan={9}
                   className="py-10 text-center text-muted-foreground"
                 >
                   هیچ سند حسابداری ثبت نشده است.

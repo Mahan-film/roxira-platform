@@ -48,8 +48,20 @@ export class JournalEntryResponseDto {
   @ApiProperty({ description: 'شناسه یکتای سند' })
   id: number;
 
-  @ApiProperty({ description: 'شماره سند' })
+  @ApiProperty({ description: 'شمارهٔ کاری سند' })
   entryNumber: string;
+
+  @ApiProperty({
+    description: 'شمارهٔ قطعی (bigint به رشته)؛ تا قطعی‌شدن سند null است.',
+    nullable: true,
+  })
+  permanentNumber: string | null;
+
+  @ApiProperty({
+    description: 'شناسهٔ سال مالی شمارهٔ قطعی؛ ۰ اگر تاریخ سند در هیچ سال مالی نباشد.',
+    nullable: true,
+  })
+  permanentFiscalYearId: number | null;
 
   @ApiProperty({ description: 'تاریخ سند' })
   date: Date;

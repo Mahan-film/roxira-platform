@@ -34,6 +34,18 @@ export class JournalEntryEntity {
   @Column({ type: 'varchar', length: 64, name: 'entry_number' })
   entryNumber: string;
 
+  /**
+   * «شمارهٔ قطعی» — assigned once by the database when the voucher first becomes POSTED, per tenant
+   * and fiscal year. NULL while the voucher is not final. Never changes afterwards. `pg` returns
+   * bigint as a string, so the API exposes it as a string too.
+   */
+  @Column({ type: 'bigint', name: 'permanent_number', nullable: true })
+  permanentNumber: string | null;
+
+  /** The fiscal year the permanent number belongs to; 0 when no fiscal year covers the date. */
+  @Column({ type: 'integer', name: 'permanent_fiscal_year_id', nullable: true })
+  permanentFiscalYearId: number | null;
+
   @Index()
   @Column({ type: 'timestamp' })
   date: Date;

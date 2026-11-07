@@ -110,11 +110,16 @@ export class JournalEntryLineDto {
  * (POST /enterprise-hub/accounting/journal-entries).
  */
 export class CreateJournalEntryDto {
-  @ApiProperty({ description: 'شماره یکتای سند حسابداری', example: 'JV-1405-000001' })
+  @ApiPropertyOptional({
+    description:
+      'شمارهٔ کاری سند؛ اختیاری است. در صورت خالی بودن، سرور «JV-<تاریخ سند>-<۸ رقم تصادفی>» می‌سازد. «شمارهٔ قطعی» جداگانه و هنگام قطعی‌شدن داده می‌شود.',
+    example: 'JV-1405-000001',
+  })
+  @IsOptional()
   @IsString()
   @MinLength(1)
   @MaxLength(64)
-  entryNumber: string;
+  entryNumber?: string;
 
   @ApiPropertyOptional({
     description: 'تاریخ سند (ISO 8601)؛ در صورت عدم ارسال، زمان جاری سرور',

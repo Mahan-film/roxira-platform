@@ -41,7 +41,7 @@ thead { display:table-header-group; } tr { page-break-inside:avoid; }
 <style>@page { size: A4 portrait; margin: 8mm; }</style>
 </head>
 <body class="{{#if isDraft}}is-draft{{/if}}">
-<!-- Placeholders: voucherNumber, sequenceNumber (شماره عطف), dateJalali, voucherType, status,
+<!-- Placeholders: voucherNumber, sequenceNumber (شمارهٔ قطعی), dateJalali, voucherType, status,
      fiscalYear, description, lines[]{row,accountCode,accountName,description,detail,debit,credit},
      totals{debit,credit,inWords}, references, preparedBy -->
 <div class="watermark">پیش‌نویس</div>
@@ -50,8 +50,8 @@ thead { display:table-header-group; } tr { page-break-inside:avoid; }
     <div><b>{{company.name}}</b><br><span class="muted">سال مالی {{fiscalYear}}</span></div>
     <div><h1>سند حسابداری</h1><div class="muted" style="text-align:center">{{voucherType}} — {{status}}</div></div>
     <div><dl class="kv">
-      <dt>شماره سند</dt><dd class="num">{{voucherNumber}}</dd>
-      <dt>شماره عطف</dt><dd class="num">{{sequenceNumber}}</dd>
+      <dt>شمارهٔ سند (کاری)</dt><dd class="num">{{voucherNumber}}</dd>
+      <dt>شمارهٔ قطعی</dt><dd class="num">{{sequenceNumber}}</dd>
       <dt>تاریخ</dt><dd class="num">{{dateJalali}}</dd></dl></div>
   </div>
   <p><b>شرح سند:</b> {{description}}</p>

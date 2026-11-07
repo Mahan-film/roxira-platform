@@ -59,3 +59,28 @@ test("a zero side of a line stays blank", () => {
   assert.equal(data.lines[0].credit, "");
   assert.equal(data.lines[1].debit, "");
 });
+
+test("maps the working number and the permanent number to their two labelled fields", () => {
+  const data = mapJournalEntryToVoucherData(
+    entry({ entryNumber: "RV-9", permanentNumber: "17" }),
+    "ثبت‌شده",
+  ) as { voucherNumber: string; sequenceNumber: string };
+  assert.equal(data.voucherNumber, "RV-9");
+  assert.equal(data.sequenceNumber, "17");
+});
+
+test("a voucher with no permanent number prints a blank final number", () => {
+  const data = mapJournalEntryToVoucherData(
+    entry({ permanentNumber: null }),
+    "ثبت‌شده",
+  ) as { sequenceNumber: string };
+  assert.equal(data.sequenceNumber, "");
+});
+
+test("the printed voucher labels both numbers", () => {
+  const html = printed(entry({ entryNumber: "RV-9", permanentNumber: "17" }));
+  assert.ok(html.includes("شمارهٔ سند (کاری)"));
+  assert.ok(html.includes("شمارهٔ قطعی"));
+  assert.ok(html.includes("RV-9"));
+  assert.ok(html.includes("17"));
+});

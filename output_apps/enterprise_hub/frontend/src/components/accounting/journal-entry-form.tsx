@@ -184,7 +184,6 @@ export function JournalEntryForm({
 
   function validate(): string[] {
     const errors: string[] = [];
-    if (!entryNumber.trim()) errors.push("شماره سند الزامی است.");
     if (!description.trim()) errors.push("شرح سند الزامی است.");
 
     const validLines = lines.filter(
@@ -233,7 +232,7 @@ export function JournalEntryForm({
     }
 
     const payload: CreateJournalEntryDto = {
-      entryNumber: entryNumber.trim(),
+      entryNumber: entryNumber.trim() || undefined,
       // Noon local time keeps the Jalali day stable across time zones.
       date: date ? new Date(`${date}T12:00:00`).toISOString() : undefined,
       description: description.trim(),
@@ -346,6 +345,9 @@ export function JournalEntryForm({
                   <WandSparklesIcon />
                 </Button>
               </div>
+              <p className="text-xs text-muted-foreground">
+                در صورت خالی بودن، خودکار ساخته می‌شود
+              </p>
             </div>
             <div className="grid gap-2">
               <Label>تاریخ سند</Label>
