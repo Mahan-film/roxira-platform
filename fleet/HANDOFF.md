@@ -29,7 +29,7 @@ Then write «DONE» on #227 with evidence.
 - Coordinator (me): architecture, decisions, read diffs of money and permission code, merge. Keep turns few; do not answer interim notices.
 - Build: `_fleet/oc.sh <worktree> <brief>`: default order DeepSeek Flash, then gateway, then direct. `OC_FIRST=-` for the plain ladder.
 - Agents: Haiku 5.5 for mechanical work, Sonnet only for hard tracks. About 3 to 5 at once. Retire above 150k tokens. Brief: `_fleet/AGENT_BRIEF.md` + `RULES.md`.
-- Merge (owner approved): CI green + diff read or review for UI + `_fleet/review.sh N --post`. Then `_fleet/merge-loop.sh N...` (`merge-batch.sh` underneath; `res-rows.py` resolves status-doc rows). UI-only: `_fleet/ship-ui.sh N "title"`.
+- Merge (owner approved): CI green + diff read or review for UI + `_fleet/review.sh N --post`. Use `_fleet/review-merge.sh N` (stops on a blocker). Then `_fleet/merge-loop.sh N...` (`merge-batch.sh` underneath; `res-rows.py` resolves status-doc rows). UI-only: `_fleet/ship-ui.sh N "title"`.
 - Free-model reviews are noisy: verify each Blocker in code. Real ones have been found (float scaling in #473), so do not dismiss them unread.
 - Local CI is skipped by `_fleet/SKIP_LOCAL_CI`; history guard and key scan stay. Original hook: `_fleet/pre-push.orig`.
 - Gateway tunnel: systemd user unit `roxira-llm-tunnel`, 127.0.0.1:4181; key `~/Secrets/roxira/llm-gateway.env`. Cap 2 USD/day; OpenRouter agents key 5 USD/day.
