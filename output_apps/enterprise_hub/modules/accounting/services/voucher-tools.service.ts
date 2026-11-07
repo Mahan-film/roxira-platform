@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { tehranIsoDate } from '../../hr/services/jalali-period';
 import { JournalEntryResponseDto } from '../dto/journal-entry-response.dto';
 import { CopyJournalEntryDto } from '../dto/copy-journal-entry.dto';
 import { JournalEntryEntity } from '../entities/journal-entry.entity';
@@ -49,7 +50,7 @@ export class VoucherToolsService {
 
     return this.accountingService.createJournalEntry(tenantId, {
       entryNumber,
-      date: dto.date,
+      date: dto.date ?? tehranIsoDate(new Date()),
       description: source.description,
       status: JournalEntryStatus.DRAFT,
       lines: lines.map((line) => ({
