@@ -66,9 +66,11 @@ export class InvoicingRepository {
   async create(
     tenantId: string,
     data: Partial<InvoiceEntity>,
+    manager?: EntityManager,
   ): Promise<InvoiceEntity> {
-    const entity = this.repository.create({ ...data, tenantId });
-    return this.repository.save(entity);
+    const repository = manager ? manager.getRepository(InvoiceEntity) : this.repository;
+    const entity = repository.create({ ...data, tenantId });
+    return repository.save(entity);
   }
 
   async save(
