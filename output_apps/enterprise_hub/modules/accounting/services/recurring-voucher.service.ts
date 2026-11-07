@@ -197,7 +197,19 @@ export class RecurringVoucherService implements OnModuleInit {
     for (const template of templates) {
       let next = template.nextRunDate;
       while (next <= today && (template.endDate == null || next <= template.endDate)) {
-        const outcome = await this.runOne(tenantId, template, next);
+        let outcome: 'created' | 'duplicate' | 'locked';
+        try {
+          outcome = await this.runOne(tenantId, template, next);
+        } catch (error) {
+          // One broken template (say a deactivated account) must not stop the others.
+          this.logger.error(`recurring voucher ${template.id} failed: ${(error as Error).message}`);
+          result.skipped.push({
+            id: template.id,
+            date: next,
+            reason: 'این سررسید ثبت نشد؛ سطرهای الگو را بررسی کنید.',
+          });
+          break;
+        }
         if (outcome === 'locked') {
           result.skipped.push({
             id: template.id,
@@ -232,7 +244,13 @@ export class RecurringVoucherService implements OnModuleInit {
           });
           continue;
         }
-        throw error;
+        // One failed reversal must not stop the others; it is retried on the next run.
+        this.logger.error(`recurring run ${run.id} reversal failed: ${(error as Error).message}`);
+        result.skipped.push({
+          id: run.recurringId,
+          date: run.reversalDate,
+          reason: 'برگشت این سند انجام نشد؛ سند را بررسی کنید.',
+        });
       }
     }
 
