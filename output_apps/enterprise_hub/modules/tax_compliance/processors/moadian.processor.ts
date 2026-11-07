@@ -35,7 +35,13 @@ export class MoadianProcessor extends WorkerHost {
 
     switch (job.name) {
       case MOADIAN_SEND_JOB:
-        return { outcome: await this.moadianService.processSend({ tenantId, submissionId }, isFinalAttempt) };
+        return {
+          outcome: await this.moadianService.processSend(
+            { tenantId, submissionId },
+            isFinalAttempt,
+            job.attemptsMade,
+          ),
+        };
       case MOADIAN_POLL_JOB:
         return { outcome: await this.moadianService.processPoll({ tenantId, submissionId }) };
       default:

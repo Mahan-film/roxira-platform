@@ -469,7 +469,10 @@ class InMemoryMoadianRepository {
 interface FakeServerState {
   received: Array<{ packet: Record<string, unknown>; header: Record<string, unknown> }>;
   inquiryStatus: string;
+  uidInquiryStatus: string;
+  uidInquiryHttpStatus: number;
   invoiceHttpStatus: number;
+  sendAttempts: number;
   authHeaders: string[];
 }
 
@@ -497,11 +500,7 @@ function fakeMoadianServer(state: FakeServerState): FetchLike {
       });
     }
     if (path === '/invoice') {
-      if (state.invoiceHttpStatus !== 200) {
-        return json(state.invoiceHttpStatus, {
-          errors: [{ errorCode: 'E1', detail: 'rejected by fake' }],
-        });
-      }
+      state.sendAttempts += 1;
       const [item] = JSON.parse(String(init!.body)) as Array<{
         payload: string;
         header: Record<string, unknown>;
@@ -509,11 +508,41 @@ function fakeMoadianServer(state: FakeServerState): FetchLike {
       const { plaintext } = decryptMoadianJwe(item.payload, taxOrgKeys.privateKeyPem);
       const verified = verifyMoadianJws(plaintext, tenantKeys.publicKey);
       expect(verified).not.toBeNull();
+      // The packet is recorded even when the response is lost (non-200): that is
+      // exactly the "reached the tax system, only the response was lost" case.
       state.received.push({ packet: verified!.payload as Record<string, unknown>, header: item.header });
+      if (state.invoiceHttpStatus !== 200) {
+        return json(state.invoiceHttpStatus, {
+          errors: [{ errorCode: 'E1', detail: 'rejected by fake' }],
+        });
+      }
       return json(200, {
         timestamp: Date.now(),
         result: [{ uid: item.header.requestTraceId, referenceNumber: 'REF-1', packetType: null }],
       });
+    }
+    if (path.startsWith('/inquiry-by-uid')) {
+      if (state.uidInquiryHttpStatus !== 200) {
+        return json(state.uidInquiryHttpStatus, {
+          errors: [{ errorCode: 'E1', detail: 'inquiry rejected by fake' }],
+        });
+      }
+      if (state.uidInquiryStatus === 'NOT_FOUND') {
+        return json(200, []);
+      }
+      const uid = decodeURIComponent(path.split('uidList=')[1]?.split('&')[0] ?? '');
+      return json(200, [
+        {
+          uid,
+          referenceNumber: 'REF-UID-1',
+          status: state.uidInquiryStatus,
+          data: {
+            error: [],
+            warning: [],
+            success: state.uidInquiryStatus === 'SUCCESS',
+          },
+        },
+      ]);
     }
     if (path.startsWith('/inquiry-by-reference-id')) {
       expect(path).toContain('referenceIds=REF-1');
@@ -545,7 +574,10 @@ function buildMoadian(options: { enabled?: boolean; invoices?: InvoiceResponseDt
   const state: FakeServerState = {
     received: [],
     inquiryStatus: 'SUCCESS',
+    uidInquiryStatus: 'NOT_FOUND',
+    uidInquiryHttpStatus: 200,
     invoiceHttpStatus: 200,
+    sendAttempts: 0,
     authHeaders: [],
   };
   const client = new MoadianApiClient(config, fakeMoadianServer(state));
@@ -792,6 +824,73 @@ describe('MoadianService — send and poll', () => {
       MoadianSubmissionStatus.QUEUED,
     );
     await expect(service.processSend(job, true)).rejects.toThrow('HTTP 503');
+    expect((await service.getSubmission(TENANT_A, INVOICE_A)).status).toBe(
+      MoadianSubmissionStatus.ERROR,
+    );
+  });
+
+  it('on retry after a lost response, asks by uid first and never resends a known invoice', async () => {
+    const { service, state, jobs } = buildMoadian();
+    await service.putCredential(TENANT_A, credentialDto());
+    // The first send reaches the tax system but the response is lost (503).
+    state.invoiceHttpStatus = 503;
+    await service.submitInvoice(TENANT_A, INVOICE_A);
+    const job = jobs[0].data as never;
+    await expect(service.processSend(job, false, 0)).rejects.toThrow('HTTP 503');
+    expect(state.sendAttempts).toBe(1);
+
+    // The retry finds the uid registered: only the reference is stored and the poll scheduled.
+    state.uidInquiryStatus = 'SUCCESS';
+    state.invoiceHttpStatus = 200;
+    await expect(service.processSend(job, false, 1)).resolves.toBe('poll');
+    expect(state.sendAttempts).toBe(1);
+    const sent = await service.getSubmission(TENANT_A, INVOICE_A);
+    expect(sent).toMatchObject({
+      status: MoadianSubmissionStatus.SENT,
+      referenceNumber: 'REF-UID-1',
+    });
+    expect(jobs[1].name).toBe(MOADIAN_POLL_JOB);
+  });
+
+  it('on retry of an unknown uid, the packet is sent again', async () => {
+    const { service, state, jobs } = buildMoadian();
+    await service.putCredential(TENANT_A, credentialDto());
+    state.invoiceHttpStatus = 503;
+    await service.submitInvoice(TENANT_A, INVOICE_A);
+    const job = jobs[0].data as never;
+    await expect(service.processSend(job, false, 0)).rejects.toThrow('HTTP 503');
+    expect(state.sendAttempts).toBe(1);
+
+    // Inquiry says the uid is unknown, so the packet is sent again and goes through.
+    state.invoiceHttpStatus = 200;
+    await expect(service.processSend(job, false, 1)).resolves.toBe('poll');
+    expect(state.sendAttempts).toBe(2);
+    const sent = await service.getSubmission(TENANT_A, INVOICE_A);
+    expect(sent).toMatchObject({
+      status: MoadianSubmissionStatus.SENT,
+      referenceNumber: 'REF-1',
+    });
+  });
+
+  it('a failed uid inquiry on retry is a transport error and never sends', async () => {
+    const { service, state, jobs } = buildMoadian();
+    await service.putCredential(TENANT_A, credentialDto());
+    state.invoiceHttpStatus = 503;
+    await service.submitInvoice(TENANT_A, INVOICE_A);
+    const job = jobs[0].data as never;
+    await expect(service.processSend(job, false, 0)).rejects.toThrow('HTTP 503');
+    expect(state.sendAttempts).toBe(1);
+
+    // Inquiry itself fails (transport): nothing is sent and the job retries.
+    state.uidInquiryHttpStatus = 503;
+    await expect(service.processSend(job, false, 1)).rejects.toThrow('HTTP 503');
+    expect(state.sendAttempts).toBe(1);
+    expect((await service.getSubmission(TENANT_A, INVOICE_A)).status).toBe(
+      MoadianSubmissionStatus.QUEUED,
+    );
+    // On the final attempt the transport error marks the submission ERROR, still without a resend.
+    await expect(service.processSend(job, true, 1)).rejects.toThrow('HTTP 503');
+    expect(state.sendAttempts).toBe(1);
     expect((await service.getSubmission(TENANT_A, INVOICE_A)).status).toBe(
       MoadianSubmissionStatus.ERROR,
     );

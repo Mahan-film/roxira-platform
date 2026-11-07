@@ -304,6 +304,50 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/accounting/journal-entries/:id/attachments (VoucherAttachmentController.list)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/accounting/journal-entries/:id/attachments/:attachmentId/download (VoucherAttachmentController.download)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/accounting/journal-entries/:id/attachments (VoucherAttachmentController.upload)": {
+    "policy": "accounting:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "DELETE /enterprise-hub/accounting/journal-entries/:id/attachments/:attachmentId (VoucherAttachmentController.remove)": {
+    "policy": "accounting:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/accounting/period-locks (AccountingController.listPeriodLocks)": {
     "policy": "accounting:read",
     "owner": true,
