@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
+import { Printer } from "lucide-react";
 
 import { loadErrorMessage } from "@/components/app/app-ui";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { getStockDocument, listStockDocuments } from "@/lib/api/inventory-client";
 import { formatMoneyRial, formatNumber } from "@/lib/fa-format";
+import { printWarehouseDocument } from "@/lib/print/open-warehouse-document-window";
 import {
   STOCK_DOCUMENT_TYPE_LABELS,
   type StockDocument,
@@ -119,16 +121,29 @@ export function StockDocumentsList({ warehouses, refreshKey }: StockDocumentsLis
                 {openId === doc.id && detail?.id === doc.id && (
                   <TableRow>
                     <TableCell colSpan={7} className="bg-muted/30">
-                      <ul className="grid gap-1 text-xs">
-                        {detail.lines?.map((line) => (
-                          <li key={line.id} className="flex flex-wrap gap-x-4">
-                            <span className="font-mono">{line.sku}</span>
-                            <span>مقدار {formatNumber(line.quantity)}</span>
-                            <span>بهای واحد {formatMoneyRial(line.unitCost)}</span>
-                            <span>ارزش {formatMoneyRial(line.value)}</span>
-                          </li>
-                        ))}
-                      </ul>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex justify-end">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => printWarehouseDocument(detail, name)}
+                          >
+                            <Printer />
+                            چاپ
+                          </Button>
+                        </div>
+                        <ul className="grid gap-1 text-xs">
+                          {detail.lines?.map((line) => (
+                            <li key={line.id} className="flex flex-wrap gap-x-4">
+                              <span className="font-mono">{line.sku}</span>
+                              <span>مقدار {formatNumber(line.quantity)}</span>
+                              <span>بهای واحد {formatMoneyRial(line.unitCost)}</span>
+                              <span>ارزش {formatMoneyRial(line.value)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     </TableCell>
                   </TableRow>
                 )}
