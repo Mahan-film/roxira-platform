@@ -121,6 +121,29 @@ export async function apiPatch<T>(page: Page, route: string, body: unknown): Pro
 }
 
 /**
+ * POST /enterprise-hub/<route> with a JSON body through the app's own proxy (test tenant's owner).
+ * Returns the parsed body; `expectedStatus` defaults to 201 (a created document).
+ */
+export async function apiPost<T>(page: Page, route: string, body: unknown, expectedStatus = 201): Promise<T> {
+  const token = await page.evaluate((key) => {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as { accessToken?: string }).accessToken : undefined;
+  }, SESSION_STORAGE_KEY);
+  expect(token, 'the test session is in localStorage').toBeTruthy();
+  const response = await withThrottleRetry(page, () =>
+    page.request.post(`/api/backend/enterprise-hub/${route}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: body,
+    }),
+  );
+  if (response.status() !== expectedStatus) {
+    // Put the server's own message in the report: a bare status code hides why a request was refused.
+    throw new Error(`POST ${route}: expected ${expectedStatus}, got ${response.status()}: ${(await response.text()).slice(0, 600)}`);
+  }
+  return (await response.json()) as T;
+}
+
+/**
  * PUT /enterprise-hub/<route> with a JSON body through the app's own proxy (test tenant's owner).
  * Returns the HTTP status: the posting-rules role update answers 204 and the caller asserts it.
  */

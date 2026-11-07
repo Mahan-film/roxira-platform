@@ -1,4 +1,5 @@
-import { test, expect, fa, findSessionFile, loginAsTestTenant } from '../app/fixtures';
+import { test, expect, fa, findSessionFile, loginAsTestTenant, SESSION_STORAGE_KEY } from '../app/fixtures';
+import * as fs from 'node:fs';
 import type { Page } from '@playwright/test';
 import { M1_EXPECTED_CLOSING, M1_MONTH_OPERATIONS, README_TOTALS, sumDelta } from './m1/expected-totals';
 import {
@@ -15,7 +16,7 @@ import {
   sortInvoices,
   toRial,
 } from './m1/fixture-data';
-import { apiGet, apiPut, importFile, issueAndWait, payAndWait, persianise, rials } from './m1/import-ui';
+import { apiGet, apiPost, apiPut, importFile, issueAndWait, payAndWait, persianise, rials } from './m1/import-ui';
 
 /**
  * M1 "Shop-ready" acceptance gate (issue #116, epic E0): one month of the fictional trading company in
@@ -380,6 +381,74 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
   /** One account's balance from `accounting/accounts` (debit-positive). */
   const balanceOf = (accounts: Array<{ code: string; balance: number | string }>, code: string): bigint =>
     rials(accounts.find((a) => a.code === code)!.balance);
+
+  // The invoice fields the POS-sale and return steps read back by id (a subset of InvoiceResponseDto).
+  type PostedInvoice = {
+    id: string;
+    taxInvoiceNumber: string;
+    direction: string;
+    subject: number;
+    status: string;
+    relatedInvoiceId: string | null;
+    finalPayable: number;
+    journalEntryId: number | null;
+    paidJournalEntryId: number | null;
+    postingError: string | null;
+  };
+  /** Polls GET invoicing/:id until the asynchronous posting finishes (issue voucher, plus settlement when asked). */
+  const waitForInvoice = async (
+    page: Page,
+    invoiceId: string,
+    options: { paid?: boolean } = {},
+  ): Promise<PostedInvoice> => {
+    const deadline = Date.now() + 30_000;
+    for (;;) {
+      const invoice = await apiGet<PostedInvoice>(page, `invoicing/${invoiceId}`);
+      if (invoice.postingError !== null) {
+        throw new Error(`invoice ${invoiceId}: posting failed: ${invoice.postingError}`);
+      }
+      if (invoice.journalEntryId !== null && (!options.paid || invoice.paidJournalEntryId !== null)) {
+        return invoice;
+      }
+      if (Date.now() > deadline) {
+        throw new Error(`invoice ${invoiceId}: no voucher and no error 30 s after the request`);
+      }
+      await page.waitForTimeout(500);
+    }
+  };
+  /** The id of the first invoice with this number; the list grows through the gate, so no total is asserted. */
+  const findInvoiceIdByNumber = async (page: Page, number: string): Promise<string> => {
+    for (let page_ = 1; page_ <= 5; page_ += 1) {
+      const listed = await apiGet<{ data: Array<{ id: string; taxInvoiceNumber: string }> }>(
+        page,
+        `invoicing?limit=100&page=${page_}`,
+      );
+      const found = listed.data.find((i) => i.taxInvoiceNumber === number);
+      if (found) return found.id;
+      if (listed.data.length < 100) break;
+    }
+    throw new Error(`invoice ${number} is not in the list`);
+  };
+  type VoucherLine = { accountCode: string; description?: string; debit: number | string; credit: number | string };
+  /** One voucher by id; fails unless it is balanced, and returns it with every line. */
+  const journalVoucher = async (
+    page: Page,
+    entryId: number,
+  ): Promise<{ lines: VoucherLine[]; totalDebit: number | string; totalCredit: number | string }> => {
+    const voucher = await apiGet<{
+      lines: VoucherLine[];
+      totalDebit: number | string;
+      totalCredit: number | string;
+    }>(page, `accounting/journal-entries/${entryId}`);
+    expect(rials(voucher.totalDebit), `voucher ${entryId} is balanced`).toBe(rials(voucher.totalCredit));
+    return voucher;
+  };
+  const voucherLineText = (voucher: { lines: VoucherLine[] }): string =>
+    voucher.lines.map((l) => `${l.accountCode} debit ${l.debit} credit ${l.credit}`).join('; ');
+  const debitOf = (lines: VoucherLine[], code: string): bigint =>
+    lines.filter((l) => l.accountCode === code).reduce((acc, l) => acc + rials(l.debit), 0n);
+  const creditOf = (lines: VoucherLine[], code: string): bigint =>
+    lines.filter((l) => l.accountCode === code).reduce((acc, l) => acc + rials(l.credit), 0n);
 
   test('07 post purchase invoices: stock in, payables up [E2]', async ({ page }) => {
     test.setTimeout(1_800_000); // the API allows 100 requests/min per IP: ~600 calls take minutes
@@ -1006,51 +1075,361 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     });
   });
 
-  test.fixme('09 POS walk-in sale: 1 x ITM-1001 paid in cash [E1]', async ({ page }) => {
+  test('09 POS walk-in sale: 1 x ITM-1001 paid in cash [E1]', async ({ page }) => {
     await loginAsTestTenant(page, '/app/invoicing');
-    void M1_MONTH_OPERATIONS.posWalkInSale; // total 20,487,500 incl. VAT; no customer
+    const sale = M1_MONTH_OPERATIONS.posWalkInSale; // 1 x ITM-1001, 20,487,500 incl. VAT; no customer
+
+    const accountsBefore = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
+    const valuationBefore = await apiGet<{ totalInventoryValue: number | string }>(page, 'inventory/valuation');
+
+    const created = await apiPost<{ invoice: { id: string }; replayed: boolean }>(page, 'invoicing/pos-sales', {
+      idempotencyKey: 'm1-pos-1',
+      lines: [{ code: sale.itemCode, quantity: Number(sale.quantity), unitPrice: Number(sale.unitPrice) }],
+      payments: [{ method: 'CASH', amount: Number(sale.total) }],
+    });
+    expect(created.replayed, 'the first call is not a replay').toBe(false);
+
+    // Posting is asynchronous (a suite-events job): wait for both the issue and the settlement voucher.
+    const invoice = await waitForInvoice(page, created.invoice.id);
+    expect(invoice.status, 'a cash POS sale is PAID at once').toBe('PAID');
+    expect(rials(invoice.finalPayable), 'the walk-in sale total').toBe(sale.total);
+
+    // The issue voucher carries revenue, output VAT, COGS and stock; the settlement clears 1201 to 1102.
+    const issue = await journalVoucher(page, invoice.journalEntryId!);
+    test.info().annotations.push({ type: 'voucher', description: `POS sale issue: ${voucherLineText(issue)}` });
+    expect(creditOf(issue.lines, '4101'), 'revenue credit excl. VAT').toBe(sale.unitPrice);
+    expect(creditOf(issue.lines, '2201'), 'output VAT credit').toBe(sale.vat);
+    expect(debitOf(issue.lines, '5101'), 'COGS debit at FIFO cost').toBe(-sale.stockDelta);
+    expect(creditOf(issue.lines, '1301'), 'stock credit at FIFO cost').toBe(-sale.stockDelta);
+
+    const accountsAfter = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
+    const valuationAfter = await apiGet<{ totalInventoryValue: number | string }>(page, 'inventory/valuation');
+    expect(
+      balanceOf(accountsAfter, '1102') - balanceOf(accountsBefore, '1102'),
+      'petty cash up by the cash sale',
+    ).toBe(sale.total);
+    expect(balanceOf(accountsAfter, '1101') - balanceOf(accountsBefore, '1101'), 'the bank 1101 does not move').toBe(0n);
+    expect(
+      balanceOf(accountsAfter, '1201') - balanceOf(accountsBefore, '1201'),
+      'receivable issued then settled: net zero',
+    ).toBe(sale.receivablesDelta);
+    expect(
+      rials(valuationAfter.totalInventoryValue) - rials(valuationBefore.totalInventoryValue),
+      'stock valuation out at the sale cost',
+    ).toBe(sale.stockDelta);
   });
 
-  test.fixme('10 sales return: CUST-001 returns 1 unit of INV-S-1403-0001 [E1]', async ({ page }) => {
+  test('10 sales return: CUST-001 returns 1 unit of INV-S-1403-0001 [E1]', async ({ page }) => {
     await loginAsTestTenant(page, '/app/invoicing');
-    void M1_MONTH_OPERATIONS.salesReturn; // credit note linked to the original invoice
+    const salesReturn = M1_MONTH_OPERATIONS.salesReturn; // credit note linked to the original invoice
+
+    const originalId = await findInvoiceIdByNumber(page, salesReturn.invoiceNumber);
+    const accountsBefore = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
+    const valuationBefore = await apiGet<{ totalInventoryValue: number | string }>(page, 'inventory/valuation');
+
+    // The imported sale carries CUST-001 only as buyerInfo (no customerId), and it is unpaid, so the quick-sale
+    // return (pos-sales returnOf: CREDIT needs a known customer, ORIGINAL needs a PAID sale) refuses it with 400.
+    // The product path left is the plain invoice form: a RETURN-subject invoice linked to the sale.
+    const original = await apiGet<{
+      sellerInfo: unknown;
+      buyerInfo: unknown;
+      currency: string;
+      fxRate: number | string;
+      jurisdiction?: string;
+      warehouseId?: number | null;
+      einvoiceType?: unknown;
+      items: Array<{ itemId?: string; sku?: string; description: string; unitPrice: number; vatRate?: number; quantity: number }>;
+    }>(page, `invoicing/${originalId}`);
+    expect(original.items[0].quantity, 'the original sold 2 units').toBe(2);
+    const line = original.items[0];
+    const returnBody = (quantity: number) => ({
+      subject: 4,
+      relatedInvoiceId: originalId,
+      direction: 'SALE',
+      sellerInfo: original.sellerInfo,
+      buyerInfo: original.buyerInfo,
+      currency: original.currency,
+      ...(original.jurisdiction ? { jurisdiction: original.jurisdiction } : {}),
+      ...(original.warehouseId ? { warehouseId: original.warehouseId } : {}),
+      items: [
+        {
+          ...(line.itemId ? { itemId: line.itemId } : {}),
+          ...(line.sku ? { sku: line.sku } : {}),
+          description: line.description,
+          quantity,
+          unitPrice: line.unitPrice,
+          ...(line.vatRate !== undefined ? { vatRate: line.vatRate } : {}),
+          originalLine: 0,
+        },
+      ],
+      status: 'ISSUED',
+    });
+    const created = await apiPost<{ id: string }>(page, 'invoicing', returnBody(1));
+
+    const returned = await waitForInvoice(page, created.id);
+    expect(returned.subject, 'the return invoice has subject RETURN (4)').toBe(4);
+    expect(returned.relatedInvoiceId, 'the return is linked to the original sale').toBe(originalId);
+    expect(rials(returned.finalPayable), 'one unit returned at the original price').toBe(salesReturn.total);
+
+    // The return voucher mirrors revenue and VAT and takes the goods back at the sale's recorded cost.
+    const voucher = await journalVoucher(page, returned.journalEntryId!);
+    test.info().annotations.push({
+      type: 'voucher',
+      description: `return of ${salesReturn.invoiceNumber}: ${voucherLineText(voucher)}`,
+    });
+    expect(creditOf(voucher.lines, '1201'), 'the credit note credits the receivable').toBe(salesReturn.total);
+    expect(debitOf(voucher.lines, '1301'), 'the goods come back into stock').toBe(salesReturn.stockDelta);
+
+    const accountsAfter = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
+    const valuationAfter = await apiGet<{ totalInventoryValue: number | string }>(page, 'inventory/valuation');
+    expect(
+      balanceOf(accountsAfter, '1201') - balanceOf(accountsBefore, '1201'),
+      '1201 down by the credit note',
+    ).toBe(salesReturn.receivablesDelta);
+    expect(
+      balanceOf(accountsAfter, '1301') - balanceOf(accountsBefore, '1301'),
+      'ledger 1301 back by the sale cost',
+    ).toBe(salesReturn.stockDelta);
+    expect(
+      rials(valuationAfter.totalInventoryValue) - rials(valuationBefore.totalInventoryValue),
+      'FIFO valuation back by the sale cost',
+    ).toBe(salesReturn.stockDelta);
+    expect(balanceOf(accountsAfter, '1101') - balanceOf(accountsBefore, '1101'), 'the bank 1101 does not move').toBe(0n);
+
+    // Only one of the two sold units is left after the first return: a second return of 2 units must fail.
+    const token = await page.evaluate((key) => {
+      const raw = window.localStorage.getItem(key);
+      return raw ? (JSON.parse(raw) as { accessToken?: string }).accessToken : undefined;
+    }, SESSION_STORAGE_KEY);
+    expect(token, 'the test session is in localStorage').toBeTruthy();
+    const refused = await page.request.post('/api/backend/enterprise-hub/invoicing', {
+      headers: { Authorization: `Bearer ${token}` },
+      data: returnBody(2),
+    });
+    expect(refused.status(), 'a return beyond the quantity left is refused with 400').toBe(400);
   });
 
-  test.fixme('11 cheque received: CUST-002 settles INV-S-1403-0002, held in hand [E1]', async ({ page }) => {
+  test('11 cheque received: CUST-002 settles INV-S-1403-0002, held in hand [E1]', async ({ page }) => {
     await loginAsTestTenant(page, '/app/cheques');
-    void M1_MONTH_OPERATIONS.chequeReceived; // 36,712,500 to 1110, not deposited
+    const cheque = M1_MONTH_OPERATIONS.chequeReceived; // 36,712,500 to 1110, not deposited
+
+    // Tenant setup, as step 07 does for cash: the cheque template's receivable role defaults to the legacy
+    // code 1020, which this chart does not have (the first run failed with UNKNOWN_ACCOUNT 1020). Pin it to 1201.
+    const pinned = await apiPut(page, 'posting-rules/cheque.received.create/roles/receivable', { accountCode: '1201' });
+    expect(pinned, 'PUT posting-rules cheque.received.create receivable -> 1201').toBe(204);
+    const accountsBefore = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
+    // ChequeDirection is lowercase 'received'; amount may be a number or a decimal string.
+    const created = await apiPost<{ id: number; status: string }>(page, 'cheques', {
+      direction: 'received',
+      chequeNumber: 'M1-CHQ-0001',
+      amount: Number(cheque.amount),
+      issueDate: '2024-05-02',
+      dueDate: '2024-06-01',
+      partyName: 'بهرام آذرخش نمونه',
+      partyCode: cheque.partyCode,
+      bankName: 'بانک ملت نمونه',
+    });
+    expect(created.status, 'a new cheque stays registered (not deposited)').toBe('registered');
+
+    const detail = await apiGet<{ status: string; events: Array<{ toStatus: string; journalEntryId: number | null }> }>(
+      page,
+      `cheques/${created.id}`,
+    );
+    expect(detail.status, 'the cheque is not transitioned').toBe('registered');
+    const creation = detail.events.find((event) => event.journalEntryId !== null);
+    expect(creation, 'the creation posted a voucher').toBeDefined();
+    const voucher = await journalVoucher(page, creation!.journalEntryId!);
+    test.info().annotations.push({
+      type: 'voucher',
+      description: `cheque ${cheque.invoiceNumber} creation: ${voucherLineText(voucher)}`,
+    });
+
+    const accountsAfter = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
+    expect(
+      balanceOf(accountsAfter, '1110') - balanceOf(accountsBefore, '1110'),
+      'notes receivable in hand up by the cheque',
+    ).toBe(cheque.amount);
+    // The creation voucher must credit the receivable role; if the product credits another account this fails
+    // with the actual voucher lines in the annotation above (do not adapt the assertion).
+    expect(
+      balanceOf(accountsAfter, '1201') - balanceOf(accountsBefore, '1201'),
+      'the creation voucher credits the receivable 1201',
+    ).toBe(cheque.receivablesDelta);
+    expect(balanceOf(accountsAfter, '1101') - balanceOf(accountsBefore, '1101'), 'the bank 1101 does not move').toBe(0n);
   });
 
-  test.fixme('12 bank reconciliation with bank-statement.csv: 100 lines matched [E3]', async ({ page }) => {
+  test('12 bank reconciliation with bank-statement.csv: 100 lines matched [E3]', async ({ page }) => {
     await loginAsTestTenant(page, '/app/accounting/bank/reconcile');
-    void SAMPLE_COMPANY_FILES.bankStatement;
-    // Every statement line matched or posted; no unreconciled lines left.
+    // The statement is unmatched by design in this fixture: its 100 lines are not the invoices settled in
+    // steps 07-11 (the book has no 1101 movement in the period), and their text says «تسویه فاکتور فروش» /
+    // «پرداخت به تأمین‌کننده». Posting them to 1201 / 2101 would break the README closings (steps 13, 14),
+    // so, as a real user must, the owner picks the counter account: a clearing account 1199 created through
+    // the real chart API, and the tenant's recon category-to-account settings point the two categories at it.
+    const deposits = 1_270_000_000n;
+    const withdrawals = 1_285_000_000n;
+    const lines = readCsv(SAMPLE_COMPANY_FILES.bankStatement);
+    expect(lines.rows).toHaveLength(100);
+
+    const accountsBefore = await apiGet<Array<{ id: number; code: string; balance: number | string }>>(page, 'accounting/accounts');
+    const bankLedger = accountsBefore.find((a) => a.code === '1101');
+    expect(bankLedger, 'ledger account 1101 exists').toBeDefined();
+    expect(balanceOf(accountsBefore, '1101'), '1101 opens at the fixture opening').toBe(fixtureOpeningBalance('1101', 'debit'));
+
+    await apiPost(page, 'accounting/accounts', { code: '1199', name: 'حساب واسط تطبیق بانکی', accountType: 'ASSET' });
+    const bankAccount = await apiPost<{ id: number }>(page, 'banking/accounts', {
+      name: 'بانک ملت - جاری ریالی نمونه',
+      bankCode: 'mellat',
+      accountNumber: '1000000000001',
+      ledgerAccountId: bankLedger!.id,
+      openingBalance: Number(fixtureOpeningBalance('1101', 'debit')),
+    });
+    const settingsStatus = await apiPut(page, 'banking/recon/settings', { categoryAccounts: { sale: '1199', purchase: '1199' } });
+    expect(settingsStatus, 'PUT banking/recon/settings').toBe(200);
+
+    // Upload the file through the real route, then answer whatever the prerequisite checks ask.
+    const token = await page.evaluate((key) => {
+      const raw = window.localStorage.getItem(key);
+      return raw ? (JSON.parse(raw) as { accessToken?: string }).accessToken : undefined;
+    }, SESSION_STORAGE_KEY);
+    const headers = { Authorization: `Bearer ${token}` };
+    const uploaded = await page.request.post(`/api/backend/enterprise-hub/banking/recon/sessions?bankAccountId=${bankAccount.id}`, {
+      headers,
+      multipart: {
+        file: { name: 'bank-statement.csv', mimeType: 'text/csv', buffer: fs.readFileSync(SAMPLE_COMPANY_FILES.bankStatement) },
+      },
+    });
+    expect(uploaded.status(), `upload: ${(await uploaded.text()).slice(0, 500)}`).toBe(201);
+    type Check = { code: string; severity: string; message: string; choices: Array<{ id: string; label: string }> };
+    type Session = { id: number; status: string; checks: Check[] };
+    let session = (await uploaded.json()) as Session;
+    test.info().annotations.push({
+      type: 'recon-checks',
+      description: `status ${session.status}; checks: ${session.checks.map((c) => `${c.code}/${c.severity}[${c.choices.map((x) => x.id).join('|')}]`).join('; ') || 'none'}`,
+    });
+    // The statement's Persian header row is not a known bank profile, so the file asks for a column mapping;
+    // the person maps the columns once (0-based, as in the file: date, time, description, withdrawal, deposit,
+    // balance, reference).
+    if (session.status === 'needs_mapping') {
+      session = await apiPost<Session>(
+        page,
+        `banking/recon/sessions/${session.id}/mapping`,
+        { columnMap: { date: 0, time: 1, description: 2, withdrawal: 3, deposit: 4, balance: 5, reference: 6 } },
+        200,
+      );
+      test.info().annotations.push({
+        type: 'recon-checks-after-mapping',
+        description: `status ${session.status}; checks: ${session.checks.map((c) => `${c.code}/${c.severity}[${c.choices.map((x) => x.id).join('|')}]`).join('; ') || 'none'}`,
+      });
+    }
+    // Only the account confirmation is answered here (the file carries no account number); any other open
+    // question fails the step with its text rather than being answered blindly.
+    for (const check of session.checks.filter((c) => c.code === 'account_match')) {
+      const choice = check.choices.find((c) => c.id === `account:${bankAccount.id}`);
+      if (choice) {
+        session = await apiPost<Session>(page, `banking/recon/sessions/${session.id}/answers`, { code: 'account_match', choice: choice.id }, 200);
+      }
+    }
+    expect(session.status, `prerequisites: ${session.checks.map((c) => `${c.code}: ${c.message}`).join(' | ')}`).toBe('ready');
+
+    type Review = {
+      counts: { matched: number; suggested: number; unmatched: number; drafts: number };
+      drafts: Array<{ id: number; status: string; counterAccountCode: string | null }>;
+      unmatched: Array<{ id: number; depositRial: string; draft: { id: number } | null }>;
+    };
+    const committed = await apiPost<Review>(page, `banking/recon/sessions/${session.id}/commit`, {}, 200);
+    test.info().annotations.push({ type: 'recon-commit', description: JSON.stringify(committed.counts) });
+    expect(committed.counts.matched + committed.counts.suggested, 'nothing in the book matches this statement').toBe(0);
+    // The classifier recognises the receipts («تسویه فاکتور فروش») but not every payment text; the lines it cannot
+    // classify are answered one by one by the person (category + counter account), as in the review screen.
+    const drafts = [...committed.drafts];
+    const unclassified = committed.unmatched.filter((row) => row.draft === null);
+    test.info().annotations.push({
+      type: 'recon-unclassified',
+      description: `${unclassified.length} of 100 lines without a draft after commit (deposits among them: ${unclassified.filter((r) => BigInt(r.depositRial) > 0n).length})`,
+    });
+    for (const row of unclassified) {
+      const answered = await apiPost<{ draft: { id: number; counterAccountCode: string | null } | null }>(
+        page,
+        `banking/recon/items/${row.id}/answer`,
+        { choiceId: BigInt(row.depositRial) > 0n ? 'sale' : 'purchase', counterAccountCode: '1199', remember: false },
+        200,
+      );
+      expect(answered.draft, `a draft for statement item ${row.id}`).not.toBeNull();
+      drafts.push({ id: answered.draft!.id, status: 'draft', counterAccountCode: answered.draft!.counterAccountCode });
+    }
+    expect(drafts, 'one draft per statement line').toHaveLength(100);
+    expect(new Set(drafts.map((d) => d.counterAccountCode)), 'every draft uses the clearing account').toEqual(new Set(['1199']));
+
+    const approved = await apiPost<Array<{ id: number; status: string; reason?: string }>>(
+      page,
+      'banking/recon/drafts/approve',
+      { draftIds: drafts.map((d) => d.id) },
+      200,
+    );
+    const notPosted = approved.filter((r) => r.status !== 'posted');
+    expect(notPosted, `drafts not posted: ${JSON.stringify(notPosted.slice(0, 3))}`).toHaveLength(0);
+    expect(approved).toHaveLength(100);
+
+    const review = await apiGet<Review>(page, `banking/recon/sessions/${session.id}/review`);
+    test.info().annotations.push({ type: 'recon-review', description: JSON.stringify(review.counts) });
+    expect(review.counts.unmatched, 'no statement line left unreconciled').toBe(0);
+    expect(review.counts.suggested, 'no suggested match left open').toBe(0);
+
+    const accountsAfter = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
+    expect(balanceOf(accountsAfter, '1199'), '1199 net debit = withdrawals - deposits').toBe(withdrawals - deposits);
+    expect(balanceOf(accountsAfter, '1199')).toBe(15_000_000n);
+    expect(balanceOf(accountsAfter, '1101'), '1101 = the statement closing').toBe(M1_EXPECTED_CLOSING.bankBalance);
+    expect(balanceOf(accountsAfter, '1201'), '1201 unchanged by the clearing postings').toBe(balanceOf(accountsBefore, '1201'));
+    expect(-balanceOf(accountsAfter, '2101'), '2101 unchanged by the clearing postings').toBe(-balanceOf(accountsBefore, '2101'));
+    expect(balanceOf(accountsAfter, '1201')).toBe(M1_EXPECTED_CLOSING.receivables);
+    expect(-balanceOf(accountsAfter, '2101')).toBe(M1_EXPECTED_CLOSING.payables);
   });
 
   // ---- Month-end assertions against the README totals --------------------------------------------------
 
-  test.fixme('13 receivables 1201 equal the expected closing [E4]', async ({ page }) => {
+  test('13 receivables 1201 equal the expected closing [E4]', async ({ page }) => {
     await loginAsTestTenant(page, '/app/accounting/reports');
-    void M1_EXPECTED_CLOSING.receivables; // 9,396,312,500
+    const accounts = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
+    expect(balanceOf(accounts, '1201'), '1201 closing receivables').toBe(M1_EXPECTED_CLOSING.receivables);
   });
 
-  test.fixme('14 payables 2101 equal the expected closing [E4]', async ({ page }) => {
+  test('14 payables 2101 equal the expected closing [E4]', async ({ page }) => {
     await loginAsTestTenant(page, '/app/accounting/reports');
-    void M1_EXPECTED_CLOSING.payables; // 5,420,780,000
+    const accounts = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
+    expect(-balanceOf(accounts, '2101'), '2101 closing payables (credit-positive)').toBe(M1_EXPECTED_CLOSING.payables);
   });
 
-  test.fixme('15 stock value 1301 equals the expected closing [E2]', async ({ page }) => {
+  test('15 stock value 1301 equals the expected closing [E2]', async ({ page }) => {
     await loginAsTestTenant(page, '/app/inventory');
-    void M1_EXPECTED_CLOSING.stockValue; // 249,383,200,000 (opening + purchases - COGS)
+    const accounts = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
+    const ledger = balanceOf(accounts, '1301');
+    const valuation = await apiGet<{ totalInventoryValue: number | string }>(page, 'inventory/valuation');
+    const fifo = rials(valuation.totalInventoryValue);
+    // Two separate equalities so a ledger-vs-FIFO difference is visible with both numbers in the message.
+    expect(ledger, `ledger 1301 ${ledger} vs expected closing`).toBe(M1_EXPECTED_CLOSING.stockValue);
+    expect(fifo, `inventory/valuation ${fifo} vs expected closing`).toBe(M1_EXPECTED_CLOSING.stockValue);
+    expect(ledger, `ledger 1301 ${ledger} vs FIFO valuation ${fifo}`).toBe(fifo);
   });
 
-  test.fixme('16 bank 1101 equals the reconciled statement balance [E3]', async ({ page }) => {
+  test('16 bank 1101 equals the reconciled statement balance [E3]', async ({ page }) => {
     await loginAsTestTenant(page, '/app/accounting/bank');
-    void M1_EXPECTED_CLOSING.bankBalance; // 2,485,000,000
+    const accounts = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
+    expect(balanceOf(accounts, '1101'), '1101 closing = statement closing').toBe(M1_EXPECTED_CLOSING.bankBalance);
+    expect(M1_EXPECTED_CLOSING.bankBalance).toBe(2_485_000_000n);
   });
 
-  test.fixme('17 trial balance is balanced: total debit = total credit [E3]', async ({ page }) => {
+  test('17 trial balance is balanced: total debit = total credit [E3]', async ({ page }) => {
     await loginAsTestTenant(page, '/app/accounting');
+    const trial = await apiGet<{ totalDebit: number | string; totalCredit: number | string }>(
+      page,
+      'accounting/trial-balance',
+    );
+    expect(rials(trial.totalDebit), 'trial balance total debit').toBe(rials(trial.totalCredit));
+
     // «وضعیت تراز دفاتر» shows «تراز», not «ناتراز» (see e2e/app/03-accounting.spec.ts).
+    const balance = page.locator('[data-slot="card"]').filter({ hasText: 'وضعیت تراز دفاتر' });
+    await expect(balance).toBeVisible();
+    await expect(balance).toContainText('تراز');
+    await expect(balance).not.toContainText('ناتراز');
   });
 });
