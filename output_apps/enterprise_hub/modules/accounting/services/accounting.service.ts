@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { LedgerAuditService } from '../../access/services/ledger-audit.service';
 import { EntityManager, FindOptionsWhere, ILike } from 'typeorm';
+import { randomBytes } from 'crypto';
 import {
   fromDb,
   fromMinor,
@@ -208,6 +209,9 @@ export class AccountingService {
     return {
       id: entity.id,
       entryNumber: entity.entryNumber,
+      permanentNumber:
+        entity.permanentNumber != null ? String(entity.permanentNumber) : null,
+      permanentFiscalYearId: entity.permanentFiscalYearId ?? null,
       date: entity.date,
       description: entity.description,
       status: entity.status,
@@ -674,48 +678,70 @@ export class AccountingService {
       this.assertBalanced(normalizedLines);
     }
 
-    const existing = await this.accountingRepository.findEntryByNumber(
-      tenantId,
-      dto.entryNumber,
-      manager,
-    );
-    if (existing) {
-      throw new ConflictException(
-        `سندی با شماره ${dto.entryNumber} قبلاً ثبت شده است.`,
-      );
-    }
+    const date = dto.date ? new Date(dto.date) : new Date();
+    const explicitNumber = dto.entryNumber?.trim() || '';
+    const isGenerated = explicitNumber.length === 0;
+    let entryNumber = isGenerated ? this.generateEntryNumber(date) : explicitNumber;
 
-    const lineInputs = await this.resolveLineInputs(tenantId, normalizedLines, manager);
-
-    let saved: JournalEntryEntity;
-    try {
-      saved = await this.accountingRepository.persistJournalEntry(
+    // An auto-generated number retries on a clash (random suffix); an explicit duplicate is reported.
+    const maxAttempts = isGenerated ? 5 : 1;
+    let lineInputs: JournalLineInput[] | null = null;
+    let saved: JournalEntryEntity | null = null;
+    for (let attempt = 1; attempt <= maxAttempts && saved == null; attempt += 1) {
+      const clash = await this.accountingRepository.findEntryByNumber(
         tenantId,
-        {
-          entryNumber: dto.entryNumber,
-          date: dto.date ? new Date(dto.date) : new Date(),
-          description: dto.description,
-          status,
-          reversesEntryId: options.reversesEntryId ?? null,
-          entryType: options.entryType,
-        },
-        lineInputs,
+        entryNumber,
         manager,
       );
-    } catch (error) {
-      if (error instanceof LockedPeriodError) {
-        throw new PeriodLockedException(this.lockedPeriodMessage(error.date));
+      if (clash) {
+        if (!isGenerated) {
+          throw new ConflictException(
+            `سندی با شماره ${entryNumber} قبلاً ثبت شده است.`,
+          );
+        }
+        entryNumber = this.generateEntryNumber(date);
+        continue;
       }
-      if (error instanceof UnknownDimensionError) {
-        this.mapPeriodLock(error);
+      // Resolved once, after the number is known to be free (same order as before).
+      if (lineInputs == null) {
+        lineInputs = await this.resolveLineInputs(tenantId, normalizedLines, manager);
       }
-      // A concurrent writer won the (tenant, number) unique index; reported, not thrown by PG.
-      if (error instanceof DuplicateEntryNumberError) {
-        throw new ConflictException(
-          `سندی با شماره ${dto.entryNumber} قبلاً ثبت شده است.`,
+      try {
+        saved = await this.accountingRepository.persistJournalEntry(
+          tenantId,
+          {
+            entryNumber,
+            date,
+            description: dto.description,
+            status,
+            reversesEntryId: options.reversesEntryId ?? null,
+            entryType: options.entryType,
+          },
+          lineInputs,
+          manager,
         );
+      } catch (error) {
+        if (error instanceof LockedPeriodError) {
+          throw new PeriodLockedException(this.lockedPeriodMessage(error.date));
+        }
+        if (error instanceof UnknownDimensionError) {
+          this.mapPeriodLock(error);
+        }
+        // A concurrent writer won the (tenant, number) unique index; reported, not thrown by PG.
+        if (error instanceof DuplicateEntryNumberError) {
+          // Never retry inside this transaction: the skipped insert already ran the final-number
+          // trigger, so the caller's transaction must roll back to leave no gap.
+          throw new ConflictException(
+            `سندی با شماره ${entryNumber} قبلاً ثبت شده است.`,
+          );
+        }
+        throw error;
       }
-      throw error;
+    }
+    if (saved == null) {
+      throw new ConflictException(
+        `ساخت شماره سند خودکار پس از ${maxAttempts} تلاش ممکن نشد؛ دوباره تلاش کنید.`,
+      );
     }
 
     if (status === JournalEntryStatus.POSTED) {
@@ -727,7 +753,7 @@ export class AccountingService {
           entryId: saved.id,
           entryNumber: saved.entryNumber,
           entryDate: new Date(saved.date).toISOString().slice(0, 10),
-          lines: lineInputs,
+          lines: lineInputs ?? [],
           reversesEntryId: options.reversesEntryId ?? null,
         },
         manager,
@@ -735,6 +761,15 @@ export class AccountingService {
     }
 
     return this.toEntryDto(saved);
+  }
+
+  /**
+   * «JV-<yyyymmdd of the voucher date>-<8 random hex>» for a create without a working number.
+   * Callers retry on a unique clash.
+   */
+  private generateEntryNumber(date: Date): string {
+    const ymd = date.toISOString().slice(0, 10).replace(/-/g, '');
+    return `JV-${ymd}-${randomBytes(4).toString('hex')}`;
   }
 
   /** One 423 message for every locked-period refusal, carrying the exact offending date. */
@@ -786,18 +821,20 @@ export class AccountingService {
     await this.ensureDefaultAccounts(tenantId);
     return this.accountingRepository.transaction(tenantId, async (manager) => {
       const entry = await this.lockEditableVoucher(tenantId, id, manager);
+      // An absent working number keeps the voucher's current one.
+      const entryNumber = dto.entryNumber?.trim() || entry.entryNumber;
       const normalizedLines = dto.lines.map((line) => this.normalizeLine(line));
       if (entry.status === JournalEntryStatus.TEMPORARY) {
         this.assertBalanced(normalizedLines);
       }
-      if (dto.entryNumber !== entry.entryNumber) {
+      if (entryNumber !== entry.entryNumber) {
         const clash = await this.accountingRepository.findEntryByNumber(
           tenantId,
-          dto.entryNumber,
+          entryNumber,
           manager,
         );
         if (clash) {
-          throw new ConflictException(`سندی با شماره ${dto.entryNumber} قبلاً ثبت شده است.`);
+          throw new ConflictException(`سندی با شماره ${entryNumber} قبلاً ثبت شده است.`);
         }
       }
       const date = dto.date ? new Date(dto.date) : entry.date;
@@ -814,7 +851,7 @@ export class AccountingService {
         await this.accountingRepository.replaceEntryContent(
           tenantId,
           id,
-          { entryNumber: dto.entryNumber, date, description: dto.description },
+          { entryNumber, date, description: dto.description },
           lineInputs,
           manager,
           dto.expectedVersion ?? null,

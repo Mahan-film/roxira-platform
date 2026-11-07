@@ -324,7 +324,7 @@ class FakeAccountingService {
         tenantId,
         accountId: account.id,
         journalEntryId,
-        entryNumber: dto.entryNumber,
+        entryNumber: dto.entryNumber ?? '',
         date: new Date(`${dto.date}T00:00:00Z`),
         description: line.description ?? null,
         entryDescription: dto.description,

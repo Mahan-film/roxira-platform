@@ -11,7 +11,7 @@ const amount = (value: number): string => (value ? formatNumber(value) : "");
 export function mapJournalEntryToVoucherData(entry: JournalEntryResponse, statusLabel: string): Record<string, unknown> {
   return {
     voucherNumber: entry.entryNumber,
-    sequenceNumber: "",
+    sequenceNumber: entry.permanentNumber ?? "",
     dateJalali: formatJalaliDate(entry.date),
     voucherType: "",
     status: statusLabel,

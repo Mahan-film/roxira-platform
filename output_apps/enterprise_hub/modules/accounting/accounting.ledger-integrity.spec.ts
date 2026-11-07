@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
-import { JournalEntryLineDto } from './dto/create-journal-entry.dto';
+import { JournalEntryLineDto, CreateJournalEntryDto } from './dto/create-journal-entry.dto';
 import { DuplicateEntryNumberError } from './exceptions/ledger.exceptions';
 import { CurrencyService } from '../currency/services/currency.service';
 import { AccountingController } from './controllers/accounting.controller';
@@ -305,4 +305,58 @@ describe('Ledger integrity — amount DTO validation', () => {
       expect(errors(value)).toBeGreaterThan(0);
     },
   );
+});
+
+describe('Ledger integrity — working number DTO', () => {
+  const body = (entryNumber?: unknown) => ({
+    ...(entryNumber === undefined ? {} : { entryNumber }),
+    description: 'x',
+    lines: [
+      { accountCode: '1010', debit: 100 },
+      { accountCode: '4010', credit: 100 },
+    ],
+  });
+
+  it('accepts a create body without entryNumber', () => {
+    expect(validateSync(plainToInstance(CreateJournalEntryDto, body())).length).toBe(0);
+  });
+
+  it('rejects an empty entryNumber', () => {
+    expect(
+      validateSync(plainToInstance(CreateJournalEntryDto, body(''))).length,
+    ).toBeGreaterThan(0);
+  });
+});
+
+describe('Ledger integrity — auto working numbers', () => {
+  it('a create without entryNumber generates JV-<yyyymmdd of the date>-<8 hex>', async () => {
+    const { service, repo } = build();
+    const created = await service.createJournalEntry('t1', {
+      description: 'auto number',
+      date: '2026-05-01',
+      lines: [
+        { accountCode: '1010', debit: 100 },
+        { accountCode: '4010', credit: 100 },
+      ],
+    } as never);
+    expect(created.entryNumber).toMatch(/^JV-\d{8}-[0-9a-f]{8}$/);
+    expect(created.entryNumber).toContain('20260501');
+    expect(repo.entries).toHaveLength(1);
+  });
+
+  it('refuses (no in-transaction retry) when a racing writer takes the generated number first', async () => {
+    const { service, repo } = build();
+    repo.failNextPersistWithUnique = true;
+    await expect(
+      service.createJournalEntry('t1', {
+        description: 'auto race',
+        date: '2026-05-01',
+        lines: [
+          { accountCode: '1010', debit: 100 },
+          { accountCode: '4010', credit: 100 },
+        ],
+      } as never),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(repo.entries).toHaveLength(0);
+  });
 });
