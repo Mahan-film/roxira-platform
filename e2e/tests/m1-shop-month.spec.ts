@@ -1710,7 +1710,8 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
       name: 'کالای آزمون چرخه خرید',
     });
     t2.itemId = Number(item.id);
-    const settings = await apiPut<{ priceToleranceBp: number }>(page, `${PURCHASING}/settings`, { priceToleranceBp: 500 });
+    expect(await apiPut(page, `${PURCHASING}/settings`, { priceToleranceBp: 500 })).toBe(200);
+    const settings = await apiGet<{ priceToleranceBp: number }>(page, `${PURCHASING}/settings`);
     expect(settings.priceToleranceBp, 'a price difference of up to 5% is accepted without a reviewer').toBe(500);
     t2.accountsBefore = await apiGet(page, 'accounting/accounts');
 
