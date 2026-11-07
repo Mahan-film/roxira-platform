@@ -1,19 +1,32 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, Printer } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, Printer } from "lucide-react";
+import { cn } from "cn";
 
 import { ErrorNotice, loadErrorMessage } from "@/components/app/app-ui";
-import { Badge } from "@/components/ui/badge";
+import { Badge, badgeVariants } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { JalaliDateInput } from "@/components/ui/jalali-date-input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { getJournalEntry } from "@/lib/api/accounting-client";
 import { listBankAccounts } from "@/lib/api/banking-client";
 import { listCheques, partialPayment, transitionCheque, verifySayad } from "@/lib/api/cheques-client";
-import { canPartialPay, isValidNationalId, partialAmountError, sortByUrgency, statusesFor, toLatinDigits } from "@/lib/cheques-ui";
-import { formatJalaliDate, formatMoneyRial } from "@/lib/fa-format";
+import {
+  canPartialPay,
+  chipTone,
+  countByStatus,
+  isValidNationalId,
+  newestEventWithEntry,
+  partialAmountError,
+  sortByUrgency,
+  statusesFor,
+  toLatinDigits,
+  voucherNoticeText,
+} from "@/lib/cheques-ui";
+import { formatJalaliDate, formatMoneyRial, formatNumber } from "@/lib/fa-format";
 import { printChequeReceipt } from "@/lib/print/open-cheque-receipt-window";
 import type { BankAccount } from "@/types/banking";
 import {
@@ -31,16 +44,28 @@ import { ChequeForm } from "./cheque-form";
 const SELECT_CLASS = "h-8 rounded-lg border border-input bg-background px-2 text-sm";
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
+/** chipTone → Badge variant; the chip always shows its text label too, so colour is never the only signal. */
+const CHIP_VARIANT = { neutral: "secondary", info: "outline", success: "default", danger: "destructive" } as const;
+const CHIP_CLASS = "min-h-11 cursor-pointer gap-1 px-3 sm:min-h-8";
+
 type Panel = { kind: "endorse" | "partial" | "clear"; id: number } | null;
 
-export function ChequesList() {
+export function ChequesList({
+  direction,
+  formOpen,
+  onFormOpenChange,
+  onChanged,
+}: {
+  direction: ChequeDirection;
+  formOpen: boolean;
+  onFormOpenChange: (open: boolean) => void;
+  onChanged: () => void;
+}) {
   const [cheques, setCheques] = useState<Cheque[]>([]);
-  const [direction, setDirection] = useState<ChequeDirection | "all">("all");
   const [status, setStatus] = useState<ChequeStatus | "all">("all");
   const [dueFrom, setDueFrom] = useState("");
   const [dueTo, setDueTo] = useState("");
   const [query, setQuery] = useState("");
-  const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +78,7 @@ export function ChequesList() {
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [bankAccountId, setBankAccountId] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [voucherNotice, setVoucherNotice] = useState<string | null>(null);
   const refresh = useCallback(() => setRefreshKey((key) => key + 1), []);
 
   useEffect(() => {
@@ -63,12 +89,24 @@ export function ChequesList() {
     return () => controller.abort();
   }, []);
 
+  // The direction tab lives in the view; on change reset the status filter and show the fresh load.
+  const firstDirection = useRef(true);
+  useEffect(() => {
+    if (firstDirection.current) {
+      firstDirection.current = false;
+      return;
+    }
+    setStatus("all");
+    setLoading(true);
+  }, [direction]);
+
+  // Server filters: direction and the due window only — the status filter is applied in memory
+  // so the chips can toggle instantly without a refetch.
   useEffect(() => {
     const controller = new AbortController();
     listCheques(
       {
-        direction: direction === "all" ? undefined : direction,
-        status: status === "all" ? undefined : status,
+        direction,
         dueFrom: dueFrom || undefined,
         dueTo: dueTo || undefined,
       },
@@ -86,23 +124,30 @@ export function ChequesList() {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [direction, status, dueFrom, dueTo, refreshKey]);
+  }, [direction, dueFrom, dueTo, refreshKey]);
+
+  const counts = useMemo(() => countByStatus(cheques), [cheques]);
 
   const visible = useMemo(() => {
     const q = toLatinDigits(query).toLowerCase();
-    const rows = q
-      ? cheques.filter((c) => [c.partyName, c.chequeNumber, c.sayadNumber ?? "", c.bankName ?? ""].some((v) => v.toLowerCase().includes(q)))
-      : cheques;
+    const rows = cheques
+      .filter((c) => status === "all" || c.status === status)
+      .filter((c) =>
+        q ? [c.partyName, c.chequeNumber, c.sayadNumber ?? "", c.bankName ?? ""].some((v) => v.toLowerCase().includes(q)) : true,
+      );
     return sortByUrgency(rows, todayIso());
-  }, [cheques, query]);
+  }, [cheques, query, status]);
 
-  async function run(work: () => Promise<unknown>, done: string) {
+  async function run(work: () => Promise<string | void>) {
     setBusy(true);
     setError(null);
     setNotice(null);
+    setVoucherNotice(null);
     try {
-      await work();
-      setNotice(done);
+      const message = await work();
+      if (typeof message === "string") {
+        setNotice(message);
+      }
       setPanel(null);
       setEndorseName("");
       setEndorseCode("");
@@ -110,6 +155,7 @@ export function ChequesList() {
       setPartialText("");
       setBankAccountId("");
       refresh();
+      onChanged();
     } catch (err) {
       setError(loadErrorMessage(err));
     } finally {
@@ -122,10 +168,25 @@ export function ChequesList() {
     next: ChequeStatus,
     extra: { spentToName?: string; spentToCode?: string; spentToNationalId?: string; bankAccountId?: number } = {},
   ) =>
-    run(
-      () => transitionCheque(cheque.id, { status: next, eventDate: todayIso(), ...extra }),
-      `چک ${cheque.chequeNumber}: «${STATUS_LABELS[cheque.direction][next]}» ثبت شد.`,
-    );
+    run(async () => {
+      const detail = await transitionCheque(cheque.id, { status: next, eventDate: todayIso(), ...extra });
+      const statusLabel = STATUS_LABELS[cheque.direction][next];
+      const event = newestEventWithEntry(detail.events);
+      if (!event?.journalEntryId) {
+        setVoucherNotice(voucherNoticeText({ chequeNumber: cheque.chequeNumber, statusLabel, entryNumber: null }));
+        return voucherNoticeText({ chequeNumber: cheque.chequeNumber, statusLabel, entryNumber: null });
+      }
+      try {
+        const entry = await getJournalEntry(event.journalEntryId);
+        const text = voucherNoticeText({ chequeNumber: cheque.chequeNumber, statusLabel, entryNumber: entry.entryNumber });
+        setVoucherNotice(text);
+        return text;
+      } catch {
+        const text = voucherNoticeText({ chequeNumber: cheque.chequeNumber, statusLabel, entryNumber: null });
+        setVoucherNotice(text);
+        return text;
+      }
+    });
 
   const selectedBankAccountId = bankAccountId ? Number(bankAccountId) : undefined;
 
@@ -152,15 +213,14 @@ export function ChequesList() {
       setError(problem);
       return;
     }
-    void run(
-      () =>
-        partialPayment(cheque.id, {
-          amount: toLatinDigits(partialText).replace(/[,٬\s]/g, ""),
-          eventDate: todayIso(),
-          bankAccountId: selectedBankAccountId,
-        }),
-      `چک ${cheque.chequeNumber}: پرداخت بخشی ثبت شد.`,
-    );
+    void run(async () => {
+      await partialPayment(cheque.id, {
+        amount: toLatinDigits(partialText).replace(/[,٬\s]/g, ""),
+        eventDate: todayIso(),
+        bankAccountId: selectedBankAccountId,
+      });
+      return `چک ${cheque.chequeNumber}: پرداخت بخشی ثبت شد.`;
+    });
   }
 
   if (loading) {
@@ -176,39 +236,29 @@ export function ChequesList() {
     <div className="flex flex-col gap-4">
       <ErrorNotice title="خطا" message={error} />
       {notice && <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">{notice}</p>}
+      {voucherNotice && <p className="rounded-lg bg-blue-500/10 px-3 py-2 text-sm text-blue-700 dark:text-blue-300">{voucherNotice}</p>}
 
-      {showForm ? (
+      {formOpen && (
         <ChequeForm
-          onCancel={() => setShowForm(false)}
+          onCancel={() => onFormOpenChange(false)}
           onCreated={() => {
-            setShowForm(false);
+            onFormOpenChange(false);
             setNotice("چک ثبت و سند حسابداری آن صادر شد.");
             refresh();
+            onChanged();
           }}
         />
-      ) : (
-        <div>
-          <Button onClick={() => setShowForm(true)}>
-            <Plus aria-hidden="true" />
-            چک جدید
-          </Button>
-        </div>
       )}
 
       <Card>
         <CardHeader className="flex flex-col gap-3">
           <CardTitle>فهرست چک‌ها</CardTitle>
           <div className="flex flex-wrap items-end gap-2 text-sm">
-            <select aria-label="نوع چک" value={direction} onChange={(e) => { setDirection(e.target.value as ChequeDirection | "all"); setStatus("all"); }} className={SELECT_CLASS}>
-              <option value="all">همه انواع</option>
-              <option value="received">دریافتی</option>
-              <option value="issued">صادرشده</option>
-            </select>
             <select aria-label="وضعیت" value={status} onChange={(e) => setStatus(e.target.value as ChequeStatus | "all")} className={SELECT_CLASS}>
               <option value="all">همه وضعیت‌ها</option>
               {statusesFor(direction).map((s) => (
                 <option key={s} value={s}>
-                  {STATUS_LABELS[direction === "issued" ? "issued" : "received"][s] === "—" ? STATUS_LABELS.issued[s] : STATUS_LABELS[direction === "issued" ? "issued" : "received"][s]}
+                  {STATUS_LABELS[direction][s]}
                 </option>
               ))}
             </select>
@@ -223,7 +273,30 @@ export function ChequesList() {
             <Input aria-label="جستجو" placeholder="جستجو: طرف حساب، سری، صیاد، بانک" value={query} onChange={(e) => setQuery(e.target.value)} className="w-64" />
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-3">
+          <div role="group" aria-label="فیلتر وضعیت" className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              aria-pressed={status === "all"}
+              onClick={() => setStatus("all")}
+              className={cn(badgeVariants({ variant: status === "all" ? "default" : "outline" }), CHIP_CLASS)}
+            >
+              همه
+              <span className="text-xs opacity-70">{formatNumber(cheques.length)}</span>
+            </button>
+            {statusesFor(direction).map((s) => (
+              <button
+                key={s}
+                type="button"
+                aria-pressed={status === s}
+                onClick={() => setStatus(s)}
+                className={cn(badgeVariants({ variant: CHIP_VARIANT[chipTone(s)] }), CHIP_CLASS, status === s && "ring-2 ring-ring/40")}
+              >
+                {STATUS_LABELS[direction][s]}
+                <span className="text-xs opacity-70">{formatNumber(counts[s] ?? 0)}</span>
+              </button>
+            ))}
+          </div>
           {visible.length === 0 ? (
             <p className="text-sm text-muted-foreground">چکی با این فیلترها یافت نشد.</p>
           ) : (
@@ -364,10 +437,10 @@ export function ChequesList() {
                               variant="ghost"
                               disabled={busy}
                               onClick={() =>
-                                void run(
-                                  () => verifySayad(cheque.id, { verified: !cheque.sayadVerified, sayadRegistrationStatus: cheque.sayadVerified ? undefined : "registered" }),
-                                  cheque.sayadVerified ? "تأیید دستی صیاد لغو شد." : "تأیید دستی صیاد ثبت شد (با نام شما و زمان).",
-                                )
+                                void run(async () => {
+                                  await verifySayad(cheque.id, { verified: !cheque.sayadVerified, sayadRegistrationStatus: cheque.sayadVerified ? undefined : "registered" });
+                                  return cheque.sayadVerified ? "تأیید دستی صیاد لغو شد." : "تأیید دستی صیاد ثبت شد (با نام شما و زمان).";
+                                })
                               }
                             >
                               {cheque.sayadVerified ? "لغو تأیید صیاد" : "تأیید دستی صیاد"}
