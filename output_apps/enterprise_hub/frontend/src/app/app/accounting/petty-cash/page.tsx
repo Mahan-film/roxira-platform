@@ -25,7 +25,7 @@ import {
   voidPettyCashExpense,
 } from "@/lib/api/accounting-reports-client";
 import { formatJalaliDate, formatReportMoney } from "@/lib/fa-format";
-import { lastSettlementDate } from "@/lib/petty-cash-ui";
+import { lastSettlementDate, normalizeAmount } from "@/lib/petty-cash-ui";
 import type { PettyCashFund, PettyCashStatement, PettyCashTransaction } from "@/types/accounting-reports";
 
 const KIND_LABELS: Record<PettyCashTransaction["kind"], string> = {
@@ -54,10 +54,10 @@ export default function PettyCashPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [statement, setStatement] = useState<PettyCashStatement | null>(null);
   const [newFund, setNewFund] = useState({ name: "", custodianName: "", imprestAmount: "" });
-  const [movement, setMovement] = useState({ amount: "", date: today(), accountCode: "1012" });
-  const [expense, setExpense] = useState({ amount: "", date: today(), accountCode: "5030", description: "", receiptNumber: "" });
+  const [movement, setMovement] = useState({ amount: "", date: today(), accountCode: "" });
+  const [expense, setExpense] = useState({ amount: "", date: today(), accountCode: "", description: "", receiptNumber: "" });
   const [selected, setSelected] = useState<number[]>([]);
-  const [settlement, setSettlement] = useState({ date: today(), replenish: "1012" });
+  const [settlement, setSettlement] = useState({ date: today(), replenish: "" });
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [settleOpen, setSettleOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -133,7 +133,7 @@ export default function PettyCashPage() {
   const fund = statement?.fund;
   const active = fund?.status === "ACTIVE";
   const pending = statement?.transactions.filter((row) => row.status === "PENDING") ?? [];
-  const validMovement = movement.amount.trim() && movement.date && movement.accountCode.trim();
+  const validMovement = normalizeAmount(movement.amount) !== null && movement.date && movement.accountCode.trim();
 
   const settlementCell = (row: PettyCashFund): string => {
     const cell = settlements[row.id];
@@ -297,7 +297,7 @@ export default function PettyCashPage() {
                   disabled={busy || !validMovement}
                   onClick={() =>
                     run(async () => {
-                      await chargePettyCash(fund.id, { ...movement, amount: movement.amount.trim() });
+                      await chargePettyCash(fund.id, { ...movement, amount: normalizeAmount(movement.amount) ?? "" });
                       setMovement({ ...movement, amount: "" });
                     })
                   }
@@ -309,7 +309,7 @@ export default function PettyCashPage() {
                   disabled={busy || !validMovement}
                   onClick={() =>
                     run(async () => {
-                      await returnPettyCash(fund.id, { ...movement, amount: movement.amount.trim() });
+                      await returnPettyCash(fund.id, { ...movement, amount: normalizeAmount(movement.amount) ?? "" });
                       setMovement({ ...movement, amount: "" });
                     })
                   }
@@ -400,12 +400,12 @@ export default function PettyCashPage() {
                 <Input id="exp-receipt" dir="ltr" className="w-28" value={expense.receiptNumber} onChange={(e) => setExpense({ ...expense, receiptNumber: e.target.value })} />
               </div>
               <Button
-                disabled={busy || !expense.amount.trim() || !expense.date || !expense.description.trim()}
+                disabled={busy || normalizeAmount(expense.amount) === null || !expense.accountCode.trim() || !expense.date || !expense.description.trim()}
                 onClick={() =>
                   run(async () => {
                     await addPettyCashExpense(fund.id, {
                       ...expense,
-                      amount: expense.amount.trim(),
+                      amount: normalizeAmount(expense.amount) ?? "",
                       receiptNumber: expense.receiptNumber.trim() || undefined,
                     });
                     setExpense({ ...expense, amount: "", description: "", receiptNumber: "" });

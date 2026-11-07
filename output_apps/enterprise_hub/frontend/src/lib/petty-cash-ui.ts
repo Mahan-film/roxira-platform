@@ -16,3 +16,16 @@ export function lastSettlementDate(
   }
   return latest;
 }
+
+/**
+ * Amount typed by the user as a plain number: digits (Latin or Persian), optional separators,
+ * up to two decimals and strictly positive. Returns the cleaned text to send, or null when invalid.
+ */
+export function normalizeAmount(text: string): string | null {
+  const t = text
+    .replace(/[,٬\s]/g, "")
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660));
+  if (!/^\d{1,16}(\.\d{1,2})?$/.test(t)) return null;
+  return /[1-9]/.test(t) ? t : null;
+}
