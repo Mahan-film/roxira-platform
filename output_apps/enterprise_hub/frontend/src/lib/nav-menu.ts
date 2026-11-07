@@ -106,7 +106,7 @@ export const MENU_GROUPS: MenuGroup[] = [
       { href: "/app/cheques", label: "چک‌ها", icon: "Banknote", module: "cheques" },
       {
         href: "/app/accounting/petty-cash",
-        label: "تنخواه",
+        label: "صندوق و تنخواه",
         icon: "Wallet",
         module: "accounting",
       },

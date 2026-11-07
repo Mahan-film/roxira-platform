@@ -84,7 +84,7 @@ export default function SuiteAccountingPage() {
             </Link>
             <Link href="/app/accounting/petty-cash" className={buttonVariants({ variant: "outline", size: "sm" })}>
               <Wallet aria-hidden="true" />
-              تنخواه
+              صندوق و تنخواه
             </Link>
             <Link href="/app/accounting/bank" className={buttonVariants({ variant: "outline", size: "sm" })}>
               <Landmark aria-hidden="true" />
