@@ -329,6 +329,14 @@ describePg('Sales returns of delivery invoices on PostgreSQL (non-superuser, rea
     const debit = lines.reduce((sum, row) => sum + Number(row.debit), 0);
     const credit = lines.reduce((sum, row) => sum + Number(row.credit), 0);
     expect(debit).toBe(credit);
+    // The credit note's receivable line names the customer, so the party ledger shows the return.
+    const partyLines = await scoped<{ credit: string }>(
+      `SELECT l.credit FROM fin_journal_entry_lines l
+         JOIN invoices i ON i.journal_entry_id = l.journal_entry_id AND i.tenant_id = $1
+        WHERE i.id = $2 AND l.tenant_id = $1 AND l.party_code = 'CUST'`,
+      [T1, result.id],
+    );
+    expect(partyLines.map((row) => Number(row.credit))).toEqual([2_200_000]);
     expect(lines.map((row) => Number(row.debit) + Number(row.credit)).sort((a, b) => a - b)).toEqual([
       200_000,
       2_000_000,

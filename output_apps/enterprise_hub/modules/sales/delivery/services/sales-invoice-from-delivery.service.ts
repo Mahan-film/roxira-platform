@@ -261,7 +261,8 @@ export class SalesInvoiceFromDeliveryService {
 
     return {
       sellerInfo: { name: sellerName },
-      buyerInfo: { name: partyName },
+      // partyCode is internal (not on the public DTO): posting carries it on the receivable line.
+      buyerInfo: { name: partyName, partyCode } as CreateInvoiceDto['buyerInfo'],
       currency: Currency.IRR,
       status: InvoiceStatus.ISSUED,
       // No itemId/sku on purpose: the delivery moved the stock, so posting must not move it again.
