@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { FindOptionsWhere, ILike } from 'typeorm';
+import { EntityManager, FindOptionsWhere, ILike } from 'typeorm';
 import { fromMinor } from '../../accounting/money';
 import { CustomerIdentityService, WALK_IN_NAME } from '../../crm/services/customer-identity.service';
 import { invoiceRuleFor } from '../country/invoice-country-rules';
@@ -64,7 +64,7 @@ import {
 import { VatRateResolver } from './vat-rate.resolver';
 import { allocateDiscount, fromUnits, percentOf, toUnits } from './invoice-discount';
 
-/** What a caller adds to `create` beyond the invoice itself (POS sales). */
+/** What a caller adds to `create` beyond the invoice itself (POS sales, invoices from deliveries). */
 export interface CreateInvoiceOptions {
   idempotencyKey?: string;
   requestHash?: string;
@@ -74,6 +74,14 @@ export interface CreateInvoiceOptions {
    * (posting locks the related sale itself, so it must not run while this caller holds it).
    */
   deferEvents?: Array<() => Promise<void>>;
+  /**
+   * Insert the invoice row with this manager instead of the repository's own connection, so a
+   * caller's transaction (invoice from delivery lines, #563) commits the invoice together with
+   * its own rows. Reads stay on the normal connections; only the insert joins the transaction.
+   */
+  manager?: EntityManager;
+  /** Issue date of a backdated invoice (the VAT rate and posting date follow it). Defaults to now. */
+  issuedAt?: Date;
 }
 
 /** Invoice-level discount as sent: an amount or a percent (E1.3). */
@@ -707,7 +715,7 @@ export class InvoicingService {
         BASE_CURRENCY,
       ),
       status,
-      issuedAt: null,
+      issuedAt: options.issuedAt ?? null,
       paidAt: null,
       idempotencyKey: options.idempotencyKey ?? null,
       requestHash: options.requestHash ?? null,
@@ -716,7 +724,7 @@ export class InvoicingService {
 
     this.applyStatusTimestamps(entity, status);
 
-    const saved = await this.invoicingRepository.create(tenantId, entity);
+    const saved = await this.invoicingRepository.create(tenantId, entity, options.manager);
 
     if (status === InvoiceStatus.ISSUED || status === InvoiceStatus.PAID) {
       if (subject === InvoiceSubject.CANCEL) {

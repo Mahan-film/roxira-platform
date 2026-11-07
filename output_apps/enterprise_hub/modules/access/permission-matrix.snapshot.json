@@ -1727,6 +1727,17 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/sales/orders/:id/invoicing (SalesDeliveryController.getOrderInvoicing)": {
+    "policy": "invoicing:read|accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/sales/quotations (SalesController.listQuotations)": {
     "policy": "invoicing:read|accounting:read",
     "owner": true,
@@ -3660,6 +3671,17 @@
   },
   "POST /enterprise-hub/radar/trigger-scout (RadarController.triggerScout)": {
     "policy": "platformAdmin"
+  },
+  "POST /enterprise-hub/sales/invoices/from-deliveries (SalesDeliveryController.createInvoiceFromDelivery)": {
+    "policy": "invoicing:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
   },
   "POST /enterprise-hub/sales/orders (SalesController.createOrder)": {
     "policy": "invoicing:create",
