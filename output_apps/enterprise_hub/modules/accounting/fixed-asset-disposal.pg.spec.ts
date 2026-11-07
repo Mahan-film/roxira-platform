@@ -164,8 +164,10 @@ describePg('Fixed-asset disposal on PostgreSQL', () => {
       ['4050', 0n, fromDb('10000000.00')],
     ]);
     const sums = await sumsOf(result.journalEntryId);
-    expect(sums.d).toBe(COST);
-    expect(sums.c).toBe(COST);
+    // Debits: accumulated 30 + proceeds 100 = 130 million. Credits: cost 120 + gain 10 = 130 million.
+    // The total is cost plus the gain, not cost, because proceeds exceed the book value here.
+    expect(sums.d).toBe('130000000.00');
+    expect(sums.c).toBe('130000000.00');
     expect(await balance('1120')).toBe('-150000000.00'); // 6 assets charged, one asset's accumulated removed
   });
 
