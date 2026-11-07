@@ -75,3 +75,6 @@ Twice daily on #227 with the line: `OpenCode PRs / Claude PRs / est. cost`. Last
 
 ## Audit 11-07
 Decisions and measurements: https://github.com/Mahan-film/roxira-platform/issues/560. Twenty CRM is NOT on production. Next: resolve #550 conflict, T1 and T2 with fresh Haiku agents, then closing and carry-forward, budget, report builder, fixed-asset disposal, #555.
+
+## Delegation 11-07 11:15 Tehran
+Coordinator session is over 500k tokens, and no tool here can open a new chat. Work moved to fresh track agents (each retires at 150k with a note in QUEUE.md). Merged since last note: #562 #564 #568. Track A sales/purchase/ledger, Track B UI. Use review-merge.sh; verify any blocker in code.
