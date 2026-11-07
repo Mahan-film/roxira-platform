@@ -1661,6 +1661,39 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/sales/backorders (SalesDeliveryController.listBackorders)": {
+    "policy": "invoicing:read|accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/sales/deliveries (SalesDeliveryController.listDeliveries)": {
+    "policy": "invoicing:read|accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/sales/deliveries/:id (SalesDeliveryController.getDelivery)": {
+    "policy": "invoicing:read|accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/sales/orders (SalesController.listOrders)": {
     "policy": "invoicing:read|accounting:read",
     "owner": true,
@@ -1673,6 +1706,17 @@
     "legacy_member": false
   },
   "GET /enterprise-hub/sales/orders/:id (SalesController.getOrder)": {
+    "policy": "invoicing:read|accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/sales/orders/:id/fulfilment (SalesDeliveryController.getFulfilment)": {
     "policy": "invoicing:read|accounting:read",
     "owner": true,
     "admin": true,
@@ -3640,6 +3684,17 @@
     "legacy_member": false
   },
   "POST /enterprise-hub/sales/orders/:id/confirm (SalesController.confirmOrder)": {
+    "policy": "invoicing:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/sales/orders/:id/deliveries (SalesDeliveryController.createDelivery)": {
     "policy": "invoicing:create",
     "owner": true,
     "admin": true,

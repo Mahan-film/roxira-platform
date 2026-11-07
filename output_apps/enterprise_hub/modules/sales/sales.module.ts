@@ -27,6 +27,6 @@ import { SalesService } from './services/sales.service';
   ],
   controllers: [SalesController],
   providers: [SalesService, SalesRepository, SalesAvailabilityService, TenantScope],
-  exports: [SalesService, SalesAvailabilityService],
+  exports: [SalesService, SalesAvailabilityService, SalesRepository, TenantScope],
 })
 export class SalesModule {}
