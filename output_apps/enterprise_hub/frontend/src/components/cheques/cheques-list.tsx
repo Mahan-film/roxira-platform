@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, Printer } from "lucide-react";
 
 import { ErrorNotice, loadErrorMessage } from "@/components/app/app-ui";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import { listBankAccounts } from "@/lib/api/banking-client";
 import { listCheques, partialPayment, transitionCheque, verifySayad } from "@/lib/api/cheques-client";
 import { canPartialPay, isValidNationalId, partialAmountError, sortByUrgency, statusesFor, toLatinDigits } from "@/lib/cheques-ui";
 import { formatJalaliDate, formatMoneyRial } from "@/lib/fa-format";
+import { printChequeReceipt } from "@/lib/print/open-cheque-receipt-window";
 import type { BankAccount } from "@/types/banking";
 import {
   ACTION_LABELS,
@@ -372,6 +373,10 @@ export function ChequesList() {
                               {cheque.sayadVerified ? "لغو تأیید صیاد" : "تأیید دستی صیاد"}
                             </Button>
                           )}
+                          <Button size="sm" variant="outline" disabled={busy} onClick={() => printChequeReceipt(cheque)}>
+                            <Printer aria-hidden="true" />
+                            چاپ
+                          </Button>
                         </div>
                       )}
                     </TableCell>
