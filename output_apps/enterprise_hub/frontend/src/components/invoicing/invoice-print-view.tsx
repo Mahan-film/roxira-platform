@@ -4,6 +4,7 @@ import { CheckCircle2, Pencil, Printer, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { printSalesInvoice } from "@/lib/print/open-sales-invoice-window";
 import {
   formatGregorianDate,
   formatJalaliDate,
@@ -102,7 +103,7 @@ export function InvoicePrintView({
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => window.print()}
+              onClick={() => printSalesInvoice(invoice, statusLabel(invoice.status))}
             >
               <Printer />
               چاپ
