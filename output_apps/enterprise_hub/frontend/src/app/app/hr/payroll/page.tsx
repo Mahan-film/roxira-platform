@@ -30,6 +30,8 @@ import {
 } from "@/lib/api/hr-client";
 import { formatJalaliDateTime, formatMoneyRial, formatNumber } from "@/lib/fa-format";
 import { printPayslip } from "@/lib/print/open-payslip-window";
+import { payrollSteps } from "@/lib/payroll-steps";
+import { PayrollStepper } from "@/components/hr/payroll-steps";
 import type { InsuranceListQuery, PayrollRun, PayrollRunItem, Payslip } from "@/types/hr";
 
 const JALALI_MONTHS = [
@@ -199,6 +201,8 @@ export default function PayrollPage() {
         }
       />
 
+      <PayrollStepper view={payrollSteps(run, (run?.employeeCount ?? 0) > 0)} />
+
       <ErrorNotice title="عملیات حقوق انجام نشد" message={error} />
 
       {(unverified[year]?.length ?? 0) > 0 && (
@@ -309,6 +313,20 @@ export default function PayrollPage() {
             <StatCard label="مالیات حقوق" value={formatMoneyRial(run.totalIncomeTax)} />
             <StatCard label="خالص پرداختی" value={formatMoneyRial(run.totalNet)} />
           </div>
+
+          {run?.status === "POSTED" && (
+            <Card className="mb-4">
+              <CardHeader>
+                <CardTitle>فایل‌های قانونی</CardTitle>
+              </CardHeader>
+              <CardContent>
+                فایل‌های بیمه و مالیات حقوق این ماه از صفحه پارامترهای قانونی ساخته می‌شوند.
+                <Link href="/app/hr/statutory" className="block mt-2 underline underline-offset-4 text-primary">
+                  رفتن به بیمه و مالیات حقوق
+                </Link>
+              </CardContent>
+            </Card>
+          )}
 
           {run.skipped.length > 0 && (
             <Card>

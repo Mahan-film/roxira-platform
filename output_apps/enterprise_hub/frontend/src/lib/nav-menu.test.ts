@@ -40,7 +40,8 @@ test("menu has exactly the nine groups in the specified order", () => {
       "stock",
       "treasury",
       "accounting",
-      "payroll-tax",
+      "payroll",
+      "tax",
       "reports-settings",
     ],
   );
@@ -57,7 +58,8 @@ test("group labels match the brief exactly", () => {
       "انبارداری",
       "خزانه‌داری",
       "حسابداری و اموال",
-      "حقوق و دستمزد و مالیات",
+      "حقوق و دستمزد",
+      "مالیات",
       "گزارش‌ها و تنظیمات",
     ],
   );
