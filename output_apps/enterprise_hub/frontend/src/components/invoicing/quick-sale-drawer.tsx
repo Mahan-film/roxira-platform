@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Printer, Trash2 } from "lucide-react";
 
 import { SkuInput } from "@/components/inventory/sku-input";
 import { BarcodeScanBox } from "@/components/invoicing/barcode-scan-box";
@@ -13,6 +13,7 @@ import { ApiClientError } from "@/lib/api/http-client";
 import { listWarehouses } from "@/lib/api/inventory-client";
 import { addScannedItem, incrementQuantity } from "@/lib/barcode-scan";
 import { createPosSale } from "@/lib/api/invoicing-client";
+import { printPosReceipt } from "@/lib/print/open-pos-receipt-window";
 import { formatMoneyRial } from "@/lib/fa-format";
 import type { StockItem, Warehouse } from "@/types/inventory";
 import {
@@ -176,10 +177,16 @@ export function QuickSaleDrawer({
     >
       <form className="grid gap-4" onSubmit={(e) => void submit(e)} noValidate>
         {done && (
-          <p className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm">
-            فروش {done.invoice.taxInvoiceNumber} ثبت شد
-            {done.customerLevel === "anonymous" ? " (مشتری گذری)" : ""}.
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm">
+            <p>
+              فروش {done.invoice.taxInvoiceNumber} ثبت شد
+              {done.customerLevel === "anonymous" ? " (مشتری گذری)" : ""}.
+            </p>
+            <Button type="button" variant="secondary" size="sm" onClick={() => printPosReceipt(done.invoice)}>
+              <Printer />
+              چاپ
+            </Button>
+          </div>
         )}
 
         <div className="grid gap-4 sm:grid-cols-2">
