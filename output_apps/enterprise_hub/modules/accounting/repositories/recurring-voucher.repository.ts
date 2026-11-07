@@ -169,7 +169,8 @@ export class RecurringVoucherRepository {
         journal_entry_id: number;
         reversal_date: string;
       }> = await m.query(
-        `SELECT "id", "recurring_id", "journal_entry_id", "reversal_date"
+        `SELECT "id", "recurring_id", "journal_entry_id",
+                to_char("reversal_date", 'YYYY-MM-DD') AS "reversal_date"
            FROM "erp_recurring_voucher_runs"
           WHERE "tenant_id" = $1
             AND "reversal_entry_id" IS NULL

@@ -42,9 +42,19 @@ const admin = async (sql: string) => {
   }
 };
 
-/** `date` columns come back as 'YYYY-MM-DD' strings; tolerate a Date just in case. */
-const isoDay = (value: unknown): string =>
-  value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
+/**
+ * Calendar day of a `date` value. node-pg parses `date` into a Date at LOCAL midnight, so the
+ * local parts give the right day in every timezone (toISOString would shift it back in Tehran).
+ */
+const isoDay = (value: unknown): string => {
+  if (value instanceof Date) {
+    const y = String(value.getFullYear()).padStart(4, '0');
+    const m = String(value.getMonth() + 1).padStart(2, '0');
+    const d = String(value.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return String(value).slice(0, 10);
+};
 
 /** Gregorian ISO day of a Jalali date, using the same conversion the ledger uses. */
 const jalaliIso = (jy: number, jm: number, jd: number): string => {
@@ -52,13 +62,16 @@ const jalaliIso = (jy: number, jm: number, jd: number): string => {
   return `${String(g.gy).padStart(4, '0')}-${String(g.gm).padStart(2, '0')}-${String(g.gd).padStart(2, '0')}`;
 };
 
-describePg('Recurring vouchers on PostgreSQL', () => {
-  const dbName = `rx_rv_${process.pid}_${Date.now()}`;
+/** Every key case runs once per zone: the service must not depend on the process timezone. */
+describePg.each(['UTC', 'Asia/Tehran'])('Recurring vouchers on PostgreSQL (TZ=%s)', (zone) => {
+  const dbName = `rx_rv_${process.pid}_${Date.now()}_${zone.replace(/\W/g, '')}`;
+  const savedTz = process.env.TZ;
   let ds: DataSource;
   let accounting: AccountingService;
   let service: RecurringVoucherService;
 
   beforeAll(async () => {
+    process.env.TZ = zone;
     await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
     await admin(`CREATE DATABASE "${dbName}"`);
     ds = new DataSource(options(dbName));
@@ -74,6 +87,11 @@ describePg('Recurring vouchers on PostgreSQL', () => {
   afterAll(async () => {
     await ds.destroy();
     await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
+    if (savedTz === undefined) {
+      delete process.env.TZ;
+    } else {
+      process.env.TZ = savedTz;
+    }
   });
 
   it('rejects an unbalanced template on create', async () => {
