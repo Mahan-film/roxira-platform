@@ -1,0 +1,12 @@
+# Task: fixed-asset disposal
+Read modules/accounting/services/fixed-asset.service.ts, controllers/fixed-asset.controller.ts, assets/*, repositories/fixed-asset.repository.ts, and how depreciation posts through the posting engine.
+
+POST fixed-assets/:id/dispose with @RequireAction(AccessAction.POST), body { date, proceeds (decimal string, 0 allowed), cashAccountRole or settlement account, note? }.
+Behaviour, in one tenant transaction with the asset row locked: refuse an asset already DISPOSED (409), a date in a locked period or closed year (existing 423), or a date before the last posted depreciation. Accumulated depreciation is read from posted runs. Book value = cost - accumulated. Post through the posting engine, adding a template fixed_asset.disposal if none exists: debit accumulated depreciation, debit settlement for proceeds, credit asset cost, and debit loss or credit gain for the difference. Source id = asset id, so a repeat cannot post twice. Set status DISPOSED and store disposal date, proceeds and journal entry id, with a migration named 1789900000300. The depreciation run must skip disposed assets.
+
+Page: add disposal to the existing fixed-asset screen if one exists; if not, create frontend/src/app/app/accounting/fixed-assets/page.tsx with list, register and dispose dialog. Help: docs/help/fa/20-fixed-assets.md.
+
+Spec fixed-asset-disposal.pg.spec.ts: cost 120,000,000, accumulated 30,000,000, proceeds 100,000,000 gives gain 10,000,000; proceeds 80,000,000 gives loss 10,000,000; proceeds 0 gives loss 90,000,000; voucher balances in each; second dispose 409; locked period refused; other tenant 404; later depreciation run skips it.
+
+## Rules
+App root: output_apps/enterprise_hub. Do NOT commit or push. Do NOT edit package.json, lockfiles, frontend app-shell.tsx, nav-menu.ts, app.module.ts, .github/. Money is bigint through modules/accounting/money.ts: no parseFloat or Number on money. No hardcoded account codes: resolve through posting roles. Every query is tenant-scoped through TenantScope. DTOs use class-validator. Persian for user-visible text. Tests assert computed values; do not weaken a test; do not claim a test passes unless you ran it. Update permission snapshot with UPDATE_PERMISSION_MATRIX=1 only if routes are added. Any new business rule must have a tenant setting with a safe default, or be listed in your final message. Update the matching row in docs/strategy/REQUIREMENTS_STATUS.md with evidence.

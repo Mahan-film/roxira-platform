@@ -1,4 +1,5 @@
 # Laptop queue (orchestrator-maintained). Source: #116 body + strategist comments, 2026-11-04.
+# Update 11-07 05:30: merged #537 #541 #550 #552 #554 #557 #559. Building through OpenCode only: asset disposal, T1 slice 4. Unreviewed; coordinator reads diffs. Budget and approval design wait for owner research. Nav entries pending: recurring vouchers, contracting.
 # Update 11-07: owner wants rules configurable by management; Deep Research prompt sent. Treat #541 reviewer rule, tolerances and approval steps as defaults until that result arrives.
 # Update 11-07 04:45: M1 green on main (end condition 2). Coordinator read diffs of #550 #552 #554 #557; merge loop running in that order. #230 items left after these: accruals done in 552; next closing/carry-forward, budget, report builder, combined report, fixed-asset disposal. #555 numbering after 550 lands.
 # Update 11-07: M1 #524 merged; verify gate on main before claiming end condition 2. Research check issues #555 (numbering, do after voucher PRs), #556 (build started, PR 557). Landing copy #559.
