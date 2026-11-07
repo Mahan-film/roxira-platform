@@ -6,7 +6,7 @@
 # ------------------------------------------------------------------------------
 # Stage 1: dependencies — نصب کامل وابستگی‌ها (dev + prod) برای مرحله بیلد
 # ------------------------------------------------------------------------------
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 WORKDIR /app
 
 COPY package.json package-lock.json ./
@@ -15,7 +15,7 @@ RUN npm ci
 # ------------------------------------------------------------------------------
 # Stage 2: builder — کامپایل TypeScript به JavaScript (nest build)
 # ------------------------------------------------------------------------------
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
@@ -30,7 +30,7 @@ RUN npm run build
 # ------------------------------------------------------------------------------
 # Stage 3: prod-deps — فقط وابستگی‌های Production (بدون devDependencies)
 # ------------------------------------------------------------------------------
-FROM node:20-alpine AS prod-deps
+FROM node:22-alpine AS prod-deps
 WORKDIR /app
 
 COPY package.json package-lock.json ./
@@ -39,7 +39,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 # ------------------------------------------------------------------------------
 # Stage 4: runner — ایمیج نهایی سبک و ایمن برای اجرای پروداکشن
 # ------------------------------------------------------------------------------
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
