@@ -16,6 +16,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "DELETE /enterprise-hub/accounting/recurring-vouchers/:id (RecurringVoucherController.remove)": {
+    "policy": "accounting:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "DELETE /enterprise-hub/api-tokens/:id (ApiTokensController.revoke)": {
     "policy": "security:admin",
     "owner": true,
@@ -371,6 +382,28 @@
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/petty-cash/funds/:id (PettyCashController.statement)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/accounting/recurring-vouchers/ (RecurringVoucherController.list)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/accounting/recurring-vouchers/:id (RecurringVoucherController.findOne)": {
     "policy": "accounting:read",
     "owner": true,
     "admin": true,
@@ -2497,6 +2530,28 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/accounting/recurring-vouchers/ (RecurringVoucherController.create)": {
+    "policy": "accounting:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/accounting/recurring-vouchers/run-due (RecurringVoucherController.runDue)": {
+    "policy": "accounting:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/api-tokens/ (ApiTokensController.create)": {
     "policy": "security:admin",
     "owner": true,
@@ -3839,6 +3894,17 @@
     "policy": "platformAdmin"
   },
   "PUT /enterprise-hub/accounting/journal-entries/:id (AccountingController.updateJournalEntry)": {
+    "policy": "accounting:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PUT /enterprise-hub/accounting/recurring-vouchers/:id (RecurringVoucherController.update)": {
     "policy": "accounting:create",
     "owner": true,
     "admin": true,
