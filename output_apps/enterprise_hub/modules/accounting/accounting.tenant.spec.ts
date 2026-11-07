@@ -22,6 +22,7 @@ import {
   TrialBalanceRawRow,
 } from './repositories/accounting.repository';
 import { AccountingService } from './services/accounting.service';
+import { VoucherToolsService } from './services/voucher-tools.service';
 import { fromDb, minorToDecimal } from './money';
 
 const requestWith = (user: unknown): AuthenticatedRequest =>
@@ -431,7 +432,7 @@ describe('AccountingService — cross-tenant isolation', () => {
 describe('AccountingController — tenant access rules', () => {
   const setup = async () => {
     const { service } = buildService();
-    const controller = new AccountingController(service);
+    const controller = new AccountingController(service, {} as VoucherToolsService);
     const created = await service.createJournalEntry(
       'tenant-a',
       buildDto('JV-A'),

@@ -21,6 +21,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { getTrialBalance, listAccounts } from "@/lib/api/accounting-client";
 import {
   type ChartOfAccount,
+  type JournalEntryResponse,
   type TrialBalanceResponse,
 } from "@/types/accounting";
 
@@ -28,6 +29,7 @@ export default function SuiteAccountingPage() {
   const [accounts, setAccounts] = useState<ChartOfAccount[]>([]);
   const [trialBalance, setTrialBalance] = useState<TrialBalanceResponse | null>(null);
   const [showVoucher, setShowVoucher] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<JournalEntryResponse | null>(null);
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -61,7 +63,10 @@ export default function SuiteAccountingPage() {
         icon={<BookOpenCheck className="size-6 text-indigo-500" />}
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => setShowVoucher((v) => !v)} aria-expanded={showVoucher}>
+            <Button size="sm" onClick={() => {
+                setEditingEntry(null);
+                setShowVoucher((v) => !v);
+              }} aria-expanded={showVoucher}>
               <FilePlus2 aria-hidden="true" />
               سند جدید
             </Button>
@@ -93,11 +98,18 @@ export default function SuiteAccountingPage() {
 
       <AccountingStats trialBalance={trialBalance} />
 
-      {showVoucher && (
+      {(showVoucher || editingEntry) && (
         <JournalEntryForm
           accounts={accounts}
+          entry={editingEntry}
+          onCancel={() => setEditingEntry(null)}
           onCreated={() => {
             setShowVoucher(false);
+            setEditingEntry(null);
+            refresh();
+          }}
+          onUpdated={() => {
+            setEditingEntry(null);
             refresh();
           }}
         />
@@ -108,7 +120,10 @@ export default function SuiteAccountingPage() {
           icon={<BookOpenCheck className="size-6 text-indigo-500" aria-hidden="true" />}
           description="مدیریت سرفصل حساب‌ها، تراز آزمایشی و ثبت اسناد دوبل حسابداری در این بخش انجام می‌شود."
           action={
-            <Button size="sm" onClick={() => setShowVoucher((v) => !v)} aria-expanded={showVoucher}>
+            <Button size="sm" onClick={() => {
+                setEditingEntry(null);
+                setShowVoucher((v) => !v);
+              }} aria-expanded={showVoucher}>
               <FilePlus2 aria-hidden="true" />
               سند جدید
             </Button>
@@ -135,7 +150,13 @@ export default function SuiteAccountingPage() {
             />
           )}
 
-          <JournalEntriesTable refreshKey={refreshKey} />
+          <JournalEntriesTable
+            refreshKey={refreshKey}
+            onEdit={(entry) => {
+              setShowVoucher(false);
+              setEditingEntry(entry);
+            }}
+          />
         </>
       )}
     </EnterpriseRouteGuard>

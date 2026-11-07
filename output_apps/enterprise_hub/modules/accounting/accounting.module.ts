@@ -49,6 +49,7 @@ import { FinancialReportsService } from './services/financial-reports.service';
 import { FiscalYearService } from './services/fiscal-year.service';
 import { PettyCashService } from './services/petty-cash.service';
 import { ReportExportService } from './services/report-export.service';
+import { VoucherToolsService } from './services/voucher-tools.service';
 
 /**
  * ماژول حسابداری دوطرفه و دفتر روزنامه سازمانی
@@ -119,6 +120,7 @@ import { ReportExportService } from './services/report-export.service';
     PettyCashRepository,
     PettyCashService,
     ReportExportService,
+    VoucherToolsService,
   ],
   exports: [AccountingService, FinancialReportsService, ReportExportService, CostCentreReportService],
 })

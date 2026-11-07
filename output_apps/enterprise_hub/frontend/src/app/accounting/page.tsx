@@ -17,7 +17,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getTrialBalance, listAccounts } from "@/lib/api/accounting-client";
 import { ApiClientError } from "@/lib/api/http-client";
-import type { ChartOfAccount, TrialBalanceResponse } from "@/types/accounting";
+import type {
+  ChartOfAccount,
+  JournalEntryResponse,
+  TrialBalanceResponse,
+} from "@/types/accounting";
 
 /**
  * صفحه جامع حسابداری دوبل و دفتر روزنامه سازمانی.
@@ -32,6 +36,7 @@ function AccountingPageContent() {
     null,
   );
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
+  const [editingEntry, setEditingEntry] = useState<JournalEntryResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [isPending, startTransition] = useTransition();
@@ -95,7 +100,16 @@ function AccountingPageContent() {
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <div className="lg:col-span-2">
-            <JournalEntryForm accounts={accounts} onCreated={handleRefresh} />
+            <JournalEntryForm
+              accounts={accounts}
+              entry={editingEntry}
+              onCancel={() => setEditingEntry(null)}
+              onCreated={handleRefresh}
+              onUpdated={() => {
+                setEditingEntry(null);
+                handleRefresh();
+              }}
+            />
           </div>
 
           <Card className="h-full border-0 bg-gradient-to-br from-indigo-500/10 via-transparent to-transparent ring-1 ring-indigo-500/20">
@@ -151,7 +165,7 @@ function AccountingPageContent() {
           />
         )}
 
-        <JournalEntriesTable refreshKey={refreshKey} />
+        <JournalEntriesTable refreshKey={refreshKey} onEdit={setEditingEntry} />
       </main>
       <RoxiraFooter />
     </div>

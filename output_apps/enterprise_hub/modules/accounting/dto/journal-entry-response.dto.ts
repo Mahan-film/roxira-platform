@@ -60,6 +60,9 @@ export class JournalEntryResponseDto {
   @ApiProperty({ enum: JournalEntryStatus, description: 'وضعیت سند' })
   status: JournalEntryStatus;
 
+  @ApiProperty({ description: 'نسخهٔ سند برای قفل ویرایش خوش‌بینانه' })
+  version: number;
+
   @ApiProperty({ description: 'ارز سند (کد متعارف)', example: 'IRR' })
   currency: string;
 

@@ -19,6 +19,7 @@ import {
   DuplicateEntryNumberError,
   LockedPeriodError,
   UnknownDimensionError,
+  VoucherVersionConflictError,
 } from '../exceptions/ledger.exceptions';
 
 /** Advisory-lock namespace shared by posting (shared) and period lock/unlock (exclusive). */
@@ -292,6 +293,25 @@ export class AccountingRepository {
     });
   }
 
+  /** Maps dimension ids back to their codes, for copying a voucher's lines through the normal create path. */
+  async findDimensionCodesByIds(
+    tenantId: string,
+    ids: number[],
+    manager?: EntityManager,
+  ): Promise<Map<number, string>> {
+    return this.scope.within(tenantId, manager, async (m) => {
+      const unique = Array.from(new Set(ids));
+      if (unique.length === 0) {
+        return new Map<number, string>();
+      }
+      const rows: Array<{ id: number; code: string }> = await m.query(
+        `SELECT id, code FROM fin_dimensions WHERE tenant_id = $1 AND id = ANY($2::int[])`,
+        [tenantId, unique],
+      );
+      return new Map(rows.map((row) => [Number(row.id), row.code]));
+    });
+  }
+
   async findAndCountEntries(
     tenantId: string,
     options: FindManyOptions<JournalEntryEntity>,
@@ -470,8 +490,37 @@ export class AccountingRepository {
   }
 
   /**
+   * Updates a voucher header with an atomic optimistic-lock check: the row is matched by id and
+   * tenant and, when `expectedVersion` is given, by its current `version`; `version` is always
+   * incremented. Zero rows means another writer saved first (or the row is gone) — a read-then-
+   * write check would race, this cannot.
+   */
+  private async updateEntryGuarded(
+    tenantId: string,
+    entryId: number,
+    values: { entryNumber?: string; date?: Date; description?: string; status?: JournalEntryStatus },
+    expectedVersion: number | null,
+    manager: EntityManager,
+  ): Promise<void> {
+    const query = manager
+      .createQueryBuilder()
+      .update(JournalEntryEntity)
+      .set({ ...values, version: () => '"version" + 1' })
+      .where('id = :id AND tenant_id = :tenantId', { id: entryId, tenantId });
+    if (expectedVersion != null) {
+      query.andWhere('version = :expectedVersion', { expectedVersion });
+    }
+    const result = await query.execute();
+    if ((result.affected ?? 0) === 0) {
+      throw new VoucherVersionConflictError(entryId);
+    }
+  }
+
+  /**
    * Replaces the header fields and every line of a DRAFT or TEMPORARY entry. The caller has
    * locked the entry and checked its status; the database refuses to touch a POSTED one anyway.
+   * The optimistic-lock UPDATE runs first, so a stale `expectedVersion` fails before any line of
+   * the old content is deleted.
    */
   async replaceEntryContent(
     tenantId: string,
@@ -479,13 +528,20 @@ export class AccountingRepository {
     header: { entryNumber: string; date: Date; description: string },
     lineInputs: JournalLineInput[],
     manager: EntityManager,
+    expectedVersion: number | null = null,
   ): Promise<void> {
+    await this.updateEntryGuarded(
+      tenantId,
+      entryId,
+      {
+        entryNumber: header.entryNumber,
+        date: header.date,
+        description: header.description,
+      },
+      expectedVersion,
+      manager,
+    );
     await manager.delete(JournalEntryLineEntity, { journalEntryId: entryId, tenantId });
-    await manager.update(JournalEntryEntity, { id: entryId, tenantId }, {
-      entryNumber: header.entryNumber,
-      date: header.date,
-      description: header.description,
-    });
     await this.insertLines(tenantId, entryId, lineInputs, manager);
   }
 
@@ -556,8 +612,9 @@ export class AccountingRepository {
   }
 
   /**
-   * Moves an entry between states. Becoming POSTED applies the line totals to the account
-   * balances in the same transaction; the database refuses an unbalanced or locked-period post.
+   * Moves an entry between states with the same atomic optimistic-lock check as a content edit.
+   * Becoming POSTED applies the line totals to the account balances in the same transaction; the
+   * database refuses an unbalanced or locked-period post.
    */
   async setEntryStatus(
     tenantId: string,
@@ -565,8 +622,15 @@ export class AccountingRepository {
     status: JournalEntryStatus,
     lineInputs: JournalLineInput[],
     manager: EntityManager,
+    expectedVersion: number | null = null,
   ): Promise<void> {
-    await manager.update(JournalEntryEntity, { id: entry.id, tenantId }, { status });
+    await this.updateEntryGuarded(
+      tenantId,
+      entry.id,
+      { status },
+      expectedVersion,
+      manager,
+    );
     if (status === JournalEntryStatus.POSTED) {
       await this.applyBalanceDeltas(tenantId, lineInputs, entry.entryNumber, manager);
     }
