@@ -12,6 +12,8 @@ import type {
   Member,
   MyAccess,
   OrganizationSummary,
+  PolicySetting,
+  PolicyValue,
   RolesResponse,
   SessionView,
   TenantListItem,
@@ -141,6 +143,15 @@ export const getSecurityPolicy = (signal?: AbortSignal) =>
   apiRequest<{ require2fa: boolean }>(`${ORG}/security`, { signal });
 export const setSecurityPolicy = (require2fa: boolean) =>
   apiRequest<{ require2fa: boolean }>(`${ORG}/security`, { method: "PATCH", body: { require2fa } });
+
+// ----------------------------------------------------------- tenant policies (A/B/C)
+export const listPolicies = (signal?: AbortSignal) =>
+  apiRequest<PolicySetting[]>(`${BASE}/policies`, { signal });
+export const setPolicy = (key: string, value: PolicyValue, reason: string) =>
+  apiRequest<PolicySetting>(`${BASE}/policies/${encodeURIComponent(key)}`, {
+    method: "PUT",
+    body: { value, reason },
+  });
 
 export const listAudit = (
   params: { before?: string; action?: string; limit?: number },

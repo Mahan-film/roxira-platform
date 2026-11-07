@@ -30,6 +30,7 @@ import {
   RecurringVoucherLine,
 } from '../entities/recurring-voucher.entity';
 import { RecurringVoucherRepository } from '../repositories/recurring-voucher.repository';
+import { PolicyService } from '../../tenants/policy/policy.service';
 import { AccountingService } from './accounting.service';
 import {
   advanceJalaliMonths,
@@ -51,6 +52,7 @@ export class RecurringVoucherService implements OnModuleInit {
   constructor(
     private readonly repo: RecurringVoucherRepository,
     private readonly accounting: AccountingService,
+    private readonly policy: PolicyService,
     @Optional()
     @InjectQueue(RECURRING_VOUCHERS_QUEUE)
     private readonly queue?: Queue,
@@ -273,6 +275,12 @@ export class RecurringVoucherService implements OnModuleInit {
         if (runId == null) {
           return 'duplicate';
         }
+        const creationMode = await this.policy.get(
+          tenantId,
+          'accounting.recurring_voucher.creation_mode',
+          manager,
+        );
+        const postNow = template.autoReverse || creationMode === 'always_post';
         const entry = await this.accounting.createJournalEntry(
           tenantId,
           {
@@ -280,7 +288,7 @@ export class RecurringVoucherService implements OnModuleInit {
             date: runDate,
             description: template.description,
             lines: template.lines as JournalEntryLineDto[],
-            status: template.autoReverse ? JournalEntryStatus.POSTED : JournalEntryStatus.DRAFT,
+            status: postNow ? JournalEntryStatus.POSTED : JournalEntryStatus.DRAFT,
           },
           manager,
         );

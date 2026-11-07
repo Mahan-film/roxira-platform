@@ -1,4 +1,5 @@
 import { fakePostingRules } from '../../hr/__fixtures__/fake-posting-rules';
+import { BadRequestException } from '@nestjs/common';
 import { FixedAssetEntity } from '../entities/fixed-asset.entity';
 import { FixedAssetService } from '../services/fixed-asset.service';
 
@@ -33,7 +34,7 @@ const setup = () => {
     },
   };
   const posting = fakePostingRules(accounting as never);
-  const service = new FixedAssetService(repo as never, {} as never, posting);
+  const service = new FixedAssetService(repo as never, {} as never, posting, { get: async () => 'refuse' } as never);
   return { service, posting, entries };
 };
 
@@ -65,5 +66,54 @@ describe('FixedAssetService.runMonth on the posting rules engine', () => {
     });
     expect(replay).toMatchObject({ replayed: true, entryNumber: 'DEP-140501-1' });
     expect(entries).toHaveLength(2);
+  });
+});
+
+/** dispose() reads the disposal-before-depreciation policy (#585): refuse keeps today's guard, allow skips it. */
+function setupDispose(mode: 'refuse' | 'allow') {
+  const asset = {
+    id: 1, tenantId: T, code: 'A', name: 'A', cost: '1200.00', salvageValue: '0.00',
+    accumulatedDepreciation: '0.00', method: 'STRAIGHT_LINE', lifeMonths: 12, annualRate: null,
+    monthsDepreciated: 0, nextPeriodIndex: 0, status: 'ACTIVE',
+    expenseAccountCode: '5060', accumulatedAccountCode: '1120', assetAccountCode: '1113',
+  } as unknown as FixedAssetEntity;
+  const posted: string[] = [];
+  const repo = {
+    scoped: async (_t: string, work: (m: unknown) => unknown) => work({}),
+    lockById: async () => ({ ...asset }),
+    lastPostedDepreciationDate: async () => '2026-03-20',
+    postedAccumulated: async () => 0n,
+    markDisposed: async () => undefined,
+  };
+  const ledger = { assertDateOpen: async () => undefined };
+  const posting = {
+    post: async (_t: string, request: { sourceId: string }) => {
+      posted.push(request.sourceId);
+      return { entryId: 1, entryNumber: 'FA-1' };
+    },
+    accountForRole: async () => '1011',
+  };
+  const policy = { get: async () => mode };
+  const service = new FixedAssetService(repo as never, ledger as never, posting as never, policy as never);
+  return { service, posted };
+}
+
+describe('FixedAssetService.dispose policy (#585)', () => {
+  it('refuses a disposal before the last posted depreciation under the refuse policy', async () => {
+    const { service } = setupDispose('refuse');
+    await expect(
+      service.dispose(T, 1, { date: '2026-02-10', proceeds: '0.00', settlementAccountCode: '1011' } as never),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('proceeds and posts under the allow policy', async () => {
+    const { service, posted } = setupDispose('allow');
+    const result = await service.dispose(T, 1, {
+      date: '2026-02-10',
+      proceeds: '0.00',
+      settlementAccountCode: '1011',
+    } as never);
+    expect(result.status).toBe('DISPOSED');
+    expect(posted).toEqual(['1']);
   });
 });

@@ -2124,6 +2124,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "GET /policies/ (PolicyController.list)": {
+    "policy": "members:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "GET /tenants/me (TenantsController.me)": {
     "policy": "anyMember",
     "owner": true,
@@ -4156,6 +4167,17 @@
     "hr": false,
     "read_only": false,
     "legacy_member": true
+  },
+  "PUT /policies/:key (PolicyController.set)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
   },
   "PUT /enterprise-hub/posting-rules/:docType/roles/:role (PostingRulesController.set)": {
     "policy": "accounting:admin",

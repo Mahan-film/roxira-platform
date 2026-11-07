@@ -1,7 +1,11 @@
 import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
+import { AccessService } from '../../access/services/access.service';
+import { AuditEntry, AuditService } from '../../access/services/audit.service';
 import { TenantScope } from '../../access/services/tenant-scope';
 import { PostingRequest, PostingRulesService } from '../../posting_rules/services/posting-rules.service';
+import { policyDefault } from '../../tenants/policy/policy.registry';
+import { PolicyService } from '../../tenants/policy/policy.service';
 import { StockDocumentsService } from '../services/stock-documents.service';
 import { PurchaseRepository, ReceiptLineForInvoice } from './purchase.repository';
 import { DEFAULT_PURCHASE_SETTINGS, PurchaseOrder, PurchaseOrderStatus, PurchaseSettings } from './purchase.types';
@@ -235,14 +239,51 @@ class FakePostingRules {
   }
 }
 
-function makeService(state: FakeState): SupplierInvoiceService {
-  return new SupplierInvoiceService(
+class FakePolicy {
+  private readonly overrides = new Map<string, unknown>();
+
+  set(key: string, value: unknown): void {
+    this.overrides.set(key, value);
+  }
+
+  async get(_tenantId: string, key: string): Promise<unknown> {
+    return this.overrides.has(key) ? this.overrides.get(key) : policyDefault(key);
+  }
+}
+
+class FakeAudit {
+  readonly entries: AuditEntry[] = [];
+
+  async record(entry: AuditEntry): Promise<void> {
+    this.entries.push(entry);
+  }
+}
+
+class FakeAccess {
+  otherApprovers = 0;
+  readonly calls: string[] = [];
+
+  async countEligibleApprovers(_tenantId: string, _userId: string, permission: string): Promise<number> {
+    this.calls.push(permission);
+    return this.otherApprovers;
+  }
+}
+
+function makeService(state: FakeState) {
+  const policy = new FakePolicy();
+  const audit = new FakeAudit();
+  const access = new FakeAccess();
+  const service = new SupplierInvoiceService(
     new FakeTenantScope(state) as unknown as TenantScope,
     new FakePurchaseRepository(state) as unknown as PurchaseRepository,
     new FakeSupplierInvoiceRepository(state) as unknown as SupplierInvoiceRepository,
     new FakeStockDocuments() as unknown as StockDocumentsService,
     new FakePostingRules(state) as unknown as PostingRulesService,
+    policy as unknown as PolicyService,
+    audit as unknown as AuditService,
+    access as unknown as AccessService,
   );
+  return { service, policy, audit, access };
 }
 
 function seedOrder(
@@ -287,10 +328,13 @@ function seedOrder(
 describe('SupplierInvoiceService (#227 T2)', () => {
   let state: FakeState;
   let service: SupplierInvoiceService;
+  let policy: FakePolicy;
+  let audit: FakeAudit;
+  let access: FakeAccess;
 
   beforeEach(() => {
     state = freshState();
-    service = makeService(state);
+    ({ service, policy, audit, access } = makeService(state));
     seedOrder(state, T1, 'order-1', 'order-line-1', 'receipt-line-1');
   });
 
@@ -398,5 +442,59 @@ describe('SupplierInvoiceService (#227 T2)', () => {
     const invoice = await createFirst();
     await expect(createFirst()).rejects.toBeInstanceOf(ConflictException);
     await expect(service.getInvoice(T2, invoice.id)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  // ------------------------------------------------- reviewer rule (#585)
+
+  const creatorAccept = (id: string, note = 'self approval') =>
+    service.acceptInvoice(T1, 'creator', id, { note });
+
+  it('lets another user accept under every reviewer rule, with no creator audit', async () => {
+    for (const rule of ['always_differs', 'differs_unless_sole_approver', 'creator_may_accept']) {
+      policy.set('purchase.invoice_review.reviewer_rule', rule);
+      const invoice = await createFirst(`INV-${rule}`);
+      const accepted = await service.acceptInvoice(T1, 'reviewer', invoice.id, { note: 'reviewer ok' });
+      expect(accepted.status).toBe('MATCHED');
+      expect(accepted.acceptedByCreator).toBe(false);
+      expect(audit.entries).toHaveLength(0);
+    }
+  });
+
+  it('refuses the creator under always_differs', async () => {
+    policy.set('purchase.invoice_review.reviewer_rule', 'always_differs');
+    const invoice = await createFirst('INV-DIFF');
+    await expect(creatorAccept(invoice.id)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(audit.entries).toHaveLength(0);
+  });
+
+  it('lets the creator accept under creator_may_accept and audits the other-approver count', async () => {
+    policy.set('purchase.invoice_review.reviewer_rule', 'creator_may_accept');
+    access.otherApprovers = 2;
+    const invoice = await createFirst('INV-MAY');
+    const accepted = await creatorAccept(invoice.id);
+    expect(accepted.acceptedByCreator).toBe(true);
+    expect(audit.entries).toHaveLength(1);
+    expect(audit.entries[0]).toMatchObject({
+      action: 'purchase.invoice.accepted_by_creator',
+      resourceType: 'supplier_invoice',
+      resourceId: invoice.id,
+    });
+    expect(audit.entries[0].metadata).toMatchObject({ rule: 'creator_may_accept', otherApprovers: 2 });
+  });
+
+  it('differs_unless_sole_approver lets the creator accept only when no other approver exists', async () => {
+    policy.set('purchase.invoice_review.reviewer_rule', 'differs_unless_sole_approver');
+
+    access.otherApprovers = 0;
+    const sole = await createFirst('INV-SOLE');
+    const accepted = await creatorAccept(sole.id);
+    expect(accepted.acceptedByCreator).toBe(true);
+    expect(audit.entries).toHaveLength(1);
+    expect(audit.entries[0].metadata).toMatchObject({ rule: 'differs_unless_sole_approver', otherApprovers: 0 });
+
+    access.otherApprovers = 1;
+    const shared = await createFirst('INV-SHARED');
+    await expect(creatorAccept(shared.id)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(audit.entries).toHaveLength(1); // still only the sole-approver audit
   });
 });

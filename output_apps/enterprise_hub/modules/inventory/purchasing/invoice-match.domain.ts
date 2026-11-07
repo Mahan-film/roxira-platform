@@ -45,7 +45,10 @@ export interface InvoiceLineMatch {
   priceDifference: bigint;
 }
 
-export type InvoiceTolerance = Pick<PurchaseSettings, 'priceToleranceBp' | 'priceToleranceAbs'>;
+export type InvoiceTolerance = Pick<PurchaseSettings, 'priceToleranceBp' | 'priceToleranceAbs'> & {
+  /** Allowed excess of the invoiced quantity over the received quantity, in basis points (100 = 1%). */
+  qtyExcessToleranceBp?: number;
+};
 
 function abs(value: bigint): bigint {
   return value < 0n ? -value : value;
@@ -53,8 +56,9 @@ function abs(value: bigint): bigint {
 
 /**
  * Matches one invoice line against the receipt and the PO price. Quantity mismatch when the invoice
- * (including other invoices for the same receipt line) exceeds what was received. Price mismatch when
- * the absolute difference is strictly greater than the larger of the percentage and absolute tolerance.
+ * (including other invoices for the same receipt line) exceeds what was received by more than the
+ * quantity allowance. Price mismatch when the absolute difference is strictly greater than the larger
+ * of the percentage and absolute tolerance.
  */
 export function matchInvoiceLine(facts: InvoiceLineFacts, settings: InvoiceTolerance): InvoiceLineMatch {
   const orderValue = lineValue(facts.quantity, facts.orderUnitPrice);
@@ -70,7 +74,11 @@ export function matchInvoiceLine(facts: InvoiceLineFacts, settings: InvoiceToler
   const absoluteTolerance = settings.priceToleranceAbs ?? 0n;
   const allowed = percentTolerance > absoluteTolerance ? percentTolerance : absoluteTolerance;
 
-  const qtyMismatch = qtyExcess > 0n;
+  // A small over-invoice is allowed; the real excess is still reported so it stays visible.
+  const qtyToleranceBp = BigInt(Math.max(0, Math.trunc(settings.qtyExcessToleranceBp ?? 0)));
+  const allowedExcess = (facts.receivedQuantity * qtyToleranceBp) / 10_000n;
+
+  const qtyMismatch = qtyExcess > allowedExcess;
   const priceMismatch = abs(priceDifference) > allowed;
 
   const status: MatchStatus = qtyMismatch

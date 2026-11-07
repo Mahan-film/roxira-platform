@@ -4,6 +4,7 @@ import {
   matchInvoiceLine,
   InvoiceLineFacts,
 } from './invoice-match.domain';
+import { lineValue } from './purchase-order.domain';
 
 const facts = (overrides: Partial<InvoiceLineFacts> = {}): InvoiceLineFacts => ({
   orderUnitPrice: 5_000_000n,
@@ -113,5 +114,69 @@ describe('invoice match domain (#227 T2)', () => {
       vat: 0n,
       payable: 49_000_000n,
     });
+  });
+});
+
+/**
+ * Quantity allowance (#585) and a pinned price-tolerance scenario.
+ *
+ * quantity is in hundredths of a unit and unitPrice in minor units per whole unit, so lineValue is
+ * `(quantity * unitPrice + 50) / 100` (half up). In the price scenario below the order is 100.00
+ * units at 1000, i.e. (10000 * 1000) / 100 = 100,000 minor units.
+ */
+describe('invoice match tolerances (#585)', () => {
+  const qtyFacts = (overrides: Partial<InvoiceLineFacts> = {}): InvoiceLineFacts => ({
+    orderUnitPrice: 1000n,
+    receivedQuantity: 10000n,
+    alreadyInvoicedQuantity: 0n,
+    quantity: 10000n,
+    unitPrice: 1000n,
+    ...overrides,
+  });
+
+  it('allows a quantity excess inside the allowance and flags one beyond it', () => {
+    // received 100.00; invoiced 103.00 -> excess 300 hundredths.
+    const invoiced = qtyFacts({ quantity: 10300n });
+
+    expect(
+      matchInvoiceLine(invoiced, { priceToleranceBp: 0, priceToleranceAbs: 0n, qtyExcessToleranceBp: 0 }).status,
+    ).toBe('QTY_MISMATCH');
+
+    // allowed = 10000 * 300 / 10000 = 300; 300 > 300 is false.
+    expect(
+      matchInvoiceLine(invoiced, { priceToleranceBp: 0, priceToleranceAbs: 0n, qtyExcessToleranceBp: 300 }).status,
+    ).toBe('MATCHED');
+
+    // allowed = 2,990,000 / 10,000 = 299 (floor); 300 > 299.
+    expect(
+      matchInvoiceLine(invoiced, { priceToleranceBp: 0, priceToleranceAbs: 0n, qtyExcessToleranceBp: 299 }).status,
+    ).toBe('QTY_MISMATCH');
+  });
+
+  it('keeps the real excess in the result even when the quantity is inside tolerance', () => {
+    // received 100.00; invoiced 106.00 -> excess 600 hundredths; allowed = 10000 * 500 / 10000 = 500.
+    const result = matchInvoiceLine(qtyFacts({ quantity: 10600n }), {
+      priceToleranceBp: 0,
+      priceToleranceAbs: 0n,
+      qtyExcessToleranceBp: 500,
+    });
+    expect(result.status).toBe('QTY_MISMATCH');
+    expect(result.qtyExcess).toBe(600n);
+  });
+
+  it('pins the price tolerance: 100.00 at 1000 gives order value 100,000 and allowed 5,000 at 500 bp', () => {
+    const orderValue = 100_000n;
+    expect(lineValue(qtyFacts().quantity, qtyFacts().orderUnitPrice)).toBe(orderValue);
+    const tolerance = { priceToleranceBp: 500, priceToleranceAbs: 0n };
+
+    // 1050 -> (10000 * 1050) / 100 = 105,000; diff 5,000 == allowed.
+    const inside = matchInvoiceLine(qtyFacts({ unitPrice: 1050n }), tolerance);
+    expect(inside.priceDifference).toBe(5_000n);
+    expect(inside.status).toBe('MATCHED');
+
+    // 1051 -> (10000 * 1051) / 100 = 105,100; diff 5,100 > 5,000.
+    const outside = matchInvoiceLine(qtyFacts({ unitPrice: 1051n }), tolerance);
+    expect(outside.priceDifference).toBe(5_100n);
+    expect(outside.status).toBe('PRICE_MISMATCH');
   });
 });

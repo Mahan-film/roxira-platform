@@ -157,3 +157,22 @@ export interface InvitationPreview {
   roleKey: string;
   expiresAt: string;
 }
+
+/** Tenant policy settings (#585), mirroring `modules/tenants/policy/policy.registry.ts`. */
+export type PolicyGroup = "A" | "B" | "C";
+export type PolicyValue = string | number | boolean;
+
+export interface PolicySetting {
+  key: string;
+  group: PolicyGroup;
+  type: "enum" | "int" | "bool";
+  allowed: string[] | { min: number; max: number } | boolean[];
+  default: PolicyValue;
+  labelFa: string;
+  descriptionFa: string;
+  value: PolicyValue;
+  isDefault: boolean;
+  updatedAt: string | null;
+  updatedBy: string | null;
+  editable: boolean;
+}

@@ -88,8 +88,8 @@ describePg('Fixed-asset register on PostgreSQL', () => {
     const repo = new AccountingRepository(new TenantScope(app));
     accounting = new AccountingService(repo, currency);
     const posting = new PostingRulesService(new PostingRulesRepository(new TenantScope(ds)), accounting);
-    assets = new FixedAssetService(new FixedAssetRepository(ds), repo, posting);
-    appAssets = new FixedAssetService(new FixedAssetRepository(app), repo, posting);
+    assets = new FixedAssetService(new FixedAssetRepository(ds), repo, posting, { get: async () => 'refuse' } as never);
+    appAssets = new FixedAssetService(new FixedAssetRepository(app), repo, posting, { get: async () => 'refuse' } as never);
     const templates = new ChartTemplateService(repo);
     await templates.apply(T1, 'iran-trading');
     await templates.apply(T2, 'iran-trading');

@@ -1,4 +1,5 @@
 import { AccessModule } from '../access/access.module';
+import { TenantPolicyModule } from '../tenants/policy/policy.module';
 import { BullModule } from '@nestjs/bullmq';
 import { FixedAssetController } from './controllers/fixed-asset.controller';
 import { DepreciationLineEntity, FixedAssetEntity } from './entities/fixed-asset.entity';
@@ -82,6 +83,7 @@ import { VoucherToolsService } from './services/voucher-tools.service';
     ]),
     CurrencyModule,
     AccessModule,
+    TenantPolicyModule,
     BullModule.registerQueue({ name: RECURRING_VOUCHERS_QUEUE }),
   ],
   controllers: [AccountingController, DimensionController, FixedAssetController, FiscalYearController, PettyCashController, ReportsController, RecurringVoucherController, VoucherAttachmentController],

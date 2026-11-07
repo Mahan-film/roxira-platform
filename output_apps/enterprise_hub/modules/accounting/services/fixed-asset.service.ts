@@ -10,6 +10,7 @@ import { FixedAssetRepository } from '../repositories/fixed-asset.repository';
 import { LockedPeriodError, PeriodLockedException } from '../exceptions/ledger.exceptions';
 import { gregorianToJalali, isoDate, jalaliMonthEnd } from '../../hr/services/jalali-period';
 import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
+import { PolicyService } from '../../tenants/policy/policy.service';
 
 export interface DepreciationRunResult {
   year: number;
@@ -63,6 +64,7 @@ export class FixedAssetService {
     private readonly assets: FixedAssetRepository,
     private readonly ledger: AccountingRepository,
     @Inject(FIXED_ASSET_POSTING) private readonly posting: FixedAssetPosting,
+    private readonly policy: PolicyService,
   ) {}
 
   list(tenantId: string) {
@@ -281,9 +283,16 @@ export class FixedAssetService {
         }
         throw error;
       }
-      const lastPosted = await this.assets.lastPostedDepreciationDate(tenantId, id, manager);
-      if (lastPosted && dto.date < lastPosted) {
-        throw new BadRequestException(`تاریخ فروش نمی‌تواند پیش از آخرین سند استهلاک ثبت‌شده (${lastPosted}) باشد.`);
+      const policy = await this.policy.get(
+        tenantId,
+        'fixed_asset.disposal_before_depreciation',
+        manager,
+      );
+      if (policy === 'refuse') {
+        const lastPosted = await this.assets.lastPostedDepreciationDate(tenantId, id, manager);
+        if (lastPosted && dto.date < lastPosted) {
+          throw new BadRequestException(`تاریخ فروش نمی‌تواند پیش از آخرین سند استهلاک ثبت‌شده (${lastPosted}) باشد.`);
+        }
       }
       const settlement = dto.settlementAccountCode ?? (await this.posting.accountForRole(tenantId, dto.cashAccountRole!));
       if (!settlement) {

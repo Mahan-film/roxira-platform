@@ -76,6 +76,28 @@ export class AccessService {
     };
   }
 
+  /**
+   * Counts other ACTIVE members of the tenant whose effective permissions include `permission`.
+   * Used by the supplier-invoice reviewer rule: `differs_unless_sole_approver` only lets the creator
+   * accept when no other eligible approver exists (`excludeUserId` is normally the creator).
+   */
+  async countEligibleApprovers(tenantId: string, excludeUserId: string, permission: string): Promise<number> {
+    const members = await this.memberships.listByTenant(tenantId);
+    let count = 0;
+    for (const member of members) {
+      if (member.status !== 'ACTIVE' || member.userId === excludeUserId) continue;
+      let permissions: readonly string[];
+      if (member.customRoleId) {
+        const role = await this.roles.find(tenantId, member.customRoleId);
+        permissions = role?.permissions ?? [];
+      } else {
+        permissions = systemRolePermissions(member.roleKey);
+      }
+      if (permissions.includes(permission)) count += 1;
+    }
+    return count;
+  }
+
   /** A session is the refresh-token family `sid`; revoked or expired families are dead. */
   async isSessionActive(sid: string, userId: string): Promise<boolean> {
     const key = `${userId}:${sid}`;
