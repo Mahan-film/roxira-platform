@@ -57,3 +57,6 @@ Twice daily on #227 with the line: `OpenCode PRs / Claude PRs / est. cost`. Last
 - Quota order: fresh session over long one (/clear costs nothing, compaction reads everything); subagents draw on the same quota; delegate noisy output; keep Haiku for mechanical work.
 - T1 agent a5069bcb0e286e98c retired at 95% 5-hour use, above the 150k rule. Restart slice 3 (#537) with a fresh Haiku agent after the 20:20 Tehran reset. Worktree 536-t1-delivery holds attempt 2.
 - After reset: read diffs of #550 #552 #554 (not reviewed, built by DeepSeek); #515 in merge loop; #524 M1 CI running on a new head; re-slot #526 #535 #518 #519.
+
+## Audit 11-07
+Decisions and measurements: https://github.com/Mahan-film/roxira-platform/issues/560. Twenty CRM is NOT on production. Next: resolve #550 conflict, T1 and T2 with fresh Haiku agents, then closing and carry-forward, budget, report builder, fixed-asset disposal, #555.
