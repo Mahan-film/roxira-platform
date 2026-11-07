@@ -29,6 +29,7 @@ import {
   postPayrollRun,
 } from "@/lib/api/hr-client";
 import { formatJalaliDateTime, formatMoneyRial, formatNumber } from "@/lib/fa-format";
+import { printPayslip } from "@/lib/print/open-payslip-window";
 import type { InsuranceListQuery, PayrollRun, PayrollRunItem, Payslip } from "@/types/hr";
 
 const JALALI_MONTHS = [
@@ -380,10 +381,16 @@ export default function PayrollPage() {
                       <TableCell className="whitespace-nowrap">{formatMoneyRial(p.incomeTax)}</TableCell>
                       <TableCell className="font-medium whitespace-nowrap">{formatMoneyRial(p.netPay)}</TableCell>
                       <TableCell>
-                        <Button variant="ghost" size="sm" onClick={() => setSelected(p)}>
-                          <FileText />
-                          فیش
-                        </Button>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => setSelected(p)}>
+                            <FileText />
+                            فیش
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => printPayslip(p)}>
+                            <Printer />
+                            چاپ
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
