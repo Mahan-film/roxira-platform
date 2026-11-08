@@ -4,6 +4,8 @@ import type {
   BalanceSheetReport,
   CashFlowReport,
   ChartTemplate,
+  CostCentreTrialBalanceQuery,
+  CostCentreTrialBalanceReport,
   DashboardReport,
   EquityChangesReport,
   FiscalYear,
@@ -38,6 +40,18 @@ export const getSubsidiaryReport = (
   query: ReportQuery & { columns: TrialBalanceColumns; accountCode?: string },
   signal?: AbortSignal,
 ) => report<TrialBalanceReport>("subsidiary", { ...query }, signal);
+export const getTrialBalanceByCostCentre = (
+  query: CostCentreTrialBalanceQuery,
+  signal?: AbortSignal,
+) =>
+  report<CostCentreTrialBalanceReport>(
+    "trial-balance-by-cost-centre",
+    {
+      ...query,
+      includeClosing: query.includeClosing ? "true" : undefined,
+    },
+    signal,
+  );
 export const getLedgerReport = (
   query: ReportQuery & { accountCode: string; partyCode?: string },
   signal?: AbortSignal,
