@@ -44,6 +44,10 @@ export const RADAR_RESOURCE_PATH = "enterprise-hub/radar";
 
 /** Bank accounts and bank reconciliation (NestJS BankingModule). */
 export const BANKING_RESOURCE_PATH = "enterprise-hub/banking";
+
+/** Treasury documents and invoice allocation (NestJS TreasuryModule). */
+export const TREASURY_RESOURCE_PATH = "enterprise-hub/treasury";
+
 /** مسیر پایه‌ی کنترلر دستیار هوشمند روی داده‌های سازمان در NestJS */
 export const ASSISTANT_RESOURCE_PATH = "enterprise-hub/assistant";
 
