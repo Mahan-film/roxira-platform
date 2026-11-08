@@ -24,3 +24,10 @@ These are real mistakes found in review. Each line is a rule. Reviewers add a li
 ## Process
 12. Plan first: put the plan as the first PR comment. One task per PR, and stay inside your area's files.
 13. Before reporting, list exactly what you did **not** check.
+14. A log-only "shadow" flag must keep the old decision authoritative and only log the diff; if turning it on changes who gets access it is not shadow mode (#634).
+15. A new Nest module must provide every provider it injects. `AccessModule` exports `AuditService` but not `TenantScope`; registering such a module unseen fails app boot (#636, #640).
+16. Check that the role that must call an endpoint can pass its guard: `members:approve` is owner and admin only, so named approvers and delegates were always refused (#636).
+17. A page guard must match the server rule: the payroll page was admin-only in the browser while the server allowed hr, and the server allowed admin and read_only to payslips (#634).
+18. Idempotency: the same key with a different body is a 409 (store a request fingerprint), and take a lock before the insert so a skipped insert never runs a numbering trigger and burns a number (#638).
+19. A page calls the real proxy through `lib/api/*-client.ts` (`/api/backend/...` with the auth client), never a made-up `/api/proxy/...` path with a bare `fetch` (#640).
+20. User-built SQL: validate aliases against a strict pattern, bind LIMIT and OFFSET, validate value types per column, and add an injection attempt to the pg spec (#640).
