@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
+import { TenantScope } from '../../access/services/tenant-scope';
 import { ContactMessageEntity } from '../entities/contact-message.entity';
 import { normalizePhone } from '../utils/phone';
 import { PipelineStage } from '../enums/crm.enums';
@@ -30,12 +31,34 @@ export interface ContactCountRow {
  */
 @Injectable()
 export class CrmRepository {
+  private resolvedScope?: TenantScope | null;
+
   constructor(
     @InjectRepository(CrmLeadEntity)
     private readonly leads: Repository<CrmLeadEntity>,
     @InjectRepository(ContactMessageEntity)
     private readonly contacts: Repository<ContactMessageEntity>,
+    @Optional() private readonly scope?: TenantScope,
   ) {}
+
+  private getScope(): TenantScope | null {
+    if (this.resolvedScope !== undefined) return this.resolvedScope;
+    if (this.scope) return (this.resolvedScope = this.scope);
+    const conn = this.leads?.manager?.connection ?? this.contacts?.manager?.connection;
+    if (conn && typeof conn.transaction === 'function') {
+      return (this.resolvedScope = new TenantScope(conn));
+    }
+    return (this.resolvedScope = null);
+  }
+
+  private withLeads<T>(
+    tenantId: string,
+    work: (repo: Repository<CrmLeadEntity>) => Promise<T>,
+  ): Promise<T> {
+    const scope = this.getScope();
+    if (!scope) return work(this.leads);
+    return scope.run(tenantId, (m) => work(m.getRepository(CrmLeadEntity)));
+  }
 
   // ---------------------------------------------------------------------------
   // سرنخ‌ها (Leads)
@@ -45,17 +68,21 @@ export class CrmRepository {
     tenantId: string,
     data: Partial<CrmLeadEntity>,
   ): Promise<CrmLeadEntity> {
-    const entity = this.leads.create({
-      ...data,
-      tenantId,
-      phoneNormalized: normalizePhone(data.phone),
+    return this.withLeads(tenantId, async (repo) => {
+      const entity = repo.create({
+        ...data,
+        tenantId,
+        phoneNormalized: normalizePhone(data.phone),
+      });
+      return repo.save(entity);
     });
-    return this.leads.save(entity);
   }
 
   /** The tenant's built-in anonymous customer, or null before the first anonymous sale. */
   async findWalkInLead(tenantId: string): Promise<CrmLeadEntity | null> {
-    return this.leads.findOne({ where: { tenantId, isWalkIn: true } });
+    return this.withLeads(tenantId, (repo) =>
+      repo.findOne({ where: { tenantId, isWalkIn: true } }),
+    );
   }
 
   /**
@@ -65,21 +92,23 @@ export class CrmRepository {
   async createWalkInLead(tenantId: string, fullName: string): Promise<CrmLeadEntity> {
     const now = new Date();
     try {
-      return await this.leads.save(
-        this.leads.create({
-          tenantId,
-          fullName,
-          email: null,
-          phone: null,
-          phoneNormalized: null,
-          isWalkIn: true,
-          marketingConsent: false,
-          source: 'POS',
-          pipelineStage: PipelineStage.WON,
-          estimatedValue: 0,
-          createdAt: now,
-          updatedAt: now,
-        }),
+      return await this.withLeads(tenantId, (repo) =>
+        repo.save(
+          repo.create({
+            tenantId,
+            fullName,
+            email: null,
+            phone: null,
+            phoneNormalized: null,
+            isWalkIn: true,
+            marketingConsent: false,
+            source: 'POS',
+            pipelineStage: PipelineStage.WON,
+            estimatedValue: 0,
+            createdAt: now,
+            updatedAt: now,
+          }),
+        ),
       );
     } catch (error) {
       if ((error as { code?: string }).code === '23505') {
@@ -97,10 +126,12 @@ export class CrmRepository {
     tenantId: string,
     phoneNormalized: string,
   ): Promise<CrmLeadEntity | null> {
-    return this.leads.findOne({
-      where: { tenantId, phoneNormalized, isWalkIn: false },
-      order: { id: 'ASC' },
-    });
+    return this.withLeads(tenantId, (repo) =>
+      repo.findOne({
+        where: { tenantId, phoneNormalized, isWalkIn: false },
+        order: { id: 'ASC' },
+      }),
+    );
   }
 
   /**
@@ -116,14 +147,16 @@ export class CrmRepository {
     if (dataList.length === 0) {
       return [];
     }
-    const entities = dataList.map((data) =>
-      this.leads.create({
-        ...data,
-        tenantId,
-        phoneNormalized: normalizePhone(data.phone),
-      }),
-    );
-    return this.leads.save(entities, { chunk: 500 }); // stay under the bind-parameter limit
+    return this.withLeads(tenantId, (repo) => {
+      const entities = dataList.map((data) =>
+        repo.create({
+          ...data,
+          tenantId,
+          phoneNormalized: normalizePhone(data.phone),
+        }),
+      );
+      return repo.save(entities, { chunk: 500 }); // stay under the bind-parameter limit
+    });
   }
 
   /** مجموعه رایانامه‌های موجودِ مستأجر در میان فهرست داده‌شده (تشخیص تکراری). */
@@ -134,13 +167,15 @@ export class CrmRepository {
     if (emails.length === 0) {
       return [];
     }
-    const rows = await this.leads.find({
-      where: { tenantId, email: In(emails) },
-      select: { email: true },
+    return this.withLeads(tenantId, async (repo) => {
+      const rows = await repo.find({
+        where: { tenantId, email: In(emails) },
+        select: { email: true },
+      });
+      return rows
+        .map((row) => row.email)
+        .filter((email): email is string => email !== null);
     });
-    return rows
-      .map((row) => row.email)
-      .filter((email): email is string => email !== null);
   }
 
   /** مجموعه شماره تلفن‌های موجودِ مستأجر در میان فهرست داده‌شده (تشخیص تکراری). */
@@ -151,13 +186,15 @@ export class CrmRepository {
     if (phones.length === 0) {
       return [];
     }
-    const rows = await this.leads.find({
-      where: { tenantId, phone: In(phones) },
-      select: { phone: true },
+    return this.withLeads(tenantId, async (repo) => {
+      const rows = await repo.find({
+        where: { tenantId, phone: In(phones) },
+        select: { phone: true },
+      });
+      return rows
+        .map((row) => row.phone)
+        .filter((phone): phone is string => phone !== null);
     });
-    return rows
-      .map((row) => row.phone)
-      .filter((phone): phone is string => phone !== null);
   }
 
   /** حذف ردیف‌های یک دسته ورود داده با قید مستأجر (برای undo). */
@@ -168,45 +205,53 @@ export class CrmRepository {
     if (ids.length === 0) {
       return 0;
     }
-    const result = await this.leads.delete({ tenantId, id: In(ids) });
-    return result.affected ?? 0;
+    return this.withLeads(tenantId, async (repo) => {
+      const result = await repo.delete({ tenantId, id: In(ids) });
+      return result.affected ?? 0;
+    });
   }
 
   async saveLead(
     tenantId: string,
     entity: CrmLeadEntity,
   ): Promise<CrmLeadEntity> {
-    entity.tenantId = tenantId;
-    await this.leads.update(
-      { id: entity.id, tenantId },
-      {
-        fullName: entity.fullName,
-        email: entity.email,
-        phone: entity.phone,
-        phoneNormalized: normalizePhone(entity.phone),
-        company: entity.company,
-        pipelineStage: entity.pipelineStage,
-        estimatedValue: entity.estimatedValue,
-        owner: entity.owner,
-        notes: entity.notes,
-        updatedAt: entity.updatedAt,
-      },
-    );
-    return entity;
+    return this.withLeads(tenantId, async (repo) => {
+      entity.tenantId = tenantId;
+      await repo.update(
+        { id: entity.id, tenantId },
+        {
+          fullName: entity.fullName,
+          email: entity.email,
+          phone: entity.phone,
+          phoneNormalized: normalizePhone(entity.phone),
+          company: entity.company,
+          pipelineStage: entity.pipelineStage,
+          estimatedValue: entity.estimatedValue,
+          owner: entity.owner,
+          notes: entity.notes,
+          updatedAt: entity.updatedAt,
+        },
+      );
+      return entity;
+    });
   }
 
   async findLeadById(
     tenantId: string,
     id: number,
   ): Promise<CrmLeadEntity | null> {
-    return this.leads.findOne({ where: { id, tenantId } });
+    return this.withLeads(tenantId, (repo) =>
+      repo.findOne({ where: { id, tenantId } }),
+    );
   }
 
   async findLeadByEmail(
     tenantId: string,
     email: string,
   ): Promise<CrmLeadEntity | null> {
-    return this.leads.findOne({ where: { email, tenantId } });
+    return this.withLeads(tenantId, (repo) =>
+      repo.findOne({ where: { email, tenantId } }),
+    );
   }
 
   async findLeadsAndCount(
@@ -218,54 +263,62 @@ export class CrmRepository {
       take: number;
     },
   ): Promise<[CrmLeadEntity[], number]> {
-    const query = this.leads.createQueryBuilder('lead');
+    return this.withLeads(tenantId, (repo) => {
+      const query = repo.createQueryBuilder('lead');
 
-    query.andWhere('lead.tenantId = :tenantId', { tenantId });
+      query.andWhere('lead.tenantId = :tenantId', { tenantId });
 
-    if (options.search) {
-      const pattern = `%${options.search}%`;
-      query.andWhere(
-        '(lead.fullName ILIKE :pattern OR lead.email ILIKE :pattern OR lead.company ILIKE :pattern OR lead.phone ILIKE :pattern)',
-        { pattern },
-      );
-    }
-    query.andWhere('lead.isWalkIn = false');
-    if (options.stage) {
-      query.andWhere('lead.pipelineStage = :stage', { stage: options.stage });
-    }
+      if (options.search) {
+        const pattern = `%${options.search}%`;
+        query.andWhere(
+          '(lead.fullName ILIKE :pattern OR lead.email ILIKE :pattern OR lead.company ILIKE :pattern OR lead.phone ILIKE :pattern)',
+          { pattern },
+        );
+      }
+      query.andWhere('lead.isWalkIn = false');
+      if (options.stage) {
+        query.andWhere('lead.pipelineStage = :stage', { stage: options.stage });
+      }
 
-    query
-      .orderBy('lead.updatedAt', 'DESC')
-      .addOrderBy('lead.id', 'DESC')
-      .skip(options.skip)
-      .take(options.take);
+      query
+        .orderBy('lead.updatedAt', 'DESC')
+        .addOrderBy('lead.id', 'DESC')
+        .skip(options.skip)
+        .take(options.take);
 
-    return query.getManyAndCount();
-  }
-
-  async findAllLeads(tenantId: string): Promise<CrmLeadEntity[]> {
-    return this.leads.find({
-      where: { tenantId, isWalkIn: false },
-      order: { updatedAt: 'DESC', id: 'DESC' },
-      take: 1000,
+      return query.getManyAndCount();
     });
   }
 
+  async findAllLeads(tenantId: string): Promise<CrmLeadEntity[]> {
+    return this.withLeads(tenantId, (repo) =>
+      repo.find({
+        where: { tenantId, isWalkIn: false },
+        order: { updatedAt: 'DESC', id: 'DESC' },
+        take: 1000,
+      }),
+    );
+  }
+
   async countAllLeads(tenantId: string): Promise<number> {
-    return this.leads.count({ where: { tenantId, isWalkIn: false } });
+    return this.withLeads(tenantId, (repo) =>
+      repo.count({ where: { tenantId, isWalkIn: false } }),
+    );
   }
 
   /** تجمیع تعداد و ارزش ریالی سرنخ‌ها به تفکیک مرحله (فقط مستأجر جاری). */
   async getStageAggregates(tenantId: string): Promise<StageAggregateRow[]> {
-    return this.leads
-      .createQueryBuilder('lead')
-      .select('lead.pipelineStage', 'stage')
-      .addSelect('COUNT(lead.id)', 'count')
-      .addSelect('COALESCE(SUM(lead.estimatedValue), 0)', 'value')
-      .where('lead.tenantId = :tenantId', { tenantId })
-      .andWhere('lead.isWalkIn = false')
-      .groupBy('lead.pipelineStage')
-      .getRawMany<StageAggregateRow>();
+    return this.withLeads(tenantId, (repo) =>
+      repo
+        .createQueryBuilder('lead')
+        .select('lead.pipelineStage', 'stage')
+        .addSelect('COUNT(lead.id)', 'count')
+        .addSelect('COALESCE(SUM(lead.estimatedValue), 0)', 'value')
+        .where('lead.tenantId = :tenantId', { tenantId })
+        .andWhere('lead.isWalkIn = false')
+        .groupBy('lead.pipelineStage')
+        .getRawMany<StageAggregateRow>(),
+    );
   }
 
   // ---------------------------------------------------------------------------

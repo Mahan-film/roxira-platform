@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
+import { TenantScope } from '../../access/services/tenant-scope';
 import { CrmActivityEntity } from '../entities/crm-activity.entity';
 
 /**
@@ -11,10 +12,32 @@ import { CrmActivityEntity } from '../entities/crm-activity.entity';
  */
 @Injectable()
 export class CrmActivityRepository {
+  private resolvedScope?: TenantScope | null;
+
   constructor(
     @InjectRepository(CrmActivityEntity)
     private readonly activities: Repository<CrmActivityEntity>,
+    @Optional() private readonly scope?: TenantScope,
   ) {}
+
+  private getScope(): TenantScope | null {
+    if (this.resolvedScope !== undefined) return this.resolvedScope;
+    if (this.scope) return (this.resolvedScope = this.scope);
+    const conn = this.activities?.manager?.connection;
+    if (conn && typeof conn.transaction === 'function') {
+      return (this.resolvedScope = new TenantScope(conn));
+    }
+    return (this.resolvedScope = null);
+  }
+
+  private withActivities<T>(
+    tenantId: string,
+    work: (repo: Repository<CrmActivityEntity>) => Promise<T>,
+  ): Promise<T> {
+    const scope = this.getScope();
+    if (!scope) return work(this.activities);
+    return scope.run(tenantId, (m) => work(m.getRepository(CrmActivityEntity)));
+  }
 
   /** درج گروهی فعالیت‌ها و بازگرداندن شناسهٔ ردیف‌های ایجادشده. */
   async createActivities(
@@ -24,12 +47,14 @@ export class CrmActivityRepository {
     if (dataList.length === 0) {
       return [];
     }
-    const entities = dataList.map((data) =>
-      this.activities.create({ ...data, tenantId }),
-    );
-    // chunked: one INSERT of 12k rows exceeds Postgres' 65,535 bind parameters
-    const saved = await this.activities.save(entities, { chunk: 500 });
-    return saved.map((entity) => entity.id);
+    return this.withActivities(tenantId, async (repo) => {
+      const entities = dataList.map((data) =>
+        repo.create({ ...data, tenantId }),
+      );
+      // chunked: one INSERT of 12k rows exceeds Postgres' 65,535 bind parameters
+      const saved = await repo.save(entities, { chunk: 500 });
+      return saved.map((entity) => entity.id);
+    });
   }
 
   /** حذف فعالیت‌های یک دسته ورود داده با قید مستأجر (برای undo). */
@@ -46,10 +71,12 @@ export class CrmActivityRepository {
     if (numericIds.length === 0) {
       return 0;
     }
-    const result = await this.activities.delete({
-      tenantId,
-      id: In(numericIds),
+    return this.withActivities(tenantId, async (repo) => {
+      const result = await repo.delete({
+        tenantId,
+        id: In(numericIds),
+      });
+      return result.affected ?? 0;
     });
-    return result.affected ?? 0;
   }
 }
