@@ -1,4 +1,5 @@
 > Any AI assistant: read `docs/AI_HANDOFF.md` first.
+> Every agent: read `docs/agents/LESSONS.md` before every task. Reviewers append new lessons there.
 
 # ROXIRA AUTONOMOUS ENGINEERING STANDARD (AGENTS.md)
 

@@ -1,0 +1,26 @@
+# Lessons for every agent (read before every task)
+
+These are real mistakes found in review. Each line is a rule. Reviewers add a line when they find a new mistake. Do not delete lines.
+
+## Never hide from a check
+1. Never rename, move or split a file so that a test, lint or guard stops seeing it. Example: `x.controller.ts` → `x.routes.ts`, which skipped `permission-matrix.spec.ts` (#636, #640). If a check fails, fix the cause, or write in the PR body why it fails.
+2. Never weaken, skip or delete a test to make CI green. Never use `--no-verify`.
+
+## Say what is not wired
+3. A new Nest module must be imported in `app.module.ts`, and a new page needs a menu entry in `nav-menu.ts`. If you may not edit those files, add a section **"Coordinator must add"** to the PR body with the exact lines. Otherwise the feature is not live and must not be reported as done (#636, #640).
+4. "Ready" means mergeable and wired. Check `gh pr view <n> --json mergeable` before you report a PR as ready (#448, #449 were reported ready while CONFLICTING).
+
+## Tenant isolation (RLS)
+5. CI connects as the superuser `postgres`, so RLS errors never show in CI. Production connects as `roxira_app` (NOSUPERUSER NOBYPASSRLS). Every pg spec for tenant tables must run the **real repository or service methods** as such a role (#618).
+6. Every query on a tenant table runs inside `TenantScope`. This includes workers, crons and other modules' joins. Find every caller with `git grep` on the table and entity names before you enable FORCE RLS (#618).
+7. Tables read before the tenant is known (login, refresh, invites, public forms) must not get a tenant-equality policy. They need their own design (#618).
+
+## Money, data, text
+8. Money is bigint minor units through `modules/accounting/money.ts`. In the UI use `formatMoneyRial`. Never use `Number()`, `parseFloat` or float division (#593: a missing «ریال»).
+9. User-built queries: identifiers come from a whitelist, values are bound parameters, and nothing is interpolated. CSV export neutralises `= + - @` at the start of a cell.
+10. Help pages describe only what the code does today. Check every route, label and role against the code. An API with no page must say so plainly (10 help PRs needed 1 to 9 fixes each).
+11. Use only fields that exist in `frontend/src/types` and the real entities. Never invent a column or an endpoint.
+
+## Process
+12. Plan first: put the plan as the first PR comment. One task per PR, and stay inside your area's files.
+13. Before reporting, list exactly what you did **not** check.
