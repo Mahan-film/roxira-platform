@@ -116,7 +116,7 @@ export default function FiscalYearsPage() {
   const nextExists = closing ? years.some((year) => year.startDate > closing.endDate) : false;
 
   return (
-    <EnterpriseRouteGuard requireAdmin>
+    <EnterpriseRouteGuard>
       <PageHeader
         title="سال مالی و سرفصل"
         description="قالب سرفصل استاندارد، تعریف سال مالی و بستن حساب‌ها"

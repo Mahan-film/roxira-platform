@@ -199,7 +199,7 @@ function ReportsView() {
   const showColumns = tab === "trial-balance" || tab === "subsidiary";
 
   return (
-    <EnterpriseRouteGuard requireAdmin>
+    <EnterpriseRouteGuard>
       <PageHeader
         title="گزارش‌های حسابداری"
         description="تراز، دفاتر و صورت‌های مالی از اسناد ثبت‌شده"

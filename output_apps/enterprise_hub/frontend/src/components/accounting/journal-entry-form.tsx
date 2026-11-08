@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import {
   CheckCircle2Icon,
   CirclePlusIcon,
+  KeyboardIcon,
   Loader2Icon,
   ScaleIcon,
   SendHorizonalIcon,
@@ -49,6 +50,10 @@ import { ApiClientError } from "@/lib/api/http-client";
 import { inferServiceDomain } from "@/lib/api/auth-client";
 import { useAuth } from "@/components/auth/auth-provider";
 import { VoucherAttachments } from "@/components/accounting/voucher-attachments";
+import {
+  computeBalancingAmount,
+  getNextCellCoordinates,
+} from "@/lib/voucher-keyboard";
 import { formatRial } from "@/lib/format";
 import {
   ACCOUNT_TYPE_LABELS,
@@ -149,6 +154,19 @@ export function JournalEntryForm({
     setCreatedEntry(null);
   }, [entry]);
 
+  const [activeRowIndex, setActiveRowIndex] = useState(0);
+
+  function focusCell(row: number, col: number) {
+    if (typeof document === "undefined") return;
+    const element = document.getElementById(`voucher-cell-${row}-${col}`);
+    if (element) {
+      element.focus();
+      if (element instanceof HTMLInputElement) {
+        element.select();
+      }
+    }
+  }
+
   function updateLine(uid: string, patch: Partial<FormLine>) {
     setLines((prev) =>
       prev.map((line) => (line.uid === uid ? { ...line, ...patch } : line)),
@@ -160,8 +178,63 @@ export function JournalEntryForm({
     setLines((prev) => [...prev, createEmptyLine(`line-${id}`)]);
   }
 
+  function addLineAndFocus() {
+    const id = nextLineId.current++;
+    const nextRow = lines.length;
+    setLines((prev) => [...prev, createEmptyLine(`line-${id}`)]);
+    setActiveRowIndex(nextRow);
+    setTimeout(() => {
+      focusCell(nextRow, 0);
+    }, 50);
+  }
+
   function removeLine(uid: string) {
     setLines((prev) => (prev.length > 2 ? prev.filter((l) => l.uid !== uid) : prev));
+  }
+
+  function autoBalanceRow(targetIndex: number) {
+    const index = Math.max(0, Math.min(targetIndex, lines.length - 1));
+    const targetLine = lines[index];
+    if (!targetLine) return;
+    const balancing = computeBalancingAmount(lines, index);
+    updateLine(targetLine.uid, balancing);
+  }
+
+  function handleFormKeyDown(event: KeyboardEvent<HTMLFormElement>) {
+    // Ctrl+Enter or Cmd+Enter: submit entry from anywhere
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      event.preventDefault();
+      void submitEntry();
+      return;
+    }
+
+    // Alt+N: add new line and focus
+    if (event.altKey && (event.key === "n" || event.key === "N")) {
+      event.preventDefault();
+      addLineAndFocus();
+      return;
+    }
+
+    // Alt+B: auto-balance current active line
+    if (event.altKey && (event.key === "b" || event.key === "B")) {
+      event.preventDefault();
+      autoBalanceRow(activeRowIndex);
+      return;
+    }
+
+    // Alt+Delete: delete active row
+    if (event.altKey && event.key === "Delete") {
+      event.preventDefault();
+      if (lines.length > 2 && activeRowIndex < lines.length) {
+        const lineToDelete = lines[activeRowIndex];
+        if (lineToDelete) {
+          removeLine(lineToDelete.uid);
+          const nextRow = Math.max(0, activeRowIndex - 1);
+          setActiveRowIndex(nextRow);
+          setTimeout(() => focusCell(nextRow, 0), 50);
+        }
+      }
+    }
   }
 
   function generateEntryNumber() {
@@ -324,7 +397,7 @@ export function JournalEntryForm({
         </div>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
+        <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="flex flex-col gap-5" noValidate>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="grid gap-2">
               <Label>شماره سند</Label>
@@ -365,12 +438,38 @@ export function JournalEntryForm({
           </div>
 
           <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold">سطرهای سند</h3>
-              <Button type="button" variant="outline" size="sm" onClick={addLine}>
-                <CirclePlusIcon />
-                افزودن سطر
-              </Button>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold">سطرهای سند</h3>
+                <div className="hidden items-center gap-1.5 text-xs text-muted-foreground md:flex">
+                  <KeyboardIcon className="size-3.5 text-indigo-500" />
+                  <span>کلیدها:</span>
+                  <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px]">Enter</kbd>
+                  <span>بعدی/سطر نو</span>
+                  <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px]">Ctrl+Enter</kbd>
+                  <span>ثبت</span>
+                  <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px]">Alt+B</kbd>
+                  <span>موازنه</span>
+                  <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px]">Alt+N</kbd>
+                  <span>سطر جدید</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => autoBalanceRow(activeRowIndex)}
+                  title="موازنه خودکار سطر جاری (Alt+B)"
+                >
+                  <ScaleIcon className="size-3.5 text-indigo-500" />
+                  موازنه خودکار
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={addLineAndFocus}>
+                  <CirclePlusIcon />
+                  افزودن سطر
+                </Button>
+              </div>
             </div>
 
             <div className="overflow-x-auto rounded-lg border">
@@ -381,12 +480,12 @@ export function JournalEntryForm({
                     <TableHead className="w-36">بدهکار</TableHead>
                     <TableHead className="w-36">بستانکار</TableHead>
                     <TableHead className="min-w-48">شرح سطر</TableHead>
-                    <TableHead className="w-12" />
+                    <TableHead className="w-20">عملیات</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {lines.map((line) => (
-                    <TableRow key={line.uid}>
+                  {lines.map((line, index) => (
+                    <TableRow key={line.uid} className={index === activeRowIndex ? "bg-muted/30" : undefined}>
                       <TableCell>
                         <Select<string>
                           value={line.accountCode || null}
@@ -394,7 +493,25 @@ export function JournalEntryForm({
                             updateLine(line.uid, { accountCode: value ?? "" })
                           }
                         >
-                          <SelectTrigger className="w-full">
+                          <SelectTrigger
+                            id={`voucher-cell-${index}-0`}
+                            className="w-full"
+                            onFocus={() => setActiveRowIndex(index)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === "Tab") {
+                                if (!e.shiftKey) {
+                                  e.preventDefault();
+                                  focusCell(index, 1);
+                                }
+                              } else if (e.key === "ArrowDown" && (e.altKey || e.ctrlKey)) {
+                                e.preventDefault();
+                                focusCell(index + 1, 0);
+                              } else if (e.key === "ArrowUp" && (e.altKey || e.ctrlKey)) {
+                                e.preventDefault();
+                                focusCell(index - 1, 0);
+                              }
+                            }}
+                          >
                             <SelectValue placeholder="انتخاب حساب" />
                           </SelectTrigger>
                           <SelectContent>
@@ -409,52 +526,128 @@ export function JournalEntryForm({
                       </TableCell>
                       <TableCell>
                         <MoneyInput
+                          id={`voucher-cell-${index}-1`}
                           helper={false}
                           className="min-w-36"
                           value={line.debit}
                           placeholder="0"
+                          onFocus={() => setActiveRowIndex(index)}
                           onChange={(digits) =>
                             updateLine(line.uid, {
                               debit: digits,
                               credit: "",
                             })
                           }
+                          onKeyDown={(e) => {
+                            if ((e.ctrlKey || e.metaKey || e.altKey) && (e.key === "b" || e.key === "B")) {
+                              e.preventDefault();
+                              autoBalanceRow(index);
+                              return;
+                            }
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              const next = getNextCellCoordinates(index, 1, lines.length, Boolean(line.debit), "next");
+                              focusCell(next.row, next.col);
+                            } else if (e.key === "ArrowDown") {
+                              e.preventDefault();
+                              const next = getNextCellCoordinates(index, 1, lines.length, false, "down");
+                              focusCell(next.row, next.col);
+                            } else if (e.key === "ArrowUp") {
+                              e.preventDefault();
+                              const next = getNextCellCoordinates(index, 1, lines.length, false, "up");
+                              focusCell(next.row, next.col);
+                            }
+                          }}
                         />
                       </TableCell>
                       <TableCell>
                         <MoneyInput
+                          id={`voucher-cell-${index}-2`}
                           helper={false}
                           className="min-w-36"
                           value={line.credit}
                           placeholder="0"
+                          onFocus={() => setActiveRowIndex(index)}
                           onChange={(digits) =>
                             updateLine(line.uid, {
                               credit: digits,
                               debit: "",
                             })
                           }
+                          onKeyDown={(e) => {
+                            if ((e.ctrlKey || e.metaKey || e.altKey) && (e.key === "b" || e.key === "B")) {
+                              e.preventDefault();
+                              autoBalanceRow(index);
+                              return;
+                            }
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              const next = getNextCellCoordinates(index, 2, lines.length, false, "next");
+                              focusCell(next.row, next.col);
+                            } else if (e.key === "ArrowDown") {
+                              e.preventDefault();
+                              const next = getNextCellCoordinates(index, 2, lines.length, false, "down");
+                              focusCell(next.row, next.col);
+                            } else if (e.key === "ArrowUp") {
+                              e.preventDefault();
+                              const next = getNextCellCoordinates(index, 2, lines.length, false, "up");
+                              focusCell(next.row, next.col);
+                            }
+                          }}
                         />
                       </TableCell>
                       <TableCell>
                         <Input
+                          id={`voucher-cell-${index}-3`}
                           value={line.description}
+                          onFocus={() => setActiveRowIndex(index)}
                           onChange={(event) =>
                             updateLine(line.uid, { description: event.target.value })
                           }
                           placeholder="شرح اختیاری"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              const next = getNextCellCoordinates(index, 3, lines.length, false, "next");
+                              if (next.shouldAddRow) {
+                                addLineAndFocus();
+                              } else {
+                                focusCell(next.row, next.col);
+                              }
+                            } else if (e.key === "ArrowDown") {
+                              e.preventDefault();
+                              const next = getNextCellCoordinates(index, 3, lines.length, false, "down");
+                              focusCell(next.row, next.col);
+                            } else if (e.key === "ArrowUp") {
+                              e.preventDefault();
+                              const next = getNextCellCoordinates(index, 3, lines.length, false, "up");
+                              focusCell(next.row, next.col);
+                            }
+                          }}
                         />
                       </TableCell>
                       <TableCell>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => removeLine(line.uid)}
-                          disabled={lines.length <= 2}
-                          title="حذف سطر"
-                        >
-                          <Trash2Icon />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => autoBalanceRow(index)}
+                            title="موازنه خودکار این سطر با باقیمانده سند (Alt+B)"
+                          >
+                            <ScaleIcon className="size-3.5 text-indigo-500" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => removeLine(line.uid)}
+                            disabled={lines.length <= 2}
+                            title="حذف سطر (Alt+Delete)"
+                          >
+                            <Trash2Icon />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

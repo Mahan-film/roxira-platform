@@ -30,7 +30,7 @@ export enum JournalEntryStatus {
 }
 
 export const JOURNAL_ENTRY_STATUS_LABELS: Record<JournalEntryStatus, string> = {
-  [JournalEntryStatus.POSTED]: "ثبت‌شده",
+  [JournalEntryStatus.POSTED]: "قطعی",
   [JournalEntryStatus.DRAFT]: "پیش‌نویس",
   [JournalEntryStatus.TEMPORARY]: "موقت",
   [JournalEntryStatus.VOID]: "ابطال‌شده",

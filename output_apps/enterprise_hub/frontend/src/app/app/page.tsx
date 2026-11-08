@@ -2,7 +2,29 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { FileUp, LayoutDashboard } from "lucide-react";
+import {
+  BookOpen,
+  Boxes,
+  Calculator,
+  CalendarClock,
+  CheckCheck,
+  CreditCard,
+  FileBarChart,
+  FileSpreadsheet,
+  FileText,
+  FileUp,
+  History,
+  Kanban,
+  Landmark,
+  LayoutDashboard,
+  PlusCircle,
+  Receipt,
+  Scale,
+  Shield,
+  ShieldCheck,
+  UserPlus,
+  Users,
+} from "lucide-react";
 
 import {
   ErrorNotice,
@@ -12,12 +34,15 @@ import {
 } from "@/components/app/app-ui";
 import { useAccess } from "@/components/app/access-provider";
 import { PasswordSettingsCard } from "@/components/auth/password-settings-card";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getTrialBalance } from "@/lib/api/accounting-client";
 import { getLeadStats } from "@/lib/api/crm-client";
 import { getHrStats } from "@/lib/api/hr-client";
 import { getFifoValuation } from "@/lib/api/inventory-client";
 import { formatMoneyRial, formatNumber } from "@/lib/fa-format";
+import { getRoleQuickActionDefs, isSalaryVisibleForRole } from "@/lib/role-home";
+import { SYSTEM_ROLE_LABELS } from "@/types/access";
 import type { TrialBalanceResponse } from "@/types/accounting";
 import type { LeadStats } from "@/types/crm";
 import type { HrStats } from "@/types/hr";
@@ -76,8 +101,57 @@ function Section({
   );
 }
 
+function renderActionIcon(iconName: string) {
+  switch (iconName) {
+    case "PlusCircle":
+      return <PlusCircle className="size-4" />;
+    case "BookOpen":
+      return <BookOpen className="size-4" />;
+    case "FileBarChart":
+      return <FileBarChart className="size-4" />;
+    case "Receipt":
+      return <Receipt className="size-4" />;
+    case "CreditCard":
+      return <CreditCard className="size-4" />;
+    case "Landmark":
+      return <Landmark className="size-4" />;
+    case "UserPlus":
+      return <UserPlus className="size-4" />;
+    case "Kanban":
+      return <Kanban className="size-4" />;
+    case "Boxes":
+      return <Boxes className="size-4" />;
+    case "CheckCheck":
+      return <CheckCheck className="size-4" />;
+    case "CalendarClock":
+      return <CalendarClock className="size-4" />;
+    case "Scale":
+      return <Scale className="size-4" />;
+    case "Users":
+      return <Users className="size-4" />;
+    case "Calculator":
+      return <Calculator className="size-4" />;
+    case "FileText":
+      return <FileText className="size-4" />;
+    case "ShieldCheck":
+      return <ShieldCheck className="size-4" />;
+    case "FileSpreadsheet":
+      return <FileSpreadsheet className="size-4" />;
+    case "FileUp":
+      return <FileUp className="size-4" />;
+    case "History":
+      return <History className="size-4" />;
+    default:
+      return <BookOpen className="size-4" />;
+  }
+}
+
 export default function SuiteDashboardPage() {
-  const { can } = useAccess();
+  const { can, org } = useAccess();
+  const roleKey = org?.roleKey ?? "owner";
+  const quickActions = getRoleQuickActionDefs(roleKey);
+  const showSalary = isSalaryVisibleForRole(roleKey);
+
   const showCrm = can("crm");
   const showHr = can("hr");
   const showInventory = can("inventory");
@@ -101,10 +175,66 @@ export default function SuiteDashboardPage() {
   return (
     <>
       <PageHeader
-        title="داشبورد"
-        description="خلاصه‌ای از وضعیت کسب‌وکار شما در یک نگاه"
+        title="داشبورد سازمانی"
+        description="خلاصه‌ای از وضعیت کسب‌وکار و دسترسی‌های متناسب با نقش شما"
         icon={<LayoutDashboard className="size-6 text-indigo-500" />}
+        actions={
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">نقش فعال:</span>
+            <Badge variant="outline" className="border-indigo-500/40 bg-indigo-500/10 font-semibold text-indigo-700 dark:text-indigo-400">
+              <Shield className="size-3 me-1 text-indigo-500" />
+              {SYSTEM_ROLE_LABELS[roleKey] ?? roleKey}
+            </Badge>
+          </div>
+        }
       />
+
+      {/* Role-tailored workspace banner */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-gradient-to-l from-indigo-500/10 via-background to-muted/30 p-4">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-500">
+            <Shield className="size-5" />
+          </div>
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold">میز کار نقش {SYSTEM_ROLE_LABELS[roleKey] ?? roleKey}</span>
+              <Badge variant="secondary" className="text-xs">
+                {SYSTEM_ROLE_LABELS[roleKey] ?? roleKey}
+              </Badge>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              دسترسی‌های سریع و شاخص‌های متناسب با وظایف شما در سازمان
+            </span>
+          </div>
+        </div>
+        {org?.branchScoped && org.branchId && (
+          <Badge variant="outline" className="text-xs">
+            شعبه: {org.branchId}
+          </Badge>
+        )}
+      </div>
+
+      {/* Role-tailored Quick Actions */}
+      <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-bold text-muted-foreground">دسترسی‌های سریع</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {quickActions.map((action) => (
+            <Link
+              key={action.title}
+              href={action.href}
+              className="flex flex-col items-center gap-2 rounded-xl border bg-card p-3 text-center transition-all hover:-translate-y-0.5 hover:border-indigo-500/50 hover:shadow-sm"
+            >
+              <div className="flex size-8 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500">
+                {renderActionIcon(action.iconName)}
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs font-bold">{action.title}</span>
+                <span className="text-[10px] text-muted-foreground line-clamp-1">{action.description}</span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
 
       {allEmpty && (
         <Link
@@ -173,12 +303,21 @@ export default function SuiteDashboardPage() {
             href="/app/hr#contracts"
             hint="قراردادهای حقوقی"
           />
-          <StatCard
-            label="جمع حقوق پایه"
-            value={formatMoneyRial(hr.data?.totalBaseSalary)}
-            href="/app/hr/payroll"
-            hint="محاسبه حقوق ماهانه"
-          />
+          {showSalary ? (
+            <StatCard
+              label="جمع حقوق پایه"
+              value={formatMoneyRial(hr.data?.totalBaseSalary)}
+              href="/app/hr/payroll"
+              hint="محاسبه حقوق ماهانه"
+            />
+          ) : (
+            <StatCard
+              label="احکام پرسنلی"
+              value={formatNumber(hr.data?.activeContracts)}
+              href="/app/hr"
+              hint="سوابق کارگزینی"
+            />
+          )}
         </Section>
       )}
 

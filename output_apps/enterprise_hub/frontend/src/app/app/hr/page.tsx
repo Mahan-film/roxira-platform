@@ -96,7 +96,7 @@ function HrPage() {
   const isEmpty = !loading && !error && employees.length === 0 && !search;
 
   return (
-    <EnterpriseRouteGuard requireAdmin>
+    <EnterpriseRouteGuard>
       <PageHeader
         title="کارکنان (HR)"
         description="پرونده کارکنان و قراردادهای حقوقی"

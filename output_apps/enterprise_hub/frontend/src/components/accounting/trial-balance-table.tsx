@@ -70,7 +70,7 @@ export function TrialBalanceTable({
 
       {errorMessage && (
         <Alert variant="destructive">
-          <AlertTitle>خطا در دریافت ترازنامه</AlertTitle>
+          <AlertTitle>خطا در دریافت تراز آزمایشی</AlertTitle>
           <AlertDescription>{errorMessage}</AlertDescription>
         </Alert>
       )}

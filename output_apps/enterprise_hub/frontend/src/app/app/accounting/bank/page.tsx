@@ -26,7 +26,7 @@ export default function SuiteBankReconciliationPage() {
   }, []);
 
   return (
-    <EnterpriseRouteGuard requireAdmin>
+    <EnterpriseRouteGuard>
       <PageHeader
         title="حساب‌های بانکی"
         description="موجودی هر حساب بانکی، تعداد ردیف‌های مغایرت‌نشده و تاریخ آخرین صورتحساب"

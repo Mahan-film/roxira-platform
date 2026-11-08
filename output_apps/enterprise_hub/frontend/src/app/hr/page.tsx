@@ -224,7 +224,7 @@ function HrPageContent() {
  */
 export default function HrPage() {
   return (
-    <EnterpriseRouteGuard requireAdmin>
+    <EnterpriseRouteGuard>
       <HrPageContent />
     </EnterpriseRouteGuard>
   );
