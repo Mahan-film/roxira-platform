@@ -170,7 +170,7 @@ export class InvoicePostingService {
           { journalEntryId: entry.entryId, postingError: null, postingMeta: meta },
           manager,
         );
-      });
+      }, invoice.tenantId);
     } catch (error) {
       await this.recordPostingError(invoice, error);
     }
@@ -244,7 +244,7 @@ export class InvoicePostingService {
           { paidJournalEntryId: entry.entryId, postingError: null },
           manager,
         );
-      });
+      }, invoice.tenantId);
     } catch (error) {
       await this.recordPostingError(invoice, error);
     }
@@ -317,7 +317,7 @@ export class InvoicePostingService {
           { reversalJournalEntryId: entry.entryId, postingError: null },
           manager,
         );
-      });
+      }, invoice.tenantId);
     } catch (error) {
       await this.recordPostingError(invoice, error);
     }
