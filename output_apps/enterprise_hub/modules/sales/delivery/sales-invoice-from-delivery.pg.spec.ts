@@ -100,7 +100,7 @@ describePg('Sales invoice from delivery lines on PostgreSQL (non-superuser, real
     });
 
   const qty = async (sku: string) =>
-    Number((await q('SELECT quantity FROM erp_stock_items WHERE tenant_id=$1 AND sku=$2', [T1, sku]))[0].quantity);
+    Number((await scoped('SELECT quantity FROM erp_stock_items WHERE tenant_id=$1 AND sku=$2', [T1, sku]))[0].quantity);
   const invoiceCount = async () =>
     Number((await scoped('SELECT count(*)::int AS c FROM invoices WHERE tenant_id=$1', [T1]))[0].c);
   const cogsSum = async () =>
@@ -385,7 +385,7 @@ describePg('Sales invoice from delivery lines on PostgreSQL (non-superuser, real
     ]);
 
     expect(await qty('A')).toBe(5);
-    const layers = await q(
+    const layers = await scoped(
       `SELECT quantity_remaining, unit_purchase_cost FROM inventory_fifo_batches WHERE tenant_id=$1 AND sku='A' AND warehouse_id=$2 ORDER BY id`,
       [T1, warehouseId],
     );
@@ -394,7 +394,7 @@ describePg('Sales invoice from delivery lines on PostgreSQL (non-superuser, real
       [5, 1200],
     ]);
     expect(await cogsSum()).toBe(11_000); // the two deliveries, nothing from the invoice
-    const docs = await q(
+    const docs = await scoped(
       `SELECT count(*)::int AS c FROM erp_stock_documents WHERE tenant_id=$1 AND source_invoice_id=$2`,
       [T1, row.id],
     );

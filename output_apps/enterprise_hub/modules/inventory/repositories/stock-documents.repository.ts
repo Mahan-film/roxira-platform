@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
+import { TenantScope } from '../../access/services/tenant-scope';
 import { QUANTITY_SCALE } from '../constants/inventory.constants';
 import { FifoBatchEntity } from '../entities/fifo-batch.entity';
 import { StockDocumentEntity, StockDocumentLineEntity } from '../entities/stock-document.entity';
@@ -34,9 +35,48 @@ export interface DocumentFilter {
  */
 @Injectable()
 export class StockDocumentsRepository {
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    @Optional()
+    private readonly scope?: TenantScope,
+  ) {}
 
-  transaction<T>(work: (manager: EntityManager) => Promise<T>): Promise<T> {
+  private get tenantScope(): TenantScope | undefined {
+    if (this.scope) {
+      return this.scope;
+    }
+    if ((this.dataSource as { isInitialized?: boolean } | undefined)?.isInitialized) {
+      return new TenantScope(this.dataSource);
+    }
+    return undefined;
+  }
+
+  private withScope<T>(
+    tenantId: string,
+    work: (manager: EntityManager) => Promise<T>,
+    manager?: EntityManager,
+  ): Promise<T> {
+    const scope = this.tenantScope;
+    if (scope) {
+      return scope.within(tenantId, manager, work);
+    }
+    if (manager) {
+      return work(manager);
+    }
+    if (this.dataSource?.manager) {
+      return work(this.dataSource.manager);
+    }
+    return work(this.dataSource as unknown as EntityManager);
+  }
+
+  transaction<T>(
+    work: (manager: EntityManager) => Promise<T>,
+    tenantId?: string,
+  ): Promise<T> {
+    const scope = this.tenantScope;
+    if (tenantId && scope) {
+      return scope.run(tenantId, work);
+    }
     return this.dataSource.transaction(work);
   }
 
@@ -53,25 +93,35 @@ export class StockDocumentsRepository {
     tenantId: string,
     data: Pick<StoreEntity, 'code' | 'name'> & { address?: string | null },
   ): Promise<StoreEntity> {
-    const repo = this.dataSource.getRepository(StoreEntity);
-    return repo.save(repo.create({ ...data, address: data.address ?? null, isActive: true, tenantId }));
-  }
-
-  findStoreById(tenantId: string, id: number): Promise<StoreEntity | null> {
-    return this.dataSource.getRepository(StoreEntity).findOne({ where: { id, tenantId } });
-  }
-
-  findStoreByCodeOrName(tenantId: string, code: string, name: string): Promise<StoreEntity[]> {
-    return this.dataSource.getRepository(StoreEntity).find({
-      where: [
-        { tenantId, code },
-        { tenantId, name },
-      ],
+    return this.withScope(tenantId, (m) => {
+      const repo = m.getRepository(StoreEntity);
+      return repo.save(
+        repo.create({ ...data, address: data.address ?? null, isActive: true, tenantId }),
+      );
     });
   }
 
+  findStoreById(tenantId: string, id: number): Promise<StoreEntity | null> {
+    return this.withScope(tenantId, (m) =>
+      m.getRepository(StoreEntity).findOne({ where: { id, tenantId } }),
+    );
+  }
+
+  findStoreByCodeOrName(tenantId: string, code: string, name: string): Promise<StoreEntity[]> {
+    return this.withScope(tenantId, (m) =>
+      m.getRepository(StoreEntity).find({
+        where: [
+          { tenantId, code },
+          { tenantId, name },
+        ],
+      }),
+    );
+  }
+
   listStores(tenantId: string): Promise<StoreEntity[]> {
-    return this.dataSource.getRepository(StoreEntity).find({ where: { tenantId }, order: { name: 'ASC' } });
+    return this.withScope(tenantId, (m) =>
+      m.getRepository(StoreEntity).find({ where: { tenantId }, order: { name: 'ASC' } }),
+    );
   }
 
   async updateStore(
@@ -79,20 +129,24 @@ export class StockDocumentsRepository {
     id: number,
     patch: Partial<Pick<StoreEntity, 'code' | 'name' | 'address' | 'isActive'>>,
   ): Promise<void> {
-    await this.dataSource.getRepository(StoreEntity).update({ id, tenantId }, patch);
+    await this.withScope(tenantId, async (m) => {
+      await m.getRepository(StoreEntity).update({ id, tenantId }, patch);
+    });
   }
 
   /** Warehouses per store, for the store list. */
   async warehouseCounts(tenantId: string): Promise<Map<number, number>> {
-    const rows = await this.dataSource
-      .getRepository(WarehouseEntity)
-      .createQueryBuilder('w')
-      .select('w.storeId', 'storeId')
-      .addSelect('COUNT(*)', 'count')
-      .where('w.tenantId = :tenantId', { tenantId })
-      .andWhere('w.storeId IS NOT NULL')
-      .groupBy('w.storeId')
-      .getRawMany<{ storeId: number; count: string }>();
+    const rows = await this.withScope(tenantId, (m) =>
+      m
+        .getRepository(WarehouseEntity)
+        .createQueryBuilder('w')
+        .select('w.storeId', 'storeId')
+        .addSelect('COUNT(*)', 'count')
+        .where('w.tenantId = :tenantId', { tenantId })
+        .andWhere('w.storeId IS NOT NULL')
+        .groupBy('w.storeId')
+        .getRawMany<{ storeId: number; count: string }>(),
+    );
     return new Map(rows.map((row) => [Number(row.storeId), Number(row.count)]));
   }
 
@@ -101,7 +155,11 @@ export class StockDocumentsRepository {
   // ---------------------------------------------------------------------------
 
   async countDocuments(tenantId: string, docType: StockDocumentType, manager: EntityManager): Promise<number> {
-    return manager.count(StockDocumentEntity, { where: { tenantId, docType } });
+    return this.withScope(
+      tenantId,
+      (m) => m.count(StockDocumentEntity, { where: { tenantId, docType } }),
+      manager,
+    );
   }
 
   async insertDocument(
@@ -110,15 +168,21 @@ export class StockDocumentsRepository {
     lines: Array<Omit<StockDocumentLineEntity, 'id' | 'tenantId' | 'documentId'>>,
     manager: EntityManager,
   ): Promise<StockDocumentEntity> {
-    const document = await manager.save(
-      manager.create(StockDocumentEntity, { ...data, tenantId }),
+    return this.withScope(
+      tenantId,
+      async (m) => {
+        const document = await m.save(
+          m.create(StockDocumentEntity, { ...data, tenantId }),
+        );
+        await m.save(
+          lines.map((line) =>
+            m.create(StockDocumentLineEntity, { ...line, tenantId, documentId: document.id }),
+          ),
+        );
+        return document;
+      },
+      manager,
     );
-    await manager.save(
-      lines.map((line) =>
-        manager.create(StockDocumentLineEntity, { ...line, tenantId, documentId: document.id }),
-      ),
-    );
-    return document;
   }
 
   /** Draft document edits, scoped by tenant. */
@@ -128,7 +192,13 @@ export class StockDocumentsRepository {
     patch: Partial<StockDocumentEntity>,
     manager?: EntityManager,
   ): Promise<void> {
-    await (manager ?? this.dataSource.manager).update(StockDocumentEntity, { id, tenantId }, patch);
+    await this.withScope(
+      tenantId,
+      async (m) => {
+        await m.update(StockDocumentEntity, { id, tenantId }, patch);
+      },
+      manager,
+    );
   }
 
   /** Replaces all lines of a document (draft editing). */
@@ -138,17 +208,29 @@ export class StockDocumentsRepository {
     lines: Array<Omit<StockDocumentLineEntity, 'id' | 'tenantId' | 'documentId'>>,
     manager: EntityManager,
   ): Promise<void> {
-    await manager.delete(StockDocumentLineEntity, { tenantId, documentId });
-    if (lines.length > 0) {
-      await manager.save(
-        lines.map((line) => manager.create(StockDocumentLineEntity, { ...line, tenantId, documentId })),
-      );
-    }
+    await this.withScope(
+      tenantId,
+      async (m) => {
+        await m.delete(StockDocumentLineEntity, { tenantId, documentId });
+        if (lines.length > 0) {
+          await m.save(
+            lines.map((line) => m.create(StockDocumentLineEntity, { ...line, tenantId, documentId })),
+          );
+        }
+      },
+      manager,
+    );
   }
 
   async deleteDraft(tenantId: string, id: number, manager: EntityManager): Promise<void> {
-    await manager.delete(StockDocumentLineEntity, { tenantId, documentId: id });
-    await manager.delete(StockDocumentEntity, { tenantId, id });
+    await this.withScope(
+      tenantId,
+      async (m) => {
+        await m.delete(StockDocumentLineEntity, { tenantId, documentId: id });
+        await m.delete(StockDocumentEntity, { tenantId, id });
+      },
+      manager,
+    );
   }
 
   /** SKUs from `skus` that exist as items of this tenant. */
@@ -156,13 +238,15 @@ export class StockDocumentsRepository {
     if (skus.length === 0) {
       return new Set();
     }
-    const rows = await this.dataSource
-      .getRepository(StockItemEntity)
-      .createQueryBuilder('item')
-      .select('item.sku', 'sku')
-      .where('item.tenantId = :tenantId', { tenantId })
-      .andWhere('item.sku IN (:...skus)', { skus })
-      .getRawMany<{ sku: string }>();
+    const rows = await this.withScope(tenantId, (m) =>
+      m
+        .getRepository(StockItemEntity)
+        .createQueryBuilder('item')
+        .select('item.sku', 'sku')
+        .where('item.tenantId = :tenantId', { tenantId })
+        .andWhere('item.sku IN (:...skus)', { skus })
+        .getRawMany<{ sku: string }>(),
+    );
     return new Set(rows.map((row) => row.sku));
   }
 
@@ -171,15 +255,17 @@ export class StockDocumentsRepository {
     if (skus.length === 0) {
       return new Set();
     }
-    const rows = await this.dataSource
-      .getRepository(FifoBatchEntity)
-      .createQueryBuilder('b')
-      .select('DISTINCT b.sku', 'sku')
-      .where('b.tenantId = :tenantId', { tenantId })
-      .andWhere('b.warehouseId = :warehouseId', { warehouseId })
-      .andWhere('b.quantityRemaining > 0')
-      .andWhere('b.sku IN (:...skus)', { skus })
-      .getRawMany<{ sku: string }>();
+    const rows = await this.withScope(tenantId, (m) =>
+      m
+        .getRepository(FifoBatchEntity)
+        .createQueryBuilder('b')
+        .select('DISTINCT b.sku', 'sku')
+        .where('b.tenantId = :tenantId', { tenantId })
+        .andWhere('b.warehouseId = :warehouseId', { warehouseId })
+        .andWhere('b.quantityRemaining > 0')
+        .andWhere('b.sku IN (:...skus)', { skus })
+        .getRawMany<{ sku: string }>(),
+    );
     return new Set(rows.map((row) => row.sku));
   }
 
@@ -188,50 +274,58 @@ export class StockDocumentsRepository {
     tenantId: string,
     limit: number,
   ): Promise<Array<{ sku: string; barcode: string; name: string }>> {
-    return this.dataSource
-      .getRepository(StockItemEntity)
-      .createQueryBuilder('item')
-      .select(['item.sku AS sku', 'item.barcode AS barcode', 'item.name AS name'])
-      .where('item.tenantId = :tenantId', { tenantId })
-      .andWhere(
-        `NOT EXISTS (SELECT 1 FROM inventory_fifo_batches b WHERE b.tenant_id = item.tenant_id AND b.sku = item.sku AND b.quantity_remaining > 0)`,
-      )
-      .orderBy('item.name', 'ASC')
-      .addOrderBy('item.id', 'ASC')
-      .limit(limit)
-      .getRawMany();
+    return this.withScope(tenantId, (m) =>
+      m
+        .getRepository(StockItemEntity)
+        .createQueryBuilder('item')
+        .select(['item.sku AS sku', 'item.barcode AS barcode', 'item.name AS name'])
+        .where('item.tenantId = :tenantId', { tenantId })
+        .andWhere(
+          `NOT EXISTS (SELECT 1 FROM inventory_fifo_batches b WHERE b.tenant_id = item.tenant_id AND b.sku = item.sku AND b.quantity_remaining > 0)`,
+        )
+        .orderBy('item.name', 'ASC')
+        .addOrderBy('item.id', 'ASC')
+        .limit(limit)
+        .getRawMany(),
+    );
   }
 
   findDocument(tenantId: string, id: number): Promise<StockDocumentEntity | null> {
-    return this.dataSource.getRepository(StockDocumentEntity).findOne({ where: { id, tenantId } });
+    return this.withScope(tenantId, (m) =>
+      m.getRepository(StockDocumentEntity).findOne({ where: { id, tenantId } }),
+    );
   }
 
   findDocumentLines(tenantId: string, documentId: number): Promise<StockDocumentLineEntity[]> {
-    return this.dataSource
-      .getRepository(StockDocumentLineEntity)
-      .find({ where: { tenantId, documentId }, order: { id: 'ASC' } });
+    return this.withScope(tenantId, (m) =>
+      m
+        .getRepository(StockDocumentLineEntity)
+        .find({ where: { tenantId, documentId }, order: { id: 'ASC' } }),
+    );
   }
 
   async listDocuments(
     tenantId: string,
     filter: DocumentFilter,
   ): Promise<[StockDocumentEntity[], number]> {
-    const query = this.dataSource
-      .getRepository(StockDocumentEntity)
-      .createQueryBuilder('d')
-      .where('d.tenantId = :tenantId', { tenantId });
-    if (filter.docType) {
-      query.andWhere('d.docType = :docType', { docType: filter.docType });
-    }
-    if (filter.warehouseId) {
-      query.andWhere('(d.fromWarehouseId = :w OR d.toWarehouseId = :w)', { w: filter.warehouseId });
-    }
-    return query
-      .orderBy('d.docDate', 'DESC')
-      .addOrderBy('d.id', 'DESC')
-      .skip(filter.skip)
-      .take(filter.take)
-      .getManyAndCount();
+    return this.withScope(tenantId, (m) => {
+      const query = m
+        .getRepository(StockDocumentEntity)
+        .createQueryBuilder('d')
+        .where('d.tenantId = :tenantId', { tenantId });
+      if (filter.docType) {
+        query.andWhere('d.docType = :docType', { docType: filter.docType });
+      }
+      if (filter.warehouseId) {
+        query.andWhere('(d.fromWarehouseId = :w OR d.toWarehouseId = :w)', { w: filter.warehouseId });
+      }
+      return query
+        .orderBy('d.docDate', 'DESC')
+        .addOrderBy('d.id', 'DESC')
+        .skip(filter.skip)
+        .take(filter.take)
+        .getManyAndCount();
+    });
   }
 
   /**
@@ -240,59 +334,61 @@ export class StockDocumentsRepository {
    * have one. Scoped by `tenantId`.
    */
   async findPostedDocuments(tenantId: string, upTo?: string, sku?: string): Promise<MovementDoc[]> {
-    const query = this.dataSource
-      .getRepository(StockDocumentEntity)
-      .createQueryBuilder('d')
-      .where('d.tenantId = :tenantId', { tenantId })
-      .andWhere('d.status = :status', { status: StockDocumentStatus.POSTED });
-    if (upTo) {
-      query.andWhere('d.docDate <= :upTo', { upTo });
-    }
-    const documents = await query.orderBy('d.docDate', 'ASC').addOrderBy('d.id', 'ASC').getMany();
-    if (documents.length === 0) {
-      return [];
-    }
-
-    const lineQuery = this.dataSource
-      .getRepository(StockDocumentLineEntity)
-      .createQueryBuilder('l')
-      .where('l.tenantId = :tenantId', { tenantId })
-      .andWhere('l.documentId IN (:...ids)', { ids: documents.map((document) => document.id) })
-      .orderBy('l.id', 'ASC');
-    if (sku) {
-      lineQuery.andWhere('l.sku = :sku', { sku });
-    }
-    const lines = await lineQuery.getMany();
-
-    const byDocument = new Map<number, MovementDoc['lines']>();
-    for (const line of lines) {
-      const bucket = byDocument.get(line.documentId) ?? [];
-      bucket.push({
-        id: line.id,
-        sku: line.sku,
-        quantity: Number(line.quantity),
-        unitCost: Number(line.unitCost),
-      });
-      byDocument.set(line.documentId, bucket);
-    }
-
-    const result: MovementDoc[] = [];
-    for (const document of documents) {
-      const documentLines = byDocument.get(document.id);
-      if (!documentLines) {
-        continue;
+    return this.withScope(tenantId, async (m) => {
+      const query = m
+        .getRepository(StockDocumentEntity)
+        .createQueryBuilder('d')
+        .where('d.tenantId = :tenantId', { tenantId })
+        .andWhere('d.status = :status', { status: StockDocumentStatus.POSTED });
+      if (upTo) {
+        query.andWhere('d.docDate <= :upTo', { upTo });
       }
-      result.push({
-        id: document.id,
-        docType: document.docType,
-        docDate: String(document.docDate).slice(0, 10),
-        docNumber: document.docNumber,
-        fromWarehouseId: document.fromWarehouseId ?? null,
-        toWarehouseId: document.toWarehouseId ?? null,
-        lines: documentLines,
-      });
-    }
-    return result;
+      const documents = await query.orderBy('d.docDate', 'ASC').addOrderBy('d.id', 'ASC').getMany();
+      if (documents.length === 0) {
+        return [];
+      }
+
+      const lineQuery = m
+        .getRepository(StockDocumentLineEntity)
+        .createQueryBuilder('l')
+        .where('l.tenantId = :tenantId', { tenantId })
+        .andWhere('l.documentId IN (:...ids)', { ids: documents.map((document) => document.id) })
+        .orderBy('l.id', 'ASC');
+      if (sku) {
+        lineQuery.andWhere('l.sku = :sku', { sku });
+      }
+      const lines = await lineQuery.getMany();
+
+      const byDocument = new Map<number, MovementDoc['lines']>();
+      for (const line of lines) {
+        const bucket = byDocument.get(line.documentId) ?? [];
+        bucket.push({
+          id: line.id,
+          sku: line.sku,
+          quantity: Number(line.quantity),
+          unitCost: Number(line.unitCost),
+        });
+        byDocument.set(line.documentId, bucket);
+      }
+
+      const result: MovementDoc[] = [];
+      for (const document of documents) {
+        const documentLines = byDocument.get(document.id);
+        if (!documentLines) {
+          continue;
+        }
+        result.push({
+          id: document.id,
+          docType: document.docType,
+          docDate: String(document.docDate).slice(0, 10),
+          docNumber: document.docNumber,
+          fromWarehouseId: document.fromWarehouseId ?? null,
+          toWarehouseId: document.toWarehouseId ?? null,
+          lines: documentLines,
+        });
+      }
+      return result;
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -305,13 +401,19 @@ export class StockDocumentsRepository {
     warehouseId: number,
     manager: EntityManager,
   ): Promise<void> {
-    const warehouse = await manager.findOne(WarehouseEntity, { where: { id: warehouseId, tenantId } });
-    if (!warehouse) {
-      throw new WarehouseMissingError(warehouseId);
-    }
-    if (warehouse.isActive === false) {
-      throw new WarehouseInactiveError(warehouseId);
-    }
+    await this.withScope(
+      tenantId,
+      async (m) => {
+        const warehouse = await m.findOne(WarehouseEntity, { where: { id: warehouseId, tenantId } });
+        if (!warehouse) {
+          throw new WarehouseMissingError(warehouseId);
+        }
+        if (warehouse.isActive === false) {
+          throw new WarehouseInactiveError(warehouseId);
+        }
+      },
+      manager,
+    );
   }
 
   /**
@@ -324,50 +426,60 @@ export class StockDocumentsRepository {
     input: { sku: string; quantity: number; fromWarehouseId: number; toWarehouseId: number },
     manager: EntityManager,
   ): Promise<MovedLayer[]> {
-    const item = await manager.findOne(StockItemEntity, {
-      where: { sku: input.sku, tenantId },
-      lock: { mode: 'pessimistic_write' },
-    });
-    if (!item) {
-      throw new StockItemMissingError(input.sku);
-    }
-    const batches = await manager
-      .createQueryBuilder(FifoBatchEntity, 'batch')
-      .setLock('pessimistic_write')
-      .where('batch.tenantId = :tenantId', { tenantId })
-      .andWhere('batch.sku = :sku', { sku: input.sku })
-      .andWhere('batch.warehouseId = :from', { from: input.fromWarehouseId })
-      .andWhere('batch.quantityRemaining > 0')
-      .orderBy('batch.receivedDate', 'ASC')
-      .addOrderBy('batch.id', 'ASC')
-      .getMany();
+    return this.withScope(
+      tenantId,
+      async (m) => {
+        const item = await m.findOne(StockItemEntity, {
+          where: { sku: input.sku, tenantId },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!item) {
+          throw new StockItemMissingError(input.sku);
+        }
+        const batches = await m
+          .createQueryBuilder(FifoBatchEntity, 'batch')
+          .setLock('pessimistic_write')
+          .where('batch.tenantId = :tenantId', { tenantId })
+          .andWhere('batch.sku = :sku', { sku: input.sku })
+          .andWhere('batch.warehouseId = :from', { from: input.fromWarehouseId })
+          .andWhere('batch.quantityRemaining > 0')
+          .orderBy('batch.receivedDate', 'ASC')
+          .addOrderBy('batch.id', 'ASC')
+          .getMany();
 
-    let remaining = this.round(input.quantity);
-    const moved: MovedLayer[] = [];
-    for (const batch of batches) {
-      if (remaining <= 0) {
-        break;
-      }
-      const take = Math.min(batch.quantityRemaining, remaining);
-      batch.quantityRemaining = this.round(batch.quantityRemaining - take);
-      await manager.save(batch);
-      await manager.save(
-        manager.create(FifoBatchEntity, {
-          tenantId,
-          sku: input.sku,
-          batchNumber: batch.batchNumber,
-          quantityRemaining: this.round(take),
-          unitPurchaseCost: batch.unitPurchaseCost,
-          receivedDate: batch.receivedDate,
-          warehouseId: input.toWarehouseId,
-        }),
-      );
-      moved.push({ quantity: this.round(take), unitCost: batch.unitPurchaseCost });
-      remaining = this.round(remaining - take);
-    }
-    if (remaining > 0) {
-      throw new InsufficientStockError(input.sku, input.quantity, this.round(input.quantity - remaining));
-    }
-    return moved;
+        let remaining = this.round(input.quantity);
+        const moved: MovedLayer[] = [];
+        for (const batch of batches) {
+          if (remaining <= 0) {
+            break;
+          }
+          const take = Math.min(batch.quantityRemaining, remaining);
+          batch.quantityRemaining = this.round(batch.quantityRemaining - take);
+          await m.save(batch);
+          await m.save(
+            m.create(FifoBatchEntity, {
+              tenantId,
+              sku: input.sku,
+              batchNumber: batch.batchNumber,
+              quantityRemaining: this.round(take),
+              unitPurchaseCost: batch.unitPurchaseCost,
+              receivedDate: batch.receivedDate,
+              warehouseId: input.toWarehouseId,
+            }),
+          );
+          moved.push({ quantity: this.round(take), unitCost: batch.unitPurchaseCost });
+          remaining = this.round(remaining - take);
+        }
+        if (remaining > 0) {
+          throw new InsufficientStockError(
+            input.sku,
+            input.quantity,
+            this.round(input.quantity - remaining),
+          );
+        }
+        return moved;
+      },
+      manager,
+    );
   }
 }

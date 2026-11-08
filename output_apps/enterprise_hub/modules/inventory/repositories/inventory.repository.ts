@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
+import { TenantScope } from '../../access/services/tenant-scope';
 import { parseScaled } from '../../accounting/money';
 import { MONEY_SCALE, QUANTITY_SCALE } from '../constants/inventory.constants';
 import { FifoBatchEntity } from '../entities/fifo-batch.entity';
@@ -104,7 +105,59 @@ export class InventoryRepository {
     @InjectRepository(FifoBatchEntity)
     private readonly batches: Repository<FifoBatchEntity>,
     private readonly dataSource: DataSource,
+    @Optional()
+    private readonly scope?: TenantScope,
   ) {}
+
+  private get tenantScope(): TenantScope | undefined {
+    if (this.scope) {
+      return this.scope;
+    }
+    const ds =
+      this.dataSource ??
+      this.warehouses?.manager?.connection ??
+      this.stockItems?.manager?.connection ??
+      this.batches?.manager?.connection;
+    if ((ds as { isInitialized?: boolean } | undefined)?.isInitialized) {
+      return new TenantScope(ds);
+    }
+    return undefined;
+  }
+
+  private withWarehouses<T>(
+    tenantId: string,
+    work: (repo: Repository<WarehouseEntity>) => Promise<T>,
+  ): Promise<T> {
+    const scope = this.tenantScope;
+    if (scope) {
+      return scope.run(tenantId, (m) => work(m.getRepository(WarehouseEntity)));
+    }
+    return work(this.warehouses);
+  }
+
+  private withStockItems<T>(
+    tenantId: string,
+    work: (repo: Repository<StockItemEntity>) => Promise<T>,
+    manager?: EntityManager,
+  ): Promise<T> {
+    const scope = this.tenantScope;
+    if (scope) {
+      return scope.within(tenantId, manager, (m) => work(m.getRepository(StockItemEntity)));
+    }
+    const repo = manager ? manager.getRepository(StockItemEntity) : this.stockItems;
+    return work(repo);
+  }
+
+  private withBatches<T>(
+    tenantId: string,
+    work: (repo: Repository<FifoBatchEntity>) => Promise<T>,
+  ): Promise<T> {
+    const scope = this.tenantScope;
+    if (scope) {
+      return scope.run(tenantId, (m) => work(m.getRepository(FifoBatchEntity)));
+    }
+    return work(this.batches);
+  }
 
   /** گرد کردن مقادیر فیزیکی به دقت تعیین‌شده. */
   private roundQuantity(value: number): number {
@@ -130,57 +183,73 @@ export class InventoryRepository {
       storeId?: number | null;
     },
   ): Promise<WarehouseEntity> {
-    const entity = this.warehouses.create({
-      storeId: null,
-      isActive: true,
-      ...data,
-      tenantId,
-      createdAt: new Date(),
+    return this.withWarehouses(tenantId, (repo) => {
+      const entity = repo.create({
+        storeId: null,
+        isActive: true,
+        ...data,
+        tenantId,
+        createdAt: new Date(),
+      });
+      return repo.save(entity);
     });
-    return this.warehouses.save(entity);
   }
 
   async findAllWarehouses(tenantId: string): Promise<WarehouseEntity[]> {
-    return this.warehouses.find({
-      where: { tenantId },
-      order: { name: 'ASC' },
-    });
+    return this.withWarehouses(tenantId, (repo) =>
+      repo.find({
+        where: { tenantId },
+        order: { name: 'ASC' },
+      }),
+    );
   }
 
   async findWarehouseById(
     tenantId: string,
     id: number,
   ): Promise<WarehouseEntity | null> {
-    return this.warehouses.findOne({ where: { id, tenantId } });
+    return this.withWarehouses(tenantId, (repo) => repo.findOne({ where: { id, tenantId } }));
   }
 
   /** The item whose code (SKU) or barcode is exactly `code`; SKU wins when both match. */
   async findStockItemByCode(tenantId: string, code: string): Promise<StockItemEntity | null> {
-    return (
-      (await this.stockItems.findOne({ where: { tenantId, sku: code } })) ??
-      (await this.stockItems.findOne({ where: { tenantId, barcode: code }, order: { id: 'ASC' } }))
-    );
+    return this.withStockItems(tenantId, async (repo) => {
+      return (
+        (await repo.findOne({ where: { tenantId, sku: code } })) ??
+        (await repo.findOne({ where: { tenantId, barcode: code }, order: { id: 'ASC' } }))
+      );
+    });
   }
 
   /** Units of `sku` available to sell: in one warehouse's layers, or the item total when none is given. */
   async availableQuantity(tenantId: string, sku: string, warehouseId: number | null): Promise<number> {
     if (warehouseId === null) {
-      const item = await this.stockItems.findOne({ where: { tenantId, sku } });
+      const item = await this.withStockItems(tenantId, (repo) =>
+        repo.findOne({ where: { tenantId, sku } }),
+      );
       return Number(item?.quantity ?? 0);
     }
-    const row = await this.batches
-      .createQueryBuilder('batch')
-      .select('COALESCE(SUM(batch.quantityRemaining), 0)', 'total')
-      .where('batch.tenantId = :tenantId', { tenantId })
-      .andWhere('batch.sku = :sku', { sku })
-      .andWhere('batch.warehouseId = :warehouseId', { warehouseId })
-      .andWhere('batch.quantityRemaining > 0')
-      .getRawOne<{ total: string }>();
+    const row = await this.withBatches(tenantId, (repo) =>
+      repo
+        .createQueryBuilder('batch')
+        .select('COALESCE(SUM(batch.quantityRemaining), 0)', 'total')
+        .where('batch.tenantId = :tenantId', { tenantId })
+        .andWhere('batch.sku = :sku', { sku })
+        .andWhere('batch.warehouseId = :warehouseId', { warehouseId })
+        .andWhere('batch.quantityRemaining > 0')
+        .getRawOne<{ total: string }>(),
+    );
     return Number(row?.total ?? 0);
   }
 
   /** A store of this tenant, or null (used to validate a warehouse's `storeId`). */
   async findStoreById(tenantId: string, id: number): Promise<StoreEntity | null> {
+    const scope = this.tenantScope;
+    if (scope) {
+      return scope.run(tenantId, (m) =>
+        m.getRepository(StoreEntity).findOne({ where: { id, tenantId } }),
+      );
+    }
     return this.dataSource.getRepository(StoreEntity).findOne({ where: { id, tenantId } });
   }
 
@@ -190,37 +259,43 @@ export class InventoryRepository {
     id: number,
     patch: Partial<Pick<WarehouseEntity, 'name' | 'locationCode' | 'storeId' | 'isActive'>>,
   ): Promise<void> {
-    await this.warehouses.update({ id, tenantId }, patch);
+    await this.withWarehouses(tenantId, async (repo) => {
+      await repo.update({ id, tenantId }, patch);
+    });
   }
 
   /** Open stock quantity (sum of FIFO layers) held by one warehouse. */
   async openQuantityInWarehouse(tenantId: string, warehouseId: number): Promise<number> {
-    const row = await this.batches
-      .createQueryBuilder('batch')
-      .select('COALESCE(SUM(batch.quantityRemaining), 0)', 'total')
-      .where('batch.tenantId = :tenantId', { tenantId })
-      .andWhere('batch.warehouseId = :warehouseId', { warehouseId })
-      .andWhere('batch.quantityRemaining > 0')
-      .getRawOne<{ total: string }>();
+    const row = await this.withBatches(tenantId, (repo) =>
+      repo
+        .createQueryBuilder('batch')
+        .select('COALESCE(SUM(batch.quantityRemaining), 0)', 'total')
+        .where('batch.tenantId = :tenantId', { tenantId })
+        .andWhere('batch.warehouseId = :warehouseId', { warehouseId })
+        .andWhere('batch.quantityRemaining > 0')
+        .getRawOne<{ total: string }>(),
+    );
     return Number(row?.total ?? 0);
   }
 
   /** How many of the tenant's items have no open FIFO layer. */
   async countItemsWithoutStock(tenantId: string): Promise<number> {
-    return this.stockItems
-      .createQueryBuilder('item')
-      .where('item.tenantId = :tenantId', { tenantId })
-      .andWhere(
-        `NOT EXISTS (SELECT 1 FROM inventory_fifo_batches b WHERE b.tenant_id = item.tenant_id AND b.sku = item.sku AND b.quantity_remaining > 0)`,
-      )
-      .getCount();
+    return this.withStockItems(tenantId, (repo) =>
+      repo
+        .createQueryBuilder('item')
+        .where('item.tenantId = :tenantId', { tenantId })
+        .andWhere(
+          `NOT EXISTS (SELECT 1 FROM inventory_fifo_batches b WHERE b.tenant_id = item.tenant_id AND b.sku = item.sku AND b.quantity_remaining > 0)`,
+        )
+        .getCount(),
+    );
   }
 
   async findWarehouseByName(
     tenantId: string,
     name: string,
   ): Promise<WarehouseEntity | null> {
-    return this.warehouses.findOne({ where: { name, tenantId } });
+    return this.withWarehouses(tenantId, (repo) => repo.findOne({ where: { name, tenantId } }));
   }
 
   // ---------------------------------------------------------------------------
@@ -232,12 +307,21 @@ export class InventoryRepository {
     data: Partial<StockItemEntity>,
     manager?: EntityManager,
   ): Promise<StockItemEntity> {
-    const repo = manager ? manager.getRepository(StockItemEntity) : this.stockItems;
-    const entity = repo.create({ ...data, tenantId });
-    return repo.save(entity);
+    return this.withStockItems(
+      tenantId,
+      (repo) => {
+        const entity = repo.create({ ...data, tenantId });
+        return repo.save(entity);
+      },
+      manager,
+    );
   }
 
-  async transaction<T>(work: (m: EntityManager) => Promise<T>): Promise<T> {
+  async transaction<T>(work: (m: EntityManager) => Promise<T>, tenantId?: string): Promise<T> {
+    const scope = this.tenantScope;
+    if (tenantId && scope) {
+      return scope.run(tenantId, work);
+    }
     return this.dataSource.transaction(work);
   }
 
@@ -246,17 +330,19 @@ export class InventoryRepository {
     entity: StockItemEntity,
   ): Promise<StockItemEntity> {
     // به‌روزرسانی با قید مستأجر: شناسه سازمان دیگر ۰ ردیف را تغییر می‌دهد.
-    await this.stockItems.update(
-      { id: entity.id, tenantId },
-      {
-        sku: entity.sku,
-        barcode: entity.barcode,
-        name: entity.name,
-        quantity: entity.quantity,
-        minQuantity: entity.minQuantity,
-        batchNumber: entity.batchNumber,
-      },
-    );
+    await this.withStockItems(tenantId, async (repo) => {
+      await repo.update(
+        { id: entity.id, tenantId },
+        {
+          sku: entity.sku,
+          barcode: entity.barcode,
+          name: entity.name,
+          quantity: entity.quantity,
+          minQuantity: entity.minQuantity,
+          batchNumber: entity.batchNumber,
+        },
+      );
+    });
     entity.tenantId = tenantId;
     return entity;
   }
@@ -265,14 +351,14 @@ export class InventoryRepository {
     tenantId: string,
     id: number,
   ): Promise<StockItemEntity | null> {
-    return this.stockItems.findOne({ where: { id, tenantId } });
+    return this.withStockItems(tenantId, (repo) => repo.findOne({ where: { id, tenantId } }));
   }
 
   async findStockItemBySku(
     tenantId: string,
     sku: string,
   ): Promise<StockItemEntity | null> {
-    return this.stockItems.findOne({ where: { sku, tenantId } });
+    return this.withStockItems(tenantId, (repo) => repo.findOne({ where: { sku, tenantId } }));
   }
 
   /** شناسه‌های کالای موجودِ مستأجر در میان فهرست داده‌شده (تشخیص تکراری). */
@@ -283,10 +369,12 @@ export class InventoryRepository {
     if (skus.length === 0) {
       return [];
     }
-    const rows = await this.stockItems.find({
-      where: { tenantId, sku: In(skus) },
-      select: { sku: true },
-    });
+    const rows = await this.withStockItems(tenantId, (repo) =>
+      repo.find({
+        where: { tenantId, sku: In(skus) },
+        select: { sku: true },
+      }),
+    );
     return rows.map((row) => row.sku);
   }
 
@@ -298,18 +386,22 @@ export class InventoryRepository {
     if (ids.length === 0) {
       return [];
     }
-    const items = await this.stockItems.find({
-      where: { tenantId, id: In(ids) },
-      select: { id: true, sku: true },
-    });
+    const items = await this.withStockItems(tenantId, (repo) =>
+      repo.find({
+        where: { tenantId, id: In(ids) },
+        select: { id: true, sku: true },
+      }),
+    );
     const skus = items.map((item) => item.sku);
     if (skus.length === 0) {
       return [];
     }
-    const batches = await this.batches.find({
-      where: { tenantId, sku: In(skus) },
-      select: { sku: true },
-    });
+    const batches = await this.withBatches(tenantId, (repo) =>
+      repo.find({
+        where: { tenantId, sku: In(skus) },
+        select: { sku: true },
+      }),
+    );
     const referencedSkus = new Set(batches.map((batch) => batch.sku));
     return items
       .filter((item) => referencedSkus.has(item.sku))
@@ -324,15 +416,19 @@ export class InventoryRepository {
     if (ids.length === 0) {
       return 0;
     }
-    const result = await this.stockItems.delete({ tenantId, id: In(ids) });
+    const result = await this.withStockItems(tenantId, (repo) =>
+      repo.delete({ tenantId, id: In(ids) }),
+    );
     return result.affected ?? 0;
   }
 
   async findAllStockItems(tenantId: string): Promise<StockItemEntity[]> {
-    return this.stockItems.find({
-      where: { tenantId },
-      order: { name: 'ASC' },
-    });
+    return this.withStockItems(tenantId, (repo) =>
+      repo.find({
+        where: { tenantId },
+        order: { name: 'ASC' },
+      }),
+    );
   }
 
   async findStockItemsAndCount(
@@ -348,48 +444,50 @@ export class InventoryRepository {
       take: number;
     },
   ): Promise<[StockItemEntity[], number]> {
-    const query = this.stockItems.createQueryBuilder('item');
+    return this.withStockItems(tenantId, (repo) => {
+      const query = repo.createQueryBuilder('item');
 
-    query.where('item.tenantId = :tenantId', { tenantId });
+      query.where('item.tenantId = :tenantId', { tenantId });
 
-    if (options.search) {
-      const pattern = `%${options.search}%`;
-      query.andWhere(
-        '(item.sku ILIKE :pattern OR item.barcode ILIKE :pattern OR item.name ILIKE :pattern)',
-        { pattern },
-      );
-    }
-    if (options.lowStockOnly) {
-      const reserved = options.reserved ?? [];
+      if (options.search) {
+        const pattern = `%${options.search}%`;
+        query.andWhere(
+          '(item.sku ILIKE :pattern OR item.barcode ILIKE :pattern OR item.name ILIKE :pattern)',
+          { pattern },
+        );
+      }
+      if (options.lowStockOnly) {
+        const reserved = options.reserved ?? [];
+        query
+          .andWhere(`item.minQuantity > 0 AND ${REORDER_STOCK_SQL} <= item.minQuantity`)
+          .setParameter('rIds', reserved.map((row) => row.itemId))
+          .setParameter('rQtys', reserved.map((row) => row.quantity));
+      }
+      if (options.noStockOnly) {
+        query.andWhere(
+          `NOT EXISTS (SELECT 1 FROM inventory_fifo_batches b WHERE b.tenant_id = item.tenant_id AND b.sku = item.sku AND b.quantity_remaining > 0)`,
+        );
+      }
+
+      // An exact code or barcode match comes first, so a scanned barcode is always on the first
+      // page even when many other items contain the same digits.
+      const exact = options.search?.trim();
+      if (exact) {
+        query
+          .addSelect('CASE WHEN item.sku = :exact OR item.barcode = :exact THEN 0 ELSE 1 END', 'exact_rank')
+          .setParameter('exact', exact)
+          .orderBy('exact_rank', 'ASC')
+          .addOrderBy('item.name', 'ASC');
+      } else {
+        query.orderBy('item.name', 'ASC');
+      }
       query
-        .andWhere(`item.minQuantity > 0 AND ${REORDER_STOCK_SQL} <= item.minQuantity`)
-        .setParameter('rIds', reserved.map((row) => row.itemId))
-        .setParameter('rQtys', reserved.map((row) => row.quantity));
-    }
-    if (options.noStockOnly) {
-      query.andWhere(
-        `NOT EXISTS (SELECT 1 FROM inventory_fifo_batches b WHERE b.tenant_id = item.tenant_id AND b.sku = item.sku AND b.quantity_remaining > 0)`,
-      );
-    }
+        .addOrderBy('item.id', 'ASC')
+        .skip(options.skip)
+        .take(options.take);
 
-    // An exact code or barcode match comes first, so a scanned barcode is always on the first
-    // page even when many other items contain the same digits.
-    const exact = options.search?.trim();
-    if (exact) {
-      query
-        .addSelect('CASE WHEN item.sku = :exact OR item.barcode = :exact THEN 0 ELSE 1 END', 'exact_rank')
-        .setParameter('exact', exact)
-        .orderBy('exact_rank', 'ASC')
-        .addOrderBy('item.name', 'ASC');
-    } else {
-      query.orderBy('item.name', 'ASC');
-    }
-    query
-      .addOrderBy('item.id', 'ASC')
-      .skip(options.skip)
-      .take(options.take);
-
-    return query.getManyAndCount();
+      return query.getManyAndCount();
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -401,38 +499,42 @@ export class InventoryRepository {
     sku: string,
     warehouseId: number | null = null,
   ): Promise<FifoBatchEntity[]> {
-    const query = this.batches
-      .createQueryBuilder('batch')
-      .where('batch.tenantId = :tenantId', { tenantId })
-      .andWhere('batch.sku = :sku', { sku })
-      .andWhere('batch.quantityRemaining > 0')
-      .orderBy('batch.receivedDate', 'ASC')
-      .addOrderBy('batch.id', 'ASC');
+    return this.withBatches(tenantId, (repo) => {
+      const query = repo
+        .createQueryBuilder('batch')
+        .where('batch.tenantId = :tenantId', { tenantId })
+        .andWhere('batch.sku = :sku', { sku })
+        .andWhere('batch.quantityRemaining > 0')
+        .orderBy('batch.receivedDate', 'ASC')
+        .addOrderBy('batch.id', 'ASC');
 
-    if (warehouseId !== null) {
-      query.andWhere('batch.warehouseId = :warehouseId', { warehouseId });
-    }
+      if (warehouseId !== null) {
+        query.andWhere('batch.warehouseId = :warehouseId', { warehouseId });
+      }
 
-    return query.getMany();
+      return query.getMany();
+    });
   }
 
   /**
    * تجمیع ارزش لایه‌های FIFO باز به تفکیک کالا.
    */
   async getBatchAggregates(tenantId: string): Promise<BatchAggregateRow[]> {
-    return this.batches
-      .createQueryBuilder('batch')
-      .select('batch.sku', 'sku')
-      .addSelect('COALESCE(SUM(batch.quantityRemaining), 0)', 'batchQuantity')
-      .addSelect(
-        'COALESCE(SUM(batch.quantityRemaining * batch.unitPurchaseCost), 0)',
-        'fifoValue',
-      )
-      .addSelect('COUNT(batch.id)', 'openBatchCount')
-      .where('batch.tenantId = :tenantId', { tenantId })
-      .andWhere('batch.quantityRemaining > 0')
-      .groupBy('batch.sku')
-      .getRawMany<BatchAggregateRow>();
+    return this.withBatches(tenantId, (repo) =>
+      repo
+        .createQueryBuilder('batch')
+        .select('batch.sku', 'sku')
+        .addSelect('COALESCE(SUM(batch.quantityRemaining), 0)', 'batchQuantity')
+        .addSelect(
+          'COALESCE(SUM(batch.quantityRemaining * batch.unitPurchaseCost), 0)',
+          'fifoValue',
+        )
+        .addSelect('COUNT(batch.id)', 'openBatchCount')
+        .where('batch.tenantId = :tenantId', { tenantId })
+        .andWhere('batch.quantityRemaining > 0')
+        .groupBy('batch.sku')
+        .getRawMany<BatchAggregateRow>(),
+    );
   }
 
   /**
@@ -442,39 +544,46 @@ export class InventoryRepository {
     tenantId: string,
     warehouseId: number,
   ): Promise<WarehouseStockRawRow[]> {
-    return this.batches
-      .createQueryBuilder('batch')
-      .innerJoin(
-        StockItemEntity,
-        'item',
-        'item.sku = batch.sku AND item.tenantId = batch.tenantId',
-      )
-      .select('batch.sku', 'sku')
-      .addSelect('item.name', 'name')
-      .addSelect('COALESCE(SUM(batch.quantityRemaining), 0)', 'quantity')
-      .addSelect(
-        'COALESCE(SUM(batch.quantityRemaining * batch.unitPurchaseCost), 0)',
-        'fifoValue',
-      )
-      .addSelect('COUNT(batch.id)', 'openBatchCount')
-      .where('batch.tenantId = :tenantId', { tenantId })
-      .andWhere('batch.warehouseId = :warehouseId', { warehouseId })
-      .andWhere('batch.quantityRemaining > 0')
-      .groupBy('batch.sku')
-      .addGroupBy('item.name')
-      .orderBy('item.name', 'ASC')
-      .getRawMany<WarehouseStockRawRow>();
+    return this.withBatches(tenantId, (repo) =>
+      repo
+        .createQueryBuilder('batch')
+        .innerJoin(
+          StockItemEntity,
+          'item',
+          'item.sku = batch.sku AND item.tenantId = batch.tenantId',
+        )
+        .select('batch.sku', 'sku')
+        .addSelect('item.name', 'name')
+        .addSelect('COALESCE(SUM(batch.quantityRemaining), 0)', 'quantity')
+        .addSelect(
+          'COALESCE(SUM(batch.quantityRemaining * batch.unitPurchaseCost), 0)',
+          'fifoValue',
+        )
+        .addSelect('COUNT(batch.id)', 'openBatchCount')
+        .where('batch.tenantId = :tenantId', { tenantId })
+        .andWhere('batch.warehouseId = :warehouseId', { warehouseId })
+        .andWhere('batch.quantityRemaining > 0')
+        .groupBy('batch.sku')
+        .addGroupBy('item.name')
+        .orderBy('item.name', 'ASC')
+        .getRawMany<WarehouseStockRawRow>(),
+    );
   }
 
   // ---------------------------------------------------------------------------
   // تراکنش‌های اتمیک ورود/خروج کالا
   // ---------------------------------------------------------------------------
 
-  /** Runs `work` in the caller's transaction when given, otherwise in a new one. */
+  /** Runs `work` in the caller's transaction when given, otherwise in a new tenant-scoped one. */
   private runInTransaction<T>(
+    tenantId: string,
     work: (manager: EntityManager) => Promise<T>,
     outerManager?: EntityManager,
   ): Promise<T> {
+    const scope = this.tenantScope;
+    if (scope) {
+      return scope.within(tenantId, outerManager, work);
+    }
     return outerManager ? work(outerManager) : this.dataSource.transaction(work);
   }
 
@@ -487,36 +596,40 @@ export class InventoryRepository {
     input: InboundPersistInput,
     outerManager?: EntityManager,
   ): Promise<InboundPersistResult> {
-    return this.runInTransaction(async (manager) => {
-      const item = await manager.findOne(StockItemEntity, {
-        where: { sku: input.sku, tenantId },
-        lock: { mode: 'pessimistic_write' },
-      });
-      if (!item) {
-        throw new StockItemMissingError(input.sku);
-      }
+    return this.runInTransaction(
+      tenantId,
+      async (manager) => {
+        const item = await manager.findOne(StockItemEntity, {
+          where: { sku: input.sku, tenantId },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!item) {
+          throw new StockItemMissingError(input.sku);
+        }
 
-      await this.assertWarehouseExists(manager, tenantId, input.warehouseId);
+        await this.assertWarehouseExists(manager, tenantId, input.warehouseId);
 
-      const batch = manager.create(FifoBatchEntity, {
-        tenantId,
-        sku: input.sku,
-        batchNumber: input.batchNumber,
-        quantityRemaining: this.roundQuantity(input.quantity),
-        unitPurchaseCost: this.roundMoney(input.unitPurchaseCost),
-        receivedDate: input.receivedDate ?? new Date(),
-        warehouseId: input.warehouseId,
-      });
-      const savedBatch = await manager.save(batch);
+        const batch = manager.create(FifoBatchEntity, {
+          tenantId,
+          sku: input.sku,
+          batchNumber: input.batchNumber,
+          quantityRemaining: this.roundQuantity(input.quantity),
+          unitPurchaseCost: this.roundMoney(input.unitPurchaseCost),
+          receivedDate: input.receivedDate ?? new Date(),
+          warehouseId: input.warehouseId,
+        });
+        const savedBatch = await manager.save(batch);
 
-      item.quantity = this.roundQuantity(item.quantity + input.quantity);
-      if (!item.batchNumber) {
-        item.batchNumber = input.batchNumber;
-      }
-      const savedItem = await manager.save(item);
+        item.quantity = this.roundQuantity(item.quantity + input.quantity);
+        if (!item.batchNumber) {
+          item.batchNumber = input.batchNumber;
+        }
+        const savedItem = await manager.save(item);
 
-      return { item: savedItem, batch: savedBatch };
-    }, outerManager);
+        return { item: savedItem, batch: savedBatch };
+      },
+      outerManager,
+    );
   }
 
   /**
@@ -528,72 +641,76 @@ export class InventoryRepository {
     input: OutboundPersistInput,
     outerManager?: EntityManager,
   ): Promise<OutboundPersistResult> {
-    return this.runInTransaction(async (manager) => {
-      const item = await manager.findOne(StockItemEntity, {
-        where: { sku: input.sku, tenantId },
-        lock: { mode: 'pessimistic_write' },
-      });
-      if (!item) {
-        throw new StockItemMissingError(input.sku);
-      }
-
-      await this.assertWarehouseExists(manager, tenantId, input.warehouseId);
-
-      const query = manager
-        .createQueryBuilder(FifoBatchEntity, 'batch')
-        .setLock('pessimistic_write')
-        .where('batch.tenantId = :tenantId', { tenantId })
-        .andWhere('batch.sku = :sku', { sku: input.sku })
-        .andWhere('batch.quantityRemaining > 0')
-        .orderBy('batch.receivedDate', 'ASC')
-        .addOrderBy('batch.id', 'ASC');
-
-      if (input.warehouseId !== null) {
-        query.andWhere('batch.warehouseId = :warehouseId', {
-          warehouseId: input.warehouseId,
+    return this.runInTransaction(
+      tenantId,
+      async (manager) => {
+        const item = await manager.findOne(StockItemEntity, {
+          where: { sku: input.sku, tenantId },
+          lock: { mode: 'pessimistic_write' },
         });
-      }
-
-      const availableBatches = await query.getMany();
-
-      let remaining = this.roundQuantity(input.quantity);
-      const layers: ConsumedLayer[] = [];
-
-      for (const batch of availableBatches) {
-        if (remaining <= 0) {
-          break;
-        }
-        const take = Math.min(batch.quantityRemaining, remaining);
-        if (take <= 0) {
-          continue;
+        if (!item) {
+          throw new StockItemMissingError(input.sku);
         }
 
-        batch.quantityRemaining = this.roundQuantity(
-          batch.quantityRemaining - take,
-        );
-        await manager.save(batch);
+        await this.assertWarehouseExists(manager, tenantId, input.warehouseId);
 
-        layers.push({
-          batchId: batch.id,
-          batchNumber: batch.batchNumber,
-          quantity: this.roundQuantity(take),
-          unitPurchaseCost: batch.unitPurchaseCost,
-          warehouseId: batch.warehouseId,
-        });
+        const query = manager
+          .createQueryBuilder(FifoBatchEntity, 'batch')
+          .setLock('pessimistic_write')
+          .where('batch.tenantId = :tenantId', { tenantId })
+          .andWhere('batch.sku = :sku', { sku: input.sku })
+          .andWhere('batch.quantityRemaining > 0')
+          .orderBy('batch.receivedDate', 'ASC')
+          .addOrderBy('batch.id', 'ASC');
 
-        remaining = this.roundQuantity(remaining - take);
-      }
+        if (input.warehouseId !== null) {
+          query.andWhere('batch.warehouseId = :warehouseId', {
+            warehouseId: input.warehouseId,
+          });
+        }
 
-      if (remaining > 0) {
-        const available = this.roundQuantity(input.quantity - remaining);
-        throw new InsufficientStockError(input.sku, input.quantity, available);
-      }
+        const availableBatches = await query.getMany();
 
-      item.quantity = this.roundQuantity(item.quantity - input.quantity);
-      const savedItem = await manager.save(item);
+        let remaining = this.roundQuantity(input.quantity);
+        const layers: ConsumedLayer[] = [];
 
-      return { item: savedItem, layers };
-    }, outerManager);
+        for (const batch of availableBatches) {
+          if (remaining <= 0) {
+            break;
+          }
+          const take = Math.min(batch.quantityRemaining, remaining);
+          if (take <= 0) {
+            continue;
+          }
+
+          batch.quantityRemaining = this.roundQuantity(
+            batch.quantityRemaining - take,
+          );
+          await manager.save(batch);
+
+          layers.push({
+            batchId: batch.id,
+            batchNumber: batch.batchNumber,
+            quantity: this.roundQuantity(take),
+            unitPurchaseCost: batch.unitPurchaseCost,
+            warehouseId: batch.warehouseId,
+          });
+
+          remaining = this.roundQuantity(remaining - take);
+        }
+
+        if (remaining > 0) {
+          const available = this.roundQuantity(input.quantity - remaining);
+          throw new InsufficientStockError(input.sku, input.quantity, available);
+        }
+
+        item.quantity = this.roundQuantity(item.quantity - input.quantity);
+        const savedItem = await manager.save(item);
+
+        return { item: savedItem, layers };
+      },
+      outerManager,
+    );
   }
 
   /**
@@ -611,6 +728,7 @@ export class InventoryRepository {
       return result;
     }
     const rows: Array<Record<string, unknown>> = await this.runInTransaction(
+      tenantId,
       async (m) =>
         m.query(
           `SELECT "id", "quantity_remaining" FROM "inventory_fifo_batches"
@@ -642,6 +760,7 @@ export class InventoryRepository {
     manager?: EntityManager,
   ): Promise<void> {
     await this.runInTransaction(
+      tenantId,
       async (m) =>
         m.query(
           `UPDATE "inventory_fifo_batches"

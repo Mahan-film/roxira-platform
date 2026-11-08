@@ -87,12 +87,12 @@ describePg('Sales delivery notes on PostgreSQL (non-superuser, real posting engi
     });
 
   const qty = async (sku: string) =>
-    Number((await q('SELECT quantity FROM erp_stock_items WHERE tenant_id=$1 AND sku=$2', [T1, sku]))[0].quantity);
+    Number((await scoped('SELECT quantity FROM erp_stock_items WHERE tenant_id=$1 AND sku=$2', [T1, sku]))[0].quantity);
   const deliveryCount = async () =>
     Number((await scoped('SELECT count(*)::int AS c FROM erp_sales_deliveries WHERE tenant_id=$1', [T1]))[0].c);
   const stockDocCount = async () =>
     Number(
-      (await q(`SELECT count(*)::int AS c FROM erp_stock_documents WHERE tenant_id=$1 AND doc_type='SALES_DELIVERY'`, [T1]))[0]
+      (await scoped(`SELECT count(*)::int AS c FROM erp_stock_documents WHERE tenant_id=$1 AND doc_type='SALES_DELIVERY'`, [T1]))[0]
         .c,
     );
   const voucherCount = async () =>
@@ -231,7 +231,7 @@ describePg('Sales delivery notes on PostgreSQL (non-superuser, real posting engi
     ]);
     expect((await availability.availability(T1, [itemA]))[0]).toMatchObject({ onHand: 11, reserved: 8, available: 3 });
 
-    const [document] = await q(
+    const [document] = await scoped(
       `SELECT doc_type, status, doc_number, from_warehouse_id, reference FROM erp_stock_documents WHERE id = $1 AND tenant_id = $2`,
       [delivery.stockDocumentId, T1],
     );
@@ -242,7 +242,7 @@ describePg('Sales delivery notes on PostgreSQL (non-superuser, real posting engi
       from_warehouse_id: warehouseId,
       reference: 'DN-1',
     });
-    const [documentLine] = await q(
+    const [documentLine] = await scoped(
       `SELECT quantity, unit_cost, value FROM erp_stock_document_lines WHERE document_id = $1 AND tenant_id = $2`,
       [delivery.stockDocumentId, T1],
     );
@@ -279,7 +279,7 @@ describePg('Sales delivery notes on PostgreSQL (non-superuser, real posting engi
     expect(fulfilment.status).toBe('PARTIAL');
     expect(fulfilment.lines[0]).toMatchObject({ delivered: 10, backorder: 2, status: 'PARTIAL' });
 
-    const layers = await q(
+    const layers = await scoped(
       `SELECT quantity_remaining, unit_purchase_cost FROM inventory_fifo_batches WHERE tenant_id=$1 AND sku='A' AND warehouse_id=$2 ORDER BY id`,
       [T1, warehouseId],
     );

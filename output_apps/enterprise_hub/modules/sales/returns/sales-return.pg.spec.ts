@@ -100,7 +100,7 @@ describePg('Sales returns of delivery invoices on PostgreSQL (non-superuser, rea
     });
 
   const qty = async (sku: string) =>
-    Number((await q('SELECT quantity FROM erp_stock_items WHERE tenant_id=$1 AND sku=$2', [T1, sku]))[0].quantity);
+    Number((await scoped('SELECT quantity FROM erp_stock_items WHERE tenant_id=$1 AND sku=$2', [T1, sku]))[0].quantity);
   /** Sum of debit minus credit on the COGS account (5101), in rials. */
   const cogsBalance = async () =>
     Number(
