@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
+import { TenantScope } from '../../access/services/tenant-scope';
 
 /**
  * Persistence for the reconciliation assistant. Every statement carries `tenant_id` as its first
@@ -176,15 +177,43 @@ const DEFAULT_SETTINGS: SettingsRow = {
 
 @Injectable()
 export class ReconRepository {
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    @Optional()
+    private readonly scope?: TenantScope,
+  ) {}
 
-  runInTransaction<T>(work: (manager: EntityManager) => Promise<T>): Promise<T> {
+  private get tenantScope(): TenantScope | undefined {
+    if (this.scope) {
+      return this.scope;
+    }
+    if ((this.dataSource as { isInitialized?: boolean } | undefined)?.isInitialized) {
+      return new TenantScope(this.dataSource);
+    }
+    return undefined;
+  }
+
+  runInTransaction<T>(
+    work: (manager: EntityManager) => Promise<T>,
+    tenantId?: string,
+  ): Promise<T> {
+    const scope = this.tenantScope;
+    if (tenantId && scope) {
+      return scope.run(tenantId, work);
+    }
     return this.dataSource.transaction(work);
   }
 
   private q(manager?: EntityManager) {
-    const source = manager ?? this.dataSource;
-    return (async (sql: string, params?: unknown[]) => normaliseDates(rowsOf(await source.query(sql, params)))) as (
+    return (async (sql: string, params?: unknown[]) => {
+      const scope = this.tenantScope;
+      const tenantId = typeof params?.[0] === 'string' ? params[0] : undefined;
+      const raw =
+        scope && tenantId
+          ? await scope.within(tenantId, manager, (m) => m.query(sql, params))
+          : await (manager ?? this.dataSource).query(sql, params);
+      return normaliseDates(rowsOf(raw));
+    }) as (
       sql: string,
       params?: unknown[],
     ) => Promise<any[]>; // eslint-disable-line @typescript-eslint/no-explicit-any

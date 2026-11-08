@@ -424,7 +424,7 @@ export class BankingService {
         entry.id,
         manager,
       );
-    });
+    }, tenantId);
     return this.toLineDto(await this.requireLine(tenantId, line.id));
   }
 
