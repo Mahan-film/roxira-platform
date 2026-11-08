@@ -46,6 +46,9 @@ export class JournalEntryEntity {
   @Column({ type: 'integer', name: 'permanent_fiscal_year_id', nullable: true })
   permanentFiscalYearId: number | null;
 
+  @Column({ type: 'varchar', length: 128, name: 'idempotency_key', nullable: true })
+  idempotencyKey: string | null;
+
   @Index()
   @Column({ type: 'timestamp' })
   date: Date;

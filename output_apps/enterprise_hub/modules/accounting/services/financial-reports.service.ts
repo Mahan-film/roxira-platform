@@ -83,6 +83,7 @@ export interface LedgerReport {
   lines: Array<{
     journalEntryId: number;
     entryNumber: string;
+    permanentNumber: string | null;
     date: string;
     accountCode: string;
     accountName: string;
@@ -198,6 +199,7 @@ export class FinancialReportsService {
       period,
       lines: rows.map((row) => ({
         entryNumber: row.entryNumber,
+        permanentNumber: row.permanentNumber != null ? String(row.permanentNumber) : null,
         day: new Date(row.date).toISOString().slice(0, 10),
         accountCode: row.accountCode,
         accountName: row.accountName,
@@ -239,6 +241,7 @@ export class FinancialReportsService {
         lines: ledger.lines.map((line) => ({
           journalEntryId: line.journalEntryId,
           entryNumber: line.entryNumber,
+          permanentNumber: line.permanentNumber,
           day: line.date,
           description: line.description,
           debit: line.debit,
@@ -491,6 +494,7 @@ export class FinancialReportsService {
         return {
           journalEntryId: Number(line.journalEntryId),
           entryNumber: line.entryNumber,
+          permanentNumber: line.permanentNumber != null ? String(line.permanentNumber) : null,
           date: new Date(line.date).toISOString().slice(0, 10),
           accountCode: line.accountCode,
           accountName: line.accountName,

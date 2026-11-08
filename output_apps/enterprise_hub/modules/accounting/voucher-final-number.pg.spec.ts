@@ -256,4 +256,34 @@ describePg('Final voucher number on PostgreSQL (non-superuser, FORCE RLS)', () =
     expect(rows).toHaveLength(0);
     expect(await counter(T1, fyY1)).toBe(before);
   });
+
+  it('an idempotency key returns the original voucher on replay without consuming a new permanent number', async () => {
+    const key = `idem-test-${Date.now()}`;
+    const first = await accounting.createJournalEntry(T1, {
+      ...(pair('FN-IDEM-1', '2026-09-20') as object),
+      idempotencyKey: key,
+    } as never);
+    expect(first.permanentNumber).not.toBeNull();
+
+    const countBeforeReplay = await counter(T1, fyY1);
+
+    // Replay with same idempotency key
+    const replayed = await accounting.createJournalEntry(T1, {
+      ...(pair('FN-IDEM-2-DIFF-WORKING', '2026-09-20') as object),
+      idempotencyKey: key,
+    } as never);
+    expect(replayed.id).toBe(first.id);
+    expect(replayed.entryNumber).toBe(first.entryNumber);
+    expect(replayed.permanentNumber).toBe(first.permanentNumber);
+
+    // No new permanent number was consumed
+    expect(await counter(T1, fyY1)).toBe(countBeforeReplay);
+
+    // Cross-tenant: Tenant B can use the exact same idempotency key independently
+    const tenantBEntry = await accounting.createJournalEntry(T2, {
+      ...(pair('FN-IDEM-T2', '2026-09-20') as object),
+      idempotencyKey: key,
+    } as never);
+    expect(tenantBEntry.id).not.toBe(first.id);
+  });
 });

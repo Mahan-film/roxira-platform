@@ -122,6 +122,16 @@ export class CreateJournalEntryDto {
   entryNumber?: string;
 
   @ApiPropertyOptional({
+    description: 'کلید یکتایی/عدم تکرار سند (Idempotency Key)؛ در ارسال مجدد همان سند برگردانده می‌شود.',
+    example: 'req-pos-12345',
+  })
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  idempotencyKey?: string;
+
+  @ApiPropertyOptional({
     description: 'تاریخ سند (ISO 8601)؛ در صورت عدم ارسال، زمان جاری سرور',
     example: '2026-09-11T10:00:00.000Z',
   })

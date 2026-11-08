@@ -115,6 +115,7 @@ export function bookSheet(book: Book): ReportTable {
 
 export interface JournalBookLine {
   entryNumber: string;
+  permanentNumber?: string | null;
   /** YYYY-MM-DD. */
   day: string;
   accountCode: string;
@@ -133,7 +134,8 @@ export function journalBook(lines: JournalBookLine[], subtitle: string, jalali: 
     columns: [
       { title: 'ردیف', width: 0.5 },
       { title: 'تاریخ', width: 0.8 },
-      { title: 'سند', width: 0.7 },
+      { title: 'شماره قطعی', width: 0.7 },
+      { title: 'شماره سند', width: 0.7 },
       { title: 'کد حساب', width: 0.7 },
       { title: 'نام حساب', width: 1.6 },
       { title: 'شرح', width: 2.2 },
@@ -141,7 +143,15 @@ export function journalBook(lines: JournalBookLine[], subtitle: string, jalali: 
     sections: [
       {
         lines: lines.map((line, i) => ({
-          cells: [String(i + 1), jalali(line.day), line.entryNumber, line.accountCode, line.accountName, line.description],
+          cells: [
+            String(i + 1),
+            jalali(line.day),
+            line.permanentNumber ? String(line.permanentNumber) : '—',
+            line.entryNumber,
+            line.accountCode,
+            line.accountName,
+            line.description,
+          ],
           debit: line.debit,
           credit: line.credit,
         })),
@@ -155,7 +165,15 @@ export interface LedgerBookAccount {
   name: string;
   opening: bigint;
   /** Lines of the account and the accounts under it, in date order. */
-  lines: Array<{ journalEntryId: number; entryNumber: string; day: string; description: string; debit: bigint; credit: bigint }>;
+  lines: Array<{
+    journalEntryId: number;
+    entryNumber: string;
+    permanentNumber?: string | null;
+    day: string;
+    description: string;
+    debit: bigint;
+    credit: bigint;
+  }>;
 }
 
 /**
@@ -170,7 +188,8 @@ export function generalLedgerBook(accounts: LedgerBookAccount[], subtitle: strin
     withBalance: true,
     columns: [
       { title: 'تاریخ', width: 0.8 },
-      { title: 'سند', width: 0.7 },
+      { title: 'شماره قطعی', width: 0.7 },
+      { title: 'شماره سند', width: 0.7 },
       { title: 'شرح', width: 2.6 },
     ],
     sections: accounts
@@ -184,7 +203,12 @@ export function generalLedgerBook(accounts: LedgerBookAccount[], subtitle: strin
             row.credit += line.credit;
           } else {
             byEntry.set(line.journalEntryId, {
-              cells: [jalali(line.day), line.entryNumber, line.description],
+              cells: [
+                jalali(line.day),
+                line.permanentNumber ? String(line.permanentNumber) : '—',
+                line.entryNumber,
+                line.description,
+              ],
               debit: line.debit,
               credit: line.credit,
             });

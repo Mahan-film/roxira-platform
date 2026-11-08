@@ -250,6 +250,19 @@ export class AccountingRepository {
     });
   }
 
+  async findEntryByIdempotencyKey(
+    tenantId: string,
+    idempotencyKey: string,
+    manager?: EntityManager,
+  ): Promise<JournalEntryEntity | null> {
+    return this.scope.within(tenantId, manager, async (m) => {
+      return m.getRepository(JournalEntryEntity).findOne({
+        where: { idempotencyKey, tenantId },
+        relations: { lines: true },
+      });
+    });
+  }
+
   /** The reversing entry of `entryId`, if one was posted. */
   async findReversalOf(
     tenantId: string,
@@ -397,6 +410,7 @@ export class AccountingRepository {
       status: JournalEntryStatus;
       reversesEntryId?: number | null;
       entryType?: JournalEntryType;
+      idempotencyKey?: string | null;
     },
     lineInputs: JournalLineInput[],
     outerManager?: EntityManager,
@@ -418,12 +432,22 @@ export class AccountingRepository {
             status: header.status,
             reversesEntryId: header.reversesEntryId ?? null,
             entryType: header.entryType ?? JournalEntryType.NORMAL,
+            idempotencyKey: header.idempotencyKey ?? null,
           })
           .orIgnore()
           .returning('id')
           .execute()
       ).raw;
       if (inserted.length === 0) {
+        if (header.idempotencyKey) {
+          const existing = await manager.findOne(JournalEntryEntity, {
+            where: { tenantId, idempotencyKey: header.idempotencyKey },
+            relations: { lines: true },
+          });
+          if (existing) {
+            return existing;
+          }
+        }
         throw new DuplicateEntryNumberError(header.entryNumber);
       }
       const entryId = inserted[0].id;

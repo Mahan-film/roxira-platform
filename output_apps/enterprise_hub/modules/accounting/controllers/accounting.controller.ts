@@ -109,9 +109,13 @@ export class AccountingController {
     @Req() request: AuthenticatedRequest,
     @Body() dto: CreateJournalEntryDto,
   ): Promise<JournalEntryResponseDto> {
+    const headerKey =
+      (request.headers['idempotency-key'] as string | undefined) ||
+      (request.headers['x-idempotency-key'] as string | undefined);
+    const idempotencyKey = dto.idempotencyKey?.trim() || headerKey?.trim() || undefined;
     return this.accountingService.createJournalEntry(
       this.tenantIdOf(request),
-      dto,
+      idempotencyKey ? { ...dto, idempotencyKey } : dto,
     );
   }
 

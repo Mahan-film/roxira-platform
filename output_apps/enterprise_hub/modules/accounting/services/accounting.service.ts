@@ -670,6 +670,18 @@ export class AccountingService {
   ): Promise<JournalEntryResponseDto> {
     await this.ensureDefaultAccounts(tenantId, manager);
 
+    const idempotencyKey = dto.idempotencyKey?.trim() || null;
+    if (idempotencyKey) {
+      const existing = await this.accountingRepository.findEntryByIdempotencyKey(
+        tenantId,
+        idempotencyKey,
+        manager,
+      );
+      if (existing) {
+        return this.toEntryDto(existing);
+      }
+    }
+
     const status = dto.status ?? JournalEntryStatus.POSTED;
     const normalizedLines = dto.lines.map((line) => this.normalizeLine(line));
 
@@ -716,6 +728,7 @@ export class AccountingService {
             status,
             reversesEntryId: options.reversesEntryId ?? null,
             entryType: options.entryType,
+            idempotencyKey,
           },
           lineInputs,
           manager,
