@@ -163,3 +163,11 @@ test("activeHref matches the longest href, with /app exact-match only", () => {
   assert.equal(activeHref("/app/unknown", hrefs), null);
   assert.equal(activeHref("/damages", hrefs), "/damages");
 });
+
+test("the report builder has a menu entry under accounting reports and its page exists", () => {
+  const leaf = MENU_GROUPS.flatMap((group) => group.items).find((item) => item.href === "/app/accounting/report-builder");
+  assert.ok(leaf);
+  assert.equal(leaf.module, "accounting");
+  assert.ok(routes.includes("/app/accounting/report-builder"));
+  assert.equal(activeHref("/app/accounting/report-builder", leafHrefs), "/app/accounting/report-builder");
+});

@@ -57,7 +57,7 @@ export function formatNumber(value?: number | null): string {
 }
 
 /** Money in rials, or in the unit the viewer chose (see `formatAmount`). */
-export function formatMoneyRial(value?: number | null, unit: MoneyUnit = "rial"): string {
+export function formatMoneyRial(value?: number | string | null, unit: MoneyUnit = "rial"): string {
   return formatAmount(value, unit);
 }
 

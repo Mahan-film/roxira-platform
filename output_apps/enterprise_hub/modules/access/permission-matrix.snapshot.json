@@ -181,6 +181,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "DELETE /report-builder/templates/:id (ReportBuilderController.deleteTemplate)": {
+    "policy": "accounting:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "GET /admin/entitlements/ (EntitlementsAdminController.listTenants)": {
     "policy": "platformAdmin"
   },
@@ -2157,6 +2168,39 @@
     "read_only": false,
     "legacy_member": false
   },
+  "GET /report-builder/datasets (ReportBuilderController.getDatasets)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /report-builder/templates (ReportBuilderController.listTemplates)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /report-builder/templates/:id (ReportBuilderController.getTemplate)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /tenants/me (TenantsController.me)": {
     "policy": "anyMember",
     "owner": true,
@@ -4104,6 +4148,39 @@
     "owner": true,
     "admin": true,
     "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /report-builder/export (ReportBuilderController.exportReport)": {
+    "policy": "accounting:export",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /report-builder/query (ReportBuilderController.executeQuery)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "POST /report-builder/templates (ReportBuilderController.saveTemplate)": {
+    "policy": "accounting:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
     "sales": false,
     "cheque_reviewer": false,
     "hr": false,

@@ -183,6 +183,29 @@ export async function apiDownloadWithParams(
   return response.blob();
 }
 
+/** Authenticated POST that returns a file (report export). Same token renewal and errors as `apiRequest`. */
+export async function apiDownloadPost(path: string, body: unknown): Promise<Blob> {
+  const send = (token: string | null): Promise<Response> =>
+    fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    });
+  const token = await getFreshAccessToken();
+  let response = await send(token);
+  if (response.status === 401 && token) {
+    const renewed = await refreshStoredSession(true);
+    if (renewed.status === "ok") {
+      response = await send(renewed.session.accessToken);
+    }
+  }
+  if (!response.ok) {
+    throw await toApiError(response);
+  }
+  return response.blob();
+}
+
 /**
  * دریافت پاسخ متنی (مثلاً CSV) با همان توکن و خطای `apiRequest`.
  */
