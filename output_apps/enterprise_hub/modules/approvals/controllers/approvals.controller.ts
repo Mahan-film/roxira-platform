@@ -1,9 +1,9 @@
 import { Body, Controller, Get, HttpStatus, Param, Post, Query, Req } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { AccessRequest, requireAccess } from '../access/access-context';
-import { AccessAction, AccessModule } from '../access/catalogue';
-import { ModuleAccess, RequireAction } from '../access/decorators';
-import { ApprovalRequestStatus } from './constants/approvals.constants';
+import { AccessRequest, requireAccess } from '../../access/access-context';
+import { AccessAction, AccessModule } from '../../access/catalogue';
+import { AnyMember, ModuleAccess, RequireAction } from '../../access/decorators';
+import { ApprovalRequestStatus } from '../constants/approvals.constants';
 import {
   ApprovalDelegationView,
   ApprovalRequestView,
@@ -13,14 +13,14 @@ import {
   CreateDelegationDto,
   DecideApprovalStepDto,
   RequestGroupBPolicyChangeDto,
-} from './dto/approvals.dto';
-import { ApprovalsService } from './services/approvals.service';
+} from '../dto/approvals.dto';
+import { ApprovalsService } from '../services/approvals.service';
 
 @ApiTags('Approvals - موتور تأیید چندمرحله‌ای')
 @ApiBearerAuth()
 @ModuleAccess(AccessModule.MEMBERS)
 @Controller('approvals')
-export class ApprovalsHttpHandler {
+export class ApprovalsController {
   constructor(private readonly approvals: ApprovalsService) {}
 
   @Get('rules')
@@ -91,6 +91,9 @@ export class ApprovalsHttpHandler {
     return this.approvals.listRequests(requireAccess(request).tenantId, status);
   }
 
+  // Any member may open a request by id; the step's approver or delegate must be able to read what they decide.
+  // The service enforces who may DECIDE; reading one request by its unguessable uuid exposes no list.
+  @AnyMember()
   @Get('requests/:id')
   @ApiOperation({ summary: 'جزئیات یک درخواست تأیید و تصمیم‌های مراحل آن' })
   @ApiResponse({ status: HttpStatus.OK })
@@ -133,7 +136,10 @@ export class ApprovalsHttpHandler {
     );
   }
 
-  @RequireAction(AccessAction.APPROVE)
+  // Approvers are named by role or delegation (an accountant, a delegate), not by the MEMBERS module, so the
+  // guard only needs a membership; ApprovalsService.decide refuses anyone who is not the step approver or an
+  // active delegate, and never the requester (maker-checker).
+  @AnyMember()
   @Post('requests/:id/decide')
   @ApiOperation({ summary: 'تأیید یا رد مرحلهٔ جاری درخواست تأیید' })
   @ApiResponse({ status: HttpStatus.OK })
