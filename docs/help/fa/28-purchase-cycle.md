@@ -1,11 +1,15 @@
 <!-- Sources (origin/main):
   output_apps/enterprise_hub/modules/inventory/purchasing/purchase.controller.ts
   output_apps/enterprise_hub/modules/inventory/purchasing/purchase.dto.ts
+  output_apps/enterprise_hub/modules/inventory/purchasing/purchase-cycle.service.ts
   output_apps/enterprise_hub/modules/inventory/purchasing/supplier-invoice.controller.ts
+  output_apps/enterprise_hub/modules/inventory/purchasing/supplier-invoice.service.ts
   output_apps/enterprise_hub/modules/inventory/purchasing/supplier-invoice.dto.ts
+  output_apps/enterprise_hub/modules/inventory/purchasing/invoice-match.domain.ts
   output_apps/enterprise_hub/modules/inventory/purchasing/landed-cost.controller.ts
   output_apps/enterprise_hub/modules/inventory/purchasing/landed-cost.dto.ts
   output_apps/enterprise_hub/modules/inventory/purchasing/landed-cost.domain.ts
+  output_apps/enterprise_hub/modules/inventory/purchasing/purchase-posting.adapter.ts
 -->
 
 # چرخهٔ خرید، تطبیق سه‌جانبه (3-Way Match) و هزینهٔ سربار خرید
@@ -18,18 +22,19 @@
 - **تبدیل درخواست به سفارش (`POST .../requests/:id/convert`)**: با تعیین کد تأمین‌کننده (`supplierCode`)، تاریخ سفارش (`orderDate`) و جدول قیمت واحد هر کالا (`prices` به صدم ریال)، درخواست به یک سفارش خرید تبدیل می‌شود.
 - **ثبت مستقیم سفارش خرید (`POST /enterprise-hub/inventory/purchasing/orders`)**: ثبت سفارش خرید با سطرهای شامل `sku`، `quantity` و `unitPrice`.
 - **تأیید و لغو سفارش**:
-  - `POST .../orders/:id/approve`: تأیید سفارش خرید. بر اساس تفکیک وظایف، **ثبت‌کنندهٔ سفارش نمی‌تواند خودش آن را تأیید کند**.
-  - `POST .../orders/:id/cancel`: لغو سفارش خرید تا پیش از ثبت رسید کالا روی آن.
+  - `POST .../orders/:id/approve`: تأیید سفارش خرید (وضعیت `DRAFT` به `APPROVED`) و نیازمند دسترسی تأیید (`approve`). در این نسخه، جلوگیری از اینکه ثبت‌کنندهٔ سفارش خودش آن را تأیید کند **پیاده‌سازی نشده** است.
+  - `POST .../orders/:id/cancel`: لغو سفارش خرید.
+  - `POST .../orders/:id/close`: بستن سفارش خرید.
 
 ## ۲. رسید کالا و حساب واسط GRNI
 
-- با `POST /enterprise-hub/inventory/purchasing/orders/:id/receipts` دریافت کامل یا جزئی سطرهای یک سفارش تأییدشده ثبت می‌شود (با امکان تعیین وزن `weight` به هزارم کیلوگرم برای تسهیم کرایه حمل و `idempotencyKey` برای جلوگیری از تکرار).
+- با `POST /enterprise-hub/inventory/purchasing/orders/:id/receipts` دریافت کامل یا جزئی سطرهای یک سفارش تأییدشده ثبت می‌شود (با امکان تعیین وزن `weight` برای تسهیم کرایه حمل و `idempotencyKey` برای جلوگیری از تکرار).
 - **کنترل اضافه‌دریافت**: مجموع مقدار دریافتی هر سطر سفارش حداکثر تا سقف تلورانس اضافه‌دریافت سازمان (`overReceiptToleranceBp` بر حسب صدم درصد) مجاز است.
 - **ثبت لایهٔ FIFO و سند حسابداری**: به محض ثبت رسید، لایهٔ FIFO به بهای سفارش در انبار ایجاد شده و سند حسابداری **بدهکار موجودی کالا (`INVENTORY`) / بستانکار کالای رسیدهٔ فاکتورنشده (`GRNI`)** صادر می‌شود.
 
 ## ۳. صورتحساب تأمین‌کننده و تطبیق سه‌جانبه (3-Way Match)
 
-هنگام ثبت صورتحساب تأمین‌کننده (`POST /enterprise-hub/inventory/purchasing/supplier-invoices`)، هر سطر صورتحساب (`receiptLineId`، `quantity`، `unitPrice`) به صورت خودکار با **مقدار رسید کالا** و **قیمت واحد سفارش خرید** مقایسه می‌شود:
+صورتحساب تأمین‌کننده با `POST /enterprise-hub/inventory/purchasing/orders/:orderId/invoices` ثبت می‌شود (فهرست: `GET /enterprise-hub/inventory/purchasing/invoices`). هر سطر صورتحساب (`receiptLineId`، `quantity`، `unitPrice`) به صورت خودکار با **مقدار رسید کالا** و **قیمت واحد سفارش خرید** مقایسه می‌شود:
 
 - **تلورانس‌های تطبیق** (قابل تنظیم از طریق `PUT /enterprise-hub/inventory/purchasing/settings` یا صفحهٔ `/app/settings/policies`):
   - `purchase.three_way.qty_excess_tolerance_bp`: تلورانس مقدار اضافهٔ صورتحساب نسبت به رسید (صدم درصد).
@@ -40,8 +45,8 @@
 
 ## ۴. پذیرش مغایرت و قطعی‌سازی صورتحساب خرید
 
-- **پذیرش صورتحساب معلق (`POST .../supplier-invoices/:id/accept`)**: نیازمند ثبت دلیل (`note`، بین ۳ تا ۵۰۰ نویسه) است. قاعدهٔ سازمانی `purchase.invoice_review.reviewer_rule` تعیین می‌کند که آیا تأییدکننده حتماً باید غیر از ثبت‌کننده باشد (`always_differs`، پیش‌فرض)، فقط در صورت نبود تأییدکنندهٔ دیگر مجاز باشد (`differs_unless_sole_approver`) یا ثبت‌کننده هم بتواند تأیید کند (`creator_may_accept`، با ثبت پرچم `acceptedByCreator`).
-- **قطعی‌سازی (`POST .../supplier-invoices/:id/post`)**: برای صورتحساب‌های `MATCHED` یا پذیرفته‌شده اجرا می‌شود و سند حسابداری را ثبت می‌کند: تسویهٔ حساب واسط **`GRNI`**، ثبت **انحراف قیمت خرید (`PPV`)**، ثبت **مالیات بر ارزش افزودهٔ خرید (`VAT`)** و بستانکار کردن **حساب‌های پرداختنی تأمین‌کننده (`AP`)**.
+- **پذیرش صورتحساب معلق (`POST .../supplier-invoices/invoices/:id/accept`)**: نیازمند ثبت دلیل (`note`، بین ۳ تا ۵۰۰ نویسه) است. قاعدهٔ سازمانی `purchase.invoice_review.reviewer_rule` تعیین می‌کند که آیا تأییدکننده حتماً باید غیر از ثبت‌کننده باشد (`always_differs`، پیش‌فرض)، فقط در صورت نبود تأییدکنندهٔ دیگر مجاز باشد (`differs_unless_sole_approver`) یا ثبت‌کننده هم بتواند تأیید کند (`creator_may_accept`، با ثبت پرچم `acceptedByCreator`).
+- **قطعی‌سازی (`POST .../supplier-invoices/invoices/:id/post`)**: برای صورتحساب‌های `MATCHED` یا پذیرفته‌شده اجرا می‌شود و سند حسابداری را ثبت می‌کند: تسویهٔ حساب واسط **`GRNI`**، ثبت **انحراف قیمت خرید** (نقش حساب `PRICE_VARIANCE`)، ثبت **مالیات بر ارزش افزودهٔ خرید (`VAT`)** و بستانکار کردن **حساب‌های پرداختنی تأمین‌کننده (`AP`)**.
 
 ## ۵. تخصیص هزینهٔ سربار خرید (Landed Cost)
 
