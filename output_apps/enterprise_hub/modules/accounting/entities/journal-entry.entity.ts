@@ -46,6 +46,13 @@ export class JournalEntryEntity {
   @Column({ type: 'integer', name: 'permanent_fiscal_year_id', nullable: true })
   permanentFiscalYearId: number | null;
 
+  @Column({ type: 'varchar', length: 128, name: 'idempotency_key', nullable: true })
+  idempotencyKey: string | null;
+
+  /** sha256 of the normalised create request; a replay must carry the same body. */
+  @Column({ type: 'varchar', length: 64, name: 'idempotency_fingerprint', nullable: true })
+  idempotencyFingerprint: string | null;
+
   @Index()
   @Column({ type: 'timestamp' })
   date: Date;

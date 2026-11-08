@@ -1,6 +1,7 @@
 import { AccessAction, AccessModule } from '../../access/catalogue';
 import { ModuleAccess, RequireAction } from '../../access/decorators';
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -109,9 +110,16 @@ export class AccountingController {
     @Req() request: AuthenticatedRequest,
     @Body() dto: CreateJournalEntryDto,
   ): Promise<JournalEntryResponseDto> {
+    const headerKey =
+      (request.headers['idempotency-key'] as string | undefined) ||
+      (request.headers['x-idempotency-key'] as string | undefined);
+    const idempotencyKey = dto.idempotencyKey?.trim() || headerKey?.trim() || undefined;
+    if (idempotencyKey && idempotencyKey.length > 128) {
+      throw new BadRequestException('Idempotency-Key must be at most 128 characters.');
+    }
     return this.accountingService.createJournalEntry(
       this.tenantIdOf(request),
-      dto,
+      idempotencyKey ? { ...dto, idempotencyKey } : dto,
     );
   }
 

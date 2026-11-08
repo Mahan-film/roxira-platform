@@ -29,6 +29,7 @@ export interface LedgerLineRow {
   id: number;
   journalEntryId: number;
   entryNumber: string;
+  permanentNumber?: string | null;
   date: Date;
   accountCode: string;
   accountName: string;
@@ -211,6 +212,7 @@ export class LedgerReportRepository {
     const party = filter.partyCode ? `AND l.party_code = $6` : '';
     return this.scope.run(tenantId, (m) => m.query(
       `SELECT l.id AS "id", l.journal_entry_id AS "journalEntryId", e.entry_number AS "entryNumber",
+              e.permanent_number AS "permanentNumber",
               e.date AS "date", a.code AS "accountCode", a.name AS "accountName",
               l.party_code AS "partyCode", COALESCE(l.description, e.description) AS "description",
               l.debit AS "debit", l.credit AS "credit"
