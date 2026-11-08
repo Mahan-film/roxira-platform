@@ -3,7 +3,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
 import { parseScaled } from '../../accounting/money';
-import { MONEY_SCALE, QUANTITY_SCALE } from '../constants/inventory.constants';
+import {
+  assertValidQuantityScale,
+  MONEY_SCALE,
+  QUANTITY_SCALE,
+} from '../constants/inventory.constants';
 import { FifoBatchEntity } from '../entities/fifo-batch.entity';
 import { StoreEntity } from '../entities/store.entity';
 import { StockItemEntity } from '../entities/stock-item.entity';
@@ -609,6 +613,8 @@ export class InventoryRepository {
 
         await this.assertWarehouseExists(manager, tenantId, input.warehouseId);
 
+        assertValidQuantityScale(input.quantity, QUANTITY_SCALE, 'مقدار ورودی کالا');
+
         const batch = manager.create(FifoBatchEntity, {
           tenantId,
           sku: input.sku,
@@ -671,6 +677,7 @@ export class InventoryRepository {
 
         const availableBatches = await query.getMany();
 
+        assertValidQuantityScale(input.quantity, QUANTITY_SCALE, 'مقدار خروجی کالا');
         let remaining = this.roundQuantity(input.quantity);
         const layers: ConsumedLayer[] = [];
 
