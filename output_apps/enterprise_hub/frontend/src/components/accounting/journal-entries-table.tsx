@@ -1,13 +1,16 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useState, useTransition } from "react";
-import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, RefreshCwIcon } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, RefreshCwIcon, Undo2 } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Drawer } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
-import { RowActionsMenu } from "@/components/ui/row-actions-menu";
+import { JalaliDateInput } from "@/components/ui/jalali-date-input";
+import { Label } from "@/components/ui/label";
+import { RowActionsMenu, type RowAction } from "@/components/ui/row-actions-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -18,16 +21,22 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-import { listJournalEntries, copyJournalEntry } from "@/lib/api/accounting-client";
+import {
+  changeJournalEntryStatus,
+  copyJournalEntry,
+  listJournalEntries,
+  reverseJournalEntry,
+} from "@/lib/api/accounting-client";
 import { ApiClientError } from "@/lib/api/http-client";
 import { formatPersianDate, formatRial } from "@/lib/format";
+import { printVoucher } from "@/lib/print/open-print-window";
+import { getVoucherAvailableActions } from "@/lib/voucher-actions";
 import {
   JOURNAL_ENTRY_STATUS_LABELS,
   JournalEntryStatus,
   type JournalEntryResponse,
   type PaginatedJournalEntryResponse,
 } from "@/types/accounting";
-import { printVoucher } from "@/lib/print/open-print-window";
 
 const PAGE_SIZE = 10;
 
@@ -37,21 +46,43 @@ interface JournalEntriesTableProps {
   onEdit?: (entry: JournalEntryResponse) => void;
 }
 
+const statusBadgeVariant = (status: JournalEntryStatus) => {
+  switch (status) {
+    case JournalEntryStatus.POSTED:
+      return "default";
+    case JournalEntryStatus.TEMPORARY:
+      return "outline";
+    case JournalEntryStatus.DRAFT:
+      return "secondary";
+    case JournalEntryStatus.VOID:
+      return "destructive";
+    default:
+      return "secondary";
+  }
+};
+
 /**
- * جدول دفتر روزنامه (General Journal) با صفحه‌بندی و نمایش بازشوی سطرهای
- * بدهکار/بستانکار هر سند. متصل به `GET /enterprise-hub/accounting/journal-entries`.
+ * جدول دفتر روزنامه (General Journal) با صفحه‌بندی، نمایش بازشوی سطرهای
+ * بدهکار/بستانکار و عملیات کامل چرخه عمر سند: پیش‌نویس، موقت، قطعی‌سازی و برگشت سند.
  */
 export function JournalEntriesTable({ refreshKey = 0, onEdit }: JournalEntriesTableProps) {
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState("");
   const [entryNumber, setEntryNumber] = useState("");
-  const [response, setResponse] = useState<PaginatedJournalEntryResponse | null>(
-    null,
-  );
+  const [response, setResponse] = useState<PaginatedJournalEntryResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [copyMessage, setCopyMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [copyingId, setCopyingId] = useState<number | null>(null);
+  const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+
+  // Modals for post and reverse actions
+  const [postingEntry, setPostingEntry] = useState<JournalEntryResponse | null>(null);
+  const [reversingEntry, setReversingEntry] = useState<JournalEntryResponse | null>(null);
+  const [reverseReason, setReverseReason] = useState("");
+  const [reverseDate, setReverseDate] = useState("");
+  const [submittingModal, setSubmittingModal] = useState(false);
+
   const [isPending, startTransition] = useTransition();
 
   const fetchRecords = useCallback(
@@ -85,12 +116,12 @@ export function JournalEntriesTable({ refreshKey = 0, onEdit }: JournalEntriesTa
 
   const handleCopy = useCallback(
     async (entry: JournalEntryResponse) => {
-      setCopyMessage(null);
+      setSuccessMessage(null);
       setErrorMessage(null);
       setCopyingId(entry.id);
       try {
         const copy = await copyJournalEntry(entry.id);
-        setCopyMessage(`سند «${copy.entryNumber}» به‌صورت پیش‌نویس کپی شد.`);
+        setSuccessMessage(`سند «${copy.entryNumber}» به‌صورت پیش‌نویس کپی شد.`);
         refresh();
       } catch (error) {
         if (error instanceof ApiClientError) {
@@ -103,6 +134,86 @@ export function JournalEntriesTable({ refreshKey = 0, onEdit }: JournalEntriesTa
       }
     },
     [refresh],
+  );
+
+  const handleChangeStatus = useCallback(
+    async (entry: JournalEntryResponse, targetStatus: JournalEntryStatus) => {
+      setSuccessMessage(null);
+      setErrorMessage(null);
+      setActionLoadingId(entry.id);
+      try {
+        const updated = await changeJournalEntryStatus(entry.id, targetStatus, entry.version);
+        const statusLabel = JOURNAL_ENTRY_STATUS_LABELS[targetStatus] ?? targetStatus;
+        setSuccessMessage(`وضعیت سند «${updated.entryNumber}» به «${statusLabel}» تغییر یافت.`);
+        refresh();
+      } catch (error) {
+        if (error instanceof ApiClientError) {
+          setErrorMessage(error.details.join(" | "));
+        } else {
+          setErrorMessage("تغییر وضعیت سند انجام نشد؛ ارتباط با سرور برقرار نشد.");
+        }
+      } finally {
+        setActionLoadingId(null);
+      }
+    },
+    [refresh],
+  );
+
+  const handlePostConfirm = useCallback(async () => {
+    if (!postingEntry) return;
+    setSubmittingModal(true);
+    setSuccessMessage(null);
+    setErrorMessage(null);
+    try {
+      const updated = await changeJournalEntryStatus(
+        postingEntry.id,
+        JournalEntryStatus.POSTED,
+        postingEntry.version,
+      );
+      setSuccessMessage(
+        `سند «${updated.entryNumber}» با موفقیت قطعی شد.${updated.permanentNumber ? ` (شماره قطعی: ${updated.permanentNumber})` : ""}`,
+      );
+      setPostingEntry(null);
+      refresh();
+    } catch (error) {
+      if (error instanceof ApiClientError) {
+        setErrorMessage(error.details.join(" | "));
+      } else {
+        setErrorMessage("قطعی‌سازی سند انجام نشد؛ ارتباط با سرور برقرار نشد.");
+      }
+    } finally {
+      setSubmittingModal(false);
+    }
+  }, [postingEntry, refresh]);
+
+  const handleReverseSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!reversingEntry) return;
+      setSubmittingModal(true);
+      setSuccessMessage(null);
+      setErrorMessage(null);
+      try {
+        const reversed = await reverseJournalEntry(reversingEntry.id, {
+          date: reverseDate || undefined,
+          reason: reverseReason.trim() || undefined,
+        });
+        setSuccessMessage(
+          `سند معکوس «${reversed.entryNumber}» برای برگشت سند «${reversingEntry.entryNumber}» با موفقیت ثبت شد.`,
+        );
+        setReversingEntry(null);
+        refresh();
+      } catch (error) {
+        if (error instanceof ApiClientError) {
+          setErrorMessage(error.details.join(" | "));
+        } else {
+          setErrorMessage("برگشت سند انجام نشد؛ ارتباط با سرور برقرار نشد.");
+        }
+      } finally {
+        setSubmittingModal(false);
+      }
+    },
+    [reversingEntry, reverseDate, reverseReason, refresh],
   );
 
   useEffect(() => {
@@ -132,7 +243,7 @@ export function JournalEntriesTable({ refreshKey = 0, onEdit }: JournalEntriesTa
               placeholder="جست‌وجوی شماره سند"
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
-              className="w-48"
+              className="w-48 text-xs font-mono"
             />
             <Button type="submit" variant="outline" size="sm">
               جست‌وجو
@@ -153,15 +264,17 @@ export function JournalEntriesTable({ refreshKey = 0, onEdit }: JournalEntriesTa
 
       {errorMessage && (
         <Alert variant="destructive">
-          <AlertTitle>خطا در دریافت اسناد</AlertTitle>
+          <AlertCircle className="size-4" />
+          <AlertTitle>خطا در عملیات</AlertTitle>
           <AlertDescription>{errorMessage}</AlertDescription>
         </Alert>
       )}
 
-      {copyMessage && (
-        <Alert>
-          <AlertTitle>کپی سند</AlertTitle>
-          <AlertDescription>{copyMessage}</AlertDescription>
+      {successMessage && (
+        <Alert className="border-emerald-500/50 text-emerald-700 dark:text-emerald-300">
+          <CheckCircle2 className="size-4" />
+          <AlertTitle>عملیات موفق</AlertTitle>
+          <AlertDescription>{successMessage}</AlertDescription>
         </Alert>
       )}
 
@@ -194,6 +307,66 @@ export function JournalEntriesTable({ refreshKey = 0, onEdit }: JournalEntriesTa
             ) : response && response.data.length > 0 ? (
               response.data.map((entry) => {
                 const isExpanded = expandedId === entry.id;
+                const isBusy = actionLoadingId === entry.id || copyingId === entry.id;
+                const caps = getVoucherAvailableActions(entry.status);
+
+                const actions: RowAction[] = [
+                  {
+                    label: "چاپ سند",
+                    onSelect: () =>
+                      printVoucher(
+                        entry,
+                        JOURNAL_ENTRY_STATUS_LABELS[entry.status] ?? entry.status,
+                      ),
+                  },
+                  {
+                    label: "کپی سند",
+                    disabled: isBusy || !caps.canCopy,
+                    onSelect: () => void handleCopy(entry),
+                  },
+                  {
+                    label: "ویرایش",
+                    disabled: !onEdit || !caps.canEdit,
+                    onSelect: () => onEdit?.(entry),
+                  },
+                ];
+
+                if (caps.canTemporary) {
+                  actions.push({
+                    label: "تبدیل به موقت",
+                    disabled: isBusy,
+                    onSelect: () => void handleChangeStatus(entry, JournalEntryStatus.TEMPORARY),
+                  });
+                }
+
+                if (caps.canDraft) {
+                  actions.push({
+                    label: "تبدیل به پیش‌نویس",
+                    disabled: isBusy,
+                    onSelect: () => void handleChangeStatus(entry, JournalEntryStatus.DRAFT),
+                  });
+                }
+
+                if (caps.canPost) {
+                  actions.push({
+                    label: "ثبت قطعی (قطعی‌سازی)",
+                    disabled: isBusy,
+                    onSelect: () => setPostingEntry(entry),
+                  });
+                }
+
+                if (caps.canReverse) {
+                  actions.push({
+                    label: "برگشت سند",
+                    disabled: isBusy,
+                    onSelect: () => {
+                      setReversingEntry(entry);
+                      setReverseReason("");
+                      setReverseDate("");
+                    },
+                  });
+                }
+
                 return (
                   <Fragment key={entry.id}>
                     <TableRow>
@@ -202,9 +375,7 @@ export function JournalEntriesTable({ refreshKey = 0, onEdit }: JournalEntriesTa
                           type="button"
                           variant="ghost"
                           size="icon-xs"
-                          onClick={() =>
-                            setExpandedId(isExpanded ? null : entry.id)
-                          }
+                          onClick={() => setExpandedId(isExpanded ? null : entry.id)}
                           title="نمایش سطرها"
                         >
                           <ChevronDownIcon
@@ -216,7 +387,7 @@ export function JournalEntriesTable({ refreshKey = 0, onEdit }: JournalEntriesTa
                           />
                         </Button>
                       </TableCell>
-                      <TableCell className="whitespace-nowrap font-mono text-xs">
+                      <TableCell className="whitespace-nowrap font-mono text-xs font-semibold">
                         {entry.entryNumber}
                       </TableCell>
                       <TableCell className="whitespace-nowrap font-mono text-xs">
@@ -225,45 +396,20 @@ export function JournalEntriesTable({ refreshKey = 0, onEdit }: JournalEntriesTa
                       <TableCell className="whitespace-nowrap">
                         {formatPersianDate(entry.date)}
                       </TableCell>
-                      <TableCell>{entry.description}</TableCell>
-                      <TableCell className="whitespace-nowrap text-emerald-600 dark:text-emerald-400">
+                      <TableCell className="text-xs">{entry.description}</TableCell>
+                      <TableCell className="whitespace-nowrap text-emerald-600 dark:text-emerald-400 tabular-nums">
                         {formatRial(entry.totalDebit)}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap text-amber-600 dark:text-amber-400">
+                      <TableCell className="whitespace-nowrap text-amber-600 dark:text-amber-400 tabular-nums">
                         {formatRial(entry.totalCredit)}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary">
-                          {JOURNAL_ENTRY_STATUS_LABELS[entry.status]}
+                        <Badge variant={statusBadgeVariant(entry.status)}>
+                          {JOURNAL_ENTRY_STATUS_LABELS[entry.status] ?? entry.status}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <RowActionsMenu
-                          label="عملیات سند"
-                          actions={[
-                            {
-                              label: "چاپ",
-                              onSelect: () =>
-                                printVoucher(
-                                  entry,
-                                  JOURNAL_ENTRY_STATUS_LABELS[entry.status],
-                                ),
-                            },
-                            {
-                              label: "کپی سند",
-                              disabled: copyingId === entry.id,
-                              onSelect: () => void handleCopy(entry),
-                            },
-                            {
-                              label: "ویرایش",
-                              disabled:
-                                !onEdit ||
-                                entry.status === JournalEntryStatus.POSTED ||
-                                entry.status === JournalEntryStatus.VOID,
-                              onSelect: () => onEdit?.(entry),
-                            },
-                          ]}
-                        />
+                        <RowActionsMenu label="عملیات سند" actions={actions} />
                       </TableCell>
                     </TableRow>
                     {isExpanded && (
@@ -288,10 +434,10 @@ export function JournalEntriesTable({ refreshKey = 0, onEdit }: JournalEntriesTa
                                   )}
                                 </span>
                                 <span className="flex items-center gap-3">
-                                  <span className="text-emerald-600 dark:text-emerald-400">
+                                  <span className="text-emerald-600 dark:text-emerald-400 tabular-nums">
                                     بدهکار {formatRial(line.debit)}
                                   </span>
-                                  <span className="text-amber-600 dark:text-amber-400">
+                                  <span className="text-amber-600 dark:text-amber-400 tabular-nums">
                                     بستانکار {formatRial(line.credit)}
                                   </span>
                                 </span>
@@ -346,6 +492,145 @@ export function JournalEntriesTable({ refreshKey = 0, onEdit }: JournalEntriesTa
           </Button>
         </div>
       </div>
+
+      {/* Post Confirmation Drawer */}
+      <Drawer
+        open={Boolean(postingEntry)}
+        onClose={() => setPostingEntry(null)}
+        title={`قطعی‌سازی سند شماره ${postingEntry?.entryNumber ?? ""}`}
+        size="md"
+      >
+        <div className="space-y-4 p-4 text-sm">
+          <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-amber-800 dark:text-amber-200">
+            <p className="font-semibold text-xs">هشدار قطعی‌سازی سند</p>
+            <p className="mt-1 text-xs">
+              قطعی‌سازی سند حسابداری برگشت‌ناپذیر است. با قطعی‌سازی، سند در دفاتر قانونی ثبت شده،
+              شماره قطعی دائم به آن اختصاص می‌یابد و پس از آن ویرایش یا حذف سند غیرممکن خواهد بود
+              (هرگونه اصلاح صرفاً از طریق صدور سند معکوس انجام می‌شود).
+            </p>
+          </div>
+
+          <div className="rounded-lg border bg-muted/20 p-3 space-y-2 text-xs">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">شماره سند:</span>
+              <span className="font-mono font-semibold">{postingEntry?.entryNumber}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">تاریخ:</span>
+              <span>{postingEntry ? formatPersianDate(postingEntry.date) : ""}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">جمع کل سند:</span>
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                {postingEntry ? formatRial(postingEntry.totalDebit) : ""}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">شرح:</span>
+              <span>{postingEntry?.description}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-4 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={submittingModal}
+              onClick={() => setPostingEntry(null)}
+            >
+              انصراف
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={submittingModal}
+              onClick={handlePostConfirm}
+            >
+              {submittingModal ? "در حال ثبت قطعی..." : "تأیید و ثبت قطعی سند"}
+            </Button>
+          </div>
+        </div>
+      </Drawer>
+
+      {/* Reverse Voucher Drawer */}
+      <Drawer
+        open={Boolean(reversingEntry)}
+        onClose={() => setReversingEntry(null)}
+        title={`برگشت سند شماره ${reversingEntry?.entryNumber ?? ""}`}
+        size="md"
+      >
+        <form onSubmit={handleReverseSubmit} className="space-y-4 p-4 text-sm">
+          <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-xs">
+            <p className="font-semibold flex items-center gap-1.5">
+              <Undo2 className="size-3.5" />
+              صدور سند معکوس (برگشت از ثبت)
+            </p>
+            <p className="mt-1 text-muted-foreground">
+              اسناد قطعی هرگز دستکاری یا حذف نمی‌شوند. سیستم برای برگشت سند، یک سند معکوس خودکار با
+              جابجایی ستون‌های بدهکار و بستانکار صادر می‌کند تا دفاتر همواره دقیق و منطبق بر قانون بمانند.
+            </p>
+          </div>
+
+          <div className="rounded-lg border bg-muted/20 p-3 space-y-2 text-xs">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">سند مبدأ:</span>
+              <span className="font-mono font-semibold">{reversingEntry?.entryNumber}</span>
+            </div>
+            {reversingEntry?.permanentNumber && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">شماره دفتر قانونی:</span>
+                <span className="font-mono">{reversingEntry.permanentNumber}</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">مبلغ کل:</span>
+              <span className="font-semibold">{reversingEntry ? formatRial(reversingEntry.totalDebit) : ""}</span>
+            </div>
+          </div>
+
+          <div className="space-y-3 pt-2">
+            <div className="grid gap-1">
+              <Label htmlFor="reverse-date">تاریخ سند برگشتی (اختیاری)</Label>
+              <JalaliDateInput
+                id="reverse-date"
+                value={reverseDate}
+                onChange={setReverseDate}
+              />
+              <span className="text-[11px] text-muted-foreground">
+                در صورت خالی بودن، تاریخ جاری روز اعمال می‌شود.
+              </span>
+            </div>
+
+            <div className="grid gap-1">
+              <Label htmlFor="reverse-reason">دلیل برگشت سند (اختیاری)</Label>
+              <Input
+                id="reverse-reason"
+                placeholder="مثلاً اشتباه در سرفصل، انصراف خریدار، اصلاح دوره"
+                value={reverseReason}
+                maxLength={200}
+                onChange={(e) => setReverseReason(e.target.value)}
+                className="text-xs"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-4 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={submittingModal}
+              onClick={() => setReversingEntry(null)}
+            >
+              انصراف
+            </Button>
+            <Button type="submit" size="sm" disabled={submittingModal}>
+              {submittingModal ? "در حال صدور..." : "صدور سند معکوس"}
+            </Button>
+          </div>
+        </form>
+      </Drawer>
     </div>
   );
 }
