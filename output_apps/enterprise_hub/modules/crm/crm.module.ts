@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { TenantScope } from '../access/services/tenant-scope';
 import { JWT_DEFAULT_EXPIRES_IN } from '../auth/constants/auth.constants';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CrmController } from './controllers/crm.controller';
@@ -55,6 +56,7 @@ import { CrmService } from './services/crm.service';
     CrmActivityRepository,
     CustomerIdentityService,
     JwtAuthGuard,
+    TenantScope,
   ],
   exports: [CrmService, CrmRepository, CrmActivityRepository, CustomerIdentityService],
 })
