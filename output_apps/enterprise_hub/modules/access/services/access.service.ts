@@ -1,6 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { SELLABLE_MODULES, SYSTEM_ROLES, systemRolePermissions } from '../catalogue';
+import {
+  AmountLimitsMap,
+  FieldVisibilityMap,
+  RoleScope,
+  SELLABLE_MODULES,
+  SYSTEM_ROLES,
+  resolveCustomRoleFieldVisibility,
+  systemRoleFieldVisibility,
+  systemRolePermissions,
+} from '../catalogue';
 import { AccessContext } from '../access-context';
 import { EntitlementsRepository } from '../repositories/entitlements.repository';
 import { MembershipsRepository } from '../repositories/memberships.repository';
@@ -52,11 +61,31 @@ export class AccessService {
     if (!tenant || !tenant.isActive) return null;
 
     let permissions: readonly string[];
+    let scope: RoleScope;
+    let amountLimits: AmountLimitsMap = {};
+    let fieldVisibility: FieldVisibilityMap;
+
     if (membership.customRoleId) {
       const role = await this.roles.find(tenantId, membership.customRoleId);
       permissions = role?.permissions ?? [];
+      const roleScopeType = role?.scopeType ?? 'org';
+      const roleScopeIds = role?.scopeIds ?? [];
+      if (roleScopeType !== 'org') {
+        scope = { type: roleScopeType, ids: [...roleScopeIds] };
+      } else if (membership.branchScoped && membership.branchId) {
+        scope = { type: 'branch', ids: [membership.branchId] };
+      } else {
+        scope = { type: 'org', ids: [] };
+      }
+      amountLimits = { ...(role?.amountLimits ?? {}) };
+      fieldVisibility = resolveCustomRoleFieldVisibility(role?.fieldVisibility);
     } else {
       permissions = systemRolePermissions(membership.roleKey);
+      scope =
+        membership.branchScoped && membership.branchId
+          ? { type: 'branch', ids: [membership.branchId] }
+          : { type: 'org', ids: [] };
+      fieldVisibility = systemRoleFieldVisibility(membership.roleKey);
     }
     // Trial switch (ALL_MODULES_ENABLED, default true): every module is open to every tenant. Off = use stored entitlements.
     const open = (this.config.get<string>('ALL_MODULES_ENABLED', 'true') ?? 'true').toLowerCase() !== 'false';
@@ -68,11 +97,15 @@ export class AccessService {
       tenantId,
       membershipId: membership.id,
       roleKey: membership.roleKey,
+      customRoleId: membership.customRoleId,
       permissions: new Set(permissions),
       entitledModules: new Set(entitled),
       branchId: membership.branchId,
       branchScoped: membership.branchScoped,
       require2fa: tenant.require2fa,
+      scope,
+      amountLimits,
+      fieldVisibility,
     };
   }
 

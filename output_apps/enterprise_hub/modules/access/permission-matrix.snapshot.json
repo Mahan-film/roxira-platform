@@ -16,6 +16,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "DELETE /enterprise-hub/accounting/journal-entries/:id/attachments/:attachmentId (VoucherAttachmentController.remove)": {
+    "policy": "accounting:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "DELETE /enterprise-hub/accounting/recurring-vouchers/:id (RecurringVoucherController.remove)": {
     "policy": "accounting:create",
     "owner": true,
@@ -335,28 +346,6 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
-    "legacy_member": false
-  },
-  "POST /enterprise-hub/accounting/journal-entries/:id/attachments (VoucherAttachmentController.upload)": {
-    "policy": "accounting:create",
-    "owner": true,
-    "admin": true,
-    "accountant": true,
-    "sales": false,
-    "cheque_reviewer": false,
-    "hr": false,
-    "read_only": false,
-    "legacy_member": false
-  },
-  "DELETE /enterprise-hub/accounting/journal-entries/:id/attachments/:attachmentId (VoucherAttachmentController.remove)": {
-    "policy": "accounting:create",
-    "owner": true,
-    "admin": true,
-    "accountant": true,
-    "sales": false,
-    "cheque_reviewer": false,
-    "hr": false,
-    "read_only": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/period-locks (AccountingController.listPeriodLocks)": {
@@ -1169,31 +1158,31 @@
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/payroll-runs (HrController.listPayrollRuns)": {
-    "policy": "hr:read",
+    "policy": "hr:read+field:salary",
     "owner": true,
-    "admin": true,
+    "admin": false,
     "accountant": false,
     "sales": false,
     "cheque_reviewer": false,
     "hr": true,
-    "read_only": true,
+    "read_only": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/payroll-runs/:id (HrController.getPayrollRun)": {
-    "policy": "hr:read",
+    "policy": "hr:read+field:salary",
     "owner": true,
-    "admin": true,
+    "admin": false,
     "accountant": false,
     "sales": false,
     "cheque_reviewer": false,
     "hr": true,
-    "read_only": true,
+    "read_only": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/payroll-runs/:id/insurance-list (HrController.getInsuranceList)": {
-    "policy": "hr:export",
+    "policy": "hr:export+field:salary",
     "owner": true,
-    "admin": true,
+    "admin": false,
     "accountant": false,
     "sales": false,
     "cheque_reviewer": false,
@@ -1202,9 +1191,9 @@
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/payroll-runs/:id/payslips-pdf (HrController.getPayslipsPdf)": {
-    "policy": "hr:export",
+    "policy": "hr:export+field:salary",
     "owner": true,
-    "admin": true,
+    "admin": false,
     "accountant": false,
     "sales": false,
     "cheque_reviewer": false,
@@ -1213,9 +1202,9 @@
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/payroll-runs/:id/payslips/:payslipId/pdf (HrController.getPayslipPdf)": {
-    "policy": "hr:export",
+    "policy": "hr:export+field:salary",
     "owner": true,
-    "admin": true,
+    "admin": false,
     "accountant": false,
     "sales": false,
     "cheque_reviewer": false,
@@ -1224,20 +1213,20 @@
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/payroll-runs/:id/reconciliation (HrController.getPayrollReconciliation)": {
-    "policy": "hr:read",
+    "policy": "hr:read+field:salary",
     "owner": true,
-    "admin": true,
+    "admin": false,
     "accountant": false,
     "sales": false,
     "cheque_reviewer": false,
     "hr": true,
-    "read_only": true,
+    "read_only": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/payroll-runs/:id/wage-tax-files (HrController.getWageTaxFiles)": {
-    "policy": "hr:export",
+    "policy": "hr:export+field:salary",
     "owner": true,
-    "admin": true,
+    "admin": false,
     "accountant": false,
     "sales": false,
     "cheque_reviewer": false,
@@ -1246,25 +1235,25 @@
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/payslips (HrController.listPayslips)": {
-    "policy": "hr:read",
+    "policy": "hr:read+field:salary",
     "owner": true,
-    "admin": true,
+    "admin": false,
     "accountant": false,
     "sales": false,
     "cheque_reviewer": false,
     "hr": true,
-    "read_only": true,
+    "read_only": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/payslips/:id (HrController.getPayslip)": {
-    "policy": "hr:read",
+    "policy": "hr:read+field:salary",
     "owner": true,
-    "admin": true,
+    "admin": false,
     "accountant": false,
     "sales": false,
     "cheque_reviewer": false,
     "hr": true,
-    "read_only": true,
+    "read_only": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/stats (HrController.getStats)": {
@@ -2475,6 +2464,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/accounting/journal-entries/:id/attachments (VoucherAttachmentController.upload)": {
+    "policy": "accounting:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/accounting/journal-entries/:id/copy (AccountingController.copyJournalEntry)": {
     "policy": "accounting:create",
     "owner": true,
@@ -3348,9 +3348,9 @@
     "legacy_member": false
   },
   "POST /enterprise-hub/hr/payroll-runs (HrController.createPayrollRun)": {
-    "policy": "hr:create",
+    "policy": "hr:create+field:salary",
     "owner": true,
-    "admin": true,
+    "admin": false,
     "accountant": false,
     "sales": false,
     "cheque_reviewer": false,
@@ -3359,9 +3359,9 @@
     "legacy_member": false
   },
   "POST /enterprise-hub/hr/payroll-runs/:id/post (HrController.postPayrollRun)": {
-    "policy": "hr:post",
+    "policy": "hr:post+field:salary",
     "owner": true,
-    "admin": true,
+    "admin": false,
     "accountant": false,
     "sales": false,
     "cheque_reviewer": false,
@@ -3370,9 +3370,9 @@
     "legacy_member": false
   },
   "POST /enterprise-hub/hr/payroll/calculate (HrController.calculatePayroll)": {
-    "policy": "hr:create",
+    "policy": "hr:create+field:salary",
     "owner": true,
-    "admin": true,
+    "admin": false,
     "accountant": false,
     "sales": false,
     "cheque_reviewer": false,
@@ -3381,9 +3381,9 @@
     "legacy_member": false
   },
   "POST /enterprise-hub/hr/payslips (HrController.issuePayslip)": {
-    "policy": "hr:create",
+    "policy": "hr:create+field:salary",
     "owner": true,
-    "admin": true,
+    "admin": false,
     "accountant": false,
     "sales": false,
     "cheque_reviewer": false,
@@ -3705,7 +3705,7 @@
   "POST /enterprise-hub/radar/trigger-scout (RadarController.triggerScout)": {
     "policy": "platformAdmin"
   },
-  "POST /enterprise-hub/sales/invoices/from-deliveries (SalesDeliveryController.createInvoiceFromDelivery)": {
+  "POST /enterprise-hub/sales/invoices/:invoiceId/returns (SalesReturnController.createReturn)": {
     "policy": "invoicing:create",
     "owner": true,
     "admin": true,
@@ -3716,7 +3716,7 @@
     "read_only": false,
     "legacy_member": false
   },
-  "POST /enterprise-hub/sales/invoices/:invoiceId/returns (SalesReturnController.createReturn)": {
+  "POST /enterprise-hub/sales/invoices/from-deliveries (SalesDeliveryController.createInvoiceFromDelivery)": {
     "policy": "invoicing:create",
     "owner": true,
     "admin": true,
@@ -4168,17 +4168,6 @@
     "read_only": false,
     "legacy_member": true
   },
-  "PUT /policies/:key (PolicyController.set)": {
-    "policy": "members:admin",
-    "owner": true,
-    "admin": true,
-    "accountant": false,
-    "sales": false,
-    "cheque_reviewer": false,
-    "hr": false,
-    "read_only": false,
-    "legacy_member": false
-  },
   "PUT /enterprise-hub/posting-rules/:docType/roles/:role (PostingRulesController.set)": {
     "policy": "accounting:admin",
     "owner": true,
@@ -4225,6 +4214,17 @@
   },
   "PUT /enterprise-hub/treasury/settings (TreasuryController.setSettings)": {
     "policy": "banking:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PUT /policies/:key (PolicyController.set)": {
+    "policy": "members:admin",
     "owner": true,
     "admin": true,
     "accountant": false,

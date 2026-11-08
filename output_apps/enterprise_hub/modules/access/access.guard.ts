@@ -11,15 +11,22 @@ import { ROLES_KEY } from '../auth/decorators/roles.decorator';
 import { TenantRole } from '../tenants/enums/tenant-role.enum';
 import { AccessContext, AccessRequest } from './access-context';
 import { denied } from './access-errors';
-import { AccessAction, AccessModule, CORE_MODULES, permissionOf } from './catalogue';
+import {
+  AccessAction,
+  AccessModule,
+  SensitiveField,
+  requiredFieldForHandler,
+} from './catalogue';
 import {
   ACCESS_ACTION_KEY,
   ACCESS_ALSO_KEY,
+  ACCESS_FIELD_KEY,
   ACCESS_MODULE_KEY,
   ANY_MEMBER_KEY,
   AUTH_ONLY_KEY,
   actionForMethod,
 } from './decorators';
+import { decisionToError, evaluateWithShadow } from './policy-evaluator';
 import { AccessService } from './services/access.service';
 
 /**
@@ -28,9 +35,10 @@ import { AccessService } from './services/access.service';
  * belong to a module via @ModuleAccess, otherwise it is refused.
  *
  * The JWT only *selects* the organisation. Membership, role permissions,
- * module entitlement and the 2FA policy are all re-read from the database, and
- * `request.user.tenantId/tenantRole` are overwritten with the verified values,
- * so downstream `requireTenantId()` can never see a forged claim.
+ * module entitlement, field visibility, scope/amount limits and the 2FA policy
+ * are all re-read from the database, and `request.user.tenantId/tenantRole`
+ * are overwritten with the verified values, so downstream `requireTenantId()`
+ * can never see a forged claim.
  */
 @Injectable()
 export class AccessGuard implements CanActivate {
@@ -85,19 +93,31 @@ export class AccessGuard implements CanActivate {
     }
 
     if (module && !anyMember) {
+      const handler = context.getHandler();
+      const controller = context.getClass();
       const action =
-        this.reflector.getAllAndOverride<AccessAction | undefined>(ACCESS_ACTION_KEY, [context.getHandler()]) ??
+        this.reflector.getAllAndOverride<AccessAction | undefined>(ACCESS_ACTION_KEY, [handler]) ??
         actionForMethod(request.method);
       const also = this.reflector.getAllAndOverride<AccessModule[] | undefined>(ACCESS_ALSO_KEY, [
-        context.getHandler(),
+        handler,
       ]);
-      let primaryDenial = this.denialFor(ctx, module, action);
-      if (primaryDenial && also?.length) {
-        // Alternative modules grant the same action only; any one passing is enough.
-        const altPassed = also.some((alt) => !this.denialFor(ctx, alt, action));
-        if (altPassed) primaryDenial = undefined;
-      }
-      if (primaryDenial) throw primaryDenial;
+      const field =
+        this.reflector.getAllAndOverride<SensitiveField | undefined>(ACCESS_FIELD_KEY, targets) ??
+        requiredFieldForHandler(controller?.name ?? '', handler?.name ?? '');
+
+      const shadowEnabled = process.env.ACCESS_SHADOW_MODE === 'true';
+      const decision = evaluateWithShadow(
+        ctx,
+        { module, also, action, field },
+        shadowEnabled
+          ? (diff) =>
+              this.logger.warn(
+                `[ACCESS_SHADOW] ${controller?.name}.${handler?.name} role=${diff.roleKey} legacy=${diff.legacyAllowed} next=${diff.newAllowed} code=${diff.newCode ?? 'OK'}`,
+              )
+          : undefined,
+      );
+      const denial = decisionToError(decision);
+      if (denial) throw denial;
     }
 
     if (ctx.require2fa && !user.mfa) {
@@ -106,21 +126,6 @@ export class AccessGuard implements CanActivate {
 
     this.bind(request, ctx);
     return true;
-  }
-
-  /** Same two checks (entitlement unless core, role permission) against one module; null when allowed. */
-  private denialFor(
-    ctx: AccessContext,
-    module: AccessModule,
-    action: AccessAction,
-  ): Error | undefined {
-    if (!CORE_MODULES.includes(module) && !ctx.entitledModules.has(module)) {
-      return denied('MODULE_NOT_ENTITLED', 'This module is not enabled for your organisation.');
-    }
-    if (!ctx.permissions.has(permissionOf(module, action))) {
-      return denied('FORBIDDEN_ACTION', 'Your role does not allow this action.');
-    }
-    return undefined;
   }
 
   private bind(request: AccessRequest, ctx: AccessContext): void {

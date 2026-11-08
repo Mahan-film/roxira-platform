@@ -6,6 +6,7 @@ import {
   IsBoolean,
   IsIn,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -15,6 +16,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { ALL_ROLE_SCOPE_TYPES, RoleScopeType, SensitiveField } from '../catalogue';
 
 const trimmed = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 
@@ -69,12 +71,28 @@ export class CreateRoleDto {
   @ApiProperty() @Transform(trimmed) @IsString() @Length(2, 80) name: string;
   @ApiProperty({ type: [String], example: ['crm:read', 'crm:create'] })
   @IsArray() @ArrayMaxSize(200) @IsString({ each: true }) permissions: string[];
+  @ApiPropertyOptional({ enum: ALL_ROLE_SCOPE_TYPES, default: 'org' })
+  @IsOptional() @IsIn([...ALL_ROLE_SCOPE_TYPES]) scopeType?: RoleScopeType;
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional() @IsArray() @ArrayMaxSize(100) @IsUUID('all', { each: true }) scopeIds?: string[];
+  @ApiPropertyOptional({ description: 'Per-permission (or "*") max amount in Rials (decimal string or exact integer)' })
+  @IsOptional() @IsObject() amountLimits?: Record<string, string | number>;
+  @ApiPropertyOptional({ description: 'Field visibility flags for cost, margin, and salary' })
+  @IsOptional() @IsObject() fieldVisibility?: Partial<Record<SensitiveField, boolean>>;
 }
 
 export class UpdateRoleDto {
   @ApiPropertyOptional() @IsOptional() @Transform(trimmed) @IsString() @Length(2, 80) name?: string;
   @ApiPropertyOptional({ type: [String] })
   @IsOptional() @IsArray() @ArrayMaxSize(200) @IsString({ each: true }) permissions?: string[];
+  @ApiPropertyOptional({ enum: ALL_ROLE_SCOPE_TYPES })
+  @IsOptional() @IsIn([...ALL_ROLE_SCOPE_TYPES]) scopeType?: RoleScopeType;
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional() @IsArray() @ArrayMaxSize(100) @IsUUID('all', { each: true }) scopeIds?: string[];
+  @ApiPropertyOptional({ description: 'Per-permission (or "*") max amount in Rials (decimal string or exact integer)' })
+  @IsOptional() @IsObject() amountLimits?: Record<string, string | number>;
+  @ApiPropertyOptional({ description: 'Field visibility flags for cost, margin, and salary' })
+  @IsOptional() @IsObject() fieldVisibility?: Partial<Record<SensitiveField, boolean>>;
 }
 
 export class CreateBranchDto {
