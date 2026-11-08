@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { TenantScope } from '../access/services/tenant-scope';
 import { AccountingModule } from '../accounting/accounting.module';
 import { CaptureController } from './controllers/capture.controller';
 import {
@@ -31,6 +32,6 @@ import { CaptureService } from './services/capture.service';
     AccountingModule,
   ],
   controllers: [CaptureController],
-  providers: [CaptureService, CaptureLlmService, CaptureRepository],
+  providers: [CaptureService, CaptureLlmService, CaptureRepository, TenantScope],
 })
 export class InvoiceCaptureModule {}
