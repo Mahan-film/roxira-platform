@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   DataSource,
@@ -8,6 +8,7 @@ import {
   In,
   Repository,
 } from 'typeorm';
+import { TenantScope } from '../../access/services/tenant-scope';
 import { InvoiceEntity } from '../entities/invoice.entity';
 import { InvoiceDirection, InvoiceSubject } from '../enums/invoice-kind.enum';
 import { InvoiceStatus } from '../enums/invoice-status.enum';
@@ -23,14 +24,47 @@ import { InvoiceStatus } from '../enums/invoice-status.enum';
  */
 @Injectable()
 export class InvoicingRepository {
+  private resolvedScope?: TenantScope | null;
+
   constructor(
     @InjectRepository(InvoiceEntity)
     private readonly repository: Repository<InvoiceEntity>,
     private readonly dataSource: DataSource,
+    @Optional() private readonly scope?: TenantScope,
   ) {}
 
-  /** Runs `work` in one database transaction. */
-  transaction<T>(work: (manager: EntityManager) => Promise<T>): Promise<T> {
+  private getScope(): TenantScope | null {
+    if (this.resolvedScope !== undefined) return this.resolvedScope;
+    if (this.scope) return (this.resolvedScope = this.scope);
+    if (this.dataSource && typeof this.dataSource.transaction === 'function') {
+      return (this.resolvedScope = new TenantScope(this.dataSource));
+    }
+    const conn = this.repository?.manager?.connection;
+    if (conn && typeof conn.transaction === 'function') {
+      return (this.resolvedScope = new TenantScope(conn));
+    }
+    return (this.resolvedScope = null);
+  }
+
+  private withRepo<T>(
+    tenantId: string,
+    manager: EntityManager | undefined,
+    work: (repo: Repository<InvoiceEntity>, m?: EntityManager) => Promise<T>,
+  ): Promise<T> {
+    const scope = this.getScope();
+    if (!scope) {
+      const repo = manager ? manager.getRepository(InvoiceEntity) : this.repository;
+      return work(repo, manager);
+    }
+    return scope.within(tenantId, manager, (m) => work(m.getRepository(InvoiceEntity), m));
+  }
+
+  /** Runs `work` in one database transaction (bound to `tenantId` when provided). */
+  transaction<T>(work: (manager: EntityManager) => Promise<T>, tenantId?: string): Promise<T> {
+    const scope = this.getScope();
+    if (tenantId && scope) {
+      return scope.run(tenantId, work);
+    }
     return this.dataSource.transaction(work);
   }
 
@@ -44,10 +78,12 @@ export class InvoicingRepository {
     id: string,
     manager: EntityManager,
   ): Promise<InvoiceEntity | null> {
-    return manager.findOne(InvoiceEntity, {
-      where: { id, tenantId },
-      lock: { mode: 'pessimistic_write' },
-    });
+    return this.withRepo(tenantId, manager, (repo) =>
+      repo.findOne({
+        where: { id, tenantId },
+        lock: { mode: 'pessimistic_write' },
+      }),
+    );
   }
 
   /**
@@ -57,10 +93,12 @@ export class InvoicingRepository {
    * foreign-key share lock the return's own insert takes on the sale row.
    */
   async lockForReturn(tenantId: string, id: string, manager: EntityManager): Promise<InvoiceEntity | null> {
-    return manager.findOne(InvoiceEntity, {
-      where: { id, tenantId },
-      lock: { mode: 'for_no_key_update' },
-    });
+    return this.withRepo(tenantId, manager, (repo) =>
+      repo.findOne({
+        where: { id, tenantId },
+        lock: { mode: 'for_no_key_update' },
+      }),
+    );
   }
 
   async create(
@@ -68,49 +106,52 @@ export class InvoicingRepository {
     data: Partial<InvoiceEntity>,
     manager?: EntityManager,
   ): Promise<InvoiceEntity> {
-    const repository = manager ? manager.getRepository(InvoiceEntity) : this.repository;
-    const entity = repository.create({ ...data, tenantId });
-    return repository.save(entity);
+    return this.withRepo(tenantId, manager, async (repo) => {
+      const entity = repo.create({ ...data, tenantId });
+      return repo.save(entity);
+    });
   }
 
   async save(
     tenantId: string,
     entity: InvoiceEntity,
   ): Promise<InvoiceEntity> {
-    // به‌روزرسانی با قید مستأجر: شناسه سازمان دیگر ۰ ردیف را تغییر می‌دهد.
-    await this.repository.update(
-      { id: entity.id, tenantId },
-      {
-        taxInvoiceNumber: entity.taxInvoiceNumber,
-        customerId: entity.customerId,
-        sellerInfo: entity.sellerInfo,
-        buyerInfo: entity.buyerInfo,
-        items: entity.items,
-        currency: entity.currency,
-        jurisdiction: entity.jurisdiction,
-        exchangeRate: entity.exchangeRate,
-        fxRate: entity.fxRate,
-        amountFx: entity.amountFx,
-        baseCurrency: entity.baseCurrency,
-        totalAmount: entity.totalAmount,
-        totalDiscount: entity.totalDiscount,
-        totalTax: entity.totalTax,
-        finalPayable: entity.finalPayable,
-        baseTotalAmount: entity.baseTotalAmount,
-        baseTotalTax: entity.baseTotalTax,
-        baseFinalPayable: entity.baseFinalPayable,
-        status: entity.status,
-        issuedAt: entity.issuedAt,
-        paidAt: entity.paidAt,
-        warehouseId: entity.warehouseId ?? null,
-      },
-    );
-    entity.tenantId = tenantId;
-    return entity;
+    return this.withRepo(tenantId, undefined, async (repo) => {
+      // به‌روزرسانی با قید مستأجر: شناسه سازمان دیگر ۰ ردیف را تغییر می‌دهد.
+      await repo.update(
+        { id: entity.id, tenantId },
+        {
+          taxInvoiceNumber: entity.taxInvoiceNumber,
+          customerId: entity.customerId,
+          sellerInfo: entity.sellerInfo,
+          buyerInfo: entity.buyerInfo,
+          items: entity.items,
+          currency: entity.currency,
+          jurisdiction: entity.jurisdiction,
+          exchangeRate: entity.exchangeRate,
+          fxRate: entity.fxRate,
+          amountFx: entity.amountFx,
+          baseCurrency: entity.baseCurrency,
+          totalAmount: entity.totalAmount,
+          totalDiscount: entity.totalDiscount,
+          totalTax: entity.totalTax,
+          finalPayable: entity.finalPayable,
+          baseTotalAmount: entity.baseTotalAmount,
+          baseTotalTax: entity.baseTotalTax,
+          baseFinalPayable: entity.baseFinalPayable,
+          status: entity.status,
+          issuedAt: entity.issuedAt,
+          paidAt: entity.paidAt,
+          warehouseId: entity.warehouseId ?? null,
+        },
+      );
+      entity.tenantId = tenantId;
+      return entity;
+    });
   }
 
   async findById(tenantId: string, id: string): Promise<InvoiceEntity | null> {
-    return this.repository.findOne({ where: { id, tenantId } });
+    return this.withRepo(tenantId, undefined, (repo) => repo.findOne({ where: { id, tenantId } }));
   }
 
   /**
@@ -135,15 +176,14 @@ export class InvoicingRepository {
     >,
     manager?: EntityManager,
   ): Promise<void> {
-    const repository = manager
-      ? manager.getRepository(InvoiceEntity)
-      : this.repository;
-    await repository.update({ id, tenantId }, data);
+    await this.withRepo(tenantId, manager, async (repo) => {
+      await repo.update({ id, tenantId }, data);
+    });
   }
 
   /** The invoice a POS retry refers to (same tenant, same client key). */
   async findByIdempotencyKey(tenantId: string, key: string): Promise<InvoiceEntity | null> {
-    return this.repository.findOne({ where: { tenantId, idempotencyKey: key } });
+    return this.withRepo(tenantId, undefined, (repo) => repo.findOne({ where: { tenantId, idempotencyKey: key } }));
   }
 
   /** Every document that refers to `relatedId` (corrective, cancel, return), oldest first. */
@@ -151,10 +191,12 @@ export class InvoicingRepository {
     tenantId: string,
     relatedId: string,
   ): Promise<InvoiceEntity[]> {
-    return this.repository.find({
-      where: { tenantId, relatedInvoiceId: relatedId },
-      order: { createdAt: 'ASC' },
-    });
+    return this.withRepo(tenantId, undefined, (repo) =>
+      repo.find({
+        where: { tenantId, relatedInvoiceId: relatedId },
+        order: { createdAt: 'ASC' },
+      }),
+    );
   }
 
   /** Corrective documents of `relatedId`, oldest first (inside the caller's transaction). */
@@ -163,23 +205,27 @@ export class InvoicingRepository {
     relatedId: string,
     manager: EntityManager,
   ): Promise<InvoiceEntity[]> {
-    return manager.find(InvoiceEntity, {
-      where: {
-        tenantId,
-        relatedInvoiceId: relatedId,
-        subject: InvoiceSubject.CORRECTIVE,
-      },
-      order: { createdAt: 'ASC' },
-    });
+    return this.withRepo(tenantId, manager, (repo) =>
+      repo.find({
+        where: {
+          tenantId,
+          relatedInvoiceId: relatedId,
+          subject: InvoiceSubject.CORRECTIVE,
+        },
+        order: { createdAt: 'ASC' },
+      }),
+    );
   }
 
   async findByTaxInvoiceNumber(
     tenantId: string,
     taxInvoiceNumber: string,
   ): Promise<InvoiceEntity | null> {
-    return this.repository.findOne({
-      where: { taxInvoiceNumber, tenantId },
-    });
+    return this.withRepo(tenantId, undefined, (repo) =>
+      repo.findOne({
+        where: { taxInvoiceNumber, tenantId },
+      }),
+    );
   }
 
   /** حذف گروهی صورتحساب‌های یک دسته ورود داده با قید مستأجر (برای undo). */
@@ -187,8 +233,10 @@ export class InvoicingRepository {
     if (ids.length === 0) {
       return 0;
     }
-    const result = await this.repository.delete({ tenantId, id: In(ids) });
-    return result.affected ?? 0;
+    return this.withRepo(tenantId, undefined, async (repo) => {
+      const result = await repo.delete({ tenantId, id: In(ids) });
+      return result.affected ?? 0;
+    });
   }
 
   /**
@@ -201,20 +249,22 @@ export class InvoicingRepository {
     from?: string,
     to?: string,
   ): Promise<InvoiceEntity[]> {
-    const query = this.repository
-      .createQueryBuilder('invoice')
-      .where('invoice.tenantId = :tenantId', { tenantId })
-      .andWhere('invoice.direction = :direction', { direction })
-      .andWhere('invoice.status IN (:...statuses)', { statuses: [InvoiceStatus.ISSUED, InvoiceStatus.PAID] });
-    if (from) {
-      query.andWhere('invoice.issuedAt >= :from', { from: new Date(`${from}T00:00:00+03:30`) });
-    }
-    if (to) {
-      const next = new Date(`${to}T00:00:00+03:30`);
-      next.setUTCDate(next.getUTCDate() + 1);
-      query.andWhere('invoice.issuedAt < :next', { next });
-    }
-    return query.orderBy('invoice.issuedAt', 'ASC').addOrderBy('invoice.id', 'ASC').getMany();
+    return this.withRepo(tenantId, undefined, (repo) => {
+      const query = repo
+        .createQueryBuilder('invoice')
+        .where('invoice.tenantId = :tenantId', { tenantId })
+        .andWhere('invoice.direction = :direction', { direction })
+        .andWhere('invoice.status IN (:...statuses)', { statuses: [InvoiceStatus.ISSUED, InvoiceStatus.PAID] });
+      if (from) {
+        query.andWhere('invoice.issuedAt >= :from', { from: new Date(`${from}T00:00:00+03:30`) });
+      }
+      if (to) {
+        const next = new Date(`${to}T00:00:00+03:30`);
+        next.setUTCDate(next.getUTCDate() + 1);
+        query.andWhere('invoice.issuedAt < :next', { next });
+      }
+      return query.orderBy('invoice.issuedAt', 'ASC').addOrderBy('invoice.id', 'ASC').getMany();
+    });
   }
 
   /**
@@ -230,10 +280,12 @@ export class InvoicingRepository {
     options: FindManyOptions<InvoiceEntity>,
   ): Promise<[InvoiceEntity[], number]> {
     const where = (options.where ?? {}) as FindOptionsWhere<InvoiceEntity>;
-    return this.repository.findAndCount({
-      ...options,
-      where: { ...where, tenantId },
-    });
+    return this.withRepo(tenantId, undefined, (repo) =>
+      repo.findAndCount({
+        ...options,
+        where: { ...where, tenantId },
+      }),
+    );
   }
 
   /**
@@ -251,37 +303,39 @@ export class InvoicingRepository {
       take: number;
     },
   ): Promise<[InvoiceEntity[], number]> {
-    const query = this.repository
-      .createQueryBuilder('invoice')
-      .where('invoice.tenantId = :tenantId', { tenantId });
+    return this.withRepo(tenantId, undefined, (repo) => {
+      const query = repo
+        .createQueryBuilder('invoice')
+        .where('invoice.tenantId = :tenantId', { tenantId });
 
-    if (options.search) {
-      const pattern = `%${options.search}%`;
-      query.andWhere(
-        "(invoice.taxInvoiceNumber ILIKE :pattern OR invoice.buyerInfo ->> 'name' ILIKE :pattern OR invoice.sellerInfo ->> 'name' ILIKE :pattern)",
-        { pattern },
-      );
-    }
-    if (options.status) {
-      query.andWhere('invoice.status = :status', { status: options.status });
-    }
-    if (options.direction) {
-      query.andWhere('invoice.direction = :direction', {
-        direction: options.direction,
-      });
-    }
-    if (options.currency) {
-      query.andWhere('invoice.currency = :currency', {
-        currency: options.currency,
-      });
-    }
+      if (options.search) {
+        const pattern = `%${options.search}%`;
+        query.andWhere(
+          "(invoice.taxInvoiceNumber ILIKE :pattern OR invoice.buyerInfo ->> 'name' ILIKE :pattern OR invoice.sellerInfo ->> 'name' ILIKE :pattern)",
+          { pattern },
+        );
+      }
+      if (options.status) {
+        query.andWhere('invoice.status = :status', { status: options.status });
+      }
+      if (options.direction) {
+        query.andWhere('invoice.direction = :direction', {
+          direction: options.direction,
+        });
+      }
+      if (options.currency) {
+        query.andWhere('invoice.currency = :currency', {
+          currency: options.currency,
+        });
+      }
 
-    query
-      .orderBy('invoice.createdAt', 'DESC')
-      .skip(options.skip)
-      .take(options.take);
+      query
+        .orderBy('invoice.createdAt', 'DESC')
+        .skip(options.skip)
+        .take(options.take);
 
-    return query.getManyAndCount();
+      return query.getManyAndCount();
+    });
   }
 
   /**
@@ -299,54 +353,56 @@ export class InvoicingRepository {
       buyerSearch?: string;
     },
   ): Promise<InvoiceSummaryRow[]> {
-    const query = this.repository
-      .createQueryBuilder('invoice')
-      .select('invoice.currency', 'currency')
-      .addSelect('invoice.status', 'status')
-      .addSelect('COUNT(*)', 'count')
-      .addSelect('COALESCE(SUM(invoice.finalPayable), 0)', 'total')
-      .addSelect('COALESCE(SUM(invoice.totalTax), 0)', 'tax')
-      .where('invoice.tenantId = :tenantId', { tenantId })
-      .andWhere("invoice.direction = 'SALE'")
-      .andWhere('invoice.subject <> 3')
-      .andWhere('invoice.status IN (:...statuses)', {
-        statuses: options.statuses,
-      });
+    return this.withRepo(tenantId, undefined, async (repo) => {
+      const query = repo
+        .createQueryBuilder('invoice')
+        .select('invoice.currency', 'currency')
+        .addSelect('invoice.status', 'status')
+        .addSelect('COUNT(*)', 'count')
+        .addSelect('COALESCE(SUM(invoice.finalPayable), 0)', 'total')
+        .addSelect('COALESCE(SUM(invoice.totalTax), 0)', 'tax')
+        .where('invoice.tenantId = :tenantId', { tenantId })
+        .andWhere("invoice.direction = 'SALE'")
+        .andWhere('invoice.subject <> 3')
+        .andWhere('invoice.status IN (:...statuses)', {
+          statuses: options.statuses,
+        });
 
-    if (options.from) {
-      query.andWhere('COALESCE(invoice.issuedAt, invoice.createdAt) >= :from', {
-        from: options.from,
-      });
-    }
-    if (options.to) {
-      query.andWhere('COALESCE(invoice.issuedAt, invoice.createdAt) < :to', {
-        to: options.to,
-      });
-    }
-    if (options.buyerSearch) {
-      query.andWhere("invoice.buyerInfo ->> 'name' ILIKE :buyer", {
-        buyer: `%${options.buyerSearch.replace(/[\\%_]/g, '\\$&')}%`,
-      });
-    }
+      if (options.from) {
+        query.andWhere('COALESCE(invoice.issuedAt, invoice.createdAt) >= :from', {
+          from: options.from,
+        });
+      }
+      if (options.to) {
+        query.andWhere('COALESCE(invoice.issuedAt, invoice.createdAt) < :to', {
+          to: options.to,
+        });
+      }
+      if (options.buyerSearch) {
+        query.andWhere("invoice.buyerInfo ->> 'name' ILIKE :buyer", {
+          buyer: `%${options.buyerSearch.replace(/[\\%_]/g, '\\$&')}%`,
+        });
+      }
 
-    const rows = await query
-      .groupBy('invoice.currency')
-      .addGroupBy('invoice.status')
-      .getRawMany<{
-        currency: string;
-        status: InvoiceEntity['status'];
-        count: string;
-        total: string;
-        tax: string;
-      }>();
+      const rows = await query
+        .groupBy('invoice.currency')
+        .addGroupBy('invoice.status')
+        .getRawMany<{
+          currency: string;
+          status: InvoiceEntity['status'];
+          count: string;
+          total: string;
+          tax: string;
+        }>();
 
-    return rows.map((row) => ({
-      currency: row.currency as InvoiceEntity['currency'],
-      status: row.status,
-      count: Number(row.count),
-      total: Number(row.total),
-      tax: Number(row.tax),
-    }));
+      return rows.map((row) => ({
+        currency: row.currency as InvoiceEntity['currency'],
+        status: row.status,
+        count: Number(row.count),
+        total: Number(row.total),
+        tax: Number(row.tax),
+      }));
+    });
   }
 }
 

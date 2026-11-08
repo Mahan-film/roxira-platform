@@ -753,7 +753,7 @@ export class InvoicingService {
     const result = await this.invoicingRepository.transaction(async (manager) => {
       await this.invoicingRepository.lockForReturn(tenantId, saleId, manager);
       return work(deferred);
-    });
+    }, tenantId);
     for (const send of deferred) {
       await send();
     }

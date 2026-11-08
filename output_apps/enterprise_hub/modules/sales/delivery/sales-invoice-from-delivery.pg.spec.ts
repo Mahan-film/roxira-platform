@@ -102,7 +102,7 @@ describePg('Sales invoice from delivery lines on PostgreSQL (non-superuser, real
   const qty = async (sku: string) =>
     Number((await q('SELECT quantity FROM erp_stock_items WHERE tenant_id=$1 AND sku=$2', [T1, sku]))[0].quantity);
   const invoiceCount = async () =>
-    Number((await q('SELECT count(*)::int AS c FROM invoices WHERE tenant_id=$1', [T1]))[0].c);
+    Number((await scoped('SELECT count(*)::int AS c FROM invoices WHERE tenant_id=$1', [T1]))[0].c);
   const cogsSum = async () =>
     Number(
       (
@@ -311,7 +311,7 @@ describePg('Sales invoice from delivery lines on PostgreSQL (non-superuser, real
       },
     ]);
 
-    const [row] = await q<Record<string, unknown>>(
+    const [row] = await scoped<Record<string, unknown>>(
       `SELECT status, issued_at::text AS issued_at, idempotency_key, "totalAmount", "totalTax", "finalPayable", items
          FROM invoices WHERE id = $1 AND tenant_id = $2`,
       [invoice.invoiceId, T1],
@@ -357,12 +357,12 @@ describePg('Sales invoice from delivery lines on PostgreSQL (non-superuser, real
   });
 
   it('posting the invoice books revenue and VAT only: no stock movement, no COGS, no stock document', async () => {
-    const [row] = await q<Record<string, string>>(
+    const [row] = await scoped<Record<string, string>>(
       `SELECT id, status FROM invoices WHERE tenant_id=$1 AND idempotency_key=$2`,
       [T1, 'DINV-inv-1'],
     );
     await posting.postIssued({ tenantId: T1, invoiceId: row.id, status: 'ISSUED' });
-    const [posted] = await q<Record<string, unknown>>(
+    const [posted] = await scoped<Record<string, unknown>>(
       `SELECT journal_entry_id, posting_error, posting_meta FROM invoices WHERE id = $1 AND tenant_id = $2`,
       [row.id, T1],
     );
@@ -470,7 +470,7 @@ describePg('Sales invoice from delivery lines on PostgreSQL (non-superuser, real
       ],
     };
     const replay = await invoices.createFromDeliveries(T1, body);
-    const stored = await q<{ id: string }>(`SELECT id FROM invoices WHERE tenant_id=$1 AND idempotency_key=$2`, [
+    const stored = await scoped<{ id: string }>(`SELECT id FROM invoices WHERE tenant_id=$1 AND idempotency_key=$2`, [
       T1,
       'DINV-inv-1',
     ]);
@@ -504,7 +504,7 @@ describePg('Sales invoice from delivery lines on PostgreSQL (non-superuser, real
     ]);
 
     await posting.postIssued({ tenantId: T1, invoiceId: invoice.invoiceId, status: 'ISSUED' });
-    const [posted] = await q<Record<string, string>>(
+    const [posted] = await scoped<Record<string, string>>(
       `SELECT journal_entry_id, posting_error FROM invoices WHERE id = $1 AND tenant_id = $2`,
       [invoice.invoiceId, T1],
     );
