@@ -97,13 +97,13 @@ export class OpeningBalanceService {
         manager,
       );
       await this.repository.updateDocument(tenantId, id, { reviewedAt: null, reviewedBy: null }, manager);
-    });
+    }, tenantId);
     return this.review(tenantId, id);
   }
 
   async deleteDraft(tenantId: string, id: number): Promise<void> {
     await this.editableDraft(tenantId, id);
-    await this.repository.transaction((manager) => this.repository.deleteDraft(tenantId, id, manager));
+    await this.repository.transaction((manager) => this.repository.deleteDraft(tenantId, id, manager), tenantId);
   }
 
   /** Totals and every problem in the current lines; computed fresh each time. */
@@ -247,7 +247,7 @@ export class OpeningBalanceService {
         { status: StockDocumentStatus.POSTED, postedAt: new Date(), journalEntryId: entry.id, createdBy: document.createdBy ?? userId },
         manager,
       );
-    });
+    }, tenantId);
     return this.review(tenantId, id);
   }
 

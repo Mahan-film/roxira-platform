@@ -209,7 +209,7 @@ export class StockDocumentsService {
             [],
             manager,
           );
-        });
+        }, tenantId);
       } catch (error) {
         if (this.isUniqueViolation(error) && attempt < NUMBER_ATTEMPTS) {
           continue;
@@ -232,7 +232,7 @@ export class StockDocumentsService {
           const count = await this.repository.countDocuments(tenantId, docType, manager);
           const docNumber = `${STOCK_DOCUMENT_PREFIX[docType]}-${docDate.replace(/-/g, '')}-${String(count + attempt).padStart(5, '0')}`;
           return work(manager, docNumber);
-        });
+        }, tenantId);
       } catch (error) {
         if (this.isUniqueViolation(error) && attempt < NUMBER_ATTEMPTS) {
           continue;
