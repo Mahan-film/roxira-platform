@@ -11,51 +11,25 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  exportReport,
+  getReportDatasets,
+  runReportQuery,
+  type ReportDataset,
+  type ReportFilter,
+  type ReportQueryResult,
+} from "@/lib/api/report-builder-client";
 import { formatMoneyRial } from "@/lib/fa-format";
 
-interface WhitelistedColumn {
-  id: string;
-  labelFa: string;
-  type: string;
-  aggregatable: string[];
-}
-
-interface DatasetInfo {
-  id: string;
-  labelFa: string;
-  descriptionFa: string;
-  columns: WhitelistedColumn[];
-}
-
-interface FilterRow {
-  column: string;
-  op: string;
-  value: string;
-}
-
-interface QueryResult {
-  dataset: string;
-  columns: Array<{ id: string; labelFa: string; type: string }>;
-  rows: Array<Record<string, unknown>>;
-  totalRows: number;
-  durationMs: number;
-}
-
-interface TemplateItem {
-  id: string;
-  name: string;
-  description: string | null;
-  dataset: string;
-  createdAt: string;
-}
+type DatasetInfo = ReportDataset;
+type FilterRow = ReportFilter;
+type QueryResult = ReportQueryResult;
 
 export default function ReportBuilderPage() {
   const [datasets, setDatasets] = useState<DatasetInfo[]>([]);
   const [selectedDataset, setSelectedDataset] = useState<string>("accounting_ledger");
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
   const [filters, setFilters] = useState<FilterRow[]>([]);
-  const [templates, setTemplates] = useState<TemplateItem[]>([]);
-  const [templateName, setTemplateName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<QueryResult | null>(null);
@@ -66,9 +40,7 @@ export default function ReportBuilderPage() {
   useEffect(() => {
     async function loadMeta() {
       try {
-        const res = await fetch("/api/proxy/report-builder/datasets");
-        if (!res.ok) throw new Error("بارگذاری مجموعه‌های داده ممکن نشد.");
-        const data: DatasetInfo[] = await res.json();
+        const data = await getReportDatasets();
         setDatasets(data);
         if (data.length > 0) {
           setSelectedDataset(data[0].id);
@@ -125,18 +97,7 @@ export default function ReportBuilderPage() {
         limit: 100,
       };
 
-      const res = await fetch("/api/proxy/report-builder/query", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message || "خطا در اجرای گزارش.");
-      }
-
-      const data: QueryResult = await res.json();
+      const data = await runReportQuery(payload);
       setResult(data);
     } catch (err) {
       setError(loadErrorMessage(err));
@@ -157,17 +118,7 @@ export default function ReportBuilderPage() {
         title: currentDataset?.labelFa || "گزارش سفارشی",
       };
 
-      const res = await fetch("/api/proxy/report-builder/export", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        throw new Error("دریافت فایل خروجی ممکن نشد.");
-      }
-
-      const blob = await res.blob();
+      const blob = await exportReport(payload);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -186,10 +137,10 @@ export default function ReportBuilderPage() {
       <div className="space-y-6">
         <PageHeader
           title="گزارش‌ساز سفارشی و گزارش‌های تلفیقی"
-          subtitle="ساخت و استخراج گزارش‌های پویا از اسناد حسابداری، فاکتورهای فروش و گزارش‌های تلفیقی با تراکنش فقط‌خواندنی و سقف ۵ ثانیه"
+          description="ساخت و استخراج گزارش‌های پویا از اسناد حسابداری، فاکتورهای فروش و گزارش‌های تلفیقی با تراکنش فقط‌خواندنی و سقف ۵ ثانیه"
         />
 
-        {error && <ErrorNotice message={error} />}
+        {error && <ErrorNotice title="خطا در گزارش‌ساز" message={error} />}
 
         {/* Dataset selector */}
         <Card>
@@ -376,7 +327,7 @@ export default function ReportBuilderPage() {
                             return (
                               <TableCell key={c.id} className="text-xs">
                                 {c.type === "money" && val != null
-                                  ? formatMoneyRial(Number(val) || 0)
+                                  ? formatMoneyRial(val as number | string)
                                   : String(val ?? "—")}
                               </TableCell>
                             );

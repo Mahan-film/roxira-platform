@@ -174,4 +174,54 @@ describePg('Report Builder on PostgreSQL (NOSUPERUSER NOBYPASSRLS, FORCE RLS)', 
     });
     expect(resB.rows.length).toBe(0);
   });
+
+  it('an injection attempt through filters, alias, limit and order stays inert on a real database', async () => {
+    const before = await ownerDs.query(`SELECT count(*)::int AS n FROM "fin_chart_of_accounts"`);
+
+    // 1. A classic payload in a filter value is just a string that matches nothing.
+    const filtered = await service.executeQuery(TENANT_A, {
+      dataset: 'accounting_ledger',
+      columns: ['entry_number'],
+      filters: [{ column: 'account_code', op: 'eq', value: "1010' OR '1'='1'; DROP TABLE fin_chart_of_accounts; --" }],
+    });
+    expect(filtered.rows).toHaveLength(0);
+
+    // 2. LIKE wildcards in `contains` are literals, not patterns.
+    const wildcard = await service.executeQuery(TENANT_A, {
+      dataset: 'accounting_ledger',
+      columns: ['entry_number'],
+      filters: [{ column: 'description', op: 'contains', value: '%' }],
+    });
+    expect(wildcard.rows).toHaveLength(0);
+
+    // 3. Identifier-shaped payloads never reach the SQL string.
+    await expect(
+      service.executeQuery(TENANT_A, {
+        dataset: 'accounting_ledger',
+        aggregates: [{ column: 'debit', func: 'sum', alias: 'x"; DROP TABLE fin_chart_of_accounts; --' }],
+      }),
+    ).rejects.toThrow(/نام مستعار/);
+    await expect(
+      service.executeQuery(TENANT_A, { dataset: 'accounting_ledger', limit: '1; DROP TABLE x' as never }),
+    ).rejects.toThrow(/limit/);
+    await expect(
+      service.executeQuery(TENANT_A, {
+        dataset: 'accounting_ledger',
+        filters: [{ column: 'debit', op: 'gt', value: '0; DROP TABLE x' }],
+      }),
+    ).rejects.toThrow(/عدد/);
+
+    // 4. A valid grouped query returns exact money strings and a sensible total.
+    const grouped = await service.executeQuery(TENANT_A, {
+      dataset: 'accounting_ledger',
+      groupBy: ['account_code'],
+      aggregates: [{ column: 'debit', func: 'sum' }],
+    });
+    expect(grouped.totalRows).toBe(2);
+    expect(grouped.rows.find((r) => r.account_code === '1010')?.sum_debit).toBe('5000000.00');
+
+    // 5. Nothing was dropped or written.
+    const after = await ownerDs.query(`SELECT count(*)::int AS n FROM "fin_chart_of_accounts"`);
+    expect(after[0].n).toBe(before[0].n);
+  });
 });

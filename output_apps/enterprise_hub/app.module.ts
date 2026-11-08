@@ -18,6 +18,7 @@ import { CrmModule } from './modules/crm/crm.module';
 import { DataImportModule } from './modules/data_import/data-import.module';
 import { TenantsModule } from './modules/tenants/tenants.module';
 import { ApprovalsModule } from './modules/approvals/approvals.module';
+import { ReportBuilderModule } from './modules/report_builder/report-builder.module';
 import { TenantPolicyModule } from './modules/tenants/policy/policy.module';
 import { TaxComplianceModule } from './modules/tax_compliance/tax-compliance.module';
 import { HrModule } from './modules/hr/hr.module';
@@ -94,6 +95,7 @@ const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(proce
     TenantsModule,
     TenantPolicyModule,
     ApprovalsModule,
+    ReportBuilderModule,
     InventoryModule,
     CrmModule,
     DataImportModule,

@@ -26,6 +26,8 @@ export interface WhitelistedDataset {
   labelFa: string;
   descriptionFa: string;
   fromSql: string;
+  /** Tenant column of the driving table; every query also filters on it (belt and braces next to FORCE RLS). */
+  tenantExpr: string;
   defaultOrderBy: string;
   columns: Record<string, WhitelistedColumn>;
 }
@@ -33,6 +35,9 @@ export interface WhitelistedDataset {
 export const STATEMENT_TIMEOUT_MS = 5000;
 export const MAX_REPORT_LIMIT = 5000;
 export const DEFAULT_REPORT_LIMIT = 100;
+/** Alias of an aggregate column: a plain identifier, never free text. */
+export const AGGREGATE_ALIAS_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,40}$/;
+export const MAX_IN_VALUES = 200;
 
 export const WHITELISTED_DATASETS: Record<string, WhitelistedDataset> = {
   accounting_ledger: {
@@ -44,6 +49,7 @@ export const WHITELISTED_DATASETS: Record<string, WhitelistedDataset> = {
       JOIN "fin_journal_entries" e ON e."id" = l."journal_entry_id" AND e."tenant_id" = l."tenant_id"
       JOIN "fin_chart_of_accounts" a ON a."id" = l."account_id" AND a."tenant_id" = l."tenant_id"
     `,
+    tenantExpr: 'l."tenant_id"',
     defaultOrderBy: 'e."date" DESC, l."id" ASC',
     columns: {
       date: {
@@ -118,6 +124,7 @@ export const WHITELISTED_DATASETS: Record<string, WhitelistedDataset> = {
     fromSql: `
       "invoices" i
     `,
+    tenantExpr: 'i."tenant_id"',
     defaultOrderBy: 'i."createdAt" DESC, i."id" DESC',
     columns: {
       invoice_number: {
@@ -178,7 +185,8 @@ export const WHITELISTED_DATASETS: Record<string, WhitelistedDataset> = {
       LEFT JOIN "fin_journal_entry_lines" l ON l."journal_entry_id" = e."id" AND l."tenant_id" = e."tenant_id"
       LEFT JOIN "fin_chart_of_accounts" a ON a."id" = l."account_id" AND a."tenant_id" = l."tenant_id"
     `,
-    defaultOrderBy: 'i."createdAt" DESC',
+    tenantExpr: 'i."tenant_id"',
+    defaultOrderBy: 'i."createdAt" DESC, i."id" DESC, l."id" ASC',
     columns: {
       invoice_number: {
         id: 'invoice_number',

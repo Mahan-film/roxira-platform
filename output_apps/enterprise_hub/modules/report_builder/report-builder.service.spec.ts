@@ -65,6 +65,7 @@ describe('ReportBuilderService (unit)', () => {
 
     // The SQL must use $1 and not interpolate the string literal
     expect(compiled.sql).toContain('e."entry_number" = $1');
+    expect(compiled.sql).not.toContain("OR '1'='1");
     expect(compiled.params).toEqual(["' OR '1'='1"]);
   });
 
@@ -80,8 +81,9 @@ describe('ReportBuilderService (unit)', () => {
 
     expect(compiled.sql).toContain('invoices');
     expect(compiled.sql).toContain('fin_journal_entries');
-    expect(compiled.sql).toContain('LIMIT 50 OFFSET 0');
+    expect(compiled.sql).toContain('LIMIT $2 OFFSET $3');
     expect(compiled.params).toEqual(['1000000']);
+    expect(compiled.queryParams).toEqual(['1000000', 50, 0]);
   });
 
   it('enforces upper bound on limit to protect against unbounded scans', () => {
@@ -89,7 +91,8 @@ describe('ReportBuilderService (unit)', () => {
       dataset: 'accounting_ledger',
       limit: 999999,
     });
-    expect(compiled.sql).toContain('LIMIT 5000 OFFSET 0');
+    expect(compiled.sql).toContain('LIMIT $1 OFFSET $2');
+    expect(compiled.queryParams).toEqual([5000, 0]);
   });
 
   it('maps PostgreSQL statement_timeout error into a clear Persian 400 error', async () => {
@@ -102,5 +105,62 @@ describe('ReportBuilderService (unit)', () => {
         dataset: 'accounting_ledger',
       }),
     ).rejects.toThrow(/سقف مجاز \(۵ ثانیه\)/);
+  });
+
+  it('never lets caller text into the SQL string: alias, direction, operator, limit and values', () => {
+    const bad = (dto: unknown) => expect(() => service.compileQuery(dto as never)).toThrow(BadRequestException);
+    bad({
+      dataset: 'accounting_ledger',
+      aggregates: [{ column: 'debit', func: 'sum', alias: 'x" , (SELECT 1) AS "y' }],
+    });
+    bad({ dataset: 'accounting_ledger', aggregates: [{ column: 'debit', func: 'sum; DROP TABLE x', alias: 'a' }] });
+    bad({ dataset: 'accounting_ledger', columns: ['debit'], limit: '1; DROP TABLE x' });
+    bad({ dataset: 'accounting_ledger', offset: -1 });
+    bad({ dataset: 'accounting_ledger', filters: [{ column: 'debit', op: 'gt', value: '1 OR 1=1' }] });
+    bad({ dataset: 'accounting_ledger', filters: [{ column: 'account_code', op: 'eq', value: { $ne: 1 } }] });
+    bad({ dataset: 'accounting_ledger', filters: [{ column: 'a"; DROP', op: 'eq', value: 'x' }] });
+    bad({ dataset: 'accounting_ledger', groupBy: ['status; --'] });
+    bad({ dataset: 'accounting_ledger', orderBy: [{ column: 'debit; --', direction: 'asc' }] });
+    // A direction that is not 'desc' becomes the literal ASC.
+    const c = service.compileQuery({
+      dataset: 'accounting_ledger',
+      columns: ['debit'],
+      orderBy: [{ column: 'debit', direction: 'asc; DROP' as never }],
+    });
+    expect(c.sql).toContain('ORDER BY l."debit" ASC');
+    expect(c.sql).not.toContain('DROP');
+  });
+
+  it('scopes every query to the bound tenant and groups consistently', () => {
+    const c = service.compileQuery({
+      dataset: 'accounting_ledger',
+      groupBy: ['account_code'],
+      aggregates: [{ column: 'debit', func: 'sum' }, { column: 'credit', func: 'sum', alias: 'total_credit' }],
+    });
+    expect(c.sql).toContain(`l."tenant_id" = current_setting('app.tenant_id', true)::uuid`);
+    expect(c.sql).toContain('GROUP BY a."code"');
+    expect(c.sql).toContain('SUM(l."debit") AS "sum_debit"');
+    expect(c.selectedColumns.map((x) => [x.id, x.type])).toEqual([
+      ['account_code', 'string'],
+      ['sum_debit', 'money'],
+      ['total_credit', 'money'],
+    ]);
+    expect(() =>
+      service.compileQuery({ dataset: 'accounting_ledger', columns: ['status'], groupBy: ['account_code'] }),
+    ).toThrow(BadRequestException);
+  });
+
+  it('escapes LIKE wildcards in contains and caps in-lists', () => {
+    const c = service.compileQuery({
+      dataset: 'accounting_ledger',
+      filters: [{ column: 'description', op: 'contains', value: '50%_off\\' }],
+    });
+    expect(c.params[0]).toBe('%50\\%\\_off\\\\%');
+    expect(() =>
+      service.compileQuery({
+        dataset: 'accounting_ledger',
+        filters: [{ column: 'account_code', op: 'in', value: Array.from({ length: 201 }, (_, i) => String(i)) }],
+      }),
+    ).toThrow(BadRequestException);
   });
 });

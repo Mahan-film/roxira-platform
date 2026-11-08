@@ -5,6 +5,7 @@ import {
   Get,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Post,
   Query,
   Req,
@@ -12,17 +13,17 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
-import { AccessRequest, requireAccess } from '../access/access-context';
-import { AccessAction, AccessModule } from '../access/catalogue';
-import { ModuleAccess, RequireAction } from '../access/decorators';
+import { AccessRequest, requireAccess } from '../../access/access-context';
+import { AccessAction, AccessModule } from '../../access/catalogue';
+import { ModuleAccess, RequireAction } from '../../access/decorators';
 import {
   ExecuteReportQueryDto,
   ExportReportDto,
   ReportQueryResultView,
   ReportTemplateView,
   SaveReportTemplateDto,
-} from './dto/report-builder.dto';
-import { ReportBuilderService } from './services/report-builder.service';
+} from '../dto/report-builder.dto';
+import { ReportBuilderService } from '../services/report-builder.service';
 
 @ApiTags('Report Builder - سازنده گزارش و گزارش‌های تلفیقی')
 @ApiBearerAuth()
@@ -51,7 +52,7 @@ export class ReportBuilderController {
     return this.service.executeQuery(ctx.tenantId, dto);
   }
 
-  @RequireAction(AccessAction.READ)
+  @RequireAction(AccessAction.EXPORT)
   @Post('export')
   @ApiOperation({ summary: 'خروجی اکسل یا پی‌دی‌اف از گزارش سفارشی' })
   @ApiResponse({ status: HttpStatus.OK })
@@ -97,7 +98,7 @@ export class ReportBuilderController {
   @ApiResponse({ status: HttpStatus.OK })
   getTemplate(
     @Req() request: AccessRequest,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
   ): Promise<ReportTemplateView> {
     const ctx = requireAccess(request);
     return this.service.getTemplate(ctx.tenantId, id);
@@ -109,7 +110,7 @@ export class ReportBuilderController {
   @ApiResponse({ status: HttpStatus.NO_CONTENT })
   async deleteTemplate(
     @Req() request: AccessRequest,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Res() res: Response,
   ): Promise<void> {
     const ctx = requireAccess(request);

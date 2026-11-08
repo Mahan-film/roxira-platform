@@ -1,13 +1,14 @@
 import { Module } from '@nestjs/common';
 import { AccessModule } from '../access/access.module';
-import { ReportBuilderController } from './report-builder.routes';
+import { TenantScope } from '../access/services/tenant-scope';
+import { ReportBuilderController } from './controllers/report-builder.controller';
 import { ReportBuilderRepository } from './repositories/report-builder.repository';
 import { ReportBuilderService } from './services/report-builder.service';
 
 @Module({
   imports: [AccessModule],
   controllers: [ReportBuilderController],
-  providers: [ReportBuilderRepository, ReportBuilderService],
+  providers: [TenantScope, ReportBuilderRepository, ReportBuilderService],
   exports: [ReportBuilderService, ReportBuilderRepository],
 })
 export class ReportBuilderModule {}

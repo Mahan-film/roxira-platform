@@ -189,6 +189,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         module: "accounting",
       },
       {
+        href: "/app/accounting/report-builder",
+        label: "گزارش‌ساز",
+        icon: "ChartColumn",
+        module: "accounting",
+        keywords: ["report builder", "custom report", "گزارش سفارشی", "تلفیقی"],
+      },
+      {
         href: "/app/settings/members",
         label: "اعضا و نقش‌ها",
         icon: "Settings",
