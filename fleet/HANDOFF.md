@@ -86,3 +86,6 @@ Plan issue #584, cost verdicts in #560. Builds are paid DeepSeek only (OC_ALLOW_
 Merged today besides earlier: #566 #572 #573 #574 #583 #586 (policy settings, /app/settings/policies) #588 (permanent voucher number). Running: Track B print forms #578-#581, #256 rerun.
 Quota rule until reset: no new Claude agents beyond one Haiku at a time; builds through OpenCode only; coordinator wakes rarely. The colleague's account (free from Tuesday 11-10) should open a NEW coordinator session: say "continue", the SessionStart hook points here. That fresh session is far cheaper than this 700k one.
 Next for that session: #584 items 2-9 (group B dual approval, custom roles with salary visibility from the payslip finding, access page, approvals); #230 report items; recurring TZ issue; then #475, #500, design PRs, tour rehearsal, DONE on #227.
+
+## 11-08 14:40: READ FIRST
+The full plan is in `_fleet/MASTER_PLAN.md` (same text as https://github.com/Mahan-film/roxira-platform/issues/642). The coordinator is at 97% of its weekly limit; the colleague session reviews and merges per §3.
