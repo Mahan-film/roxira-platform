@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MoreThanOrEqual, Repository } from 'typeorm';
+import { TenantScope } from '../../access/services/tenant-scope';
 import { DataImportBatchItemEntity } from '../entities/data-import-batch-item.entity';
 import { DataImportBatchEntity } from '../entities/data-import-batch.entity';
 
@@ -24,7 +25,42 @@ export class DataImportBatchRepository {
     private readonly batches: Repository<DataImportBatchEntity>,
     @InjectRepository(DataImportBatchItemEntity)
     private readonly items: Repository<DataImportBatchItemEntity>,
+    @Optional()
+    private readonly scope?: TenantScope,
   ) {}
+
+  private get tenantScope(): TenantScope | undefined {
+    if (this.scope) {
+      return this.scope;
+    }
+    const ds = this.batches?.manager?.connection ?? this.items?.manager?.connection;
+    if (typeof (ds as { transaction?: unknown } | undefined)?.transaction === 'function') {
+      return new TenantScope(ds);
+    }
+    return undefined;
+  }
+
+  private withBatches<T>(
+    tenantId: string,
+    work: (repo: Repository<DataImportBatchEntity>) => Promise<T>,
+  ): Promise<T> {
+    const scope = this.tenantScope;
+    if (scope) {
+      return scope.run(tenantId, (m) => work(m.getRepository(DataImportBatchEntity)));
+    }
+    return work(this.batches);
+  }
+
+  private withItems<T>(
+    tenantId: string,
+    work: (repo: Repository<DataImportBatchItemEntity>) => Promise<T>,
+  ): Promise<T> {
+    const scope = this.tenantScope;
+    if (scope) {
+      return scope.run(tenantId, (m) => work(m.getRepository(DataImportBatchItemEntity)));
+    }
+    return work(this.items);
+  }
 
   /** ایجاد سرصفحه یک دسته ورود. */
   async createBatch(
@@ -36,16 +72,18 @@ export class DataImportBatchRepository {
       inserted: number;
     },
   ): Promise<void> {
-    const entity = this.batches.create({
-      id: data.id,
-      tenantId,
-      entity: data.entity,
-      fileName: data.fileName,
-      inserted: data.inserted,
-      undone: false,
-      createdAt: new Date(),
+    await this.withBatches(tenantId, async (repo) => {
+      const entity = repo.create({
+        id: data.id,
+        tenantId,
+        entity: data.entity,
+        fileName: data.fileName,
+        inserted: data.inserted,
+        undone: false,
+        createdAt: new Date(),
+      });
+      await repo.save(entity);
     });
-    await this.batches.save(entity);
   }
 
   /** ثبت ردیف‌های یک دسته (نگاشت به شناسه ردیف‌های ماژول مالک). */
@@ -58,17 +96,19 @@ export class DataImportBatchRepository {
     if (rows.length === 0) {
       return;
     }
-    const entities = rows.map((row) =>
-      this.items.create({
-        tenantId,
-        batchId,
-        entity: entityKey,
-        ownerId: String(row.ownerId),
-        rowNumber: row.rowNumber,
-        createdAt: new Date(),
-      }),
-    );
-    await this.items.save(entities, { chunk: 1000 }); // stay under the bind-parameter limit
+    await this.withItems(tenantId, async (repo) => {
+      const entities = rows.map((row) =>
+        repo.create({
+          tenantId,
+          batchId,
+          entity: entityKey,
+          ownerId: String(row.ownerId),
+          rowNumber: row.rowNumber,
+          createdAt: new Date(),
+        }),
+      );
+      await repo.save(entities, { chunk: 1000 }); // stay under the bind-parameter limit
+    });
   }
 
   /** خواندن یک دسته در محدوده همان مستأجر. */
@@ -76,7 +116,9 @@ export class DataImportBatchRepository {
     tenantId: string,
     batchId: string,
   ): Promise<DataImportBatchEntity | null> {
-    return this.batches.findOne({ where: { id: batchId, tenantId } });
+    return this.withBatches(tenantId, (repo) =>
+      repo.findOne({ where: { id: batchId, tenantId } }),
+    );
   }
 
   /** فهرست آخرین دسته‌های ورود یک مستأجر. */
@@ -84,11 +126,13 @@ export class DataImportBatchRepository {
     tenantId: string,
     limit = 20,
   ): Promise<DataImportBatchEntity[]> {
-    return this.batches.find({
-      where: { tenantId },
-      order: { createdAt: 'DESC' },
-      take: limit,
-    });
+    return this.withBatches(tenantId, (repo) =>
+      repo.find({
+        where: { tenantId },
+        order: { createdAt: 'DESC' },
+        take: limit,
+      }),
+    );
   }
 
   /** ردیف‌های یک دسته در محدوده همان مستأجر. */
@@ -96,14 +140,16 @@ export class DataImportBatchRepository {
     tenantId: string,
     batchId: string,
   ): Promise<DataImportBatchItemEntity[]> {
-    return this.items.find({ where: { tenantId, batchId } });
+    return this.withItems(tenantId, (repo) => repo.find({ where: { tenantId, batchId } }));
   }
 
   /** شمارش دسته‌های ورود ایجادشده یک مستأجر از یک زمان مشخص تا کنون. */
   async countCreatedSince(tenantId: string, since: Date): Promise<number> {
-    return this.batches.count({
-      where: { tenantId, createdAt: MoreThanOrEqual(since) },
-    });
+    return this.withBatches(tenantId, (repo) =>
+      repo.count({
+        where: { tenantId, createdAt: MoreThanOrEqual(since) },
+      }),
+    );
   }
 
   /** به‌روزرسانی تعداد ردیف‌های درج‌شدهٔ یک دسته (دستهٔ package از ابتدا ساخته می‌شود). */
@@ -112,21 +158,29 @@ export class DataImportBatchRepository {
     batchId: string,
     inserted: number,
   ): Promise<void> {
-    await this.batches.update({ id: batchId, tenantId }, { inserted });
+    await this.withBatches(tenantId, async (repo) => {
+      await repo.update({ id: batchId, tenantId }, { inserted });
+    });
   }
 
   /** حذف سرصفحهٔ یک دستهٔ خالی (commit بدون هیچ ردیف درج‌شده). */
   async removeBatch(tenantId: string, batchId: string): Promise<void> {
-    await this.batches.delete({ id: batchId, tenantId });
+    await this.withBatches(tenantId, async (repo) => {
+      await repo.delete({ id: batchId, tenantId });
+    });
   }
 
   /** علامت‌گذاری دسته به‌عنوان بازگردانی‌شده. */
   async markUndone(tenantId: string, batchId: string): Promise<void> {
-    await this.batches.update({ id: batchId, tenantId }, { undone: true });
+    await this.withBatches(tenantId, async (repo) => {
+      await repo.update({ id: batchId, tenantId }, { undone: true });
+    });
   }
 
   /** حذف ردیف‌های یک دسته پس از undo. */
   async removeItems(tenantId: string, batchId: string): Promise<void> {
-    await this.items.delete({ tenantId, batchId });
+    await this.withItems(tenantId, async (repo) => {
+      await repo.delete({ tenantId, batchId });
+    });
   }
 }

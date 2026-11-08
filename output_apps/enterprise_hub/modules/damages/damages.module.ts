@@ -1,6 +1,7 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { TenantScope } from '../access/services/tenant-scope';
 import { DamagesController } from './controllers/damages.controller';
 import { DAMAGES_QUEUE_NAME } from './constants/damages.constants';
 import { DamageCalculationEntity } from './entities/damage-calculation.entity';
@@ -29,7 +30,7 @@ import { DamagesService } from './services/damages.service';
     BullModule.registerQueue({ name: DAMAGES_QUEUE_NAME }),
   ],
   controllers: [DamagesController],
-  providers: [DamagesService, DamagesRepository, DamagesQueueProcessor],
+  providers: [TenantScope, DamagesService, DamagesRepository, DamagesQueueProcessor],
   exports: [DamagesService],
 })
 export class DamagesModule {}
