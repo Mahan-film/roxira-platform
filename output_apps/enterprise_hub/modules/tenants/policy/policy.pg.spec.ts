@@ -99,4 +99,72 @@ describePg('Tenant policy settings on PostgreSQL (non-superuser, FORCE RLS)', ()
     );
     expect(stillThere.value).toBe(900);
   });
+
+  it('persists control weakening warning, reason and auto-revert date (#584-6) under NOSUPERUSER NOBYPASSRLS', async () => {
+    const future = new Date(Date.now() + 86400_000 * 3).toISOString();
+    const view = await service.set(
+      T1,
+      ownerActor,
+      'purchase.invoice_review.reviewer_rule',
+      'creator_may_accept',
+      'مجوز موقت تضعیف کنترل تفکیک وظایف',
+      future,
+    );
+
+    expect(view.isWeakened).toBe(true);
+    expect(view.warning).toContain('تفکیک وظایف غیرفعال شد');
+    expect(view.reason).toBe('مجوز موقت تضعیف کنترل تفکیک وظایف');
+    expect(view.autoRevertAt).toEqual(new Date(future));
+
+    // Verify stored directly in Postgres under RLS
+    const rows = await app.transaction(async (m) => {
+      await TenantScope.bind(m, T1);
+      return m.query(
+        `SELECT "key", "auto_revert_at", "reason" FROM "tenant_policy_settings" WHERE "tenant_id" = $1 AND "key" = $2`,
+        [T1, 'purchase.invoice_review.reviewer_rule'],
+      );
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].reason).toBe('مجوز موقت تضعیف کنترل تفکیک وظایف');
+    expect(new Date(rows[0].auto_revert_at)).toEqual(new Date(future));
+  });
+
+  it('automatically reverts an expired policy on real PostgreSQL and cleans up auto_revert_at', async () => {
+    // Manually set auto_revert_at in the past via owner connection to simulate elapsed time
+    await owner.query(
+      `UPDATE "tenant_policy_settings"
+       SET "auto_revert_at" = now() - interval '1 hour'
+       WHERE "tenant_id" = $1 AND "key" = $2`,
+      [T1, 'purchase.invoice_review.reviewer_rule'],
+    );
+
+    // Reading through the non-superuser service triggers the automatic reversion
+    const val = await service.get(T1, 'purchase.invoice_review.reviewer_rule');
+    expect(val).toBe('always_differs'); // reverted to default!
+
+    // Check DB state: auto_revert_at is cleared and reason updated
+    const [row] = await owner.query(
+      `SELECT "value", "auto_revert_at", "reason" FROM "tenant_policy_settings" WHERE "tenant_id" = $1 AND "key" = $2`,
+      [T1, 'purchase.invoice_review.reviewer_rule'],
+    );
+    expect(row.value).toBe('always_differs');
+    expect(row.auto_revert_at).toBeNull();
+    expect(row.reason).toContain('بازگشت خودکار به مقدار پیش‌فرض امن');
+  });
+
+  it('returns active exceptions report isolating across tenants', async () => {
+    // Set a non-default tolerance on T1
+    await service.set(T1, ownerActor, 'purchase.three_way.qty_excess_tolerance_bp', 150, 'تلورانس مجاز موقت');
+
+    const exceptionsT1 = await service.getExceptions(T1);
+    expect(exceptionsT1).toHaveLength(1);
+    expect(exceptionsT1[0].key).toBe('purchase.three_way.qty_excess_tolerance_bp');
+    expect(exceptionsT1[0].value).toBe(150);
+    expect(exceptionsT1[0].isWeakened).toBe(true);
+
+    // T2 has key set to 900 in earlier test
+    const exceptionsT2 = await service.getExceptions(T2);
+    expect(exceptionsT2).toHaveLength(1);
+    expect(exceptionsT2[0].value).toBe(900);
+  });
 });
