@@ -190,6 +190,39 @@
   "GET /admin/entitlements/requests/open (EntitlementsAdminController.openRequests)": {
     "policy": "platformAdmin"
   },
+  "GET /approvals/requests (ApprovalsController.listRequests)": {
+    "policy": "members:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "GET /approvals/requests/:id (ApprovalsController.getRequest)": {
+    "policy": "anyMember",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": true,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": true
+  },
+  "GET /approvals/rules (ApprovalsController.listRules)": {
+    "policy": "members:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "GET /auth/me (AuthController.me)": {
     "policy": "authOnly"
   },
@@ -2290,6 +2323,72 @@
     "legacy_member": false
   },
   "PATCH /tenants/me/settings (TenantsController.updateSettings)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /approvals/delegations (ApprovalsController.createDelegation)": {
+    "policy": "members:approve",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /approvals/delegations/:id/revoke (ApprovalsController.revokeDelegation)": {
+    "policy": "members:approve",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /approvals/policy-changes/group-b (ApprovalsController.requestGroupBPolicyChange)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /approvals/requests (ApprovalsController.createRequest)": {
+    "policy": "members:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /approvals/requests/:id/decide (ApprovalsController.decide)": {
+    "policy": "anyMember",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": true,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": true
+  },
+  "POST /approvals/rules (ApprovalsController.upsertRule)": {
     "policy": "members:admin",
     "owner": true,
     "admin": true,
