@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { LedgerAuditService } from '../../access/services/ledger-audit.service';
 import { EntityManager, FindOptionsWhere, ILike } from 'typeorm';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import {
   fromDb,
   fromMinor,
@@ -33,6 +33,7 @@ import {
 } from '../constants/accounting.constants';
 import {
   DuplicateEntryNumberError,
+  IdempotentReplayError,
   LockedPeriodError,
   PeriodLockedException,
   UnknownDimensionError,
@@ -670,7 +671,13 @@ export class AccountingService {
   ): Promise<JournalEntryResponseDto> {
     await this.ensureDefaultAccounts(tenantId, manager);
 
+    const status = dto.status ?? JournalEntryStatus.POSTED;
+    const normalizedLines = dto.lines.map((line) => this.normalizeLine(line));
+
     const idempotencyKey = dto.idempotencyKey?.trim() || null;
+    const idempotencyFingerprint = idempotencyKey
+      ? this.requestFingerprint(dto, status, normalizedLines)
+      : null;
     if (idempotencyKey) {
       const existing = await this.accountingRepository.findEntryByIdempotencyKey(
         tenantId,
@@ -678,12 +685,9 @@ export class AccountingService {
         manager,
       );
       if (existing) {
-        return this.toEntryDto(existing);
+        return this.replayOf(existing, idempotencyKey, idempotencyFingerprint);
       }
     }
-
-    const status = dto.status ?? JournalEntryStatus.POSTED;
-    const normalizedLines = dto.lines.map((line) => this.normalizeLine(line));
 
     // A draft may be unbalanced while it is typed; every other state must balance to the cent.
     if (status !== JournalEntryStatus.DRAFT) {
@@ -706,6 +710,17 @@ export class AccountingService {
         manager,
       );
       if (clash) {
+        if (idempotencyKey) {
+          // A concurrent request with the same key may have just committed this very number.
+          const winner = await this.accountingRepository.findEntryByIdempotencyKey(
+            tenantId,
+            idempotencyKey,
+            manager,
+          );
+          if (winner) {
+            return this.replayOf(winner, idempotencyKey, idempotencyFingerprint);
+          }
+        }
         if (!isGenerated) {
           throw new ConflictException(
             `سندی با شماره ${entryNumber} قبلاً ثبت شده است.`,
@@ -729,11 +744,15 @@ export class AccountingService {
             reversesEntryId: options.reversesEntryId ?? null,
             entryType: options.entryType,
             idempotencyKey,
+            idempotencyFingerprint,
           },
           lineInputs,
           manager,
         );
       } catch (error) {
+        if (error instanceof IdempotentReplayError && idempotencyKey) {
+          return this.replayOf(error.existing as JournalEntryEntity, idempotencyKey, idempotencyFingerprint);
+        }
         if (error instanceof LockedPeriodError) {
           throw new PeriodLockedException(this.lockedPeriodMessage(error.date));
         }
@@ -774,6 +793,39 @@ export class AccountingService {
     }
 
     return this.toEntryDto(saved);
+  }
+
+  /** Stable hash of what the caller asked for (the key itself and server-chosen values excluded). */
+  private requestFingerprint(
+    dto: CreateJournalEntryDto,
+    status: JournalEntryStatus,
+    lines: NormalisedJournalLine[],
+  ): string {
+    const canonical = JSON.stringify(
+      {
+        description: dto.description ?? null,
+        date: dto.date ?? null,
+        entryNumber: dto.entryNumber?.trim() || null,
+        status,
+        lines,
+      },
+      (_k, v) => (typeof v === 'bigint' ? v.toString() : v),
+    );
+    return createHash('sha256').update(canonical).digest('hex');
+  }
+
+  /** Same key + same body returns the original voucher; same key + other body is a clear 409. */
+  private replayOf(
+    existing: JournalEntryEntity,
+    key: string,
+    fingerprint: string | null,
+  ): JournalEntryResponseDto {
+    if (existing.idempotencyFingerprint && fingerprint && existing.idempotencyFingerprint !== fingerprint) {
+      throw new ConflictException(
+        `کلید یکتایی «${key}» قبلاً با محتوای دیگری استفاده شده است؛ برای سند جدید کلید جدید بفرستید. (Idempotency-Key reused with a different request body.)`,
+      );
+    }
+    return this.toEntryDto(existing);
   }
 
   /**

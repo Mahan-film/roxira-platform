@@ -17,6 +17,7 @@ import { minorToDecimal } from '../money';
 import { JournalSearchFilter, journalSearchWhere } from './journal-search.sql';
 import {
   DuplicateEntryNumberError,
+  IdempotentReplayError,
   LockedPeriodError,
   UnknownDimensionError,
   VoucherVersionConflictError,
@@ -411,6 +412,7 @@ export class AccountingRepository {
       reversesEntryId?: number | null;
       entryType?: JournalEntryType;
       idempotencyKey?: string | null;
+      idempotencyFingerprint?: string | null;
     },
     lineInputs: JournalLineInput[],
     outerManager?: EntityManager,
@@ -418,6 +420,21 @@ export class AccountingRepository {
     return this.transaction(tenantId, async (manager) => {
       await this.lockLedgerShared(tenantId, manager);
       await this.assertDateOpen(tenantId, header.date, manager);
+
+      if (header.idempotencyKey) {
+        // Serialise same-key writers inside the inserting transaction. The loser waits for the
+        // winner's commit, then sees its row and replays; its insert (and the final-number
+        // trigger, which would burn a number even for a skipped insert) never runs.
+        await manager.query(
+          `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+          [`jeidem:${tenantId}:${header.idempotencyKey}`],
+        );
+        const existing = await manager.findOne(JournalEntryEntity, {
+          where: { tenantId, idempotencyKey: header.idempotencyKey },
+          relations: { lines: true },
+        });
+        if (existing) throw new IdempotentReplayError(existing);
+      }
 
       const inserted: Array<{ id: number }> = (
         await manager
@@ -433,21 +450,13 @@ export class AccountingRepository {
             reversesEntryId: header.reversesEntryId ?? null,
             entryType: header.entryType ?? JournalEntryType.NORMAL,
             idempotencyKey: header.idempotencyKey ?? null,
+            idempotencyFingerprint: header.idempotencyFingerprint ?? null,
           })
           .orIgnore()
           .returning('id')
           .execute()
       ).raw;
       if (inserted.length === 0) {
-        if (header.idempotencyKey) {
-          const existing = await manager.findOne(JournalEntryEntity, {
-            where: { tenantId, idempotencyKey: header.idempotencyKey },
-            relations: { lines: true },
-          });
-          if (existing) {
-            return existing;
-          }
-        }
         throw new DuplicateEntryNumberError(header.entryNumber);
       }
       const entryId = inserted[0].id;

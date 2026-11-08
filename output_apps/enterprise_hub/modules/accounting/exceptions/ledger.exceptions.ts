@@ -23,6 +23,16 @@ export class DuplicateEntryNumberError extends Error {
   }
 }
 
+/**
+ * The (tenant, idempotency key) already belongs to a voucher. Thrown from the inserting
+ * transaction BEFORE the insert, so the final-number trigger never runs and no number is burned.
+ */
+export class IdempotentReplayError extends Error {
+  constructor(readonly existing: unknown) {
+    super('Idempotency key already used.');
+  }
+}
+
 /** A line names a dimension code that does not exist or is inactive for this tenant. */
 export class UnknownDimensionError extends Error {
   constructor(readonly kind: string, readonly code: string) {
