@@ -69,6 +69,11 @@ export class CreatePartyDto {
   @IsOptional()
   @IsBoolean()
   active?: boolean;
+
+  @ApiPropertyOptional({ description: 'سقف اعتبار (ریال)', example: '100000000' })
+  @IsOptional()
+  @IsString()
+  creditLimit?: string;
 }
 
 /** `code` is the identity of the row and is never updatable. */
@@ -114,6 +119,11 @@ export class UpdatePartyDto {
   @IsOptional()
   @IsBoolean()
   active?: boolean;
+
+  @ApiPropertyOptional({ description: 'سقف اعتبار (ریال)' })
+  @IsOptional()
+  @IsString()
+  creditLimit?: string;
 }
 
 export class QueryPartiesDto {
@@ -162,6 +172,7 @@ export class PartyResponseDto {
   @ApiPropertyOptional({ nullable: true, type: String }) phone: string | null;
   @ApiPropertyOptional({ nullable: true, type: String }) email: string | null;
   @ApiProperty() active: boolean;
+  @ApiPropertyOptional({ type: String, example: '100000000' }) creditLimit: string;
   @ApiProperty() createdAt: Date;
   @ApiProperty() updatedAt: Date;
 }

@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { StockMovementType } from '../enums/stock-movement-type.enum';
 
 /**
@@ -48,4 +48,7 @@ export class StockMovementResultDto {
 
   @ApiProperty({ description: 'زمان ثبت گردش' })
   processedAt: Date;
+
+  @ApiPropertyOptional({ description: 'هشدار خط‌مشی (مثلاً موجودی منفی)' })
+  warning?: string;
 }

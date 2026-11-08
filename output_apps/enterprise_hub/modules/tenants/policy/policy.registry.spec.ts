@@ -20,12 +20,12 @@ describe('policy registry (#585)', () => {
     }
   });
 
-  it('has exactly 3 fixed (A), 4 protected (B) and 8 management (C) keys', () => {
+  it('has exactly 3 fixed (A), 7 protected (B) and 12 management (C) keys', () => {
     const count = (group: string) => POLICY_REGISTRY.filter((d) => d.group === group).length;
     expect(count('A')).toBe(3);
-    expect(count('B')).toBe(4);
-    expect(count('C')).toBe(8);
-    expect(POLICY_REGISTRY).toHaveLength(15);
+    expect(count('B')).toBe(7);
+    expect(count('C')).toBe(12);
+    expect(POLICY_REGISTRY).toHaveLength(22);
   });
 
   it('exposes definitions and defaults by key', () => {

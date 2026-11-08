@@ -72,6 +72,7 @@ export interface LockedFifoLayer {
 export interface OutboundPersistResult {
   item: StockItemEntity;
   layers: ConsumedLayer[];
+  warning?: string;
 }
 
 /** تجمیع لایه‌های FIFO باز به تفکیک کالا. */
@@ -706,18 +707,49 @@ export class InventoryRepository {
           remaining = this.roundQuantity(remaining - take);
         }
 
+        let warning: string | undefined;
         if (remaining > 0) {
           const available = this.roundQuantity(input.quantity - remaining);
-          throw new InsufficientStockError(input.sku, input.quantity, available);
+          const mode = await this.getNegativeStockMode(tenantId, manager);
+          if (mode === 'refuse') {
+            throw new InsufficientStockError(input.sku, input.quantity, available);
+          }
+          layers.push({
+            batchId: 0,
+            batchNumber: 'NEGATIVE-STOCK',
+            quantity: this.roundQuantity(remaining),
+            unitPurchaseCost: 0,
+            warehouseId: input.warehouseId,
+          });
+          if (mode === 'warn') {
+            warning = `کسری موجودی کالا: موجودی انبار برای کالای ${input.sku} منفی شد (کسری: ${remaining}).`;
+          }
         }
 
         item.quantity = this.roundQuantity(item.quantity - input.quantity);
         const savedItem = await manager.save(item);
 
-        return { item: savedItem, layers };
+        return { item: savedItem, layers, warning };
       },
       outerManager,
     );
+  }
+
+  private async getNegativeStockMode(
+    tenantId: string,
+    manager: EntityManager,
+  ): Promise<string> {
+    const rows = (await manager.query(
+      `SELECT "value" FROM "tenant_policy_settings" WHERE "tenant_id" = $1 AND "key" = 'inventory.negative_stock.mode'`,
+      [tenantId],
+    )) as Array<{ value: unknown }>;
+    if (rows.length > 0 && rows[0].value !== null && rows[0].value !== undefined) {
+      const val = typeof rows[0].value === 'string'
+        ? rows[0].value.replace(/^"|"$/g, '')
+        : String(rows[0].value);
+      return val;
+    }
+    return 'refuse';
   }
 
   /**

@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Currency } from '../../currency/enums/currency.enum';
 import { JournalEntryStatus } from '../enums/accounting.enum';
 import { Money } from '../money';
@@ -95,6 +95,9 @@ export class JournalEntryResponseDto {
 
   @ApiProperty({ type: [JournalEntryLineResponseDto], description: 'سطرهای سند' })
   lines: JournalEntryLineResponseDto[];
+
+  @ApiPropertyOptional({ description: 'هشدار خط‌مشی (مثلاً بودجه)' })
+  warning?: string;
 }
 
 /**

@@ -39,6 +39,9 @@ export class PartyEntity {
   @Column({ type: 'boolean', default: true })
   active: boolean;
 
+  @Column({ type: 'bigint', name: 'credit_limit', default: '0' })
+  creditLimit: string;
+
   @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt: Date;
 

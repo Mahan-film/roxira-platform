@@ -44,6 +44,10 @@ export class SalesController {
     return String(request.user?.sub ?? 'unknown').slice(0, 64);
   }
 
+  private roleOf(request: AuthenticatedRequest): string {
+    return request.user?.tenantRole ?? request.user?.role ?? 'sales_agent';
+  }
+
   // ------------------------------------------------------------------ quotations
 
   @Get('quotations')
@@ -76,7 +80,7 @@ export class SalesController {
     @Req() request: AuthenticatedRequest,
     @Body() dto: CreateSalesQuotationDto,
   ): Promise<SalesQuotationResponseDto> {
-    return this.sales.createQuotation(requireTenantId(request), dto, this.userIdOf(request));
+    return this.sales.createQuotation(requireTenantId(request), dto, this.userIdOf(request), this.roleOf(request));
   }
 
   @Put('quotations/:id')
@@ -87,7 +91,7 @@ export class SalesController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateSalesQuotationDto,
   ): Promise<SalesQuotationResponseDto> {
-    return this.sales.updateQuotation(requireTenantId(request), id, dto);
+    return this.sales.updateQuotation(requireTenantId(request), id, dto, this.roleOf(request));
   }
 
   @Post('quotations/:id/status')
@@ -141,7 +145,7 @@ export class SalesController {
     @Req() request: AuthenticatedRequest,
     @Body() dto: CreateSalesOrderDto,
   ): Promise<SalesOrderResponseDto> {
-    return this.sales.createOrder(requireTenantId(request), dto, this.userIdOf(request));
+    return this.sales.createOrder(requireTenantId(request), dto, this.userIdOf(request), this.roleOf(request));
   }
 
   @Put('orders/:id')
@@ -152,7 +156,7 @@ export class SalesController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateSalesOrderDto,
   ): Promise<SalesOrderResponseDto> {
-    return this.sales.updateOrder(requireTenantId(request), id, dto);
+    return this.sales.updateOrder(requireTenantId(request), id, dto, this.roleOf(request));
   }
 
   @Post('orders/:id/confirm')

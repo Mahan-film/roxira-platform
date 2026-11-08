@@ -645,6 +645,7 @@ export class InventoryService {
         totalCost: this.roundMoney(totalCost),
         layers,
         processedAt: new Date(),
+        warning: result.warning,
       };
     } catch (error) {
       this.rethrowDomainError(error);
