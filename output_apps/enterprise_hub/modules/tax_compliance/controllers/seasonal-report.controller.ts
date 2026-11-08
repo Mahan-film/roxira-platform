@@ -6,6 +6,18 @@ import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
 import { requireTenantId } from '../../tenants/tenant-context';
 import { ExportVatReturnDto } from '../dto/export-vat-return.dto';
 import { QuerySeasonalReportDto } from '../dto/query-seasonal-report.dto';
+import {
+  QueryTaxInspectorPackageDto,
+  TaxInspectorPackageView,
+} from '../dto/tax-inspector-report.dto';
+import {
+  QueryQuarterlyTaxComparisonDto,
+  QuarterlyTaxComparisonView,
+} from '../dto/quarterly-tax-comparison.dto';
+import {
+  QueryYearEndRolloverDto,
+  YearEndTaxRolloverView,
+} from '../dto/year-end-tax-rollover.dto';
 import { renderVatReturn } from '../reports/vat-return-export';
 import { VatReturn, VatReturnService } from '../reports/vat-return.service';
 import {
@@ -14,6 +26,9 @@ import {
   SeasonalTransactionRow,
   SeasonalVatReport,
 } from '../reports/seasonal-report.service';
+import { TaxInspectorService } from '../reports/tax-inspector.service';
+import { QuarterlyTaxComparisonService } from '../reports/quarterly-tax-comparison.service';
+import { YearEndTaxRolloverService } from '../reports/year-end-tax-rollover.service';
 
 /**
  * گزارش‌های فصلی (ارزش افزوده و فهرست معاملات) از صورتحساب‌های مستأجر.
@@ -26,6 +41,9 @@ export class SeasonalReportController {
   constructor(
     private readonly reports: SeasonalReportService,
     private readonly vatReturns: VatReturnService,
+    private readonly taxInspector: TaxInspectorService,
+    private readonly taxComparison: QuarterlyTaxComparisonService,
+    private readonly yearEndService: YearEndTaxRolloverService,
   ) {}
 
   private tenantIdOf(request: AuthenticatedRequest): string {
@@ -105,5 +123,32 @@ export class SeasonalReportController {
     response.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
     response.setHeader('Cache-Control', 'no-store');
     return new StreamableFile(file.body);
+  }
+
+  @Get('tax-inspector-package')
+  @ApiOperation({ summary: 'بسته ممیز مالیاتی: خلاصه پرونده مالیاتی، تطبیق فروش و دفاتر، و بررسی سلامت اسناد' })
+  taxInspectorPackage(
+    @Req() request: AuthenticatedRequest,
+    @Query() query: QueryTaxInspectorPackageDto,
+  ): Promise<TaxInspectorPackageView> {
+    return this.taxInspector.generatePackage(this.tenantIdOf(request), query.year);
+  }
+
+  @Get('quarterly-tax-comparison')
+  @ApiOperation({ summary: 'گزارش مقایسه‌ای فصلی مالیات: تحلیل روندهای چهار فصل، مغایرت‌ها و مالیات عملکرد' })
+  quarterlyComparison(
+    @Req() request: AuthenticatedRequest,
+    @Query() query: QueryQuarterlyTaxComparisonDto,
+  ): Promise<QuarterlyTaxComparisonView> {
+    return this.taxComparison.generateComparison(this.tenantIdOf(request), query.year);
+  }
+
+  @Get('year-end-tax-rollover')
+  @ApiOperation({ summary: 'تطبیق مالیاتی پایان سال و چک‌لیست آمادگی بستن سال مالی' })
+  yearEndRollover(
+    @Req() request: AuthenticatedRequest,
+    @Query() query: QueryYearEndRolloverDto,
+  ): Promise<YearEndTaxRolloverView> {
+    return this.yearEndService.assessRollover(this.tenantIdOf(request), query);
   }
 }
