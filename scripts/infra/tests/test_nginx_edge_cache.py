@@ -39,6 +39,14 @@ def test_snippet_has_cache_policy():
     assert CACHE_LINE in SNIPPET
     # add_header in a location drops inherited headers: security headers re-included.
     assert "snippets/security_headers.conf" in SNIPPET
+    # Nginx local cache directives (T17)
+    assert "proxy_cache laws_cache;" in SNIPPET
+    assert "proxy_cache_lock on;" in SNIPPET
+    assert "proxy_cache_use_stale" in SNIPPET
+    assert "proxy_cache_bypass $laws_cookie_bypass $http_authorization;" in SNIPPET
+    assert "add_header X-Cache-Status $upstream_cache_status always;" in SNIPPET
+    assert "proxy_cache_path /var/cache/nginx/laws_cache" in CONF
+    assert "$laws_cookie_bypass" in CONF
 
 
 def test_cached_locations_exist_per_frontend_server():
