@@ -186,7 +186,7 @@ export default function PayrollPage() {
   const draft = run?.status === "DRAFT";
 
   return (
-    <EnterpriseRouteGuard requireAdmin>
+    <EnterpriseRouteGuard>
       <PageHeader
         title="حقوق و دستمزد ماهانه"
         description="محاسبه حقوق طبق قانون کار، فیش حقوقی، ثبت سند حسابداری و لیست بیمه"

@@ -1,5 +1,7 @@
 import { AccessAction, AccessModule } from '../../access/catalogue';
 import { ModuleAccess, RequireAction } from '../../access/decorators';
+import { AccessRequest } from '../../access/access-context';
+import { redactSensitiveFields } from '../../access/policy-evaluator';
 import {
   BadRequestException,
   Body,
@@ -433,6 +435,16 @@ export class HrController {
   async getStats(
     @Req() request: AuthenticatedRequest,
   ): Promise<HrStatsResponseDto> {
-    return this.hrService.getStats(this.tenantIdOf(request));
+    const stats = await this.hrService.getStats(this.tenantIdOf(request));
+    // Headcount stays visible; salary totals only for roles with salary visibility (#584-3).
+    const access = (request as AccessRequest).access;
+    if (!access) return stats;
+    return redactSensitiveFields(stats as unknown as Record<string, unknown>, access, {
+      totalBaseSalary: 'salary',
+      totalGrossPay: 'salary',
+      totalNetPay: 'salary',
+      totalDeductions: 'salary',
+      averageNetPay: 'salary',
+    }) as unknown as HrStatsResponseDto;
   }
 }

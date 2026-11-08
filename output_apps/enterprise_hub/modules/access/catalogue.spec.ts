@@ -1,6 +1,20 @@
 import {
-  ALL_PERMISSIONS, canGrant, isPermission, SELLABLE_MODULES, CORE_MODULES, SYSTEM_ROLES, SystemRole,
-  AccessModule, systemRolePermissions,
+  ALL_PERMISSIONS,
+  ALL_ROLE_SCOPE_TYPES,
+  ALL_SENSITIVE_FIELDS,
+  AccessModule,
+  CORE_MODULES,
+  SELLABLE_MODULES,
+  SYSTEM_ROLES,
+  SystemRole,
+  canGrant,
+  canGrantFieldVisibility,
+  isPermission,
+  isRoleScopeType,
+  isSensitiveField,
+  resolveCustomRoleFieldVisibility,
+  systemRoleFieldVisibility,
+  systemRolePermissions,
 } from './catalogue';
 
 describe('permission catalogue', () => {
@@ -33,6 +47,40 @@ describe('permission catalogue', () => {
     const sales = new Set(systemRolePermissions(SystemRole.SALES));
     expect(canGrant(sales, ['crm:read'])).toBe(true);
     expect(canGrant(sales, ['crm:read', 'accounting:read'])).toBe(false);
+  });
+
+  it('salary visibility is granted only to owner and hr by default (#584-3)', () => {
+    const salaryHolders = SYSTEM_ROLES.filter((r) => r.fieldVisibility.salary).map((r) => r.key);
+    expect(salaryHolders).toEqual([SystemRole.OWNER, SystemRole.HR]);
+    expect(systemRoleFieldVisibility(SystemRole.ADMIN).salary).toBe(false);
+    expect(systemRoleFieldVisibility(SystemRole.READ_ONLY).salary).toBe(false);
+  });
+
+  it('canGrantFieldVisibility blocks granting sensitive fields the granter lacks', () => {
+    const adminVis = systemRoleFieldVisibility(SystemRole.ADMIN);
+    expect(canGrantFieldVisibility(adminVis, { cost: true, margin: true })).toBe(true);
+    expect(canGrantFieldVisibility(adminVis, { salary: true })).toBe(false);
+
+    const hrVis = systemRoleFieldVisibility(SystemRole.HR);
+    expect(canGrantFieldVisibility(hrVis, { salary: true })).toBe(true);
+    expect(canGrantFieldVisibility(hrVis, { cost: true })).toBe(false);
+  });
+
+  it('validates role scope types and custom role field visibility defaults', () => {
+    for (const st of ALL_ROLE_SCOPE_TYPES) expect(isRoleScopeType(st)).toBe(true);
+    expect(isRoleScopeType('global')).toBe(false);
+    for (const sf of ALL_SENSITIVE_FIELDS) expect(isSensitiveField(sf)).toBe(true);
+    expect(isSensitiveField('unknown')).toBe(false);
+    expect(resolveCustomRoleFieldVisibility(undefined)).toEqual({
+      cost: false,
+      margin: false,
+      salary: false,
+    });
+    expect(resolveCustomRoleFieldVisibility({ cost: true })).toEqual({
+      cost: true,
+      margin: false,
+      salary: false,
+    });
   });
 
   it('the catalogue has no price or money concept', () => {

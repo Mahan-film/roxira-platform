@@ -3,12 +3,24 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AccessRequest, requireAccess } from '../access-context';
-import { ALL_ACTIONS, AccessAction, AccessModule, SYSTEM_ROLES } from '../catalogue';
+import {
+  ALL_ACTIONS,
+  ALL_ROLE_SCOPE_TYPES,
+  ALL_SENSITIVE_FIELDS,
+  AccessAction,
+  AccessModule,
+  SYSTEM_ROLES,
+} from '../catalogue';
 import { AnyMember, AuthOnly, ModuleAccess, RequireAction } from '../decorators';
 import {
   AuditQueryDto, CreateBranchDto, CreateDepartmentDto, CreateInvitationDto, CreateManagedMemberDto, CreateOrganizationDto,
   CreateRoleDto, RequestModuleDto, ResetManagedPasswordDto, UpdateBranchDto, UpdateMemberDto, UpdateRoleDto, UpdateSecurityPolicyDto,
 } from '../dto/org.dto';
+import {
+  effectiveAmountLimits,
+  effectiveFieldVisibility,
+  effectiveScope,
+} from '../policy-evaluator';
 import { AccessService } from '../services/access.service';
 import { AuditService } from '../services/audit.service';
 import { EntitlementsService } from '../services/entitlements.service';
@@ -53,12 +65,16 @@ export class OrgController {
       organization: {
         tenantId: ctx.tenantId,
         roleKey: ctx.roleKey,
+        customRoleId: ctx.customRoleId ?? null,
         permissions: [...ctx.permissions],
         entitledModules: [...ctx.entitledModules],
         branchId: ctx.branchId,
         branchScoped: ctx.branchScoped,
         require2fa: ctx.require2fa,
         mfa: user?.mfa === true,
+        scope: effectiveScope(ctx),
+        amountLimits: effectiveAmountLimits(ctx),
+        fieldVisibility: effectiveFieldVisibility(ctx),
       },
     };
   }
@@ -136,7 +152,12 @@ export class OrgController {
     return {
       system: this.roles.systemRoles(),
       custom: await this.roles.list(ctx),
-      catalogue: { modules: Object.values(AccessModule), actions: ALL_ACTIONS },
+      catalogue: {
+        modules: Object.values(AccessModule),
+        actions: ALL_ACTIONS,
+        scopeTypes: ALL_ROLE_SCOPE_TYPES,
+        sensitiveFields: ALL_SENSITIVE_FIELDS,
+      },
     };
   }
 
@@ -144,7 +165,12 @@ export class OrgController {
   @Post('roles')
   @HttpCode(HttpStatus.CREATED)
   createRole(@Req() req: AccessRequest, @Body() dto: CreateRoleDto) {
-    return this.roles.create(requireAccess(req), dto.name, dto.permissions, req);
+    return this.roles.create(requireAccess(req), dto.name, dto.permissions, req, {
+      scopeType: dto.scopeType,
+      scopeIds: dto.scopeIds,
+      amountLimits: dto.amountLimits,
+      fieldVisibility: dto.fieldVisibility,
+    });
   }
 
   @RequireAction(AccessAction.ADMIN)
