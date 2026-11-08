@@ -9,6 +9,9 @@ Postgres connection (order persistence is a FakeOrderStore below). Safe for
 
 from __future__ import annotations
 
+import contextlib
+import threading
+
 import pytest
 
 from output_apps.ecosystem_core.src.billing import payment_service
@@ -25,6 +28,12 @@ class FakeOrderStore:
     def __init__(self):
         self.orders: dict[str, dict] = {}
         self.mark_paid_calls = 0
+        self._lock = threading.RLock()
+
+    @contextlib.contextmanager
+    def lock(self, track_id: str):
+        with self._lock:
+            yield
 
     def create_pending_order(self, *, track_id, plan_type, amount_rial, phone=None, user_ref=None):
         self.orders[track_id] = {
@@ -598,3 +607,140 @@ def test_subscription_purchase_is_flagged_subscription():
                                             "expires_at": "2030-02-01T00:00:00+00:00"})
     assert res["is_subscription"] is True
     assert res["expires_at"] == "2030-02-01T00:00:00+00:00"
+
+
+# ---------------------------------------------------------------------------
+# T18: Replay/Refresh safety, lock serialization, amount audit, duplicate ref
+# ---------------------------------------------------------------------------
+
+
+def test_refresh_or_replay_never_double_credits_or_reactivates():
+    """T18: On page refresh / replay, verify_invoice returns already_verified: True,
+    replayed: True, PAID status, and never invokes activate_fn a second time."""
+    store = FakeOrderStore()
+    _seed_pending(store, amount=35_000_000, plan_type="VIP_MONTHLY_PRO")
+    activated = []
+    gateway_calls = []
+
+    def fake_gateway(tid):
+        gateway_calls.append(tid)
+        return _PAID_OK
+
+    def fake_activate(user_ref, plan_type):
+        activated.append((user_ref, plan_type))
+        return {"persisted": True, "expires_at": "2030-01-01T00:00:00+00:00"}
+
+    # First call: user returns from gateway
+    res1 = payment_service.verify_invoice(
+        track_id="TRK-1",
+        order_store=store,
+        zibal_verify_fn=fake_gateway,
+        activate_fn=fake_activate,
+        plans=PLANS,
+    )
+    assert res1["status"] == "PAID"
+    assert res1["already_verified"] is False
+    assert res1["replayed"] is False
+    assert len(activated) == 1
+    assert len(gateway_calls) == 1
+    assert store.mark_paid_calls == 1
+
+    # Second call: user refreshes the callback page (F5)
+    res2 = payment_service.verify_invoice(
+        track_id="TRK-1",
+        order_store=store,
+        zibal_verify_fn=fake_gateway,
+        activate_fn=fake_activate,
+        plans=PLANS,
+    )
+    assert res2["status"] == "PAID"
+    assert res2["already_verified"] is True
+    assert res2["replayed"] is True
+    assert len(activated) == 1  # No double credit!
+    assert len(gateway_calls) == 1  # Gateway not re-queried!
+    assert store.mark_paid_calls == 1
+
+    # Third call: subsequent replay
+    res3 = payment_service.verify_invoice(
+        track_id="TRK-1",
+        order_store=store,
+        zibal_verify_fn=fake_gateway,
+        activate_fn=fake_activate,
+        plans=PLANS,
+    )
+    assert res3["status"] == "PAID"
+    assert res3["already_verified"] is True
+    assert res3["replayed"] is True
+    assert len(activated) == 1
+
+
+def test_concurrent_verify_requests_serialize_and_activate_once():
+    """T18: Multiple simultaneous requests (e.g. fast double-click or webhook + browser)
+    serialize via lock and execute activate_fn exactly once."""
+    import concurrent.futures
+
+    store = FakeOrderStore()
+    _seed_pending(store, amount=35_000_000, plan_type="VIP_MONTHLY_PRO")
+    activated = []
+
+    def fake_activate(user_ref, plan_type):
+        import time
+        time.sleep(0.01)  # simulate small delay during activation
+        activated.append((user_ref, plan_type))
+        return {"persisted": True, "expires_at": "2030-01-01T00:00:00+00:00"}
+
+    def do_verify():
+        return payment_service.verify_invoice(
+            track_id="TRK-1",
+            order_store=store,
+            zibal_verify_fn=lambda tid: _PAID_OK,
+            activate_fn=fake_activate,
+            plans=PLANS,
+        )
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        futures = [executor.submit(do_verify) for _ in range(5)]
+        results = [f.result() for f in futures]
+
+    assert all(r["status"] == "PAID" for r in results)
+    assert len(activated) == 1
+    first_time = [r for r in results if not r.get("already_verified")]
+    replayed = [r for r in results if r.get("already_verified")]
+    assert len(first_time) == 1
+    assert len(replayed) == 4
+
+
+def test_server_side_amount_zero_or_negative_is_rejected():
+    """T18: Gateway returning 0 or invalid amount is rejected and marked failed."""
+    store = FakeOrderStore()
+    _seed_pending(store, amount=35_000_000, plan_type="VIP_MONTHLY_PRO")
+    res = payment_service.verify_invoice(
+        track_id="TRK-1",
+        order_store=store,
+        zibal_verify_fn=lambda tid: {
+            "success": True, "paid": True, "definitive": True,
+            "amount": 0, "ref_number": "REF-0",
+        },
+        activate_fn=lambda u, p: pytest.fail("should not activate"),
+        plans=PLANS,
+    )
+    assert res["status"] == "FAILED"
+    assert "مبلغ" in res["message"]
+    assert store.orders["TRK-1"]["status"] == "failed"
+
+
+def test_unique_gateway_ref_number_integrity_rejection():
+    """T18: If gateway_ref_number is replayed across distinct orders, PgOrderStore.mark_paid
+    catches IntegrityError and returns False."""
+    from unittest.mock import MagicMock
+    psycopg = pytest.importorskip("psycopg")
+
+    mock_conn = MagicMock()
+    mock_cursor = MagicMock()
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+    mock_cursor.execute.side_effect = psycopg.IntegrityError("unique constraint violation")
+
+    from output_apps.ecosystem_core.src.billing import payment_orders
+    pg_store = payment_orders.PgOrderStore(mock_conn)
+    result = pg_store.mark_paid("TRK-DUP", "DUPLICATE-REF-999")
+    assert result is False

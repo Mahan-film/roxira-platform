@@ -91,3 +91,44 @@ def test_callback_url_encodes_track_id(client: TestClient):
     # malicious trackId inject extra query params into the redirect).
     assert "abc&evil=1" not in location
     assert "trackId=abc%26evil%3D1" in location
+
+
+def test_callback_supports_authority_and_status_ok(client: TestClient):
+    """Zarinpal/Shaparak style callback with authority and status=OK."""
+    resp = client.get(
+        "/api/v1/payment/zibal/callback",
+        params={"authority": "AUTH_12345", "status": "OK"},
+    )
+    assert resp.status_code == 302
+    location = resp.headers["location"]
+    assert "trackId=AUTH_12345" in location
+    assert "success=1" in location
+
+
+def test_callback_supports_capital_authority_and_status_nok(client: TestClient):
+    """Shaparak/Zarinpal style callback with Authority and status=NOK."""
+    resp = client.get(
+        "/api/v1/payment/zibal/callback",
+        params={"Authority": "AUTH_67890", "status": "NOK"},
+    )
+    assert resp.status_code == 302
+    location = resp.headers["location"]
+    assert "trackId=AUTH_67890" in location
+    assert "success=0" in location
+
+
+def test_callback_missing_token_redirects_with_missing_status(client: TestClient):
+    """A callback with no trackId or authority parameter."""
+    resp = client.get("/api/v1/payment/zibal/callback")
+    assert resp.status_code == 302
+    assert resp.headers["location"] == "/judge/payment/callback?status=missing_token"
+
+
+def test_callback_supports_snake_case_track_id(client: TestClient):
+    resp = client.get(
+        "/api/v1/payment/zibal/callback",
+        params={"track_id": "TRK_SNAKE", "success": 1},
+    )
+    assert resp.status_code == 302
+    assert "trackId=TRK_SNAKE" in resp.headers["location"]
+    assert "success=1" in resp.headers["location"]

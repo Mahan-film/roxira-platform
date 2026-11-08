@@ -3111,24 +3111,37 @@ async def create_payment_invoice(request: Request, payload: dict = Body(...)):
 
 @router.post("/payments/verify")
 async def verify_payment(request: Request, payload: dict = Body(...)):
-    """تأیید واقعی تراکنش زیبال با trackId و فعال‌سازی دسترسی VIP پس از تطابق مبلغ"""
+    """تأیید واقعی تراکنش با trackId یا Authority و فعال‌سازی دسترسی VIP پس از تطابق مبلغ"""
+    raw_track_id = str(
+        payload.get("track_id")
+        or payload.get("trackId")
+        or payload.get("authority")
+        or payload.get("Authority")
+        or ""
+    ).strip()
     limited = await asyncio.to_thread(
-        chat_auth.gate_payment_status, request, str(payload.get("track_id") or payload.get("trackId") or "") or None)
+        chat_auth.gate_payment_status, request, raw_track_id or None)
     if limited is not None:
         return limited
     if (not payment_service.payments_live_enabled()
-            and not str(payload.get("track_id") or payload.get("trackId") or "").startswith("USDT_")):
+            and not raw_track_id.startswith("USDT_")):
         return JSONResponse(
             status_code=503,
             content={"status": "UNAVAILABLE", "message": "درگاه پرداخت موقتاً در دسترس نیست."},
         )
 
-    track_id = payload.get("track_id") or payload.get("trackId")
-    if not track_id:
+    track_id = (
+        payload.get("track_id")
+        or payload.get("trackId")
+        or payload.get("authority")
+        or payload.get("Authority")
+    )
+    if not track_id or not str(track_id).strip():
         return JSONResponse(
             status_code=400,
-            content={"status": "FAILED", "message": "شناسه پیگیری (track_id) الزامی است."},
+            content={"status": "FAILED", "message": "شناسه پیگیری (track_id یا authority) الزامی است."},
         )
+    track_id = str(track_id).strip()
 
     if str(track_id).startswith("USDT_"):
         # Optional USDT-TRC20 checkout (CRYPTO_PAY_ENABLED): no Zibal call.
