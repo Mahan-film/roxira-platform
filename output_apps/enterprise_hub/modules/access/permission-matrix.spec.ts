@@ -241,6 +241,22 @@ describe('permission matrix (every controller)', () => {
       }
     });
 
+    it('shadow mode keeps legacy access authoritative (admin and read_only still reach payslips) but reports the diff', async () => {
+      const r = moduleRoutes.find((x) => classify(x).field === 'salary' && classify(x).action === AccessAction.READ)!;
+      for (const role of [SystemRole.ADMIN, SystemRole.READ_ONLY]) {
+        const stub = new AccessStub();
+        stub.grant('u1', TENANT, role);
+        const ctx = (await stub.resolve('u1', TENANT))!;
+        const { module, also, action, field } = classify(r);
+        const diffs: ShadowDiff[] = [];
+        const q = { module: module!, also, action: action!, field };
+        expect(evaluateWithShadow(ctx, q, (d) => diffs.push(d), true)).toEqual({ allowed: true });
+        expect(diffs).toHaveLength(1);
+        expect(diffs[0]).toMatchObject({ legacyAllowed: true, newAllowed: false, newCode: 'FORBIDDEN_FIELD' });
+        expect(evaluateWithShadow(ctx, q, undefined, false)).toMatchObject({ allowed: false, code: 'FORBIDDEN_FIELD' });
+      }
+    });
+
     it('enforces custom role scope (branch / warehouse), amount limits (money.ts minor units) and field redaction', async () => {
       const stub = new AccessStub();
       stub.grant('u1', TENANT, 'custom', {

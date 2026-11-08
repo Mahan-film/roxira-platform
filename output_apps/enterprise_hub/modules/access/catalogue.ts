@@ -253,6 +253,12 @@ export const SALARY_PROTECTED_HANDLERS: ReadonlySet<string> = new Set([
   'HrController.getPayrollReconciliation',
   'HrController.getPayslipsPdf',
   'HrController.getPayslipPdf',
+  'HrController.previewSettlement',
+  'HrController.createContract',
+  'HrController.listContracts',
+  'HrController.getContract',
+  'HrController.listAllowances',
+  'HrController.replaceAllowances',
 ]);
 
 export function requiredFieldForHandler(

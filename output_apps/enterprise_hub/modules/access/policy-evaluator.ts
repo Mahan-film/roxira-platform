@@ -169,13 +169,16 @@ export function evaluateAccess(ctx: AccessContext, query: AccessEvaluationQuery)
 }
 
 /**
- * Runs both legacy and new evaluators; invokes `onDiff` when they diverge (shadow mode)
- * and returns the authoritative `evaluateAccess` decision.
+ * Runs both legacy and new evaluators and invokes `onDiff` when they diverge.
+ * With `shadow` on (ACCESS_SHADOW_MODE) the LEGACY decision stays authoritative, so turning
+ * the flag on never changes who can do what; the diffs are only logged. With `shadow` off
+ * the new `evaluateAccess` decision is enforced.
  */
 export function evaluateWithShadow(
   ctx: AccessContext,
   query: AccessEvaluationQuery,
   onDiff?: (diff: ShadowDiff) => void,
+  shadow = false,
 ): AccessDecision {
   const legacy = legacyEvaluateAccess(ctx, query.module, query.action, query.also);
   const next = evaluateAccess(ctx, query);
@@ -190,7 +193,7 @@ export function evaluateWithShadow(
       newCode: next.allowed ? undefined : next.code,
     });
   }
-  return next;
+  return shadow ? legacy : next;
 }
 
 export function decisionToError(decision: AccessDecision): Error | undefined {

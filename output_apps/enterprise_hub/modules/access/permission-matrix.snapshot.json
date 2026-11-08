@@ -1092,36 +1092,36 @@
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/contracts (HrController.listContracts)": {
-    "policy": "hr:read",
+    "policy": "hr:read+field:salary",
     "owner": true,
-    "admin": true,
+    "admin": false,
     "accountant": false,
     "sales": false,
     "cheque_reviewer": false,
     "hr": true,
-    "read_only": true,
+    "read_only": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/contracts/:id (HrController.getContract)": {
-    "policy": "hr:read",
+    "policy": "hr:read+field:salary",
     "owner": true,
-    "admin": true,
+    "admin": false,
     "accountant": false,
     "sales": false,
     "cheque_reviewer": false,
     "hr": true,
-    "read_only": true,
+    "read_only": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/contracts/:id/allowances (HrController.listAllowances)": {
-    "policy": "hr:read",
+    "policy": "hr:read+field:salary",
     "owner": true,
-    "admin": true,
+    "admin": false,
     "accountant": false,
     "sales": false,
     "cheque_reviewer": false,
     "hr": true,
-    "read_only": true,
+    "read_only": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/employees (HrController.listEmployees)": {
@@ -3315,9 +3315,9 @@
     "legacy_member": false
   },
   "POST /enterprise-hub/hr/contracts (HrController.createContract)": {
-    "policy": "hr:create",
+    "policy": "hr:create+field:salary",
     "owner": true,
-    "admin": true,
+    "admin": false,
     "accountant": false,
     "sales": false,
     "cheque_reviewer": false,
@@ -3337,14 +3337,14 @@
     "legacy_member": false
   },
   "POST /enterprise-hub/hr/employees/:id/settlement (HrController.previewSettlement)": {
-    "policy": "hr:read",
+    "policy": "hr:read+field:salary",
     "owner": true,
-    "admin": true,
+    "admin": false,
     "accountant": false,
     "sales": false,
     "cheque_reviewer": false,
     "hr": true,
-    "read_only": true,
+    "read_only": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/hr/payroll-runs (HrController.createPayrollRun)": {
@@ -4114,9 +4114,9 @@
     "legacy_member": false
   },
   "PUT /enterprise-hub/hr/contracts/:id/allowances (HrController.replaceAllowances)": {
-    "policy": "hr:create",
+    "policy": "hr:create+field:salary",
     "owner": true,
-    "admin": true,
+    "admin": false,
     "accountant": false,
     "sales": false,
     "cheque_reviewer": false,

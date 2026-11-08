@@ -115,6 +115,7 @@ export class AccessGuard implements CanActivate {
                 `[ACCESS_SHADOW] ${controller?.name}.${handler?.name} role=${diff.roleKey} legacy=${diff.legacyAllowed} next=${diff.newAllowed} code=${diff.newCode ?? 'OK'}`,
               )
           : undefined,
+        shadowEnabled,
       );
       const denial = decisionToError(decision);
       if (denial) throw denial;
