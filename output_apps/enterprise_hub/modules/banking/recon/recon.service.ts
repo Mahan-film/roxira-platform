@@ -503,7 +503,7 @@ export class ReconService {
         inserted: inserted.length,
         skippedExisting: items.length - inserted.length,
       }, manager);
-    });
+    }, tenantId);
     await this.repo.bumpRuleHits(tenantId, [...usedRules]);
     return this.rerun(tenantId, actor, sessionId);
   }
@@ -610,7 +610,7 @@ export class ReconService {
         suggested: result.suggested.length,
         unmatched: result.unmatchedBank.length,
       }, manager);
-    });
+    }, tenantId);
     return { matched: result.matched.length, suggested: result.suggested.length };
   }
 
@@ -631,7 +631,7 @@ export class ReconService {
           }
         }
         await this.repo.audit(tenantId, actor, accept ? 'match.accept' : 'match.reject', 'match_group', groupId, { sessionId }, manager);
-      });
+      }, tenantId);
     } catch (error) {
       if (isUnique(error)) {
         throw new ConflictException('یکی از سندهای این تطبیق همین حالا با ردیف دیگری تطبیق خورد.');
@@ -709,7 +709,7 @@ export class ReconService {
         personType: outcome.personType,
         ruleCreated: Boolean(outcome.rule),
       }, manager);
-    });
+    }, tenantId);
     draft = await this.draftFor(tenantId, actor, (await this.repo.getItem(tenantId, itemId)) as ItemRow, false);
     return { item: await this.itemView(tenantId, itemId), draft: draft ? this.draftView(draft) : null };
   }
@@ -887,7 +887,7 @@ export class ReconService {
       await this.repo.updateDraft(tenantId, draft.id, { status: 'posted', journal_entry_id: entry.id }, manager);
       await this.repo.audit(tenantId, actor, 'draft.post', 'draft', draft.id, { journalEntryId: entry.id, auto: draft.auto }, manager);
       return entry.id;
-    });
+    }, tenantId);
   }
 
   async rejectDraft(tenantId: string, actor: string, draftId: number): Promise<DraftView> {
@@ -920,7 +920,7 @@ export class ReconService {
       await this.repo.updateItem(tenantId, draft.item_id, { status: 'open' }, manager);
       await this.repo.updateDraft(tenantId, draftId, { status: 'reversed', reversal_entry_id: reversalId, decided_by: actor }, manager);
       await this.repo.audit(tenantId, actor, 'draft.reverse', 'draft', draftId, { reason, reversalEntryId: reversalId }, manager);
-    });
+    }, tenantId);
     return this.draftView({ ...draft, status: 'reversed', reversal_entry_id: reversalId });
   }
 

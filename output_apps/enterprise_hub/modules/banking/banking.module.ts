@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { TenantScope } from '../access/services/tenant-scope';
 import { AccountingModule } from '../accounting/accounting.module';
 import { BankingController } from './controllers/banking.controller';
 import { BankAccountEntity } from './entities/bank-account.entity';
@@ -27,7 +28,7 @@ import { BankingService } from './services/banking.service';
     AccountingModule,
   ],
   controllers: [BankingController, ReconController],
-  providers: [BankingService, BankingRepository, ReconService, ReconRepository],
+  providers: [TenantScope, BankingService, BankingRepository, ReconService, ReconRepository],
   exports: [BankingService],
 })
 export class BankingModule {}
