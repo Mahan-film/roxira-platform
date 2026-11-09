@@ -92,6 +92,23 @@ export class MembershipsRepository {
 
   /** All organisations a user belongs to (for the switcher). Scoped by user, not by tenant. */
   async listForUser(userId: string): Promise<MembershipWithTenant[]> {
+    try {
+      const rows = await this.repo.query(
+        `SELECT * FROM public.lookup_user_memberships($1)`,
+        [userId],
+      );
+      if (rows && rows.length > 0) {
+        return rows.map((r: any) => ({
+          membershipId: r.membership_id ?? r.membershipId,
+          tenantId: r.tenant_id ?? r.tenantId,
+          tenantName: r.tenant_name ?? r.tenantName,
+          roleKey: r.role_key ?? r.roleKey,
+          status: r.status,
+        }));
+      }
+    } catch {
+      // fallback to queryBuilder below
+    }
     const rows = await this.repo
       .createQueryBuilder('m')
       .innerJoin('tenants', 't', 't.id = m.tenant_id')

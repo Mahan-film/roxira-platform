@@ -21,46 +21,196 @@ export class AuthRepository {
   }
 
   async findByUsername(username: string): Promise<UserEntity | null> {
-    return this.repository.findOne({ where: { username } });
+    try {
+      const rows = await this.repository.query(
+        `SELECT * FROM public.lookup_user_by_login($1)`,
+        [username],
+      );
+      if (rows && rows.length > 0) {
+        const r = rows[0];
+        return this.repository.create({
+          id: r.id,
+          phone: r.phone,
+          username: r.username,
+          loginEmail: r.login_email,
+          displayName: r.displayName ?? r.display_name,
+          email: r.email,
+          role: r.role,
+          serviceDomain: r.serviceDomain ?? r.service_domain,
+          tenantId: r.tenant_id,
+          tenantRole: r.tenant_role,
+          isActive: r.is_active ?? r.isActive,
+          lastLoginAt: r.last_login_at ?? r.lastLoginAt,
+          createdAt: r.created_at ?? r.createdAt,
+          updatedAt: r.updated_at ?? r.updatedAt,
+        } as UserEntity);
+      }
+      return null;
+    } catch {
+      return this.repository.findOne({ where: { username } });
+    }
   }
 
   async findByLoginEmail(loginEmail: string): Promise<UserEntity | null> {
-    return this.repository.findOne({ where: { loginEmail } });
+    try {
+      const rows = await this.repository.query(
+        `SELECT * FROM public.lookup_user_by_login($1)`,
+        [loginEmail],
+      );
+      if (rows && rows.length > 0) {
+        const r = rows[0];
+        return this.repository.create({
+          id: r.id,
+          phone: r.phone,
+          username: r.username,
+          loginEmail: r.login_email,
+          displayName: r.displayName ?? r.display_name,
+          email: r.email,
+          role: r.role,
+          serviceDomain: r.serviceDomain ?? r.service_domain,
+          tenantId: r.tenant_id,
+          tenantRole: r.tenant_role,
+          isActive: r.is_active ?? r.isActive,
+          lastLoginAt: r.last_login_at ?? r.lastLoginAt,
+          createdAt: r.created_at ?? r.createdAt,
+          updatedAt: r.updated_at ?? r.updatedAt,
+        } as UserEntity);
+      }
+      return null;
+    } catch {
+      return this.repository.findOne({ where: { loginEmail } });
+    }
   }
 
   /** Load a user together with `passwordHash` (a `select: false` column). */
   async findWithPasswordHash(
     where: { id: string } | { username: string } | { loginEmail: string },
   ): Promise<UserEntity | null> {
-    return this.repository.findOne({
-      where,
-      select: {
-        id: true,
-        phone: true,
-        username: true,
-        loginEmail: true,
-        displayName: true,
-        email: true,
-        role: true,
-        serviceDomain: true,
-        tenantId: true,
-        tenantRole: true,
-        isActive: true,
-        lastLoginAt: true,
-        createdAt: true,
-        updatedAt: true,
-        passwordHash: true,
-        passwordUpdatedAt: true,
-      },
-    });
+    try {
+      let rows: any[] = [];
+      if ('id' in where) {
+        rows = await this.repository.query(
+          `SELECT * FROM public.lookup_user_by_id($1)`,
+          [where.id],
+        );
+      } else if ('username' in where) {
+        rows = await this.repository.query(
+          `SELECT * FROM public.lookup_user_by_login($1)`,
+          [where.username],
+        );
+      } else if ('loginEmail' in where) {
+        rows = await this.repository.query(
+          `SELECT * FROM public.lookup_user_by_login($1)`,
+          [where.loginEmail],
+        );
+      }
+      if (rows && rows.length > 0) {
+        const r = rows[0];
+        return this.repository.create({
+          id: r.id,
+          phone: r.phone,
+          username: r.username,
+          loginEmail: r.login_email,
+          displayName: r.displayName ?? r.display_name,
+          email: r.email,
+          role: r.role,
+          serviceDomain: r.serviceDomain ?? r.service_domain,
+          tenantId: r.tenant_id,
+          tenantRole: r.tenant_role,
+          isActive: r.is_active ?? r.isActive,
+          lastLoginAt: r.last_login_at ?? r.lastLoginAt,
+          createdAt: r.created_at ?? r.createdAt,
+          updatedAt: r.updated_at ?? r.updatedAt,
+          passwordHash: r.password_hash ?? r.passwordHash,
+          passwordUpdatedAt: r.password_updated_at ?? r.passwordUpdatedAt,
+        } as UserEntity);
+      }
+      return null;
+    } catch {
+      return this.repository.findOne({
+        where,
+        select: {
+          id: true,
+          phone: true,
+          username: true,
+          loginEmail: true,
+          displayName: true,
+          email: true,
+          role: true,
+          serviceDomain: true,
+          tenantId: true,
+          tenantRole: true,
+          isActive: true,
+          lastLoginAt: true,
+          createdAt: true,
+          updatedAt: true,
+          passwordHash: true,
+          passwordUpdatedAt: true,
+        },
+      });
+    }
   }
 
   async findByPhone(phone: string): Promise<UserEntity | null> {
-    return this.repository.findOne({ where: { phone } });
+    try {
+      const rows = await this.repository.query(
+        `SELECT * FROM public.lookup_user_by_phone($1)`,
+        [phone],
+      );
+      if (rows && rows.length > 0) {
+        const r = rows[0];
+        return this.repository.create({
+          id: r.id,
+          phone: r.phone,
+          username: r.username,
+          loginEmail: r.login_email,
+          displayName: r.displayName ?? r.display_name,
+          email: r.email,
+          role: r.role,
+          serviceDomain: r.serviceDomain ?? r.service_domain,
+          tenantId: r.tenant_id,
+          tenantRole: r.tenant_role,
+          isActive: r.is_active ?? r.isActive,
+          lastLoginAt: r.last_login_at ?? r.lastLoginAt,
+          createdAt: r.created_at ?? r.createdAt,
+          updatedAt: r.updated_at ?? r.updatedAt,
+        } as UserEntity);
+      }
+      return null;
+    } catch {
+      return this.repository.findOne({ where: { phone } });
+    }
   }
 
   async findById(id: string): Promise<UserEntity | null> {
-    return this.repository.findOne({ where: { id } });
+    try {
+      const rows = await this.repository.query(
+        `SELECT * FROM public.lookup_user_by_id($1)`,
+        [id],
+      );
+      if (rows && rows.length > 0) {
+        const r = rows[0];
+        return this.repository.create({
+          id: r.id,
+          phone: r.phone,
+          username: r.username,
+          loginEmail: r.login_email,
+          displayName: r.displayName ?? r.display_name,
+          email: r.email,
+          role: r.role,
+          serviceDomain: r.serviceDomain ?? r.service_domain,
+          tenantId: r.tenant_id,
+          tenantRole: r.tenant_role,
+          isActive: r.is_active ?? r.isActive,
+          lastLoginAt: r.last_login_at ?? r.lastLoginAt,
+          createdAt: r.created_at ?? r.createdAt,
+          updatedAt: r.updated_at ?? r.updatedAt,
+        } as UserEntity);
+      }
+      return null;
+    } catch {
+      return this.repository.findOne({ where: { id } });
+    }
   }
 
   /**

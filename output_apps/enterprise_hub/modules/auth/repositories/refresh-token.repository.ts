@@ -15,8 +15,34 @@ export class RefreshTokenRepository {
     return this.repository.save(this.repository.create(data));
   }
 
-  findByHash(tokenHash: string): Promise<RefreshTokenEntity | null> {
-    return this.repository.findOne({ where: { tokenHash } });
+  async findByHash(tokenHash: string): Promise<RefreshTokenEntity | null> {
+    try {
+      const rows = await this.repository.query(
+        `SELECT * FROM public.lookup_refresh_token_by_hash($1)`,
+        [tokenHash],
+      );
+      if (rows && rows.length > 0) {
+        const r = rows[0];
+        return this.repository.create({
+          id: r.id,
+          userId: r.user_id ?? r.userId,
+          tenantId: r.tenant_id ?? r.tenantId,
+          tokenHash: r.token_hash ?? r.tokenHash,
+          familyId: r.family_id ?? r.familyId,
+          userAgent: r.user_agent ?? r.userAgent,
+          ip: r.ip,
+          deviceHash: r.device_hash ?? r.deviceHash,
+          mfa: r.mfa,
+          sessionStartedAt: r.session_started_at ?? r.sessionStartedAt,
+          expiresAt: r.expires_at ?? r.expiresAt,
+          revokedAt: r.revoked_at ?? r.revokedAt,
+          createdAt: r.created_at ?? r.createdAt,
+        } as RefreshTokenEntity);
+      }
+      return null;
+    } catch {
+      return this.repository.findOne({ where: { tokenHash } });
+    }
   }
 
   /**

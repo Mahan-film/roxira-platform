@@ -11,8 +11,37 @@ export class InvitationsRepository {
   create(data: Partial<InvitationEntity>): Promise<InvitationEntity> {
     return this.repo.save(this.repo.create(data));
   }
-  findByHash(tokenHash: string): Promise<InvitationEntity | null> {
-    return this.repo.findOne({ where: { tokenHash } });
+  async findByHash(tokenHash: string): Promise<InvitationEntity | null> {
+    try {
+      const rows = await this.repo.query(
+        `SELECT * FROM public.lookup_invitation_by_token_hash($1)`,
+        [tokenHash],
+      );
+      if (rows && rows.length > 0) {
+        const r = rows[0];
+        return this.repo.create({
+          id: r.id,
+          tenantId: r.tenant_id ?? r.tenantId,
+          email: r.email,
+          phone: r.phone,
+          roleKey: r.role_key ?? r.roleKey,
+          customRoleId: r.custom_role_id ?? r.customRoleId,
+          branchId: r.branch_id ?? r.branchId,
+          departmentId: r.department_id ?? r.departmentId,
+          branchScoped: r.branch_scoped ?? r.branchScoped,
+          tokenHash: r.token_hash ?? r.tokenHash,
+          expiresAt: r.expires_at ?? r.expiresAt,
+          acceptedAt: r.accepted_at ?? r.acceptedAt,
+          acceptedBy: r.accepted_by ?? r.acceptedBy,
+          revokedAt: r.revoked_at ?? r.revokedAt,
+          invitedBy: r.invited_by ?? r.invitedBy,
+          createdAt: r.created_at ?? r.createdAt,
+        } as InvitationEntity);
+      }
+      return null;
+    } catch {
+      return this.repo.findOne({ where: { tokenHash } });
+    }
   }
   listPending(tenantId: string): Promise<InvitationEntity[]> {
     return this.repo.find({

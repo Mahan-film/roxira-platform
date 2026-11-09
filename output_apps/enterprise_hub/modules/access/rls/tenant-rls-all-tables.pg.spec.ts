@@ -47,15 +47,6 @@ import { TenantScope } from '../services/tenant-scope';
  * its migration enables FORCE RLS.
  */
 export const RLS_PENDING_ALLOWLIST = new Set<string>([
-  // Pre-tenant auth / membership / entitlement & public forms (#475 comment)
-  'auth_refresh_tokens',
-  'contact_messages',
-  'enterprise_inquiries',
-  'tenant_invitations',
-  'tenant_memberships',
-  'tenant_module_entitlements',
-  'tenant_module_requests',
-  'users',
   // Module 2: CRM
   'crm_activities',
   'crm_leads',
