@@ -10,7 +10,9 @@ import {
   ParseUUIDPipe,
   Post,
   Put,
+  Query,
   Req,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SubmitMoadianInvoiceDto } from '../dto/submit-moadian-invoice.dto';
@@ -21,7 +23,14 @@ import {
   MoadianSubmissionResponseDto,
 } from '../dto/moadian-response.dto';
 import { PutMoadianCredentialDto } from '../dto/put-moadian-credential.dto';
+import {
+  MoadianArticle6QueryDto,
+  MoadianArticle6ReportDto,
+  MoadianInboxAgeQueryDto,
+  MoadianInboxAgeReportDto,
+} from '../dto/moadian-compliance.dto';
 import { MoadianService } from '../services/moadian.service';
+import { MoadianCompliancePolicyService } from '../services/moadian-compliance-policy.service';
 
 /**
  * اتصال زنده به سامانه مودیان (پشت پرچم MOADIAN_ENABLED).
@@ -31,7 +40,10 @@ import { MoadianService } from '../services/moadian.service';
 @ModuleAccess(AccessModule.TAX)
 @Controller('enterprise-hub/tax-compliance/moadian')
 export class MoadianController {
-  constructor(private readonly moadianService: MoadianService) {}
+  constructor(
+    private readonly moadianService: MoadianService,
+    private readonly compliancePolicyService?: MoadianCompliancePolicyService,
+  ) {}
 
   private tenantIdOf(request: AuthenticatedRequest): string {
     return requireTenantId(request);
@@ -84,9 +96,60 @@ export class MoadianController {
   @ApiOperation({ summary: 'وضعیت ارسال صورتحساب به سامانه مودیان' })
   @ApiResponse({ status: HttpStatus.OK, type: MoadianSubmissionResponseDto })
   async status(
-    @Req() request: AuthenticatedRequest,
     @Param('invoiceId', new ParseUUIDPipe()) invoiceId: string,
+    @Req() request: AuthenticatedRequest,
   ): Promise<MoadianSubmissionResponseDto> {
     return this.moadianService.getSubmission(this.tenantIdOf(request), invoiceId);
+  }
+
+  @RequireAction(AccessAction.READ)
+  @Get('compliance/inbox-age')
+  @ApiOperation({
+    summary: 'گزارش سن و مهلت رسیدگی صورتحساب‌های خرید کارپوشه مؤدیان',
+    description: 'بررسی فاکتورهای معوق بر اساس سیاست‌های هشدار ۲۰ روزه و بحرانی ۲۷ روزه کارپوشه (تبصره ماده ۵).',
+  })
+  @ApiResponse({ status: HttpStatus.OK, type: MoadianInboxAgeReportDto })
+  async getInboxAge(
+    @Req() request: AuthenticatedRequest,
+    @Query() query: MoadianInboxAgeQueryDto,
+  ): Promise<MoadianInboxAgeReportDto> {
+    if (!this.compliancePolicyService) {
+      throw new ServiceUnavailableException('Moadian compliance policy service is not available');
+    }
+    return this.compliancePolicyService.checkInboxAge(this.tenantIdOf(request), query);
+  }
+
+  @RequireAction(AccessAction.READ)
+  @Get('compliance/article-6-sales-cap')
+  @ApiOperation({
+    summary: 'استعلام سقف مجاز صدور صورتحساب ماده ۶ سامانه مؤدیان',
+    description: 'محاسبه میزان استفاده از سقف مجاز دوره و صدور هشدار پیشگیرانه در آستانه ۸۰٪.',
+  })
+  @ApiResponse({ status: HttpStatus.OK, type: MoadianArticle6ReportDto })
+  async getArticle6Cap(
+    @Req() request: AuthenticatedRequest,
+    @Query() query: MoadianArticle6QueryDto,
+  ): Promise<MoadianArticle6ReportDto> {
+    if (!this.compliancePolicyService) {
+      throw new ServiceUnavailableException('Moadian compliance policy service is not available');
+    }
+    return this.compliancePolicyService.checkArticle6SalesCap(this.tenantIdOf(request), query);
+  }
+
+  @RequireAction(AccessAction.READ)
+  @Post('compliance/check-article-6-cap')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'شبیه‌سازی و بررسی عبور از سقف ماده ۶ قبل از صدور صورتحساب جدید',
+  })
+  @ApiResponse({ status: HttpStatus.OK, type: MoadianArticle6ReportDto })
+  async checkArticle6Cap(
+    @Req() request: AuthenticatedRequest,
+    @Body() body: MoadianArticle6QueryDto,
+  ): Promise<MoadianArticle6ReportDto> {
+    if (!this.compliancePolicyService) {
+      throw new ServiceUnavailableException('Moadian compliance policy service is not available');
+    }
+    return this.compliancePolicyService.checkArticle6SalesCap(this.tenantIdOf(request), body);
   }
 }

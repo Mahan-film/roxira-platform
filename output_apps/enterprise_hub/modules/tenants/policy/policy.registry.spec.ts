@@ -13,18 +13,36 @@ describe('policy registry (#585)', () => {
     }
   });
 
-  it('has exactly 3 fixed (A), 2 protected (B) and 4 management (C) keys', () => {
+  it('has exactly 3 fixed (A), 4 protected (B) and 8 management (C) keys', () => {
     const count = (group: string) => POLICY_REGISTRY.filter((d) => d.group === group).length;
     expect(count('A')).toBe(3);
-    expect(count('B')).toBe(2);
-    expect(count('C')).toBe(4);
-    expect(POLICY_REGISTRY).toHaveLength(9);
+    expect(count('B')).toBe(4);
+    expect(count('C')).toBe(8);
+    expect(POLICY_REGISTRY).toHaveLength(15);
   });
 
   it('exposes definitions and defaults by key', () => {
     expect(getPolicyDefinition('purchase.three_way.qty_excess_tolerance_bp')?.group).toBe('C');
+    expect(getPolicyDefinition('moadian.inbox_age_alert.mode')?.group).toBe('B');
+    expect(getPolicyDefinition('moadian.article_6_cap.mode')?.group).toBe('B');
     expect(getPolicyDefinition('does.not.exist')).toBeUndefined();
     expect(policyDefault('purchase.invoice_review.reviewer_rule')).toBe('always_differs');
+    expect(policyDefault('moadian.inbox_age_alert.mode')).toBe('warn');
+    expect(policyDefault('moadian.article_6_cap.mode')).toBe('warn');
+    expect(policyDefault('moadian.inbox_age_alert.warn_days')).toBe(20);
+    expect(policyDefault('moadian.inbox_age_alert.critical_days')).toBe(27);
+    expect(policyDefault('moadian.article_6_cap.warning_percent')).toBe(80);
+  });
+
+  it('validates the moadian policy ranges and enums', () => {
+    expect(validatePolicyValue('moadian.inbox_age_alert.mode', 'warn')).toEqual({ ok: true });
+    expect(validatePolicyValue('moadian.inbox_age_alert.mode', 'invalid').ok).toBe(false);
+    expect(validatePolicyValue('moadian.inbox_age_alert.warn_days', 20)).toEqual({ ok: true });
+    expect(validatePolicyValue('moadian.inbox_age_alert.warn_days', 0).ok).toBe(false);
+    expect(validatePolicyValue('moadian.inbox_age_alert.warn_days', 30).ok).toBe(false);
+    expect(validatePolicyValue('moadian.article_6_cap.warning_percent', 80)).toEqual({ ok: true });
+    expect(validatePolicyValue('moadian.article_6_cap.warning_percent', 49).ok).toBe(false);
+    expect(validatePolicyValue('moadian.article_6_cap.warning_percent', 96).ok).toBe(false);
   });
 
   it('validates the quantity tolerance as a strict whole number in range', () => {
