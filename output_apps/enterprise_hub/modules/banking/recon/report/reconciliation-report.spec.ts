@@ -74,12 +74,25 @@ describe('reconciliation statement', () => {
       periodTo: '2024-10-06',
       bankBalance: 0n,
       ledgerBalance: 0n,
-      unmatchedBook: [],
+      unmatchedBook: [
+        book(1, 'in', 10, '+PLUS_CMD'),
+        book(2, 'out', 20, '-NON_NUMERIC'),
+        book(3, 'in', 30, '@AT_FORMULA'),
+        book(4, 'out', 40, '\tTAB_PREFIX'),
+      ],
       unmatchedBank: [bank(9, 'in', 5, '=cmd|\' /C calc\'!A0')],
     });
     const csv = reportToCsv(hostile);
     expect(csv).toContain("'=cmd");
     expect(csv).not.toMatch(/(^|,)=cmd/m);
+    expect(csv).toContain("'+PLUS_CMD");
+    expect(csv).toContain("'-NON_NUMERIC");
+    expect(csv).toContain("'@AT_FORMULA");
+    expect(csv).toContain("'\tTAB_PREFIX");
+
+    // XLSX also neutralises formulas
+    const xlsxBuf = reportToXlsx(hostile);
+    expect(xlsxBuf).toBeInstanceOf(Buffer);
   });
 
   it('HTML escapes statement text', () => {
