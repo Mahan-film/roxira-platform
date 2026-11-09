@@ -41,3 +41,25 @@ export function isSessionAlive(session: SessionTimes, now = Date.now()): boolean
 export function msUntilRefresh(session: SessionTimes, now = Date.now()): number {
   return Math.max(5_000, session.expiresAt - REFRESH_LEAD_MS - now);
 }
+
+/**
+ * True when the JWT contains a non-null, non-empty tenantId string in its payload.
+ * Used as a frontend guard to prevent calling tenant-only APIs (such as assistant/status)
+ * when a user is signed in without an organisation.
+ */
+export function hasActiveTenant(token?: string | null): boolean {
+  if (!token || typeof token !== "string") return false;
+  const parts = token.split(".");
+  if (parts.length !== 3) return false;
+  try {
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const jsonStr =
+      typeof atob === "function"
+        ? atob(b64.padEnd(Math.ceil(b64.length / 4) * 4, "="))
+        : Buffer.from(b64, "base64").toString("utf-8");
+    const json = JSON.parse(jsonStr);
+    return typeof json?.tenantId === "string" && json.tenantId.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
