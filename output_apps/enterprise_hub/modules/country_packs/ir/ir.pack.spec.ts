@@ -124,9 +124,9 @@ describe('Iran pack is adapters over existing code (behaviour unchanged)', () =>
 
   it('e-invoice adapter keeps the mapper refusals (foreign invoice, draft)', () => {
     const foreign = { ...invoice(), jurisdiction: InvoiceJurisdiction.INTL } as InvoiceResponseDto;
-    expect(() => pack.eInvoice.map(foreign, context)).toThrow(/domestic/);
+    expect(() => pack.eInvoice.map(foreign, context)).toThrow(/داخلی/);
     const draft = { ...invoice(), status: InvoiceStatus.DRAFT } as InvoiceResponseDto;
-    expect(() => pack.eInvoice.map(draft, context)).toThrow(/ISSUED or PAID/);
+    expect(() => pack.eInvoice.map(draft, context)).toThrow(/صادرشده یا پرداخت‌شده/);
   });
 
   it('calendar and locale describe Iran today', () => {
