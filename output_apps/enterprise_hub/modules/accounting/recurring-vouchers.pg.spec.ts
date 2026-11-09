@@ -1,8 +1,5 @@
 /** Recurring vouchers and auto-reversing accruals on a REAL PostgreSQL. Opt-in: skipped unless ROXIRA_TEST_PG_HOST is set. */
 import 'reflect-metadata';
-import * as path from 'path';
-import { DataSource } from 'typeorm';
-import { TenantScope } from '../access/services/tenant-scope';
 import { CurrencyService } from '../currency/services/currency.service';
 import { jalaliToGregorian } from '../data_import/normaliser/normalise';
 import { RecurringVoucherFrequency } from './constants/recurring-voucher.constants';
@@ -10,37 +7,16 @@ import { AccountingRepository } from './repositories/accounting.repository';
 import { RecurringVoucherRepository } from './repositories/recurring-voucher.repository';
 import { AccountingService } from './services/accounting.service';
 import { RecurringVoucherService } from './services/recurring-voucher.service';
-
-const HOST = process.env.ROXIRA_TEST_PG_HOST;
-const describePg = HOST ? describe : describe.skip;
+import {
+  createTestDatabase,
+  describePg,
+  TestDatabaseContext,
+} from '../../test/support/test-pg';
 
 const T1 = '11111111-1111-4111-8111-111111111111';
 const T2 = '22222222-2222-4222-8222-222222222222';
 const T3 = '33333333-3333-4333-8333-333333333333';
 const T4 = '44444444-4444-4444-8444-444444444444';
-
-const options = (database: string) => ({
-  type: 'postgres' as const,
-  host: HOST,
-  port: process.env.ROXIRA_TEST_PG_PORT ? Number(process.env.ROXIRA_TEST_PG_PORT) : 5432,
-  username: process.env.ROXIRA_TEST_PG_USER ?? 'postgres',
-  database,
-  entities: [path.join(__dirname, '../**/*.entity.ts')],
-  migrations: [path.join(__dirname, '../../migrations/*.ts')],
-  migrationsTransactionMode: 'each' as const,
-  synchronize: false,
-  logging: false,
-});
-
-const admin = async (sql: string) => {
-  const ds = new DataSource({ ...options('postgres'), entities: [], migrations: [] });
-  await ds.initialize();
-  try {
-    await ds.query(sql);
-  } finally {
-    await ds.destroy();
-  }
-};
 
 /**
  * Calendar day of a `date` value. node-pg parses `date` into a Date at LOCAL midnight, so the
@@ -64,29 +40,22 @@ const jalaliIso = (jy: number, jm: number, jd: number): string => {
 
 /** Every key case runs once per zone: the service must not depend on the process timezone. */
 describePg.each(['UTC', 'Asia/Tehran'])('Recurring vouchers on PostgreSQL (TZ=%s)', (zone) => {
-  const dbName = `rx_rv_${process.pid}_${Date.now()}_${zone.replace(/\W/g, '')}`;
   const savedTz = process.env.TZ;
-  let ds: DataSource;
+  let testDb: TestDatabaseContext;
   let accounting: AccountingService;
   let service: RecurringVoucherService;
 
   beforeAll(async () => {
     process.env.TZ = zone;
-    await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
-    await admin(`CREATE DATABASE "${dbName}"`);
-    ds = new DataSource(options(dbName));
-    await ds.initialize();
-    await ds.runMigrations();
+    testDb = await createTestDatabase(`rv_${zone.replace(/\W/g, '')}`);
     const currency = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
-    const scope = new TenantScope(ds);
-    const accountingRepo = new AccountingRepository(scope);
+    const accountingRepo = new AccountingRepository(testDb.scope);
     accounting = new AccountingService(accountingRepo, currency);
-    service = new RecurringVoucherService(new RecurringVoucherRepository(scope, ds), accounting, { get: async () => 'draft_unless_auto_reverse' } as never);
+    service = new RecurringVoucherService(new RecurringVoucherRepository(testDb.scope, testDb.app), accounting, { get: async () => 'draft_unless_auto_reverse' } as never);
   }, 120000);
 
   afterAll(async () => {
-    await ds.destroy();
-    await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
+    await testDb?.cleanup();
     if (savedTz === undefined) {
       delete process.env.TZ;
     } else {
@@ -124,13 +93,13 @@ describePg.each(['UTC', 'Asia/Tehran'])('Recurring vouchers on PostgreSQL (TZ=%s
     const first = await service.runDue(T1, '2026-06-21');
     expect(first).toMatchObject({ created: 3, reversed: 0, skipped: [] });
 
-    const runs: Array<{ run_date: unknown }> = await ds.query(
+    const runs: Array<{ run_date: unknown }> = await testDb.rawQuery(
       `SELECT run_date FROM erp_recurring_voucher_runs WHERE tenant_id = $1 AND recurring_id = $2 ORDER BY run_date`,
       [T1, template.id],
     );
     expect(runs.map((row) => isoDay(row.run_date))).toEqual(['2026-03-21', '2026-04-21', '2026-05-22']);
 
-    const entries: Array<{ status: string; date: unknown }> = await ds.query(
+    const entries: Array<{ status: string; date: unknown }> = await testDb.rawQuery(
       `SELECT status, date FROM fin_journal_entries WHERE tenant_id = $1 AND entry_number LIKE $2 ORDER BY entry_number`,
       [T1, `RV-${template.id}-%`],
     );
@@ -139,7 +108,7 @@ describePg.each(['UTC', 'Asia/Tehran'])('Recurring vouchers on PostgreSQL (TZ=%s
 
     const again = await service.runDue(T1, '2026-06-21');
     expect(again).toMatchObject({ created: 0, reversed: 0 });
-    const count: Array<{ n: number }> = await ds.query(
+    const count: Array<{ n: number }> = await testDb.rawQuery(
       `SELECT COUNT(*)::int AS n FROM erp_recurring_voucher_runs WHERE tenant_id = $1 AND recurring_id = $2`,
       [T1, template.id],
     );
@@ -167,20 +136,20 @@ describePg.each(['UTC', 'Asia/Tehran'])('Recurring vouchers on PostgreSQL (TZ=%s
     expect(posted).toMatchObject({ created: 1, reversed: 0 });
 
     const run: Array<{ id: number; journal_entry_id: number; reversal_entry_id: number | null; reversal_date: unknown }> =
-      await ds.query(
+      await testDb.rawQuery(
         `SELECT id, journal_entry_id, reversal_entry_id, reversal_date FROM erp_recurring_voucher_runs WHERE tenant_id = $1 AND recurring_id = $2`,
         [T2, template.id],
       );
     expect(isoDay(run[0].reversal_date)).toBe(reversalDate);
     expect(run[0].reversal_entry_id).toBeNull();
 
-    const accrual: Array<{ status: string; date: unknown }> = await ds.query(
+    const accrual: Array<{ status: string; date: unknown }> = await testDb.rawQuery(
       `SELECT status, date FROM fin_journal_entries WHERE id = $1`,
       [run[0].journal_entry_id],
     );
     expect(accrual[0].status).toBe('POSTED');
     expect(isoDay(accrual[0].date)).toBe(accrualDate);
-    const balanceAfterPost: Array<{ balance: string }> = await ds.query(
+    const balanceAfterPost: Array<{ balance: string }> = await testDb.rawQuery(
       `SELECT balance FROM fin_chart_of_accounts WHERE tenant_id = $1 AND code = '5010'`,
       [T2],
     );
@@ -189,20 +158,20 @@ describePg.each(['UTC', 'Asia/Tehran'])('Recurring vouchers on PostgreSQL (TZ=%s
     const reversed = await service.runDue(T2, reversalDate);
     expect(reversed).toMatchObject({ created: 0, reversed: 1, skipped: [] });
 
-    const updated: Array<{ reversal_entry_id: number }> = await ds.query(
+    const updated: Array<{ reversal_entry_id: number }> = await testDb.rawQuery(
       `SELECT reversal_entry_id FROM erp_recurring_voucher_runs WHERE id = $1`,
       [run[0].id],
     );
     expect(updated[0].reversal_entry_id).toBeGreaterThan(0);
 
-    const reversalEntry: Array<{ date: unknown; reverses_entry_id: number }> = await ds.query(
+    const reversalEntry: Array<{ date: unknown; reverses_entry_id: number }> = await testDb.rawQuery(
       `SELECT date, reverses_entry_id FROM fin_journal_entries WHERE id = $1`,
       [updated[0].reversal_entry_id],
     );
     expect(isoDay(reversalEntry[0].date)).toBe(reversalDate);
     expect(reversalEntry[0].reverses_entry_id).toBe(run[0].journal_entry_id);
 
-    const reversalLines: Array<{ account_id: number; debit: string; credit: string }> = await ds.query(
+    const reversalLines: Array<{ account_id: number; debit: string; credit: string }> = await testDb.rawQuery(
       `SELECT l.account_id, l.debit, l.credit
          FROM fin_journal_entry_lines l
          JOIN fin_chart_of_accounts a ON a.id = l.account_id AND a.tenant_id = l.tenant_id
@@ -215,7 +184,7 @@ describePg.each(['UTC', 'Asia/Tehran'])('Recurring vouchers on PostgreSQL (TZ=%s
       { account_id: expect.any(Number), debit: '0.00', credit: '10000000.00' },
     ]);
 
-    const balanceAfterReverse: Array<{ balance: string }> = await ds.query(
+    const balanceAfterReverse: Array<{ balance: string }> = await testDb.rawQuery(
       `SELECT balance FROM fin_chart_of_accounts WHERE tenant_id = $1 AND code = '5010'`,
       [T2],
     );
@@ -245,12 +214,12 @@ describePg.each(['UTC', 'Asia/Tehran'])('Recurring vouchers on PostgreSQL (TZ=%s
       { id: template.id, date: '2026-08-01', reason: expect.any(String) },
     ]);
 
-    const still: Array<{ next_run_date: unknown }> = await ds.query(
+    const still: Array<{ next_run_date: unknown }> = await testDb.rawQuery(
       `SELECT next_run_date FROM erp_recurring_vouchers WHERE id = $1`,
       [template.id],
     );
     expect(isoDay(still[0].next_run_date)).toBe('2026-08-01');
-    const noRun: Array<{ n: number }> = await ds.query(
+    const noRun: Array<{ n: number }> = await testDb.rawQuery(
       `SELECT COUNT(*)::int AS n FROM erp_recurring_voucher_runs WHERE tenant_id = $1 AND recurring_id = $2`,
       [T3, template.id],
     );
@@ -259,7 +228,7 @@ describePg.each(['UTC', 'Asia/Tehran'])('Recurring vouchers on PostgreSQL (TZ=%s
     await accounting.unlockPeriod(T3, 'tester', lock.id, { reason: 'unlocked for test' });
     const retried = await service.runDue(T3, '2026-08-01');
     expect(retried).toMatchObject({ created: 1, skipped: [] });
-    const created: Array<{ n: number }> = await ds.query(
+    const created: Array<{ n: number }> = await testDb.rawQuery(
       `SELECT COUNT(*)::int AS n FROM erp_recurring_voucher_runs WHERE tenant_id = $1 AND recurring_id = $2`,
       [T3, template.id],
     );
@@ -282,7 +251,7 @@ describePg.each(['UTC', 'Asia/Tehran'])('Recurring vouchers on PostgreSQL (TZ=%s
     expect(visibleToT1.some((row) => row.id === foreign.id)).toBe(false);
 
     await service.runDue(T1, '2026-01-01');
-    const foreignRuns: Array<{ n: number }> = await ds.query(
+    const foreignRuns: Array<{ n: number }> = await testDb.rawQuery(
       `SELECT COUNT(*)::int AS n FROM erp_recurring_voucher_runs WHERE tenant_id = $1`,
       [T4],
     );

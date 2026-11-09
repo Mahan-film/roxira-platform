@@ -4,48 +4,21 @@
  * each run creates and drops its own database.
  */
 import 'reflect-metadata';
-import * as path from 'path';
 import { BadRequestException } from '@nestjs/common';
-import { DataSource } from 'typeorm';
-import { TenantScope } from '../access/services/tenant-scope';
 import { CurrencyService } from '../currency/services/currency.service';
 import { QueryJournalEntryDto } from './dto/query-journal-entry.dto';
 import { AccountingRepository } from './repositories/accounting.repository';
 import { AccountingService } from './services/accounting.service';
-
-const HOST = process.env.ROXIRA_TEST_PG_HOST;
-const describePg = HOST ? describe : describe.skip;
-const USER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
-const PORT = process.env.ROXIRA_TEST_PG_PORT ? Number(process.env.ROXIRA_TEST_PG_PORT) : 5432;
-const T1 = '11111111-1111-4111-8111-111111111111';
-const T2 = '22222222-2222-4222-8222-222222222222';
-
-const options = (database: string) => ({
-  type: 'postgres' as const,
-  host: HOST,
-  port: PORT,
-  username: USER,
-  database,
-  entities: [path.join(__dirname, '../**/*.entity.ts')],
-  migrations: [path.join(__dirname, '../../migrations/*.ts')],
-  migrationsTransactionMode: 'each' as const,
-  synchronize: false,
-  logging: false,
-});
-
-const admin = async (sql: string) => {
-  const ds = new DataSource({ ...options('postgres'), entities: [], migrations: [] });
-  await ds.initialize();
-  try {
-    await ds.query(sql);
-  } finally {
-    await ds.destroy();
-  }
-};
+import {
+  createTestDatabase,
+  describePg,
+  TestDatabaseContext,
+  TEST_T1 as T1,
+  TEST_T2 as T2,
+} from '../../test/support/test-pg';
 
 describePg('Journal entry search on PostgreSQL', () => {
-  const dbName = `rx_js_${process.pid}_${Date.now()}`;
-  let ds: DataSource;
+  let testDb: TestDatabaseContext;
   let accounting: AccountingService;
 
   const entry = (
@@ -71,13 +44,9 @@ describePg('Journal entry search on PostgreSQL', () => {
     (await search(tenant, filter)).data.map((e) => e.entryNumber);
 
   beforeAll(async () => {
-    await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
-    await admin(`CREATE DATABASE "${dbName}"`);
-    ds = new DataSource(options(dbName));
-    await ds.initialize();
-    await ds.runMigrations();
+    testDb = await createTestDatabase('js');
     const currency = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
-    accounting = new AccountingService(new AccountingRepository(new TenantScope(ds)), currency);
+    accounting = new AccountingService(new AccountingRepository(testDb.scope), currency);
     await entry(T1, 'S-1', '2026-04-01', '5000000.00', 'فروش نقدی', { partyCode: 'C-7' });
     await entry(T1, 'S-2', '2026-04-15', '120000.50', 'تخفیف 50% مشتری');
     await entry(T1, 'S-3', '2026-05-02', '5000000.00', 'خرید', { lineDescription: 'بابت فاکتور ۱۲۳' });
@@ -85,8 +54,7 @@ describePg('Journal entry search on PostgreSQL', () => {
   }, 120000);
 
   afterAll(async () => {
-    await ds.destroy();
-    await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
+    await testDb?.cleanup();
   });
 
   it('finds entries by line amount, newest first, with an exact total', async () => {

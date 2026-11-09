@@ -43,6 +43,8 @@ const HOST = process.env.ROXIRA_TEST_PG_HOST;
 const PERF_ON = process.env.ROXIRA_PERF === '1';
 const describePerf = PERF_ON && HOST ? describe : describe.skip;
 const USER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
+const ADMIN_USER = process.env.ROXIRA_TEST_PG_ADMIN_USER ?? 'postgres';
+const ADMIN_PASSWORD = process.env.ROXIRA_TEST_PG_ADMIN_PASSWORD ?? process.env.ROXIRA_TEST_PG_PASSWORD;
 const PORT = process.env.ROXIRA_TEST_PG_PORT ? Number(process.env.ROXIRA_TEST_PG_PORT) : 5432;
 const ASSERT = process.env.ROXIRA_PERF_ASSERT === '1';
 const T1 = PERF_TENANT;
@@ -61,7 +63,13 @@ const options = (database: string) => ({
 });
 
 const admin = async (sql: string) => {
-  const ds = new DataSource({ ...options('postgres'), entities: [], migrations: [] });
+  const ds = new DataSource({
+    ...options('postgres'),
+    username: ADMIN_USER,
+    password: ADMIN_PASSWORD,
+    entities: [],
+    migrations: [],
+  });
   await ds.initialize();
   try {
     await ds.query(sql);

@@ -1,64 +1,28 @@
-import { TenantScope } from '../access/services/tenant-scope';
-/**
- * Fiscal close on a REAL PostgreSQL. Opt-in, like accounting.ledger.pg.spec.ts: skipped unless
- * ROXIRA_TEST_PG_HOST is set; each run creates and drops its own throwaway database.
- */
 import 'reflect-metadata';
-import * as path from 'path';
 import { BadRequestException } from '@nestjs/common';
-import { DataSource } from 'typeorm';
 import { CurrencyService } from '../currency/services/currency.service';
-import { ChartOfAccountEntity } from './entities/chart-of-account.entity';
-import { FiscalYearEntity } from './entities/fiscal-year.entity';
-import { JournalEntryLineEntity } from './entities/journal-entry-line.entity';
-import { JournalEntryEntity } from './entities/journal-entry.entity';
-import { PeriodLockEntity } from './entities/period-lock.entity';
 import { AccountingRepository } from './repositories/accounting.repository';
 import { FiscalYearRepository } from './repositories/fiscal-year.repository';
 import { LedgerReportRepository } from './repositories/ledger-report.repository';
 import { AccountingService } from './services/accounting.service';
 import { ChartTemplateService } from './services/chart-template.service';
 import { FiscalYearService } from './services/fiscal-year.service';
-
-const HOST = process.env.ROXIRA_TEST_PG_HOST;
-const describePg = HOST ? describe : describe.skip;
-const USER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
-const PORT = process.env.ROXIRA_TEST_PG_PORT ? Number(process.env.ROXIRA_TEST_PG_PORT) : 5432;
-const T1 = '11111111-1111-4111-8111-111111111111';
-const T2 = '22222222-2222-4222-8222-222222222222';
-
-const options = (database: string) => ({
-  type: 'postgres' as const,
-  host: HOST,
-  port: PORT,
-  username: USER,
-  database,
-  entities: [path.join(__dirname, '../**/*.entity.ts')],
-  migrations: [path.join(__dirname, '../../migrations/*.ts')],
-  migrationsTransactionMode: 'each' as const,
-  synchronize: false,
-  logging: false,
-});
-
-const admin = async (sql: string) => {
-  const ds = new DataSource({ ...options('postgres'), entities: [], migrations: [] });
-  await ds.initialize();
-  try {
-    await ds.query(sql);
-  } finally {
-    await ds.destroy();
-  }
-};
+import {
+  createTestDatabase,
+  describePg,
+  TestDatabaseContext,
+  TEST_T1 as T1,
+  TEST_T2 as T2,
+} from '../../test/support/test-pg';
 
 describePg('Fiscal close on PostgreSQL', () => {
-  const dbName = `rx_fy_${process.pid}_${Date.now()}`;
-  let ds: DataSource;
+  let testDb: TestDatabaseContext;
   let accounting: AccountingService;
   let templates: ChartTemplateService;
   let years: FiscalYearService;
 
   const balances = async (tenant: string): Promise<Record<string, string>> => {
-    const rows: Array<{ code: string; balance: string }> = await ds.query(
+    const rows: Array<{ code: string; balance: string }> = await testDb.rawQuery(
       `SELECT code, balance FROM fin_chart_of_accounts WHERE tenant_id = $1 AND balance <> 0`,
       [tenant],
     );
@@ -68,21 +32,16 @@ describePg('Fiscal close on PostgreSQL', () => {
     accounting.createJournalEntry(tenant, { entryNumber, date, description: 'test', lines } as never);
 
   beforeAll(async () => {
-    await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
-    await admin(`CREATE DATABASE "${dbName}"`);
-    ds = new DataSource(options(dbName));
-    await ds.initialize();
-    await ds.runMigrations();
+    testDb = await createTestDatabase('fy');
     const currency = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
-    const repo = new AccountingRepository(new TenantScope(ds));
+    const repo = new AccountingRepository(testDb.scope);
     accounting = new AccountingService(repo, currency);
     templates = new ChartTemplateService(repo);
-    years = new FiscalYearService(repo, new FiscalYearRepository(ds), new LedgerReportRepository(new TenantScope(ds)), accounting);
+    years = new FiscalYearService(repo, new FiscalYearRepository(testDb.app), new LedgerReportRepository(testDb.scope), accounting);
   }, 120000);
 
   afterAll(async () => {
-    await ds.destroy();
-    await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
+    await testDb?.cleanup();
   });
 
   it('applies the template additively and refuses postings to header accounts', async () => {
@@ -146,9 +105,9 @@ describePg('Fiscal close on PostgreSQL', () => {
 
   it('keeps tenants apart and enforces RLS for a role that cannot bypass it', async () => {
     expect(await years.list(T2)).toEqual([]);
-    await ds.query(`CREATE ROLE rx_fy_app LOGIN`);
-    await ds.query(`GRANT SELECT ON fin_fiscal_years TO rx_fy_app`);
-    const rows = await ds.transaction(async (m) => {
+    await testDb.owner.query(`CREATE ROLE rx_fy_app LOGIN`);
+    await testDb.owner.query(`GRANT SELECT ON fin_fiscal_years TO rx_fy_app`);
+    const rows = await testDb.owner.transaction(async (m) => {
       await m.query(`SET LOCAL ROLE rx_fy_app`);
       const none = await m.query(`SELECT id FROM fin_fiscal_years`);
       await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [T2]);
@@ -163,14 +122,14 @@ describePg('Fiscal close on PostgreSQL', () => {
   });
 
   it('reverts the migration cleanly', async () => {
-    await ds.query(`REVOKE ALL ON fin_fiscal_years FROM rx_fy_app`);
-    await ds.query(`DROP ROLE rx_fy_app`);
+    await testDb.owner.query(`REVOKE ALL ON fin_fiscal_years FROM rx_fy_app`);
+    await testDb.owner.query(`DROP ROLE rx_fy_app`);
     // Later migrations stack on top of this one, so revert down to it by name, not by count.
-    while ((await ds.query(`SELECT 1 FROM migrations WHERE name = 'AddChartHierarchyAndFiscalYears1789370000000'`)).length > 0) {
-      await ds.undoLastMigration();
+    while ((await testDb.owner.query(`SELECT 1 FROM migrations WHERE name = 'AddChartHierarchyAndFiscalYears1789370000000'`)).length > 0) {
+      await testDb.owner.undoLastMigration();
     }
-    const [{ exists }] = await ds.query(`SELECT to_regclass('fin_fiscal_years') IS NOT NULL AS "exists"`);
+    const [{ exists }] = await testDb.owner.query(`SELECT to_regclass('fin_fiscal_years') IS NOT NULL AS "exists"`);
     expect(exists).toBe(false);
-    await ds.runMigrations();
+    await testDb.owner.runMigrations();
   });
 });

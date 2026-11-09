@@ -3,10 +3,7 @@
  * other pg specs: skipped unless ROXIRA_TEST_PG_HOST is set; each run creates and drops its own database.
  */
 import 'reflect-metadata';
-import * as path from 'path';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { DataSource } from 'typeorm';
-import { TenantScope } from '../access/services/tenant-scope';
 import { CurrencyService } from '../currency/services/currency.service';
 import { DimensionKind, JournalEntryStatus } from './enums/accounting.enum';
 import { fromDb } from './money';
@@ -18,41 +15,18 @@ import { AccountingService } from './services/accounting.service';
 import { CostCentreReportService, UNASSIGNED_CENTRE_NAME } from './services/cost-centre-report.service';
 import { DimensionService } from './services/dimension.service';
 import { FinancialReportsService } from './services/financial-reports.service';
+import {
+  createTestDatabase,
+  describePg,
+  TestDatabaseContext,
+  TEST_T1 as T1,
+  TEST_T2 as T2,
+} from '../../test/support/test-pg';
 
-const HOST = process.env.ROXIRA_TEST_PG_HOST;
-const describePg = HOST ? describe : describe.skip;
-const USER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
-const PORT = process.env.ROXIRA_TEST_PG_PORT ? Number(process.env.ROXIRA_TEST_PG_PORT) : 5432;
-const T1 = '11111111-1111-4111-8111-111111111111';
-const T2 = '22222222-2222-4222-8222-222222222222';
 const rial = (value: string) => fromDb(value);
 
-const options = (database: string) => ({
-  type: 'postgres' as const,
-  host: HOST,
-  port: PORT,
-  username: USER,
-  database,
-  entities: [path.join(__dirname, '../**/*.entity.ts')],
-  migrations: [path.join(__dirname, '../../migrations/*.ts')],
-  migrationsTransactionMode: 'each' as const,
-  synchronize: false,
-  logging: false,
-});
-
-const admin = async (sql: string) => {
-  const ds = new DataSource({ ...options('postgres'), entities: [], migrations: [] });
-  await ds.initialize();
-  try {
-    await ds.query(sql);
-  } finally {
-    await ds.destroy();
-  }
-};
-
 describePg('Cost centres on PostgreSQL', () => {
-  const dbName = `rx_cc_${process.pid}_${Date.now()}`;
-  let ds: DataSource;
+  let testDb: TestDatabaseContext;
   let accounting: AccountingService;
   let dims: DimensionService;
   let report: CostCentreReportService;
@@ -71,24 +45,19 @@ describePg('Cost centres on PostgreSQL', () => {
     } as never);
 
   beforeAll(async () => {
-    await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
-    await admin(`CREATE DATABASE "${dbName}"`);
-    ds = new DataSource(options(dbName));
-    await ds.initialize();
-    await ds.runMigrations();
+    testDb = await createTestDatabase('cc');
     const currency = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
-    const repo = new AccountingRepository(new TenantScope(ds));
+    const repo = new AccountingRepository(testDb.scope);
     accounting = new AccountingService(repo, currency);
-    const dimensionRepo = new DimensionRepository(ds);
+    const dimensionRepo = new DimensionRepository(testDb.app);
     dims = new DimensionService(dimensionRepo);
-    const ledger = new LedgerReportRepository(new TenantScope(ds));
-    const reports = new FinancialReportsService(repo, new FiscalYearRepository(ds), ledger);
+    const ledger = new LedgerReportRepository(testDb.scope);
+    const reports = new FinancialReportsService(repo, new FiscalYearRepository(testDb.app), ledger);
     report = new CostCentreReportService(reports, ledger, dimensionRepo);
   }, 120000);
 
   afterAll(async () => {
-    await ds.destroy();
-    await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
+    await testDb?.cleanup();
   });
 
   it('builds a cost-centre tree and refuses a bad parent', async () => {
@@ -110,24 +79,24 @@ describePg('Cost centres on PostgreSQL', () => {
   });
 
   it('refuses a self, cross-kind or cross-tenant parent at the database', async () => {
-    await expect(ds.query(`UPDATE fin_dimensions SET parent_id = id WHERE code = 'CC-200'`)).rejects.toThrow();
+    await expect(testDb.rawQuery(`UPDATE fin_dimensions SET parent_id = id WHERE code = 'CC-200'`)).rejects.toThrow();
     const project = await dims.create(T1, { kind: DimensionKind.PROJECT, code: 'PR-1', name: 'Tower' });
     await expect(
-      ds.query(`UPDATE fin_dimensions SET parent_id = (SELECT id FROM fin_dimensions WHERE code = 'CC-100') WHERE id = $1`, [
+      testDb.rawQuery(`UPDATE fin_dimensions SET parent_id = (SELECT id FROM fin_dimensions WHERE code = 'CC-100') WHERE id = $1`, [
         project.id,
       ]),
     ).rejects.toThrow();
-    await ds.query(`SELECT set_config('app.tenant_id', $1, false)`, [T2]);
+    await testDb.rawQuery(`SELECT set_config('app.tenant_id', $1, false)`, [T2]);
     try {
       await expect(
-        ds.query(
+        testDb.rawQuery(
           `INSERT INTO fin_dimensions (tenant_id, kind, code, name, parent_id)
            VALUES ($1, 'COST_CENTER', 'X', 'x', (SELECT min(id) FROM fin_dimensions))`,
           [T2],
         ),
       ).rejects.toThrow();
     } finally {
-      await ds.query(`SELECT set_config('app.tenant_id', '', false)`);
+      await testDb.rawQuery(`SELECT set_config('app.tenant_id', '', false)`);
     }
   });
 

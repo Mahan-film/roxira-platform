@@ -40,6 +40,8 @@ const HOST = process.env.ROXIRA_TEST_PG_HOST;
 const describePg = HOST ? describe : describe.skip;
 
 const USER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
+const ADMIN_USER = process.env.ROXIRA_TEST_PG_ADMIN_USER ?? 'postgres';
+const ADMIN_PASSWORD = process.env.ROXIRA_TEST_PG_ADMIN_PASSWORD ?? process.env.ROXIRA_TEST_PG_PASSWORD;
 const PORT = process.env.ROXIRA_TEST_PG_PORT ? Number(process.env.ROXIRA_TEST_PG_PORT) : 5432;
 const MIGRATIONS = path.join(__dirname, '../../migrations/*.ts');
 const ENTITIES = path.join(__dirname, '../**/*.entity.ts');
@@ -70,7 +72,13 @@ const options = (database: string) => {
 
 /** Runs one statement on the maintenance database (CREATE/DROP DATABASE cannot run in a transaction). */
 const adminQuery = async (sql: string) => {
-  const admin = new DataSource({ ...options('postgres'), entities: [], migrations: [] });
+  const admin = new DataSource({
+    ...options('postgres'),
+    username: ADMIN_USER,
+    password: ADMIN_PASSWORD,
+    entities: [],
+    migrations: [],
+  });
   await admin.initialize();
   try {
     await admin.query(sql);

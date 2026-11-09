@@ -1,18 +1,4 @@
-import { TenantScope } from '../access/services/tenant-scope';
-import { PostingRulesRepository } from '../posting_rules/repositories/posting-rules.repository';
-import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
-/**
- * Cheque lifecycle on a REAL PostgreSQL: migrations (including the Sayad / partial-payment one), FORCE RLS tables,
- * the TenantScope repository, and real balanced journal entries through AccountingService.
- *
- * Opt-in like accounting.ledger.pg.spec.ts: skipped unless ROXIRA_TEST_PG_HOST is set. Each run creates and drops its
- * own throwaway database. Optional: ROXIRA_TEST_PG_USER, ROXIRA_TEST_PG_PORT.
- *
- *   ROXIRA_TEST_PG_HOST=127.0.0.1 npx jest modules/cheques/cheques.pg.spec.ts
- */
 import 'reflect-metadata';
-import * as path from 'path';
-import { DataSource } from 'typeorm';
 import { CurrencyService } from '../currency/services/currency.service';
 import { AccountType } from '../accounting/enums/accounting.enum';
 import { AccountingRepository } from '../accounting/repositories/accounting.repository';
@@ -25,49 +11,27 @@ import { BankingService } from '../banking/services/banking.service';
 import { ChequeReconService } from './services/cheque-recon.service';
 import { ChequesRepository } from './repositories/cheques.repository';
 import { ChequesService } from './services/cheques.service';
-
-const HOST = process.env.ROXIRA_TEST_PG_HOST;
-const describePg = HOST ? describe : describe.skip;
-const USER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
-const PORT = process.env.ROXIRA_TEST_PG_PORT ? Number(process.env.ROXIRA_TEST_PG_PORT) : 5432;
-const T1 = '11111111-1111-4111-8111-111111111111';
-const T2 = '22222222-2222-4222-8222-222222222222';
-
-const options = (database: string) => ({
-  type: 'postgres' as const,
-  host: HOST,
-  port: PORT,
-  username: USER,
-  database,
-  entities: [path.join(__dirname, '../**/*.entity.ts')],
-  migrations: [path.join(__dirname, '../../migrations/*.ts')],
-  migrationsTransactionMode: 'each' as const,
-  synchronize: false,
-  logging: false,
-});
-
-const adminQuery = async (sql: string) => {
-  const ds = new DataSource({ ...options('postgres'), entities: [], migrations: [] });
-  await ds.initialize();
-  try {
-    await ds.query(sql);
-  } finally {
-    await ds.destroy();
-  }
-};
+import { PostingRulesRepository } from '../posting_rules/repositories/posting-rules.repository';
+import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
+import {
+  createTestDatabase,
+  describePg,
+  TestDatabaseContext,
+  TEST_T1 as T1,
+  TEST_T2 as T2,
+} from '../../test/support/test-pg';
 
 const currencyStub = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
 
 describePg('Cheque lifecycle on PostgreSQL', () => {
-  const dbName = `rx_chq_${process.pid}_${Date.now()}`;
-  let ds: DataSource;
+  let testDb: TestDatabaseContext;
   let service: ChequesService;
   let accounting: AccountingService;
   let banking: BankingService;
   let recon: ChequeReconService;
   let seq = 0;
 
-  const q = <R = Record<string, string>>(sql: string, params: unknown[] = []) => ds.query(sql, params) as Promise<R[]>;
+  const q = <R = Record<string, string>>(sql: string, params: unknown[] = []) => testDb.rawQuery<R>(sql, params);
   const sayad = () => String(1000000000000000 + ++seq);
 
   const base = (over: Record<string, unknown> = {}) => ({
@@ -93,20 +57,21 @@ describePg('Cheque lifecycle on PostgreSQL', () => {
   };
 
   beforeAll(async () => {
-    await adminQuery(`CREATE DATABASE "${dbName}"`);
-    ds = new DataSource(options(dbName));
-    await ds.initialize();
-    await ds.runMigrations();
-    accounting = new AccountingService(new AccountingRepository(new TenantScope(ds)), currencyStub);
-    const chequesRepo = new ChequesRepository(new TenantScope(ds));
+    testDb = await createTestDatabase('chq');
+    accounting = new AccountingService(new AccountingRepository(testDb.scope), currencyStub);
+    const chequesRepo = new ChequesRepository(testDb.scope);
     banking = new BankingService(
-      new BankingRepository(ds.getRepository(BankAccountEntity), ds.getRepository(BankStatementLineEntity), ds),
+      new BankingRepository(
+        testDb.app.getRepository(BankAccountEntity),
+        testDb.app.getRepository(BankStatementLineEntity),
+        testDb.app,
+      ),
       accounting,
     );
     service = new ChequesService(
       chequesRepo,
       accounting,
-      new PostingRulesService(new PostingRulesRepository(new TenantScope(ds)), accounting),
+      new PostingRulesService(new PostingRulesRepository(testDb.scope), accounting),
       banking,
     );
     recon = new ChequeReconService(chequesRepo, banking);
@@ -125,8 +90,7 @@ describePg('Cheque lifecycle on PostgreSQL', () => {
   }, 180_000);
 
   afterAll(async () => {
-    await ds?.destroy();
-    await adminQuery(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
+    await testDb?.cleanup();
   });
 
   it('migration: the columns, the delivered status and FORCE RLS are in place', async () => {

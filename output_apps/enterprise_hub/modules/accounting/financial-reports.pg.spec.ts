@@ -1,20 +1,9 @@
-import { TenantScope } from '../access/services/tenant-scope';
-/**
- * Sample company on a REAL PostgreSQL: the statements must reconcile to the trial balance exactly,
- * before and after a close, and for imported data. Opt-in: skipped unless ROXIRA_TEST_PG_HOST is set.
- * Set ROXIRA_REPORT_OUT to a directory to keep the exported files for a visual check.
- */
 import 'reflect-metadata';
 import * as fs from 'fs';
 import * as path from 'path';
 import { strFromU8, unzipSync } from 'fflate';
-import { DataSource } from 'typeorm';
 import { parseXlsx } from '../data_import/parsers/xlsx.parser';
 import { CurrencyService } from '../currency/services/currency.service';
-import { ChartOfAccountEntity } from './entities/chart-of-account.entity';
-import { JournalEntryLineEntity } from './entities/journal-entry-line.entity';
-import { JournalEntryEntity } from './entities/journal-entry.entity';
-import { PeriodLockEntity } from './entities/period-lock.entity';
 import { AccountType } from './enums/accounting.enum';
 import { AccountingRepository } from './repositories/accounting.repository';
 import { FiscalYearRepository } from './repositories/fiscal-year.repository';
@@ -24,42 +13,21 @@ import { ChartTemplateService } from './services/chart-template.service';
 import { FinancialReportsService, moneyJson } from './services/financial-reports.service';
 import { FiscalYearService } from './services/fiscal-year.service';
 import { ReportExportService } from './services/report-export.service';
+import {
+  createTestDatabase,
+  describePg,
+  TestDatabaseContext,
+} from '../../test/support/test-pg';
 
-const HOST = process.env.ROXIRA_TEST_PG_HOST;
-const describePg = HOST ? describe : describe.skip;
 const COMPANY = '33333333-3333-4333-8333-333333333333';
 const IMPORTED = '44444444-4444-4444-8444-444444444444';
 const OTHER = '55555555-5555-4555-8555-555555555555';
-
-const options = (database: string) => ({
-  type: 'postgres' as const,
-  host: HOST,
-  port: process.env.ROXIRA_TEST_PG_PORT ? Number(process.env.ROXIRA_TEST_PG_PORT) : 5432,
-  username: process.env.ROXIRA_TEST_PG_USER ?? 'postgres',
-  database,
-  entities: [path.join(__dirname, '../**/*.entity.ts')],
-  migrations: [path.join(__dirname, '../../migrations/*.ts')],
-  migrationsTransactionMode: 'each' as const,
-  synchronize: false,
-  logging: false,
-});
-
-const admin = async (sql: string) => {
-  const ds = new DataSource({ ...options('postgres'), entities: [], migrations: [] });
-  await ds.initialize();
-  try {
-    await ds.query(sql);
-  } finally {
-    await ds.destroy();
-  }
-};
 
 /** Rial with two decimals as minor units. */
 const rial = (text: string): bigint => BigInt(text.replace('.', ''));
 
 describePg('Financial reports on PostgreSQL', () => {
-  const dbName = `rx_rep_${process.pid}_${Date.now()}`;
-  let ds: DataSource;
+  let testDb: TestDatabaseContext;
   let accounting: AccountingService;
   let reports: FinancialReportsService;
   let exporter: ReportExportService;
@@ -75,16 +43,12 @@ describePg('Financial reports on PostgreSQL', () => {
     ]);
 
   beforeAll(async () => {
-    await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
-    await admin(`CREATE DATABASE "${dbName}"`);
-    ds = new DataSource(options(dbName));
-    await ds.initialize();
-    await ds.runMigrations();
+    testDb = await createTestDatabase('rep');
     const currency = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
-    const repo = new AccountingRepository(new TenantScope(ds));
+    const repo = new AccountingRepository(testDb.scope);
     accounting = new AccountingService(repo, currency);
-    const fiscal = new FiscalYearRepository(ds);
-    const ledger = new LedgerReportRepository(new TenantScope(ds));
+    const fiscal = new FiscalYearRepository(testDb.app);
+    const ledger = new LedgerReportRepository(testDb.scope);
     reports = new FinancialReportsService(repo, fiscal, ledger);
     exporter = new ReportExportService(reports);
     years = new FiscalYearService(repo, fiscal, ledger, accounting);
@@ -115,8 +79,7 @@ describePg('Financial reports on PostgreSQL', () => {
   }, 120000);
 
   afterAll(async () => {
-    await ds.destroy();
-    await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
+    await testDb?.cleanup();
   });
 
   const statements = async (tenant: string, query: object) => ({
@@ -372,7 +335,7 @@ describePg('Financial reports on PostgreSQL', () => {
     expect(pdf.body.subarray(0, 4).toString()).toBe('%PDF');
 
     // Another company with the same party code sees only its own lines, and does not change ours.
-    await new ChartTemplateService(new AccountingRepository(new TenantScope(ds))).apply(OTHER, 'iran-trading');
+    await new ChartTemplateService(new AccountingRepository(testDb.scope)).apply(OTHER, 'iran-trading');
     await pair(OTHER, 'X01', '2026-05-01', '1020', '4020', '7.00', 'CUS1');
     const other = await reports.partyStatement(OTHER, { from: '2026-03-21', to: '2027-03-20', partyCode: 'CUS1' });
     expect(rows(other)).toEqual([['X01', rial('7.00'), 0n, rial('7.00')]]);

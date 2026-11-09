@@ -7,18 +7,12 @@
  */
 import 'reflect-metadata';
 import { NotFoundException } from '@nestjs/common';
-import * as path from 'path';
-import { DataSource } from 'typeorm';
-import { TenantScope } from '../access/services/tenant-scope';
 import { AuditService } from '../access/services/audit.service';
 import { AccountingService } from '../accounting/services/accounting.service';
 import { PostingRulesRepository } from '../posting_rules/repositories/posting-rules.repository';
 import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
-import { ContractAllowanceEntity } from './entities/contract-allowance.entity';
 import { EmployeeEntity } from './entities/employee.entity';
 import { EmploymentContractEntity } from './entities/employment-contract.entity';
-import { PayrollRunEntity } from './entities/payroll-run.entity';
-import { PayslipEntity } from './entities/payslip.entity';
 import { AllowanceTaxTreatment, Gender, MaritalStatus } from './enums/hr.enum';
 import { HrRepository } from './repositories/hr.repository';
 import { readDbf } from './services/dbf-file';
@@ -27,40 +21,25 @@ import { compareInsuranceTotals } from './services/insurance-list';
 import { PayrollRunService } from './services/payroll-run.service';
 import { StatutoryRepository } from './statutory/statutory.repository';
 import { StatutoryService } from './statutory/statutory.service';
+import {
+  createTestDatabase,
+  describePg,
+  TestDatabaseContext,
+  TEST_T1 as T1,
+  TEST_T2 as T2,
+} from '../../test/support/test-pg';
 
-const HOST = process.env.ROXIRA_TEST_PG_HOST;
-const describePg = HOST ? describe : describe.skip;
-const T1 = '11111111-1111-4111-8111-111111111111';
-const T2 = '22222222-2222-4222-8222-222222222222';
 const M = 1_000_000;
 
-const options = (database: string) => ({
-  type: 'postgres' as const,
-  host: HOST,
-  port: process.env.ROXIRA_TEST_PG_PORT ? Number(process.env.ROXIRA_TEST_PG_PORT) : 5432,
-  username: process.env.ROXIRA_TEST_PG_USER ?? 'postgres',
-  database,
-  entities: [path.join(__dirname, '../**/*.entity.ts')],
-  migrations: [path.join(__dirname, '../../migrations/*.ts')],
-  migrationsTransactionMode: 'each' as const,
-  synchronize: false,
-  logging: false,
-});
-
 describePg('monthly payroll on PostgreSQL', () => {
-  const db = `payroll_${process.pid}`;
-  let admin: DataSource;
-  let ds: DataSource;
+  let testDb: TestDatabaseContext;
   let runs: PayrollRunService;
   const entries: { entryNumber: string; lines: { debit?: number; credit?: number }[] }[] = [];
 
   beforeAll(async () => {
-    admin = await new DataSource({ ...options('postgres'), entities: [], migrations: [] }).initialize();
-    await admin.query(`CREATE DATABASE "${db}"`);
-    ds = await new DataSource(options(db)).initialize();
-    await ds.runMigrations();
+    testDb = await createTestDatabase('payroll');
 
-    const repository = new HrRepository(new TenantScope(ds), ds);
+    const repository = new HrRepository(testDb.scope, testDb.app);
     const accounting = {
       listAccounts: async () => [
         { code: '5010' },
@@ -94,7 +73,7 @@ describePg('monthly payroll on PostgreSQL', () => {
           lines.reduce((total, line) => total + line[key], 0);
         expect(sum('debit')).toBe(sum('credit'));
         entries.push({ entryNumber: dto.entryNumber, lines });
-        const [row] = await ds.query(
+        const [row] = await testDb.rawQuery(
           `INSERT INTO fin_journal_entries (tenant_id, entry_number, description)
            VALUES ($1, $2, 'test') RETURNING id`,
           [T1, dto.entryNumber],
@@ -103,11 +82,11 @@ describePg('monthly payroll on PostgreSQL', () => {
       },
     } as unknown as AccountingService;
     const statutory = new StatutoryService(
-      new StatutoryRepository(new TenantScope(ds)),
+      new StatutoryRepository(testDb.scope),
       { record: async () => undefined } as unknown as AuditService,
     );
     const postingRules = new PostingRulesService(
-      new PostingRulesRepository(new TenantScope(ds)),
+      new PostingRulesRepository(testDb.scope),
       accounting,
     );
     const hr = new HrService(repository, accounting, statutory, postingRules);
@@ -120,7 +99,7 @@ describePg('monthly payroll on PostgreSQL', () => {
     );
 
     const now = new Date();
-    const employee = await ds.getRepository(EmployeeEntity).save({
+    const employee = await testDb.owner.getRepository(EmployeeEntity).save({
       tenantId: T1,
       employeeNumber: 'E1',
       firstName: 'مریم',
@@ -135,7 +114,7 @@ describePg('monthly payroll on PostgreSQL', () => {
       insuranceNumber: '12345678',
       createdAt: now,
     });
-    const contract = await ds.getRepository(EmploymentContractEntity).save({
+    const contract = await testDb.owner.getRepository(EmploymentContractEntity).save({
       tenantId: T1,
       contractNumber: 'C1',
       employeeId: employee.id,
@@ -156,9 +135,7 @@ describePg('monthly payroll on PostgreSQL', () => {
   }, 180_000);
 
   afterAll(async () => {
-    await ds?.destroy();
-    await admin.query(`DROP DATABASE IF EXISTS "${db}" WITH (FORCE)`);
-    await admin.destroy();
+    await testDb?.cleanup();
   });
 
   it('carries tax across posted months, balances, and exports totals that agree', async () => {

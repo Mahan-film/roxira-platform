@@ -1,48 +1,18 @@
-import { TenantScope } from '../access/services/tenant-scope';
-/**
- * Voucher copy and optimistic edit lock on a REAL PostgreSQL. Opt-in like the other pg specs:
- * skipped unless ROXIRA_TEST_PG_HOST is set; each run creates and drops its own database.
- */
 import 'reflect-metadata';
-import * as path from 'path';
 import { NotFoundException } from '@nestjs/common';
-import { DataSource } from 'typeorm';
 import { CurrencyService } from '../currency/services/currency.service';
 import { JournalEntryResponseDto } from './dto/journal-entry-response.dto';
 import { JournalEntryStatus } from './enums/accounting.enum';
 import { AccountingRepository } from './repositories/accounting.repository';
 import { AccountingService } from './services/accounting.service';
 import { VoucherToolsService } from './services/voucher-tools.service';
-
-const HOST = process.env.ROXIRA_TEST_PG_HOST;
-const describePg = HOST ? describe : describe.skip;
-const USER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
-const PORT = process.env.ROXIRA_TEST_PG_PORT ? Number(process.env.ROXIRA_TEST_PG_PORT) : 5432;
-const T1 = '11111111-1111-4111-8111-111111111111';
-const T2 = '22222222-2222-4222-8222-222222222222';
-
-const options = (database: string) => ({
-  type: 'postgres' as const,
-  host: HOST,
-  port: PORT,
-  username: USER,
-  database,
-  entities: [path.join(__dirname, '../**/*.entity.ts')],
-  migrations: [path.join(__dirname, '../../migrations/*.ts')],
-  migrationsTransactionMode: 'each' as const,
-  synchronize: false,
-  logging: false,
-});
-
-const admin = async (sql: string) => {
-  const ds = new DataSource({ ...options('postgres'), entities: [], migrations: [] });
-  await ds.initialize();
-  try {
-    await ds.query(sql);
-  } finally {
-    await ds.destroy();
-  }
-};
+import {
+  createTestDatabase,
+  describePg,
+  TestDatabaseContext,
+  TEST_T1 as T1,
+  TEST_T2 as T2,
+} from '../../test/support/test-pg';
 
 const lineView = (entry: Pick<JournalEntryResponseDto, 'lines'>) =>
   entry.lines
@@ -55,8 +25,7 @@ const lineView = (entry: Pick<JournalEntryResponseDto, 'lines'>) =>
     .sort((a, b) => a.accountCode.localeCompare(b.accountCode));
 
 describePg('Voucher copy and edit lock on PostgreSQL', () => {
-  const dbName = `rx_vc_${process.pid}_${Date.now()}`;
-  let ds: DataSource;
+  let testDb: TestDatabaseContext;
   let accounting: AccountingService;
   let tools: VoucherToolsService;
 
@@ -78,29 +47,19 @@ describePg('Voucher copy and edit lock on PostgreSQL', () => {
       lines: balanced('100.00'),
     } as never);
   const balance = async (tenant: string, code: string): Promise<string> =>
-    (await ds.query(`SELECT balance FROM fin_chart_of_accounts WHERE tenant_id = $1 AND code = $2`, [tenant, code]))[0]
+    (await testDb.rawQuery(`SELECT balance FROM fin_chart_of_accounts WHERE tenant_id = $1 AND code = $2`, [tenant, code]))[0]
       ?.balance;
 
   beforeAll(async () => {
-    await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
-    await admin(`CREATE DATABASE "${dbName}"`);
-    ds = new DataSource(options(dbName));
-    await ds.initialize();
-    await ds.runMigrations();
+    testDb = await createTestDatabase('vc');
     const currency = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
-    accounting = new AccountingService(
-      new AccountingRepository(new TenantScope(ds)),
-      currency,
-    );
-    tools = new VoucherToolsService(
-      new AccountingRepository(new TenantScope(ds)),
-      accounting,
-    );
+    const repo = new AccountingRepository(testDb.scope);
+    accounting = new AccountingService(repo, currency);
+    tools = new VoucherToolsService(repo, accounting);
   }, 120000);
 
   afterAll(async () => {
-    await ds.destroy();
-    await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
+    await testDb?.cleanup();
   });
 
   it('copies a posted voucher line by line as a DRAFT and leaves the source untouched', async () => {
@@ -133,7 +92,7 @@ describePg('Voucher copy and edit lock on PostgreSQL', () => {
     const source = await make(T1, 'SRC-3', JournalEntryStatus.POSTED, '2026-08-05');
     await accounting.lockPeriod(T1, 'u', { periodStart: '2026-08-01', periodEnd: '2026-08-31' } as never);
     await expect(tools.copyVoucher(T1, source.id, { date: '2026-08-10' })).rejects.toMatchObject({ status: 423 });
-    const rows = await ds.query(
+    const rows = await testDb.rawQuery(
       `SELECT count(*)::int AS n FROM fin_journal_entries WHERE tenant_id = $1 AND entry_number LIKE 'SRC-3-COPY%'`,
       [T1],
     );

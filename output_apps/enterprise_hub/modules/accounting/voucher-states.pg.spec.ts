@@ -4,51 +4,21 @@ import { TenantScope } from '../access/services/tenant-scope';
  * skipped unless ROXIRA_TEST_PG_HOST is set; each run creates and drops its own database.
  */
 import 'reflect-metadata';
-import * as path from 'path';
 import { BadRequestException, ConflictException } from '@nestjs/common';
-import { DataSource } from 'typeorm';
 import { CurrencyService } from '../currency/services/currency.service';
-import { ChartOfAccountEntity } from './entities/chart-of-account.entity';
-import { JournalEntryLineEntity } from './entities/journal-entry-line.entity';
-import { JournalEntryEntity } from './entities/journal-entry.entity';
-import { PeriodLockEntity } from './entities/period-lock.entity';
 import { JournalEntryStatus } from './enums/accounting.enum';
 import { AccountingRepository } from './repositories/accounting.repository';
 import { AccountingService } from './services/accounting.service';
-
-const HOST = process.env.ROXIRA_TEST_PG_HOST;
-const describePg = HOST ? describe : describe.skip;
-const USER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
-const PORT = process.env.ROXIRA_TEST_PG_PORT ? Number(process.env.ROXIRA_TEST_PG_PORT) : 5432;
-const T1 = '11111111-1111-4111-8111-111111111111';
-const T2 = '22222222-2222-4222-8222-222222222222';
-
-const options = (database: string) => ({
-  type: 'postgres' as const,
-  host: HOST,
-  port: PORT,
-  username: USER,
-  database,
-  entities: [path.join(__dirname, '../**/*.entity.ts')],
-  migrations: [path.join(__dirname, '../../migrations/*.ts')],
-  migrationsTransactionMode: 'each' as const,
-  synchronize: false,
-  logging: false,
-});
-
-const admin = async (sql: string) => {
-  const ds = new DataSource({ ...options('postgres'), entities: [], migrations: [] });
-  await ds.initialize();
-  try {
-    await ds.query(sql);
-  } finally {
-    await ds.destroy();
-  }
-};
+import {
+  createTestDatabase,
+  describePg,
+  TestDatabaseContext,
+  TEST_T1 as T1,
+  TEST_T2 as T2,
+} from '../../test/support/test-pg';
 
 describePg('Voucher states on PostgreSQL', () => {
-  const dbName = `rx_vs_${process.pid}_${Date.now()}`;
-  let ds: DataSource;
+  let testDb: TestDatabaseContext;
   let accounting: AccountingService;
 
   const lines = (amount: string, extra = '0.00') => [
@@ -63,25 +33,20 @@ describePg('Voucher states on PostgreSQL', () => {
     date = '2026-05-01',
   ) => accounting.createJournalEntry(tenant, { entryNumber, date, description: 't', status, lines: body } as never);
   const balance = async (tenant: string, code: string): Promise<string> =>
-    (await ds.query(`SELECT balance FROM fin_chart_of_accounts WHERE tenant_id = $1 AND code = $2`, [tenant, code]))[0]
+    (await testDb.rawQuery(`SELECT balance FROM fin_chart_of_accounts WHERE tenant_id = $1 AND code = $2`, [tenant, code]))[0]
       ?.balance;
 
   beforeAll(async () => {
-    await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
-    await admin(`CREATE DATABASE "${dbName}"`);
-    ds = new DataSource(options(dbName));
-    await ds.initialize();
-    await ds.runMigrations();
+    testDb = await createTestDatabase('vs');
     const currency = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
     accounting = new AccountingService(
-      new AccountingRepository(new TenantScope(ds)),
+      new AccountingRepository(testDb.scope),
       currency,
     );
   }, 120000);
 
   afterAll(async () => {
-    await ds.destroy();
-    await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
+    await testDb?.cleanup();
   });
 
   it('keeps an unbalanced draft out of balances, trial balance and ledger', async () => {
@@ -137,7 +102,7 @@ describePg('Voucher states on PostgreSQL', () => {
       ConflictException,
     );
     // Even raw SQL cannot edit it.
-    await expect(ds.query(`UPDATE fin_journal_entries SET description = 'x' WHERE id = $1`, [entry!.id])).rejects.toThrow(
+    await expect(testDb.rawQuery(`UPDATE fin_journal_entries SET description = 'x' WHERE id = $1`, [entry!.id])).rejects.toThrow(
       /immutable/,
     );
   });
@@ -149,7 +114,7 @@ describePg('Voucher states on PostgreSQL', () => {
     await accounting.deleteVoucher(T1, b.id);
     const again = await make(T1, 'D-2', JournalEntryStatus.DRAFT);
     expect(again.status).toBe('DRAFT');
-    expect(await ds.query(`SELECT count(*)::int AS n FROM fin_journal_entry_lines WHERE journal_entry_id = $1`, [a.id])).toEqual([
+    expect(await testDb.rawQuery(`SELECT count(*)::int AS n FROM fin_journal_entry_lines WHERE journal_entry_id = $1`, [a.id])).toEqual([
       { n: 0 },
     ]);
   });
@@ -167,7 +132,7 @@ describePg('Voucher states on PostgreSQL', () => {
   });
 
   it('rejects an invalid status at the database', async () => {
-    await expect(ds.query(`UPDATE fin_journal_entries SET status = 'WEIRD' WHERE entry_number = 'D-2'`)).rejects.toThrow(
+    await expect(testDb.rawQuery(`UPDATE fin_journal_entries SET status = 'WEIRD' WHERE entry_number = 'D-2'`)).rejects.toThrow(
       /CHK_fin_journal_entries_status/,
     );
   });
