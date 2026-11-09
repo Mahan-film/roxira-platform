@@ -15,7 +15,7 @@ import {
   partyReceipts,
   partySaleInvoices,
 } from "@/lib/customer-party";
-import { formatAmount, formatMoneyRial, formatJalaliDate } from "@/lib/fa-format";
+import { formatMoneyRial, formatJalaliDate } from "@/lib/fa-format";
 import { STATUS_LABELS, type Cheque } from "@/types/cheques";
 import type { Lead } from "@/types/crm";
 import { INVOICE_STATUS_LABELS, type InvoiceResponseDto } from "@/types/invoicing";
@@ -190,7 +190,7 @@ function PartyTabBody({ tab, lead, data }: { tab: PartyTab; lead: Lead; data: Pa
                 <span className="text-xs text-muted-foreground">سررسید {formatJalaliDate(c.dueDate)}</span>
               </span>
               <span className="flex items-center gap-2">
-                <span>{formatAmount(c.amount)}</span>
+                <span>{formatMoneyRial(Number(c.amount))}</span>
                 <Badge variant="outline">{STATUS_LABELS.received[c.status]}</Badge>
               </span>
             </li>

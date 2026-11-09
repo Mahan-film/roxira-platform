@@ -5,7 +5,7 @@
  */
 import type { Cheque } from "../types/cheques.ts";
 import type { Lead } from "../types/crm.ts";
-import { InvoiceDirection, InvoiceStatus, type InvoiceResponseDto } from "../types/invoicing.ts";
+import type { InvoiceResponseDto } from "../types/invoicing.ts";
 
 export type PartyTab = "invoices" | "receipts" | "balance" | "cheques";
 
@@ -24,14 +24,14 @@ export function partySaleInvoices(
   leadId: number,
 ): InvoiceResponseDto[] {
   return invoices
-    .filter((i) => i.customerId === leadId && i.direction === InvoiceDirection.SALE)
+    .filter((i) => i.customerId === leadId && i.direction === "SALE")
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 /** Receipts: sale invoices already marked paid, by payment date (newest first). */
 export function partyReceipts(saleInvoices: readonly InvoiceResponseDto[]): InvoiceResponseDto[] {
   return saleInvoices
-    .filter((i) => i.status === InvoiceStatus.PAID)
+    .filter((i) => i.status === "PAID")
     .sort((a, b) => (b.paidAt ?? "").localeCompare(a.paidAt ?? ""));
 }
 
@@ -44,7 +44,7 @@ export function partyOpenBalance(saleInvoices: readonly InvoiceResponseDto[]): {
   total: number;
   count: number;
 } {
-  const open = saleInvoices.filter((i) => i.status === InvoiceStatus.ISSUED);
+  const open = saleInvoices.filter((i) => i.status === "ISSUED");
   return { total: open.reduce((sum, i) => sum + i.finalPayable, 0), count: open.length };
 }
 
