@@ -134,7 +134,7 @@ export function EnamadShieldFallback({
       width={width}
       height={height}
       className={className}
-      style={{ cursor: "pointer", ...style }}
+      style={{ width: `${width}px`, height: `${height}px`, cursor: "pointer", ...style }}
       xmlns="http://www.w3.org/2000/svg"
     >
       <title>{alt}</title>
@@ -244,11 +244,12 @@ export function EnamadBadge({
           width={width}
           height={height}
           alt={alt}
-          className="block h-auto w-full select-none"
+          className="block select-none"
           style={style}
         />
       ) : (
         /* Native <img> — never next/image; same referrerpolicy, still no rel. */
+        /* Fixed size (explicit width/height + inline style), lazy loading & async decoding (T19). */
         /* eslint-disable-next-line @next/next/no-img-element */
         <img
           {...ENAMAD_REFERRER_ATTRIBUTE}
@@ -256,8 +257,10 @@ export function EnamadBadge({
           alt={alt}
           width={width}
           height={height}
-          className="block h-auto w-full select-none"
-          style={{ cursor: "pointer", ...style }}
+          loading="lazy"
+          decoding="async"
+          className="block select-none"
+          style={{ width: `${width}px`, height: `${height}px`, cursor: "pointer", ...style }}
           onError={handleLogoError}
         />
       )}
