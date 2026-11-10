@@ -1,6 +1,7 @@
 import { TaxInspectorService } from './reports/tax-inspector.service';
 import { QuarterlyTaxComparisonService } from './reports/quarterly-tax-comparison.service';
 import { YearEndTaxRolloverService } from './reports/year-end-tax-rollover.service';
+import { StatutoryRepository } from '../hr/statutory/statutory.repository';
 import {
   RawInvoiceSalesSummary,
   RawLedgerSummary,
@@ -54,9 +55,24 @@ describe('Tax Compliance Reports Services', () => {
       getLedgerSummary: jest.fn().mockResolvedValue(mockLedger),
     };
 
+    const statutoryRepo: Partial<StatutoryRepository> = {
+      findForYear: jest.fn().mockResolvedValue([
+        {
+          paramKey: 'corporate_tax_rate',
+          effectiveFrom: '2025-03-21',
+          tenantId: 'tenant-1',
+          version: 1,
+          value: '0.25',
+        },
+      ]),
+    };
+
     inspectorService = new TaxInspectorService(repo as TaxInspectorRepository);
     comparisonService = new QuarterlyTaxComparisonService(repo as TaxInspectorRepository);
-    rolloverService = new YearEndTaxRolloverService(repo as TaxInspectorRepository);
+    rolloverService = new YearEndTaxRolloverService(
+      repo as TaxInspectorRepository,
+      statutoryRepo as StatutoryRepository,
+    );
   });
 
   describe('TaxInspectorService', () => {
@@ -111,8 +127,8 @@ describe('Tax Compliance Reports Services', () => {
     it('calculates taxable profit adjustments under Direct Taxes Act Art 105 & 147', async () => {
       const rollover = await rolloverService.assessRollover('tenant-1', {
         year: 1404,
-        nonDeductibleExpensesMinor: '1000000000', // 10,000,000.00 non-deductible addback
-        taxExemptIncomeMinor: '500000000', // 5,000,000.00 exemption deduction
+        nonDeductibleExpensesMinor: '10000000.00', // 10,000,000.00 non-deductible addback
+        taxExemptIncomeMinor: '5000000.00', // 5,000,000.00 exemption deduction
       });
 
       const accountingProfit = mockLedger.revenueMinor - mockLedger.expenseMinor; // 60,000,000.00
