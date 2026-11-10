@@ -784,3 +784,47 @@ describe('ChequesService party codes on receivable/payable lines (CHK-01)', () =
     for (const entry of t.entries) expect(partyLines(entry)).toEqual([]);
   });
 });
+
+describe('ChequesService Ras-giri and Discounting (T72)', () => {
+  it('calculates rasgiri and discounting from DTO inputs', async () => {
+    const t = build();
+    const ras = t.service.calculateRasgiri({
+      items: [
+        { amount: '50000000', dueDate: '2026-11-20' },
+        { amount: '50000000', dueDate: '2026-11-30' },
+      ],
+      baseDate: '2026-11-10',
+    });
+    expect(ras.totalCount).toBe(2);
+    expect(ras.totalAmount).toBe('100000000');
+    expect(ras.weightedAverageDays).toBe(15);
+    expect(ras.weightedMaturityDate).toBe('2026-11-25');
+
+    const disc = t.service.calculateDiscount({
+      items: [
+        { amount: '50000000', dueDate: '2026-11-20' },
+        { amount: '50000000', dueDate: '2026-11-30' },
+      ],
+      annualRatePercent: 24,
+      baseDate: '2026-11-10',
+    });
+    expect(disc.annualRatePercent).toBe(24);
+    expect(disc.totalAmount).toBe('100000000');
+    expect(BigInt(disc.totalDiscountAmount) > 0n).toBe(true);
+    expect(BigInt(disc.netPresentValue) < 100000000n).toBe(true);
+  });
+
+  it('calculates rasgiri and discounting for selected tenant cheques', async () => {
+    const t = build();
+    const c1 = await t.service.create(A, received({ sayadNumber: undefined, amount: 200, dueDate: '2026-11-20' }) as never);
+    const c2 = await t.service.create(A, received({ sayadNumber: undefined, amount: 200, dueDate: '2026-11-30' }) as never);
+
+    const ras = await t.service.calculateSelectionRasgiri(A, [c1.id, c2.id], '2026-11-10');
+    expect(ras.totalCount).toBe(2);
+    expect(ras.weightedAverageDays).toBe(15);
+
+    const disc = await t.service.calculateSelectionDiscount(A, [c1.id, c2.id], 24, '2026-11-10');
+    expect(disc.totalAmount).toBe('400');
+    expect(disc.items).toHaveLength(2);
+  });
+});

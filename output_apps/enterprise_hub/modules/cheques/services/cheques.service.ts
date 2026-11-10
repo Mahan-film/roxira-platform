@@ -43,6 +43,19 @@ import {
 } from '../lifecycle/cheque-lifecycle';
 import { SayadRegistrationStatus, isValidReceiverNationalId, isValidSayadNumber } from '../sayad/sayad';
 import { ChequesRepository } from '../repositories/cheques.repository';
+import {
+  calculateRasgiri,
+  calculateChequesDiscounting,
+  calculateSingleDiscount,
+  RasgiriResult,
+  DiscountResult,
+  ChequeCalculationInput,
+} from '../utils/cheque-calculator.util';
+import {
+  CalculateRasgiriDto,
+  CalculateDiscountDto,
+  CalculateSingleDiscountDto,
+} from '../dto/cheque-calculator.dto';
 
 const DAY_MS = 86_400_000;
 
@@ -557,5 +570,88 @@ export class ChequesService {
       amount: event.amount === null || event.amount === undefined ? null : fromMinor(fromDb(event.amount)),
       note: cleanNote || null,
     };
+  }
+
+  /**
+   * Computes Ras-giri (weighted-average maturity) for given cheque inputs.
+   */
+  calculateRasgiri(dto: CalculateRasgiriDto): RasgiriResult {
+    return calculateRasgiri(dto.items, dto.baseDate);
+  }
+
+  /**
+   * Computes discounting for given cheque inputs and annual rate.
+   */
+  calculateDiscount(dto: CalculateDiscountDto): DiscountResult {
+    return calculateChequesDiscounting(dto.items, dto.annualRatePercent, dto.baseDate);
+  }
+
+  /**
+   * Computes discounting for a single cheque amount and days.
+   */
+  calculateSingleDiscount(dto: CalculateSingleDiscountDto): {
+    discountAmount: string;
+    netPresentValue: string;
+    effectivePeriodRatePercent: number;
+  } {
+    const res = calculateSingleDiscount(dto.amount, dto.days, dto.annualRatePercent);
+    return {
+      discountAmount: res.discountAmount.toString(),
+      netPresentValue: res.netPresentValue.toString(),
+      effectivePeriodRatePercent: res.effectivePeriodRatePercent,
+    };
+  }
+
+  /**
+   * Computes Ras-giri for a selection of existing cheques in the tenant.
+   */
+  async calculateSelectionRasgiri(
+    tenantId: string,
+    chequeIds: number[],
+    baseDate?: string,
+  ): Promise<RasgiriResult> {
+    if (!chequeIds || chequeIds.length === 0) {
+      throw new BadRequestException('حداقل یک فقره چک باید انتخاب شود.');
+    }
+    const items: ChequeCalculationInput[] = await Promise.all(
+      chequeIds.map(async (id) => {
+        const cheque = await this.get(tenantId, id);
+        return {
+          id: cheque.id,
+          amount: cheque.remainingAmount ?? cheque.amount,
+          dueDate: cheque.dueDate,
+          sayadNumber: cheque.sayadNumber ?? undefined,
+          description: cheque.partyName ?? cheque.description ?? undefined,
+        };
+      }),
+    );
+    return calculateRasgiri(items, baseDate);
+  }
+
+  /**
+   * Computes discounting for a selection of existing cheques in the tenant.
+   */
+  async calculateSelectionDiscount(
+    tenantId: string,
+    chequeIds: number[],
+    annualRatePercent: number,
+    baseDate?: string,
+  ): Promise<DiscountResult> {
+    if (!chequeIds || chequeIds.length === 0) {
+      throw new BadRequestException('حداقل یک فقره چک باید انتخاب شود.');
+    }
+    const items: ChequeCalculationInput[] = await Promise.all(
+      chequeIds.map(async (id) => {
+        const cheque = await this.get(tenantId, id);
+        return {
+          id: cheque.id,
+          amount: cheque.remainingAmount ?? cheque.amount,
+          dueDate: cheque.dueDate,
+          sayadNumber: cheque.sayadNumber ?? undefined,
+          description: cheque.partyName ?? cheque.description ?? undefined,
+        };
+      }),
+    );
+    return calculateChequesDiscounting(items, annualRatePercent, baseDate);
   }
 }
