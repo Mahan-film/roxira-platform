@@ -1,11 +1,11 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
- * Migration 1789900001600: Add auto_revert_at and reason columns to tenant_policy_settings (#584-6).
+ * Migration 1789900001700: Add auto_revert_at and reason columns to tenant_policy_settings (#584-6).
  * Supports automatic reverting of weakened controls and tracking of reasons in the exceptions report.
  */
-export class AddPolicyAutoRevertAndReason1789900001600 implements MigrationInterface {
-  name = 'AddPolicyAutoRevertAndReason1789900001600';
+export class AddPolicyAutoRevertAndReason1789900001700 implements MigrationInterface {
+  name = 'AddPolicyAutoRevertAndReason1789900001700';
 
   public async up(q: QueryRunner): Promise<void> {
     await q.query(`
