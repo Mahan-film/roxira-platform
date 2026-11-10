@@ -103,16 +103,12 @@ class PgOrderStore:
 
     @contextlib.contextmanager
     def lock(self, track_id: str):
-        """PostgreSQL advisory lock per track_id so concurrent verification attempts serialize.
-        If another thread/process is already verifying this track_id, subsequent
-        requests wait and then read the committed outcome instead of racing."""
-        with self._conn.cursor() as cur:
-            cur.execute("SELECT pg_advisory_lock(hashtext(%s));", (track_id,))
-        try:
-            yield
-        finally:
+        """PostgreSQL transaction-level advisory lock per track_id so concurrent verification attempts serialize.
+        Automatically released upon transaction commit or rollback, preventing leaked locks on error."""
+        with self._conn.transaction():
             with self._conn.cursor() as cur:
-                cur.execute("SELECT pg_advisory_unlock(hashtext(%s));", (track_id,))
+                cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s));", (track_id,))
+            yield
 
     def create_pending_order(
         self,

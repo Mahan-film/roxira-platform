@@ -744,3 +744,57 @@ def test_unique_gateway_ref_number_integrity_rejection():
     pg_store = payment_orders.PgOrderStore(mock_conn)
     result = pg_store.mark_paid("TRK-DUP", "DUPLICATE-REF-999")
     assert result is False
+
+
+def test_verify_invoice_concurrent_threads_no_double_activation():
+    """T18 Concurrency: Concurrent verify requests for the same track_id must
+    activate the entitlement exactly once and all return PAID status."""
+    import concurrent.futures
+    store = FakeOrderStore()
+    _seed_pending(store, amount=6_250_000)
+    activated = []
+    lock = threading.Lock()
+
+    def do_activate(user_ref, plan_type):
+        with lock:
+            activated.append((user_ref, plan_type))
+
+    def run_verify():
+        return payment_service.verify_invoice(
+            track_id="TRK-1",
+            order_store=store,
+            zibal_verify_fn=lambda tid: {
+                "success": True, "paid": True, "definitive": True,
+                "amount": 6_250_000, "ref_number": "REF-CONC-1",
+            },
+            activate_fn=do_activate,
+        )
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+        futures = [pool.submit(run_verify) for _ in range(5)]
+        results = [f.result() for f in futures]
+
+    assert all(r["status"] == "PAID" for r in results)
+    assert len(activated) == 1
+    assert store.mark_paid_calls == 1
+
+
+def test_pg_order_store_uses_transaction_advisory_lock():
+    """T18 Advisory Lock: PgOrderStore.lock must use pg_advisory_xact_lock
+    inside a transaction to avoid leaked locks on error."""
+    from unittest.mock import MagicMock
+    from output_apps.ecosystem_core.src.billing.payment_orders import PgOrderStore
+
+    mock_conn = MagicMock()
+    mock_cur = MagicMock()
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+    store = PgOrderStore(mock_conn)
+
+    with store.lock("TRK-LOCK-TEST"):
+        pass
+
+    mock_conn.transaction.assert_called_once()
+    mock_cur.execute.assert_called_once_with(
+        "SELECT pg_advisory_xact_lock(hashtext(%s));", ("TRK-LOCK-TEST",)
+    )
+

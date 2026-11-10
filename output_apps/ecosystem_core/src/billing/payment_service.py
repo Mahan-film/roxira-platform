@@ -206,48 +206,59 @@ def verify_invoice(
     the order failed: it returns status "PENDING_RETRY" and leaves the order
     exactly as it was, so a paid order can never be permanently lost to a
     transient error and a later, real verify can still succeed."""
-    with _maybe_lock(order_store, track_id):
-        order = order_store.get_order(track_id)
-        if not order:
-            return {"status": "FAILED", "message": "سفارش با این شناسه یافت نشد."}
+    order = order_store.get_order(track_id)
+    if not order:
+        return {"status": "FAILED", "message": "سفارش با این شناسه یافت نشد."}
 
-        if order["status"] == "paid":
-            # Idempotent replay (page refresh / Zibal calling twice): never
-            # re-verify or re-activate; only report what is already stored.
+    if order["status"] == "paid":
+        # Idempotent replay (page refresh / Zibal calling twice): never
+        # re-verify or re-activate; only report what is already stored.
+        return _paid_result(
+            order, track_id, "این تراکنش پیش‌تر تایید و فعال شده است.",
+            plans=plans, entitlement_fn=entitlement_fn,
+            already_verified=True,
+            replayed=True,
+        )
+
+    # Network call to gateway is executed outside any DB lock to avoid holding DB resources
+    verify_res = zibal_verify_fn(track_id)
+
+    if not verify_res.get("definitive"):
+        # No final answer from the gateway yet — leave the order pending
+        # (never mark_failed here) so the callback page can retry.
+        return {
+            "status": "PENDING_RETRY",
+            # fixed Persian copy: the gateway/network text is English
+            "message": "امکان تایید قطعی نتیجهٔ پرداخت در حال حاضر وجود ندارد؛ لطفاً دوباره تلاش کنید.",
+            "track_id": track_id,
+        }
+
+    if not verify_res.get("paid"):
+        order_store.mark_failed(track_id)
+        return {
+            "status": "FAILED",
+            "message": "پرداخت انجام نشد یا لغو شد. در صورت کسر وجه، مبلغ ظرف ۷۲ ساعت به حساب شما بازمی‌گردد.",
+        }
+
+    gateway_amount = int(verify_res.get("amount") or 0)
+    expected_amount = int(order["amount_rial"])
+    if gateway_amount <= 0 or gateway_amount != expected_amount:
+        order_store.mark_failed(track_id)
+        return {
+            "status": "FAILED",
+            "message": "مبلغ تایید شده توسط درگاه با فاکتور مطابقت ندارد.",
+        }
+
+    # Lock DB row / order to safely perform atomic state transition and entitlement activation
+    with _maybe_lock(order_store, track_id):
+        refreshed = order_store.get_order(track_id) or order
+        if refreshed.get("status") == "paid":
             return _paid_result(
-                order, track_id, "این تراکنش پیش‌تر تایید و فعال شده است.",
+                refreshed, track_id, "این تراکنش پیش‌تر تایید و فعال شده است.",
                 plans=plans, entitlement_fn=entitlement_fn,
                 already_verified=True,
                 replayed=True,
             )
-
-        verify_res = zibal_verify_fn(track_id)
-
-        if not verify_res.get("definitive"):
-            # No final answer from the gateway yet — leave the order pending
-            # (never mark_failed here) so the callback page can retry.
-            return {
-                "status": "PENDING_RETRY",
-                # fixed Persian copy: the gateway/network text is English
-                "message": "امکان تایید قطعی نتیجهٔ پرداخت در حال حاضر وجود ندارد؛ لطفاً دوباره تلاش کنید.",
-                "track_id": track_id,
-            }
-
-        if not verify_res.get("paid"):
-            order_store.mark_failed(track_id)
-            return {
-                "status": "FAILED",
-                "message": "پرداخت انجام نشد یا لغو شد. در صورت کسر وجه، مبلغ ظرف ۷۲ ساعت به حساب شما بازمی‌گردد.",
-            }
-
-        gateway_amount = int(verify_res.get("amount") or 0)
-        expected_amount = int(order["amount_rial"])
-        if gateway_amount <= 0 or gateway_amount != expected_amount:
-            order_store.mark_failed(track_id)
-            return {
-                "status": "FAILED",
-                "message": "مبلغ تایید شده توسط درگاه با فاکتور مطابقت ندارد.",
-            }
 
         became_paid = order_store.mark_paid(track_id, verify_res.get("ref_number"))
         if not became_paid:
@@ -271,10 +282,10 @@ def verify_invoice(
         # activated at most once (merge_entitlement stacks same-level renewals, a
         # second activation would wrongly add another period). A failed persist
         # touches nothing, so retrying it a couple of times is safe.
-        activation_result, activation_pending = activate_with_retry(order, track_id, activate_fn)
+        activation_result, activation_pending = activate_with_retry(refreshed, track_id, activate_fn)
 
         result = _paid_result(
-            order, track_id, "پرداخت با موفقیت تایید و حساب کاربری فعال شد.",
+            refreshed, track_id, "پرداخت با موفقیت تایید و حساب کاربری فعال شد.",
             plans=plans, entitlement_fn=entitlement_fn,
             activation=activation_result if isinstance(activation_result, dict) else None,
             already_verified=False,
