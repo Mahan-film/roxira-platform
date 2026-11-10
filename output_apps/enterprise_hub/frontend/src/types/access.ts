@@ -56,16 +56,42 @@ export const SYSTEM_ROLE_LABELS: Record<string, string> = {
   custom: "نقش سفارشی",
 };
 
+export type RoleScopeType = "org" | "branch" | "warehouse";
+export type SensitiveField = "cost" | "margin" | "salary";
+
+export interface RoleScope {
+  type: RoleScopeType;
+  ids: string[];
+}
+
+export type FieldVisibilityMap = Record<SensitiveField, boolean>;
+
+export const SCOPE_TYPE_LABELS: Record<RoleScopeType, string> = {
+  org: "کل سازمان (سراسری)",
+  branch: "محدود به شعب",
+  warehouse: "محدود به انبارها",
+};
+
+export const SENSITIVE_FIELD_LABELS: Record<SensitiveField, string> = {
+  cost: "بهای تمام‌شده و خرید",
+  margin: "حاشیه سود و تخفیف",
+  salary: "حقوق و دستمزد",
+};
+
 export interface MyAccess {
   organization: null | {
     tenantId: string;
     roleKey: string;
+    customRoleId?: string | null;
     permissions: string[];
     entitledModules: string[];
     branchId: string | null;
     branchScoped: boolean;
     require2fa: boolean;
     mfa: boolean;
+    scope?: RoleScope;
+    amountLimits?: Record<string, string>;
+    fieldVisibility?: Partial<FieldVisibilityMap>;
   };
 }
 
@@ -114,12 +140,26 @@ export interface CustomRole {
   id: string;
   name: string;
   permissions: string[];
+  scopeType?: RoleScopeType;
+  scopeIds?: string[];
+  amountLimits?: Record<string, string>;
+  fieldVisibility?: Partial<FieldVisibilityMap>;
 }
 
 export interface RolesResponse {
-  system: Array<{ key: string; deprecated: boolean; permissions: string[] }>;
+  system: Array<{
+    key: string;
+    deprecated: boolean;
+    permissions: string[];
+    fieldVisibility?: Partial<FieldVisibilityMap>;
+  }>;
   custom: CustomRole[];
-  catalogue: { modules: AccessModuleKey[]; actions: AccessActionKey[] };
+  catalogue: {
+    modules: AccessModuleKey[];
+    actions: AccessActionKey[];
+    scopeTypes?: RoleScopeType[];
+    sensitiveFields?: SensitiveField[];
+  };
 }
 
 export interface Branch { id: string; name: string; code: string | null; parentId: string | null }
