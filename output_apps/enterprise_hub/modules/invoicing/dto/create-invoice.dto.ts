@@ -106,8 +106,9 @@ export class InvoiceItemDto {
   @MaxLength(512)
   description?: string;
 
-  @ApiProperty({ description: 'تعداد/مقدار', example: 2, minimum: 0.01 })
-  @IsNumber({ maxDecimalPlaces: 2 })
+  @ApiProperty({ description: 'تعداد/مقدار', example: 2, minimum: 0.001 })
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @Min(0.001)
   @IsPositive()
   quantity: number;
 

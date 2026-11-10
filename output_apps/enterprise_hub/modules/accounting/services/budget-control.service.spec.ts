@@ -98,4 +98,23 @@ describe('BudgetControlService', () => {
     expect(result.allowed).toBe(true);
     expect(result.warning).toBeUndefined();
   });
+
+  it('checks budget and spend by costCenterCode when provided', async () => {
+    mockPolicyService.get.mockResolvedValueOnce('warn');
+    // budget query for cost center
+    mockManager.query
+      .mockResolvedValueOnce([{ budget: '2000000.00' }])
+      .mockResolvedValueOnce([{ spend: '1900000.00' }]);
+
+    const result = await service.checkBudget('tenant-1', {
+      costCenterCode: 'CC-ENGINEERING',
+      amountMinor: 20000000n, // 200,000 -> 2,100,000 > 2,000,000
+    });
+
+    expect(result.allowed).toBe(true);
+    expect(result.warning).toBeDefined();
+    expect(result.warning).toContain('مرکز هزینه');
+    expect(result.budgetMinor).toBe(200000000n);
+    expect(result.actualSpendMinor).toBe(190000000n);
+  });
 });

@@ -59,8 +59,9 @@ export class BudgetControlService {
     return this.scope.within(tenantId, manager, async (m) => {
       let budgetMinor = 0n;
       const projectCode = input.projectCode;
+      const costCenterCode = input.costCenterCode;
 
-      // 1. If projectCode given, check erp_projects
+      // 1. If projectCode given, check erp_projects by project code
       if (projectCode) {
         const projectRows = (await m.query(
           `SELECT "budget" FROM "erp_projects" WHERE "tenant_id" = $1 AND "code" = $2`,
@@ -71,6 +72,17 @@ export class BudgetControlService {
           budgetMinor = fromDb(projectRows[0].budget);
         }
       }
+      // If no budget found from project code and costCenterCode given, check by cost_centre_code
+      if (budgetMinor <= 0n && costCenterCode) {
+        const costCenterRows = (await m.query(
+          `SELECT "budget" FROM "erp_projects" WHERE "tenant_id" = $1 AND "cost_centre_code" = $2`,
+          [tenantId, costCenterCode],
+        )) as Array<{ budget: string | number }>;
+
+        if (costCenterRows.length > 0) {
+          budgetMinor = fromDb(costCenterRows[0].budget);
+        }
+      }
 
       // If budget is 0 or not configured, allow without restriction
       if (budgetMinor <= 0n) {
@@ -78,29 +90,57 @@ export class BudgetControlService {
       }
 
       // 2. Calculate actual spend from posted journal lines
-      const spendRows = (await m.query(
-        `SELECT COALESCE(SUM(l.debit - l.credit), 0) AS spend
-         FROM "fin_journal_entry_lines" l
-         JOIN "fin_dimensions" d ON d.id = l.project_id AND d.tenant_id = l.tenant_id
-         JOIN "fin_journal_entries" e ON e.id = l.journal_entry_id AND e.tenant_id = l.tenant_id
-         WHERE l.tenant_id = $1
-           AND d.code = $2
-           AND e.status = 'POSTED'`,
-        [tenantId, projectCode],
-      )) as Array<{ spend: string | number }>;
+      let spendRows: Array<{ spend: string | number }>;
+      if (projectCode && costCenterCode) {
+        spendRows = (await m.query(
+          `SELECT COALESCE(SUM(l.debit - l.credit), 0) AS spend
+           FROM "fin_journal_entry_lines" l
+           JOIN "fin_dimensions" d ON d.id = l.project_id AND d.tenant_id = l.tenant_id
+           JOIN "fin_dimensions" cc ON cc.id = l.cost_center_id AND cc.tenant_id = l.tenant_id
+           JOIN "fin_journal_entries" e ON e.id = l.journal_entry_id AND e.tenant_id = l.tenant_id
+           WHERE l.tenant_id = $1
+             AND d.code = $2
+             AND cc.code = $3
+             AND e.status = 'POSTED'`,
+          [tenantId, projectCode, costCenterCode],
+        )) as Array<{ spend: string | number }>;
+      } else if (projectCode) {
+        spendRows = (await m.query(
+          `SELECT COALESCE(SUM(l.debit - l.credit), 0) AS spend
+           FROM "fin_journal_entry_lines" l
+           JOIN "fin_dimensions" d ON d.id = l.project_id AND d.tenant_id = l.tenant_id
+           JOIN "fin_journal_entries" e ON e.id = l.journal_entry_id AND e.tenant_id = l.tenant_id
+           WHERE l.tenant_id = $1
+             AND d.code = $2
+             AND e.status = 'POSTED'`,
+          [tenantId, projectCode],
+        )) as Array<{ spend: string | number }>;
+      } else {
+        spendRows = (await m.query(
+          `SELECT COALESCE(SUM(l.debit - l.credit), 0) AS spend
+           FROM "fin_journal_entry_lines" l
+           JOIN "fin_dimensions" cc ON cc.id = l.cost_center_id AND cc.tenant_id = l.tenant_id
+           JOIN "fin_journal_entries" e ON e.id = l.journal_entry_id AND e.tenant_id = l.tenant_id
+           WHERE l.tenant_id = $1
+             AND cc.code = $2
+             AND e.status = 'POSTED'`,
+          [tenantId, costCenterCode],
+        )) as Array<{ spend: string | number }>;
+      }
 
       const actualSpendMinor = fromDb(spendRows[0]?.spend ?? 0);
       const totalProjected = actualSpendMinor + input.amountMinor;
+      const targetLabel = projectCode ? 'پروژه' : 'مرکز هزینه';
 
       if (totalProjected > budgetMinor) {
         if (mode === 'refuse') {
           throw new BadRequestException(
-            `مبلغ هزینه از سقف بودجه مصوب پروژه فراتر است. سقف بودجه: ${budgetMinor} ریال، مجموع هزینه‌های فعلی: ${actualSpendMinor} ریال، مبلغ جدید: ${input.amountMinor} ریال.`,
+            `مبلغ هزینه از سقف بودجه مصوب ${targetLabel} فراتر است. سقف بودجه: ${budgetMinor} ریال، مجموع هزینه‌های فعلی: ${actualSpendMinor} ریال، مبلغ جدید: ${input.amountMinor} ریال.`,
           );
         }
         return {
           allowed: true,
-          warning: `مبلغ هزینه از سقف بودجه مصوب پروژه (${budgetMinor} ریال) فراتر رفته است. مجموع هزینه با احتساب این سند: ${totalProjected} ریال.`,
+          warning: `مبلغ هزینه از سقف بودجه مصوب ${targetLabel} (${budgetMinor} ریال) فراتر رفته است. مجموع هزینه با احتساب این سند: ${totalProjected} ریال.`,
           actualSpendMinor,
           budgetMinor,
         };

@@ -737,6 +737,7 @@ export class AccountingService {
         lineInputs = await this.resolveLineInputs(tenantId, normalizedLines, manager);
       }
       if (this.budgetControl && status === JournalEntryStatus.POSTED) {
+        const warnings: string[] = [];
         for (const line of lineInputs) {
           if ((line.projectCode || line.costCenterCode) && line.debitMinor > 0n) {
             const check = await this.budgetControl.checkBudget(
@@ -748,8 +749,13 @@ export class AccountingService {
               },
               manager,
             );
-            if (check.warning) budgetWarning = check.warning;
+            if (check.warning && !warnings.includes(check.warning)) {
+              warnings.push(check.warning);
+            }
           }
+        }
+        if (warnings.length > 0) {
+          budgetWarning = warnings.join(' | ');
         }
       }
       try {
