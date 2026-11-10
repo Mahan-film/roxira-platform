@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsNumberString, IsOptional, Max, Min } from 'class-validator';
+import { IsInt, IsOptional, Matches, Max, Min } from 'class-validator';
+
+const AMOUNT = /^\d+(\.\d{1,2})?$/;
 
 export class QueryYearEndRolloverDto {
   @ApiProperty({ description: 'سال مالی شمسی (مثلاً ۱۴۰۴ یا ۱۴۰۵)', example: 1404 })
@@ -15,7 +17,7 @@ export class QueryYearEndRolloverDto {
     example: '50000000',
   })
   @IsOptional()
-  @IsNumberString()
+  @Matches(AMOUNT, { message: 'مبلغ هزینه‌های غیرقابل قبول باید یک عدد نامنفی تا ۲ رقم اعشار باشد.' })
   nonDeductibleExpensesMinor?: string;
 
   @ApiPropertyOptional({
@@ -23,7 +25,7 @@ export class QueryYearEndRolloverDto {
     example: '20000000',
   })
   @IsOptional()
-  @IsNumberString()
+  @Matches(AMOUNT, { message: 'مبلغ معافیت‌های قانونی باید یک عدد نامنفی تا ۲ رقم اعشار باشد.' })
   taxExemptIncomeMinor?: string;
 }
 

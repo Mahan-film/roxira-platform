@@ -135,4 +135,33 @@ describe('ChequeMaturityReportService', () => {
     expect(alborz.partyName).toBe('تأمین کننده البرز');
     expect(alborz.totalAmountMinor).toBe('5000000000');
   });
+
+  it('handles full ISO datetime string without crashing and filters by bankName', async () => {
+    const report = await service.generateReport('tenant-1', {
+      asOfDate: '2026-11-08T12:34:56.789Z',
+      bankName: 'ملت',
+    });
+
+    expect(repo.list).toHaveBeenCalledWith('tenant-1', { direction: undefined });
+    expect(report.summary.totalCount).toBe(2);
+    expect(report.summary.totalAmountMinor).toBe('4000000000');
+  });
+
+  it('nets settledAmount from partial payments', async () => {
+    (repo.list as jest.Mock).mockResolvedValueOnce([
+      {
+        id: 10,
+        chequeNumber: 'CHQ-PARTIAL',
+        direction: ChequeDirection.RECEIVED,
+        status: ChequeStatus.DEPOSITED,
+        amount: '10000000.00',
+        settledAmount: '3000000.00', // Unpaid remainder is 7,000,000.00
+        dueDate: '2026-11-08',
+      },
+    ]);
+
+    const report = await service.generateReport('tenant-1', { asOfDate: '2026-11-08' });
+    expect(report.summary.totalCount).toBe(1);
+    expect(report.summary.totalAmountMinor).toBe('700000000');
+  });
 });

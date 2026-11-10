@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { parseMinor } from '../../accounting/money';
+import { fromDb, parseMinor } from '../../accounting/money';
 import {
   BankChequeMaturityView,
   ChequeMaturityBucketView,
@@ -10,6 +10,7 @@ import {
 } from '../dto/cheque-maturity-report.dto';
 import { ChequeEntity } from '../entities/cheque.entity';
 import { ChequeDirection, ChequeStatus } from '../enums/cheque.enum';
+import { OPEN_STATUSES } from '../lifecycle/cheque-lifecycle';
 import { ChequesRepository } from '../repositories/cheques.repository';
 
 const BUCKET_DEFINITIONS: Array<{
@@ -30,10 +31,12 @@ const BUCKET_DEFINITIONS: Array<{
   { key: 'due_90_plus', labelFa: 'سررسید بیش از ۹۰ روز آینده', minDays: 91 },
 ];
 
+const DAY_MS = 86_400_000;
+const dateOnly = (value: string): string => value.slice(0, 10);
+const dayNumber = (date: string): number => Math.floor(Date.parse(`${dateOnly(date)}T00:00:00.000Z`) / DAY_MS);
+
 function diffInDays(targetDateStr: string, asOfDateStr: string): number {
-  const target = new Date(targetDateStr + 'T00:00:00Z').getTime();
-  const base = new Date(asOfDateStr + 'T00:00:00Z').getTime();
-  return Math.round((target - base) / 86_400_000);
+  return dayNumber(targetDateStr) - dayNumber(asOfDateStr);
 }
 
 @Injectable()
@@ -44,14 +47,9 @@ export class ChequeMaturityReportService {
     tenantId: string,
     query: QueryChequeMaturityDto = {},
   ): Promise<ChequeMaturityReportView> {
-    const asOfDate = query.asOfDate ?? new Date().toISOString().slice(0, 10);
+    const asOfDate = dateOnly(query.asOfDate ?? new Date().toISOString());
     const direction = query.direction ?? 'all';
-
-    const OPEN_STATUSES = new Set([
-      ChequeStatus.REGISTERED,
-      ChequeStatus.DELIVERED,
-      ChequeStatus.DEPOSITED,
-    ]);
+    const openSet = new Set(OPEN_STATUSES);
 
     // Query active/open cheques (excluding settled, returned or spent cheques)
     const allCheques = await this.repo.list(tenantId, {
@@ -59,8 +57,8 @@ export class ChequeMaturityReportService {
     });
 
     const filteredCheques = allCheques.filter((c) => {
-      if (!OPEN_STATUSES.has(c.status)) return false;
-      if (query.bankName && c.bankName !== query.bankName) return false;
+      if (!openSet.has(c.status)) return false;
+      if (query.bankName && c.bankName !== query.bankName && !c.bankName?.includes(query.bankName)) return false;
       return true;
     });
 
@@ -88,11 +86,15 @@ export class ChequeMaturityReportService {
     let sumProductDays = 0n;
 
     const bankAgg: Record<string, { count: number; totalMinor: bigint }> = {};
-    const partyAgg: Record<string, { partyCode: string | null; count: number; totalMinor: bigint }> = {};
+    const partyAgg: Record<string, { partyCode: string | null; partyName: string; count: number; totalMinor: bigint }> = {};
     const sayadAgg: Record<string, { count: number; totalMinor: bigint }> = {};
 
     for (const cheque of filteredCheques) {
-      const minor = parseMinor(cheque.amount);
+      const grossMinor = fromDb(cheque.amount);
+      const settledMinor = fromDb(cheque.settledAmount ?? '0');
+      const minor = grossMinor - settledMinor;
+      if (minor <= 0n) continue;
+
       const days = diffInDays(cheque.dueDate, asOfDate);
 
       const itemView: ChequeMaturityItemView = {
@@ -148,10 +150,11 @@ export class ChequeMaturityReportService {
       bankAgg[bank].totalMinor += minor;
 
       // Party grouping
-      const party = cheque.partyName || 'نامشخص';
-      if (!partyAgg[party]) partyAgg[party] = { partyCode: cheque.partyCode, count: 0, totalMinor: 0n };
-      partyAgg[party].count += 1;
-      partyAgg[party].totalMinor += minor;
+      const partyKey = cheque.partyCode || cheque.partyName || 'نامشخص';
+      const partyDisplayName = cheque.partyName || cheque.partyCode || 'نامشخص';
+      if (!partyAgg[partyKey]) partyAgg[partyKey] = { partyCode: cheque.partyCode, partyName: partyDisplayName, count: 0, totalMinor: 0n };
+      partyAgg[partyKey].count += 1;
+      partyAgg[partyKey].totalMinor += minor;
 
       // Sayad status
       const sayad = cheque.sayadRegistrationStatus || 'unknown';
@@ -160,7 +163,7 @@ export class ChequeMaturityReportService {
       sayadAgg[sayad].totalMinor += minor;
     }
 
-    const weightedAvg = totalMinor > 0n ? Number(sumProductDays / totalMinor) : 0;
+    const weightedAvg = totalMinor > 0n ? Math.round(Number((sumProductDays * 100n) / totalMinor)) / 100 : 0;
 
     const byBank: BankChequeMaturityView[] = Object.entries(bankAgg)
       .map(([bankName, agg]) => ({
@@ -170,9 +173,9 @@ export class ChequeMaturityReportService {
       }))
       .sort((a, b) => (BigInt(b.totalAmountMinor) > BigInt(a.totalAmountMinor) ? 1 : -1));
 
-    const topParties: PartyChequeMaturityView[] = Object.entries(partyAgg)
-      .map(([partyName, agg]) => ({
-        partyName,
+    const topParties: PartyChequeMaturityView[] = Object.values(partyAgg)
+      .map((agg) => ({
+        partyName: agg.partyName,
         partyCode: agg.partyCode,
         count: agg.count,
         totalAmountMinor: agg.totalMinor.toString(),
@@ -193,7 +196,7 @@ export class ChequeMaturityReportService {
       direction,
       currency: 'IRR',
       summary: {
-        totalCount: filteredCheques.length,
+        totalCount: overdueCount + todayCount + upcomingCount,
         totalAmountMinor: totalMinor.toString(),
         overdueCount,
         overdueAmountMinor: overdueMinor.toString(),

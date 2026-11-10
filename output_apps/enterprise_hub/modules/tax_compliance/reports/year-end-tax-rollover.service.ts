@@ -64,9 +64,17 @@ export class YearEndTaxRolloverService {
     }
 
     const rateStr = String(rateRow.value);
-    const taxRatePercent = Math.round(parseFloat(rateStr) * 100);
-    const estimatedTaxMinor =
-      taxableProfitMinor > 0n ? applyRate(taxableProfitMinor, rateStr) : 0n;
+    const [rateWhole, rateFrac = ''] = rateStr.split('.');
+    const taxRatePercent = Number(BigInt(rateWhole || '0') * 100n + BigInt((rateFrac + '00').slice(0, 2)));
+
+    const floorRow = resolved.get('corporate_tax_effective_floor');
+    const floorStr = floorRow && isValidStatutoryValue('corporate_tax_effective_floor', floorRow.value)
+      ? String(floorRow.value)
+      : null;
+
+    const byRate = taxableProfitMinor > 0n ? applyRate(taxableProfitMinor, rateStr) : 0n;
+    const floorTax = profitBeforeTaxMinor > 0n && floorStr ? applyRate(profitBeforeTaxMinor, floorStr) : 0n;
+    const estimatedTaxMinor = byRate > floorTax ? byRate : floorTax;
 
     const taxReconciliation: TaxReconciliationView = {
       accountingRevenueMinor: revenueMinor.toString(),

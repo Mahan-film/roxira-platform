@@ -21,11 +21,12 @@ import { TaxInspectorService } from './reports/tax-inspector.service';
 import { QuarterlyTaxComparisonService } from './reports/quarterly-tax-comparison.service';
 import { YearEndTaxRolloverService } from './reports/year-end-tax-rollover.service';
 
-const HOST = process.env.ROXIRA_TEST_PG_HOST;
+const HOST = process.env.ROXIRA_TEST_PG_HOST ?? (process.env.CI ? '127.0.0.1' : undefined);
 const describePg = HOST ? describe : describe.skip;
 const OWNER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
 const OWNER_PW = process.env.ROXIRA_TEST_PG_PASSWORD;
 const PORT = Number(process.env.ROXIRA_TEST_PG_PORT ?? 5432);
+const ADMIN_DB = process.env.ROXIRA_TEST_PG_ADMIN_DB ?? (OWNER === 'mac' ? 'template1' : 'postgres');
 const APP_PW = 'tax-reports-test-only';
 
 const TENANT_A = '11111111-1111-4111-8111-111111111111';
@@ -61,7 +62,7 @@ describePg('Tax Compliance and Cheque Reports on real PostgreSQL (NOSUPERUSER, N
   let chequeMaturityService: ChequeMaturityReportService;
 
   beforeAll(async () => {
-    admin = await new DataSource({ ...options('postgres'), entities: [], migrations: [] }).initialize();
+    admin = await new DataSource({ ...options(ADMIN_DB), entities: [], migrations: [] }).initialize();
     await admin.query(`CREATE DATABASE "${db}"`);
     await admin.query(`DROP ROLE IF EXISTS ${role}`);
     await admin.query(`CREATE ROLE ${role} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${APP_PW}'`);
@@ -143,13 +144,45 @@ describePg('Tax Compliance and Cheque Reports on real PostgreSQL (NOSUPERUSER, N
       ON CONFLICT DO NOTHING
     `);
 
-    // 5. Cheques for Tenant A
+    // 5. Moadian submission for the invoice
     await ownerDs.query(`
-      INSERT INTO "fin_cheques" ("tenant_id", "direction", "cheque_number", "bank_name", "amount", "issue_date", "due_date", "party_name", "party_code", "status", "sayad_registration_status")
+      INSERT INTO "moadian_submissions" ("tenant_id", "invoice_id", "uid", "tax_id", "serial", "status", "packet")
+      VALUES (
+        '${TENANT_A}',
+        '44444444-4444-4444-8444-444444444444',
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        'TAXID1234567890123456',
+        1,
+        'SUCCESS',
+        '{}'::jsonb
+      )
+      ON CONFLICT DO NOTHING
+    `);
+
+    // 6. Capture document (purchase) in 1404 Q1
+    await ownerDs.query(`
+      INSERT INTO "capture_documents" (
+        "id", "tenant_id", "status", "source_kind", "source_sha256", "extracted", "edited", "created_by"
+      ) VALUES (
+        '55555555-5555-5555-8555-555555555555',
+        '${TENANT_A}',
+        'posted',
+        'pdf',
+        'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+        '{}'::jsonb,
+        '{"kind": "purchase", "date": "2025-05-15", "total": "2000000", "tax": "180000"}'::jsonb,
+        'seed'
+      )
+      ON CONFLICT DO NOTHING
+    `);
+
+    // 7. Cheques for Tenant A (including settled amount on CHQ-101 and full-ISO date test)
+    await ownerDs.query(`
+      INSERT INTO "fin_cheques" ("tenant_id", "direction", "cheque_number", "bank_name", "amount", "settled_amount", "issue_date", "due_date", "party_name", "party_code", "status", "sayad_registration_status")
       VALUES
-        ('${TENANT_A}', 'received', 'CHQ-101', 'بانک ملت', 5000000.00, '2026-10-01', '2026-11-05', 'مشتری الف', 'P-1', 'registered', 'registered'),
-        ('${TENANT_A}', 'received', 'CHQ-102', 'بانک صادرات', 12000000.00, '2026-10-05', '2026-11-15', 'مشتری ب', 'P-2', 'registered', 'registered'),
-        ('${TENANT_A}', 'issued', 'CHQ-103', 'بانک ملی', 8000000.00, '2026-10-10', '2026-12-01', 'تأمین‌کننده ج', 'S-1', 'registered', 'unknown')
+        ('${TENANT_A}', 'received', 'CHQ-101', 'بانک ملت', 5000000.00, 1000000.00, '2026-10-01', '2026-11-05', 'مشتری الف', 'P-1', 'registered', 'registered'),
+        ('${TENANT_A}', 'received', 'CHQ-102', 'بانک صادرات', 12000000.00, 0, '2026-10-05', '2026-11-15', 'مشتری ب', 'P-2', 'registered', 'registered'),
+        ('${TENANT_A}', 'issued', 'CHQ-103', 'بانک ملی', 8000000.00, 0, '2026-10-10', '2026-12-01', 'تأمین‌کننده ج', 'S-1', 'registered', 'unknown')
       ON CONFLICT DO NOTHING
     `);
   }, 240_000);
@@ -172,6 +205,12 @@ describePg('Tax Compliance and Cheque Reports on real PostgreSQL (NOSUPERUSER, N
     expect(pkg.salesReconciliation.outputVatMinor).toBe('90000000'); // 900,000.00 VAT
     expect(pkg.salesReconciliation.ledgerRevenueMinor).toBe('1000000000'); // 10,000,000.00 net revenue
     expect(pkg.salesReconciliation.salesToLedgerDiscrepancyMinor).toBe('0');
+    expect(pkg.salesReconciliation.moadianTransmittedCount).toBe(1);
+    expect(pkg.salesReconciliation.moadianTransmittedTotalMinor).toBe('1000000000'); // Net sales = Net Moadian
+    expect(pkg.salesReconciliation.salesToMoadianDiscrepancyMinor).toBe('0');
+    expect(pkg.purchasesReconciliation.deductiblePurchasesMinor).toBe('200000000'); // From capture_documents
+    expect(pkg.purchasesReconciliation.inputVatCreditMinor).toBe('18000000'); // From capture_documents
+    expect(pkg.vatSummary.inputVatCreditMinor).toBe('18000000');
     expect(pkg.booksAudit.isBalanced).toBe(true);
     expect(pkg.booksAudit.postedVouchersCount).toBe(1);
   });
@@ -204,14 +243,17 @@ describePg('Tax Compliance and Cheque Reports on real PostgreSQL (NOSUPERUSER, N
   });
 
   it('generates Cheque Maturity Report with aging buckets and statistics', async () => {
+    // Test with full ISO datetime string
     const report = await chequeMaturityService.generateReport(TENANT_A, {
-      asOfDate: '2026-11-08',
+      asOfDate: '2026-11-08T15:30:00.000Z',
       direction: 'all',
     });
 
     expect(report.summary.totalCount).toBe(3);
-    expect(report.summary.totalAmountMinor).toBe('2500000000'); // (5M + 12M + 8M) * 100
+    // Unpaid remainder: (4M + 12M + 8M) * 100 = 24M rial = 2,400,000,000 minor units
+    expect(report.summary.totalAmountMinor).toBe('2400000000');
     expect(report.summary.overdueCount).toBe(1); // CHQ-101 (due 2026-11-05) is 3 days overdue
+    expect(report.summary.overdueAmountMinor).toBe('400000000');
     expect(report.summary.upcomingCount).toBe(2);
 
     expect(report.buckets.overdue_1_30.count).toBe(1);

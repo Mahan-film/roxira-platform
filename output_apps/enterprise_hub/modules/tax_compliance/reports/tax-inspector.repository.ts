@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
 import { fromDb } from '../../accounting/money';
+import { tehranDay } from './jalali-format.util';
 
 export interface RawInvoiceSalesSummary {
   invoicedCount: number;
@@ -107,13 +108,13 @@ export class TaxInspectorRepository {
       );
 
       // 2. Capture documents
-      const fromDay = fromDate.toISOString().slice(0, 10);
-      const toDay = toDate.toISOString().slice(0, 10);
+      const fromDay = tehranDay(fromDate);
+      const toDay = tehranDay(toDate);
       const capRows = await manager.query(
         `SELECT
            COUNT(*)::int AS "count",
-           COALESCE(SUM(CAST(COALESCE("edited"->>'total_amount', "extracted"->'draft'->>'total_amount', '0') AS numeric)), 0) AS "totalAmount",
-           COALESCE(SUM(CAST(COALESCE("edited"->>'tax_amount', "extracted"->'draft'->>'tax_amount', '0') AS numeric)), 0) AS "totalTax"
+           COALESCE(SUM(CAST(COALESCE("edited"->>'total', "extracted"->'draft'->>'total', '0') AS numeric)), 0) AS "totalAmount",
+           COALESCE(SUM(CAST(COALESCE("edited"->>'tax', "extracted"->'draft'->>'tax', '0') AS numeric)), 0) AS "totalTax"
          FROM "capture_documents"
          WHERE "tenant_id" = $1
            AND "status" IN ('posted', 'auto_posted')
@@ -126,7 +127,10 @@ export class TaxInspectorRepository {
       const rInv = invRows[0] || {};
       const rCap = capRows[0] || {};
 
-      const invAmountMinor = fromDb(rInv.totalAmount) || (fromDb(rInv.totalPayable) - fromDb(rInv.totalTax));
+      const invAmountMinor =
+        rInv.totalAmount !== null && rInv.totalAmount !== undefined
+          ? fromDb(rInv.totalAmount)
+          : fromDb(rInv.totalPayable) - fromDb(rInv.totalTax);
       const invTaxMinor = fromDb(rInv.totalTax);
 
       const capAmountMinor = fromDb(rCap.totalAmount);
@@ -149,13 +153,13 @@ export class TaxInspectorRepository {
       const rows = await manager.query(
         `SELECT
            COUNT(*)::int AS "count",
-           COALESCE(SUM(i."finalPayable"), 0) AS "totalAmount"
+           COALESCE(SUM(i."totalAmount"), 0) AS "totalAmount"
          FROM "moadian_submissions" m
          JOIN "invoices" i ON i."id" = m."invoice_id" AND i."tenant_id" = m."tenant_id"
          WHERE m."tenant_id" = $1
            AND m."status" = 'SUCCESS'
-           AND i."createdAt" >= $2
-           AND i."createdAt" < $3`,
+           AND COALESCE(i."issued_at", i."createdAt") >= $2
+           AND COALESCE(i."issued_at", i."createdAt") < $3`,
         [tenantId, fromDate, toDate],
       );
 
@@ -173,8 +177,8 @@ export class TaxInspectorRepository {
     toDate: Date,
   ): Promise<RawLedgerSummary> {
     return this.scope.run(tenantId, async (manager) => {
-      const fromStr = fromDate.toISOString().slice(0, 10);
-      const toStr = toDate.toISOString().slice(0, 10);
+      const fromStr = tehranDay(fromDate);
+      const toStr = tehranDay(toDate);
 
       // Revenue and Expense accounts turnover (excluding closing/opening entries)
       const turnoverRows = await manager.query(
@@ -187,7 +191,7 @@ export class TaxInspectorRepository {
          JOIN "fin_chart_of_accounts" a ON a."id" = l."account_id" AND a."tenant_id" = l."tenant_id"
          WHERE l."tenant_id" = $1
            AND e."status" = 'POSTED'
-           AND (e."entry_type" IS NULL OR e."entry_type" NOT IN ('CLOSING_TEMP', 'CLOSING_PERM', 'OPENING'))
+           AND (e."entry_type" IS NULL OR e."entry_type" NOT IN ('CLOSING_TEMP', 'CLOSING_PERM', 'OPENING', 'OPENING_AUTO'))
            AND e."date" >= $2
            AND e."date" < $3
          GROUP BY a."account_type"`,
