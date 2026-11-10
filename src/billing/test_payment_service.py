@@ -798,3 +798,28 @@ def test_pg_order_store_uses_transaction_advisory_lock():
         "SELECT pg_advisory_xact_lock(hashtext(%s));", ("TRK-LOCK-TEST",)
     )
 
+
+def test_pg_order_store_lock_exception_rolls_back_transaction():
+    """T18 Advisory Lock: A thrown error inside PgOrderStore.lock rolls back the transaction
+    so no advisory lock leaks."""
+    from unittest.mock import MagicMock
+    from output_apps.ecosystem_core.src.billing.payment_orders import PgOrderStore
+
+    mock_conn = MagicMock()
+    mock_cur = MagicMock()
+    mock_tx = MagicMock()
+    mock_conn.transaction.return_value = mock_tx
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+    store = PgOrderStore(mock_conn)
+
+    with pytest.raises(RuntimeError, match="simulated failure"):
+        with store.lock("TRK-ERR"):
+            raise RuntimeError("simulated failure")
+
+    mock_conn.transaction.assert_called_once()
+    mock_tx.__enter__.assert_called_once()
+    mock_tx.__exit__.assert_called_once()
+    exc_type = mock_tx.__exit__.call_args[0][0]
+    assert exc_type is RuntimeError
+
+
