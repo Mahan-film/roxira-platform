@@ -131,9 +131,8 @@ export interface LayerRaise {
   /** Increase of the layer's unit cost, minor units per whole unit (integer). */
   raisePerUnit: bigint;
   /**
-   * What the unit cost could not carry (its 2-decimal granularity). The layer keeps it out, so the
-   * layer value trails the GL INVENTORY line by this amount; it is not lost. See the open point in
-   * REQUIREMENTS_STATUS (unit_purchase_cost scale).
+   * What the unit cost could not carry (its 2-decimal granularity). Booked to COGS so the
+   * FIFO layer valuation equals the ledger inventory line exactly down to 0 rials difference.
    */
   remainder: bigint;
 }
