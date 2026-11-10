@@ -1,4 +1,5 @@
-import { formatJalaliDate, formatNumber } from "../fa-format.ts";
+import { formatJalaliDate, formatMoneyRial } from "../fa-format.ts";
+const fmtDigits = (v: bigint) => formatMoneyRial(v.toString()).replace(/\s*ریال$/, "");
 import { integerToPersianWords } from "../persian-words.ts";
 import {
   TREASURY_KIND_LABELS,
@@ -43,7 +44,6 @@ export function mapTreasuryDocToPrintData(
   doc: TreasuryDocumentDetail,
   companyName = "",
 ): Record<string, unknown> {
-  const numericTotal = Number(doc.total);
   const totalBigInt = BigInt(String(doc.total).split(".")[0] || "0");
   const invoiceRefs = (doc.allocations ?? [])
     .map((a) => a.invoiceNumber ?? a.invoiceId)
@@ -51,11 +51,11 @@ export function mapTreasuryDocToPrintData(
     .join("، ");
 
   const payments: PrintPaymentRow[] = (doc.methods ?? []).map((m) => {
-    const numAmount = Number(m.amount);
+    const lineBigInt = BigInt(String(m.amount).split(".")[0] || "0");
     return {
       method: TREASURY_METHOD_LABELS[m.method] ?? m.method,
       detail: formatMethodDetail(m),
-      amount: formatNumber(numAmount),
+      amount: fmtDigits(lineBigInt),
     };
   });
 
@@ -72,14 +72,14 @@ export function mapTreasuryDocToPrintData(
       name: doc.partyName,
       code: doc.partyCode,
     },
-    amount: formatNumber(numericTotal),
+    amount: fmtDigits(totalBigInt),
     currencyLabel: "ریال",
     amountInWords: integerToPersianWords(totalBigInt),
     purpose: doc.description || (isReceipt ? "تسویه حساب و دریافت وجه" : "تسویه حساب و پرداخت وجه"),
     invoiceRefs,
     voucherNumber: doc.journalEntryId ? String(doc.journalEntryId) : "",
     payments,
-    paymentsTotal: formatNumber(numericTotal),
+    paymentsTotal: fmtDigits(totalBigInt),
     signerLeftLabel: isReceipt ? "تحویل‌گیرنده وجه" : "دریافت‌کننده وجه",
     signerRightLabel: isReceipt ? "صندوق‌دار / مسئول مالی" : "تنظیم‌کننده",
   };

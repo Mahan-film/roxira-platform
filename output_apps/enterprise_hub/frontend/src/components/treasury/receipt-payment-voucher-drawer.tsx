@@ -65,7 +65,6 @@ export function ReceiptPaymentVoucherDrawer({
   const isReceipt = doc.kind === "receipt";
   const title = TREASURY_KIND_LABELS[doc.kind] ?? (isReceipt ? "رسید دریافت" : "رسید پرداخت");
   const partyLabel = TREASURY_PARTY_LABELS[doc.kind] ?? (isReceipt ? "دریافت از" : "پرداخت به");
-  const numericTotal = Number(doc.total);
   const totalBigInt = BigInt(String(doc.total).split(".")[0] || "0");
 
   return (
@@ -104,7 +103,7 @@ export function ReceiptPaymentVoucherDrawer({
           <div>
             <span className="text-xs text-muted-foreground block">مبلغ کل رسید</span>
             <span className="font-bold text-base text-primary">
-              {formatMoneyRial(numericTotal)}
+              {formatMoneyRial(totalBigInt.toString())}
             </span>
             <span className="text-xs text-muted-foreground block mt-0.5">
               به حروف: {integerToPersianWords(totalBigInt)} ریال
@@ -144,7 +143,7 @@ export function ReceiptPaymentVoucherDrawer({
                       {formatMethodDetail(methodLine)}
                     </TableCell>
                     <TableCell className="text-left tabular-nums">
-                      {formatNumber(Number(methodLine.amount))}
+                      {formatMoneyRial(String(methodLine.amount).split(".")[0] || "0")}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -177,10 +176,10 @@ export function ReceiptPaymentVoucherDrawer({
                         {formatJalaliDate(alloc.allocatedDate)}
                       </TableCell>
                       <TableCell className="text-left tabular-nums">
-                        {formatNumber(Number(alloc.amount))}
+                        {formatMoneyRial(String(alloc.amount).split(".")[0] || "0")}
                       </TableCell>
                       <TableCell className="text-left tabular-nums text-xs text-muted-foreground">
-                        {alloc.writeoff ? formatNumber(Number(alloc.writeoff)) : "—"}
+                        {alloc.writeoff ? formatMoneyRial(String(alloc.writeoff).split(".")[0] || "0") : "—"}
                       </TableCell>
                     </TableRow>
                   ))}
