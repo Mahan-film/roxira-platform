@@ -1,3 +1,4 @@
+import { formatMoneyRial } from "./fa-format.ts";
 import {
   ACTION_LABELS,
   MODULE_LABELS,
@@ -63,14 +64,14 @@ export function getEffectiveScope(
 }
 
 /** Parses Persian or Latin digit string or number to clean positive integer Rials. */
-export function parseRialAmount(value: string | number): bigint {
-  if (typeof value === "number") {
-    if (!Number.isFinite(value) || value < 0) return BigInt(0);
-    return BigInt(Math.floor(value));
-  }
-  const clean = value
+export function parseRialAmount(value: string | bigint | number): bigint {
+  if (typeof value === "bigint") return value < BigInt(0) ? BigInt(0) : value;
+  const raw = String(value ?? "").trim();
+  if (raw.startsWith("-")) return BigInt(0);
+  const clean = raw
     .replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
     .replace(/[,\s٬]/g, "")
+    .split(".")[0]
     .trim();
   if (!clean || !/^\d+$/.test(clean)) return BigInt(0);
   try {
@@ -82,7 +83,7 @@ export function parseRialAmount(value: string | number): bigint {
 
 export function formatRialDisplay(amount: bigint | number | string): string {
   const minor = typeof amount === "bigint" ? amount : parseRialAmount(amount);
-  return `${minor.toLocaleString("fa-IR")} ریال`;
+  return formatMoneyRial(minor.toString());
 }
 
 export interface AccessEvaluationQuery {
