@@ -6,6 +6,7 @@
  * When `modules/posting_rules` (#230, #231) lands, only `resolvePurchaseRole` changes.
  */
 import { AccountType } from '../../accounting/enums/accounting.enum';
+import { findTemplate } from '../../posting_rules/domain/posting-templates';
 import {
   COGS_ACCOUNT,
   INVENTORY_ACCOUNT,
@@ -25,25 +26,35 @@ export enum PurchaseAccountRole {
   COGS = 'COGS',
 }
 
+const receiptDefaults = () => findTemplate('purchase.receipt')?.defaults ?? {};
+const invoiceDefaults = () => findTemplate('purchase.invoice')?.defaults ?? {};
+const landedDefaults = () => findTemplate('purchase.landed_cost')?.defaults ?? {};
+
 const PURCHASE_ACCOUNT_ROLES: Record<PurchaseAccountRole, InvoiceAccountSpec> = {
   [PurchaseAccountRole.INVENTORY]: INVENTORY_ACCOUNT,
   [PurchaseAccountRole.PAYABLE]: PAYABLE_ACCOUNT,
   [PurchaseAccountRole.VAT_RECEIVABLE]: VAT_RECEIVABLE_ACCOUNT,
   [PurchaseAccountRole.COGS]: COGS_ACCOUNT,
   [PurchaseAccountRole.GRNI]: {
-    code: '2013',
+    get code() {
+      return receiptDefaults().grni ?? '2013';
+    },
     name: 'کالای دریافتی صورتحساب‌نشده',
     accountType: AccountType.LIABILITY,
     match: ['صورتحساب‌نشده'],
   },
   [PurchaseAccountRole.PRICE_VARIANCE]: {
-    code: '5120',
+    get code() {
+      return invoiceDefaults().price_variance ?? '5120';
+    },
     name: 'تفاوت بهای خرید',
     accountType: AccountType.EXPENSE,
     match: ['تفاوت بهای خرید'],
   },
   [PurchaseAccountRole.LANDED_COST_CLEARING]: {
-    code: '2014',
+    get code() {
+      return landedDefaults().payable ?? '2014';
+    },
     name: 'هزینه‌های حمل و گمرک پرداختنی',
     accountType: AccountType.LIABILITY,
     match: ['حمل و گمرک'],

@@ -1,12 +1,18 @@
 import { RoleAccounts } from '../../posting_rules/domain/posting-engine';
 
-/** Stock value vouchers come in two shapes: opening balances and stocktake adjustments. */
-export type StockValueKind = 'opening' | 'adjustment';
+/** Stock value vouchers: opening balances, stocktake adjustments, issues and receipts. */
+export type StockValueKind = 'opening' | 'adjustment' | 'issue' | 'receipt';
 
 /** The engine doc type of a stock value voucher; `net === 0n` is never posted (callers guard). */
 export function stockPostingDocType(kind: StockValueKind, net: bigint): string {
   if (kind === 'opening') {
     return 'stock.opening';
+  }
+  if (kind === 'issue') {
+    return 'stock.issue';
+  }
+  if (kind === 'receipt') {
+    return 'stock.receipt';
   }
   return net > 0n ? 'stock.adjustment_gain' : 'stock.adjustment_loss';
 }
@@ -20,9 +26,16 @@ export function stockPostingOverrides(
   accounts: string[],
 ): RoleAccounts {
   const [inventory, counter] = accounts;
-  return kind === 'opening'
-    ? { inventory, opening_equity: counter }
-    : { inventory, stock_adjustment: counter };
+  if (kind === 'opening') {
+    return { inventory, opening_equity: counter };
+  }
+  if (kind === 'issue') {
+    return { inventory, cogs: counter };
+  }
+  if (kind === 'receipt') {
+    return { inventory, purchases: counter };
+  }
+  return { inventory, stock_adjustment: counter };
 }
 
 /** The posting source type every stock document voucher is keyed by. */
