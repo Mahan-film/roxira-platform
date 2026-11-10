@@ -37,6 +37,8 @@ import { MembersService } from './services/members.service';
 import { OrganizationsService } from './services/organizations.service';
 import { RolesService } from './services/roles.service';
 import { StructureService } from './services/structure.service';
+import { LoginWindowService } from './services/login-window.service';
+import { CostMaskingService } from './services/cost-masking.service';
 
 /**
  * Organisation access control. Sits below AuthModule (Auth imports this one;
@@ -58,11 +60,12 @@ import { StructureService } from './services/structure.service';
     EntitlementsRepository, ModuleRequestsRepository, TenantScope, AuditRepository, SessionCheckRepository, AuthRepository, RefreshTokenRepository, MailService,
     AccessService, AuditService, LedgerAuditService, MembersService, RolesService, StructureService,
     EntitlementsService, InvitationsService, OrganizationsService,
+    LoginWindowService, CostMaskingService,
     AccessGuard, AuditInterceptor,
   ],
   exports: [
     AccessService, AuditService, LedgerAuditService, MembershipsRepository, OrganizationsService, InvitationsService,
-    EntitlementsService, AccessGuard, AuditInterceptor,
+    EntitlementsService, LoginWindowService, CostMaskingService, AccessGuard, AuditInterceptor,
   ],
 })
 export class AccessModule {}
