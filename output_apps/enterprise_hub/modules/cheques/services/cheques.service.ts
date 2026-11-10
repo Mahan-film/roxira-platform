@@ -269,7 +269,7 @@ export class ChequesService {
       // The engine is idempotent per source key: a replay returns the first voucher, so leave the
       // state as the first call left it (the remainder already shrank on the first commit).
       if (posted.replayed) {
-        return;
+        return await this.getById(id, tenantId);
       }
       if (paid >= remaining) {
         throw new BadRequestException('مبلغ پرداخت باید کمتر از مانده چک باشد؛ برای پرداخت کامل، وضعیت را «وصول/پاس» کنید.');
@@ -290,7 +290,7 @@ export class ChequesService {
         manager,
       );
     });
-    return this.get(tenantId, id);
+    return await this.getById(id, tenantId);
   }
 
   /**
@@ -339,6 +339,10 @@ export class ChequesService {
     }
     const events = await this.chequesRepository.listEvents(tenantId, id);
     return { ...this.toDto(cheque), events: events.map((event) => this.toEventDto(event)) };
+  }
+
+  async getById(id: number, tenantId: string): Promise<ChequeDetailResponseDto> {
+    return this.get(tenantId, id);
   }
 
   async list(tenantId: string, query: QueryChequesDto): Promise<ChequeResponseDto[]> {
