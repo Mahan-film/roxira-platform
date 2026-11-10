@@ -35,14 +35,20 @@ import { PutMoadianCredentialDto } from '../dto/put-moadian-credential.dto';
 import { MoadianCredentialEntity } from '../entities/moadian-credential.entity';
 import { MoadianSubmissionEntity } from '../entities/moadian-submission.entity';
 import {
+  MoadianBuyerType,
   MoadianInquiryStatus,
   MoadianInvoicePattern,
   MoadianInvoiceSubject,
+  MoadianInvoiceType,
   MoadianSettlementMethod,
   MoadianSubmissionStatus,
 } from '../enums/moadian.enum';
 import { MoadianRepository } from '../repositories/moadian.repository';
 import { choosePattern, MoadianPatternSelectionError } from '../utils/moadian-pattern-select';
+import {
+  validateCounterpartyAgainstInvoiceType,
+  MoadianCounterpartyValidationError,
+} from '../utils/moadian-payload.transformer';
 import { SubmitMoadianInvoiceDto } from '../dto/submit-moadian-invoice.dto';
 import { MoadianMappingError, mapInvoiceToMoadianPacket } from '../utils/moadian-packet.mapper';
 import { openSecret, parseMasterKey, sealSecret } from '../utils/secret-box.util';
@@ -212,7 +218,7 @@ export class MoadianService {
         'صورتحساب خرید را تأمین‌کننده به سامانه مودیان ارسال می‌کند؛ از اینجا ارسال نمی‌شود.',
       );
     }
-    const subject = Number(invoice.subject ?? 1) as MoadianInvoiceSubject;
+    const subject = Number(options.subject ?? invoice.subject ?? 1) as MoadianInvoiceSubject;
     let pattern: MoadianInvoicePattern;
     try {
       pattern = choosePattern(options.pattern, options.extras);
@@ -222,9 +228,36 @@ export class MoadianService {
       }
       throw error;
     }
+
+    // Validate invoice type against counterparty type
+    const buyerBid = invoice.buyerInfo?.nationalId?.replace(/\s+/g, '') ?? null;
+    const buyerTinb = invoice.buyerInfo?.economicCode?.replace(/\s+/g, '') ?? null;
+    const computedInty = buyerBid || buyerTinb ? MoadianInvoiceType.WITH_BUYER : MoadianInvoiceType.WITHOUT_BUYER;
+    const explicitTob = options.extras?.header?.tob !== undefined
+      ? (Number(options.extras.header.tob) as MoadianBuyerType)
+      : buyerBid?.length === 11
+        ? MoadianBuyerType.LEGAL
+        : buyerBid?.length === 10
+          ? MoadianBuyerType.NATURAL
+          : buyerBid?.length === 12
+            ? MoadianBuyerType.FOREIGN_NATIONAL
+            : null;
+    try {
+      validateCounterpartyAgainstInvoiceType(computedInty, explicitTob, {
+        nationalId: buyerBid,
+        economicCode: buyerTinb,
+        passportNumber: (options.extras?.header?.bpn as string) ?? null,
+      });
+    } catch (error) {
+      if (error instanceof MoadianCounterpartyValidationError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
+
     // Corrective, cancel and return documents point at the tax id of the invoice they amend.
-    let referenceTaxId: string | null = null;
-    if (subject !== MoadianInvoiceSubject.MAIN) {
+    let referenceTaxId: string | null = options.referenceTaxId ?? null;
+    if (subject !== MoadianInvoiceSubject.MAIN && !referenceTaxId) {
       const related = invoice.relatedInvoiceId
         ? await this.repository.findSubmissionByInvoice(tenantId, invoice.relatedInvoiceId)
         : null;

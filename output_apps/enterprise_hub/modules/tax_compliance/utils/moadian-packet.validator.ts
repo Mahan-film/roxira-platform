@@ -72,6 +72,28 @@ export function validatePacketAgainstPattern(header: Bag, body: Bag[]): void {
   if (type === MoadianInvoiceType.WITHOUT_BUYER && !isType2Pattern(pattern)) {
     problems.push(`نوع ۲ (بدون مشخصات خریدار) فقط برای الگوهای ۱ و ۳ مجاز است، نه الگوی ${pattern}؛ مشخصات خریدار را وارد کنید`);
   }
+  if (type === MoadianInvoiceType.WITHOUT_BUYER) {
+    if (header.tob === MoadianBuyerType.LEGAL) {
+      problems.push('صورتحساب برای شخص حقوقی نمی‌تواند از نوع دوم (بدون مشخصات خریدار) باشد');
+    }
+    if (header.tob === MoadianBuyerType.FOREIGN_NATIONAL) {
+      problems.push('صورتحساب برای اتباع غیرایرانی نمی‌تواند از نوع دوم باشد');
+    }
+    if (header.tob === MoadianBuyerType.CIVIC) {
+      problems.push('صورتحساب برای مشارکت مدنی نمی‌تواند از نوع دوم باشد');
+    }
+  }
+  if (type === MoadianInvoiceType.WITH_BUYER && present(header.tob)) {
+    if (header.tob === MoadianBuyerType.FOREIGN_NATIONAL && !present(header.bid) && !present(header.bpn)) {
+      problems.push('برای خریدار تبعه غیرایرانی، ارسال شناسه فراگیر (header.bid) یا شماره گذرنامه (header.bpn) الزامی است');
+    }
+    if (header.tob === MoadianBuyerType.LEGAL && !present(header.bid) && !present(header.tinb)) {
+      problems.push('برای خریدار شخص حقوقی، ارسال شناسه ملی (header.bid) یا کد اقتصادی (header.tinb) الزامی است');
+    }
+    if (header.tob === MoadianBuyerType.NATURAL && !present(header.bid) && !present(header.tinb)) {
+      problems.push('برای خریدار شخص حقیقی در صورتحساب نوع اول، ارسال کد ملی (header.bid) الزامی است');
+    }
+  }
   if (pattern === MoadianInvoicePattern.EXPORT && ins === MoadianInvoiceSubject.CORRECTIVE) {
     problems.push('موضوع اصلاحی (ins=2) در الگوی ۷ (صادرات) مجاز نیست');
   }
@@ -143,11 +165,14 @@ export function validatePacketAgainstPattern(header: Bag, body: Bag[]): void {
   }
 
   // Totals are the sums of the lines (Tir 1405 totals rules).
-  for (const [total, line] of [['tprdis', 'prdis'], ['tdis', 'dis'], ['tadis', 'adis'], ['tvam', 'vam'], ['tbill', 'tsstam'], ['torv', 'ssrv'], ['tocv', 'sscv'], ['tonw', 'nw']] as const) {
-    if (present(header[total]) && !near(num(header[total]), sum(body, line))) problems.push(`جمع header.${total} با مجموع ${line} سطرها برابر نیست`);
-  }
-  if (present(header.todam) && !near(num(header.todam), sum(body, 'odam') + sum(body, 'olam'))) {
-    problems.push('header.todam با مجموع odam و olam سطرها برابر نیست');
+  // For cancellation with empty body, lines are fetched from reference on Moadian server.
+  if (!(ins === MoadianInvoiceSubject.CANCELLATION && body.length === 0)) {
+    for (const [total, line] of [['tprdis', 'prdis'], ['tdis', 'dis'], ['tadis', 'adis'], ['tvam', 'vam'], ['tbill', 'tsstam'], ['torv', 'ssrv'], ['tocv', 'sscv'], ['tonw', 'nw']] as const) {
+      if (present(header[total]) && !near(num(header[total]), sum(body, line))) problems.push(`جمع header.${total} با مجموع ${line} سطرها برابر نیست`);
+    }
+    if (present(header.todam) && !near(num(header.todam), sum(body, 'odam') + sum(body, 'olam'))) {
+      problems.push('header.todam با مجموع odam و olam سطرها برابر نیست');
+    }
   }
   if (pattern === MoadianInvoicePattern.EXPORT) {
     body.forEach((r, i) => num(r.vra) !== 0 && problems.push(`body[${i}].vra در الگوی ۷ باید صفر باشد`));

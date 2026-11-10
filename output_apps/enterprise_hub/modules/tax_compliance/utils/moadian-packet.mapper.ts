@@ -181,6 +181,9 @@ function buyerTypeOf(nationalId: string | null): MoadianBuyerType | null {
   if (nationalId?.length === 11) {
     return MoadianBuyerType.LEGAL;
   }
+  if (nationalId?.length === 12) {
+    return MoadianBuyerType.FOREIGN_NATIONAL;
+  }
   return null;
 }
 
@@ -222,11 +225,12 @@ export function mapInvoiceToMoadianPacket(
   if (invoice.status !== InvoiceStatus.ISSUED && invoice.status !== InvoiceStatus.PAID) {
     throw new MoadianMappingError('فقط صورتحساب صادرشده یا پرداخت‌شده به سامانه مودیان ارسال می‌شود');
   }
-  if (!invoice.items?.length) {
-    throw new MoadianMappingError('صورتحساب هیچ سطری ندارد');
-  }
   const pattern = ctx.pattern ?? MoadianInvoicePattern.SALE;
   const subject = ctx.subject ?? MoadianInvoiceSubject.MAIN;
+  const isCancellation = subject === MoadianInvoiceSubject.CANCELLATION;
+  if (!invoice.items?.length && !isCancellation) {
+    throw new MoadianMappingError('صورتحساب هیچ سطری ندارد');
+  }
 
   const tins = digitsOnly(ctx.sellerEconomicCode) ?? digitsOnly(invoice.sellerInfo?.economicCode);
   if (!tins || !ECONOMIC_CODE_PATTERN.test(tins)) {
@@ -244,7 +248,7 @@ export function mapInvoiceToMoadianPacket(
   const tinb = digitsOnly(invoice.buyerInfo?.economicCode);
   const inty = bid || tinb ? MoadianInvoiceType.WITH_BUYER : MoadianInvoiceType.WITHOUT_BUYER;
 
-  const body: Bag[] = invoice.items.map((item, index) => {
+  const body: Bag[] = (invoice.items ?? []).map((item, index) => {
     const sstid = ctx.defaultSstid;
     if (!sstid || !SSTID_PATTERN.test(sstid)) {
       throw new MoadianMappingError(`سطر ${index + 1} شناسه ۱۳ رقمی کالا/خدمت مودیان (sstid) ندارد`);
@@ -302,7 +306,11 @@ export function mapInvoiceToMoadianPacket(
   });
   const total = (key: string): number | null => {
     const values = body.map((r) => r[key]).filter((v) => v !== null && v !== undefined);
-    return values.length === 0 ? null : values.reduce<number>((a, v) => a + Number(v), 0);
+    return values.length === 0
+      ? isCancellation && body.length === 0
+        ? 0
+        : null
+      : values.reduce<number>((a, v) => a + Number(v), 0);
   };
   Object.assign(header, {
     tprdis: total('prdis'), tdis: total('dis'), tadis: total('adis'), tvam: total('vam') ?? 0,
