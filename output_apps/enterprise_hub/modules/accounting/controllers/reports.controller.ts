@@ -152,5 +152,4 @@ export class ReportsController {
     }
     return moneyJson(await this.consolidatedService.getConsolidatedReport(userId, query));
   }
-  }
 }
