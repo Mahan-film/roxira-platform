@@ -1,5 +1,6 @@
 import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 import { PartyRole } from '../enums/party-role.enum';
+import { CustomerGroup } from '../enums/customer-group.enum';
 
 /**
  * A party (طرف حساب) of the tenant: customer, supplier or both, keyed by a per-tenant code.
@@ -23,6 +24,14 @@ export class PartyEntity {
 
   @Column({ type: 'varchar', length: 16 })
   role: PartyRole;
+
+  @Column({
+    type: 'varchar',
+    length: 32,
+    name: 'customer_group',
+    default: CustomerGroup.CONSUMER,
+  })
+  customerGroup: CustomerGroup;
 
   @Column({ type: 'varchar', length: 20, name: 'national_id', nullable: true })
   nationalId: string | null;
