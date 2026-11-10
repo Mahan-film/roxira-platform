@@ -35,6 +35,10 @@ import {
   getVatReturn,
   submitToMoadian,
 } from "@/lib/api/moadian-seasonal-client";
+import {
+  runMoadianPreFlightValidation,
+  type MoadianPreFlightError,
+} from "@/lib/moadian-preflight";
 import { formatMoneyRial, formatNumber } from "@/lib/fa-format";
 import { nextDeadlineView, type NextDeadlineInput } from "@/lib/tax-deadline";
 import { InvoiceStatus, type InvoiceResponseDto } from "@/types/invoicing";
@@ -95,6 +99,7 @@ function MoadianCard() {
   const [invoiceId, setInvoiceId] = useState("");
   const [submission, setSubmission] = useState<MoadianSubmissionResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [preFlightErrors, setPreFlightErrors] = useState<MoadianPreFlightError[]>([]);
   const [busy, setBusy] = useState(false);
   const [polling, setPolling] = useState(false);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -173,9 +178,15 @@ function MoadianCard() {
     stopPolling();
     setSubmission(null);
     setError(null);
+    setPreFlightErrors([]);
     setInvoiceId(id);
     selectedRef.current = id;
     if (!id) return;
+    const inv = invoices.find((i) => i.id === id);
+    if (inv) {
+      const pre = runMoadianPreFlightValidation(inv);
+      setPreFlightErrors(pre.errors);
+    }
     try {
       const existing = await getMoadianSubmission(id);
       // Ignore a late answer for an invoice that is no longer selected.
@@ -191,6 +202,15 @@ function MoadianCard() {
 
   async function submit() {
     if (!invoiceId) return;
+    const inv = invoices.find((i) => i.id === invoiceId);
+    if (inv) {
+      const pre = runMoadianPreFlightValidation(inv);
+      if (!pre.valid) {
+        setPreFlightErrors(pre.errors);
+        setError("خطاهای اعتبارسنجی پیش از ارسال مودیان وجود دارد؛ لطفاً اطلاعات صورتحساب را اصلاح کنید.");
+        return;
+      }
+    }
     setBusy(true);
     setError(null);
     stopPolling();
@@ -289,6 +309,21 @@ function MoadianCard() {
             {busy ? "در حال ارسال…" : "ارسال به مودیان"}
           </Button>
         </div>
+
+        {preFlightErrors.length > 0 && (
+          <Alert variant="destructive">
+            <AlertTitle>خطاهای پیش از ارسال مودیان ({preFlightErrors.length} مورد)</AlertTitle>
+            <AlertDescription>
+              <ul className="list-disc ps-5 text-xs space-y-1 mt-2">
+                {preFlightErrors.map((err, idx) => (
+                  <li key={idx}>
+                    <span className="font-semibold">{err.field}:</span> {err.message}
+                  </li>
+                ))}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        )}
 
         {error && <ErrorNotice title="خطا در ارسال به مودیان" message={error} />}
 
