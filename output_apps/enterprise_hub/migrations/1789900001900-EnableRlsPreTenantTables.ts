@@ -115,6 +115,17 @@ export class EnableRlsPreTenantTables1789900001900 implements MigrationInterface
       AS $$
         SELECT * FROM public.tenant_module_entitlements WHERE tenant_id = p_tenant_id;
       $$;
+
+      CREATE OR REPLACE FUNCTION public.lookup_membership(p_tenant_id uuid, p_user_id uuid)
+      RETURNS SETOF public.tenant_memberships
+      LANGUAGE sql
+      SECURITY DEFINER
+      SET search_path = public, pg_temp
+      AS $$
+        SELECT * FROM public.tenant_memberships
+        WHERE tenant_id = p_tenant_id AND user_id = p_user_id
+        LIMIT 1;
+      $$;
     `);
 
     // Grant execute permissions to roxira_app if the role exists
@@ -129,6 +140,7 @@ export class EnableRlsPreTenantTables1789900001900 implements MigrationInterface
           GRANT EXECUTE ON FUNCTION public.lookup_user_memberships(uuid) TO roxira_app;
           GRANT EXECUTE ON FUNCTION public.lookup_invitation_by_token_hash(text) TO roxira_app;
           GRANT EXECUTE ON FUNCTION public.lookup_tenant_entitlements(uuid) TO roxira_app;
+          GRANT EXECUTE ON FUNCTION public.lookup_membership(uuid, uuid) TO roxira_app;
         END IF;
       END $$;
     `);
@@ -252,13 +264,30 @@ export class EnableRlsPreTenantTables1789900001900 implements MigrationInterface
     // 3.7 contact_messages
     await q.query(`DROP POLICY IF EXISTS "contact_messages_insert" ON "contact_messages"`);
     await q.query(`DROP POLICY IF EXISTS "contact_messages_tenant" ON "contact_messages"`);
+    await q.query(`DROP POLICY IF EXISTS "contact_messages_modify" ON "contact_messages"`);
+    await q.query(`DROP POLICY IF EXISTS "contact_messages_delete" ON "contact_messages"`);
     await q.query(`
       CREATE POLICY "contact_messages_insert" ON "contact_messages"
       FOR INSERT
       WITH CHECK (true);
 
       CREATE POLICY "contact_messages_tenant" ON "contact_messages"
-      FOR ALL
+      FOR SELECT
+      USING (
+        (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid)
+        OR (nullif(current_setting('app.tenant_id', true), '') IS NULL)
+        OR (current_setting('app.auth_lookup', true) = 'true')
+      );
+
+      CREATE POLICY "contact_messages_modify" ON "contact_messages"
+      FOR UPDATE
+      USING (
+        (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid)
+        OR (current_setting('app.auth_lookup', true) = 'true')
+      );
+
+      CREATE POLICY "contact_messages_delete" ON "contact_messages"
+      FOR DELETE
       USING (
         (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid)
         OR (current_setting('app.auth_lookup', true) = 'true')
@@ -293,6 +322,8 @@ export class EnableRlsPreTenantTables1789900001900 implements MigrationInterface
     await q.query(`DROP POLICY IF EXISTS "tenant_module_requests_tenant" ON "tenant_module_requests"`);
     await q.query(`DROP POLICY IF EXISTS "contact_messages_insert" ON "contact_messages"`);
     await q.query(`DROP POLICY IF EXISTS "contact_messages_tenant" ON "contact_messages"`);
+    await q.query(`DROP POLICY IF EXISTS "contact_messages_modify" ON "contact_messages"`);
+    await q.query(`DROP POLICY IF EXISTS "contact_messages_delete" ON "contact_messages"`);
     await q.query(`DROP POLICY IF EXISTS "enterprise_inquiries_insert" ON "enterprise_inquiries"`);
     await q.query(`DROP POLICY IF EXISTS "enterprise_inquiries_tenant" ON "enterprise_inquiries"`);
 
@@ -311,6 +342,7 @@ export class EnableRlsPreTenantTables1789900001900 implements MigrationInterface
       DROP FUNCTION IF EXISTS public.lookup_user_memberships(uuid);
       DROP FUNCTION IF EXISTS public.lookup_invitation_by_token_hash(text);
       DROP FUNCTION IF EXISTS public.lookup_tenant_entitlements(uuid);
+      DROP FUNCTION IF EXISTS public.lookup_membership(uuid, uuid);
     `);
   }
 }

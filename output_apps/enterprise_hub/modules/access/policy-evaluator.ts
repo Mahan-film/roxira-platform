@@ -6,6 +6,7 @@ import {
   AccessModule,
   AmountLimitsMap,
   CORE_MODULES,
+  DEFAULT_FIELD_VISIBILITY,
   FieldVisibilityMap,
   Permission,
   RoleScope,
@@ -44,7 +45,7 @@ export interface ShadowDiff {
 
 /** Normalise optional fields on an `AccessContext` (keeps older test stubs working). */
 export function effectiveFieldVisibility(ctx: AccessContext): FieldVisibilityMap {
-  return ctx.fieldVisibility ?? systemRoleFieldVisibility(ctx.roleKey);
+  return ctx?.fieldVisibility ?? (ctx?.roleKey ? systemRoleFieldVisibility(ctx.roleKey) : DEFAULT_FIELD_VISIBILITY);
 }
 
 export function effectiveScope(ctx: AccessContext): RoleScope {
