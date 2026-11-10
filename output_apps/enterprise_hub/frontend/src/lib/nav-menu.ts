@@ -157,24 +157,31 @@ export const MENU_GROUPS: MenuGroup[] = [
     ],
   },
   {
-    id: "payroll-tax",
-    label: "حقوق و دستمزد و مالیات",
+    id: "payroll",
+    label: "حقوق و دستمزد",
     icon: "UsersRound",
     items: [
-      { href: "/app/tax", label: "مالیات و مودیان", icon: "Landmark", module: "tax" },
       { href: "/app/hr", label: "کارکنان", icon: "UsersRound", module: "hr", keywords: ["employee", "کارمند", "پرسنل"] },
       {
         href: "/app/hr/payroll",
-        label: "حقوق و دستمزد ماهانه",
+        label: "حقوق ماهانه",
         icon: "Calculator",
         module: "hr",
       },
       {
         href: "/app/hr/statutory",
-        label: "پارامترهای قانونی",
+        label: "بیمه و مالیات حقوق",
         icon: "ClipboardList",
         module: "hr",
       },
+    ],
+  },
+  {
+    id: "tax",
+    label: "مالیات",
+    icon: "Landmark",
+    items: [
+      { href: "/app/tax", label: "مالیات و مودیان", icon: "Landmark", module: "tax" },
     ],
   },
   {

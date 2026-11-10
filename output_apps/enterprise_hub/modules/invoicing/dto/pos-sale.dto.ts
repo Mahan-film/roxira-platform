@@ -51,7 +51,7 @@ export class PosLineDto {
   description?: string;
 
   @ApiProperty({ example: 2 })
-  @IsNumber({ maxDecimalPlaces: 3 })
+  @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()
   quantity: number;
 

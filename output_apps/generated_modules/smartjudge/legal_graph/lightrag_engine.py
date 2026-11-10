@@ -101,6 +101,33 @@ QDRANT_PORT = os.environ.get("QDRANT_PORT", "6333")
 # stored) ~ 0.0 on prod 2026-10-10), so querying it with the bge-m3 embedder returns
 # near-random neighbours even though the dimension (1024) matches. Pairing is therefore
 # explicit: collection -> embedder, see ``_COLLECTION_EMBEDDERS``.
+SMARTJUDGE_USE_HAKIM_EMBED_ENV = "SMARTJUDGE_USE_HAKIM_EMBED"
+HAKIM_MODEL_ID = "MCINext/Hakim"
+HAKIM_DEFAULT_COLLECTION = "iran_laws_hakim_v1"
+HAKIM_VECTOR_DIM = 768
+
+
+def is_hakim_embed_enabled() -> bool:
+    """Return True if the Hakim embedding model switch is enabled (default: False / off)."""
+    return os.environ.get(SMARTJUDGE_USE_HAKIM_EMBED_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def get_default_embed_model() -> str:
+    """Return active default embedding model: LIGHTRAG_QDRANT_EMBED_MODEL, or MCINext/Hakim if enabled, else BAAI/bge-m3."""
+    explicit = os.environ.get("LIGHTRAG_QDRANT_EMBED_MODEL", "").strip()
+    if explicit:
+        return explicit
+    return HAKIM_MODEL_ID if is_hakim_embed_enabled() else "BAAI/bge-m3"
+
+
+def get_default_collection() -> str:
+    """Return active default collection: LIGHTRAG_QDRANT_COLLECTION, or iran_laws_hakim_v1 if enabled, else iran_laws_v2."""
+    explicit = os.environ.get("LIGHTRAG_QDRANT_COLLECTION", "").strip()
+    if explicit:
+        return explicit
+    return HAKIM_DEFAULT_COLLECTION if is_hakim_embed_enabled() else "iran_laws_v2"
+
+
 QDRANT_DEFAULT_COLLECTION = "iran_laws_v2"
 _COLLECTION_EMBEDDERS = {
     "iran_laws_v2": "BAAI/bge-m3",
@@ -108,6 +135,8 @@ _COLLECTION_EMBEDDERS = {
     "iran_laws_bge_m3": "BAAI/bge-m3",
     "iran_rulings_v1": "BAAI/bge-m3",  # unity + Administrative Court board rulings (ekhtebar), see rulings_retrieval.py
     "iran_laws_mistral_v1": "mistral-embed",  # not loadable here (no Mistral embed client)
+    "iran_laws_hakim_v1": "MCINext/Hakim",  # 768-dim Hakim embeddings (T16 benchmark winner)
+    "iran_laws_hakim": "MCINext/Hakim",
 }
 
 
@@ -118,10 +147,14 @@ def _resolve_collection(env_value: str, embed_model: str) -> str:
     replaced by ``LIGHTRAG_QDRANT_BGE_COLLECTION`` (default ``iran_laws_v2``) with a loud
     warning, unless ``LIGHTRAG_QDRANT_ALLOW_EMBED_MISMATCH=1``.
     """
-    name = (env_value or "").strip() or QDRANT_DEFAULT_COLLECTION
+    default_coll = get_default_collection() if embed_model == HAKIM_MODEL_ID else QDRANT_DEFAULT_COLLECTION
+    name = (env_value or "").strip() or default_coll
     wanted = _COLLECTION_EMBEDDERS.get(name)
     if wanted and wanted != embed_model and os.environ.get("LIGHTRAG_QDRANT_ALLOW_EMBED_MISMATCH") != "1":
-        replacement = os.environ.get("LIGHTRAG_QDRANT_BGE_COLLECTION", QDRANT_DEFAULT_COLLECTION)
+        replacement = os.environ.get(
+            "LIGHTRAG_QDRANT_BGE_COLLECTION",
+            HAKIM_DEFAULT_COLLECTION if embed_model == HAKIM_MODEL_ID else QDRANT_DEFAULT_COLLECTION,
+        )
         logger.warning(
             "Qdrant collection %s was built with %s but the query embedder is %s; using %s instead",
             name, wanted, embed_model, replacement,
@@ -132,7 +165,7 @@ def _resolve_collection(env_value: str, embed_model: str) -> str:
 
 QDRANT_FALLBACK_COLLECTION = _resolve_collection(
     os.environ.get("LIGHTRAG_QDRANT_COLLECTION", ""),
-    os.environ.get("LIGHTRAG_QDRANT_EMBED_MODEL", "BAAI/bge-m3"),
+    get_default_embed_model(),
 )
 QDRANT_FALLBACK_TIMEOUT = float(os.environ.get("LIGHTRAG_QDRANT_TIMEOUT", "4"))
 # کش منفی کوتاه: اگر همهٔ میزبان‌های Qdrant پاسخ ندادند، تا این مدت دوباره کاوش
@@ -164,7 +197,7 @@ def _qdrant_targets() -> List[Tuple[str, str, Dict[str, str]]]:
 # ۱۰۲۴بعدی، cosine). اگر مدل بارگذاری نشود (نصب نبودن sentence_transformers،
 # نبود دانلود محلی و…) یا ابعاد کالکشن با ابعاد مدل نخواند، به‌صورت خودکار به
 # مسیر scroll (پنجرهٔ کوچک، `QDRANT_SCAN_LIMIT`) تنزل می‌کنیم.
-QDRANT_EMBED_MODEL_NAME = os.environ.get("LIGHTRAG_QDRANT_EMBED_MODEL", "BAAI/bge-m3")
+QDRANT_EMBED_MODEL_NAME = get_default_embed_model()
 # تعداد کاندیدهایی که از جست‌وجوی برداری واقعی گرفته می‌شود و سپس با
 # هم‌پوشانی واژگانی/article_no محلی (همان `_rank_payloads`) رتبه‌بندی نهایی
 # می‌شوند.
@@ -671,12 +704,13 @@ def _get_query_embedder() -> Any:
         try:
             from sentence_transformers import SentenceTransformer  # لازی، وابستهٔ اختیاری
 
-            logger.info("Loading query embedder %s for Qdrant search ...", QDRANT_EMBED_MODEL_NAME)
-            _embedder_instance = SentenceTransformer(QDRANT_EMBED_MODEL_NAME)
+            model_name = get_default_embed_model()
+            logger.info("Loading query embedder %s for Qdrant search ...", model_name)
+            _embedder_instance = SentenceTransformer(model_name)
         except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "Qdrant query embedder unavailable (%s) -> scroll fallback: %s",
-                QDRANT_EMBED_MODEL_NAME,
+                get_default_embed_model(),
                 exc,
             )
             _embedder_load_failed = True

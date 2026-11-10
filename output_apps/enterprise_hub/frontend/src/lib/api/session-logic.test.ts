@@ -6,6 +6,7 @@ import {
   REFRESH_LEAD_MS,
   accessNeedsRefresh,
   canRefresh,
+  hasActiveTenant,
   isSessionAlive,
   msUntilRefresh,
 } from "./session-logic.ts";
@@ -39,4 +40,33 @@ test("an expired refresh token ends the session", () => {
   const session = { ...base, expiresAt: NOW - 1, refreshToken: "r", refreshExpiresAt: NOW - 1 };
   assert.equal(canRefresh(session, NOW), false);
   assert.equal(isSessionAlive(session, NOW), false);
+});
+
+function mockJwt(payload: Record<string, unknown>): string {
+  const header = Buffer.from(JSON.stringify({ alg: "HS256" })).toString("base64url");
+  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  return `${header}.${body}.sig`;
+}
+
+test("hasActiveTenant returns false for empty, null or invalid tokens", () => {
+  assert.equal(hasActiveTenant(null), false);
+  assert.equal(hasActiveTenant(undefined), false);
+  assert.equal(hasActiveTenant(""), false);
+  assert.equal(hasActiveTenant("not-a-jwt"), false);
+  assert.equal(hasActiveTenant("part1.part2"), false);
+});
+
+test("hasActiveTenant returns false when tenantId is null (user signed up without org)", () => {
+  const jwt = mockJwt({ sub: "user-1", email: "noorg@example.invalid", tenantId: null });
+  assert.equal(hasActiveTenant(jwt), false);
+});
+
+test("hasActiveTenant returns false when tenantId is empty string or whitespace", () => {
+  const jwt = mockJwt({ sub: "user-1", tenantId: "   " });
+  assert.equal(hasActiveTenant(jwt), false);
+});
+
+test("hasActiveTenant returns true when tenantId is a valid non-empty string", () => {
+  const jwt = mockJwt({ sub: "user-1", tenantId: "d6e30a13-c126-46d9-9ca8-e3489ac370a4" });
+  assert.equal(hasActiveTenant(jwt), true);
 });

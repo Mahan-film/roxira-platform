@@ -76,8 +76,11 @@ const WH_COLUMNS = [
 ] as const;
 
 const cell = (value: string | number): string => {
+  if (typeof value === 'number') return String(value);
   const text = String(value ?? '');
-  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  const plainNumber = /^-?\d+(\.\d+)?$/.test(text);
+  const safe = !plainNumber && /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+  return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 };
 
 const csv = (columns: ReadonlyArray<string>, rows: (string | number)[][]): string =>

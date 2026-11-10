@@ -41,6 +41,15 @@ const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 </cellXfs>
 </styleSheet>`;
 
+/** Neutralise formula triggers (= + - @ TAB CR) in text cells. */
+export function escapeFormula(text: string): string {
+  const plainNumber = /^-?\d+(\.\d+)?$/.test(text);
+  if (!plainNumber && /^[=+\-@\t\r]/.test(text)) {
+    return `'${text}`;
+  }
+  return text;
+}
+
 function cellXml(cell: ReportCell, reference: string, bold: boolean, titleStyle = false): string {
   if (cell === null || cell === '') {
     return '';
@@ -52,9 +61,10 @@ function cellXml(cell: ReportCell, reference: string, bold: boolean, titleStyle 
       : bold ? STYLE.moneyBold : STYLE.money;
     return `<c r="${reference}" s="${style}"><v>${minorToDecimal(cell)}</v></c>`;
   }
-  // Inline strings are never evaluated, so account names cannot act as spreadsheet formulas.
+  // Formula injection sweep: leading = + - @ \t \r in text cells are escaped with a leading apostrophe.
   const style = titleStyle ? STYLE.title : bold ? STYLE.bold : STYLE.text;
-  return `<c r="${reference}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(cell)}</t></is></c>`;
+  const safe = escapeFormula(cell);
+  return `<c r="${reference}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(safe)}</t></is></c>`;
 }
 
 /** A one-sheet right-to-left workbook. */

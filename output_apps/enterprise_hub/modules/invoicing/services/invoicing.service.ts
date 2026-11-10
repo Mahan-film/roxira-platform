@@ -16,6 +16,10 @@ import { CrmRepository } from '../../crm/repositories/crm.repository';
 import { BASE_CURRENCY } from '../../currency/constants/currency.constants';
 import { Currency } from '../../currency/enums/currency.enum';
 import { CurrencyService } from '../../currency/services/currency.service';
+import {
+  assertValidQuantityScale,
+  QUANTITY_SCALE,
+} from '../../inventory/constants/inventory.constants';
 import { InventoryRepository } from '../../inventory/repositories/inventory.repository';
 import { PartiesService } from '../../parties/services/parties.service';
 import { TenantsRepository } from '../../tenants/repositories/tenants.repository';
@@ -416,6 +420,12 @@ export class InvoicingService {
           'شرح هر سطر الزامی است؛ یا کالای انبار انتخاب کنید یا description بفرستید.',
         );
       }
+
+      assertValidQuantityScale(
+        item.quantity,
+        QUANTITY_SCALE,
+        `تعداد سطر «${description}»`,
+      );
 
       prepared.push({
         item,

@@ -163,15 +163,17 @@ export class LandedCostService {
           );
         }
         const split = splitShare(entry.share, entry.line.quantity, layer.quantityRemaining);
-        const { raisePerUnit } = layerRaise(split.toInventory, layer.quantityRemaining);
+        const { raisePerUnit, remainder } = layerRaise(split.toInventory, layer.quantityRemaining);
+        const toInventory = split.toInventory - remainder;
+        const toCogs = split.toCogs + remainder;
         const allocation: NewLandedCostAllocation = {
           receiptLineId: entry.line.id,
           sku: entry.line.sku,
           quantity: entry.line.quantity,
           basisValue: entry.basisValue,
           share: entry.share,
-          toInventory: split.toInventory,
-          toCogs: split.toCogs,
+          toInventory,
+          toCogs,
           fifoBatchId,
         };
         return { allocation, raisePerUnit };
@@ -200,7 +202,7 @@ export class LandedCostService {
       );
 
       // The share still on hand raises its layer's unit cost; the rounding remainder of that
-      // division stays in the voucher's INVENTORY line, never lost.
+      // division is booked to COGS so the FIFO layer valuation equals the ledger inventory line exactly.
       for (const entry of prepared) {
         if (entry.raisePerUnit > 0n) {
           await this.inventoryRepository.raiseLayerUnitCostByMinor(

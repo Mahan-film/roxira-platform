@@ -10,6 +10,8 @@ import {
   PolicyType,
   PolicyValue,
   getPolicyDefinition,
+  getWeakeningWarning,
+  isPolicyWeakened,
   validatePolicyValue,
 } from './policy.registry';
 
@@ -33,6 +35,22 @@ export interface PolicyView {
   updatedAt: Date | null;
   updatedBy: string | null;
   editable: boolean;
+  /** True when the current value weakens internal control or ledger protection (#584-6) */
+  isWeakened: boolean;
+  /** Warning message explaining the control risk when turned off or weakened (#584-6) */
+  warning: string | null;
+  /** Scheduled auto-revert date to the safe default (#584-6) */
+  autoRevertAt: Date | null;
+  /** Written reason for deviation (#584-6) */
+  reason: string | null;
+}
+
+/** Stored metadata row from tenant_policy_settings */
+interface StoredPolicyMeta {
+  updatedAt: Date | null;
+  updatedBy: string | null;
+  autoRevertAt: Date | null;
+  reason: string | null;
 }
 
 /** Group C price tolerances live in the existing purchase-settings columns, not in the policy table. */
@@ -59,20 +77,25 @@ export class PolicyService {
     private readonly audit: AuditService,
   ) {}
 
-  /** Current value of one key (stored value or the registry default). */
+  /** Current value of one key (stored value or the registry default). Reverts expired controls first. */
   async get(tenantId: string, key: string, manager?: EntityManager): Promise<PolicyValue> {
     const definition = getPolicyDefinition(key);
     if (!definition) throw new NotFoundException(`قاعدهٔ «${key}» شناخته‌شده نیست.`);
-    return this.scope.within(tenantId, manager, (m) => this.readValue(tenantId, definition, m));
+    return this.scope.within(tenantId, manager, async (m) => {
+      await this.revertExpired(tenantId, m);
+      return this.readValue(tenantId, definition, m);
+    });
   }
 
   /** Every definition with its group, type, allowed values, default and current value. */
-  getAll(tenantId: string): Promise<PolicyView[]> {
+  getAll(tenantId: string, options?: { exceptionsOnly?: boolean }): Promise<PolicyView[]> {
     return this.scope.run(tenantId, async (manager) => {
+      await this.revertExpired(tenantId, manager);
+
       const storedRows = (await manager.query(
-        `SELECT "key", "value", "updated_by", "updated_at" FROM "tenant_policy_settings" WHERE "tenant_id" = $1`,
+        `SELECT "key", "value", "updated_by", "updated_at", "auto_revert_at", "reason" FROM "tenant_policy_settings" WHERE "tenant_id" = $1`,
         [tenantId],
-      )) as Array<{ key: string; value: unknown; updated_by: string; updated_at: Date }>;
+      )) as Array<{ key: string; value: unknown; updated_by: string; updated_at: Date; auto_revert_at: Date | null; reason: string | null }>;
       const stored = new Map(storedRows.map((row) => [String(row.key), row]));
 
       const purchaseRows = (await manager.query(
@@ -81,7 +104,7 @@ export class PolicyService {
       )) as Array<Record<string, unknown>>;
       const purchase = purchaseRows[0];
 
-      return POLICY_REGISTRY.map((definition) => {
+      const all = POLICY_REGISTRY.map((definition) => {
         if (definition.store) {
           const value = purchase
             ? this.coerce(definition, purchase[PURCHASE_SETTINGS_COLUMNS[definition.key]])
@@ -89,7 +112,7 @@ export class PolicyService {
           return this.view(
             definition,
             value,
-            purchase ? { updatedAt: toDate(purchase.updated_at), updatedBy: null } : null,
+            purchase ? { updatedAt: toDate(purchase.updated_at), updatedBy: null, autoRevertAt: null, reason: null } : null,
           );
         }
         const row = stored.get(definition.key);
@@ -97,17 +120,29 @@ export class PolicyService {
           return this.view(definition, this.coerce(definition, row.value), {
             updatedAt: toDate(row.updated_at),
             updatedBy: String(row.updated_by),
+            autoRevertAt: row.auto_revert_at ? toDate(row.auto_revert_at) : null,
+            reason: row.reason ? String(row.reason) : null,
           });
         }
         return this.view(definition, definition.default, null);
       });
+
+      if (options?.exceptionsOnly) {
+        return all.filter((p) => !p.isDefault || p.isWeakened);
+      }
+      return all;
     });
+  }
+
+  /** Returns all policies currently differing from safe default or weakened (#584-6 exceptions report). */
+  async getExceptions(tenantId: string): Promise<PolicyView[]> {
+    return this.getAll(tenantId, { exceptionsOnly: true });
   }
 
   /**
    * Sets one policy value. Rules are checked in this order: unknown key (404), fixed group A (403),
-   * actor must be owner or admin (403), value validity (400), reason length (400), then a no-op when
-   * the value is unchanged. A real change writes the value and appends one audit row in the same
+   * actor must be owner or admin (403), value validity (400), reason length (400), future auto-revert date (400),
+   * then a no-op when the value is unchanged. A real change writes the value and appends one audit row in the same
    * transaction (action `policy.changed`, or `policy.changed.protected` for group B).
    */
   async set(
@@ -116,6 +151,7 @@ export class PolicyService {
     key: string,
     value: PolicyValue,
     reason: string,
+    autoRevertAt?: string | Date | null,
     request?: Pick<Request, 'ip' | 'headers'>,
   ): Promise<PolicyView> {
     const definition = getPolicyDefinition(key);
@@ -134,11 +170,22 @@ export class PolicyService {
       throw new BadRequestException(`دلیل تغییر باید دست‌کم ${minLength} نویسه باشد.`);
     }
 
+    let revertDate: Date | null = null;
+    if (autoRevertAt) {
+      revertDate = typeof autoRevertAt === 'string' ? new Date(autoRevertAt) : autoRevertAt;
+      if (Number.isNaN(revertDate.getTime()) || revertDate.getTime() <= Date.now()) {
+        throw new BadRequestException('تاریخ بازگشت خودکار باید در آینده باشد.');
+      }
+    }
+
     return this.scope.run(tenantId, async (manager) => {
       const current = await this.readValue(tenantId, definition, manager);
-      if (current === value) return this.view(definition, current, null);
+      if (current === value && !revertDate) return this.view(definition, current, null);
 
-      await this.writeValue(tenantId, definition, value, actor.userId, manager);
+      await this.writeValue(tenantId, definition, value, actor.userId, revertDate, trimmed, manager);
+      const isWeakened = isPolicyWeakened(key, value);
+      const warning = getWeakeningWarning(key, value);
+
       await this.audit.record(
         {
           tenantId,
@@ -146,12 +193,81 @@ export class PolicyService {
           action: definition.group === 'B' ? 'policy.changed.protected' : 'policy.changed',
           resourceType: 'tenant_policy',
           resourceId: key,
-          metadata: { key, group: definition.group, oldValue: current, newValue: value, reason: trimmed },
+          metadata: {
+            key,
+            group: definition.group,
+            oldValue: current,
+            newValue: value,
+            reason: trimmed,
+            isWeakened,
+            warning,
+            autoRevertAt: revertDate,
+          },
           request,
         },
         manager,
       );
-      return this.view(definition, value, { updatedAt: new Date(), updatedBy: actor.userId });
+      return this.view(definition, value, {
+        updatedAt: new Date(),
+        updatedBy: actor.userId,
+        autoRevertAt: revertDate,
+        reason: trimmed,
+      });
+    });
+  }
+
+  /**
+   * Reverts any policies whose auto_revert_at date has passed, back to safe defaults (#584-6).
+   */
+  async revertExpired(tenantId: string, outerManager?: EntityManager): Promise<number> {
+    return this.scope.within(tenantId, outerManager, async (manager) => {
+      const expiredRows = (await manager.query(
+        `SELECT "key", "value", "updated_by", "auto_revert_at", "reason"
+         FROM "tenant_policy_settings"
+         WHERE "tenant_id" = $1 AND "auto_revert_at" IS NOT NULL AND "auto_revert_at" <= now()`,
+        [tenantId],
+      )) as Array<{ key: string; value: unknown; updated_by: string; auto_revert_at: Date; reason: string | null }>;
+
+      if (!expiredRows || expiredRows.length === 0) return 0;
+
+      for (const row of expiredRows) {
+        const def = getPolicyDefinition(row.key);
+        if (!def) continue;
+
+        await manager.query(
+          `UPDATE "tenant_policy_settings"
+           SET "value" = $3::jsonb,
+               "auto_revert_at" = NULL,
+               "updated_at" = now(),
+               "reason" = $4
+           WHERE "tenant_id" = $1 AND "key" = $2`,
+          [
+            tenantId,
+            row.key,
+            JSON.stringify(def.default),
+            `بازگشت خودکار به مقدار پیش‌فرض امن (${def.default}) پس از انقضای مهلت`,
+          ],
+        );
+
+        await this.audit.record(
+          {
+            tenantId,
+            actorUserId: 'system:auto-revert',
+            action: 'policy.auto_reverted',
+            resourceType: 'tenant_policy',
+            resourceId: row.key,
+            metadata: {
+              key: row.key,
+              group: def.group,
+              revertedFrom: row.value,
+              revertedTo: def.default,
+              expiredAutoRevertAt: row.auto_revert_at,
+            },
+          },
+          manager,
+        );
+      }
+      return expiredRows.length;
     });
   }
 
@@ -183,6 +299,8 @@ export class PolicyService {
     definition: PolicyDefinition,
     value: PolicyValue,
     userId: string,
+    autoRevertAt: Date | null,
+    reason: string | null,
     manager: EntityManager,
   ): Promise<void> {
     if (definition.store) {
@@ -211,11 +329,15 @@ export class PolicyService {
     }
 
     await manager.query(
-      `INSERT INTO "tenant_policy_settings" ("tenant_id", "key", "value", "updated_by", "updated_at")
-       VALUES ($1, $2, $3::jsonb, $4, now())
+      `INSERT INTO "tenant_policy_settings" ("tenant_id", "key", "value", "updated_by", "updated_at", "auto_revert_at", "reason")
+       VALUES ($1, $2, $3::jsonb, $4, now(), $5, $6)
        ON CONFLICT ("tenant_id", "key") DO UPDATE SET
-         "value" = EXCLUDED."value", "updated_by" = EXCLUDED."updated_by", "updated_at" = now()`,
-      [tenantId, definition.key, JSON.stringify(value), userId.slice(0, 64)],
+         "value" = EXCLUDED."value",
+         "updated_by" = EXCLUDED."updated_by",
+         "updated_at" = now(),
+         "auto_revert_at" = EXCLUDED."auto_revert_at",
+         "reason" = EXCLUDED."reason"`,
+      [tenantId, definition.key, JSON.stringify(value), userId.slice(0, 64), autoRevertAt, reason],
     );
   }
 
@@ -230,8 +352,10 @@ export class PolicyService {
   private view(
     definition: PolicyDefinition,
     value: PolicyValue,
-    stored: { updatedAt: Date | null; updatedBy: string | null } | null,
+    stored: StoredPolicyMeta | null,
   ): PolicyView {
+    const isWeakened = isPolicyWeakened(definition.key, value);
+    const warning = getWeakeningWarning(definition.key, value);
     return {
       key: definition.key,
       group: definition.group,
@@ -245,6 +369,10 @@ export class PolicyService {
       updatedAt: stored?.updatedAt ?? null,
       updatedBy: stored?.updatedBy ?? null,
       editable: definition.group !== 'A',
+      isWeakened,
+      warning,
+      autoRevertAt: stored?.autoRevertAt ?? null,
+      reason: stored?.reason ?? null,
     };
   }
 }

@@ -36,6 +36,8 @@ import { TaxComplianceRepository } from './repositories/tax-compliance.repositor
 import { MoadianApiClient } from './services/moadian-api.client';
 import { MoadianService } from './services/moadian.service';
 import { TaxComplianceService } from './services/tax-compliance.service';
+import { MoadianCompliancePolicyService } from './services/moadian-compliance-policy.service';
+import { TenantPolicyModule } from '../tenants/policy/policy.module';
 
 /**
  * ماژول تطبیق سامانه مودیان و امضای الکترونیک صورتحساب‌ها.
@@ -61,6 +63,7 @@ import { TaxComplianceService } from './services/tax-compliance.service';
       StatutoryParameterEntity,
     ]),
     InvoicingModule,
+    TenantPolicyModule,
     BullModule.registerQueue({ name: MOADIAN_QUEUE }),
   ],
   controllers: [TaxComplianceController, MoadianController, SeasonalReportController, LedgerExportController, CorporateTaxController, BusinessTaxController, RentalTaxController, DoctorWithholdingController],
@@ -83,7 +86,8 @@ import { TaxComplianceService } from './services/tax-compliance.service';
     VatReturnService,
     TenantScope,
     SeasonalReportRepository,
+    MoadianCompliancePolicyService,
   ],
-  exports: [TaxComplianceService, VatReturnService],
+  exports: [TaxComplianceService, VatReturnService, MoadianCompliancePolicyService],
 })
 export class TaxComplianceModule {}

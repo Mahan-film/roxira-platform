@@ -9,7 +9,12 @@ import { EntityManager } from 'typeorm';
 import { parseScaled } from '../../accounting/money';
 import { doubleToHundredths } from '../../sales/sales-math';
 import { SalesAvailabilityService } from '../../sales/services/sales-availability.service';
-import { MONEY_SCALE, QUANTITY_SCALE } from '../constants/inventory.constants';
+import {
+  assertValidQuantityScale,
+  MONEY_SCALE,
+  QUANTITY_SCALE,
+} from '../constants/inventory.constants';
+export { assertValidQuantityScale };
 import { CreateStockItemDto } from '../dto/create-stock-item.dto';
 import { CreateWarehouseDto, UpdateWarehouseDto } from '../dto/create-warehouse.dto';
 import { FifoBatchResponseDto } from '../dto/fifo-batch-response.dto';
@@ -328,15 +333,9 @@ export class InventoryService {
     const q = input.quantity ?? 0;
     const unitCost = input.unitCost;
 
-    if (!Number.isFinite(q) || q < 0) {
-      throw new BadRequestException('موجودی اولیه باید عددی صفر یا مثبت باشد.');
-    }
-    // Stock is never rounded silently: more than QUANTITY_SCALE decimals is a row failure.
-    const scaledQuantity = q * 10 ** QUANTITY_SCALE;
-    if (Math.abs(scaledQuantity - Math.round(scaledQuantity)) > 1e-6) {
-      throw new BadRequestException(
-        `موجودی اولیه حداکثر ${QUANTITY_SCALE} رقم اعشار مجاز است.`,
-      );
+    assertValidQuantityScale(q, QUANTITY_SCALE, 'موجودی اولیه');
+    if (input.minQuantity !== undefined) {
+      assertValidQuantityScale(input.minQuantity, QUANTITY_SCALE, 'حداقل موجودی');
     }
     if (q > 0 && unitCost === undefined) {
       throw new BadRequestException('بهای واحد در صورت وجود موجودی اولیه الزامی است.');
@@ -437,6 +436,7 @@ export class InventoryService {
       entity.batchNumber = dto.batchNumber;
     }
     if (dto.minQuantity !== undefined) {
+      assertValidQuantityScale(dto.minQuantity, QUANTITY_SCALE, 'حداقل موجودی');
       entity.minQuantity = this.roundQuantity(dto.minQuantity);
     }
 
@@ -571,6 +571,7 @@ export class InventoryService {
     dto: InboundStockDto,
     manager?: EntityManager,
   ): Promise<StockMovementResultDto> {
+    assertValidQuantityScale(dto.quantity, QUANTITY_SCALE, 'مقدار ورودی کالا');
     const batchNumber = dto.batchNumber ?? this.generateBatchNumber(dto.sku);
 
     try {
@@ -617,6 +618,7 @@ export class InventoryService {
     dto: OutboundStockDto,
     manager?: EntityManager,
   ): Promise<StockMovementResultDto> {
+    assertValidQuantityScale(dto.quantity, QUANTITY_SCALE, 'مقدار خروجی کالا');
     try {
       const result = await this.inventoryRepository.persistOutbound(tenantId, {
         sku: dto.sku,

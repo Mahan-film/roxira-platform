@@ -215,11 +215,11 @@ describe('groupInvoiceRows', () => {
     expect(lower[0].fxRate).toBe(920000);
   });
 
-  it('fails a row whose quantity has more than three decimals or is not positive', () => {
-    const tooMany = groupInvoiceRows([row({ quantity: 1.2345, unitPrice: 1000, amount: 1234.5, vat: 123.45, totalRial: 1357.95 })], TENANT_PARTIES);
+  it('fails a row whose quantity has more than two decimals or is not positive', () => {
+    const tooMany = groupInvoiceRows([row({ quantity: 1.125, unitPrice: 1000, amount: 1125, vat: 112.5, totalRial: 1237.5 })], TENANT_PARTIES);
     const zero = groupInvoiceRows([row({ rowNumber: 3, quantity: 0 })], TENANT_PARTIES);
 
-    expect(tooMany[0].rowErrors.get(2)).toContain('تعداد');
+    expect(tooMany[0].rowErrors.get(2)).toContain('تعداد «1.125» بیش از 2 رقم اعشار دارد و گرد نمی‌شود.');
     expect(zero[0].rowErrors.get(3)).toContain('بیشتر از صفر');
   });
 

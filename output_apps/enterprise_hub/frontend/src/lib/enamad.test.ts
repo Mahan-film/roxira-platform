@@ -26,6 +26,16 @@ test("badge: plain <a>, target=_blank, referrerpolicy origin on a and img, no re
   assert.doesNotMatch(src, /next\/link|next\/image/);
 });
 
+test("badge: fixed size, lazy loading, and async decoding (T19)", () => {
+  const src = stripComments(read("../components/layout/EnamadBadge.tsx"));
+  assert.match(src, /loading="lazy"/);
+  assert.match(src, /decoding="async"/);
+  assert.match(src, /width=\{width\}/);
+  assert.match(src, /height=\{height\}/);
+  assert.match(src, /width:\s*`\$\{width\}px`/);
+  assert.match(src, /height:\s*`\$\{height\}px`/);
+});
+
 test("no-referrer is not set by the app or the shared nginx headers", () => {
   const nginx = read("../../../../nginx_config/snippets/security_headers.conf");
   assert.doesNotMatch(nginx, /Referrer-Policy\s+"?no-referrer/);
