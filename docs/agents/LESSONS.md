@@ -34,3 +34,5 @@ These are real mistakes found in review. Each line is a rule. Reviewers add a li
 21. Every file path, spec name and PR number in a report or audit must be one you opened. Run `git cat-file -e origin/main:<path>` on each cited path before posting (#671 cited four files that do not exist and marked all 29 #230 lines complete).
 22. A REPORT row names only a PR you opened or pushed in this wave, with its current head SHA. Never reuse an old PR number for a task you did not do (WAVE 4 listed T59 as "PR #134 MERGED": #134 is from October and the tour was never run). An issue is not a PR.
 23. Before reporting a PR as done, read its latest `Cross-family review` comment. A `Verdict: blocker` for the current head means the task is not done.
+24. Copy UI text, field names and error codes from the real source file before you write a spec (WAVE 4 #681 asserted four labels and a 400 that do not exist; #644 read `total_amount` where capture drafts store `total`).
+25. A permissive default (`roleKey = 'owner'`, a missing setting treated as allowed) is a security bug. Fail closed (#675).

@@ -16,3 +16,10 @@ Closes #
 - Blockers / assumptions:
 - Verification (exact commands + result):
 - Secrets: none added (gitleaks / push protection)
+
+### Agent evidence (required for agent PRs)
+- Task: T<n> (issue 592, WAVE <n>)
+- Specs added or changed (paths):
+- Command(s) run + counts (e.g. `npx jest x.pg.spec.ts` => 12/12):
+- Coordinator must add: none | <exact lines for app.module.ts / nav-menu.ts>
+- What was NOT checked:
