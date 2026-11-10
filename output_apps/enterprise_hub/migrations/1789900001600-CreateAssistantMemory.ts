@@ -8,8 +8,8 @@ import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
  * A fact is never updated in place; a correction closes the old row and inserts a new one.
  * tenant_id is mandatory and the table has FORCE RLS (AGENTS.md section 4). Additive and reversible.
  */
-export class CreateAssistantMemory1789500000000 implements MigrationInterface {
-  name = 'CreateAssistantMemory1789500000000';
+export class CreateAssistantMemory1789900001600 implements MigrationInterface {
+  name = 'CreateAssistantMemory1789900001600';
 
   public async up(q: QueryRunner): Promise<void> {
     await q.query(`
