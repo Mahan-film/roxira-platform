@@ -5,6 +5,7 @@ import type {
   BankAccount,
   BookLine,
   CreateBankAccountDto,
+  CashBox,
   ReconciliationSummary,
   StatementLine,
 } from "@/types/banking";
@@ -107,4 +108,9 @@ export function createEntryFromStatementLine(
     method: "POST",
     body: payload,
   });
+}
+
+/** GET /enterprise-hub/banking/cash-boxes */
+export function listCashBoxes(signal?: AbortSignal): Promise<CashBox[]> {
+  return apiRequest<CashBox[]>(`${BANKING_ENDPOINT}/cash-boxes`, { method: "GET", signal });
 }
