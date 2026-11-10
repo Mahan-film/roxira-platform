@@ -1,17 +1,5 @@
-import { TenantScope } from '../access/services/tenant-scope';
-/**
- * Read-only closed fiscal years on a REAL PostgreSQL. Opt-in like the other pg specs: skipped
- * unless ROXIRA_TEST_PG_HOST is set; each run creates and drops its own throwaway database.
- *
- * A Jalali fiscal year (1405 = 2026-03-21..2027-03-20) is posted to and closed; then every
- * ledger write dated inside it must be refused with 423 and the Persian message, the year's
- * own lock must refuse the plain unlock API (409), and reopening the year must make every
- * path writable again.
- */
 import 'reflect-metadata';
-import * as path from 'path';
 import { BadRequestException } from '@nestjs/common';
-import { DataSource } from 'typeorm';
 import { CurrencyService } from '../currency/services/currency.service';
 import { JournalEntryStatus, JournalEntryType } from './enums/accounting.enum';
 import { AccountingRepository } from './repositories/accounting.repository';
@@ -26,39 +14,15 @@ import { FixedAssetService } from './services/fixed-asset.service';
 import { PettyCashService } from './services/petty-cash.service';
 import { PostingRulesRepository } from '../posting_rules/repositories/posting-rules.repository';
 import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
-
-const HOST = process.env.ROXIRA_TEST_PG_HOST;
-const describePg = HOST ? describe : describe.skip;
-const USER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
-const PORT = process.env.ROXIRA_TEST_PG_PORT ? Number(process.env.ROXIRA_TEST_PG_PORT) : 5432;
-const T1 = '11111111-1111-4111-8111-111111111111';
-
-const options = (database: string) => ({
-  type: 'postgres' as const,
-  host: HOST,
-  port: PORT,
-  username: USER,
-  database,
-  entities: [path.join(__dirname, '../**/*.entity.ts')],
-  migrations: [path.join(__dirname, '../../migrations/*.ts')],
-  migrationsTransactionMode: 'each' as const,
-  synchronize: false,
-  logging: false,
-});
-
-const admin = async (sql: string) => {
-  const bootstrap = new DataSource({ ...options('postgres'), entities: [], migrations: [] });
-  await bootstrap.initialize();
-  try {
-    await bootstrap.query(sql);
-  } finally {
-    await bootstrap.destroy();
-  }
-};
+import {
+  createTestDatabase,
+  describePg,
+  TestDatabaseContext,
+  TEST_T1 as T1,
+} from '../../test/support/test-pg';
 
 describePg('Closed fiscal year is read-only on PostgreSQL', () => {
-  const dbName = `rx_cf_${process.pid}_${Date.now()}`;
-  let ds: DataSource;
+  let testDb: TestDatabaseContext;
   let accounting: AccountingService;
   let years: FiscalYearService;
   let petty: PettyCashService;
@@ -76,7 +40,7 @@ describePg('Closed fiscal year is read-only on PostgreSQL', () => {
   });
   const balance = async (code: string): Promise<string> =>
     (
-      await ds.query(`SELECT balance FROM fin_chart_of_accounts WHERE tenant_id = $1 AND code = $2`, [T1, code])
+      await testDb.rawQuery(`SELECT balance FROM fin_chart_of_accounts WHERE tenant_id = $1 AND code = $2`, [T1, code])
     )[0]?.balance;
 
   let y1Id = 0;
@@ -88,24 +52,19 @@ describePg('Closed fiscal year is read-only on PostgreSQL', () => {
   let cashAfterClose = 0;
 
   beforeAll(async () => {
-    await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
-    await admin(`CREATE DATABASE "${dbName}"`);
-    ds = new DataSource(options(dbName));
-    await ds.initialize();
-    await ds.runMigrations();
+    testDb = await createTestDatabase('cf');
     const currency = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
-    const repo = new AccountingRepository(new TenantScope(ds));
+    const repo = new AccountingRepository(testDb.scope);
     accounting = new AccountingService(repo, currency);
-    years = new FiscalYearService(repo, new FiscalYearRepository(ds), new LedgerReportRepository(new TenantScope(ds)), accounting);
-    const engine = new PostingRulesService(new PostingRulesRepository(new TenantScope(ds)), accounting);
-    petty = new PettyCashService(new PettyCashRepository(ds), repo, accounting, engine);
-    assets = new FixedAssetService(new FixedAssetRepository(ds), repo, engine, { get: async () => 'refuse' } as never);
+    years = new FiscalYearService(repo, new FiscalYearRepository(testDb.app), new LedgerReportRepository(testDb.scope), accounting);
+    const engine = new PostingRulesService(new PostingRulesRepository(testDb.scope), accounting);
+    petty = new PettyCashService(new PettyCashRepository(testDb.app), repo, accounting, engine);
+    assets = new FixedAssetService(new FixedAssetRepository(testDb.app), repo, engine, { get: async () => 'refuse' } as never);
     await new ChartTemplateService(repo).apply(T1, 'iran-trading');
   }, 120000);
 
   afterAll(async () => {
-    await ds.destroy();
-    await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
+    await testDb?.cleanup();
   });
 
   it('closes Jalali 1405, carries the balances into 1406 and locks every day of the year', async () => {
@@ -164,7 +123,7 @@ describePg('Closed fiscal year is read-only on PostgreSQL', () => {
         status: JournalEntryStatus.DRAFT,
       } as never),
     ).rejects.toMatchObject({ status: 423, message: expect.stringMatching(/قفل|بسته/) });
-    await ds.transaction(async (manager) => {
+    await testDb.app.transaction(async (manager) => {
       await expect(
         accounting.postTypedEntry(
           T1,
@@ -175,7 +134,7 @@ describePg('Closed fiscal year is read-only on PostgreSQL', () => {
       ).rejects.toMatchObject({ status: 423 });
     });
     expect(
-      await ds.query(`SELECT count(*)::int AS n FROM fin_journal_entries WHERE tenant_id = $1 AND entry_number LIKE 'LATE-%'`, [T1]),
+      await testDb.rawQuery(`SELECT count(*)::int AS n FROM fin_journal_entries WHERE tenant_id = $1 AND entry_number LIKE 'LATE-%'`, [T1]),
     ).toEqual([{ n: 0 }]);
   });
 
@@ -188,7 +147,7 @@ describePg('Closed fiscal year is read-only on PostgreSQL', () => {
       message: expect.stringMatching(/قفل|بسته/),
     });
     expect(
-      (await ds.query(`SELECT months_depreciated FROM fin_fixed_assets WHERE tenant_id = $1 AND code = 'FA-CLOSED'`, [T1]))[0],
+      (await testDb.rawQuery(`SELECT months_depreciated FROM fin_fixed_assets WHERE tenant_id = $1 AND code = 'FA-CLOSED'`, [T1]))[0],
     ).toMatchObject({ months_depreciated: 0 });
   }, 60000);
 
@@ -225,7 +184,7 @@ describePg('Closed fiscal year is read-only on PostgreSQL', () => {
     await expect(
       accounting.updateVoucher(T1, next.id, { ...edit, entryNumber: 'NEXT-1', date: midDay('2026-07-01') } as never),
     ).rejects.toMatchObject({ status: 423, message: expect.stringMatching(/2026-07-01/) });
-    const untouched = (await ds.query(`SELECT date FROM fin_journal_entries WHERE id = $1`, [next.id]))[0];
+    const untouched = (await testDb.rawQuery(`SELECT date FROM fin_journal_entries WHERE id = $1`, [next.id]))[0];
     expect(new Date(untouched.date).toISOString()).toContain('2027-04-01');
   });
 
@@ -240,7 +199,7 @@ describePg('Closed fiscal year is read-only on PostgreSQL', () => {
     });
     expect(reversal.entryNumber).toBe('IN-2-REV');
     // The original and its reversal net to zero on every account they touch.
-    const nets: Array<{ code: string; net: string }> = await ds.query(
+    const nets: Array<{ code: string; net: string }> = await testDb.rawQuery(
       `SELECT a.code, SUM(l.debit - l.credit) AS net
          FROM fin_journal_entry_lines l
          JOIN fin_journal_entries e ON e.id = l.journal_entry_id

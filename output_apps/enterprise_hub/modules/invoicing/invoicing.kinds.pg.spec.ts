@@ -1,19 +1,4 @@
-import { TenantScope } from '../access/services/tenant-scope';
-/**
- * Purchase, sale, return and cancel postings against a REAL PostgreSQL: FIFO layers are created by
- * a purchase, a sale takes them at cost, a return and a cancellation put them back, and every
- * voucher balances. Skipped unless ROXIRA_TEST_PG_HOST is set; each run creates and drops its own
- * database:
- *
- *   ROXIRA_TEST_PG_HOST=127.0.0.1 ROXIRA_TEST_PG_PORT=55441 npx jest modules/invoicing/invoicing.kinds.pg.spec.ts
- */
 import 'reflect-metadata';
-import * as path from 'path';
-import { DataSource } from 'typeorm';
-import { ChartOfAccountEntity } from '../accounting/entities/chart-of-account.entity';
-import { JournalEntryLineEntity } from '../accounting/entities/journal-entry-line.entity';
-import { JournalEntryEntity } from '../accounting/entities/journal-entry.entity';
-import { PeriodLockEntity } from '../accounting/entities/period-lock.entity';
 import { AccountingRepository } from '../accounting/repositories/accounting.repository';
 import { AccountingService } from '../accounting/services/accounting.service';
 import { CurrencyService } from '../currency/services/currency.service';
@@ -30,70 +15,50 @@ import { InvoicingRepository } from './repositories/invoicing.repository';
 import { InvoicePostingService } from './services/invoice-posting.service';
 import { PostingRulesRepository } from '../posting_rules/repositories/posting-rules.repository';
 import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
+import {
+  createTestDatabase,
+  describePg,
+  TestDatabaseContext,
+  TEST_T1 as T,
+} from '../../test/support/test-pg';
 
-const HOST = process.env.ROXIRA_TEST_PG_HOST;
-const describePg = HOST ? describe : describe.skip;
-const USER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
-const PORT = process.env.ROXIRA_TEST_PG_PORT ? Number(process.env.ROXIRA_TEST_PG_PORT) : 5432;
-const T = '11111111-1111-4111-8111-111111111111';
 const SKU = 'KIND-1';
 
-const options = (database: string) => ({
-  type: 'postgres' as const,
-  host: HOST,
-  port: PORT,
-  username: USER,
-  database,
-  entities: [path.join(__dirname, '../**/*.entity.ts')],
-  migrations: [path.join(__dirname, '../../migrations/*.ts')],
-  migrationsTransactionMode: 'each' as const,
-  synchronize: false,
-  logging: false,
-});
-
 describePg('invoice kinds on PostgreSQL', () => {
-  const db = `kinds_${process.pid}`;
-  let admin: DataSource;
-  let ds: DataSource;
+  let testDb: TestDatabaseContext;
   let invoicing: InvoicingRepository;
   let posting: InvoicePostingService;
   let inventory: InventoryService;
   const q = <R = Record<string, string>>(sql: string, params: unknown[] = []) =>
-    ds.query(sql, params) as Promise<R[]>;
+    testDb.rawQuery<R>(sql, params);
 
   beforeAll(async () => {
-    admin = await new DataSource({ ...options('postgres'), entities: [], migrations: [] }).initialize();
-    await admin.query(`DROP DATABASE IF EXISTS "${db}" WITH (FORCE)`);
-    await admin.query(`CREATE DATABASE "${db}"`);
-    ds = await new DataSource(options(db)).initialize();
-    await ds.runMigrations();
+    testDb = await createTestDatabase('kinds');
     const accounting = new AccountingService(
-      new AccountingRepository(new TenantScope(ds)),
+      new AccountingRepository(testDb.scope),
       { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService,
     );
     inventory = new InventoryService(
       new InventoryRepository(
-        ds.getRepository(WarehouseEntity),
-        ds.getRepository(StockItemEntity),
-        ds.getRepository(FifoBatchEntity),
-        ds,
+        testDb.app.getRepository(WarehouseEntity),
+        testDb.app.getRepository(StockItemEntity),
+        testDb.app.getRepository(FifoBatchEntity),
+        testDb.app,
       ),
     );
-    invoicing = new InvoicingRepository(ds.getRepository(InvoiceEntity), ds);
+    invoicing = new InvoicingRepository(testDb.app.getRepository(InvoiceEntity), testDb.app);
     posting = new InvoicePostingService(
       invoicing,
       inventory,
       accounting,
-      new PostingRulesService(new PostingRulesRepository(new TenantScope(ds)), accounting),
-      new StockDocumentsRepository(ds),
+      new PostingRulesService(new PostingRulesRepository(testDb.scope), accounting),
+      new StockDocumentsRepository(testDb.app),
     );
     await inventory.createStockItem(T, { sku: SKU, barcode: SKU, name: 'kind item' } as never);
-  }, 180_000);
+  }, 120_000);
 
   afterAll(async () => {
-    await ds?.destroy();
-    await admin.query(`DROP DATABASE IF EXISTS "${db}" WITH (FORCE)`);
-    await admin.destroy();
+    await testDb?.cleanup();
   });
 
   let n = 0;

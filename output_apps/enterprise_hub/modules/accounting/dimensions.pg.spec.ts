@@ -1,56 +1,21 @@
-import { TenantScope } from '../access/services/tenant-scope';
-/**
- * Floating details, cost centres and project centres on a REAL PostgreSQL. Opt-in like the other
- * pg specs: skipped unless ROXIRA_TEST_PG_HOST is set; each run creates and drops its own database.
- */
 import 'reflect-metadata';
-import * as path from 'path';
 import { BadRequestException, ConflictException } from '@nestjs/common';
-import { DataSource } from 'typeorm';
 import { CurrencyService } from '../currency/services/currency.service';
-import { ChartOfAccountEntity } from './entities/chart-of-account.entity';
-import { JournalEntryLineEntity } from './entities/journal-entry-line.entity';
-import { JournalEntryEntity } from './entities/journal-entry.entity';
-import { PeriodLockEntity } from './entities/period-lock.entity';
 import { DimensionKind, JournalEntryStatus } from './enums/accounting.enum';
 import { AccountingRepository } from './repositories/accounting.repository';
 import { DimensionRepository } from './repositories/dimension.repository';
 import { AccountingService } from './services/accounting.service';
 import { DimensionService } from './services/dimension.service';
-
-const HOST = process.env.ROXIRA_TEST_PG_HOST;
-const describePg = HOST ? describe : describe.skip;
-const USER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
-const PORT = process.env.ROXIRA_TEST_PG_PORT ? Number(process.env.ROXIRA_TEST_PG_PORT) : 5432;
-const T1 = '11111111-1111-4111-8111-111111111111';
-const T2 = '22222222-2222-4222-8222-222222222222';
-
-const options = (database: string) => ({
-  type: 'postgres' as const,
-  host: HOST,
-  port: PORT,
-  username: USER,
-  database,
-  entities: [path.join(__dirname, '../**/*.entity.ts')],
-  migrations: [path.join(__dirname, '../../migrations/*.ts')],
-  migrationsTransactionMode: 'each' as const,
-  synchronize: false,
-  logging: false,
-});
-
-const admin = async (sql: string) => {
-  const ds = new DataSource({ ...options('postgres'), entities: [], migrations: [] });
-  await ds.initialize();
-  try {
-    await ds.query(sql);
-  } finally {
-    await ds.destroy();
-  }
-};
+import {
+  createTestDatabase,
+  describePg,
+  TestDatabaseContext,
+  TEST_T1 as T1,
+  TEST_T2 as T2,
+} from '../../test/support/test-pg';
 
 describePg('Dimensions on PostgreSQL', () => {
-  const dbName = `rx_dim_${process.pid}_${Date.now()}`;
-  let ds: DataSource;
+  let testDb: TestDatabaseContext;
   let accounting: AccountingService;
   let dims: DimensionService;
   const range = { from: '2026-04-01', to: '2026-06-30' };
@@ -68,22 +33,17 @@ describePg('Dimensions on PostgreSQL', () => {
     } as never);
 
   beforeAll(async () => {
-    await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
-    await admin(`CREATE DATABASE "${dbName}"`);
-    ds = new DataSource(options(dbName));
-    await ds.initialize();
-    await ds.runMigrations();
+    testDb = await createTestDatabase('dim');
     const currency = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
     accounting = new AccountingService(
-      new AccountingRepository(new TenantScope(ds)),
+      new AccountingRepository(testDb.scope),
       currency,
     );
-    dims = new DimensionService(new DimensionRepository(ds));
+    dims = new DimensionService(new DimensionRepository(testDb.app));
   }, 120000);
 
   afterAll(async () => {
-    await ds.destroy();
-    await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
+    await testDb?.cleanup();
   });
 
   it('creates dimensions per kind and refuses a duplicate code', async () => {
@@ -127,10 +87,10 @@ describePg('Dimensions on PostgreSQL', () => {
         { accountCode: '1010', credit: '5.00' },
       ],
     } as never);
-    const rows = await ds.query(`SELECT project_id FROM fin_journal_entry_lines WHERE journal_entry_id = $1 AND debit > 0`, [draft!.id]);
+    const rows = await testDb.rawQuery(`SELECT project_id FROM fin_journal_entry_lines WHERE journal_entry_id = $1 AND debit > 0`, [draft!.id]);
     expect(rows[0].project_id).not.toBeNull();
     await expect(
-      ds.query(`UPDATE fin_journal_entry_lines SET project_id = (SELECT id FROM fin_dimensions LIMIT 1), tenant_id = $1 WHERE journal_entry_id = $2`, [T2, draft!.id]),
+      testDb.rawQuery(`UPDATE fin_journal_entry_lines SET project_id = (SELECT id FROM fin_dimensions LIMIT 1), tenant_id = $1 WHERE journal_entry_id = $2`, [T2, draft!.id]),
     ).rejects.toThrow();
   });
 });

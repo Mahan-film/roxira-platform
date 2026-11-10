@@ -21,6 +21,7 @@ import { JournalEntryStatus } from './enums/accounting.enum';
 
 const HOST = process.env.ROXIRA_TEST_PG_HOST;
 const describePg = HOST ? describe : describe.skip;
+const ADMIN_USER = process.env.ROXIRA_TEST_PG_ADMIN_USER ?? 'postgres';
 const USER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
 const PASSWORD = process.env.ROXIRA_TEST_PG_PASSWORD;
 const PORT = process.env.ROXIRA_TEST_PG_PORT ? Number(process.env.ROXIRA_TEST_PG_PORT) : 5432;
@@ -44,7 +45,7 @@ const options = (database: string, username = USER, password = PASSWORD) => ({
 });
 
 const admin = async (sql: string) => {
-  const ds = new DataSource({ ...options('postgres'), entities: [], migrations: [] });
+  const ds = new DataSource({ ...options('postgres', ADMIN_USER, PASSWORD), entities: [], migrations: [] });
   await ds.initialize();
   try {
     await ds.query(sql);

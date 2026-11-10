@@ -4,10 +4,7 @@
  * Opt-in: skipped unless ROXIRA_TEST_PG_HOST is set.
  */
 import 'reflect-metadata';
-import * as path from 'path';
 import { ModuleRef } from '@nestjs/core';
-import { DataSource } from 'typeorm';
-import { TenantScope } from '../access/services/tenant-scope';
 import { ChequesRepository } from '../cheques/repositories/cheques.repository';
 import { ChequesService } from '../cheques/services/cheques.service';
 import { CurrencyService } from '../currency/services/currency.service';
@@ -27,39 +24,16 @@ import { FiscalYearRepository } from './repositories/fiscal-year.repository';
 import { LedgerReportRepository } from './repositories/ledger-report.repository';
 import { AccountingService } from './services/accounting.service';
 import { FinancialReportsService } from './services/financial-reports.service';
-
-const HOST = process.env.ROXIRA_TEST_PG_HOST;
-const describePg = HOST ? describe : describe.skip;
-const T1 = '66666666-6666-4666-8666-666666666666';
-const T2 = '77777777-7777-4777-8777-777777777777';
-
-const options = (database: string) => ({
-  type: 'postgres' as const,
-  host: HOST,
-  port: process.env.ROXIRA_TEST_PG_PORT ? Number(process.env.ROXIRA_TEST_PG_PORT) : 5432,
-  username: process.env.ROXIRA_TEST_PG_USER ?? 'postgres',
-  password: process.env.ROXIRA_TEST_PG_PASSWORD,
-  database,
-  entities: [path.join(__dirname, '../**/*.entity.ts')],
-  migrations: [path.join(__dirname, '../../migrations/*.ts')],
-  migrationsTransactionMode: 'each' as const,
-  synchronize: false,
-  logging: false,
-});
-
-const admin = async (sql: string) => {
-  const ds = new DataSource({ ...options('postgres'), entities: [], migrations: [] });
-  await ds.initialize();
-  try {
-    await ds.query(sql);
-  } finally {
-    await ds.destroy();
-  }
-};
+import {
+  createTestDatabase,
+  describePg,
+  TestDatabaseContext,
+  TEST_T1 as T1,
+  TEST_T2 as T2,
+} from '../../test/support/test-pg';
 
 describePg('Ageing by treasury allocations on PostgreSQL (#237)', () => {
-  const dbName = `rx_age_${process.pid}_${Date.now()}`;
-  let ds: DataSource;
+  let testDb: TestDatabaseContext;
   let accounting: AccountingService;
   let treasury: TreasuryService;
   /** Ageing as the app wires it: treasury bound to AGEING_ALLOCATIONS. */
@@ -79,7 +53,7 @@ describePg('Ageing by treasury allocations on PostgreSQL (#237)', () => {
         { accountCode: '4010', debit: '0', credit: String(amount) },
       ],
     } as never);
-    const inserted = await ds.getRepository(InvoiceEntity).insert({
+    const inserted = await testDb.owner.getRepository(InvoiceEntity).insert({
       tenantId,
       taxInvoiceNumber: number,
       sellerInfo: {} as never,
@@ -109,19 +83,16 @@ describePg('Ageing by treasury allocations on PostgreSQL (#237)', () => {
     } as never);
 
   beforeAll(async () => {
-    await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
-    await admin(`CREATE DATABASE "${dbName}"`);
-    ds = new DataSource(options(dbName));
-    await ds.initialize();
-    await ds.runMigrations();
-    const scope = new TenantScope(ds);
+    testDb = await createTestDatabase('age');
+    const scope = testDb.scope;
     const currency = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
     const repo = new AccountingRepository(scope);
     accounting = new AccountingService(repo, currency);
     for (const tenantId of [T1, T2]) {
-      await ds
-        .query(`INSERT INTO tenants (id, name, slug) VALUES ($1, $2, $2) ON CONFLICT DO NOTHING`, [tenantId, tenantId.slice(0, 8)])
-        .catch(() => undefined);
+      await testDb.rawQuery(
+        `INSERT INTO tenants (id, name, slug) VALUES ($1, $2, $2) ON CONFLICT DO NOTHING`,
+        [tenantId, tenantId.slice(0, 8)],
+      ).catch(() => undefined);
       for (const [code, name, accountType] of [
         ['1010', 'بانک', AccountType.ASSET],
         ['1020', 'حساب‌های دریافتنی', AccountType.ASSET],
@@ -160,14 +131,13 @@ describePg('Ageing by treasury allocations on PostgreSQL (#237)', () => {
       },
     } as unknown as ModuleRef;
     const ledger = new LedgerReportRepository(scope);
-    const fiscal = new FiscalYearRepository(ds);
+    const fiscal = new FiscalYearRepository(testDb.app);
     reports = new FinancialReportsService(repo, fiscal, ledger, moduleRef);
     fifoReports = new FinancialReportsService(repo, fiscal, ledger);
   }, 240_000);
 
   afterAll(async () => {
-    await ds?.destroy();
-    await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
+    await testDb?.cleanup();
   });
 
   it('a payment allocated to the newest invoice leaves the oldest invoice in its old bucket', async () => {

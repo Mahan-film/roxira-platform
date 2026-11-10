@@ -2,14 +2,7 @@
 import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
 import { PostingRulesRepository } from '../posting_rules/repositories/posting-rules.repository';
 import 'reflect-metadata';
-import * as path from 'path';
-import { DataSource } from 'typeorm';
-import { TenantScope } from '../access/services/tenant-scope';
 import { CurrencyService } from '../currency/services/currency.service';
-import { ChartOfAccountEntity } from './entities/chart-of-account.entity';
-import { JournalEntryLineEntity } from './entities/journal-entry-line.entity';
-import { JournalEntryEntity } from './entities/journal-entry.entity';
-import { PeriodLockEntity } from './entities/period-lock.entity';
 import { AccountingRepository } from './repositories/accounting.repository';
 import { FiscalYearRepository } from './repositories/fiscal-year.repository';
 import { LedgerReportRepository } from './repositories/ledger-report.repository';
@@ -18,55 +11,30 @@ import { AccountingService } from './services/accounting.service';
 import { ChartTemplateService } from './services/chart-template.service';
 import { FinancialReportsService } from './services/financial-reports.service';
 import { PettyCashService } from './services/petty-cash.service';
+import {
+  createTestDatabase,
+  describePg,
+  TestDatabaseContext,
+} from '../../test/support/test-pg';
 
-const HOST = process.env.ROXIRA_TEST_PG_HOST;
-const describePg = HOST ? describe : describe.skip;
 const T1 = '66666666-6666-4666-8666-666666666666';
 const T2 = '77777777-7777-4777-8777-777777777777';
 
-const options = (database: string) => ({
-  type: 'postgres' as const,
-  host: HOST,
-  port: process.env.ROXIRA_TEST_PG_PORT ? Number(process.env.ROXIRA_TEST_PG_PORT) : 5432,
-  username: process.env.ROXIRA_TEST_PG_USER ?? 'postgres',
-  database,
-  entities: [path.join(__dirname, '../**/*.entity.ts')],
-  migrations: [path.join(__dirname, '../../migrations/*.ts')],
-  migrationsTransactionMode: 'each' as const,
-  synchronize: false,
-  logging: false,
-});
-
-const admin = async (sql: string) => {
-  const ds = new DataSource({ ...options('postgres'), entities: [], migrations: [] });
-  await ds.initialize();
-  try {
-    await ds.query(sql);
-  } finally {
-    await ds.destroy();
-  }
-};
-
 describePg('Petty cash on PostgreSQL', () => {
-  const dbName = `rx_pc_${process.pid}_${Date.now()}`;
-  let ds: DataSource;
+  let testDb: TestDatabaseContext;
   let accounting: AccountingService;
   let reports: FinancialReportsService;
   let engine: PostingRulesService;
   let petty: PettyCashService;
 
   beforeAll(async () => {
-    await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
-    await admin(`CREATE DATABASE "${dbName}"`);
-    ds = new DataSource(options(dbName));
-    await ds.initialize();
-    await ds.runMigrations();
+    testDb = await createTestDatabase('pc');
     const currency = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
-    const repo = new AccountingRepository(new TenantScope(ds));
+    const repo = new AccountingRepository(testDb.scope);
     accounting = new AccountingService(repo, currency);
-    reports = new FinancialReportsService(repo, new FiscalYearRepository(ds), new LedgerReportRepository(new TenantScope(ds)));
-    engine = new PostingRulesService(new PostingRulesRepository(new TenantScope(ds)), accounting);
-    petty = new PettyCashService(new PettyCashRepository(ds), repo, accounting, {
+    reports = new FinancialReportsService(repo, new FiscalYearRepository(testDb.app), new LedgerReportRepository(testDb.scope));
+    engine = new PostingRulesService(new PostingRulesRepository(testDb.scope), accounting);
+    petty = new PettyCashService(new PettyCashRepository(testDb.app), repo, accounting, {
       post: (...a) => engine.post(...a),
     });
     await new ChartTemplateService(repo).apply(T1, 'iran-trading');
@@ -77,8 +45,7 @@ describePg('Petty cash on PostgreSQL', () => {
   }, 120000);
 
   afterAll(async () => {
-    await ds.destroy();
-    await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
+    await testDb?.cleanup();
   });
 
   it('runs a fund through charge, receipts, settlement, refill, return and close', async () => {
@@ -91,9 +58,9 @@ describePg('Petty cash on PostgreSQL', () => {
     await expect(petty.charge(T1, 'u', fund.id, { ...movement, amount: '100000.01' })).rejects.toMatchObject({ status: 409 });
     await petty.charge(T1, 'u', fund.id, { ...movement, amount: '100000' });
     const chargeTx = (await petty.statement(T1, fund.id)).transactions.find(t => t.kind === 'CHARGE')!;
-    const chargeEntry = await ds.query('SELECT description FROM fin_journal_entries WHERE id = $1', [chargeTx.journalEntryId]);
+    const chargeEntry = await testDb.rawQuery('SELECT description FROM fin_journal_entries WHERE id = $1', [chargeTx.journalEntryId]);
     expect(chargeEntry[0].description).toBe('شارژ تنخواه (کارگاه)');
-    const chargeLines = await ds.query(
+    const chargeLines = await testDb.rawQuery(
       'SELECT description FROM fin_journal_entry_lines WHERE journal_entry_id = $1 ORDER BY id',
       [chargeTx.journalEntryId],
     );
@@ -180,11 +147,11 @@ describePg('Petty cash on PostgreSQL', () => {
   });
 
   it('reverts its migration cleanly', async () => {
-    while ((await ds.query(`SELECT 1 FROM migrations WHERE name = 'CreatePettyCash1789380000000'`)).length > 0) {
-      await ds.undoLastMigration();
+    while ((await testDb.owner.query(`SELECT 1 FROM migrations WHERE name = 'CreatePettyCash1789380000000'`)).length > 0) {
+      await testDb.owner.undoLastMigration();
     }
-    const [{ exists }] = await ds.query(`SELECT to_regclass('fin_petty_cash_funds') IS NOT NULL AS "exists"`);
+    const [{ exists }] = await testDb.owner.query(`SELECT to_regclass('fin_petty_cash_funds') IS NOT NULL AS "exists"`);
     expect(exists).toBe(false);
-    await ds.runMigrations();
+    await testDb.owner.runMigrations();
   });
 });

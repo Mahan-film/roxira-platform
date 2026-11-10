@@ -3,10 +3,7 @@
  * ROXIRA_TEST_PG_HOST is set; each run creates and drops its own database.
  */
 import 'reflect-metadata';
-import * as path from 'path';
 import { BadRequestException, NotFoundException, PayloadTooLargeException } from '@nestjs/common';
-import { DataSource } from 'typeorm';
-import { TenantScope } from '../access/services/tenant-scope';
 import { CurrencyService } from '../currency/services/currency.service';
 import { JournalEntryStatus } from './enums/accounting.enum';
 import { AccountingRepository } from './repositories/accounting.repository';
@@ -17,42 +14,18 @@ import {
   sanitizeAttachmentName,
   VoucherAttachmentService,
 } from './services/voucher-attachment.service';
-
-const HOST = process.env.ROXIRA_TEST_PG_HOST;
-const describePg = HOST ? describe : describe.skip;
-const USER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
-const PORT = process.env.ROXIRA_TEST_PG_PORT ? Number(process.env.ROXIRA_TEST_PG_PORT) : 5432;
-const T1 = '11111111-1111-4111-8111-111111111111';
-const T2 = '22222222-2222-4222-8222-222222222222';
-
-const options = (database: string) => ({
-  type: 'postgres' as const,
-  host: HOST,
-  port: PORT,
-  username: USER,
-  database,
-  entities: [path.join(__dirname, '../**/*.entity.ts')],
-  migrations: [path.join(__dirname, '../../migrations/*.ts')],
-  migrationsTransactionMode: 'each' as const,
-  synchronize: false,
-  logging: false,
-});
-
-const admin = async (sql: string) => {
-  const ds = new DataSource({ ...options('postgres'), entities: [], migrations: [] });
-  await ds.initialize();
-  try {
-    await ds.query(sql);
-  } finally {
-    await ds.destroy();
-  }
-};
+import {
+  createTestDatabase,
+  describePg,
+  TestDatabaseContext,
+  TEST_T1 as T1,
+  TEST_T2 as T2,
+} from '../../test/support/test-pg';
 
 const pdf = (marker: string): Buffer => Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.from(marker)]);
 
 describePg('Voucher attachments on PostgreSQL', () => {
-  const dbName = `rx_va_${process.pid}_${Date.now()}`;
-  let ds: DataSource;
+  let testDb: TestDatabaseContext;
   let accounting: AccountingService;
   let attachments: VoucherAttachmentService;
 
@@ -74,19 +47,14 @@ describePg('Voucher attachments on PostgreSQL', () => {
     } as never);
 
   beforeAll(async () => {
-    await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
-    await admin(`CREATE DATABASE "${dbName}"`);
-    ds = new DataSource(options(dbName));
-    await ds.initialize();
-    await ds.runMigrations();
+    testDb = await createTestDatabase('va');
     const currency = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
-    accounting = new AccountingService(new AccountingRepository(new TenantScope(ds)), currency);
-    attachments = new VoucherAttachmentService(new VoucherAttachmentRepository(new TenantScope(ds)));
+    accounting = new AccountingService(new AccountingRepository(testDb.scope), currency);
+    attachments = new VoucherAttachmentService(new VoucherAttachmentRepository(testDb.scope));
   }, 120000);
 
   afterAll(async () => {
-    await ds.destroy();
-    await admin(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
+    await testDb?.cleanup();
   });
 
   it('uploads, lists and downloads the exact same bytes', async () => {
@@ -190,7 +158,7 @@ describePg('Voucher attachments on PostgreSQL', () => {
     await expect(attachments.download(T1, entry.id, uploaded.id)).rejects.toBeInstanceOf(NotFoundException);
     await expect(attachments.remove(T1, entry.id, uploaded.id)).rejects.toBeInstanceOf(NotFoundException);
 
-    const rows = (await ds.query(
+    const rows = (await testDb.rawQuery(
       `SELECT deleted_at FROM erp_journal_entry_attachments WHERE tenant_id = $1 AND id = $2`,
       [T1, uploaded.id],
     )) as Array<{ deleted_at: Date | null }>;
