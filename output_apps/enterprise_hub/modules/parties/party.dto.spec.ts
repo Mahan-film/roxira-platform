@@ -65,6 +65,14 @@ describe('CreatePartyDto', () => {
   it('rejects a name longer than 200 characters', async () => {
     await expectInvalid(CreatePartyDto, { ...valid, name: 'ا'.repeat(201) }, 'name');
   });
+
+  it('validates creditLimit format', async () => {
+    await expectValid(CreatePartyDto, { ...valid, creditLimit: '1000' });
+    await expectValid(CreatePartyDto, { ...valid, creditLimit: '1000000.50' });
+    await expectInvalid(CreatePartyDto, { ...valid, creditLimit: 'abc' }, 'creditLimit');
+    await expectInvalid(CreatePartyDto, { ...valid, creditLimit: '-50' }, 'creditLimit');
+    await expectInvalid(CreatePartyDto, { ...valid, creditLimit: '12.345' }, 'creditLimit');
+  });
 });
 
 describe('UpdatePartyDto', () => {

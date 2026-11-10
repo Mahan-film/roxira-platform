@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { SystemRole } from '../../access/catalogue';
 import { DiscountPolicyService } from './discount-policy.service';
 
 describe('DiscountPolicyService', () => {
@@ -88,5 +89,54 @@ describe('DiscountPolicyService', () => {
         },
       ]),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  describe('SystemRole mapping', () => {
+    it('maps SystemRole.OWNER and SystemRole.ADMIN to 100%', async () => {
+      mockPolicyService.get.mockResolvedValue('refuse');
+      const ownerRes = await service.checkDiscount('tenant-1', SystemRole.OWNER, [{ discountPercent: 90 }]);
+      expect(ownerRes.allowed).toBe(true);
+      expect(ownerRes.limit).toBe(100);
+
+      const adminRes = await service.checkDiscount('tenant-1', SystemRole.ADMIN, [{ discountPercent: 90 }]);
+      expect(adminRes.allowed).toBe(true);
+      expect(adminRes.limit).toBe(100);
+    });
+
+    it('maps SystemRole.ACCOUNTANT to manager discount limit (default 25%)', async () => {
+      mockPolicyService.get
+        .mockResolvedValueOnce('refuse') // enforcement
+        .mockResolvedValueOnce(25); // manager limit
+
+      const res = await service.checkDiscount('tenant-1', SystemRole.ACCOUNTANT, [{ discountPercent: 20 }]);
+      expect(res.allowed).toBe(true);
+      expect(res.limit).toBe(25);
+    });
+
+    it('maps SystemRole.SALES to agent discount limit (default 10%)', async () => {
+      mockPolicyService.get
+        .mockResolvedValueOnce('refuse') // enforcement
+        .mockResolvedValueOnce(10); // agent limit
+
+      const res = await service.checkDiscount('tenant-1', SystemRole.SALES, [{ discountPercent: 5 }]);
+      expect(res.allowed).toBe(true);
+      expect(res.limit).toBe(10);
+    });
+
+    it('fails closed (0% limit) for non-sales roles like read_only, hr or empty role', async () => {
+      mockPolicyService.get.mockResolvedValue('refuse');
+
+      await expect(
+        service.checkDiscount('tenant-1', SystemRole.READ_ONLY, [{ discountPercent: 1 }]),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.checkDiscount('tenant-1', SystemRole.HR, [{ discountPercent: 1 }]),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.checkDiscount('tenant-1', '', [{ discountPercent: 1 }]),
+      ).rejects.toThrow(BadRequestException);
+    });
   });
 });

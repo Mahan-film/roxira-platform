@@ -89,12 +89,22 @@ export class DiscountPolicyService {
     roleKey: string,
     manager?: EntityManager,
   ): Promise<number> {
-    const normalizedRole = (roleKey || '').toLowerCase();
-    if (normalizedRole === SystemRole.OWNER || normalizedRole === SystemRole.ADMIN || normalizedRole === 'admin') {
+    const normalizedRole = (roleKey || '').toLowerCase().trim();
+    if (
+      normalizedRole === SystemRole.OWNER ||
+      normalizedRole === SystemRole.ADMIN ||
+      normalizedRole === 'owner' ||
+      normalizedRole === 'admin'
+    ) {
       return 100;
     }
 
-    if (normalizedRole.includes('manager') || normalizedRole === 'sales_manager') {
+    if (
+      normalizedRole === SystemRole.ACCOUNTANT ||
+      normalizedRole === 'accountant' ||
+      normalizedRole.includes('manager') ||
+      normalizedRole === 'sales_manager'
+    ) {
       const managerLimit = (await this.policyService.get(
         tenantId,
         'sales.discount.max_percent_manager',
@@ -103,11 +113,19 @@ export class DiscountPolicyService {
       return managerLimit ?? 25;
     }
 
-    const agentLimit = (await this.policyService.get(
-      tenantId,
-      'sales.discount.max_percent_agent',
-      manager,
-    )) as number;
-    return agentLimit ?? 10;
+    if (
+      normalizedRole === SystemRole.SALES ||
+      normalizedRole === 'sales' ||
+      normalizedRole === 'sales_agent'
+    ) {
+      const agentLimit = (await this.policyService.get(
+        tenantId,
+        'sales.discount.max_percent_agent',
+        manager,
+      )) as number;
+      return agentLimit ?? 10;
+    }
+
+    return 0;
   }
 }

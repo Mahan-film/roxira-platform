@@ -21,6 +21,8 @@ const NATIONAL_ID = /^\d{10,11}$/;
 const ECONOMIC_CODE = /^\d{10,14}$/;
 /** E.164-ish phone: optional leading +, then 8 to 15 digits. */
 const PHONE = /^\+?\d{8,15}$/;
+/** Credit limit amount in Rial: non-negative integer or decimal with at most 2 fractional digits. */
+const CREDIT_LIMIT = /^\d+(\.\d{1,2})?$/;
 
 export class CreatePartyDto {
   @ApiProperty({ description: 'کد طرف حساب (یکتا در هر سازمان)', example: 'C-100' })
@@ -73,6 +75,7 @@ export class CreatePartyDto {
   @ApiPropertyOptional({ description: 'سقف اعتبار (ریال)', example: '100000000' })
   @IsOptional()
   @IsString()
+  @Matches(CREDIT_LIMIT, { message: 'سقف اعتبار باید یک مبلغ معتبر باشد.' })
   creditLimit?: string;
 }
 
@@ -123,6 +126,7 @@ export class UpdatePartyDto {
   @ApiPropertyOptional({ description: 'سقف اعتبار (ریال)' })
   @IsOptional()
   @IsString()
+  @Matches(CREDIT_LIMIT, { message: 'سقف اعتبار باید یک مبلغ معتبر باشد.' })
   creditLimit?: string;
 }
 

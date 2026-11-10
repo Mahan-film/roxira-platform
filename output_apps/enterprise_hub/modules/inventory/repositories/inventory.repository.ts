@@ -714,11 +714,29 @@ export class InventoryRepository {
           if (mode === 'refuse') {
             throw new InsufficientStockError(input.sku, input.quantity, available);
           }
+          let unitPurchaseCost = 0;
+          if (layers.length > 0) {
+            const totalCost = layers.reduce((acc, l) => acc + l.quantity * l.unitPurchaseCost, 0);
+            const totalQty = layers.reduce((acc, l) => acc + l.quantity, 0);
+            unitPurchaseCost = totalQty > 0 ? this.roundMoney(totalCost / totalQty) : 0;
+          }
+          if (unitPurchaseCost === 0) {
+            const latestBatch = await manager
+              .createQueryBuilder(FifoBatchEntity, 'batch')
+              .where('batch.tenantId = :tenantId', { tenantId })
+              .andWhere('batch.sku = :sku', { sku: input.sku })
+              .orderBy('batch.receivedDate', 'DESC')
+              .addOrderBy('batch.id', 'DESC')
+              .getOne();
+            if (latestBatch) {
+              unitPurchaseCost = Number(latestBatch.unitPurchaseCost);
+            }
+          }
           layers.push({
             batchId: 0,
             batchNumber: 'NEGATIVE-STOCK',
             quantity: this.roundQuantity(remaining),
-            unitPurchaseCost: 0,
+            unitPurchaseCost,
             warehouseId: input.warehouseId,
           });
           if (mode === 'warn') {
@@ -744,10 +762,16 @@ export class InventoryRepository {
       [tenantId],
     )) as Array<{ value: unknown }>;
     if (rows.length > 0 && rows[0].value !== null && rows[0].value !== undefined) {
-      const val = typeof rows[0].value === 'string'
-        ? rows[0].value.replace(/^"|"$/g, '')
-        : String(rows[0].value);
-      return val;
+      let raw = rows[0].value;
+      if (typeof raw === 'object' && raw !== null) {
+        raw = (raw as Record<string, unknown>).value ?? JSON.stringify(raw);
+      }
+      const val = typeof raw === 'string'
+        ? raw.replace(/^"|"$/g, '').trim()
+        : String(raw).trim();
+      if (val === 'allow' || val === 'warn') {
+        return val;
+      }
     }
     return 'refuse';
   }

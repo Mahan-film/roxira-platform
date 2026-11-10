@@ -45,7 +45,7 @@ export class SalesController {
   }
 
   private roleOf(request: AuthenticatedRequest): string {
-    return request.user?.tenantRole ?? request.user?.role ?? 'sales_agent';
+    return request.user?.tenantRole ?? request.user?.role ?? '';
   }
 
   // ------------------------------------------------------------------ quotations
@@ -113,7 +113,13 @@ export class SalesController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: ConvertQuotationDto,
   ): Promise<SalesOrderResponseDto> {
-    return this.sales.convertQuotation(requireTenantId(request), id, dto, this.userIdOf(request));
+    return this.sales.convertQuotation(
+      requireTenantId(request),
+      id,
+      dto,
+      this.userIdOf(request),
+      this.roleOf(request),
+    );
   }
 
   // ------------------------------------------------------------------ orders

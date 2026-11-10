@@ -143,7 +143,7 @@ export class SalesService {
     tenantId: string,
     dto: CreateSalesQuotationDto,
     userId?: string,
-    roleKey: string = 'owner',
+    roleKey: string = '',
   ): Promise<SalesQuotationResponseDto> {
     await this.assertCustomer(tenantId, dto.partyCode);
     if (this.discountPolicy) {
@@ -175,7 +175,7 @@ export class SalesService {
     tenantId: string,
     id: number,
     dto: UpdateSalesQuotationDto,
-    roleKey: string = 'owner',
+    roleKey: string = '',
   ): Promise<SalesQuotationResponseDto> {
     await this.assertCustomer(tenantId, dto.partyCode);
     if (this.discountPolicy) {
@@ -222,6 +222,7 @@ export class SalesService {
     id: number,
     dto: ConvertQuotationDto,
     userId?: string,
+    roleKey: string = '',
   ): Promise<SalesOrderResponseDto> {
     let warning: string | undefined;
     const orderId = await this.runNumbered(tenantId, async (manager, attempt) => {
@@ -256,6 +257,13 @@ export class SalesService {
         discount: line.discount,
         lineTotal: line.lineTotal,
       }));
+      if (this.discountPolicy) {
+        const lineDiscounts = lines.map((l) => ({
+          discountAmountMinor: l.discount !== undefined ? toMinor(l.discount) : 0n,
+          grossAmountMinor: computeLine(parseQuantityHundredths(l.quantity), toMinor(l.unitPrice), 0n),
+        }));
+        await this.discountPolicy.checkDiscount(tenantId, roleKey, lineDiscounts, 0, manager);
+      }
       const count = await this.repository.countOrders(tenantId, manager);
       const header: OrderHeaderInput = {
         number: `${SALES_ORDER_PREFIX}-${count + attempt}`,
@@ -299,7 +307,7 @@ export class SalesService {
     tenantId: string,
     dto: CreateSalesOrderDto,
     userId?: string,
-    roleKey: string = 'owner',
+    roleKey: string = '',
   ): Promise<SalesOrderResponseDto> {
     await this.assertCustomer(tenantId, dto.partyCode);
     if (this.discountPolicy) {
@@ -349,7 +357,7 @@ export class SalesService {
     tenantId: string,
     id: number,
     dto: UpdateSalesOrderDto,
-    roleKey: string = 'owner',
+    roleKey: string = '',
   ): Promise<SalesOrderResponseDto> {
     await this.assertCustomer(tenantId, dto.partyCode);
     if (this.discountPolicy) {

@@ -32,6 +32,16 @@ describe('PartiesService.create', () => {
     const { service } = build({ C1: true });
     await expect(service.create(T, { code: 'C1', name: 'x', role: PartyRole.CUSTOMER } as never)).rejects.toThrow('کد طرف حساب تکراری است.');
   });
+
+  it('parses creditLimit to minor units on create or throws BadRequestException on invalid format', async () => {
+    const { service, created } = build();
+    await service.create(T, { code: 'C2', name: 'مشتری ب', role: PartyRole.CUSTOMER, creditLimit: '1000' } as never);
+    expect(created[0]).toMatchObject({ creditLimit: '100000' });
+
+    await expect(
+      service.create(T, { code: 'C3', name: 'مشتری ج', role: PartyRole.CUSTOMER, creditLimit: 'invalid-money' } as never),
+    ).rejects.toThrow('سقف اعتبار نامعتبر است.');
+  });
 });
 
 describe('PartiesService.getByCode', () => {

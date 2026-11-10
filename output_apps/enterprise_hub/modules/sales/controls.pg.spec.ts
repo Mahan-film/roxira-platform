@@ -32,7 +32,7 @@ import { AccountingRepository } from '../accounting/repositories/accounting.repo
 import { CurrencyService } from '../currency/services/currency.service';
 import { JournalEntryStatus } from '../accounting/enums/accounting.enum';
 
-const HOST = process.env.ROXIRA_TEST_PG_HOST;
+const HOST = process.env.ROXIRA_TEST_PG_HOST ?? (process.env.CI ? '127.0.0.1' : undefined);
 const describePg = HOST ? describe : describe.skip;
 const OWNER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
 const OWNER_PW = process.env.ROXIRA_TEST_PG_PASSWORD;
@@ -350,6 +350,31 @@ describePg('Controls & Policies on PostgreSQL (NOSUPERUSER NOBYPASSRLS, FORCE RL
         'owner',
       );
       expect(ownerQuote).toBeDefined();
+
+      // 6. Real SystemRole: accountant (manager tier) and sales (agent tier)
+      const accountantQuote = await salesService.createQuotation(
+        TENANT_ID,
+        {
+          partyCode: customerCode,
+          quoteDate: '2026-11-08',
+          lines: [{ itemId: testItemId, quantity: 1, unitPrice: 100000, discount: 20000 }], // 20% <= 25%
+        },
+        'accountant-1',
+        'accountant',
+      );
+      expect(accountantQuote).toBeDefined();
+
+      const salesQuote = await salesService.createQuotation(
+        TENANT_ID,
+        {
+          partyCode: customerCode,
+          quoteDate: '2026-11-08',
+          lines: [{ itemId: testItemId, quantity: 1, unitPrice: 100000, discount: 5000 }], // 5% <= 10%
+        },
+        'sales-1',
+        'sales',
+      );
+      expect(salesQuote).toBeDefined();
     });
   });
 
@@ -394,7 +419,10 @@ describePg('Controls & Policies on PostgreSQL (NOSUPERUSER NOBYPASSRLS, FORCE RL
       expect(result.warning).toBeDefined();
       expect(result.warning).toContain('کسری موجودی');
       expect(Number(result.item.quantity)).toBe(-3);
-      expect(result.layers.some((l) => l.batchNumber === 'NEGATIVE-STOCK')).toBe(true);
+      const negativeLayer = result.layers.find((l) => l.batchNumber === 'NEGATIVE-STOCK');
+      expect(negativeLayer).toBeDefined();
+      expect(negativeLayer?.quantity).toBe(3);
+      expect(negativeLayer?.unitPurchaseCost).toBe(100000);
     });
   });
 

@@ -64,7 +64,7 @@ export class BudgetControlService {
       // 1. If projectCode given, check erp_projects by project code
       if (projectCode) {
         const projectRows = (await m.query(
-          `SELECT "budget" FROM "erp_projects" WHERE "tenant_id" = $1 AND "code" = $2`,
+          `SELECT "budget" FROM "erp_projects" WHERE "tenant_id" = $1 AND "code" = $2 ORDER BY "id" ASC LIMIT 1`,
           [tenantId, projectCode],
         )) as Array<{ budget: string | number }>;
 
@@ -75,7 +75,7 @@ export class BudgetControlService {
       // If no budget found from project code and costCenterCode given, check by cost_centre_code
       if (budgetMinor <= 0n && costCenterCode) {
         const costCenterRows = (await m.query(
-          `SELECT "budget" FROM "erp_projects" WHERE "tenant_id" = $1 AND "cost_centre_code" = $2`,
+          `SELECT "budget" FROM "erp_projects" WHERE "tenant_id" = $1 AND "cost_centre_code" = $2 ORDER BY "id" ASC LIMIT 1`,
           [tenantId, costCenterCode],
         )) as Array<{ budget: string | number }>;
 
