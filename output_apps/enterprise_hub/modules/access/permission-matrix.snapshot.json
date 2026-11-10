@@ -49,6 +49,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "DELETE /enterprise-hub/assistant/memory/:id (AssistantMemoryController.forget)": {
+    "policy": "assistant:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": true
+  },
   "DELETE /enterprise-hub/banking/recon/rules/:id (ReconController.deleteRule)": {
     "policy": "banking:admin",
     "owner": true,
@@ -644,6 +655,17 @@
     "hr": false,
     "read_only": true,
     "legacy_member": false
+  },
+  "GET /enterprise-hub/assistant/memory/ (AssistantMemoryController.recall)": {
+    "policy": "assistant:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": true
   },
   "GET /enterprise-hub/assistant/status (AssistantController.status)": {
     "policy": "assistant:read",
@@ -2861,6 +2883,17 @@
     "legacy_member": false
   },
   "POST /enterprise-hub/assistant/chat (AssistantController.chat)": {
+    "policy": "assistant:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": true
+  },
+  "POST /enterprise-hub/assistant/memory/ (AssistantMemoryController.confirm)": {
     "policy": "assistant:read",
     "owner": true,
     "admin": true,
