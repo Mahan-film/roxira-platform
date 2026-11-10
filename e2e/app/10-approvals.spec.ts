@@ -76,10 +76,10 @@ test.describe('Approvals Engine (/approvals)', () => {
         comment: 'تلاش ثبت‌کننده برای تأیید درخواست خود',
       },
     });
-    // Server must reject with 400 Bad Request to prevent maker-checker violation
-    expect(selfDecideRes.status()).toBe(400);
+    // Server must reject with 403 Forbidden to prevent maker-checker violation
+    expect(selfDecideRes.status()).toBe(403);
     const errorBody = await selfDecideRes.json();
-    expect(errorBody.message).toContain('Maker cannot decide their own approval step');
+    expect(errorBody.message).toContain('درخواست‌کننده نمی‌تواند درخواست خودش را تأیید یا رد کند');
 
     // 5. Create a time-bound delegation with a maximum amount limit
     const startsAt = new Date().toISOString();

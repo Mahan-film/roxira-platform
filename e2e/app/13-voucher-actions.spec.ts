@@ -27,23 +27,20 @@ test.describe('Voucher Actions & Rapid Entry (/app/accounting)', () => {
   test('journal entry form exposes keyboard shortcuts and auto-balancing controls', async ({ page }) => {
     await openApp(page, '/app/accounting');
 
-    // Click "سند جدید" button to open journal entry creation form/modal
-    const newVoucherBtn = page.getByRole('button', { name: /سند جدید|ثبت سند/ });
-    if (await newVoucherBtn.isVisible()) {
-      await newVoucherBtn.click();
+    // Click "سند جدید" button to open journal entry creation form
+    const newVoucherBtn = page.getByRole('button', { name: /سند جدید/ });
+    await expect(newVoucherBtn).toBeVisible();
+    await newVoucherBtn.click();
 
-      // Keyboard shortcut bar should be visible with Alt+B / Ctrl+B guidance
-      const shortcutBar = page.locator('[data-testid="keyboard-shortcuts-bar"], div').filter({
-        hasText: /Alt\+B|Ctrl\+B|تراز خودکار|Alt\+N/,
-      });
-      await expect(shortcutBar.first()).toBeVisible();
+    // Keyboard shortcut bar should be visible with Alt+B / Ctrl+Enter / Alt+N guidance
+    const shortcutBar = page.locator('div').filter({
+      hasText: /Alt\+B/,
+    });
+    await expect(shortcutBar.first()).toBeVisible();
 
-      // Auto balance button or shortcut hint should be accessible
-      const autoBalanceBtn = page.getByRole('button', { name: /تراز خودکار/ }).or(page.locator('button[title*="تراز"]'));
-      if (await autoBalanceBtn.count() > 0) {
-        await expect(autoBalanceBtn.first()).toBeVisible();
-      }
-    }
+    // Auto balance button «موازنه خودکار» should be accessible
+    const autoBalanceBtn = page.getByRole('button', { name: /موازنه خودکار/ });
+    await expect(autoBalanceBtn).toBeVisible();
 
     await expectNoErrorNotice(page);
   });

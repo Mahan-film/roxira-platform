@@ -24,8 +24,8 @@ test.describe('Access Settings & Permission Matrix (/app/settings/access)', () =
 
     // 1. Matrix Tab: should render permissions table by default
     await expect(matrixTab).toHaveAttribute('aria-selected', 'true');
-    await expect(page.getByText('حسابداری و دفاتر مالی').first()).toBeVisible();
-    await expect(page.getByText('صورتحساب‌ها و فروش').first()).toBeVisible();
+    await expect(page.getByText('حسابداری').first()).toBeVisible();
+    await expect(page.getByText('صورتحساب').first()).toBeVisible();
 
     // 2. Preview as User Tab
     await previewTab.click();

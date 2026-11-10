@@ -11,7 +11,7 @@ test.describe('Report Builder (/app/accounting/report-builder)', () => {
     await openApp(page, '/app/accounting/report-builder');
 
     // Page header and title
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('سازنده گزارش');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('گزارش‌ساز سفارشی و گزارش‌های تلفیقی');
 
     // Available dataset buttons
     const ledgerBtn = page.getByRole('button', { name: /دفتر کل و اسناد حسابداری/ });
@@ -28,7 +28,7 @@ test.describe('Report Builder (/app/accounting/report-builder)', () => {
     await expect(page.getByText('کد حساب')).toBeVisible();
 
     // Filter controls
-    const addFilterBtn = page.getByRole('button', { name: /افزودن شرط/ });
+    const addFilterBtn = page.getByRole('button', { name: /افزودن فیلتر/ });
     await expect(addFilterBtn).toBeVisible();
     await addFilterBtn.click();
 
