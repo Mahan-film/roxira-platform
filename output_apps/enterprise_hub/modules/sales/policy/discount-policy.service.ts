@@ -53,7 +53,10 @@ export class DiscountPolicyService {
     for (const line of lines) {
       let percent = line.discountPercent ?? 0;
       if (percent <= 0 && line.discountAmountMinor && line.grossAmountMinor && line.grossAmountMinor > 0n) {
-        percent = Number((line.discountAmountMinor * 100n) / line.grossAmountMinor);
+        if (line.discountAmountMinor * 100n > line.grossAmountMinor * BigInt(roleLimit)) {
+          const ratio = (line.discountAmountMinor * 100n) / line.grossAmountMinor;
+          percent = Number(ratio);
+        }
       }
       if (percent > maxRequestedPercent) {
         maxRequestedPercent = percent;
