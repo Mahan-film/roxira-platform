@@ -54,7 +54,7 @@ import {
   computeBalancingAmount,
   getNextCellCoordinates,
 } from "@/lib/voucher-keyboard";
-import { formatRial } from "@/lib/format";
+import { formatMoneyRial } from "@/lib/fa-format";
 import {
   ACCOUNT_TYPE_LABELS,
   type ChartOfAccount,
@@ -678,7 +678,7 @@ export function JournalEntryForm({
                     : "font-bold text-rose-600 dark:text-rose-400"
                 }
               >
-                {formatRial(difference)}
+                {formatMoneyRial(difference)}
               </span>
             </div>
           </div>
@@ -711,8 +711,8 @@ export function JournalEntryForm({
               </AlertTitle>
               <AlertDescription>
                 شماره {createdEntry.entryNumber} — جمع بدهکار{" "}
-                {formatRial(createdEntry.totalDebit)} / جمع بستانکار{" "}
-                {formatRial(createdEntry.totalCredit)}
+                {formatMoneyRial(createdEntry.totalDebit)} / جمع بستانکار{" "}
+                {formatMoneyRial(createdEntry.totalCredit)}
               </AlertDescription>
             </Alert>
           )}

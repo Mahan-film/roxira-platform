@@ -25,28 +25,23 @@ export function computeBalancingAmount(
   lines: LineAmounts[],
   targetIndex: number,
 ): LineAmounts {
-  let otherDebit = 0;
-  let otherCredit = 0;
+  const zero = BigInt(0);
+  const toBig = (s?: string) => {
+    const d = (s ?? "").replace(/[^\d]/g, "");
+    return d ? BigInt(d) : zero;
+  };
+  let otherDebit = zero;
+  let otherCredit = zero;
 
   for (let i = 0; i < lines.length; i++) {
     if (i === targetIndex) continue;
-    const d = Number(lines[i]?.debit) || 0;
-    const c = Number(lines[i]?.credit) || 0;
-    otherDebit += d;
-    otherCredit += c;
+    otherDebit += toBig(lines[i]?.debit);
+    otherCredit += toBig(lines[i]?.credit);
   }
 
-  const diff = Math.round(otherDebit - otherCredit);
-
-  if (diff > 0) {
-    // Debit is heavier; target needs credit to balance
-    return { debit: "", credit: String(diff) };
-  } else if (diff < 0) {
-    // Credit is heavier; target needs debit to balance
-    return { debit: String(Math.abs(diff)), credit: "" };
-  }
-
-  // Already balanced
+  const diff = otherDebit - otherCredit;
+  if (diff > zero) return { debit: "", credit: diff.toString() };
+  if (diff < zero) return { debit: (-diff).toString(), credit: "" };
   return { debit: "", credit: "" };
 }
 

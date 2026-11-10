@@ -28,7 +28,8 @@ import {
   reverseJournalEntry,
 } from "@/lib/api/accounting-client";
 import { ApiClientError } from "@/lib/api/http-client";
-import { formatPersianDate, formatRial } from "@/lib/format";
+import { formatPersianDate } from "@/lib/format";
+import { formatMoneyRial } from "@/lib/fa-format";
 import { printVoucher } from "@/lib/print/open-print-window";
 import { getVoucherAvailableActions } from "@/lib/voucher-actions";
 import {
@@ -398,10 +399,10 @@ export function JournalEntriesTable({ refreshKey = 0, onEdit }: JournalEntriesTa
                       </TableCell>
                       <TableCell className="text-xs">{entry.description}</TableCell>
                       <TableCell className="whitespace-nowrap text-emerald-600 dark:text-emerald-400 tabular-nums">
-                        {formatRial(entry.totalDebit)}
+                        {formatMoneyRial(entry.totalDebit)}
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-amber-600 dark:text-amber-400 tabular-nums">
-                        {formatRial(entry.totalCredit)}
+                        {formatMoneyRial(entry.totalCredit)}
                       </TableCell>
                       <TableCell>
                         <Badge variant={statusBadgeVariant(entry.status)}>
@@ -435,10 +436,10 @@ export function JournalEntriesTable({ refreshKey = 0, onEdit }: JournalEntriesTa
                                 </span>
                                 <span className="flex items-center gap-3">
                                   <span className="text-emerald-600 dark:text-emerald-400 tabular-nums">
-                                    بدهکار {formatRial(line.debit)}
+                                    بدهکار {formatMoneyRial(line.debit)}
                                   </span>
                                   <span className="text-amber-600 dark:text-amber-400 tabular-nums">
-                                    بستانکار {formatRial(line.credit)}
+                                    بستانکار {formatMoneyRial(line.credit)}
                                   </span>
                                 </span>
                               </div>
@@ -522,7 +523,7 @@ export function JournalEntriesTable({ refreshKey = 0, onEdit }: JournalEntriesTa
             <div className="flex justify-between">
               <span className="text-muted-foreground">جمع کل سند:</span>
               <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                {postingEntry ? formatRial(postingEntry.totalDebit) : ""}
+                {postingEntry ? formatMoneyRial(postingEntry.totalDebit) : ""}
               </span>
             </div>
             <div className="flex justify-between">
@@ -585,7 +586,7 @@ export function JournalEntriesTable({ refreshKey = 0, onEdit }: JournalEntriesTa
             )}
             <div className="flex justify-between">
               <span className="text-muted-foreground">مبلغ کل:</span>
-              <span className="font-semibold">{reversingEntry ? formatRial(reversingEntry.totalDebit) : ""}</span>
+              <span className="font-semibold">{reversingEntry ? formatMoneyRial(reversingEntry.totalDebit) : ""}</span>
             </div>
           </div>
 
