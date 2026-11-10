@@ -70,10 +70,11 @@ export class TreasuryController {
   openInvoices(
     @Req() request: AuthenticatedRequest,
     @Query('kind', new ParseEnumPipe(TreasuryDocKind)) kind: TreasuryDocKind,
-    @Query('ids') ids: string,
+    @Query('ids') ids?: string,
+    @Query('partyCode') partyCode?: string,
   ): Promise<OpenInvoiceResponseDto[]> {
     const list = (ids ?? '').split(',').map((s) => s.trim()).filter(Boolean).slice(0, 200);
-    return this.treasuryService.openInvoices(requireTenantId(request), kind, list);
+    return this.treasuryService.openInvoices(requireTenantId(request), kind, list, partyCode);
   }
 
   @Get('allocations')

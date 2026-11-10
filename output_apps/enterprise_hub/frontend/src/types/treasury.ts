@@ -95,3 +95,42 @@ export interface QueryTreasuryDocuments {
   from?: string;
   to?: string;
 }
+
+export interface OpenInvoice {
+  invoiceId: string;
+  invoiceNumber: string;
+  issueDate: string;
+  dueDate?: string;
+  total: number;
+  remainingAmount: number;
+}
+
+export interface CreateTreasuryMethodDto {
+  method: TreasuryMethod;
+  amount: number;
+  bankAccountId?: number;
+  cashBoxId?: number;
+  chequeId?: number;
+  reference?: string;
+  bankName?: string;
+  accountNumber?: string;
+  chequeNumber?: string;
+  dueDate?: string;
+}
+
+export interface CreateTreasuryAllocationDto {
+  invoiceId: string;
+  amount: number;
+  writeoff?: number;
+}
+
+export interface CreateTreasuryDocumentDto {
+  kind: TreasuryDocKind;
+  partyType: TreasuryPartyType;
+  partyCode: string;
+  partyName?: string;
+  docDate: string;
+  description?: string;
+  methods: CreateTreasuryMethodDto[];
+  allocations?: CreateTreasuryAllocationDto[];
+}

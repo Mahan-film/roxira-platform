@@ -96,3 +96,13 @@ export interface ReconciliationSummary {
   unmatchedStatementCount: number;
   unmatchedBookCount: number;
 }
+
+export interface CashBox {
+  id: number;
+  tenantId: string;
+  name: string;
+  code: string;
+  ledgerAccountId: number;
+  openingBalance: number | string;
+  currentBalance?: number | string;
+}

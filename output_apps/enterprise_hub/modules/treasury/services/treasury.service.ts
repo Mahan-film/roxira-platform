@@ -285,15 +285,47 @@ export class TreasuryService {
     return this.getTolerance(tenantId);
   }
 
-  /** Open amount (payable minus allocations) of the given invoices, for the allocation grid. */
-  async openInvoices(tenantId: string, kind: TreasuryDocKind, invoiceIds: string[]): Promise<OpenInvoiceResponseDto[]> {
-    const invoices = await this.loadInvoices(tenantId, kind, invoiceIds);
+  /** Open amount (payable minus allocations) of the given invoices or party's open invoices, for the allocation grid. */
+  async openInvoices(
+    tenantId: string,
+    kind: TreasuryDocKind,
+    invoiceIds: string[],
+    partyCode?: string,
+  ): Promise<OpenInvoiceResponseDto[]> {
+    let invoices: Map<string, InvoiceFacts>;
+    if (invoiceIds && invoiceIds.length > 0) {
+      invoices = await this.loadInvoices(tenantId, kind, invoiceIds);
+    } else {
+      const wanted = kind === TreasuryDocKind.RECEIPT ? InvoiceDirection.SALE : InvoiceDirection.PURCHASE;
+      const res = await this.invoicingService.findAll(tenantId, {
+        page: 1,
+        limit: 100,
+        status: InvoiceStatus.ISSUED,
+        direction: wanted,
+      });
+      invoices = new Map<string, InvoiceFacts>();
+      for (const inv of res.data) {
+        const party = kind === TreasuryDocKind.RECEIPT ? inv.buyerInfo : inv.sellerInfo;
+        if (partyCode && party?.partyCode && party.partyCode !== partyCode) {
+          continue;
+        }
+        invoices.set(inv.id, {
+          id: inv.id,
+          number: inv.taxInvoiceNumber,
+          payable: amountOf(inv.finalPayable, 'مبلغ صورتحساب'),
+        });
+      }
+    }
     const open = await this.outstanding(tenantId, invoices, undefined);
-    return open.map((item) => ({
-      invoiceId: item.targetId,
-      invoiceNumber: invoices.get(item.targetId)?.number ?? item.targetId,
-      outstanding: fromMinor(item.outstanding),
-    }));
+    return open
+      .filter((item) => (invoiceIds && invoiceIds.length > 0) || item.outstanding > 0n)
+      .map((item) => ({
+        invoiceId: item.targetId,
+        invoiceNumber: invoices.get(item.targetId)?.number ?? item.targetId,
+        outstanding: fromMinor(item.outstanding),
+        total: fromMinor(invoices.get(item.targetId)?.payable ?? 0n),
+        remainingAmount: fromMinor(item.outstanding),
+      }));
   }
 
   /**

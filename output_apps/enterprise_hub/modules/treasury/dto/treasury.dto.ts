@@ -60,6 +60,12 @@ export class TreasuryMethodLineDto {
   @MaxLength(64)
   chequeBankName?: string;
 
+  @ApiPropertyOptional({ description: 'نام بانک (نام مستعار chequeBankName)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  bankName?: string;
+
   @ApiPropertyOptional({ description: 'فقط برای چک: تاریخ سررسید (ISO)' })
   @IsOptional()
   @IsISO8601({ strict: true })
@@ -239,6 +245,8 @@ export class OpenInvoiceResponseDto {
   @ApiProperty() invoiceId: string;
   @ApiProperty() invoiceNumber: string;
   @ApiProperty({ description: 'مانده قابل تخصیص', ...MONEY }) outstanding: number | string;
+  @ApiPropertyOptional(MONEY) total?: number | string;
+  @ApiPropertyOptional(MONEY) remainingAmount?: number | string;
 }
 
 export class AllocationReportRowDto {
