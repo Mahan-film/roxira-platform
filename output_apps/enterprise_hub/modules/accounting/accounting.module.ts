@@ -51,6 +51,9 @@ import { FiscalYearService } from './services/fiscal-year.service';
 import { PettyCashService } from './services/petty-cash.service';
 import { ReportExportService } from './services/report-export.service';
 import { VoucherToolsService } from './services/voucher-tools.service';
+import { AccountBudgetEntity } from './entities/account-budget.entity';
+import { AccountBudgetRepository } from './repositories/account-budget.repository';
+import { BudgetVsActualService } from './services/budget-vs-actual.service';
 
 /**
  * ماژول حسابداری دوطرفه و دفتر روزنامه سازمانی
@@ -80,6 +83,7 @@ import { VoucherToolsService } from './services/voucher-tools.service';
       RecurringVoucherEntity,
       RecurringVoucherRunEntity,
       JournalEntryAttachmentEntity,
+      AccountBudgetEntity,
     ]),
     CurrencyModule,
     AccessModule,
@@ -90,6 +94,8 @@ import { VoucherToolsService } from './services/voucher-tools.service';
   providers: [
     AccountingService,
     AccountingRepository,
+    AccountBudgetRepository,
+    BudgetVsActualService,
     DimensionRepository,
     DimensionService,
     RecurringVoucherRepository,
@@ -128,6 +134,6 @@ import { VoucherToolsService } from './services/voucher-tools.service';
     ReportExportService,
     VoucherToolsService,
   ],
-  exports: [AccountingService, FinancialReportsService, ReportExportService, CostCentreReportService],
+  exports: [AccountingService, FinancialReportsService, ReportExportService, CostCentreReportService, BudgetVsActualService],
 })
 export class AccountingModule {}

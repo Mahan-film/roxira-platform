@@ -133,3 +133,41 @@ export const settlePettyCash = (
 ) => apiRequest<PettyCashStatement>(`${PETTY_CASH}/${id}/settle`, { method: "POST", body });
 export const closePettyCashFund = (id: number) =>
   apiRequest<PettyCashFund>(`${PETTY_CASH}/${id}/close`, { method: "POST" });
+
+export interface BudgetVsActualRow {
+  accountCode: string;
+  accountName: string;
+  accountType: string;
+  costCenterId: number | null;
+  costCenterCode: string | null;
+  costCenterName: string | null;
+  budgetAmount: Money;
+  actualAmount: Money;
+  varianceAmount: Money;
+  variancePercent: number | null;
+  utilizationPercent: number | null;
+}
+
+export interface BudgetVsActualReport {
+  fiscalYearId: number;
+  fiscalYearName: string;
+  startDate: string;
+  endDate: string;
+  totalBudget: Money;
+  totalActual: Money;
+  totalVariance: Money;
+  overallUtilizationPercent: number | null;
+  rows: BudgetVsActualRow[];
+}
+
+export const getBudgetVsActual = (
+  query: { fiscalYearId: number; costCenterId?: number; costCenterCode?: string },
+  signal?: AbortSignal,
+) => report<BudgetVsActualReport>("budget-vs-actual", { ...query }, signal);
+
+export const setAccountBudget = (body: {
+  fiscalYearId: number;
+  accountCode: string;
+  budgetAmount: Money;
+  costCenterId?: number;
+}) => apiRequest(`${REPORTS}/budgets`, { method: "PUT", body });
