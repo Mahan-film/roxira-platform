@@ -16,15 +16,19 @@ export interface BalanceDisplay {
 }
 
 /** Parses numeric balance string and returns debit/credit marker in Persian. */
+function toMinorBigInt(raw: string | number | bigint | null | undefined): bigint {
+  if (typeof raw === "bigint") return raw;
+  const intPart = String(raw ?? "0").trim().split(".")[0];
+  if (!intPart || intPart === "-" || intPart === "+") return BigInt(0);
+  try { return BigInt(intPart); } catch { return BigInt(0); }
+}
+
 export function getBalanceDisplay(balanceStr: string | number): BalanceDisplay {
-  const num = typeof balanceStr === "number" ? balanceStr : parseFloat(balanceStr || "0");
-  if (Number.isNaN(num) || num === 0) {
-    return { status: "SETTLED", statusFa: "تسویه", amountMinor: BigInt(0) };
-  }
-  if (num > 0) {
-    return { status: "DEBIT", statusFa: "بد", amountMinor: BigInt(Math.round(num)) };
-  }
-  return { status: "CREDIT", statusFa: "بس", amountMinor: BigInt(Math.round(Math.abs(num))) };
+  const n = toMinorBigInt(balanceStr);
+  const zero = BigInt(0);
+  if (n === zero) return { status: "SETTLED", statusFa: "تسویه", amountMinor: zero };
+  if (n > zero) return { status: "DEBIT", statusFa: "بد", amountMinor: n };
+  return { status: "CREDIT", statusFa: "بس", amountMinor: -n };
 }
 
 export interface DimensionTreeNode {
@@ -63,10 +67,8 @@ export function calculateBalancesSummary(rows: DimensionBalanceRow[]): {
   let totalCredit = BigInt(0);
 
   for (const r of rows) {
-    const deb = parseFloat(r.debit || "0");
-    const cred = parseFloat(r.credit || "0");
-    if (!Number.isNaN(deb)) totalDebit += BigInt(Math.round(deb));
-    if (!Number.isNaN(cred)) totalCredit += BigInt(Math.round(cred));
+    totalDebit += toMinorBigInt(r.debit);
+    totalCredit += toMinorBigInt(r.credit);
   }
 
   return {
