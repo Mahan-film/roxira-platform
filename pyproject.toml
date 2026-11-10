@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "crawlee[adaptive-crawler,beautifulsoup,parsel,playwright]>=1.8.3,<2",
-    "django==5.2.18",
+    "django==5.2.19",
     "django-environ>=0.14.0",
     "django-ninja>=1.6.2",
     "httpx>=0.28.1",
@@ -64,7 +64,7 @@ documents = [
 # در نبود آن، بازیابی به لایهٔ SQL بومی dual_retrieval تنزل می‌کند.
 legal-graph = [
     "lightrag-hku==1.5.7",
-    "openai==3.42.0",
+    "openai==3.46.0",
 ]
 
 # ── سرور MCP رادار فناوری (W9 Phase B) ──────────────────────────────────────
