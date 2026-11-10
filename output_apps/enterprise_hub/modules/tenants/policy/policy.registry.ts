@@ -80,6 +80,24 @@ export const POLICY_REGISTRY: readonly PolicyDefinition[] = [
     labelFa: 'فروش دارایی پیش از آخرین سند استهلاک',
     descriptionFa: 'اگر «رد کردن» باشد، فروش دارایی با تاریخی پیش از آخرین سند استهلاک ثبت‌شده رد می‌شود.',
   },
+  {
+    key: 'moadian.inbox_age_alert.mode',
+    group: 'B',
+    type: 'enum',
+    allowed: ['refuse', 'warn', 'off'],
+    default: 'warn',
+    labelFa: 'کنترل مهلت رسیدگی صورتحساب‌های خرید کارپوشه مؤدیان',
+    descriptionFa: 'تعیین شیوهٔ برخورد با صورتحساب‌های خرید باز در کارپوشه مؤدیان که بیش از مهلت مقرر تعیین‌تکلیف نشده‌اند (تبصره ماده ۵ قانون پایانه‌های فروشگاهی؛ پیش‌فرض: هشدار / WARN).',
+  },
+  {
+    key: 'moadian.article_6_cap.mode',
+    group: 'B',
+    type: 'enum',
+    allowed: ['refuse', 'warn', 'off'],
+    default: 'warn',
+    labelFa: 'کنترل سقف مجاز صدور صورتحساب ماده ۶ سامانه مؤدیان',
+    descriptionFa: 'کنترل سقف مجاز صدور صورتحساب الکترونیکی هر دوره مالیاتی (ماده ۶ قانون پایانه‌های فروشگاهی و قانون تسهیل)؛ در صورت نزدیک‌شدن یا عبور از سقف، هشدار داده یا صدور مسدود می‌شود (پیش‌فرض: هشدار / WARN).',
+  },
 
   // ------------------------------------------------------ group C (management)
   {
@@ -119,6 +137,42 @@ export const POLICY_REGISTRY: readonly PolicyDefinition[] = [
     default: 'draft_unless_auto_reverse',
     labelFa: 'حالت ساخت سند دوره‌ای',
     descriptionFa: 'اگر «همیشه قطعی» باشد سند دوره‌ای همان‌لحظه قطعی می‌شود؛ وگرنه تا برگشت خودکار پیش‌نویس می‌ماند.',
+  },
+  {
+    key: 'moadian.inbox_age_alert.warn_days',
+    group: 'C',
+    type: 'int',
+    allowed: { min: 1, max: 29 },
+    default: 20,
+    labelFa: 'آستانهٔ روز هشدار اولیه عدم رسیدگی کارپوشه (روز)',
+    descriptionFa: 'تعداد روز پس از صدور/درج فاکتور خرید در کارپوشه که در صورت عدم تأیید یا رد، هشدار اولیه داده می‌شود (پیش‌فرض: ۲۰ روز).',
+  },
+  {
+    key: 'moadian.inbox_age_alert.critical_days',
+    group: 'C',
+    type: 'int',
+    allowed: { min: 1, max: 29 },
+    default: 27,
+    labelFa: 'آستانهٔ روز هشدار اضطراری پیش از تأیید خودکار کارپوشه (روز)',
+    descriptionFa: 'تعداد روز پس از صدور فاکتور در کارپوشه که هشدار اضطراری برای جلوگیری از تأیید خودکار روز ۳۰ام داده می‌شود (پیش‌فرض: ۲۷ روز).',
+  },
+  {
+    key: 'moadian.article_6_cap.warning_percent',
+    group: 'C',
+    type: 'int',
+    allowed: { min: 50, max: 95 },
+    default: 80,
+    labelFa: 'درصد آستانهٔ هشدار سقف فروش ماده ۶ (درصد)',
+    descriptionFa: 'درصد استفاده از سقف مجاز ماده ۶ برای صدور هشدار پیشگیرانه به واحد مالی (پیش‌فرض: ۸۰٪، پیش از اخطار ۸۵٪ سامانه امور مالیاتی).',
+  },
+  {
+    key: 'moadian.article_6_cap.custom_ceiling_rial',
+    group: 'C',
+    type: 'int',
+    allowed: { min: 0, max: 1_000_000_000_000_000 },
+    default: 0,
+    labelFa: 'سقف مجاز مصوب فروش ماده ۶ دوره جاری (ریال)',
+    descriptionFa: 'سقف مجاز مصوب ماده ۶ اعلام‌شده در کارپوشه مالیاتی بر حسب ریال (۰ = محاسبه خودکار بر مبنای ۵ برابر معافیت سالانه ماده ۱۰۱).',
   },
 ];
 
