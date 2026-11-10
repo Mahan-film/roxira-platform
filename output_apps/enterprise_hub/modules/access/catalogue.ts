@@ -259,6 +259,8 @@ export const SALARY_PROTECTED_HANDLERS: ReadonlySet<string> = new Set([
   'HrController.getContract',
   'HrController.listAllowances',
   'HrController.replaceAllowances',
+  'HrController.createStaffLoan',
+  'HrController.listStaffLoans',
 ]);
 
 export function requiredFieldForHandler(

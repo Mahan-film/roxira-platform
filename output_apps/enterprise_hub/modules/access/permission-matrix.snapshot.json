@@ -1223,6 +1223,17 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/hr/attendance (HrController.listAttendance)": {
+    "policy": "hr:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/hr/contracts (HrController.listContracts)": {
     "policy": "hr:read+field:salary",
     "owner": true,
@@ -1276,6 +1287,28 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/hr/leaves (HrController.listLeaves)": {
+    "policy": "hr:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/hr/loans (HrController.listStaffLoans)": {
+    "policy": "hr:read+field:salary",
+    "owner": true,
+    "admin": false,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/payroll-rates/:year (HrController.getPayrollRates)": {
@@ -2390,6 +2423,17 @@
   },
   "PATCH /enterprise-hub/hr/employees/:id (HrController.updateEmployee)": {
     "policy": "hr:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PATCH /enterprise-hub/hr/leaves/:id/review (HrController.reviewLeave)": {
+    "policy": "hr:approve",
     "owner": true,
     "admin": true,
     "accountant": false,
@@ -3644,6 +3688,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/hr/attendance (HrController.recordAttendance)": {
+    "policy": "hr:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/hr/contracts (HrController.createContract)": {
     "policy": "hr:create+field:salary",
     "owner": true,
@@ -3668,6 +3723,28 @@
   },
   "POST /enterprise-hub/hr/employees/:id/settlement (HrController.previewSettlement)": {
     "policy": "hr:read+field:salary",
+    "owner": true,
+    "admin": false,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/hr/leaves (HrController.requestLeave)": {
+    "policy": "hr:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/hr/loans (HrController.createStaffLoan)": {
+    "policy": "hr:create+field:salary",
     "owner": true,
     "admin": false,
     "accountant": false,

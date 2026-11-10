@@ -38,6 +38,8 @@ import {
 } from '../dto/payroll-run.dto';
 import { EmployeeEntity } from '../entities/employee.entity';
 import { EmploymentContractEntity } from '../entities/employment-contract.entity';
+import { EmployeeAttendanceEntity } from '../entities/employee-attendance.entity';
+import { StaffLoanEntity } from '../entities/staff-loan.entity';
 import { PayrollRunEntity } from '../entities/payroll-run.entity';
 import { PayslipEntity } from '../entities/payslip.entity';
 import {
@@ -288,6 +290,29 @@ export class PayrollRunService {
           dto.periodYear,
           dto.periodMonth,
         );
+        const [attendances, activeLoans] = await Promise.all([
+          this.hrRepository.findAttendanceByPeriod(
+            tenantId,
+            dto.periodYear,
+            dto.periodMonth,
+            manager,
+          ),
+          this.hrRepository.findActiveLoans(
+            tenantId,
+            employees.map((employee) => employee.id),
+            manager,
+          ),
+        ]);
+        const attendanceByEmployee = new Map<number, EmployeeAttendanceEntity>();
+        for (const attendance of attendances) {
+          attendanceByEmployee.set(attendance.employeeId, attendance);
+        }
+        const loansByEmployee = new Map<number, StaffLoanEntity[]>();
+        for (const loan of activeLoans) {
+          const list = loansByEmployee.get(loan.employeeId) ?? [];
+          list.push(loan);
+          loansByEmployee.set(loan.employeeId, list);
+        }
         const month = String(dto.periodMonth).padStart(2, '0');
         const skipped: PayrollRunSkippedDto[] = [];
         const rows: Partial<PayslipEntity>[] = [];
@@ -312,6 +337,22 @@ export class PayrollRunService {
             continue;
           }
           const item = items.get(employee.id);
+          const attendance = attendanceByEmployee.get(employee.id);
+          const empLoans = loansByEmployee.get(employee.id) ?? [];
+          const loanDeduction = empLoans.reduce(
+            (sum, loan) =>
+              sum + Math.min(Number(loan.instalmentAmount), Number(loan.remainingAmount)),
+            0,
+          );
+
+          const overtimeHours = item?.overtimeHours ?? Number(attendance?.overtimeHours ?? 0);
+          const nightHours = item?.nightHours ?? Number(attendance?.nightHours ?? 0);
+          const holidayHours = item?.holidayHours ?? Number(attendance?.holidayHours ?? 0);
+          const absenceDays =
+            item?.absenceDays ??
+            (Number(attendance?.absenceDays ?? 0) + Number(attendance?.unpaidLeaveDays ?? 0));
+          const otherDeductions = (item?.otherDeductions ?? 0) + loanDeduction;
+
           const result = calculatePayroll({
             rates,
             employeeInsuranceRate:
@@ -336,11 +377,11 @@ export class PayrollRunService {
               dto.periodYear,
               dto.periodMonth,
             ),
-            overtimeHours: item?.overtimeHours,
-            nightHours: item?.nightHours,
-            holidayHours: item?.holidayHours,
-            absenceDays: item?.absenceDays,
-            otherDeductions: item?.otherDeductions,
+            overtimeHours,
+            nightHours,
+            holidayHours,
+            absenceDays,
+            otherDeductions,
             insuranceSubject: contract.isInsuranceSubject,
           });
           if (result.netPay < 0) {
@@ -384,10 +425,10 @@ export class PayrollRunService {
             otherDeductions: result.otherDeductions,
             netPay: result.netPay,
             workDays: result.workDays,
-            overtimeHours: item?.overtimeHours ?? 0,
-            nightHours: item?.nightHours ?? 0,
-            holidayHours: item?.holidayHours ?? 0,
-            absenceDays: item?.absenceDays ?? 0,
+            overtimeHours,
+            nightHours,
+            holidayHours,
+            absenceDays,
             status: PayslipStatus.DRAFT,
             journalEntryId: null,
             journalEntryNumber: null,
@@ -642,6 +683,32 @@ export class PayrollRunService {
         },
         manager,
       );
+
+      // Deduct loan instalments for active loans of employees in this run
+      const runPayslips = await this.hrRepository.findPayslipsByRun(
+        tenantId,
+        run.id,
+        manager,
+      );
+      const activeLoans = await this.hrRepository.findActiveLoans(
+        tenantId,
+        runPayslips.map((p) => p.employeeId),
+        manager,
+      );
+      for (const loan of activeLoans) {
+        const deduction = Math.min(
+          Number(loan.instalmentAmount),
+          Number(loan.remainingAmount),
+        );
+        if (deduction > 0) {
+          await this.hrRepository.deductLoanInstalment(
+            tenantId,
+            loan.id,
+            deduction,
+            manager,
+          );
+        }
+      }
     });
     return this.findRun(tenantId, run.id);
   }

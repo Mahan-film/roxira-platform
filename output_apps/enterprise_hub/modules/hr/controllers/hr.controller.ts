@@ -57,6 +57,22 @@ import {
 import { QueryEmployeeDto, QueryPayslipDto } from '../dto/query-hr.dto';
 import { PreviewSettlementDto, SettlementPreviewDto } from '../dto/settlement.dto';
 import { UpdateEmployeeDto } from '../dto/update-employee.dto';
+import {
+  AttendanceResponseDto,
+  QueryAttendanceDto,
+  RecordAttendanceDto,
+} from '../dto/attendance.dto';
+import {
+  CreateLeaveDto,
+  LeaveResponseDto,
+  QueryLeaveDto,
+  ReviewLeaveDto,
+} from '../dto/leave.dto';
+import {
+  CreateStaffLoanDto,
+  QueryStaffLoanDto,
+  StaffLoanResponseDto,
+} from '../dto/staff-loan.dto';
 import { HrService } from '../services/hr.service';
 import { PayrollRunService } from '../services/payroll-run.service';
 
@@ -446,5 +462,98 @@ export class HrController {
       totalDeductions: 'salary',
       averageNetPay: 'salary',
     }) as unknown as HrStatsResponseDto;
+  }
+
+  // ---------------------------------------------------------------------------
+  // کارکرد و حضور و غیاب
+  // ---------------------------------------------------------------------------
+
+  @RequireAction(AccessAction.CREATE)
+  @Post('attendance')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'ثبت یا به‌روزرسانی کارکرد و حضور و غیاب ماهانه کارمند' })
+  @ApiResponse({ status: HttpStatus.OK, type: AttendanceResponseDto })
+  async recordAttendance(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: RecordAttendanceDto,
+  ): Promise<AttendanceResponseDto> {
+    return this.hrService.recordAttendance(this.tenantIdOf(request), dto);
+  }
+
+  @RequireAction(AccessAction.READ)
+  @Get('attendance')
+  @ApiOperation({ summary: 'فهرست کارکرد و حضور و غیاب پرسنل' })
+  @ApiResponse({ status: HttpStatus.OK, type: [AttendanceResponseDto] })
+  async listAttendance(
+    @Req() request: AuthenticatedRequest,
+    @Query() query: QueryAttendanceDto,
+  ): Promise<AttendanceResponseDto[]> {
+    return this.hrService.listAttendances(this.tenantIdOf(request), query);
+  }
+
+  // ---------------------------------------------------------------------------
+  // مرخصی‌ها
+  // ---------------------------------------------------------------------------
+
+  @RequireAction(AccessAction.CREATE)
+  @Post('leaves')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'ثبت درخواست مرخصی' })
+  @ApiResponse({ status: HttpStatus.CREATED, type: LeaveResponseDto })
+  async requestLeave(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: CreateLeaveDto,
+  ): Promise<LeaveResponseDto> {
+    return this.hrService.requestLeave(this.tenantIdOf(request), dto);
+  }
+
+  @RequireAction(AccessAction.APPROVE)
+  @Patch('leaves/:id/review')
+  @ApiOperation({ summary: 'بررسی و تأیید یا رد مرخصی' })
+  @ApiResponse({ status: HttpStatus.OK, type: LeaveResponseDto })
+  async reviewLeave(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ReviewLeaveDto,
+  ): Promise<LeaveResponseDto> {
+    return this.hrService.reviewLeave(this.tenantIdOf(request), id, dto);
+  }
+
+  @RequireAction(AccessAction.READ)
+  @Get('leaves')
+  @ApiOperation({ summary: 'فهرست مرخصی‌های ثبت‌شده' })
+  @ApiResponse({ status: HttpStatus.OK, type: [LeaveResponseDto] })
+  async listLeaves(
+    @Req() request: AuthenticatedRequest,
+    @Query() query: QueryLeaveDto,
+  ): Promise<LeaveResponseDto[]> {
+    return this.hrService.listLeaves(this.tenantIdOf(request), query);
+  }
+
+  // ---------------------------------------------------------------------------
+  // وام‌های پرسنلی
+  // ---------------------------------------------------------------------------
+
+  @RequireAction(AccessAction.CREATE)
+  @Post('loans')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'تعریف وام یا مساعده پرسنلی' })
+  @ApiResponse({ status: HttpStatus.CREATED, type: StaffLoanResponseDto })
+  async createStaffLoan(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: CreateStaffLoanDto,
+  ): Promise<StaffLoanResponseDto> {
+    return this.hrService.createStaffLoan(this.tenantIdOf(request), dto);
+  }
+
+  @RequireAction(AccessAction.READ)
+  @Get('loans')
+  @ApiOperation({ summary: 'فهرست وام‌های پرسنلی' })
+  @ApiResponse({ status: HttpStatus.OK, type: [StaffLoanResponseDto] })
+  async listStaffLoans(
+    @Req() request: AuthenticatedRequest,
+    @Query() query: QueryStaffLoanDto,
+  ): Promise<StaffLoanResponseDto[]> {
+    return this.hrService.listStaffLoans(this.tenantIdOf(request), query);
   }
 }

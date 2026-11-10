@@ -399,3 +399,129 @@ export interface SetStatutoryParameterDto {
   source: string;
   verified: boolean;
 }
+
+export enum LeaveType {
+  ANNUAL = "ANNUAL",
+  UNPAID = "UNPAID",
+  SICK = "SICK",
+  SPECIAL = "SPECIAL",
+}
+
+export enum LeaveStatus {
+  PENDING = "PENDING",
+  APPROVED = "APPROVED",
+  REJECTED = "REJECTED",
+}
+
+export enum LoanStatus {
+  ACTIVE = "ACTIVE",
+  PAID_OFF = "PAID_OFF",
+  CANCELLED = "CANCELLED",
+}
+
+export const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
+  [LeaveType.ANNUAL]: "استحقاقی",
+  [LeaveType.UNPAID]: "بدون حقوق",
+  [LeaveType.SICK]: "استعلاجی",
+  [LeaveType.SPECIAL]: "مناسبتی (ازدواج/فوت)",
+};
+
+export const LEAVE_STATUS_LABELS: Record<LeaveStatus, string> = {
+  [LeaveStatus.PENDING]: "در انتظار بررسی",
+  [LeaveStatus.APPROVED]: "تأییدشده",
+  [LeaveStatus.REJECTED]: "ردشده",
+};
+
+export const LOAN_STATUS_LABELS: Record<LoanStatus, string> = {
+  [LoanStatus.ACTIVE]: "جاری",
+  [LoanStatus.PAID_OFF]: "تسویه‌شده",
+  [LoanStatus.CANCELLED]: "لغوشده",
+};
+
+export interface EmployeeAttendance {
+  id: number;
+  employeeId: number;
+  employeeName?: string;
+  employeeNumber?: string;
+  periodYear: number;
+  periodMonth: number;
+  workDays: number;
+  overtimeHours: number;
+  nightHours: number;
+  holidayHours: number;
+  absenceDays: number;
+  unpaidLeaveDays: number;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RecordAttendancePayload {
+  employeeId: number;
+  periodYear: number;
+  periodMonth: number;
+  workDays?: number;
+  overtimeHours?: number;
+  nightHours?: number;
+  holidayHours?: number;
+  absenceDays?: number;
+  unpaidLeaveDays?: number;
+  notes?: string;
+}
+
+export interface EmployeeLeave {
+  id: number;
+  employeeId: number;
+  employeeName?: string;
+  employeeNumber?: string;
+  leaveType: LeaveType;
+  leaveTypeLabel: string;
+  startDate: string;
+  endDate: string;
+  days: number;
+  status: LeaveStatus;
+  statusLabel: string;
+  description?: string | null;
+  approvedBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateLeavePayload {
+  employeeId: number;
+  leaveType: LeaveType;
+  startDate: string;
+  endDate: string;
+  days: number;
+  description?: string;
+}
+
+export interface StaffLoan {
+  id: number;
+  employeeId: number;
+  employeeName?: string;
+  employeeNumber?: string;
+  loanNumber: string;
+  title: string;
+  principalAmount: number;
+  instalmentAmount: number;
+  totalInstalments: number;
+  paidInstalments: number;
+  remainingAmount: number;
+  status: LoanStatus;
+  statusLabel: string;
+  startDate?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateStaffLoanPayload {
+  employeeId: number;
+  loanNumber?: string;
+  title: string;
+  principalAmount: number;
+  instalmentAmount: number;
+  totalInstalments: number;
+  startDate?: string;
+}
+

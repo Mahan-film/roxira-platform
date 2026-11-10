@@ -111,6 +111,46 @@ class InMemoryPayrollRepository {
   contracts: EmploymentContractEntity[] = [];
   payslips: PayslipEntity[] = [];
   runs: PayrollRunEntity[] = [];
+  attendances: any[] = [];
+  loans: any[] = [];
+
+  async findAttendanceByPeriod(
+    tenantId: string,
+    periodYear: number,
+    periodMonth: number,
+  ): Promise<any[]> {
+    return this.attendances.filter(
+      (a) =>
+        a.tenantId === tenantId &&
+        a.periodYear === periodYear &&
+        a.periodMonth === periodMonth,
+    );
+  }
+
+  async findActiveLoans(
+    tenantId: string,
+    employeeIds?: number[],
+  ): Promise<any[]> {
+    return this.loans.filter(
+      (l) =>
+        l.tenantId === tenantId &&
+        l.status === 'ACTIVE' &&
+        (!employeeIds || employeeIds.includes(l.employeeId)),
+    );
+  }
+
+  async deductLoanInstalment(
+    tenantId: string,
+    loanId: number,
+    amount: number,
+  ): Promise<any> {
+    const loan = this.loans.find((l) => l.tenantId === tenantId && l.id === loanId);
+    if (!loan) return null;
+    loan.paidInstalments = (loan.paidInstalments ?? 0) + 1;
+    loan.remainingAmount = Math.max(0, (loan.remainingAmount ?? 0) - amount);
+    if (loan.remainingAmount <= 0) loan.status = 'PAID_OFF';
+    return loan;
+  }
   private seq = 0;
 
   nextId(): number {
