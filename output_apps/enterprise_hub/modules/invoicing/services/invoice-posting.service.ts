@@ -9,6 +9,10 @@ import { RoleAccounts } from '../../posting_rules/domain/posting-engine';
 import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
 import { StockDocumentsRepository } from '../../inventory/repositories/stock-documents.repository';
 import { STOCK_DOCUMENT_PREFIX, StockDocumentType } from '../../inventory/enums/stock-document.enum';
+import {
+  assertValidQuantityScale,
+  QUANTITY_SCALE,
+} from '../../inventory/constants/inventory.constants';
 import { InventoryService } from '../../inventory/services/inventory.service';
 import {
   CASH_BANK_ACCOUNT,
@@ -367,6 +371,7 @@ export class InvoicePostingService {
         if (!this.isLinkedLine(line)) {
           continue;
         }
+        assertValidQuantityScale(line.quantity, QUANTITY_SCALE, `تعداد سطر «${line.sku}»`);
         const warehouseId = invoice.warehouseId ?? null;
         const reference = `${subject === InvoiceSubject.RETURN ? 'برگشت ' : ''}فاکتور ${invoice.taxInvoiceNumber}`;
         if (out) {

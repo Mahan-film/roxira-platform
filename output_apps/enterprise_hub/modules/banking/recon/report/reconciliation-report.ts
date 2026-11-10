@@ -128,7 +128,7 @@ export function reportToCsv(report: ReconciliationStatement): string {
   const guard = (value: XlsxCell): string => {
     const text = value === null ? '' : String(value);
     const safe = /^[=+@\-\t\r]/.test(text) && !/^-?\d+(\.\d+)?$/.test(text) ? `'${text}` : text;
-    return /[",\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+    return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
   };
   return `﻿${rows(report).map((row) => row.map(guard).join(',')).join('\n')}\n`;
 }

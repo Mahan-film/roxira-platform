@@ -80,6 +80,24 @@ export const POLICY_REGISTRY: readonly PolicyDefinition[] = [
     labelFa: 'فروش دارایی پیش از آخرین سند استهلاک',
     descriptionFa: 'اگر «رد کردن» باشد، فروش دارایی با تاریخی پیش از آخرین سند استهلاک ثبت‌شده رد می‌شود.',
   },
+  {
+    key: 'moadian.inbox_age_alert.mode',
+    group: 'B',
+    type: 'enum',
+    allowed: ['refuse', 'warn', 'off'],
+    default: 'warn',
+    labelFa: 'کنترل مهلت رسیدگی صورتحساب‌های خرید کارپوشه مؤدیان',
+    descriptionFa: 'تعیین شیوهٔ برخورد با صورتحساب‌های خرید باز در کارپوشه مؤدیان که بیش از مهلت مقرر تعیین‌تکلیف نشده‌اند (تبصره ماده ۵ قانون پایانه‌های فروشگاهی؛ پیش‌فرض: هشدار / WARN).',
+  },
+  {
+    key: 'moadian.article_6_cap.mode',
+    group: 'B',
+    type: 'enum',
+    allowed: ['refuse', 'warn', 'off'],
+    default: 'warn',
+    labelFa: 'کنترل سقف مجاز صدور صورتحساب ماده ۶ سامانه مؤدیان',
+    descriptionFa: 'کنترل سقف مجاز صدور صورتحساب الکترونیکی هر دوره مالیاتی (ماده ۶ قانون پایانه‌های فروشگاهی و قانون تسهیل)؛ در صورت نزدیک‌شدن یا عبور از سقف، هشدار داده یا صدور مسدود می‌شود (پیش‌فرض: هشدار / WARN).',
+  },
 
   // ------------------------------------------------------ group C (management)
   {
@@ -119,6 +137,42 @@ export const POLICY_REGISTRY: readonly PolicyDefinition[] = [
     default: 'draft_unless_auto_reverse',
     labelFa: 'حالت ساخت سند دوره‌ای',
     descriptionFa: 'اگر «همیشه قطعی» باشد سند دوره‌ای همان‌لحظه قطعی می‌شود؛ وگرنه تا برگشت خودکار پیش‌نویس می‌ماند.',
+  },
+  {
+    key: 'moadian.inbox_age_alert.warn_days',
+    group: 'C',
+    type: 'int',
+    allowed: { min: 1, max: 29 },
+    default: 20,
+    labelFa: 'آستانهٔ روز هشدار اولیه عدم رسیدگی کارپوشه (روز)',
+    descriptionFa: 'تعداد روز پس از صدور/درج فاکتور خرید در کارپوشه که در صورت عدم تأیید یا رد، هشدار اولیه داده می‌شود (پیش‌فرض: ۲۰ روز).',
+  },
+  {
+    key: 'moadian.inbox_age_alert.critical_days',
+    group: 'C',
+    type: 'int',
+    allowed: { min: 1, max: 29 },
+    default: 27,
+    labelFa: 'آستانهٔ روز هشدار اضطراری پیش از تأیید خودکار کارپوشه (روز)',
+    descriptionFa: 'تعداد روز پس از صدور فاکتور در کارپوشه که هشدار اضطراری برای جلوگیری از تأیید خودکار روز ۳۰ام داده می‌شود (پیش‌فرض: ۲۷ روز).',
+  },
+  {
+    key: 'moadian.article_6_cap.warning_percent',
+    group: 'C',
+    type: 'int',
+    allowed: { min: 50, max: 95 },
+    default: 80,
+    labelFa: 'درصد آستانهٔ هشدار سقف فروش ماده ۶ (درصد)',
+    descriptionFa: 'درصد استفاده از سقف مجاز ماده ۶ برای صدور هشدار پیشگیرانه به واحد مالی (پیش‌فرض: ۸۰٪، پیش از اخطار ۸۵٪ سامانه امور مالیاتی).',
+  },
+  {
+    key: 'moadian.article_6_cap.custom_ceiling_rial',
+    group: 'C',
+    type: 'int',
+    allowed: { min: 0, max: 1_000_000_000_000_000 },
+    default: 0,
+    labelFa: 'سقف مجاز مصوب فروش ماده ۶ دوره جاری (ریال)',
+    descriptionFa: 'سقف مجاز مصوب ماده ۶ اعلام‌شده در کارپوشه مالیاتی بر حسب ریال (۰ = محاسبه خودکار بر مبنای ۵ برابر معافیت سالانه ماده ۱۰۱).',
   },
 ];
 
@@ -165,4 +219,54 @@ export function validatePolicyValue(key: string, value: unknown): PolicyValidati
     return { ok: false, error: `مقدار این قاعده باید بین ${range.min} و ${range.max} باشد.` };
   }
   return { ok: true };
+}
+
+/**
+ * Checks whether a given policy value represents a weakened internal control or deviation from safe default (#584-6).
+ */
+export function isPolicyWeakened(key: string, value: unknown): boolean {
+  const definition = BY_KEY.get(key);
+  if (!definition) return false;
+  if (value === definition.default) return false;
+
+  switch (key) {
+    case 'purchase.invoice_review.reviewer_rule':
+      return value === 'creator_may_accept' || value === 'differs_unless_sole_approver';
+    case 'fixed_asset.disposal_before_depreciation':
+      return value === 'allow';
+    case 'purchase.three_way.qty_excess_tolerance_bp':
+    case 'purchase.three_way.price_tolerance_bp':
+    case 'purchase.three_way.price_tolerance_abs':
+      return typeof value === 'number' && value > 0;
+    case 'accounting.recurring_voucher.creation_mode':
+      return value === 'always_post';
+    default:
+      return definition.group === 'B';
+  }
+}
+
+/**
+ * Returns a Persian warning message when a control is weakened or turned off (#584-6).
+ */
+export function getWeakeningWarning(key: string, value: unknown): string | null {
+  if (!isPolicyWeakened(key, value)) return null;
+
+  switch (key) {
+    case 'purchase.invoice_review.reviewer_rule':
+      return value === 'creator_may_accept'
+        ? 'هشدار کنترل داخلی: ایجادکنندهٔ صورتحساب خرید می‌تواند اختلافات را شخصاً تأیید کند (تفکیک وظایف غیرفعال شد).'
+        : 'هشدار کنترل داخلی: در صورت تک‌تأییدکننده بودن، تفکیک وظایف بررسی صورتحساب خرید نادیده گرفته می‌شود.';
+    case 'fixed_asset.disposal_before_depreciation':
+      return 'هشدار کنترل داخلی: ثبت فروش دارایی قبل از آخرین سند استهلاک مجاز شد؛ ممکن است ارزش دفتری نادقیق ثبت شود.';
+    case 'purchase.three_way.qty_excess_tolerance_bp':
+      return `هشدار کنترل داخلی: تلورانس اضافه‌دریافت (${value} صدم درصد) فعال شد؛ مقادیر بیش از رسید بدون مغایرت پذیرفته می‌شوند.`;
+    case 'purchase.three_way.price_tolerance_bp':
+      return `هشدار کنترل داخلی: تلورانس درصدی قیمت (${value} صدم درصد) فعال شد؛ تفاوت قیمت با سفارش خودکار پذیرفته می‌شود.`;
+    case 'purchase.three_way.price_tolerance_abs':
+      return `هشدار کنترل داخلی: تلورانس مبلغی قیمت (${value} صدم ریال) فعال شد؛ تفاوت قیمت با سفارش خودکار پذیرفته می‌شود.`;
+    case 'accounting.recurring_voucher.creation_mode':
+      return 'هشدار کنترل داخلی: اسناد دوره‌ای به‌صورت خودکار قطعی می‌شوند و بررسی دستی پیش از ثبت در دفاتر غیرفعال شد.';
+    default:
+      return 'هشدار کنترل داخلی: تنظیمات این قاعده از حالت امن پیش‌فرض خارج شده است.';
+  }
 }

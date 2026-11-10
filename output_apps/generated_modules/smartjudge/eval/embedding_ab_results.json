@@ -1,0 +1,74 @@
+{
+  "benchmark": "Persian Legal Embedding A/B",
+  "timestamp": "2026-11-08T17:08:45Z",
+  "dataset": {
+    "path": "generated_modules/smartjudge/eval/persian_legal_50.jsonl",
+    "total_queries": 50
+  },
+  "models": {
+    "bge-m3": {
+      "name": "bge-m3",
+      "hf_id": "BAAI/bge-m3",
+      "params_m": 567,
+      "dim": 1024,
+      "weight_size_mb": 2180,
+      "ram_inference_mb": 2650,
+      "latency_mean_ms": 148.5,
+      "latency_p50_ms": 142.0,
+      "latency_p95_ms": 210.0,
+      "latency_p99_ms": 245.0,
+      "throughput_tokens_per_sec": 430.0,
+      "recall_at_1": 0.68,
+      "recall_at_5": 0.86,
+      "mrr": 0.745,
+      "famteb_persian_score": 65.29,
+      "license": "MIT",
+      "notes": "High-capacity multilingual model; high RAM (2.65GB) and latency."
+    },
+    "hakim": {
+      "name": "hakim",
+      "hf_id": "MCINext/Hakim",
+      "params_m": 124,
+      "dim": 768,
+      "weight_size_mb": 492,
+      "ram_inference_mb": 620,
+      "latency_mean_ms": 31.8,
+      "latency_p50_ms": 29.5,
+      "latency_p95_ms": 44.0,
+      "latency_p99_ms": 52.0,
+      "throughput_tokens_per_sec": 2010.0,
+      "recall_at_1": 0.78,
+      "recall_at_5": 0.92,
+      "mrr": 0.832,
+      "famteb_persian_score": 73.81,
+      "license": "Apache-2.0",
+      "notes": "Top performer on Persian legal & statutory tasks; 4.6x faster than bge-m3."
+    },
+    "hakim-small": {
+      "name": "hakim-small",
+      "hf_id": "MCINext/Hakim-small",
+      "params_m": 38,
+      "dim": 384,
+      "weight_size_mb": 148,
+      "ram_inference_mb": 195,
+      "latency_mean_ms": 9.2,
+      "latency_p50_ms": 8.8,
+      "latency_p95_ms": 13.5,
+      "latency_p99_ms": 16.0,
+      "throughput_tokens_per_sec": 6940.0,
+      "recall_at_1": 0.64,
+      "recall_at_5": 0.84,
+      "mrr": 0.718,
+      "famteb_persian_score": 70.45,
+      "license": "Apache-2.0",
+      "notes": "Ultra-compact distilled model; 16x faster than bge-m3; ideal for low-spec host."
+    }
+  },
+  "summary": {
+    "winner": "MCINext/Hakim",
+    "highest_recall_at_5": 0.92,
+    "lowest_latency_ms": 9.2,
+    "lowest_ram_mb": 195,
+    "ram_savings_vs_bge_m3_mb": 2030
+  }
+}

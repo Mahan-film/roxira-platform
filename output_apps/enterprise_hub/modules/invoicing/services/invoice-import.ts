@@ -3,7 +3,7 @@ import { Currency } from '../../currency/enums/currency.enum';
 import { InvoiceDirection } from '../enums/invoice-kind.enum';
 
 export const INVOICE_IMPORT_VAT_RATE_SCALE = 4;
-export const INVOICE_IMPORT_QUANTITY_SCALE = 3;
+export const INVOICE_IMPORT_QUANTITY_SCALE = 2;
 
 const RATE_FACTOR = 10n ** BigInt(INVOICE_IMPORT_VAT_RATE_SCALE);
 const QUANTITY_FACTOR = 10n ** BigInt(INVOICE_IMPORT_QUANTITY_SCALE);
@@ -417,13 +417,13 @@ function checkFigures(
 ): string[] {
   const errors: string[] = [];
   const product = figures.quantityMicro * figures.unitPriceMinor;
-  if (product % 1000n !== 0n) {
+  if (product % QUANTITY_FACTOR !== 0n) {
     errors.push(
       `مبلغ سطر با حاصل‌ضرب تعداد در بهای واحد برابر نیست و محاسبهٔ دقیق بدون گردکردن ممکن نیست (تعداد ${formatQuantity(figures.quantityMicro)} × بهای واحد ${formatRials(figures.unitPriceMinor)} ریال، صورتحساب ${invoiceNumber}).`,
     );
     return errors;
   }
-  const computedAmount = product / 1000n;
+  const computedAmount = product / QUANTITY_FACTOR;
   if (computedAmount !== figures.amountMinor) {
     errors.push(
       `مبلغ سطر با تعداد × بهای واحد سازگار نیست: ${formatQuantity(figures.quantityMicro)} × ${formatRials(figures.unitPriceMinor)} = ${formatRials(computedAmount)} ریال، اما مبلغ «${formatRials(figures.amountMinor)}» ثبت شده است (صورتحساب ${invoiceNumber}).`,

@@ -25,12 +25,14 @@ export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
 export enum JournalEntryStatus {
   POSTED = "POSTED",
   DRAFT = "DRAFT",
+  TEMPORARY = "TEMPORARY",
   VOID = "VOID",
 }
 
 export const JOURNAL_ENTRY_STATUS_LABELS: Record<JournalEntryStatus, string> = {
   [JournalEntryStatus.POSTED]: "ثبت‌شده",
   [JournalEntryStatus.DRAFT]: "پیش‌نویس",
+  [JournalEntryStatus.TEMPORARY]: "موقت",
   [JournalEntryStatus.VOID]: "ابطال‌شده",
 };
 

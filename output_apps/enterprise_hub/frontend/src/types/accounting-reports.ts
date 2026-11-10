@@ -205,3 +205,36 @@ export interface PettyCashStatement {
   fund: PettyCashFund;
   transactions: PettyCashTransaction[];
 }
+
+export const UNASSIGNED_CENTRE_NAME = "بدون مرکز هزینه";
+
+export interface CostCentreSection {
+  /** Null for the lines that carry no cost centre. */
+  code: string | null;
+  name: string;
+  parentCode: string | null;
+  depth: number;
+  /** Per account, over this centre and every centre under it. */
+  rows: TrialBalanceRow[];
+  totals: TrialBalanceAmounts;
+}
+
+export interface CostCentreTrialBalanceReport {
+  period: ReportPeriod;
+  columns: TrialBalanceColumns;
+  groups: TrialBalanceGroup[];
+  costCenterCode: string | null;
+  centres: CostCentreSection[];
+  /** Each line counted once. */
+  totals: TrialBalanceAmounts;
+  /** Whole-ledger check without a filter; null for one centre's subtree. */
+  balanced: boolean | null;
+}
+
+export interface CostCentreTrialBalanceQuery extends ReportQuery {
+  columns?: TrialBalanceColumns;
+  level?: string;
+  includeClosing?: boolean;
+  costCenterCode?: string;
+}
+

@@ -76,6 +76,7 @@ describe('electronic journal and ledger CSV (LDG-01)', () => {
     expect(csv).toContain(`"'=HYPERLINK(""x"")"`);
     expect(csv).toContain(',-1.00\r\n');
     expect(toCsv(['a'], [['-5.00'], ['-abc']])).toBe('﻿a\r\n-5.00\r\n\'-abc\r\n');
+    expect(toCsv(['h'], [['+SUM(1,2)'], ['@VLOOKUP'], ['\tcmd'], ['\rcmd']])).toBe('﻿h\r\n"\'+SUM(1,2)"\r\n\'@VLOOKUP\r\n\'\tcmd\r\n"\'\rcmd"\r\n');
   });
 
   it('ledger passes the season end so opening entries dated inside the season count as opening', async () => {

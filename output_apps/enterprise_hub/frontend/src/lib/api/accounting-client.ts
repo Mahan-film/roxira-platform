@@ -5,6 +5,7 @@ import {
   CreateAccountDto,
   CreateJournalEntryDto,
   JournalEntryResponse,
+  JournalEntryStatus,
   PaginatedJournalEntryResponse,
   QueryAccountLedgerDto,
   QueryJournalEntryDto,
@@ -121,6 +122,39 @@ export async function getJournalEntry(
   return apiRequest<JournalEntryResponse>(
     `${ACCOUNTING_ENDPOINT}/journal-entries/${id}`,
     { method: "GET", signal },
+  );
+}
+
+/** تغییر وضعیت سند (پیش‌نویس، موقت، قطعی) — POST /enterprise-hub/accounting/journal-entries/:id/status */
+export async function changeJournalEntryStatus(
+  id: number,
+  status: JournalEntryStatus,
+  expectedVersion?: number,
+  signal?: AbortSignal,
+): Promise<JournalEntryResponse> {
+  return apiRequest<JournalEntryResponse>(
+    `${ACCOUNTING_ENDPOINT}/journal-entries/${id}/status`,
+    {
+      method: "POST",
+      body: { status, expectedVersion },
+      signal,
+    },
+  );
+}
+
+/** برگشت سند قطعی‌شده با ایجاد سند معکوس — POST /enterprise-hub/accounting/journal-entries/:id/reverse */
+export async function reverseJournalEntry(
+  id: number,
+  payload?: { date?: string; reason?: string },
+  signal?: AbortSignal,
+): Promise<JournalEntryResponse> {
+  return apiRequest<JournalEntryResponse>(
+    `${ACCOUNTING_ENDPOINT}/journal-entries/${id}/reverse`,
+    {
+      method: "POST",
+      body: payload ?? {},
+      signal,
+    },
   );
 }
 

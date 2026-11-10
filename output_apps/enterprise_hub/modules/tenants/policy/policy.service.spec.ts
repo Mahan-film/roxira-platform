@@ -12,6 +12,8 @@ interface PolicyRow {
   value: unknown;
   updatedBy: string;
   updatedAt: Date;
+  autoRevertAt: Date | null;
+  reason: string | null;
 }
 
 interface PurchaseRow {
@@ -32,18 +34,42 @@ function fakeManager(db: FakeDb): EntityManager {
   const query = jest.fn(async (sql: string, params: unknown[] = []) => {
     const s = sql.replace(/\s+/g, ' ').trim().toLowerCase();
     if (s.startsWith('insert into "tenant_policy_settings"')) {
-      const [tenantId, key, value, updatedBy] = params as string[];
-      db.policy.set(`${tenantId}:${key}`, { value: JSON.parse(value), updatedBy, updatedAt: new Date() });
+      const [tenantId, key, value, updatedBy, autoRevertAt, reason] = params as [string, string, string, string, Date | null, string | null];
+      db.policy.set(`${tenantId}:${key}`, {
+        value: JSON.parse(value),
+        updatedBy,
+        updatedAt: new Date(),
+        autoRevertAt: autoRevertAt ?? null,
+        reason: reason ?? null,
+      });
       db.writes += 1;
       return [];
     }
-    if (s.startsWith('insert into "erp_purchase_settings"')) {
-      const [tenantId, o, b, a] = params as [string, number, number, string];
-      db.purchase.set(tenantId, { o: Number(o), b: Number(b), a: String(a), updatedAt: new Date() });
-      db.writes += 1;
+    if (s.includes('from "tenant_policy_settings"') && s.includes('"auto_revert_at" is not null')) {
+      const [tenantId] = params as string[];
+      const now = Date.now();
+      return [...db.policy.entries()]
+        .filter(([k, row]) => k.startsWith(`${tenantId}:`) && row.autoRevertAt && row.autoRevertAt.getTime() <= now)
+        .map(([k, row]) => ({
+          key: k.slice(tenantId.length + 1),
+          value: row.value,
+          updated_by: row.updatedBy,
+          auto_revert_at: row.autoRevertAt,
+          reason: row.reason,
+        }));
+    }
+    if (s.startsWith('update "tenant_policy_settings"') && s.includes('"auto_revert_at"')) {
+      const [tenantId, key, value, reason] = params as [string, string, string, string];
+      const existing = db.policy.get(`${tenantId}:${key}`);
+      if (existing) {
+        existing.value = JSON.parse(value);
+        existing.autoRevertAt = null;
+        existing.reason = reason;
+        existing.updatedAt = new Date();
+      }
       return [];
     }
-    if (s.startsWith('select "key", "value", "updated_by", "updated_at" from "tenant_policy_settings"')) {
+    if (s.startsWith('select "key", "value", "updated_by", "updated_at"') && s.includes('from "tenant_policy_settings"')) {
       const [tenantId] = params as string[];
       return [...db.policy.entries()]
         .filter(([k]) => k.startsWith(`${tenantId}:`))
@@ -52,7 +78,15 @@ function fakeManager(db: FakeDb): EntityManager {
           value: row.value,
           updated_by: row.updatedBy,
           updated_at: row.updatedAt,
+          auto_revert_at: row.autoRevertAt,
+          reason: row.reason,
         }));
+    }
+    if (s.startsWith('insert into "erp_purchase_settings"')) {
+      const [tenantId, o, b, a] = params as [string, number, number, string];
+      db.purchase.set(tenantId, { o: Number(o), b: Number(b), a: String(a), updatedAt: new Date() });
+      db.writes += 1;
+      return [];
     }
     if (s.startsWith('select "value" as v from "tenant_policy_settings"')) {
       const [tenantId, key] = params as string[];
@@ -164,5 +198,99 @@ describe('PolicyService (#585)', () => {
     expect(await service.get(T2, 'purchase.invoice_review.reviewer_rule')).toBe('always_differs');
     await expect(service.get(T2, 'nope.key')).rejects.toBeInstanceOf(NotFoundException);
     await expect(service.set(T2, owner, 'nope.key', true, 'x'.repeat(5))).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  describe('Control-off warnings, auto-revert date and exceptions report (#584-6)', () => {
+    it('returns isWeakened and Persian warning when a control is weakened', async () => {
+      const db = new FakeDb();
+      const { service, audit } = makeService(db);
+      const key = 'purchase.invoice_review.reviewer_rule';
+
+      const view = await service.set(T1, owner, key, 'creator_may_accept', 'تغییر موقت به علت مرخصی مدیر مالی');
+      expect(view.isWeakened).toBe(true);
+      expect(view.warning).toContain('تفکیک وظایف غیرفعال شد');
+
+      const entry = audit.record.mock.calls[0][0] as { metadata: Record<string, unknown> };
+      expect(entry.metadata.isWeakened).toBe(true);
+      expect(entry.metadata.warning).toContain('تفکیک وظایف');
+    });
+
+    it('rejects an auto-revert date in the past with 400', async () => {
+      const { service } = makeService(new FakeDb());
+      const past = new Date(Date.now() - 3600_000).toISOString();
+
+      await expect(
+        service.set(T1, owner, 'purchase.three_way.qty_excess_tolerance_bp', 50, 'x'.repeat(5), past),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('accepts a valid future auto-revert date, persists it, and exposes it in the view', async () => {
+      const db = new FakeDb();
+      const { service } = makeService(db);
+      const future = new Date(Date.now() + 86400_000 * 7).toISOString();
+
+      const view = await service.set(
+        T1,
+        owner,
+        'purchase.three_way.qty_excess_tolerance_bp',
+        50,
+        'مجوز اضافه بار یک هفته‌ای',
+        future,
+      );
+
+      expect(view.autoRevertAt).toEqual(new Date(future));
+      expect(view.reason).toBe('مجوز اضافه بار یک هفته‌ای');
+      expect(db.policy.get(`${T1}:purchase.three_way.qty_excess_tolerance_bp`)?.autoRevertAt).toEqual(new Date(future));
+    });
+
+    it('automatically reverts an expired control to default on read and audits policy.auto_reverted', async () => {
+      const db = new FakeDb();
+      const { service, audit } = makeService(db);
+      const key = 'purchase.invoice_review.reviewer_rule';
+
+      // Seed an already expired setting directly
+      db.policy.set(`${T1}:${key}`, {
+        value: 'creator_may_accept',
+        updatedBy: 'u1',
+        updatedAt: new Date(Date.now() - 86400_000),
+        autoRevertAt: new Date(Date.now() - 3600_000), // expired 1h ago
+        reason: 'مجوز موقت منقضی',
+      });
+
+      // Reading the key automatically reverts it to registry default ('always_differs')
+      const value = await service.get(T1, key);
+      expect(value).toBe('always_differs');
+
+      // Verify the audit event
+      expect(audit.record).toHaveBeenCalledTimes(1);
+      const call = audit.record.mock.calls[0][0] as { action: string; resourceId: string; metadata: Record<string, unknown> };
+      expect(call.action).toBe('policy.auto_reverted');
+      expect(call.resourceId).toBe(key);
+      expect(call.metadata.revertedTo).toBe('always_differs');
+    });
+
+    it('getExceptions returns only active non-default / weakened policies', async () => {
+      const db = new FakeDb();
+      const { service } = makeService(db);
+
+      // Set one weakened policy with auto-revert
+      const future = new Date(Date.now() + 86400_000).toISOString();
+      await service.set(
+        T1,
+        owner,
+        'purchase.invoice_review.reviewer_rule',
+        'creator_may_accept',
+        'مجوز موقت تا فردا',
+        future,
+      );
+
+      const exceptions = await service.getExceptions(T1);
+      expect(exceptions).toHaveLength(1);
+      expect(exceptions[0].key).toBe('purchase.invoice_review.reviewer_rule');
+      expect(exceptions[0].value).toBe('creator_may_accept');
+      expect(exceptions[0].isWeakened).toBe(true);
+      expect(exceptions[0].warning).toContain('تفکیک وظایف');
+      expect(exceptions[0].autoRevertAt).toEqual(new Date(future));
+    });
   });
 });

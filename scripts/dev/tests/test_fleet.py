@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -12,6 +13,11 @@ fleet = importlib.util.module_from_spec(spec)
 sys.modules["fleet"] = fleet
 spec.loader.exec_module(fleet)
 CFG = fleet.load_config()
+
+# A fake clock inside the off-peak window (16:00-00:00 UTC) so build jobs are never deferred.
+INSIDE = datetime(2026, 11, 5, 16, 30, tzinfo=timezone.utc).timestamp()
+NOON = datetime(2026, 11, 5, 12, 0, tzinfo=timezone.utc).timestamp()
+WINDOW_OPEN = datetime(2026, 11, 5, 16, 0, tzinfo=timezone.utc).timestamp()
 
 
 def test_extract_areas_from_paths_and_override():
@@ -101,7 +107,7 @@ def test_tick_caps_writers_and_locks_areas(tmp_path, monkeypatch):
     with store.txn() as d:
         d["jobs"] = {str(n): make_job(n, a) for n, a in [(1, ["scripts/dev"]), (2, ["scripts"]), (3, ["docs"]), (4, ["config"]), (5, ["src/x"])]}
     f = fleet.Fleet(CFG, store)
-    f.tick(3)
+    f.tick(3, now=INSIDE)
     jobs = store.read()["jobs"]
     assert [j["status"] for j in jobs.values()].count("building") == 3  # cap
     assert jobs["2"]["status"] == "queued" and "lock" in jobs["2"]["note"]  # overlaps #1
@@ -113,17 +119,17 @@ def test_rate_limited_job_waits_then_resumes(tmp_path, monkeypatch):
     with store.txn() as d:
         d["jobs"] = {"7": make_job(7, ["docs"], status="building", lane="opencode", pid=None)}
     f = fleet.Fleet(CFG, store)
-    f.rate_limited(7, "opencode")
+    f.rate_limited(7, "opencode", now=INSIDE)
     d = store.read()
     j = d["jobs"]["7"]
-    assert j["status"] == "queued" and j["resume_at"] > time.time() + 800 and d["cooldown"]["opencode"] > time.time()
+    assert j["status"] == "queued" and j["resume_at"] > INSIDE + 800 and d["cooldown"]["opencode"] > INSIDE
     monkeypatch.setattr(fleet.subprocess, "Popen", lambda cmd, **kw: FakeProc())
-    f.tick(3)
+    f.tick(3, now=INSIDE)
     assert store.read()["jobs"]["7"]["status"] == "queued"  # still waiting
     with store.txn() as d:
-        d["jobs"]["7"]["resume_at"] = time.time() - 1
+        d["jobs"]["7"]["resume_at"] = INSIDE - 1
         d["cooldown"] = {}
-    f.tick(3)
+    f.tick(3, now=INSIDE)
     assert store.read()["jobs"]["7"]["status"] == "building"
 
 
@@ -136,6 +142,66 @@ def test_dead_step_is_recovered(tmp_path, monkeypatch):
     monkeypatch.setattr(fleet.subprocess, "Popen", lambda cmd, **kw: started.append(cmd[-1]) or FakeProc())
     fleet.Fleet(CFG, store).tick(3)
     assert started == ["review"]
+
+
+def test_offpeak_defers_batch_job_then_starts_it_when_window_opens(tmp_path, monkeypatch):
+    store = fleet.Store(tmp_path)
+    started = []
+    monkeypatch.setattr(fleet.subprocess, "Popen", lambda cmd, **kw: started.append(cmd[-2:]) or FakeProc())
+    monkeypatch.setattr(fleet, "alive", lambda pid: True)
+    with store.txn() as d:
+        d["jobs"] = {"1": make_job(1, ["docs"], task="fleet")}
+    f = fleet.Fleet(CFG, store)
+    f.tick(3, now=NOON)
+    j = store.read()["jobs"]["1"]
+    assert j["status"] == "queued" and "off-peak" in j["note"]
+    assert j["resume_at"] == WINDOW_OPEN
+    f.tick(3, now=WINDOW_OPEN)
+    assert store.read()["jobs"]["1"]["status"] == "building"
+
+
+def test_interactive_task_is_never_deferred(tmp_path, monkeypatch):
+    store = fleet.Store(tmp_path)
+    monkeypatch.setattr(fleet.subprocess, "Popen", lambda cmd, **kw: FakeProc())
+    monkeypatch.setattr(fleet, "alive", lambda pid: True)
+    with store.txn() as d:
+        d["jobs"] = {"2": make_job(2, ["docs"], task="review_desk")}
+    fleet.Fleet(CFG, store).tick(3, now=NOON)
+    assert store.read()["jobs"]["2"]["status"] == "building"
+
+
+def test_identical_prompt_reuses_cache_and_makes_zero_calls(tmp_path, monkeypatch):
+    store = fleet.Store(tmp_path / "state")
+    cache = tmp_path / "cache.json"
+    cfg = {**CFG, "routing": {**CFG["routing"], "cache": True, "cache_path": str(cache)}}
+    f = fleet.Fleet(cfg, store)
+
+    def boom(*a, **k):
+        raise AssertionError("llm_route.route must not be called on a cache hit")
+
+    monkeypatch.setattr(fleet.llm_route, "route", boom)
+    prompt = "review this diff"
+    fleet.routing_policy.cache_put(fleet.routing_policy.cache_key(prompt), '{"verdict":"pass","issues":[]}', cache)
+    text, who = f.routed_review("review_desk", prompt)
+    assert who == "cache" and "pass" in text
+
+
+def test_routed_review_caches_the_router_answer(tmp_path, monkeypatch):
+    store = fleet.Store(tmp_path / "state")
+    cache = tmp_path / "cache.json"
+    cfg = {**CFG, "routing": {**CFG["routing"], "cache": True, "cache_path": str(cache)}}
+    f = fleet.Fleet(cfg, store)
+    calls = []
+
+    class Res:
+        text = '{"verdict":"fail","issues":["x"]}'
+        served = "openrouter/test"
+
+    monkeypatch.setattr(fleet.llm_route, "route", lambda *a, **k: calls.append(a) or Res())
+    text, who = f.routed_review("review_desk", "prompt")
+    assert who == "openrouter/test" and text and calls
+    text2, who2 = f.routed_review("review_desk", "prompt")
+    assert who2 == "cache" and text2 == Res.text and len(calls) == 1
 
 
 def test_parse_verdict_prefers_last_object_and_fails_closed():
@@ -196,6 +262,7 @@ def _cfg(models):
     cfg = dict(CFG)
     cfg["lanes"] = {"opencode": {"models": models, "timeout_secs": 5}}
     cfg["paid"] = {"daily_cap_usd": 2.0, "est_cost_per_call_usd": 0.15}
+    cfg["routing"] = {}
     return cfg
 
 
