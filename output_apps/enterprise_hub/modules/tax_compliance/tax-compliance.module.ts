@@ -31,6 +31,10 @@ import { SeasonalReportRepository } from './reports/seasonal-report.repository';
 import { SeasonalReportService } from './reports/seasonal-report.service';
 import { VatReturnRepository } from './reports/vat-return.repository';
 import { VatReturnService } from './reports/vat-return.service';
+import { TaxInspectorRepository } from './reports/tax-inspector.repository';
+import { TaxInspectorService } from './reports/tax-inspector.service';
+import { QuarterlyTaxComparisonService } from './reports/quarterly-tax-comparison.service';
+import { YearEndTaxRolloverService } from './reports/year-end-tax-rollover.service';
 import { MoadianRepository } from './repositories/moadian.repository';
 import { TaxComplianceRepository } from './repositories/tax-compliance.repository';
 import { MoadianApiClient } from './services/moadian-api.client';
@@ -84,10 +88,21 @@ import { TenantPolicyModule } from '../tenants/policy/policy.module';
     LedgerExportService,
     VatReturnRepository,
     VatReturnService,
+    TaxInspectorRepository,
+    TaxInspectorService,
+    QuarterlyTaxComparisonService,
+    YearEndTaxRolloverService,
     TenantScope,
     SeasonalReportRepository,
     MoadianCompliancePolicyService,
   ],
-  exports: [TaxComplianceService, VatReturnService, MoadianCompliancePolicyService],
+  exports: [
+    TaxComplianceService,
+    VatReturnService,
+    MoadianCompliancePolicyService,
+    TaxInspectorService,
+    QuarterlyTaxComparisonService,
+    YearEndTaxRolloverService,
+  ],
 })
 export class TaxComplianceModule {}

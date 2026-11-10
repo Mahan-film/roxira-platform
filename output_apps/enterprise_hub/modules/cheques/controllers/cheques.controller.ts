@@ -34,6 +34,11 @@ import {
   TransitionChequeDto,
   VerifySayadDto,
 } from '../dto/cheque.dto';
+import {
+  ChequeMaturityReportView,
+  QueryChequeMaturityDto,
+} from '../dto/cheque-maturity-report.dto';
+import { ChequeMaturityReportService } from '../services/cheque-maturity-report.service';
 import { ChequeReconService } from '../services/cheque-recon.service';
 import { ChequesService } from '../services/cheques.service';
 
@@ -48,6 +53,7 @@ export class ChequesController {
   constructor(
     private readonly chequesService: ChequesService,
     private readonly reconService: ChequeReconService,
+    private readonly maturityService: ChequeMaturityReportService,
   ) {}
 
   private tenantIdOf(request: AuthenticatedRequest): string {
@@ -78,6 +84,16 @@ export class ChequesController {
   @ApiResponse({ status: HttpStatus.OK, type: BouncedChequesResponseDto })
   bounced(@Req() request: AuthenticatedRequest, @Query() query: QueryBouncedChequesDto): Promise<BouncedChequesResponseDto> {
     return this.chequesService.bouncedReport(this.tenantIdOf(request), query);
+  }
+
+  @Get('maturity-report')
+  @ApiOperation({ summary: 'گزارش تحلیلی سررسید چک‌ها به تفکیک بازه‌های زمانی، بانک، طرف‌حساب و وضعیت صیاد' })
+  @ApiResponse({ status: HttpStatus.OK })
+  maturityReport(
+    @Req() request: AuthenticatedRequest,
+    @Query() query: QueryChequeMaturityDto,
+  ): Promise<ChequeMaturityReportView> {
+    return this.maturityService.generateReport(this.tenantIdOf(request), query);
   }
 
   // Reads bank statement and book lines: needs the banking module's permission, not only cheques.

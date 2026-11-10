@@ -865,6 +865,17 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/cheques/maturity-report (ChequesController.maturityReport)": {
+    "policy": "cheques:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": true,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/cheques/reconciliation (ChequesController.reconciliation)": {
     "policy": "banking:read",
     "owner": true,
@@ -1914,6 +1925,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "GET /enterprise-hub/tax-compliance/reports/quarterly-tax-comparison (SeasonalReportController.quarterlyComparison)": {
+    "policy": "tax:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/tax-compliance/reports/seasonal-purchases.csv (SeasonalReportController.purchasesCsv)": {
     "policy": "tax:export",
     "owner": true,
@@ -1945,6 +1967,17 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/tax-compliance/reports/tax-inspector-package (SeasonalReportController.taxInspectorPackage)": {
+    "policy": "tax:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/reports/vat-return (SeasonalReportController.vatReturn)": {
@@ -1989,6 +2022,17 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/tax-compliance/reports/year-end-tax-rollover (SeasonalReportController.yearEndRollover)": {
+    "policy": "tax:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/signatures (TaxComplianceController.findAll)": {

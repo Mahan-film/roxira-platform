@@ -10,6 +10,7 @@ import { ChequeEntity } from './entities/cheque.entity';
 import { ChequesRepository } from './repositories/cheques.repository';
 import { ChequeReconService } from './services/cheque-recon.service';
 import { ChequesService } from './services/cheques.service';
+import { ChequeMaturityReportService } from './services/cheque-maturity-report.service';
 
 /**
  * Received and issued cheques with lifecycle and ledger postings.
@@ -21,7 +22,7 @@ import { ChequesService } from './services/cheques.service';
 @Module({
   imports: [TypeOrmModule.forFeature([ChequeEntity, ChequeEventEntity]), AccountingModule, BankingModule, PostingRulesModule],
   controllers: [ChequesController],
-  providers: [ChequesService, ChequeReconService, ChequesRepository, TenantScope],
-  exports: [ChequesService],
+  providers: [ChequesService, ChequeReconService, ChequesRepository, ChequeMaturityReportService, TenantScope],
+  exports: [ChequesService, ChequeMaturityReportService],
 })
 export class ChequesModule {}

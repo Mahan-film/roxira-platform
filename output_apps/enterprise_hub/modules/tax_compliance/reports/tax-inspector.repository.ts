@@ -1,0 +1,291 @@
+import { Injectable } from '@nestjs/common';
+import { DataSource } from 'typeorm';
+import { TenantScope } from '../../access/services/tenant-scope';
+import { fromDb } from '../../accounting/money';
+import { tehranDay } from './jalali-format.util';
+
+export interface RawInvoiceSalesSummary {
+  invoicedCount: number;
+  totalAmountMinor: bigint;
+  taxableAmountMinor: bigint;
+  exemptAmountMinor: bigint;
+  vatMinor: bigint;
+}
+
+export interface RawPurchasesSummary {
+  purchaseCount: number;
+  deductiblePurchasesMinor: bigint;
+  inputVatMinor: bigint;
+}
+
+export interface RawLedgerSummary {
+  revenueMinor: bigint;
+  expenseMinor: bigint;
+  totalVouchers: number;
+  postedVouchers: number;
+  draftVouchers: number;
+  isBalanced: boolean;
+  hasNumberingGaps: boolean;
+  hasClosingVoucher: boolean;
+  closingVoucherNumber: string | null;
+}
+
+export interface RawMoadianSummary {
+  transmittedCount: number;
+  totalAmountMinor: bigint;
+}
+
+@Injectable()
+export class TaxInspectorRepository {
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly scope: TenantScope,
+  ) {}
+
+  async getSalesSummary(
+    tenantId: string,
+    fromDate: Date,
+    toDate: Date,
+  ): Promise<RawInvoiceSalesSummary> {
+    return this.scope.run(tenantId, async (manager) => {
+      const rows = await manager.query(
+        `SELECT
+           COUNT(*)::int AS "count",
+           COALESCE(SUM("finalPayable"), 0) AS "totalPayable",
+           COALESCE(SUM("totalTax"), 0) AS "totalTax",
+           COALESCE(SUM("totalAmount"), 0) AS "totalAmount"
+         FROM "invoices"
+         WHERE "tenant_id" = $1
+           AND "status" IN ('ISSUED', 'PAID')
+           AND "direction" = 'SALE'
+           AND "subject" = 1
+           AND "jurisdiction" = 'IR'
+           AND COALESCE("issued_at", "createdAt") >= $2
+           AND COALESCE("issued_at", "createdAt") < $3`,
+        [tenantId, fromDate, toDate],
+      );
+
+      const r = rows[0] || {};
+      const totalPayableMinor = fromDb(r.totalPayable);
+      const vatMinor = fromDb(r.totalTax);
+      const netAmountMinor = fromDb(r.totalAmount);
+      const totalAmountMinor = netAmountMinor > 0n ? netAmountMinor : (totalPayableMinor - vatMinor);
+      const taxableMinor = vatMinor > 0n ? totalAmountMinor : 0n;
+      const exemptMinor = totalAmountMinor - taxableMinor;
+
+      return {
+        invoicedCount: Number(r.count || 0),
+        totalAmountMinor,
+        taxableAmountMinor: taxableMinor,
+        exemptAmountMinor: exemptMinor,
+        vatMinor,
+      };
+    });
+  }
+
+  async getPurchasesSummary(
+    tenantId: string,
+    fromDate: Date,
+    toDate: Date,
+  ): Promise<RawPurchasesSummary> {
+    return this.scope.run(tenantId, async (manager) => {
+      // 1. Purchase invoices
+      const invRows = await manager.query(
+        `SELECT
+           COUNT(*)::int AS "count",
+           COALESCE(SUM("finalPayable"), 0) AS "totalPayable",
+           COALESCE(SUM("totalTax"), 0) AS "totalTax",
+           COALESCE(SUM("totalAmount"), 0) AS "totalAmount"
+         FROM "invoices"
+         WHERE "tenant_id" = $1
+           AND "status" IN ('ISSUED', 'PAID')
+           AND "direction" = 'PURCHASE'
+           AND "subject" = 1
+           AND "jurisdiction" = 'IR'
+           AND COALESCE("issued_at", "createdAt") >= $2
+           AND COALESCE("issued_at", "createdAt") < $3`,
+        [tenantId, fromDate, toDate],
+      );
+
+      // 2. Capture documents
+      const fromDay = tehranDay(fromDate);
+      const toDay = tehranDay(toDate);
+      const capRows = await manager.query(
+        `SELECT
+           COUNT(*)::int AS "count",
+           COALESCE(SUM(CAST(COALESCE("edited"->>'total', "extracted"->'draft'->>'total', '0') AS numeric)), 0) AS "totalAmount",
+           COALESCE(SUM(CAST(COALESCE("edited"->>'tax', "extracted"->'draft'->>'tax', '0') AS numeric)), 0) AS "totalTax"
+         FROM "capture_documents"
+         WHERE "tenant_id" = $1
+           AND "status" IN ('posted', 'auto_posted')
+           AND COALESCE("edited"->>'kind', "extracted"->'draft'->>'kind') = 'purchase'
+           AND COALESCE("edited"->>'date', "extracted"->'draft'->>'date') >= $2
+           AND COALESCE("edited"->>'date', "extracted"->'draft'->>'date') < $3`,
+        [tenantId, fromDay, toDay],
+      );
+
+      const rInv = invRows[0] || {};
+      const rCap = capRows[0] || {};
+
+      const invAmountMinor =
+        rInv.totalAmount !== null && rInv.totalAmount !== undefined
+          ? fromDb(rInv.totalAmount)
+          : fromDb(rInv.totalPayable) - fromDb(rInv.totalTax);
+      const invTaxMinor = fromDb(rInv.totalTax);
+
+      const capAmountMinor = fromDb(rCap.totalAmount);
+      const capTaxMinor = fromDb(rCap.totalTax);
+
+      return {
+        purchaseCount: Number(rInv.count || 0) + Number(rCap.count || 0),
+        deductiblePurchasesMinor: invAmountMinor + capAmountMinor,
+        inputVatMinor: invTaxMinor + capTaxMinor,
+      };
+    });
+  }
+
+  async getMoadianSummary(
+    tenantId: string,
+    fromDate: Date,
+    toDate: Date,
+  ): Promise<RawMoadianSummary> {
+    return this.scope.run(tenantId, async (manager) => {
+      const rows = await manager.query(
+        `SELECT
+           COUNT(*)::int AS "count",
+           COALESCE(SUM(i."totalAmount"), 0) AS "totalAmount"
+         FROM "moadian_submissions" m
+         JOIN "invoices" i ON i."id" = m."invoice_id" AND i."tenant_id" = m."tenant_id"
+         WHERE m."tenant_id" = $1
+           AND m."status" = 'SUCCESS'
+           AND COALESCE(i."issued_at", i."createdAt") >= $2
+           AND COALESCE(i."issued_at", i."createdAt") < $3`,
+        [tenantId, fromDate, toDate],
+      );
+
+      const r = rows[0] || {};
+      return {
+        transmittedCount: Number(r.count || 0),
+        totalAmountMinor: fromDb(r.totalAmount),
+      };
+    });
+  }
+
+  async getLedgerSummary(
+    tenantId: string,
+    fromDate: Date,
+    toDate: Date,
+  ): Promise<RawLedgerSummary> {
+    return this.scope.run(tenantId, async (manager) => {
+      const fromStr = tehranDay(fromDate);
+      const toStr = tehranDay(toDate);
+
+      // Revenue and Expense accounts turnover (excluding closing/opening entries)
+      const turnoverRows = await manager.query(
+        `SELECT
+           a."account_type",
+           COALESCE(SUM(l."credit" - l."debit"), 0) AS "netCredit",
+           COALESCE(SUM(l."debit" - l."credit"), 0) AS "netDebit"
+         FROM "fin_journal_entry_lines" l
+         JOIN "fin_journal_entries" e ON e."id" = l."journal_entry_id" AND e."tenant_id" = l."tenant_id"
+         JOIN "fin_chart_of_accounts" a ON a."id" = l."account_id" AND a."tenant_id" = l."tenant_id"
+         WHERE l."tenant_id" = $1
+           AND e."status" = 'POSTED'
+           AND (e."entry_type" IS NULL OR e."entry_type" NOT IN ('CLOSING_TEMP', 'CLOSING_PERM', 'OPENING', 'OPENING_AUTO'))
+           AND e."date" >= $2
+           AND e."date" < $3
+         GROUP BY a."account_type"`,
+        [tenantId, fromStr, toStr],
+      );
+
+      let revenueMinor = 0n;
+      let expenseMinor = 0n;
+      for (const row of turnoverRows) {
+        if (row.account_type === 'REVENUE') {
+          revenueMinor = fromDb(row.netCredit);
+        } else if (row.account_type === 'EXPENSE') {
+          expenseMinor = fromDb(row.netDebit);
+        }
+      }
+
+      // Vouchers status counts
+      const countsRows = await manager.query(
+        `SELECT
+           COUNT(*)::int AS "total",
+           COUNT(CASE WHEN "status" = 'POSTED' THEN 1 END)::int AS "posted",
+           COUNT(CASE WHEN "status" = 'DRAFT' OR "status" = 'TEMPORARY' THEN 1 END)::int AS "draft"
+         FROM "fin_journal_entries"
+         WHERE "tenant_id" = $1
+           AND "date" >= $2
+           AND "date" < $3`,
+        [tenantId, fromStr, toStr],
+      );
+      const c = countsRows[0] || {};
+
+      // Check balance of all journal lines in the period
+      const balanceRows = await manager.query(
+        `SELECT
+           COALESCE(SUM(l."debit"), 0) AS "totalDebit",
+           COALESCE(SUM(l."credit"), 0) AS "totalCredit"
+         FROM "fin_journal_entry_lines" l
+         JOIN "fin_journal_entries" e ON e."id" = l."journal_entry_id" AND e."tenant_id" = l."tenant_id"
+         WHERE l."tenant_id" = $1
+           AND e."status" = 'POSTED'
+           AND e."date" >= $2
+           AND e."date" < $3`,
+        [tenantId, fromStr, toStr],
+      );
+      const b = balanceRows[0] || {};
+      const isBalanced = fromDb(b.totalDebit) === fromDb(b.totalCredit);
+
+      // Closing voucher check
+      const closingRows = await manager.query(
+        `SELECT "entry_number"
+         FROM "fin_journal_entries"
+         WHERE "tenant_id" = $1
+           AND "date" >= $2
+           AND "date" < $3
+           AND ("entry_number" LIKE 'FC-%' OR "description" LIKE '%اختتامیه%')
+         LIMIT 1`,
+        [tenantId, fromStr, toStr],
+      );
+      const hasClosing = closingRows.length > 0;
+      const closingVoucherNumber = hasClosing ? closingRows[0].entry_number : null;
+
+      // Check for numbering gaps on permanent numbers
+      const permNumberRows = await manager.query(
+        `SELECT "permanent_number"
+         FROM "fin_journal_entries"
+         WHERE "tenant_id" = $1
+           AND "date" >= $2
+           AND "date" < $3
+           AND "status" = 'POSTED'
+           AND "permanent_number" IS NOT NULL
+         ORDER BY "permanent_number" ASC`,
+        [tenantId, fromStr, toStr],
+      );
+
+      let hasNumberingGaps = false;
+      for (let i = 1; i < permNumberRows.length; i++) {
+        const prev = BigInt(permNumberRows[i - 1].permanent_number);
+        const curr = BigInt(permNumberRows[i].permanent_number);
+        if (curr - prev > 1n) {
+          hasNumberingGaps = true;
+          break;
+        }
+      }
+
+      return {
+        revenueMinor,
+        expenseMinor,
+        totalVouchers: Number(c.total || 0),
+        postedVouchers: Number(c.posted || 0),
+        draftVouchers: Number(c.draft || 0),
+        isBalanced,
+        hasNumberingGaps,
+        hasClosingVoucher: hasClosing,
+        closingVoucherNumber,
+      };
+    });
+  }
+}
