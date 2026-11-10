@@ -18,9 +18,9 @@ import 'reflect-metadata';
 import * as path from 'path';
 import { DataSource } from 'typeorm';
 import {
-  EnableRlsPreTenantTables1789900001600,
+  EnableRlsPreTenantTables1789900001900,
   PRE_TENANT_RLS_TABLES,
-} from '../../../migrations/1789900001600-EnableRlsPreTenantTables';
+} from '../../../migrations/1789900001900-EnableRlsPreTenantTables';
 import { AuthRepository } from '../../auth/repositories/auth.repository';
 import { RefreshTokenRepository } from '../../auth/repositories/refresh-token.repository';
 import { UserEntity } from '../../auth/entities/user.entity';
@@ -267,7 +267,7 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
   });
 
   it('reversibility: migration down() and up() work cleanly', async () => {
-    const migration = new EnableRlsPreTenantTables1789900001600();
+    const migration = new EnableRlsPreTenantTables1789900001900();
     const qr = owner.createQueryRunner();
 
     try {

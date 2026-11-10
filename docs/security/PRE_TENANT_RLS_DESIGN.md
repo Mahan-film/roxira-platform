@@ -328,7 +328,7 @@ USING (
 
 ## 6. Migration Rollout & Reversibility
 
-1. **Migration Script**: `output_apps/enterprise_hub/migrations/1789900001600-EnableRlsPreTenantTables.ts`
+1. **Migration Script**: `output_apps/enterprise_hub/migrations/1789900001900-EnableRlsPreTenantTables.ts`
 2. **`up()`**:
    - Creates all 6 `SECURITY DEFINER` lookup functions.
    - Grants execute permissions to `roxira_app` and `PUBLIC`.

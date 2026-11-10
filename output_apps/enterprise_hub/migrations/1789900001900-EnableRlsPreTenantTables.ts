@@ -28,8 +28,8 @@ export const PRE_TENANT_RLS_TABLES = [
   'enterprise_inquiries',
 ] as const;
 
-export class EnableRlsPreTenantTables1789900001600 implements MigrationInterface {
-  name = 'EnableRlsPreTenantTables1789900001600';
+export class EnableRlsPreTenantTables1789900001900 implements MigrationInterface {
+  name = 'EnableRlsPreTenantTables1789900001900';
 
   public async up(q: QueryRunner): Promise<void> {
     // -------------------------------------------------------------------------
