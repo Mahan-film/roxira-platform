@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { randomUUID } from 'node:crypto';
 import { UserEntity } from '../entities/user.entity';
 import { AuthServiceDomain } from '../enums/auth-service.enum';
 
@@ -11,13 +12,18 @@ import { AuthServiceDomain } from '../enums/auth-service.enum';
  */
 @Injectable()
 export class AuthRepository {
+  private readonly logger = new Logger(AuthRepository.name);
+
   constructor(
     @InjectRepository(UserEntity)
     private readonly repository: Repository<UserEntity>,
   ) {}
 
   async updatePassword(id: string, passwordHash: string): Promise<void> {
-    await this.repository.update({ id }, { passwordHash, passwordUpdatedAt: new Date() });
+    await this.repository.manager.transaction(async (m) => {
+      await m.query(`SELECT set_config('app.user_id', $1, true)`, [id]);
+      await m.update(UserEntity, { id }, { passwordHash, passwordUpdatedAt: new Date() });
+    });
   }
 
   async findByUsername(username: string): Promise<UserEntity | null> {
@@ -46,7 +52,8 @@ export class AuthRepository {
         } as UserEntity);
       }
       return null;
-    } catch {
+    } catch (err) {
+      this.logger.debug(`lookup_user_by_login fallback for ${username}: ${err}`);
       return this.repository.findOne({ where: { username } });
     }
   }
@@ -77,7 +84,8 @@ export class AuthRepository {
         } as UserEntity);
       }
       return null;
-    } catch {
+    } catch (err) {
+      this.logger.debug(`lookup_user_by_login fallback for ${loginEmail}: ${err}`);
       return this.repository.findOne({ where: { loginEmail } });
     }
   }
@@ -126,7 +134,8 @@ export class AuthRepository {
         } as UserEntity);
       }
       return null;
-    } catch {
+    } catch (err) {
+      this.logger.debug(`findWithPasswordHash fallback: ${err}`);
       return this.repository.findOne({
         where,
         select: {
@@ -177,7 +186,8 @@ export class AuthRepository {
         } as UserEntity);
       }
       return null;
-    } catch {
+    } catch (err) {
+      this.logger.debug(`lookup_user_by_phone fallback for ${phone}: ${err}`);
       return this.repository.findOne({ where: { phone } });
     }
   }
@@ -208,7 +218,8 @@ export class AuthRepository {
         } as UserEntity);
       }
       return null;
-    } catch {
+    } catch (err) {
+      this.logger.debug(`lookup_user_by_id fallback for ${id}: ${err}`);
       return this.repository.findOne({ where: { id } });
     }
   }
@@ -218,19 +229,34 @@ export class AuthRepository {
    * می‌شوند؛ جداسازی مستأجر در سطح کوئری تضمین می‌شود (Rule #4 - AGENTS.md).
    */
   async findByTenantId(tenantId: string): Promise<UserEntity[]> {
-    return this.repository.find({
-      where: { tenantId },
-      order: { createdAt: 'ASC' },
+    return this.repository.manager.transaction(async (m) => {
+      await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [tenantId]);
+      return m.find(UserEntity, {
+        where: { tenantId },
+        order: { createdAt: 'ASC' },
+      });
     });
   }
 
   async create(data: Partial<UserEntity>): Promise<UserEntity> {
     const entity = this.repository.create(data);
-    return this.repository.save(entity);
+    if (!entity.id) {
+      entity.id = randomUUID();
+    }
+    return this.save(entity);
   }
 
   async save(entity: UserEntity): Promise<UserEntity> {
-    return this.repository.save(entity);
+    if (!entity.id) {
+      entity.id = randomUUID();
+    }
+    return this.repository.manager.transaction(async (m) => {
+      await m.query(`SELECT set_config('app.user_id', $1, true)`, [entity.id]);
+      if (entity.tenantId) {
+        await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [entity.tenantId]);
+      }
+      return m.save(entity);
+    });
   }
 
   /**

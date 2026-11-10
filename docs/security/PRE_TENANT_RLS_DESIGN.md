@@ -285,11 +285,10 @@ FOR INSERT
 WITH CHECK (true);
 
 -- Only the recipient tenant can read/manage contact messages
-CREATE POLICY contact_messages_select_modify ON public.contact_messages
-FOR ALL
+CREATE POLICY contact_messages_tenant ON public.contact_messages
+FOR SELECT
 USING (
-  (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
-  OR (current_setting('app.auth_lookup', true) = 'true')
+  nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid
 );
 
 -- =========================================================================
@@ -303,13 +302,11 @@ CREATE POLICY enterprise_inquiries_insert ON public.enterprise_inquiries
 FOR INSERT
 WITH CHECK (true);
 
--- Tenants see inquiries assigned to them; platform admins see unassigned/public inquiries
-CREATE POLICY enterprise_inquiries_select_modify ON public.enterprise_inquiries
+-- Tenants see inquiries assigned to them
+CREATE POLICY enterprise_inquiries_tenant ON public.enterprise_inquiries
 FOR ALL
 USING (
-  (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
-  OR (tenant_id IS NULL AND current_setting('app.tenant_id', true) IS NULL)
-  OR (current_setting('app.auth_lookup', true) = 'true')
+  nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid
 );
 ```
 
@@ -330,13 +327,13 @@ USING (
 
 1. **Migration Script**: `output_apps/enterprise_hub/migrations/1789900001900-EnableRlsPreTenantTables.ts`
 2. **`up()`**:
-   - Creates all 6 `SECURITY DEFINER` lookup functions.
-   - Grants execute permissions to `roxira_app` and `PUBLIC`.
+   - Creates atomic `SECURITY DEFINER` lookup and mutation functions owned by `postgres`.
+   - Revokes execute from `PUBLIC` and grants execute permissions to `roxira_app`.
    - Enables and forces RLS on all 8 tables.
    - Applies the granular policies.
 3. **`down()`**:
    - Drops all 8 table policies.
    - Disables and un-forces RLS on all 8 tables.
-   - Drops the 6 lookup functions.
+   - Drops the functions.
 4. **Audit Allow-List Removal**:
    - `RLS_PENDING_ALLOWLIST` in `tenant-rls-all-tables.pg.spec.ts` is cleared of these 8 tables. All 101 tenant tables on the platform are now 100% covered under PostgreSQL FORCE ROW LEVEL SECURITY.

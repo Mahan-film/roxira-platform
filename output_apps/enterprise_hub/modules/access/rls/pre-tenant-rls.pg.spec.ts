@@ -9,8 +9,11 @@
  *   2. The non-superuser `NOSUPERUSER NOBYPASSRLS` role can successfully execute
  *      pre-auth lookups (phone, username/email, token rotation, invite redemption, public forms)
  *      via SECURITY DEFINER lookup functions and permissive INSERT policies.
- *   3. Strict cross-tenant isolation is enforced (Tenant A cannot see Tenant B's rows).
- *   4. Migration up() and down() are completely reversible.
+ *   3. Strict cross-tenant isolation is enforced (Tenant A cannot see Tenant B's rows,
+ *      and unscoped connections without session settings read 0 rows).
+ *   4. Write paths (user signup, token issue/revocation, invitation acceptance, entitlement upsert)
+ *      satisfy FORCE RLS WITH CHECK policies.
+ *   5. Migration up() and down() are completely reversible.
  *
  * Opt-in like other pg specs: skipped unless ROXIRA_TEST_PG_HOST is set.
  */
@@ -31,8 +34,13 @@ import { EntitlementEntity } from '../entities/entitlement.entity';
 import { ModuleRequestEntity } from '../entities/module-request.entity';
 import { InvitationsRepository } from '../repositories/invitations.repository';
 import { MembershipsRepository } from '../repositories/memberships.repository';
+import { EntitlementsRepository } from '../repositories/entitlements.repository';
+import { ModuleRequestsRepository } from '../repositories/module-requests.repository';
 import { ContactMessageEntity } from '../../crm/entities/contact-message.entity';
+import { CrmLeadEntity } from '../../crm/entities/crm-lead.entity';
+import { CrmRepository } from '../../crm/repositories/crm.repository';
 import { EnterpriseInquiryEntity } from '../../inquiries/entities/enterprise-inquiry.entity';
+import { InquiriesRepository } from '../../inquiries/repositories/inquiries.repository';
 import { TenantScope } from '../services/tenant-scope';
 
 const HOST = process.env.ROXIRA_TEST_PG_HOST;
@@ -70,6 +78,10 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
   let refreshRepo: RefreshTokenRepository;
   let invitationsRepo: InvitationsRepository;
   let membershipsRepo: MembershipsRepository;
+  let entitlementsRepo: EntitlementsRepository;
+  let moduleRequestsRepo: ModuleRequestsRepository;
+  let crmRepo: CrmRepository;
+  let inquiriesRepo: InquiriesRepository;
 
   beforeAll(async () => {
     admin = await new DataSource({ ...options('postgres'), entities: [], migrations: [] }).initialize();
@@ -92,6 +104,10 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     refreshRepo = new RefreshTokenRepository(app.getRepository(RefreshTokenEntity));
     invitationsRepo = new InvitationsRepository(app.getRepository(InvitationEntity));
     membershipsRepo = new MembershipsRepository(app.getRepository(MembershipEntity));
+    entitlementsRepo = new EntitlementsRepository(app.getRepository(EntitlementEntity));
+    moduleRequestsRepo = new ModuleRequestsRepository(app.getRepository(ModuleRequestEntity));
+    crmRepo = new CrmRepository(app.getRepository(CrmLeadEntity), app.getRepository(ContactMessageEntity));
+    inquiriesRepo = new InquiriesRepository(app.getRepository(EnterpriseInquiryEntity));
 
     for (const tenantId of [T1, T2]) {
       await owner
@@ -129,6 +145,33 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     }
   });
 
+  it('unscoped connection without session settings reads 0 rows from pre-tenant tables', async () => {
+    // Direct raw queries on app data source (unscoped NOSUPERUSER NOBYPASSRLS session)
+    const msgs = await app.getRepository(ContactMessageEntity).find();
+    expect(msgs).toHaveLength(0);
+
+    const inquiries = await app.getRepository(EnterpriseInquiryEntity).find();
+    expect(inquiries).toHaveLength(0);
+
+    const users = await app.getRepository(UserEntity).find();
+    expect(users).toHaveLength(0);
+
+    const tokens = await app.getRepository(RefreshTokenEntity).find();
+    expect(tokens).toHaveLength(0);
+
+    const memberships = await app.getRepository(MembershipEntity).find();
+    expect(memberships).toHaveLength(0);
+
+    const invitations = await app.getRepository(InvitationEntity).find();
+    expect(invitations).toHaveLength(0);
+
+    const entitlements = await app.getRepository(EntitlementEntity).find();
+    expect(entitlements).toHaveLength(0);
+
+    const requests = await app.getRepository(ModuleRequestEntity).find();
+    expect(requests).toHaveLength(0);
+  });
+
   it('allows unauthenticated pre-tenant user lookups via SECURITY DEFINER functions', async () => {
     const user1Id = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
     await owner.query(`
@@ -155,24 +198,53 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     expect(byId?.phone).toBe('09121111111');
   });
 
-  it('allows token rotation lookup and enforces refresh token isolation', async () => {
+  it('allows user creation, updates, and password reset under FORCE RLS', async () => {
+    // 1. Password signup: user inserted with no tenant_id
+    const newUser = await authRepo.create({
+      username: 'signup_user',
+      displayName: 'Sign Up User',
+      loginEmail: 'signup@example.com',
+    });
+    expect(newUser.id).toBeDefined();
+
+    // 2. Update password
+    await authRepo.updatePassword(newUser.id, 'hashed_password_123');
+
+    // 3. Look up user with password hash
+    const userWithPw = await authRepo.findWithPasswordHash({ id: newUser.id });
+    expect(userWithPw?.passwordHash).toBe('hashed_password_123');
+  });
+
+  it('allows token rotation lookup, issue, and revocation under FORCE RLS', async () => {
     const tokenHash = 'refresh_token_test_1'.padEnd(64, '0');
     const familyId = 'ffffffff-1111-4111-8111-ffffffffffff';
     const userId = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
     const expiresAt = new Date(Date.now() + 3600000);
 
-    await owner.query(`
-      INSERT INTO auth_refresh_tokens (id, user_id, tenant_id, token_hash, family_id, expires_at)
-      VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)
-    `, [userId, T1, tokenHash, familyId, expiresAt]);
+    // 1. Issue token via refreshRepo.create
+    const createdToken = await refreshRepo.create({
+      userId,
+      tenantId: T1,
+      tokenHash,
+      familyId,
+      expiresAt,
+    });
+    expect(createdToken.id).toBeDefined();
 
-    // Opaque lookup without knowing tenant_id
+    // 2. Opaque lookup without knowing tenant_id
     const token = await refreshRepo.findByHash(tokenHash);
     expect(token).not.toBeNull();
     expect(token?.familyId).toBe(familyId);
     expect(token?.tenantId).toBe(T1);
 
-    // Cross-tenant direct query isolation: Tenant 2 cannot see Tenant 1's tokens
+    // 3. Revoke single token atomically
+    const revoked = await refreshRepo.revokeIfActive(createdToken.id);
+    expect(revoked).toBe(true);
+
+    // 4. Revoke whole family
+    await refreshRepo.revokeFamily(familyId);
+
+    // 5. Cross-tenant direct query isolation: Tenant 2 cannot see Tenant 1's tokens
     await scope.run(T2, async (manager) => {
       const t1Tokens = await manager.getRepository(RefreshTokenEntity).find({
         where: { tenantId: T1 },
@@ -211,21 +283,30 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     });
   });
 
-  it('allows invitation preview by hash without tenant context and isolates in scope', async () => {
+  it('allows invitation preview, acceptance, and tenant isolation', async () => {
     const inviteHash = 'invite_token_test_1'.padEnd(64, '0');
     const inviterId = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
     const expiresAt = new Date(Date.now() + 86400000);
 
-    await owner.query(`
-      INSERT INTO tenant_invitations (id, tenant_id, email, role_key, token_hash, expires_at, invited_by)
-      VALUES (gen_random_uuid(), $1, 'invited@example.com', 'accountant', $2, $3, $4)
-    `, [T1, inviteHash, expiresAt, inviterId]);
+    const inv = await invitationsRepo.create({
+      tenantId: T1,
+      email: 'invited@example.com',
+      roleKey: 'accountant',
+      tokenHash: inviteHash,
+      expiresAt,
+      invitedBy: inviterId,
+    });
+    expect(inv.id).toBeDefined();
 
     // Preview invite by token hash without session
     const invite = await invitationsRepo.findByHash(inviteHash);
     expect(invite).not.toBeNull();
     expect(invite?.email).toBe('invited@example.com');
     expect(invite?.tenantId).toBe(T1);
+
+    // Accept invite
+    const accepted = await invitationsRepo.markAccepted(inv.id, inviterId, T1);
+    expect(accepted).toBe(true);
 
     // Cross-tenant list isolation
     await scope.run(T2, async (manager) => {
@@ -234,35 +315,71 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     });
   });
 
-  it('allows public anonymous submissions for contact_messages and enterprise_inquiries', async () => {
-    // 1. Anonymous visitor submits contact message
-    const contactMsg = app.getRepository(ContactMessageEntity).create({
+  it('allows module entitlements and requests under FORCE RLS', async () => {
+    const userId = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
+
+    // 1. Entitlements upsert and list
+    await entitlementsRepo.set(T1, 'accounting', true, null);
+    const entitlements = await entitlementsRepo.list(T1);
+    expect(entitlements.some((e) => e.module === 'accounting' && e.enabled)).toBe(true);
+
+    // 2. Module requests create and list
+    const req = await moduleRequestsRepo.create({
       tenantId: T1,
+      module: 'custom_reports',
+      status: 'OPEN',
+      requestedBy: userId,
+    });
+    expect(req.id).toBeDefined();
+
+    const t1Requests = await moduleRequestsRepo.listForTenant(T1);
+    expect(t1Requests.some((r) => r.id === req.id)).toBe(true);
+
+    // Open requests operator view
+    const openRequests = await moduleRequestsRepo.listOpen();
+    expect(openRequests.some((r) => r.id === req.id)).toBe(true);
+  });
+
+  it('allows public anonymous submissions for contact_messages and enterprise_inquiries', async () => {
+    // 1. Submit contact message via CrmRepository
+    const savedMsg = await crmRepo.createContactMessage(T1, {
       senderName: 'Visitor One',
       senderPhone: '09129999999',
       subject: 'Inquiry about platform',
       message: 'Hello from public web form',
     });
-    const savedMsg = await app.getRepository(ContactMessageEntity).save(contactMsg);
     expect(savedMsg.id).toBeDefined();
 
-    // 2. Anonymous visitor submits enterprise inquiry (null tenant)
-    const inquiry = app.getRepository(EnterpriseInquiryEntity).create({
+    // 2. Submit contact message via SECURITY DEFINER function
+    const fnRows = await app.query(
+      `SELECT public.submit_contact_message($1, $2, $3, $4, $5, $6) AS id`,
+      [T1, 'Visitor Two', '09128888888', 'v2@example.com', 'Subject 2', 'Message 2'],
+    );
+    expect(fnRows[0].id).toBeDefined();
+
+    // 3. Anonymous visitor submits enterprise inquiry (null tenant) via InquiriesRepository
+    const savedInquiry = await inquiriesRepo.create({
       tenantId: null,
       name: 'Corporate Prospect',
       phone: '02188888888',
       email: 'corp@example.com',
       message: 'Enterprise pricing details please',
     });
-    const savedInquiry = await app.getRepository(EnterpriseInquiryEntity).save(inquiry);
     expect(savedInquiry.id).toBeDefined();
 
-    // 3. Tenant 2 cannot see Tenant 1 contact messages
+    // 4. Unscoped connection reads 0 rows (no leakage)
+    const msgs = await app.getRepository(ContactMessageEntity).find();
+    expect(msgs).toHaveLength(0);
+
+    const inquiries = await app.getRepository(EnterpriseInquiryEntity).find();
+    expect(inquiries).toHaveLength(0);
+
+    // 5. Tenant 2 cannot see Tenant 1 contact messages
     await scope.run(T2, async (manager) => {
-      const msgs = await manager.getRepository(ContactMessageEntity).find({
+      const tenant2Msgs = await manager.getRepository(ContactMessageEntity).find({
         where: { tenantId: T1 },
       });
-      expect(msgs).toHaveLength(0);
+      expect(tenant2Msgs).toHaveLength(0);
     });
   });
 

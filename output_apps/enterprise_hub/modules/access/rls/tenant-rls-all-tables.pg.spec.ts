@@ -39,9 +39,8 @@ import { TenantScope } from '../services/tenant-scope';
 
 /**
  * Explicit allow-list of public tables with `tenant_id` that do not yet have
- * `ENABLE + FORCE ROW LEVEL SECURITY`:
- * - 8 pre-tenant auth/membership/entitlement & public-form tables (need dedicated design, see #475)
- * - 29 module tables scheduled for the next per-module RLS PRs (CRM, Capture, Banking, Data Import, Inventory)
+ * `ENABLE + FORCE ROW LEVEL SECURITY` (all 8 pre-tenant tables now have FORCE RLS):
+ * - module tables scheduled for the next per-module RLS PRs (CRM, Capture, Banking, Data Import, Inventory)
  *
  * Any newly added table with `tenant_id` outside this list will immediately fail the audit spec unless
  * its migration enables FORCE RLS.

@@ -329,8 +329,11 @@ export class CrmRepository {
     tenantId: string,
     data: Partial<ContactMessageEntity>,
   ): Promise<ContactMessageEntity> {
-    const entity = this.contacts.create({ ...data, tenantId });
-    return this.contacts.save(entity);
+    return this.contacts.manager.transaction(async (m) => {
+      await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [tenantId]);
+      const entity = m.create(ContactMessageEntity, { ...data, tenantId });
+      return m.save(entity);
+    });
   }
 
   async findContactMessagesAndCount(

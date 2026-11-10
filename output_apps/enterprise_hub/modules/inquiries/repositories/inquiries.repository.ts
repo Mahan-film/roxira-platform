@@ -21,6 +21,29 @@ export class InquiriesRepository {
   async create(
     data: Partial<EnterpriseInquiryEntity>,
   ): Promise<EnterpriseInquiryEntity> {
+    try {
+      const rows = await this.inquiries.query(
+        `SELECT public.submit_enterprise_inquiry($1, $2, $3, $4, $5, $6, $7) AS id`,
+        [
+          data.name ?? '',
+          data.company ?? null,
+          data.phone ?? null,
+          data.email ?? null,
+          data.message ?? null,
+          data.source ?? null,
+          data.tenantId ?? null,
+        ],
+      );
+      if (rows && rows.length > 0) {
+        return this.inquiries.create({
+          ...data,
+          id: Number(rows[0].id),
+          createdAt: new Date(),
+        } as EnterpriseInquiryEntity);
+      }
+    } catch {
+      // Fallback to direct save
+    }
     const entity = this.inquiries.create(data);
     return this.inquiries.save(entity);
   }

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MembershipEntity } from '../entities/membership.entity';
@@ -22,6 +22,8 @@ export interface MembershipWithTenant {
 /** Only access point to `tenant_memberships`. Every tenant-scoped method takes tenantId first. */
 @Injectable()
 export class MembershipsRepository {
+  private readonly logger = new Logger(MembershipsRepository.name);
+
   constructor(
     @InjectRepository(MembershipEntity)
     private readonly repo: Repository<MembershipEntity>,
@@ -51,8 +53,12 @@ export class MembershipsRepository {
         } as MembershipEntity);
       }
       return null;
-    } catch {
-      return this.repo.findOne({ where: { tenantId, userId } });
+    } catch (err) {
+      this.logger.debug(`lookup_membership fallback: ${err}`);
+      return this.repo.manager.transaction(async (m) => {
+        await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [tenantId]);
+        return m.findOne(MembershipEntity, { where: { tenantId, userId } });
+      });
     }
   }
 
@@ -68,10 +74,11 @@ export class MembershipsRepository {
   }
 
   save(entity: MembershipEntity): Promise<MembershipEntity> {
+    if (!entity.tenantId) {
+      throw new Error('Cannot save membership without tenantId');
+    }
     return this.repo.manager.transaction(async (m) => {
-      if (entity.tenantId) {
-        await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [entity.tenantId]);
-      }
+      await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [entity.tenantId]);
       return m.save(entity);
     });
   }
@@ -142,7 +149,7 @@ export class MembershipsRepository {
         `SELECT * FROM public.lookup_user_memberships($1)`,
         [userId],
       );
-      if (rows && rows.length > 0) {
+      if (rows) {
         return rows.map((r: any) => ({
           membershipId: r.membership_id ?? r.membershipId,
           tenantId: r.tenant_id ?? r.tenantId,
@@ -151,8 +158,8 @@ export class MembershipsRepository {
           status: r.status,
         }));
       }
-    } catch {
-      // fallback to queryBuilder below
+    } catch (err) {
+      this.logger.debug(`lookup_user_memberships fallback for ${userId}: ${err}`);
     }
     const rows = await this.repo
       .createQueryBuilder('m')

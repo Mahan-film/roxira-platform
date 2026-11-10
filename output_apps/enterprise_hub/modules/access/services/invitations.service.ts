@@ -132,7 +132,7 @@ export class InvitationsService {
     if (existing) {
       throw new ConflictException('You are already a member of this organisation.');
     }
-    if (!(await this.invitations.markAccepted(inv.id, userId))) {
+    if (!(await this.invitations.markAccepted(inv.id, userId, inv.tenantId))) {
       throw new NotFoundException('This invitation is not valid.');
     }
     await this.memberships.create({
