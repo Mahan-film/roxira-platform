@@ -1,6 +1,5 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsDateString, IsIn, IsOptional, IsString } from 'class-validator';
 import { ChequeDirection, ChequeStatus } from '../enums/cheque.enum';
 import { SayadRegistrationStatus } from '../sayad/sayad';
 
@@ -11,7 +10,7 @@ export class QueryChequeMaturityDto {
     default: 'all',
   })
   @IsOptional()
-  @IsString()
+  @IsIn(['received', 'issued', 'all'])
   direction?: 'received' | 'issued' | 'all';
 
   @ApiPropertyOptional({
@@ -19,7 +18,7 @@ export class QueryChequeMaturityDto {
     example: '2026-11-08',
   })
   @IsOptional()
-  @IsString()
+  @IsDateString()
   asOfDate?: string;
 
   @ApiPropertyOptional({

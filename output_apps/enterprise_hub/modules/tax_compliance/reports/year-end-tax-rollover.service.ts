@@ -1,4 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { parseMinor } from '../../accounting/money';
+import { isoDate, jalaliMonthEnd } from '../../hr/services/jalali-period';
+import { isValidStatutoryValue } from '../../hr/statutory/statutory-catalogue';
+import { StatutoryRepository } from '../../hr/statutory/statutory.repository';
+import { IRAN, resolveParameters } from '../../hr/statutory/statutory.service';
 import { jalaliQuarterRange } from '../utils/jalali-quarter.util';
 import {
   QueryYearEndRolloverDto,
@@ -8,9 +13,20 @@ import {
 } from '../dto/year-end-tax-rollover.dto';
 import { TaxInspectorRepository } from './tax-inspector.repository';
 
+const RATE_SCALE = 1_000_000n;
+
+function applyRate(amountMinor: bigint, rate: string): bigint {
+  const [whole, fraction = ''] = rate.split('.');
+  const scaled = BigInt(whole + fraction.padEnd(6, '0'));
+  return (amountMinor * scaled + RATE_SCALE / 2n) / RATE_SCALE;
+}
+
 @Injectable()
 export class YearEndTaxRolloverService {
-  constructor(private readonly repo: TaxInspectorRepository) {}
+  constructor(
+    private readonly repo: TaxInspectorRepository,
+    private readonly statutory: StatutoryRepository,
+  ) {}
 
   async assessRollover(
     tenantId: string,
@@ -29,16 +45,28 @@ export class YearEndTaxRolloverService {
     const profitBeforeTaxMinor = revenueMinor - expensesMinor;
 
     const nonDeductibleMinor = query.nonDeductibleExpensesMinor
-      ? BigInt(query.nonDeductibleExpensesMinor)
+      ? parseMinor(query.nonDeductibleExpensesMinor)
       : 0n;
     const exemptIncomeMinor = query.taxExemptIncomeMinor
-      ? BigInt(query.taxExemptIncomeMinor)
+      ? parseMinor(query.taxExemptIncomeMinor)
       : 0n;
 
     const taxableProfitMinor = profitBeforeTaxMinor + nonDeductibleMinor - exemptIncomeMinor;
-    const taxRatePercent = 25; // 25% corporate tax under Art. 105 Direct Taxes Act
+
+    // Corporate tax rate dynamically fetched from statutory parameters store
+    const statutoryRows = await this.statutory.findForYear(tenantId, IRAN, query.year);
+    const resolved = resolveParameters(statutoryRows, isoDate(jalaliMonthEnd(query.year, 12)));
+    const rateRow = resolved.get('corporate_tax_rate');
+    if (!rateRow || !isValidStatutoryValue('corporate_tax_rate', rateRow.value)) {
+      throw new BadRequestException(
+        `پارامتر قانونی «corporate_tax_rate» برای سال ${query.year} تعریف نشده یا نامعتبر است؛ منبع قانونی تأییدشده لازم است.`,
+      );
+    }
+
+    const rateStr = String(rateRow.value);
+    const taxRatePercent = Math.round(parseFloat(rateStr) * 100);
     const estimatedTaxMinor =
-      taxableProfitMinor > 0n ? (taxableProfitMinor * 25n) / 100n : 0n;
+      taxableProfitMinor > 0n ? applyRate(taxableProfitMinor, rateStr) : 0n;
 
     const taxReconciliation: TaxReconciliationView = {
       accountingRevenueMinor: revenueMinor.toString(),

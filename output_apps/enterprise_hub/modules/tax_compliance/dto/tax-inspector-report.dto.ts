@@ -1,6 +1,6 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsInt, Max, Min } from 'class-validator';
 
 export class QueryTaxInspectorPackageDto {
   @ApiProperty({ description: 'سال مالی شمسی (مثلاً ۱۴۰۴ یا ۱۴۰۵)', example: 1404 })

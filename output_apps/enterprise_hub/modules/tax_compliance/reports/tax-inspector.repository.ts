@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
-import { parseMinor } from '../../accounting/money';
+import { fromDb } from '../../accounting/money';
 
 export interface RawInvoiceSalesSummary {
   invoicedCount: number;
@@ -55,17 +55,22 @@ export class TaxInspectorRepository {
            COALESCE(SUM("totalAmount"), 0) AS "totalAmount"
          FROM "invoices"
          WHERE "tenant_id" = $1
-           AND "createdAt" >= $2
-           AND "createdAt" < $3
-           AND ("direction" = 'SALE' OR "direction" IS NULL)`,
+           AND "status" IN ('ISSUED', 'PAID')
+           AND "direction" = 'SALE'
+           AND "subject" = 1
+           AND "jurisdiction" = 'IR'
+           AND COALESCE("issued_at", "createdAt") >= $2
+           AND COALESCE("issued_at", "createdAt") < $3`,
         [tenantId, fromDate, toDate],
       );
 
       const r = rows[0] || {};
-      const totalAmountMinor = r.totalPayable ? parseMinor(String(r.totalPayable)) : 0n;
-      const vatMinor = r.totalTax ? parseMinor(String(r.totalTax)) : 0n;
-      const taxableMinor = vatMinor > 0n ? totalAmountMinor - vatMinor : 0n;
-      const exemptMinor = vatMinor === 0n ? totalAmountMinor : 0n;
+      const totalPayableMinor = fromDb(r.totalPayable);
+      const vatMinor = fromDb(r.totalTax);
+      const netAmountMinor = fromDb(r.totalAmount);
+      const totalAmountMinor = netAmountMinor > 0n ? netAmountMinor : (totalPayableMinor - vatMinor);
+      const taxableMinor = vatMinor > 0n ? totalAmountMinor : 0n;
+      const exemptMinor = totalAmountMinor - taxableMinor;
 
       return {
         invoicedCount: Number(r.count || 0),
@@ -88,16 +93,22 @@ export class TaxInspectorRepository {
         `SELECT
            COUNT(*)::int AS "count",
            COALESCE(SUM("finalPayable"), 0) AS "totalPayable",
-           COALESCE(SUM("totalTax"), 0) AS "totalTax"
+           COALESCE(SUM("totalTax"), 0) AS "totalTax",
+           COALESCE(SUM("totalAmount"), 0) AS "totalAmount"
          FROM "invoices"
          WHERE "tenant_id" = $1
-           AND "createdAt" >= $2
-           AND "createdAt" < $3
-           AND "direction" = 'PURCHASE'`,
+           AND "status" IN ('ISSUED', 'PAID')
+           AND "direction" = 'PURCHASE'
+           AND "subject" = 1
+           AND "jurisdiction" = 'IR'
+           AND COALESCE("issued_at", "createdAt") >= $2
+           AND COALESCE("issued_at", "createdAt") < $3`,
         [tenantId, fromDate, toDate],
       );
 
       // 2. Capture documents
+      const fromDay = fromDate.toISOString().slice(0, 10);
+      const toDay = toDate.toISOString().slice(0, 10);
       const capRows = await manager.query(
         `SELECT
            COUNT(*)::int AS "count",
@@ -105,20 +116,21 @@ export class TaxInspectorRepository {
            COALESCE(SUM(CAST(COALESCE("edited"->>'tax_amount', "extracted"->'draft'->>'tax_amount', '0') AS numeric)), 0) AS "totalTax"
          FROM "capture_documents"
          WHERE "tenant_id" = $1
-           AND "created_at" >= $2
-           AND "created_at" < $3
-           AND "status" IN ('posted', 'auto_posted')`,
-        [tenantId, fromDate, toDate],
+           AND "status" IN ('posted', 'auto_posted')
+           AND COALESCE("edited"->>'kind', "extracted"->'draft'->>'kind') = 'purchase'
+           AND COALESCE("edited"->>'date', "extracted"->'draft'->>'date') >= $2
+           AND COALESCE("edited"->>'date', "extracted"->'draft'->>'date') < $3`,
+        [tenantId, fromDay, toDay],
       );
 
       const rInv = invRows[0] || {};
       const rCap = capRows[0] || {};
 
-      const invAmountMinor = rInv.totalPayable ? parseMinor(String(rInv.totalPayable)) : 0n;
-      const invTaxMinor = rInv.totalTax ? parseMinor(String(rInv.totalTax)) : 0n;
+      const invAmountMinor = fromDb(rInv.totalAmount) || (fromDb(rInv.totalPayable) - fromDb(rInv.totalTax));
+      const invTaxMinor = fromDb(rInv.totalTax);
 
-      const capAmountMinor = rCap.totalAmount ? parseMinor(String(rCap.totalAmount)) : 0n;
-      const capTaxMinor = rCap.totalTax ? parseMinor(String(rCap.totalTax)) : 0n;
+      const capAmountMinor = fromDb(rCap.totalAmount);
+      const capTaxMinor = fromDb(rCap.totalTax);
 
       return {
         purchaseCount: Number(rInv.count || 0) + Number(rCap.count || 0),
@@ -150,7 +162,7 @@ export class TaxInspectorRepository {
       const r = rows[0] || {};
       return {
         transmittedCount: Number(r.count || 0),
-        totalAmountMinor: r.totalAmount ? parseMinor(String(r.totalAmount)) : 0n,
+        totalAmountMinor: fromDb(r.totalAmount),
       };
     });
   }
@@ -164,7 +176,7 @@ export class TaxInspectorRepository {
       const fromStr = fromDate.toISOString().slice(0, 10);
       const toStr = toDate.toISOString().slice(0, 10);
 
-      // Revenue and Expense accounts turnover
+      // Revenue and Expense accounts turnover (excluding closing/opening entries)
       const turnoverRows = await manager.query(
         `SELECT
            a."account_type",
@@ -175,6 +187,7 @@ export class TaxInspectorRepository {
          JOIN "fin_chart_of_accounts" a ON a."id" = l."account_id" AND a."tenant_id" = l."tenant_id"
          WHERE l."tenant_id" = $1
            AND e."status" = 'POSTED'
+           AND (e."entry_type" IS NULL OR e."entry_type" NOT IN ('CLOSING_TEMP', 'CLOSING_PERM', 'OPENING'))
            AND e."date" >= $2
            AND e."date" < $3
          GROUP BY a."account_type"`,
@@ -185,9 +198,9 @@ export class TaxInspectorRepository {
       let expenseMinor = 0n;
       for (const row of turnoverRows) {
         if (row.account_type === 'REVENUE') {
-          revenueMinor = row.netCredit ? parseMinor(String(row.netCredit)) : 0n;
+          revenueMinor = fromDb(row.netCredit);
         } else if (row.account_type === 'EXPENSE') {
-          expenseMinor = row.netDebit ? parseMinor(String(row.netDebit)) : 0n;
+          expenseMinor = fromDb(row.netDebit);
         }
       }
 
@@ -219,7 +232,7 @@ export class TaxInspectorRepository {
         [tenantId, fromStr, toStr],
       );
       const b = balanceRows[0] || {};
-      const isBalanced = String(b.totalDebit) === String(b.totalCredit);
+      const isBalanced = fromDb(b.totalDebit) === fromDb(b.totalCredit);
 
       // Closing voucher check
       const closingRows = await manager.query(
@@ -244,7 +257,7 @@ export class TaxInspectorRepository {
            AND "date" < $3
            AND "status" = 'POSTED'
            AND "permanent_number" IS NOT NULL
-         ORDER BY CAST("permanent_number" AS bigint) ASC`,
+         ORDER BY "permanent_number" ASC`,
         [tenantId, fromStr, toStr],
       );
 

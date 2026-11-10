@@ -15,8 +15,7 @@ import { DataSource } from 'typeorm';
 import { TenantScope } from '../access/services/tenant-scope';
 import { ChequesRepository } from '../cheques/repositories/cheques.repository';
 import { ChequeMaturityReportService } from '../cheques/services/cheque-maturity-report.service';
-import { ChequeDirection, ChequeStatus } from '../cheques/enums/cheque.enum';
-import { SayadRegistrationStatus } from '../cheques/sayad/sayad';
+import { StatutoryRepository } from '../hr/statutory/statutory.repository';
 import { TaxInspectorRepository } from './reports/tax-inspector.repository';
 import { TaxInspectorService } from './reports/tax-inspector.service';
 import { QuarterlyTaxComparisonService } from './reports/quarterly-tax-comparison.service';
@@ -78,25 +77,35 @@ describePg('Tax Compliance and Cheque Reports on real PostgreSQL (NOSUPERUSER, N
     appDs = await new DataSource({ ...options(db, role, APP_PW), extra: { max: 8 } }).initialize();
     tenantScope = new TenantScope(appDs);
 
+    let statutoryRepo: StatutoryRepository;
     inspectorRepo = new TaxInspectorRepository(appDs, tenantScope);
     inspectorService = new TaxInspectorService(inspectorRepo);
     comparisonService = new QuarterlyTaxComparisonService(inspectorRepo);
-    rolloverService = new YearEndTaxRolloverService(inspectorRepo);
+    statutoryRepo = new StatutoryRepository(tenantScope);
+    rolloverService = new YearEndTaxRolloverService(inspectorRepo, statutoryRepo);
 
     chequesRepo = new ChequesRepository(tenantScope);
     chequeMaturityService = new ChequeMaturityReportService(chequesRepo);
 
     // Seed test data for Tenant A:
-    // 1. Chart of Accounts (Revenue 4010, Cash 1010)
+    // 1. Chart of Accounts (Cash 1010, VAT Payable 2002, Revenue 4010)
     await ownerDs.query(`
       INSERT INTO "fin_chart_of_accounts" ("id", "tenant_id", "code", "name", "account_type")
       VALUES
         (1001, '${TENANT_A}', '1010', 'صندوق مرکزی', 'ASSET'),
-        (1002, '${TENANT_A}', '4010', 'درآمد فروش', 'REVENUE')
+        (1002, '${TENANT_A}', '4010', 'درآمد فروش', 'REVENUE'),
+        (1003, '${TENANT_A}', '2002', 'مالیات بر ارزش افزوده پرداختنی', 'LIABILITY')
       ON CONFLICT DO NOTHING
     `);
 
-    // 2. Journal Entry & lines (Date in 1404: 2025-05-10)
+    // 2. Statutory parameter for corporate tax rate (Art. 105: 25%)
+    await ownerDs.query(`
+      INSERT INTO "statutory_parameters" ("tenant_id", "country", "fiscal_year", "param_key", "effective_from", "version", "value", "source", "source_kind", "verified", "created_by")
+      VALUES ('${TENANT_A}', 'IR', 1404, 'corporate_tax_rate', '2025-03-21', 1, '"0.25"', 'ماده ۱۰۵ ق.م.م', 'OFFICIAL', true, 'seed')
+      ON CONFLICT DO NOTHING
+    `);
+
+    // 3. Journal Entry & lines (Date in 1404: 2025-05-10)
     await ownerDs.query(`
       INSERT INTO "fin_journal_entries" ("id", "tenant_id", "entry_number", "permanent_number", "date", "description", "status")
       VALUES (2001, '${TENANT_A}', 'JV-101', '1', '2025-05-10', 'فروش کالا', 'POSTED')
@@ -105,14 +114,15 @@ describePg('Tax Compliance and Cheque Reports on real PostgreSQL (NOSUPERUSER, N
     await ownerDs.query(`
       INSERT INTO "fin_journal_entry_lines" ("id", "tenant_id", "journal_entry_id", "account_id", "debit", "credit", "description")
       VALUES
-        (3001, '${TENANT_A}', 2001, 1001, 10900000.00, 0, 'واریز وجه'),
-        (3002, '${TENANT_A}', 2001, 1002, 0, 10900000.00, 'فروش ثبت شده')
+        (3001, '${TENANT_A}', 2001, 1001, 10900000.00, 0, 'واریز وجه نقد فاکتور'),
+        (3002, '${TENANT_A}', 2001, 1002, 0, 10000000.00, 'درآمد خالص فروش'),
+        (3003, '${TENANT_A}', 2001, 1003, 0, 900000.00, 'مالیات بر ارزش افزوده فروش')
       ON CONFLICT DO NOTHING
     `);
 
-    // 3. Invoice for Tenant A (createdAt: 2025-05-10 in 1404 Farvardin-Khordad Q1)
+    // 4. Invoice for Tenant A (issuedAt: 2025-05-10 in 1404 Farvardin-Khordad Q1)
     await ownerDs.query(`
-      INSERT INTO "invoices" ("id", "tenant_id", "taxInvoiceNumber", "sellerInfo", "buyerInfo", "items", "totalAmount", "totalTax", "finalPayable", "direction", "status", "createdAt")
+      INSERT INTO "invoices" ("id", "tenant_id", "taxInvoiceNumber", "sellerInfo", "buyerInfo", "items", "totalAmount", "totalTax", "finalPayable", "direction", "status", "subject", "jurisdiction", "issued_at", "createdAt")
       VALUES (
         '44444444-4444-4444-8444-444444444444',
         '${TENANT_A}',
@@ -125,12 +135,15 @@ describePg('Tax Compliance and Cheque Reports on real PostgreSQL (NOSUPERUSER, N
         10900000.00,
         'SALE',
         'PAID',
+        1,
+        'IR',
+        '2025-05-10 10:00:00',
         '2025-05-10 10:00:00'
       )
       ON CONFLICT DO NOTHING
     `);
 
-    // 4. Cheques for Tenant A
+    // 5. Cheques for Tenant A
     await ownerDs.query(`
       INSERT INTO "fin_cheques" ("tenant_id", "direction", "cheque_number", "bank_name", "amount", "issue_date", "due_date", "party_name", "party_code", "status", "sayad_registration_status")
       VALUES
@@ -155,9 +168,9 @@ describePg('Tax Compliance and Cheque Reports on real PostgreSQL (NOSUPERUSER, N
     expect(pkg.year).toBe(1404);
     expect(pkg.tenantId).toBe(TENANT_A);
     expect(pkg.salesReconciliation.invoicedSalesCount).toBe(1);
-    expect(pkg.salesReconciliation.invoicedSalesTotalMinor).toBe('1090000000'); // 10,900,000.00
-    expect(pkg.salesReconciliation.outputVatMinor).toBe('90000000'); // 900,000.00
-    expect(pkg.salesReconciliation.ledgerRevenueMinor).toBe('1090000000');
+    expect(pkg.salesReconciliation.invoicedSalesTotalMinor).toBe('1000000000'); // 10,000,000.00 net sales
+    expect(pkg.salesReconciliation.outputVatMinor).toBe('90000000'); // 900,000.00 VAT
+    expect(pkg.salesReconciliation.ledgerRevenueMinor).toBe('1000000000'); // 10,000,000.00 net revenue
     expect(pkg.salesReconciliation.salesToLedgerDiscrepancyMinor).toBe('0');
     expect(pkg.booksAudit.isBalanced).toBe(true);
     expect(pkg.booksAudit.postedVouchersCount).toBe(1);
@@ -170,23 +183,24 @@ describePg('Tax Compliance and Cheque Reports on real PostgreSQL (NOSUPERUSER, N
     expect(comparison.quarters.length).toBe(4);
     // Q1 contains our invoice from 2025-05-10
     expect(comparison.quarters[0].quarter).toBe(1);
-    expect(comparison.quarters[0].invoicedSalesMinor).toBe('1090000000');
-    expect(comparison.yearTotal.invoicedSalesMinor).toBe('1090000000');
+    expect(comparison.quarters[0].invoicedSalesMinor).toBe('1000000000');
+    expect(comparison.yearTotal.invoicedSalesMinor).toBe('1000000000');
   });
 
   it('assesses Year-End Tax Rollover and tax calculation', async () => {
     const rollover = await rolloverService.assessRollover(TENANT_A, {
       year: 1404,
-      nonDeductibleExpensesMinor: '100000000', // 1,000,000.00
+      nonDeductibleExpensesMinor: '1000000.00', // 1,000,000.00 rials
       taxExemptIncomeMinor: '0',
     });
 
     expect(rollover.year).toBe(1404);
-    expect(rollover.taxReconciliation.accountingRevenueMinor).toBe('1090000000');
-    // Profit before tax = 10,900,000.00. Taxable profit = 10,900,000.00 + 1,000,000.00 = 11,900,000.00
-    expect(rollover.taxReconciliation.taxableProfitMinor).toBe('1190000000');
-    // 25% tax = 2,975,000.00 = 297500000 minor units
-    expect(rollover.taxReconciliation.estimatedCorporateTaxMinor).toBe('297500000');
+    expect(rollover.taxReconciliation.accountingRevenueMinor).toBe('1000000000');
+    // Profit before tax = 10,000,000.00. Taxable profit = 10,000,000.00 + 1,000,000.00 = 11,000,000.00
+    expect(rollover.taxReconciliation.taxableProfitMinor).toBe('1100000000');
+    expect(rollover.taxReconciliation.taxRatePercent).toBe(25);
+    // 25% tax = 2,750,000.00 = 275000000 minor units
+    expect(rollover.taxReconciliation.estimatedCorporateTaxMinor).toBe('275000000');
   });
 
   it('generates Cheque Maturity Report with aging buckets and statistics', async () => {

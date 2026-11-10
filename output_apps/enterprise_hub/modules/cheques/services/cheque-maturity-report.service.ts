@@ -47,12 +47,19 @@ export class ChequeMaturityReportService {
     const asOfDate = query.asOfDate ?? new Date().toISOString().slice(0, 10);
     const direction = query.direction ?? 'all';
 
-    // Query active/open cheques (excluding settled or canceled if not relevant)
+    const OPEN_STATUSES = new Set([
+      ChequeStatus.REGISTERED,
+      ChequeStatus.DELIVERED,
+      ChequeStatus.DEPOSITED,
+    ]);
+
+    // Query active/open cheques (excluding settled, returned or spent cheques)
     const allCheques = await this.repo.list(tenantId, {
       direction: direction === 'all' ? undefined : (direction as ChequeDirection),
     });
 
     const filteredCheques = allCheques.filter((c) => {
+      if (!OPEN_STATUSES.has(c.status)) return false;
       if (query.bankName && c.bankName !== query.bankName) return false;
       return true;
     });
