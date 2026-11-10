@@ -567,6 +567,19 @@ describe('ChequesService partial payment (CHK-01)', () => {
     expect(t.entries).toHaveLength(3);
   });
 
+  it('numeric idempotency key does not collide with later event seq sourceId', async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadNumber: undefined, amount: 100 }) as never);
+    await t.service.transition(A, c.id, { status: ChequeStatus.DEPOSITED });
+    // Event count is now 2 (create, transition). A partial payment with numeric idempotencyKey '2'
+    // is scoped as 'idem:2' and must not collide with subsequent event seq=2
+    await t.service.partialPayment(A, c.id, { amount: 30, idempotencyKey: '2' });
+    const cleared = await t.service.transition(A, c.id, { status: ChequeStatus.CLEARED });
+    expect(cleared).toMatchObject({ status: 'cleared', settledAmount: 100, remainingAmount: 0 });
+    // Both partial voucher and closing voucher exist with remainder posted
+    expect(t.entries.at(-1)?.lines[0].debit).toBe('70.00');
+  });
+
   it('reads the source sequence through the posting transaction, not a second connection', async () => {
     const t = build();
     const c = await t.service.create(A, received({ sayadNumber: undefined, amount: 100 }) as never);

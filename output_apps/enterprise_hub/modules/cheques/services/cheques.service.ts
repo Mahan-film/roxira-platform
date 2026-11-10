@@ -269,7 +269,7 @@ export class ChequesService {
       // The engine is idempotent per source key: a replay returns the first voucher, so leave the
       // state as the first call left it (the remainder already shrank on the first commit).
       if (posted.replayed) {
-        return await this.getById(id, tenantId);
+        return;
       }
       if (paid >= remaining) {
         throw new BadRequestException('مبلغ پرداخت باید کمتر از مانده چک باشد؛ برای پرداخت کامل، وضعیت را «وصول/پاس» کنید.');
@@ -433,7 +433,7 @@ export class ChequesService {
     overrides?: RoleAccounts,
   ): Promise<PostingResult> {
     const seq = (await this.chequesRepository.listEvents(tenantId, cheque.id, manager)).length;
-    const sourceId = idempotencyKey ? `${cheque.id}:${idempotencyKey}` : `${cheque.id}:${seq}`;
+    const sourceId = idempotencyKey ? `${cheque.id}:idem:${idempotencyKey}` : `${cheque.id}:${seq}`;
     return this.postingRules.post(
       tenantId,
       {
