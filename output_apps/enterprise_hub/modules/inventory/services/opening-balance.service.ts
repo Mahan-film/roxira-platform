@@ -258,8 +258,9 @@ export class OpeningBalanceService {
   async template(tenantId: string): Promise<string> {
     const items = await this.repository.itemsWithoutStock(tenantId, TEMPLATE_LIMIT);
     const escape = (value: string) => {
-      const safe = /^[=+\-@]/.test(value) ? `'${value}` : value;
-      return /[",\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+      const plainNumber = /^-?\d+(\.\d+)?$/.test(value);
+      const safe = /^[=+\-@\t\r]/.test(value) && !plainNumber ? `'${value}` : value;
+      return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
     };
     return [
       'sku,barcode,name,quantity,unit_cost',

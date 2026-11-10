@@ -145,4 +145,39 @@ describe('wage tax working files', () => {
       buildWageTaxFiles(1405, 1, 'MAIN', [person], { totalGross: 121, totalTax: 5 }),
     ).toThrow(/disagree/);
   });
+
+  it('neutralises formula injection in wage tax CSV exports', () => {
+    const maliciousPerson: WageTaxPerson = {
+      ...person,
+      firstName: '=CMD|\' /C calc\'!A0',
+      lastName: '+EXCEL_POC',
+      fatherName: '@SUM(1,2)',
+    };
+    const files = buildWageTaxFiles(1405, 1, 'MAIN', [maliciousPerson], {
+      totalGross: 120,
+      totalTax: 5,
+    });
+    expect(files.wpFile).toContain('\'=CMD|\' /C calc\'!A0');
+    expect(files.wpFile).toContain('\'+EXCEL_POC');
+    expect(files.wpFile).toContain('\'@SUM(1,2)');
+  });
+
+  it('neutralises formula injection in insurance list CSV exports', () => {
+    const maliciousWorker: InsuranceListWorker = {
+      ...worker,
+      firstName: '=HYPERLINK("x")',
+      jobTitle: '+ADMIN',
+    };
+    const insuranceFiles = buildInsuranceList(
+      { workshopCode: '1234567890', workshopName: '@EVIL_WORKSHOP', employerName: '-OWNER' },
+      1405,
+      1,
+      [maliciousWorker],
+      23,
+    );
+    expect(insuranceFiles.workersFile).toContain('\'=HYPERLINK');
+    expect(insuranceFiles.workersFile).toContain('\'+ADMIN');
+    expect(insuranceFiles.workshopFile).toContain('\'@EVIL_WORKSHOP');
+    expect(insuranceFiles.workshopFile).toContain('\'-OWNER');
+  });
 });

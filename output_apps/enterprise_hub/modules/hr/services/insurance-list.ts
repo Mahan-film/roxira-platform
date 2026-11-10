@@ -236,8 +236,11 @@ export const DSKWOR_FIELDS = [
 type Row = Record<string, string | number>;
 
 const csvCell = (value: string | number): string => {
+  if (typeof value === 'number') return String(value);
   const text = String(value ?? '');
-  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  const plainNumber = /^-?\d+(\.\d+)?$/.test(text);
+  const safe = !plainNumber && /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+  return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 };
 
 const toCsv = (fields: ReadonlyArray<string>, rows: Row[]): string =>
