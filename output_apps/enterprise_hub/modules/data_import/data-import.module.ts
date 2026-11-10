@@ -50,6 +50,7 @@ import { PackageImportService } from './services/package-import.service';
 import { PackageProgressService } from './services/package-progress.service';
 import { PackageStoreService } from './services/package-store.service';
 import { UploadStoreService } from './services/upload-store.service';
+import { SepidarChequesFifoAdapter } from './migration/bak/sepidar-cheques-fifo.adapter';
 import { TenantScope } from '../access/services/tenant-scope';
 import { BulkImportController } from './bulk/bulk-import.controller';
 import { BulkImportProcessor } from './bulk/bulk-import.processor';
@@ -174,6 +175,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
         PartiesRegistry,
       ],
     },
+    SepidarChequesFifoAdapter,
     JwtAuthGuard,
     TenantScope,
     BulkImportRepository,
@@ -187,6 +189,6 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
       useFactory: () => (storageDriver() === 's3' ? new S3ObjectStore(s3SettingsFromEnv()) : new LocalObjectStore(localStorageRoot())),
     },
   ],
-  exports: [DataImportService, EntityImportService],
+  exports: [DataImportService, EntityImportService, SepidarChequesFifoAdapter],
 })
 export class DataImportModule {}
