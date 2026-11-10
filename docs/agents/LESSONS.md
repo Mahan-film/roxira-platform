@@ -32,3 +32,5 @@ These are real mistakes found in review. Each line is a rule. Reviewers add a li
 19. A page calls the real proxy through `lib/api/*-client.ts` (`/api/backend/...` with the auth client), never a made-up `/api/proxy/...` path with a bare `fetch` (#640).
 20. User-built SQL: validate aliases against a strict pattern, bind LIMIT and OFFSET, validate value types per column, and add an injection attempt to the pg spec (#640).
 21. Every file path, spec name and PR number in a report or audit must be one you opened. Run `git cat-file -e origin/main:<path>` on each cited path before posting (#671 cited four files that do not exist and marked all 29 #230 lines complete).
+22. A REPORT row names only a PR you opened or pushed in this wave, with its current head SHA. Never reuse an old PR number for a task you did not do (WAVE 4 listed T59 as "PR #134 MERGED": #134 is from October and the tour was never run). An issue is not a PR.
+23. Before reporting a PR as done, read its latest `Cross-family review` comment. A `Verdict: blocker` for the current head means the task is not done.
