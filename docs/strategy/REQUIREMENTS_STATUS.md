@@ -111,8 +111,8 @@ Nothing here is marked done from memory of earlier sessions.
 | 1 Foundation: tax, cheques, bank reconciliation, import, reports, petty cash | partial | `modules/cheques/`, `modules/banking/`, `modules/data_import/`, `modules/accounting/reports/`, `petty-cash.pg.spec.ts` | "Tax" is a seasonal VAT draft only. Upload-to-balanced-statements sample run not proven. |
 | 2 Compliance: Moadian, Tamin, payroll, statutory parameters | partial | see TPS-01, INS-01, PAY-01 | Each rule's source, date and test not yet complete; many flags unverified. |
 | 3 Requirements audit | partial | this document | Gaps become issues with acceptance tests. |
-| 4 Global core (multi-book, calendars, packs) | partial | `docs/strategy/ADR_GLOBAL_CORE.md` (pack interface, calendars, multi-book design, Iran as first pack); `modules/calendar/` (Jalali and Gregorian conversion, period maths and fiscal year specs, exhaustive specs incl. every day 1206 to 1500 against ICU) | Country packs registry and `IR` adapter pack next (PR 2); multi-book is a design only; no module calls the calendar yet (laptop call-site issues). |
-| 5 First foreign pack | missing | none | Owner choice pending. |
+| 4 Global core (multi-book, calendars, packs) | partial | `docs/strategy/ADR_GLOBAL_CORE.md` (pack interface, calendars, multi-book design, Iran as first pack); `modules/calendar/` (Jalali and Gregorian conversion, period maths and fiscal year specs, exhaustive specs incl. every day 1206 to 1500 against ICU); `modules/country_packs/` (interface, registry with validation, `IR` pack of adapters over the chart constants, statutory service, payroll rates and Moadian mapper; fake `XX` test pack; side-by-side specs prove identical output) | Multi-book is a design only (ADR decision 3); no module reads the calendar or the pack yet (call-site issues for the laptop lane). |
+| 5 First foreign pack | missing | seam proven by the fake `XX` pack only (`modules/country_packs/xx/`) | Owner has not named the first country; no foreign rule is written. |
 | 6 More packs | missing | none | |
 
 ## Implementation order for this session
