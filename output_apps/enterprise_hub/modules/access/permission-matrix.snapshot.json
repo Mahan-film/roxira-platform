@@ -733,6 +733,28 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/banking/cash-boxes (CashBoxController.list)": {
+    "policy": "banking:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": true,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/banking/cash-boxes/:id (CashBoxController.get)": {
+    "policy": "banking:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": true,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/banking/recon/audit (ReconController.audit)": {
     "policy": "banking:admin",
     "owner": true,
@@ -2937,6 +2959,28 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/banking/cash-boxes (CashBoxController.create)": {
+    "policy": "banking:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/banking/pos-settlements (CashBoxController.settlePos)": {
+    "policy": "banking:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/banking/recon/drafts/:id/reject (ReconController.reject)": {
     "policy": "banking:post",
     "owner": true,
@@ -3092,6 +3136,17 @@
     "legacy_member": false
   },
   "POST /enterprise-hub/banking/statement-lines/:id/match (BankingController.match)": {
+    "policy": "banking:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/banking/transfers/cash-bank (CashBoxController.transfer)": {
     "policy": "banking:post",
     "owner": true,
     "admin": true,

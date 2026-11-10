@@ -103,6 +103,56 @@ export interface CashBox {
   name: string;
   code: string;
   ledgerAccountId: number;
+  currency: string;
   openingBalance: number | string;
   currentBalance?: number | string;
+  active?: boolean;
+  status?: string;
+  description?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateCashBoxDto {
+  name: string;
+  code: string;
+  ledgerAccountId: number;
+  currency?: string;
+  openingBalance?: number | string;
+  description?: string;
+}
+
+export interface CashBankTransferDto {
+  cashBoxId: number;
+  bankAccountId: number;
+  amount: number | string;
+  date: string;
+  direction: "TO_BANK" | "TO_CASH" | "CASH_TO_BANK" | "BANK_TO_CASH";
+  description?: string;
+}
+
+export interface PosSettlementDto {
+  bankAccountId: number;
+  terminalNumber: string;
+  date: string;
+  grossAmount: number | string;
+  feeAmount: number | string;
+  referenceNumber?: string;
+  description?: string;
+}
+
+export interface PosSettlementResult {
+  settlement: {
+    id: number;
+    terminalNumber: string;
+    grossAmount: number;
+    feeAmount: number;
+    netAmount: number;
+    date: string;
+    status: string;
+  };
+  voucher: {
+    entryId: number;
+    entryNumber: string;
+  };
 }

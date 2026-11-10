@@ -43,6 +43,7 @@ export const POSTING_ROLES = {
   fixed_asset: { label: 'دارایی ثابت', types: [AccountType.ASSET] },
   asset_disposal_gain: { label: 'سود حاصل از فروش دارایی', types: [AccountType.REVENUE] },
   asset_disposal_loss: { label: 'زیان حاصل از فروش دارایی', types: [AccountType.EXPENSE] },
+  bank_fee: { label: 'کارمزد خدمات بانکی', types: [AccountType.EXPENSE] },
 } as const;
 
 export type PostingRole = keyof typeof POSTING_ROLES;
@@ -90,4 +91,5 @@ export const DEFAULT_ROLE_ACCOUNTS: Readonly<Partial<Record<PostingRole, string>
   fixed_asset: '1110',
   asset_disposal_gain: '4050',
   asset_disposal_loss: '5070',
+  bank_fee: '5210',
 };
