@@ -1157,6 +1157,28 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/data-import/export/json (TenantExportController.exportJson)": {
+    "policy": "data_import:export",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/data-import/export/tabular (TenantExportController.exportTabular)": {
+    "policy": "data_import:export",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/data-import/formats (DataImportController.listFormats)": {
     "policy": "data_import:read",
     "owner": true,
