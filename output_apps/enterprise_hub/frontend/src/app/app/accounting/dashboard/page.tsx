@@ -39,7 +39,7 @@ export default function AccountingDashboardPage() {
     : [];
 
   return (
-    <EnterpriseRouteGuard requireAdmin>
+    <EnterpriseRouteGuard>
       <PageHeader
         title="داشبورد مدیریتی"
         description="مبالغ به ریال و از اسناد ثبت‌شده در دفتر"

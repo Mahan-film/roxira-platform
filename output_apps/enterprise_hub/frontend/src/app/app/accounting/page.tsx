@@ -56,7 +56,7 @@ export default function SuiteAccountingPage() {
   }, [refreshKey]);
 
   return (
-    <EnterpriseRouteGuard requireAdmin>
+    <EnterpriseRouteGuard>
       <PageHeader
         title="حساب‌ها"
         description="سرفصل حساب‌ها، تراز آزمایشی و دفتر روزنامه"

@@ -180,7 +180,7 @@ function AccountingPageContent() {
  */
 export default function AccountingPage() {
   return (
-    <EnterpriseRouteGuard requireAdmin>
+    <EnterpriseRouteGuard>
       <AccountingPageContent />
     </EnterpriseRouteGuard>
   );

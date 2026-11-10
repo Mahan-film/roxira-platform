@@ -144,7 +144,7 @@ export default function PettyCashPage() {
   };
 
   return (
-    <EnterpriseRouteGuard requireAdmin>
+    <EnterpriseRouteGuard>
       <PageHeader
         title="صندوق و تنخواه"
         description="تنخواه‌گردان‌ها، رسید هزینه‌ها و تسویه با دفتر"

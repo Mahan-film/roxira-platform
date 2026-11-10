@@ -191,7 +191,7 @@ export default function FixedAssetsPage() {
     });
 
   return (
-    <EnterpriseRouteGuard requireAdmin>
+    <EnterpriseRouteGuard>
       <PageHeader
         title="دارایی‌های ثابت"
         description="ثبت دارایی، استهلاک انباشته، ارزش دفتری و فروش دارایی با سند سود یا زیان"

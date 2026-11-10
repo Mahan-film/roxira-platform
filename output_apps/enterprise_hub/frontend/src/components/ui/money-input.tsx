@@ -28,8 +28,11 @@ interface MoneyInputProps {
   placeholder?: string;
   className?: string;
   helper?: boolean;
+  onKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void;
+  onFocus?: (event: React.FocusEvent<HTMLInputElement>) => void;
   "aria-label"?: string;
   "aria-invalid"?: boolean;
+  [key: `data-${string}`]: unknown;
 }
 
 /**
@@ -44,6 +47,8 @@ export function MoneyInput({
   placeholder,
   className,
   helper = true,
+  onKeyDown,
+  onFocus,
   ...aria
 }: MoneyInputProps) {
   const helperId = useId();
@@ -81,6 +86,7 @@ export function MoneyInput({
       event.preventDefault();
       append(event.shiftKey ? 4 : 3);
     }
+    onKeyDown?.(event);
   }
 
   const described = describeRials(value);
@@ -98,6 +104,7 @@ export function MoneyInput({
         value={display}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
+        onFocus={onFocus}
         aria-describedby={helper ? helperId : undefined}
         className={cn("text-start tabular-nums", className)}
         {...(helper === false && described
