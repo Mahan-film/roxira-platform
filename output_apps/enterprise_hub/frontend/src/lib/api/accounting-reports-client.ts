@@ -17,6 +17,7 @@ import type {
   ReportQuery,
   TrialBalanceColumns,
   TrialBalanceReport,
+  ConsolidatedReportResponse,
 } from "@/types/accounting-reports";
 
 const BASE = `${API_PROXY_BASE_PATH}/${ACCOUNTING_RESOURCE_PATH}`;
@@ -171,3 +172,15 @@ export const setAccountBudget = (body: {
   budgetAmount: Money;
   costCenterId?: number;
 }) => apiRequest(`${REPORTS}/budgets`, { method: "PUT", body });
+
+export const getConsolidatedReport = (
+  query?: { asOfDate?: string; tenantIds?: string[] },
+  signal?: AbortSignal,
+) => {
+  const searchParams: Record<string, string | undefined> = {};
+  if (query?.asOfDate) searchParams.asOfDate = query.asOfDate;
+  if (query?.tenantIds && query.tenantIds.length > 0) {
+    searchParams.tenantIds = query.tenantIds.join(",");
+  }
+  return report<ConsolidatedReportResponse>("consolidated", searchParams, signal);
+};

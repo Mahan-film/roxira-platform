@@ -238,3 +238,28 @@ export interface CostCentreTrialBalanceQuery extends ReportQuery {
   costCenterCode?: string;
 }
 
+export interface ConsolidatedTenantSummary {
+  tenantId: string;
+  tenantName: string;
+  totalDebit: Money;
+  totalCredit: Money;
+}
+
+export interface ConsolidatedAccountRow {
+  accountCode: string;
+  accountName: string;
+  companyAmounts: Record<string, { debit: number; credit: number; balance: number }>;
+  totalDebit: Money;
+  totalCredit: Money;
+  netBalance: Money;
+}
+
+export interface ConsolidatedReportResponse {
+  asOfDate: string;
+  participatingTenants: ConsolidatedTenantSummary[];
+  rows: ConsolidatedAccountRow[];
+  grandTotalDebit: Money;
+  grandTotalCredit: Money;
+  grandNetBalance: Money;
+}
+

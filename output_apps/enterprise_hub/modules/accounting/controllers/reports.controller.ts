@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, HttpStatus, Param, Put, Query, Req, Res, StreamableFile } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, HttpStatus, Param, Put, Query, Req, Res, StreamableFile, UnauthorizedException } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AccessAction, AccessModule } from '../../access/catalogue';
 import { ModuleAccess, RequireAction } from '../../access/decorators';
@@ -15,10 +15,12 @@ import {
   TrialBalanceQueryDto,
 } from '../dto/report.dto';
 import { BudgetVsActualQueryDto, SetAccountBudgetDto } from '../dto/budget-report.dto';
+import { ConsolidatedReportQueryDto } from '../dto/consolidated-report.dto';
 import { CostCentreReportService } from '../services/cost-centre-report.service';
 import { FinancialReportsService, moneyJson } from '../services/financial-reports.service';
 import { ReportExportService } from '../services/report-export.service';
 import { BudgetVsActualService } from '../services/budget-vs-actual.service';
+import { ConsolidatedReportService } from '../services/consolidated-report.service';
 
 /** Accounting reports of the JWT tenant. Amounts follow the ledger's exact JSON money rule. */
 @ApiTags('Accounting - گزارش‌ها و صورت‌های مالی')
@@ -30,6 +32,7 @@ export class ReportsController {
     private readonly exporter: ReportExportService,
     private readonly costCentres: CostCentreReportService,
     private readonly budgetService: BudgetVsActualService,
+    private readonly consolidatedService: ConsolidatedReportService,
   ) {}
 
   @Get('trial-balance')
@@ -134,5 +137,20 @@ export class ReportsController {
     @Body() dto: SetAccountBudgetDto,
   ) {
     return this.budgetService.setBudget(requireTenantId(request), dto);
+  }
+
+  @Get('consolidated')
+  @ApiOperation({ summary: 'گزارش تجمیعی چند شرکت (هلدینگ)' })
+  @ApiResponse({ status: HttpStatus.OK })
+  async consolidated(
+    @Req() request: AuthenticatedRequest,
+    @Query() query: ConsolidatedReportQueryDto,
+  ) {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new UnauthorizedException('شناسه کاربر یافت نشد.');
+    }
+    return moneyJson(await this.consolidatedService.getConsolidatedReport(userId, query));
+  }
   }
 }
