@@ -31,3 +31,4 @@ These are real mistakes found in review. Each line is a rule. Reviewers add a li
 18. Idempotency: the same key with a different body is a 409 (store a request fingerprint), and take a lock before the insert so a skipped insert never runs a numbering trigger and burns a number (#638).
 19. A page calls the real proxy through `lib/api/*-client.ts` (`/api/backend/...` with the auth client), never a made-up `/api/proxy/...` path with a bare `fetch` (#640).
 20. User-built SQL: validate aliases against a strict pattern, bind LIMIT and OFFSET, validate value types per column, and add an injection attempt to the pg spec (#640).
+21. Every file path, spec name and PR number in a report or audit must be one you opened. Run `git cat-file -e origin/main:<path>` on each cited path before posting (#671 cited four files that do not exist and marked all 29 #230 lines complete).
