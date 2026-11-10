@@ -1,6 +1,18 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsInt, IsObject, IsOptional, IsString, Length, Max, Min, ValidateNested } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsBoolean,
+  IsInt,
+  IsObject,
+  IsOptional,
+  IsString,
+  Length,
+  Max,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 
 /** Pattern-specific data the invoice does not hold, keyed by Moadian field name. */
 export class MoadianExtrasDto {
@@ -40,6 +52,11 @@ export class SubmitMoadianInvoiceDto {
   @IsString({ message: 'شماره منحصر‌به‌فرد مالیاتی مرجع باید رشته متنی باشد.' })
   @Length(22, 22, { message: 'شماره منحصر‌به‌فرد مالیاتی مرجع باید دقیقاً ۲۲ کاراکتر باشد.' })
   referenceTaxId?: string;
+
+  @ApiPropertyOptional({ description: 'Perform pre-flight validation before submission' })
+  @IsOptional()
+  @IsBoolean()
+  preFlightCheck?: boolean;
 
   @ApiPropertyOptional({ description: 'Cash part in rials for a cash and credit settlement' })
   @IsOptional()

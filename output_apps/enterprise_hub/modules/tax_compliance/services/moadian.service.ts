@@ -55,6 +55,10 @@ import {
   validateCounterpartyAgainstInvoiceType,
   MoadianCounterpartyValidationError,
 } from '../utils/moadian-payload.transformer';
+import {
+  runMoadianPreFlightValidation,
+  MoadianPreFlightResult,
+} from '../utils/moadian-preflight.validator';
 import { SubmitMoadianInvoiceDto } from '../dto/submit-moadian-invoice.dto';
 import { MoadianMappingError, mapInvoiceToMoadianPacket } from '../utils/moadian-packet.mapper';
 import {
@@ -268,6 +272,18 @@ export class MoadianService implements OnModuleInit {
   // ارسال صورتحساب
   // ---------------------------------------------------------------------------
 
+  async preFlightValidate(
+    tenantId: string,
+    invoiceId: string,
+  ): Promise<MoadianPreFlightResult> {
+    this.assertEnabled();
+    const invoice = await this.invoicingService.findOne(tenantId, invoiceId);
+    const credential = await this.repository.findCredential(tenantId);
+    return runMoadianPreFlightValidation(invoice, {
+      defaultSstid: credential?.defaultSstid,
+    });
+  }
+
   async submitInvoice(
     tenantId: string,
     invoiceId: string,
@@ -336,6 +352,16 @@ export class MoadianService implements OnModuleInit {
     const credential = await this.repository.findCredential(tenantId);
     if (!credential) {
       throw new BadRequestException('ابتدا اطلاعات اتصال مودیان را ثبت کنید.');
+    }
+
+    if (options.preFlightCheck) {
+      const preFlight = runMoadianPreFlightValidation(invoice, {
+        defaultSstid: credential.defaultSstid,
+      });
+      if (!preFlight.valid) {
+        const messages = preFlight.errors.map((e) => `${e.field}: ${e.message}`).join(' | ');
+        throw new BadRequestException(`اعتبارسنجی پیش از ارسال مودیان: ${messages}`);
+      }
     }
 
     const existing = await this.repository.findSubmissionByInvoice(tenantId, invoiceId);
