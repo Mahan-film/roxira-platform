@@ -4,6 +4,7 @@ import {
   Entity,
   Index,
   PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 
 /**
@@ -53,6 +54,15 @@ export class PosSettlementEntity {
   @Column({ type: 'integer', nullable: true, name: 'journal_entry_id' })
   journalEntryId: number | null;
 
+  @Column({ type: 'varchar', length: 64, nullable: true, name: 'idempotency_key' })
+  idempotencyKey: string | null;
+
+  @Column({ type: 'varchar', length: 64, nullable: true, name: 'idempotency_fingerprint' })
+  idempotencyFingerprint: string | null;
+
   @CreateDateColumn({ type: 'timestamptz', name: 'created_at' })
   createdAt: Date;
+
+  @UpdateDateColumn({ type: 'timestamptz', name: 'updated_at' })
+  updatedAt: Date;
 }

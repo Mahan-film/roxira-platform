@@ -118,27 +118,29 @@ export interface CreateCashBoxDto {
   code: string;
   ledgerAccountId: number;
   currency?: string;
-  openingBalance?: number | string;
+  openingBalance?: string;
   description?: string;
 }
 
 export interface CashBankTransferDto {
   cashBoxId: number;
   bankAccountId: number;
-  amount: number | string;
+  amount: string;
   date: string;
-  direction: "TO_BANK" | "TO_CASH" | "CASH_TO_BANK" | "BANK_TO_CASH";
+  direction: "TO_BANK" | "TO_CASH";
   description?: string;
+  idempotencyKey?: string;
 }
 
 export interface PosSettlementDto {
   bankAccountId: number;
   terminalNumber: string;
   date: string;
-  grossAmount: number | string;
-  feeAmount: number | string;
+  grossAmount: string;
+  feeAmount?: string;
   referenceNumber?: string;
   description?: string;
+  idempotencyKey?: string;
 }
 
 export interface PosSettlementResult {

@@ -1,8 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Matches, MaxLength, Min } from 'class-validator';
+import { IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Matches, MaxLength, Min } from 'class-validator';
 
-const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const STRICT_DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+const DECIMAL_AMOUNT = /^\d+(\.\d{1,2})?$/;
+const BOX_CODE = /^[A-Za-z0-9_-]+$/;
 
 export class CreateCashBoxDto {
   @ApiProperty({ description: 'نام صندوق', example: 'صندوق مرکزی فروشگاه' })
@@ -15,6 +17,7 @@ export class CreateCashBoxDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(32)
+  @Matches(BOX_CODE, { message: 'کد صندوق تنها می‌تواند شامل حروف، اعداد، خط فاصله و زیرخط باشد.' })
   code: string;
 
   @ApiProperty({ description: 'شناسه حساب متناظر در دفتر کل', example: 10 })
@@ -29,9 +32,11 @@ export class CreateCashBoxDto {
   @MaxLength(8)
   currency?: string;
 
-  @ApiPropertyOptional({ description: 'مانده اولیه (ریال)', default: 0 })
+  @ApiPropertyOptional({ description: 'مانده اولیه (ریال)', default: '0' })
   @IsOptional()
-  openingBalance?: number | string;
+  @IsString()
+  @Matches(DECIMAL_AMOUNT, { message: 'مانده اولیه باید یک عدد اعشاری معتبر باشد.' })
+  openingBalance?: string;
 }
 
 export class CashBankTransferDto {
@@ -47,16 +52,17 @@ export class CashBankTransferDto {
   @Min(1)
   bankAccountId: number;
 
-  @ApiProperty({ enum: ['TO_BANK', 'TO_CASH', 'CASH_TO_BANK', 'BANK_TO_CASH'], description: 'جهت انتقال وجه: واریز به بانک یا برداشت نقد' })
-  @IsIn(['TO_BANK', 'TO_CASH', 'CASH_TO_BANK', 'BANK_TO_CASH'])
-  direction: 'TO_BANK' | 'TO_CASH' | 'CASH_TO_BANK' | 'BANK_TO_CASH';
+  @ApiProperty({ enum: ['TO_BANK', 'TO_CASH'], description: 'جهت انتقال وجه: واریز به بانک یا برداشت نقد' })
+  @IsIn(['TO_BANK', 'TO_CASH'])
+  direction: 'TO_BANK' | 'TO_CASH';
 
   @ApiProperty({ description: 'مبلغ انتقال (ریال)', example: '50000000' })
-  @IsNotEmpty()
-  amount: number | string;
+  @IsString()
+  @Matches(DECIMAL_AMOUNT, { message: 'مبلغ انتقال باید یک عدد اعشاری مثبت باشد.' })
+  amount: string;
 
   @ApiProperty({ description: 'تاریخ انتقال', example: '2026-05-15' })
-  @Matches(DATE_ONLY, { message: 'date must be YYYY-MM-DD' })
+  @Matches(STRICT_DATE, { message: 'date must be YYYY-MM-DD' })
   date: string;
 
   @ApiPropertyOptional({ description: 'توضیحات سند' })
@@ -64,6 +70,12 @@ export class CashBankTransferDto {
   @IsString()
   @MaxLength(256)
   description?: string;
+
+  @ApiPropertyOptional({ description: 'کلید یکتایی عملیات (Idempotency Key)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  idempotencyKey?: string;
 }
 
 export class PosSettlementDto {
@@ -80,20 +92,29 @@ export class PosSettlementDto {
   terminalNumber: string;
 
   @ApiProperty({ description: 'تاریخ تسویه', example: '2026-05-15' })
-  @Matches(DATE_ONLY, { message: 'date must be YYYY-MM-DD' })
+  @Matches(STRICT_DATE, { message: 'date must be YYYY-MM-DD' })
   date: string;
 
   @ApiProperty({ description: 'مبلغ ناخالص فروش پوز (ریال)', example: '100000000' })
-  @IsNotEmpty()
-  grossAmount: number | string;
+  @IsString()
+  @Matches(DECIMAL_AMOUNT, { message: 'مبلغ ناخالص باید یک عدد اعشاری مثبت باشد.' })
+  grossAmount: string;
 
-  @ApiPropertyOptional({ description: 'کارمزد کسرشده توسط شاپرک/بانک (ریال)', default: 0, example: '12000' })
+  @ApiPropertyOptional({ description: 'کارمزد کسرشده توسط شاپرک/بانک (ریال)', default: '0', example: '12000' })
   @IsOptional()
-  feeAmount?: number | string;
+  @IsString()
+  @Matches(DECIMAL_AMOUNT, { message: 'مبلغ کارمزد باید یک عدد اعشاری مثبت باشد.' })
+  feeAmount?: string;
 
   @ApiPropertyOptional({ description: 'شماره پیگیری یا مرجع تسویه' })
   @IsOptional()
   @IsString()
   @MaxLength(64)
   referenceNumber?: string;
+
+  @ApiPropertyOptional({ description: 'کلید یکتایی عملیات (Idempotency Key)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  idempotencyKey?: string;
 }

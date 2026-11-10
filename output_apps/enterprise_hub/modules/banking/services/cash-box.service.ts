@@ -1,12 +1,16 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { EntityManager } from 'typeorm';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { createHash } from 'crypto';
+import { EntityManager, IsNull } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
 import { ChartOfAccountEntity } from '../../accounting/entities/chart-of-account.entity';
+import { JournalEntryEntity } from '../../accounting/entities/journal-entry.entity';
+import { AccountLevel, AccountType } from '../../accounting/enums/accounting.enum';
 import { fromMinor, minorToDecimal, toMinor } from '../../accounting/money';
 import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
 import { CashBankTransferDto, CreateCashBoxDto, PosSettlementDto } from '../dto/cash-box.dto';
 import { BankAccountEntity } from '../entities/bank-account.entity';
 import { CashBoxEntity } from '../entities/cash-box.entity';
+import { CashTransferEntity } from '../entities/cash-transfer.entity';
 import { PosSettlementEntity } from '../entities/pos-settlement.entity';
 
 @Injectable()
@@ -22,15 +26,36 @@ export class CashBoxService {
     manager?: EntityManager,
   ): Promise<CashBoxEntity> {
     return this.scope.within(tenantId, manager, async (m) => {
-      // Validate ledger account belongs to tenant
+      // Validate unique code within tenant
+      const existing = await m.findOne(CashBoxEntity, {
+        where: { tenantId, code: dto.code.trim() },
+      });
+      if (existing) {
+        throw new ConflictException(`صندوقی با کد «${dto.code.trim()}» قبلاً ثبت شده است.`);
+      }
+
+      // Validate ledger account belongs to tenant and is active ASSET moein/tafsili
       const account = await m.findOne(ChartOfAccountEntity, {
         where: { id: dto.ledgerAccountId, tenantId },
       });
       if (!account) {
         throw new NotFoundException(`حساب دفتر کل با شناسه ${dto.ledgerAccountId} یافت نشد.`);
       }
+      if (account.level && account.level !== AccountLevel.MOEIN && account.level !== AccountLevel.TAFSILI) {
+        throw new BadRequestException('حساب دفتر کل انتخاب‌شده باید در سطح معین یا تفصیلی باشد.');
+      }
+      if (account.accountType !== AccountType.ASSET) {
+        throw new BadRequestException('حساب دفتر کل صندوق باید از نوع دارایی (ASSET) باشد.');
+      }
+      if (account.currency && dto.currency && account.currency !== dto.currency) {
+        throw new BadRequestException('واحد پول صندوق با واحد پول حساب دفتر کل همخوانی ندارد.');
+      }
 
       const openingMinor = dto.openingBalance != null ? toMinor(dto.openingBalance) : 0n;
+      if (openingMinor < 0n) {
+        throw new BadRequestException('مانده اولیه صندوق نمی‌تواند منفی باشد.');
+      }
+
       const box = m.create(CashBoxEntity, {
         tenantId,
         name: dto.name.trim(),
@@ -98,10 +123,17 @@ export class CashBoxService {
       if (!box) {
         throw new NotFoundException(`صندوق با شناسه ${dto.cashBoxId} یافت نشد.`);
       }
+      if (!box.active) {
+        throw new BadRequestException('صندوق انتخاب‌شده غیرفعال است.');
+      }
 
       const bank = await m.findOne(BankAccountEntity, { where: { tenantId, id: dto.bankAccountId } });
       if (!bank) {
         throw new NotFoundException(`حساب بانکی با شناسه ${dto.bankAccountId} یافت نشد.`);
+      }
+
+      if (box.currency !== bank.currency) {
+        throw new BadRequestException(`واحد پول صندوق (${box.currency}) با واحد پول حساب بانکی (${bank.currency}) همخوانی ندارد.`);
       }
 
       const boxAccount = await m.findOne(ChartOfAccountEntity, {
@@ -115,7 +147,7 @@ export class CashBoxService {
         throw new NotFoundException('حساب دفتر کل متناظر صندوق یا بانک یافت نشد.');
       }
 
-      const isToBank = dto.direction === 'TO_BANK' || dto.direction === 'CASH_TO_BANK';
+      const isToBank = dto.direction === 'TO_BANK';
       const docType = isToBank
         ? 'treasury.cash_bank_transfer'
         : 'treasury.bank_cash_transfer';
@@ -124,14 +156,55 @@ export class CashBoxService {
         ? `انتقال وجه از صندوق ${box.name} به حساب ${bank.name}`
         : `انتقال وجه از حساب ${bank.name} به صندوق ${box.name}`;
 
-      const transferId = `xfer-${box.id}-${bank.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const idempotencyKey =
+        dto.idempotencyKey?.trim() ||
+        `xfer:${box.id}:${bank.id}:${dto.date}:${amountMinor}:${dto.direction}`;
+
+      const fingerprint = createHash('sha256')
+        .update(
+          JSON.stringify({
+            tenantId,
+            cashBoxId: box.id,
+            bankAccountId: bank.id,
+            date: dto.date,
+            amount: amountMinor.toString(),
+            direction: dto.direction,
+          }),
+        )
+        .digest('hex');
+
+      // Check existing cash transfer record for idempotency
+      const existingTransfer = await m.findOne(CashTransferEntity, {
+        where: { tenantId, idempotencyKey },
+      });
+      if (existingTransfer) {
+        if (
+          existingTransfer.idempotencyFingerprint &&
+          existingTransfer.idempotencyFingerprint !== fingerprint
+        ) {
+          throw new ConflictException(
+            `کلید یکتایی «${idempotencyKey}» قبلاً با محتوای دیگری ثبت شده است؛ برای انتقال جدید کلید جدید بفرستید.`,
+          );
+        }
+        const existingEntry = existingTransfer.journalEntryId
+          ? await m.findOne(JournalEntryEntity, { where: { tenantId, id: existingTransfer.journalEntryId } })
+          : null;
+        return {
+          direction: dto.direction,
+          amount: fromMinor(amountMinor),
+          date: dto.date,
+          cashBox: { id: box.id, name: box.name, code: box.code },
+          bankAccount: { id: bank.id, name: bank.name, accountNumber: bank.accountNumber },
+          voucher: { entryId: existingTransfer.journalEntryId!, entryNumber: existingEntry?.entryNumber ?? '', replayed: true },
+        };
+      }
 
       const voucher = await this.postingRules.post(
         tenantId,
         {
           docType,
           sourceType: 'cash_bank_transfer',
-          sourceId: transferId,
+          sourceId: idempotencyKey,
           date: dto.date,
           amounts: { amount: amountMinor },
           description: dto.description || defaultDesc,
@@ -142,6 +215,20 @@ export class CashBoxService {
         },
         m,
       );
+
+      // Save CashTransferEntity
+      const transferRecord = m.create(CashTransferEntity, {
+        tenantId,
+        cashBoxId: box.id,
+        bankAccountId: bank.id,
+        direction: dto.direction,
+        amount: minorToDecimal(amountMinor),
+        date: dto.date,
+        journalEntryId: voucher.entryId,
+        idempotencyKey,
+        idempotencyFingerprint: fingerprint,
+      });
+      await m.save(CashTransferEntity, transferRecord);
 
       return {
         direction: dto.direction,
@@ -187,14 +274,67 @@ export class CashBoxService {
         dto.referenceNumber ? ` - پیگیری ${dto.referenceNumber}` : ''
       }`;
 
-      const settlementId = `pos-${bank.id}-${dto.terminalNumber}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const idempotencyKey =
+        dto.idempotencyKey?.trim() ||
+        `pos:${bank.id}:${dto.terminalNumber.trim()}:${dto.date}:${dto.referenceNumber?.trim() || ''}`;
+
+      const fingerprint = createHash('sha256')
+        .update(
+          JSON.stringify({
+            tenantId,
+            bankAccountId: bank.id,
+            terminalNumber: dto.terminalNumber.trim(),
+            date: dto.date,
+            grossAmount: grossMinor.toString(),
+            feeAmount: feeMinor.toString(),
+            referenceNumber: dto.referenceNumber?.trim() || null,
+          }),
+        )
+        .digest('hex');
+
+      // Check existing POS settlement
+      const existingSettlement = await m.findOne(PosSettlementEntity, {
+        where: dto.idempotencyKey?.trim()
+          ? { tenantId, idempotencyKey: dto.idempotencyKey.trim() }
+          : {
+              tenantId,
+              bankAccountId: bank.id,
+              terminalNumber: dto.terminalNumber.trim(),
+              date: dto.date,
+              referenceNumber: dto.referenceNumber?.trim() || IsNull(),
+            },
+      });
+
+      if (existingSettlement) {
+        if (
+          existingSettlement.idempotencyFingerprint &&
+          existingSettlement.idempotencyFingerprint !== fingerprint
+        ) {
+          throw new ConflictException(
+            `کلید یکتایی «${idempotencyKey}» قبلاً با محتوای دیگری ثبت شده است؛ برای تسویه جدید کلید جدید بفرستید.`,
+          );
+        }
+        const existingVoucher = existingSettlement.journalEntryId
+          ? await m.findOne(JournalEntryEntity, {
+              where: { tenantId, id: existingSettlement.journalEntryId },
+            })
+          : null;
+        return {
+          settlement: existingSettlement,
+          voucher: {
+            entryId: existingSettlement.journalEntryId!,
+            entryNumber: existingVoucher?.entryNumber ?? '',
+            replayed: true,
+          },
+        };
+      }
 
       const voucher = await this.postingRules.post(
         tenantId,
         {
           docType: 'treasury.pos_settlement',
           sourceType: 'pos_settlement',
-          sourceId: settlementId,
+          sourceId: idempotencyKey,
           date: dto.date,
           amounts: {
             gross: grossMinor,
@@ -219,6 +359,8 @@ export class CashBoxService {
         netAmount: minorToDecimal(netMinor),
         referenceNumber: dto.referenceNumber?.trim() || null,
         journalEntryId: voucher.entryId,
+        idempotencyKey,
+        idempotencyFingerprint: fingerprint,
       });
 
       const saved = await m.save(PosSettlementEntity, settlement);

@@ -92,4 +92,5 @@ export const DEFAULT_ROLE_ACCOUNTS: Readonly<Partial<Record<PostingRole, string>
   asset_disposal_gain: '4050',
   asset_disposal_loss: '5070',
   bank_fee: '5210',
+  pos_clearing: '1015',
 };

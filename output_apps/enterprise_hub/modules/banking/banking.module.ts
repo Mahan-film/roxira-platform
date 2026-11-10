@@ -9,6 +9,7 @@ import { BankAccountEntity } from './entities/bank-account.entity';
 import { BankStatementLineEntity } from './entities/bank-statement-line.entity';
 import { CashBoxEntity } from './entities/cash-box.entity';
 import { PosSettlementEntity } from './entities/pos-settlement.entity';
+import { CashTransferEntity } from './entities/cash-transfer.entity';
 import { BankingRepository } from './repositories/banking.repository';
 import { ReconController } from './recon/recon.controller';
 import { ReconRepository } from './recon/recon.repository';
@@ -26,6 +27,7 @@ import { CashBoxService } from './services/cash-box.service';
       BankStatementLineEntity,
       CashBoxEntity,
       PosSettlementEntity,
+      CashTransferEntity,
     ]),
     AccountingModule,
     PostingRulesModule,

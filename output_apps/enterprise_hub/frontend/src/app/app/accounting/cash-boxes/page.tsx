@@ -58,7 +58,7 @@ export default function CashBoxesPage() {
   const [transferBoxId, setTransferBoxId] = useState<number | "">("");
   const [transferBankId, setTransferBankId] = useState<number | "">("");
   const [transferAmount, setTransferAmount] = useState<string>("");
-  const [transferDirection, setTransferDirection] = useState<"CASH_TO_BANK" | "BANK_TO_CASH">("CASH_TO_BANK");
+  const [transferDirection, setTransferDirection] = useState<"TO_BANK" | "TO_CASH">("TO_BANK");
   const [transferDate, setTransferDate] = useState<string>("");
   const [transferDesc, setTransferDesc] = useState<string>("");
 
@@ -105,7 +105,7 @@ export default function CashBoxesPage() {
         name: newBoxName,
         code: newBoxCode,
         ledgerAccountId: Number(newBoxAccountId),
-        openingBalance: Number(newBoxOpening) || 0,
+        openingBalance: newBoxOpening?.trim() || "0",
       });
       setSuccessMsg("صندوق جدید با موفقیت ایجاد شد.");
       setCreateDialogOpen(false);
@@ -129,7 +129,7 @@ export default function CashBoxesPage() {
       const res = await transferCashBank({
         cashBoxId: Number(transferBoxId),
         bankAccountId: Number(transferBankId),
-        amount: Number(transferAmount),
+        amount: transferAmount.trim(),
         direction: transferDirection,
         date: transferDate,
         description: transferDesc || undefined,
@@ -360,11 +360,11 @@ export default function CashBoxesPage() {
               className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
               value={transferDirection}
               onChange={(e) =>
-                setTransferDirection(e.target.value as "CASH_TO_BANK" | "BANK_TO_CASH")
+                setTransferDirection(e.target.value as "TO_BANK" | "TO_CASH")
               }
             >
-              <option value="CASH_TO_BANK">واریز از صندوق به بانک (برداشت از صندوق)</option>
-              <option value="BANK_TO_CASH">برداشت از بانک به صندوق (شارژ صندوق)</option>
+              <option value="TO_BANK">واریز از صندوق به بانک (برداشت از صندوق)</option>
+              <option value="TO_CASH">برداشت از بانک به صندوق (شارژ صندوق)</option>
             </select>
           </div>
           <div>
@@ -491,7 +491,15 @@ export default function CashBoxesPage() {
             <div className="rounded-md bg-muted p-3 text-sm flex justify-between items-center">
               <span>واریز خالص به بانک:</span>
               <span className="font-mono font-bold text-blue-600">
-                {formatMoneyRial(Math.max(0, Number(posGross) - Number(posFee || 0)))}
+                {(() => {
+                  try {
+                    const g = BigInt((posGross || "0").split(".")[0] || "0");
+                    const f = BigInt((posFee || "0").split(".")[0] || "0");
+                    return formatMoneyRial(g > f ? (g - f).toString() : "0");
+                  } catch {
+                    return "۰";
+                  }
+                })()}
               </span>
             </div>
           )}
