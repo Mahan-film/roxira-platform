@@ -580,9 +580,25 @@ describe('ChequesService partial payment (CHK-01)', () => {
     expect(t.entries.at(-1)?.lines[0].debit).toBe('70.00');
   });
 
+  it('reusing the same idempotency key with a different body throws 409 ConflictException', async () => {
+    const t = build();
+    const c = await t.service.create(A, received({ sayadNumber: undefined, amount: 100 }) as never);
+    await t.service.partialPayment(A, c.id, { amount: 30, idempotencyKey: 'pay-conflict' });
+    await expect(
+      t.service.partialPayment(A, c.id, { amount: 40, idempotencyKey: 'pay-conflict' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      t.service.partialPayment(A, c.id, { amount: 30, eventDate: '2026-11-20', idempotencyKey: 'pay-conflict' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      t.service.partialPayment(A, c.id, { amount: 30, bankAccountId: 7, idempotencyKey: 'pay-conflict' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
   it('reads the source sequence through the posting transaction, not a second connection', async () => {
     const t = build();
     const c = await t.service.create(A, received({ sayadNumber: undefined, amount: 100 }) as never);
+    t.eventReadManagers.length = 0;
     await t.service.partialPayment(A, c.id, { amount: 30 });
     expect(t.eventReadManagers.some((manager) => manager !== undefined && manager !== null)).toBe(true);
   });

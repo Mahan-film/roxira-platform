@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { ConflictException } from '@nestjs/common';
 import { CurrencyService } from '../currency/services/currency.service';
 import { AccountType } from '../accounting/enums/accounting.enum';
 import { AccountingRepository } from '../accounting/repositories/accounting.repository';
@@ -179,6 +180,15 @@ describePg('Cheque lifecycle on PostgreSQL', () => {
     const parts = await q<{ n: string }>(
       `SELECT count(*)::text AS n FROM fin_cheque_events WHERE cheque_id = $1 AND from_status = to_status`, [c.id]);
     expect(parts[0].n).toBe('1');
+  });
+
+  it('partial payment: reusing the same idempotency key with a different body throws 409 ConflictException', async () => {
+    const c = await service.create(T1, base({ amount: '1000' }) as never);
+    await service.transition(T1, c.id, { status: ChequeStatus.DEPOSITED });
+    await service.partialPayment(T1, c.id, { amount: '300', idempotencyKey: 'pg-pay-diff' });
+    await expect(
+      service.partialPayment(T1, c.id, { amount: '400', idempotencyKey: 'pg-pay-diff' }),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('check constraints reject a verified cheque without a verifier, a bad national id and a bad status', async () => {

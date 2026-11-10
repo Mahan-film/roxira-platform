@@ -244,11 +244,34 @@ export class ChequesService {
     await this.chequesRepository.runInTransaction(tenantId, async (manager) => {
       const cheque = await this.chequesRepository.findByIdForUpdate(tenantId, id, manager);
       if (!cheque) throw new NotFoundException('چک یافت نشد.');
+      const events = await this.chequesRepository.listEvents(tenantId, id, manager);
+
+      // Idempotency: same key with the same body replays without touching vouchers or balances;
+      // same key with a different amount/date/bank account throws 409 ConflictException (LESSONS 18).
+      const priorEvent = dto.idempotencyKey
+        ? events.find((e) => e.note?.includes(`[idem:${dto.idempotencyKey}]`))
+        : null;
+      if (priorEvent) {
+        const priorPaid = toMinor(priorEvent.amount ?? '0');
+        const priorDate = dateOnly(priorEvent.eventDate);
+        const priorBank = priorEvent.bankAccountId ?? null;
+        const currentBank = dto.bankAccountId ?? null;
+        if (priorPaid !== paid || priorDate !== eventDate || priorBank !== currentBank) {
+          throw new ConflictException(
+            `کلید یکتایی «${dto.idempotencyKey}» قبلاً با محتوای دیگری استفاده شده است؛ برای درخواست جدید کلید جدید بفرستید. (Idempotency-Key reused with a different request body.)`,
+          );
+        }
+        return;
+      }
+
       const settled = fromDb(cheque.settledAmount ?? '0');
       const remaining = fromDb(cheque.amount) - settled;
       const posting = partialPaymentPosting(cheque.direction, cheque.status, paid);
       if (!posting) {
         throw new BadRequestException(`پرداخت بخشی از چک در وضعیت «${cheque.status}» مجاز نیست.`);
+      }
+      if (paid >= remaining) {
+        throw new BadRequestException('مبلغ پرداخت باید کمتر از مانده چک باشد؛ برای پرداخت کامل، وضعیت را «وصول/پاس» کنید.');
       }
       if (eventDate < cheque.issueDate) {
         throw new BadRequestException('تاریخ رویداد نمی‌تواند پیش از تاریخ صدور چک باشد.');
@@ -269,12 +292,23 @@ export class ChequesService {
       // The engine is idempotent per source key: a replay returns the first voucher, so leave the
       // state as the first call left it (the remainder already shrank on the first commit).
       if (posted.replayed) {
+        const matchingEvent = events.find((e) => e.journalEntryId === posted.entryId);
+        if (matchingEvent) {
+          const priorPaid = toMinor(matchingEvent.amount ?? '0');
+          const priorDate = dateOnly(matchingEvent.eventDate);
+          const priorBank = matchingEvent.bankAccountId ?? null;
+          const currentBank = dto.bankAccountId ?? null;
+          if (priorPaid !== paid || priorDate !== eventDate || priorBank !== currentBank) {
+            throw new ConflictException(
+              `کلید یکتایی «${dto.idempotencyKey}» قبلاً با محتوای دیگری استفاده شده است؛ برای درخواست جدید کلید جدید بفرستید. (Idempotency-Key reused with a different request body.)`,
+            );
+          }
+        }
         return;
       }
-      if (paid >= remaining) {
-        throw new BadRequestException('مبلغ پرداخت باید کمتر از مانده چک باشد؛ برای پرداخت کامل، وضعیت را «وصول/پاس» کنید.');
-      }
       await this.chequesRepository.updateStatus(tenantId, id, { settledAmount: minorToDecimal(settled + paid) }, manager);
+      const noteSuffix = dto.idempotencyKey ? ` [idem:${dto.idempotencyKey}]` : '';
+      const baseNote = dto.note ?? 'پرداخت بخشی از وجه چک';
       await this.chequesRepository.addEvent(
         tenantId,
         {
@@ -285,12 +319,12 @@ export class ChequesService {
           journalEntryId: posted.entryId,
           amount: minorToDecimal(paid),
           bankAccountId: dto.bankAccountId ?? null,
-          note: dto.note ?? 'پرداخت بخشی از وجه چک',
+          note: `${baseNote}${noteSuffix}`,
         },
         manager,
       );
     });
-    return await this.getById(id, tenantId);
+    return this.get(tenantId, id);
   }
 
   /**
@@ -339,10 +373,6 @@ export class ChequesService {
     }
     const events = await this.chequesRepository.listEvents(tenantId, id);
     return { ...this.toDto(cheque), events: events.map((event) => this.toEventDto(event)) };
-  }
-
-  async getById(id: number, tenantId: string): Promise<ChequeDetailResponseDto> {
-    return this.get(tenantId, id);
   }
 
   async list(tenantId: string, query: QueryChequesDto): Promise<ChequeResponseDto[]> {
@@ -517,6 +547,7 @@ export class ChequesService {
   }
 
   private toEventDto(event: ChequeEventEntity): ChequeEventResponseDto {
+    const cleanNote = event.note ? event.note.replace(/\s*\[idem:[^\]]+\]$/, '') : null;
     return {
       id: event.id,
       fromStatus: event.fromStatus,
@@ -524,7 +555,7 @@ export class ChequesService {
       eventDate: event.eventDate,
       journalEntryId: event.journalEntryId,
       amount: event.amount === null || event.amount === undefined ? null : fromMinor(fromDb(event.amount)),
-      note: event.note,
+      note: cleanNote || null,
     };
   }
 }
