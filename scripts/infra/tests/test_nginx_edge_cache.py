@@ -45,8 +45,9 @@ def test_snippet_has_cache_policy():
     assert "proxy_cache_lock on;" in SNIPPET
     assert "proxy_cache_use_stale" in SNIPPET
     assert "proxy_cache_bypass $cookie_session $laws_cookie_bypass $http_authorization;" in SNIPPET
-    assert "proxy_no_cache $cookie_session $laws_cookie_bypass $http_authorization;" in SNIPPET
+    assert "proxy_no_cache $cookie_session $laws_cookie_bypass $http_authorization $upstream_http_set_cookie;" in SNIPPET
     assert "add_header X-Cache-Status $upstream_cache_status always;" in SNIPPET
+    assert "proxy_cache_key" not in SNIPPET
     assert "proxy_cache_path /var/cache/nginx/laws_cache" in CONF
     assert "$laws_cookie_bypass" in CONF
 
@@ -64,6 +65,7 @@ def test_cached_locations_keep_frontend_proxy():
         assert "proxy_pass http://$frontend_backend;" in body
         assert "proxy_set_header X-Forwarded-Proto $scheme;" in body
         assert "add_header Content-Language" in body
+        assert 'proxy_cache_key "$scheme$request_method$host$request_uri";' in body
 
 
 def test_private_paths_never_match_cached_locations():
