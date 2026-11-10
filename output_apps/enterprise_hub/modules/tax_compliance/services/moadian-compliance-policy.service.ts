@@ -1,3 +1,4 @@
+import { fromDb, fromMinor, toMinor } from '../../accounting/money';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { TenantScope } from '../../access/services/tenant-scope';
 import { PolicyService } from '../../tenants/policy/policy.service';
@@ -14,6 +15,12 @@ import { jalaliQuarterRange } from '../utils/jalali-quarter.util';
  * In 1405: 5 * 1,440,000,000 Rials annual base = 7,200,000,000 Rials.
  */
 export const STATUTORY_DEFAULT_ARTICLE_6_CEILING_RIAL = 7_200_000_000n;
+
+function parseRialToMinor(val: number | string | bigint | null | undefined): bigint {
+  if (val === null || val === undefined) return 0n;
+  if (typeof val === 'bigint') return val * 100n;
+  return toMinor(val);
+}
 
 @Injectable()
 export class MoadianCompliancePolicyService {
@@ -112,7 +119,7 @@ export class MoadianCompliancePolicyService {
           severity,
           messageFa,
           sellerName: row.seller_info?.name,
-          amountRial: String(Math.round(Number(row.final_payable))),
+          amountRial: String(fromMinor(fromDb(row.final_payable))),
         });
       }
 
@@ -138,7 +145,7 @@ export class MoadianCompliancePolicyService {
   async checkArticle6SalesCap(
     tenantId: string,
     options?: {
-      newSalesAmountRial?: number | bigint;
+      newSalesAmountRial?: number | string | bigint;
       fiscalYear?: number;
       quarter?: number;
       asOf?: Date | string;
@@ -174,6 +181,7 @@ export class MoadianCompliancePolicyService {
     const ceilingRial = customCeiling > 0n ? customCeiling : STATUTORY_DEFAULT_ARTICLE_6_CEILING_RIAL;
 
     if (mode === 'off') {
+      const newSales = parseRialToMinor(options?.newSalesAmountRial) / 100n;
       return {
         mode: 'off',
         warningPercent,
@@ -181,8 +189,8 @@ export class MoadianCompliancePolicyService {
         quarter,
         quarterLabel: range.label,
         currentSalesRial: '0',
-        newSalesRial: String(options?.newSalesAmountRial ?? 0),
-        projectedSalesRial: String(options?.newSalesAmountRial ?? 0),
+        newSalesRial: newSales.toString(),
+        projectedSalesRial: newSales.toString(),
         ceilingRial: ceilingRial.toString(),
         utilizationPercent: 0,
         isWarning: false,
@@ -206,8 +214,8 @@ export class MoadianCompliancePolicyService {
         [tenantId, range.from, range.to],
       )) as Array<{ total_sales: number | string }>;
 
-      const currentSales = BigInt(Math.round(Number(result[0]?.total_sales ?? 0)));
-      const newSales = BigInt(Math.round(Number(options?.newSalesAmountRial ?? 0)));
+      const currentSales = fromDb(result[0]?.total_sales ?? 0) / 100n;
+      const newSales = parseRialToMinor(options?.newSalesAmountRial) / 100n;
       const projected = currentSales + newSales;
 
       const utilizationPercent =
@@ -254,7 +262,7 @@ export class MoadianCompliancePolicyService {
    */
   async assertCanIssueInvoice(
     tenantId: string,
-    invoiceAmountRial: number | bigint,
+    invoiceAmountRial: number | string | bigint,
     options?: { asOf?: Date | string; fiscalYear?: number; quarter?: number },
   ): Promise<void> {
     const report = await this.checkArticle6SalesCap(tenantId, {

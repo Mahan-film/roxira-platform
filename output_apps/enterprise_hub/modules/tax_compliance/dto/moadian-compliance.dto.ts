@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsDateString, IsEnum, IsInt, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsMoneyAmount } from '../../accounting/dto/money.validator';
+import { Money } from '../../accounting/money';
 
 export class MoadianInboxAgeQueryDto {
   @ApiPropertyOptional({
@@ -89,13 +91,11 @@ export class MoadianInboxAgeReportDto {
 export class MoadianArticle6QueryDto {
   @ApiPropertyOptional({
     description: 'مبلغ فاکتور فروش در حال صدور جهت شبیه‌سازی عبور از سقف (ریال)',
-    example: 100000000,
+    example: '100000000',
   })
   @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  newSalesAmountRial?: number;
+  @IsMoneyAmount()
+  newSalesAmountRial?: Money;
 
   @ApiPropertyOptional({
     description: 'تاریخ مبنا جهت تشخیص فصل مالیاتی (ISO 8601)',
