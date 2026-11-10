@@ -327,7 +327,8 @@ describe('LandedCostService (#227 T2)', () => {
 
     const result = await service.createLandedCost(T1, 'u1', 'receipt-1', { ...BODY, amount: '100' });
     expect(result.allocations.map((allocation) => allocation.share)).toEqual(['34', '33', '33']);
-    expect(state.journals[0].amounts).toMatchObject({ inventory: 100n, cogs: 0n, payable: 100n });
+    // Each 10-unit layer raises 3 minor units per unit (30 minor units per line = 90 inventory); remainder 10 goes to COGS.
+    expect(state.journals[0].amounts).toMatchObject({ inventory: 90n, cogs: 10n, payable: 100n });
   });
 
   it('splits a late freight on a 40%-sold line into 400,000 COGS and 600,000 into the layer', async () => {
@@ -369,11 +370,12 @@ describe('LandedCostService (#227 T2)', () => {
     seedLayer(state, T1, 32, 300n);
 
     const first = await service.createLandedCost(T1, 'u1', 'receipt-1', { ...BODY, amount: '100' });
-    // 100 minor units over 3 units: the layer can raise 33 per unit (99 in all); the voucher keeps 100.
-    expect(first.allocations[0]).toMatchObject({ toInventory: '100', toCogs: '0' });
-    expect(first.inventoryAmount).toBe('100');
+    // 100 minor units over 3 units: the layer raises 33 per unit (99 in all); remainder 1 is booked to COGS.
+    expect(first.allocations[0]).toMatchObject({ toInventory: '99', toCogs: '1' });
+    expect(first.inventoryAmount).toBe('99');
+    expect(first.cogsAmount).toBe('1');
     expect(state.raises).toEqual([{ tenantId: T1, batchId: 31, deltaMinor: 33n }]);
-    expect(state.journals[0].amounts).toMatchObject({ inventory: 100n, cogs: 0n, payable: 100n });
+    expect(state.journals[0].amounts).toMatchObject({ inventory: 99n, cogs: 1n, payable: 100n });
 
     await expect(service.createLandedCost(T1, 'u1', 'receipt-2', { ...BODY, amount: '100' })).rejects.toBeInstanceOf(
       ConflictException,

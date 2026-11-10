@@ -41,6 +41,14 @@ function columnName(index: number): string {
   return name;
 }
 
+function escapeFormula(value: string): string {
+  const plainNumber = /^-?\d+(\.\d+)?$/.test(value);
+  if (!plainNumber && /^[=+\-@\t\r]/.test(value)) {
+    return `'${value}`;
+  }
+  return value;
+}
+
 function sheetXml(rows: XlsxCell[][]): string {
   const body = rows
     .map((row, r) => {
@@ -58,8 +66,9 @@ function sheetXml(rows: XlsxCell[][]): string {
               ? `<c r="${ref}"><v>${value.toString()}</v></c>`
               : `<c r="${ref}" t="inlineStr"><is><t>${value.toString()}</t></is></c>`;
           }
-          // Strings are inline strings, never formulas, whatever they start with.
-          return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(String(value))}</t></is></c>`;
+          // Neutralise formula triggers (= + - @ TAB CR) in text cells.
+          const safe = escapeFormula(String(value));
+          return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(safe)}</t></is></c>`;
         })
         .join('');
       return `<row r="${r + 1}">${cells}</row>`;
