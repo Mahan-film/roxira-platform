@@ -1,49 +1,45 @@
 import { AccountType } from '../../accounting/enums/accounting.enum';
 
 /**
- * Posting roles: what an account does in a voucher, independent of its code. A tenant maps each
- * role to an account of its own chart (per document type, or for all types with doc type "*").
+ * Standard semantic roles a business transaction moves money between.
+ * The chart of accounts maps each role to a concrete account code in the tenant's ledger.
  */
 export const POSTING_ROLES = {
-  receivable: { label: 'حساب‌های دریافتنی', types: [AccountType.ASSET] },
+  receivable: { label: 'حساب‌های دریافتنی تجاری', types: [AccountType.ASSET] },
   revenue: { label: 'درآمد فروش', types: [AccountType.REVENUE] },
-  vat_output: { label: 'مالیات بر ارزش افزوده فروش (پرداختنی)', types: [AccountType.LIABILITY] },
-  vat_input: { label: 'مالیات بر ارزش افزوده خرید (دریافتنی)', types: [AccountType.ASSET] },
-  payable: { label: 'حساب‌های پرداختنی', types: [AccountType.LIABILITY] },
-  purchases: { label: 'خرید', types: [AccountType.EXPENSE] },
+  vat_output: { label: 'مالیات بر ارزش افزوده فروش', types: [AccountType.LIABILITY] },
+  vat_input: { label: 'مالیات بر ارزش افزوده خرید', types: [AccountType.ASSET] },
+  payable: { label: 'حساب‌های پرداختنی تجاری', types: [AccountType.LIABILITY] },
   cogs: { label: 'بهای تمام‌شده کالای فروش‌رفته', types: [AccountType.EXPENSE] },
   inventory: { label: 'موجودی کالا', types: [AccountType.ASSET] },
-  grni: { label: 'کالای دریافتی صورتحساب‌نشده', types: [AccountType.LIABILITY] },
-  price_variance: { label: 'تفاوت بهای خرید', types: [AccountType.EXPENSE] },
-  stock_adjustment: { label: 'اضافه و کسری انبار', types: [AccountType.EXPENSE, AccountType.EQUITY] },
-  opening_equity: { label: 'مابه‌ازای موجودی اول دوره', types: [AccountType.EQUITY] },
   cash: { label: 'صندوق', types: [AccountType.ASSET] },
   bank: { label: 'بانک', types: [AccountType.ASSET] },
-  pos_clearing: { label: 'تسویه کارت‌خوان', types: [AccountType.ASSET] },
-  petty_cash: { label: 'تنخواه', types: [AccountType.ASSET] },
-  counter: { label: 'حساب مقابل', types: [AccountType.ASSET, AccountType.LIABILITY, AccountType.EQUITY, AccountType.REVENUE, AccountType.EXPENSE] },
-  cheques_receivable: { label: 'اسناد دریافتنی (چک نزد صندوق)', types: [AccountType.ASSET] },
-  cheques_in_collection: { label: 'اسناد دریافتنی در جریان وصول', types: [AccountType.ASSET] },
-  cheques_payable: { label: 'اسناد پرداختنی (چک صادرشده)', types: [AccountType.LIABILITY] },
+  petty_cash: { label: 'تنخواه‌گردان', types: [AccountType.ASSET] },
+  pos_clearing: { label: 'حساب واسط پوز', types: [AccountType.ASSET] },
+  cheques_receivable: { label: 'اسناد دریافتنی (نزد صندوق)', types: [AccountType.ASSET] },
+  cheques_in_collection: { label: 'اسناد در جریان وصول', types: [AccountType.ASSET] },
+  cheques_payable: { label: 'اسناد پرداختنی', types: [AccountType.LIABILITY] },
   payroll_expense: { label: 'هزینه حقوق و دستمزد', types: [AccountType.EXPENSE] },
   employer_insurance_expense: { label: 'هزینه بیمه سهم کارفرما', types: [AccountType.EXPENSE] },
   payroll_payable: { label: 'حقوق پرداختنی', types: [AccountType.LIABILITY] },
   wage_tax_payable: { label: 'مالیات حقوق پرداختنی', types: [AccountType.LIABILITY] },
-  insurance_payable: { label: 'حق بیمه پرداختنی', types: [AccountType.LIABILITY] },
-  other_deductions_payable: { label: 'سایر کسورات حقوق', types: [AccountType.LIABILITY] },
+  insurance_payable: { label: 'بیمه پرداختنی تأمین اجتماعی', types: [AccountType.LIABILITY] },
+  other_deductions_payable: { label: 'سایر کسورات حقوق پرداختنی', types: [AccountType.LIABILITY] },
   depreciation_expense: { label: 'هزینه استهلاک', types: [AccountType.EXPENSE] },
   accumulated_depreciation: { label: 'استهلاک انباشته', types: [AccountType.ASSET] },
   income_tax_expense: { label: 'هزینه مالیات بر درآمد', types: [AccountType.EXPENSE] },
-  income_tax_payable: { label: 'مالیات بر درآمد پرداختنی', types: [AccountType.LIABILITY] },
-  retention_receivable: { label: 'سپرده حسن انجام کار دریافتنی', types: [AccountType.ASSET] },
-  retention_payable: { label: 'سپرده حسن انجام کار پرداختنی', types: [AccountType.LIABILITY] },
-  advance_received: { label: 'پیش‌دریافت قرارداد', types: [AccountType.LIABILITY] },
-  advance_paid: { label: 'پیش‌پرداخت قرارداد', types: [AccountType.ASSET] },
-  contract_insurance_expense: { label: 'هزینه بیمه کسرشده از صورت وضعیت', types: [AccountType.EXPENSE] },
+  income_tax_payable: { label: 'ذخیره مالیات عملکرد', types: [AccountType.LIABILITY] },
+  opening_equity: { label: 'سرمایه / تراز افتتاحیه', types: [AccountType.EQUITY] },
+  stock_adjustment: { label: 'کسری و اضافی انبار', types: [AccountType.EXPENSE, AccountType.REVENUE] },
+  counter: { label: 'طرف حساب پرداختنی/دریافتنی', types: [AccountType.ASSET, AccountType.LIABILITY, AccountType.EXPENSE, AccountType.REVENUE] },
+  settlement_bank: { label: 'بانک واریز/برداشت', types: [AccountType.ASSET] },
   fixed_asset: { label: 'دارایی ثابت', types: [AccountType.ASSET] },
   asset_disposal_gain: { label: 'سود حاصل از فروش دارایی', types: [AccountType.REVENUE] },
   asset_disposal_loss: { label: 'زیان حاصل از فروش دارایی', types: [AccountType.EXPENSE] },
   bank_fee: { label: 'کارمزد خدمات بانکی', types: [AccountType.EXPENSE] },
+  monetary_asset: { label: 'حساب پولی / دارایی یا بدهی ارزی', types: [AccountType.ASSET, AccountType.LIABILITY] },
+  fx_gain: { label: 'سود تسعیر ارز', types: [AccountType.REVENUE] },
+  fx_loss: { label: 'زیان تسعیر ارز', types: [AccountType.EXPENSE] },
 } as const;
 
 export type PostingRole = keyof typeof POSTING_ROLES;
@@ -93,4 +89,7 @@ export const DEFAULT_ROLE_ACCOUNTS: Readonly<Partial<Record<PostingRole, string>
   asset_disposal_loss: '5070',
   bank_fee: '5210',
   pos_clearing: '1015',
+  monetary_asset: '1012',
+  fx_gain: '4120',
+  fx_loss: '5210',
 };

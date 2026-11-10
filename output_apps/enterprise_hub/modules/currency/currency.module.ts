@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { CurrencyController } from './controllers/currency.controller';
 import { CurrencyService } from './services/currency.service';
+import { FxRevaluationService } from './services/fx-revaluation.service';
 
 /**
  * ماژول لایه چندارزی (Multi-Currency Layer).
@@ -11,7 +12,7 @@ import { CurrencyService } from './services/currency.service';
  */
 @Module({
   controllers: [CurrencyController],
-  providers: [CurrencyService],
-  exports: [CurrencyService],
+  providers: [CurrencyService, FxRevaluationService],
+  exports: [CurrencyService, FxRevaluationService],
 })
 export class CurrencyModule {}
