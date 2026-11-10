@@ -343,4 +343,52 @@ describePg('Financial reports on PostgreSQL', () => {
       rial('490000.50'),
     );
   }, 60000);
+
+  it('computes trial balance in < 2 s over 100k vouchers seeded with generate_series (#230)', async () => {
+    const PERF_TENANT = '77777777-7777-4777-8777-777777777777';
+    const repo = new AccountingRepository(testDb.scope);
+    await new ChartTemplateService(repo).apply(PERF_TENANT, 'iran-trading');
+    await years.create(PERF_TENANT, { name: '1405', startDate: '2026-03-21', endDate: '2027-03-20' });
+
+    // Seed 100,000 POSTED vouchers with 2 balanced lines each using generate_series
+    await testDb.owner.query("SET session_replication_role = 'replica'");
+    try {
+      await testDb.owner.query(
+        `INSERT INTO fin_journal_entries (tenant_id, entry_number, permanent_number, date, description, status, entry_type)
+         SELECT $1::uuid, 'PV-' || lpad(g::text, 6, '0'), g,
+                TIMESTAMPTZ '2026-03-21' + ((g % 350) * interval '1 day') + interval '10 hours',
+                'Perf voucher ' || g, 'POSTED', 'NORMAL'
+         FROM generate_series(1, 100000) AS g`,
+        [PERF_TENANT],
+      );
+
+      await testDb.owner.query(
+        `WITH e AS (
+           SELECT id, tenant_id, right(entry_number, 6)::int AS n
+           FROM fin_journal_entries
+           WHERE tenant_id = $1::uuid AND entry_number LIKE 'PV-%'
+         )
+         INSERT INTO fin_journal_entry_lines (tenant_id, journal_entry_id, account_id, debit, credit, currency, description)
+         SELECT e.tenant_id, e.id, a.id, s.debit, s.credit, 'IRR', s.d
+         FROM e
+         CROSS JOIN LATERAL (VALUES
+           ('1011', ((e.n % 10) * 1000000 + 100000)::numeric(18,2), 0::numeric(18,2), 'بدهکار'),
+           ('4020', 0::numeric(18,2), ((e.n % 10) * 1000000 + 100000)::numeric(18,2), 'بستانکار')
+         ) AS s(code, debit, credit, d)
+         JOIN fin_chart_of_accounts a ON a.tenant_id = e.tenant_id AND a.code = s.code`,
+        [PERF_TENANT],
+      );
+    } finally {
+      await testDb.owner.query("SET session_replication_role = 'origin'");
+    }
+
+    const start = Date.now();
+    const trial = await reports.trialBalance(PERF_TENANT, { from: '2026-03-21', to: '2027-03-20', columns: 6 });
+    const durationMs = Date.now() - start;
+
+    expect(durationMs).toBeLessThan(2000);
+    expect(trial.balanced).toBe(true);
+    expect(trial.totals.periodDebit).toBeGreaterThan(0n);
+    expect(trial.totals.periodDebit).toBe(trial.totals.periodCredit);
+  }, 120000);
 });
