@@ -166,3 +166,53 @@ export function validatePolicyValue(key: string, value: unknown): PolicyValidati
   }
   return { ok: true };
 }
+
+/**
+ * Checks whether a given policy value represents a weakened internal control or deviation from safe default (#584-6).
+ */
+export function isPolicyWeakened(key: string, value: unknown): boolean {
+  const definition = BY_KEY.get(key);
+  if (!definition) return false;
+  if (value === definition.default) return false;
+
+  switch (key) {
+    case 'purchase.invoice_review.reviewer_rule':
+      return value === 'creator_may_accept' || value === 'differs_unless_sole_approver';
+    case 'fixed_asset.disposal_before_depreciation':
+      return value === 'allow';
+    case 'purchase.three_way.qty_excess_tolerance_bp':
+    case 'purchase.three_way.price_tolerance_bp':
+    case 'purchase.three_way.price_tolerance_abs':
+      return typeof value === 'number' && value > 0;
+    case 'accounting.recurring_voucher.creation_mode':
+      return value === 'always_post';
+    default:
+      return definition.group === 'B';
+  }
+}
+
+/**
+ * Returns a Persian warning message when a control is weakened or turned off (#584-6).
+ */
+export function getWeakeningWarning(key: string, value: unknown): string | null {
+  if (!isPolicyWeakened(key, value)) return null;
+
+  switch (key) {
+    case 'purchase.invoice_review.reviewer_rule':
+      return value === 'creator_may_accept'
+        ? 'هشدار کنترل داخلی: ایجادکنندهٔ صورتحساب خرید می‌تواند اختلافات را شخصاً تأیید کند (تفکیک وظایف غیرفعال شد).'
+        : 'هشدار کنترل داخلی: در صورت تک‌تأییدکننده بودن، تفکیک وظایف بررسی صورتحساب خرید نادیده گرفته می‌شود.';
+    case 'fixed_asset.disposal_before_depreciation':
+      return 'هشدار کنترل داخلی: ثبت فروش دارایی قبل از آخرین سند استهلاک مجاز شد؛ ممکن است ارزش دفتری نادقیق ثبت شود.';
+    case 'purchase.three_way.qty_excess_tolerance_bp':
+      return `هشدار کنترل داخلی: تلورانس اضافه‌دریافت (${value} صدم درصد) فعال شد؛ مقادیر بیش از رسید بدون مغایرت پذیرفته می‌شوند.`;
+    case 'purchase.three_way.price_tolerance_bp':
+      return `هشدار کنترل داخلی: تلورانس درصدی قیمت (${value} صدم درصد) فعال شد؛ تفاوت قیمت با سفارش خودکار پذیرفته می‌شود.`;
+    case 'purchase.three_way.price_tolerance_abs':
+      return `هشدار کنترل داخلی: تلورانس مبلغی قیمت (${value} صدم ریال) فعال شد؛ تفاوت قیمت با سفارش خودکار پذیرفته می‌شود.`;
+    case 'accounting.recurring_voucher.creation_mode':
+      return 'هشدار کنترل داخلی: اسناد دوره‌ای به‌صورت خودکار قطعی می‌شوند و بررسی دستی پیش از ثبت در دفاتر غیرفعال شد.';
+    default:
+      return 'هشدار کنترل داخلی: تنظیمات این قاعده از حالت امن پیش‌فرض خارج شده است.';
+  }
+}

@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsDefined, IsString, MaxLength, MinLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsDateString, IsDefined, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 /** Body of PUT /policies/:key. The value is validated against the policy registry in the service. */
 export class SetPolicyDto {
@@ -18,4 +18,12 @@ export class SetPolicyDto {
   @MinLength(5)
   @MaxLength(500)
   reason: string;
+
+  @ApiPropertyOptional({
+    description: 'تاریخ بازگشت خودکار به تنظیم پیش‌فرض امن (ISO 8601) برای تغییرات موقت کنترل‌ها (#584-6)',
+    example: '2026-12-31T23:59:59.000Z',
+  })
+  @IsOptional()
+  @IsDateString()
+  autoRevertAt?: string;
 }
