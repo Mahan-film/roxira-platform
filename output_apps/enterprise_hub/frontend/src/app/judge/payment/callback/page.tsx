@@ -63,6 +63,7 @@ function PaymentCallbackContent() {
   const [message, setMessage] = useState("در حال بررسی نتیجه پرداخت...");
   const [paid, setPaid] = useState<PaidDetails | null>(null);
   const trackIdRef = useRef<string | null>(null);
+  const verifiedRef = useRef<string | null>(null);
 
   const runVerify = useCallback(async (trackId: string) => {
     setState("checking");
@@ -90,7 +91,9 @@ function PaymentCallbackContent() {
       }
 
       if (res.ok && data.status === "PAID") {
-        track("payment_success");
+        if (!data.already_verified && !data.replayed) {
+          track("payment_success");
+        }
         setState("paid");
         setMessage(persianOr(data.message, "پرداخت با موفقیت تایید شد."));
         setPaid({
@@ -123,23 +126,35 @@ function PaymentCallbackContent() {
       const trackId =
         params.get("trackId") ||
         params.get("track_id") ||
+        params.get("authority") ||
+        params.get("Authority") ||
         (typeof window !== "undefined" ? window.sessionStorage.getItem("roxira_judge_track_id") : null);
 
       const zibalSuccess = params.get("success");
+      const statusParam = params.get("status")?.toUpperCase();
 
       if (!trackId) {
         setState("failed");
-        setMessage("شناسه پیگیری تراکنش یافت نشد.");
+        setMessage(
+          params.get("status") === "missing_token"
+            ? "شناسه پیگیری پرداخت در درخواست ارسالی از درگاه یافت نشد."
+            : "شناسه پیگیری تراکنش یافت نشد."
+        );
         return;
       }
       trackIdRef.current = trackId;
 
-      if (zibalSuccess === "0") {
+      if (verifiedRef.current === trackId) {
+        return;
+      }
+
+      if (zibalSuccess === "0" || statusParam === "NOK" || statusParam === "FAILED") {
         setState("failed");
         setMessage("پرداخت توسط شما لغو شد یا ناموفق بود. در صورت کسر وجه، مبلغ ظرف ۷۲ ساعت به حساب شما بازمی‌گردد.");
         return;
       }
 
+      verifiedRef.current = trackId;
       await runVerify(trackId);
     })();
   }, [params, runVerify]);

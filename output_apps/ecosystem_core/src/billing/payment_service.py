@@ -14,6 +14,7 @@ looks the amount up by ``plan_type`` — a client-supplied amount is never read.
 """
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import re
@@ -177,6 +178,16 @@ def activate_with_retry(
     return activation_result, activation_pending
 
 
+@contextlib.contextmanager
+def _maybe_lock(order_store: Any, track_id: str):
+    lock_fn = getattr(order_store, "lock", None)
+    if callable(lock_fn):
+        with lock_fn(track_id):
+            yield
+    else:
+        yield
+
+
 def verify_invoice(
     *,
     track_id: str,
@@ -205,8 +216,11 @@ def verify_invoice(
         return _paid_result(
             order, track_id, "این تراکنش پیش‌تر تایید و فعال شده است.",
             plans=plans, entitlement_fn=entitlement_fn,
+            already_verified=True,
+            replayed=True,
         )
 
+    # Network call to gateway is executed outside any DB lock to avoid holding DB resources
     verify_res = zibal_verify_fn(track_id)
 
     if not verify_res.get("definitive"):
@@ -227,44 +241,60 @@ def verify_invoice(
         }
 
     gateway_amount = int(verify_res.get("amount") or 0)
-    if gateway_amount != int(order["amount_rial"]):
+    expected_amount = int(order["amount_rial"])
+    if gateway_amount <= 0 or gateway_amount != expected_amount:
         order_store.mark_failed(track_id)
         return {
             "status": "FAILED",
             "message": "مبلغ تایید شده توسط درگاه با فاکتور مطابقت ندارد.",
         }
 
-    became_paid = order_store.mark_paid(track_id, verify_res.get("ref_number"))
-    if not became_paid:
-        # Raced with another verify call for the same track_id (or the order
-        # was already terminal). Re-read and only ever report PAID if it is
-        # genuinely paid now — never claim success on a guess.
+    # Lock DB row / order to safely perform atomic state transition and entitlement activation
+    with _maybe_lock(order_store, track_id):
         refreshed = order_store.get_order(track_id) or order
-        if refreshed.get("status") != "paid":
-            return {
-                "status": "FAILED",
-                "message": "وضعیت تراکنش نامشخص است؛ لطفاً دوباره تلاش کنید.",
-            }
-        return _paid_result(
-            refreshed, track_id, "این تراکنش پیش‌تر تایید و فعال شده است.",
+        if refreshed.get("status") == "paid":
+            return _paid_result(
+                refreshed, track_id, "این تراکنش پیش‌تر تایید و فعال شده است.",
+                plans=plans, entitlement_fn=entitlement_fn,
+                already_verified=True,
+                replayed=True,
+            )
+
+        became_paid = order_store.mark_paid(track_id, verify_res.get("ref_number"))
+        if not became_paid:
+            # Raced with another verify call for the same track_id (or the order
+            # was already terminal). Re-read and only ever report PAID if it is
+            # genuinely paid now — never claim success on a guess.
+            refreshed = order_store.get_order(track_id) or order
+            if refreshed.get("status") != "paid":
+                return {
+                    "status": "FAILED",
+                    "message": "وضعیت تراکنش نامشخص است؛ لطفاً دوباره تلاش کنید.",
+                }
+            return _paid_result(
+                refreshed, track_id, "این تراکنش پیش‌تر تایید و فعال شده است.",
+                plans=plans, entitlement_fn=entitlement_fn,
+                already_verified=True,
+                replayed=True,
+            )
+
+        # Only the call that won mark_paid() reaches this point, so an order is
+        # activated at most once (merge_entitlement stacks same-level renewals, a
+        # second activation would wrongly add another period). A failed persist
+        # touches nothing, so retrying it a couple of times is safe.
+        activation_result, activation_pending = activate_with_retry(refreshed, track_id, activate_fn)
+
+        result = _paid_result(
+            refreshed, track_id, "پرداخت با موفقیت تایید و حساب کاربری فعال شد.",
             plans=plans, entitlement_fn=entitlement_fn,
+            activation=activation_result if isinstance(activation_result, dict) else None,
+            already_verified=False,
+            replayed=False,
         )
-
-    # Only the call that won mark_paid() reaches this point, so an order is
-    # activated at most once (merge_entitlement stacks same-level renewals, a
-    # second activation would wrongly add another period). A failed persist
-    # touches nothing, so retrying it a couple of times is safe.
-    activation_result, activation_pending = activate_with_retry(order, track_id, activate_fn)
-
-    result = _paid_result(
-        order, track_id, "پرداخت با موفقیت تایید و حساب کاربری فعال شد.",
-        plans=plans, entitlement_fn=entitlement_fn,
-        activation=activation_result if isinstance(activation_result, dict) else None,
-    )
-    result["ref_number"] = verify_res.get("ref_number")
-    if activation_pending:
-        result["activation_pending"] = True
-    return result
+        result["ref_number"] = verify_res.get("ref_number")
+        if activation_pending:
+            result["activation_pending"] = True
+        return result
 
 
 def _paid_result(
@@ -275,6 +305,8 @@ def _paid_result(
     plans: dict | None,
     entitlement_fn: Callable[[str | None], dict | None] | None,
     activation: dict | None = None,
+    already_verified: bool = False,
+    replayed: bool = False,
 ) -> dict:
     """PAID response enriched with what the result page shows: plan name,
     plan level and expiry. Pure lookups; any failure just omits the fields."""
@@ -287,6 +319,8 @@ def _paid_result(
         "track_id": track_id,
         "plan_type": plan_type,
         "plan_level": pricing_service.plan_level(plan_type),
+        "already_verified": already_verified,
+        "replayed": replayed,
     }
     plan = (plans or {}).get(plan_type) or {}
     # is_subscription is decided by the PURCHASED plan: a one-off bought while a

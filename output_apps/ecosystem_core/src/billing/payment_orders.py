@@ -23,6 +23,7 @@ this allows.
 """
 from __future__ import annotations
 
+import contextlib
 import os
 from typing import Any
 
@@ -70,6 +71,11 @@ def ensure_schema(conn: Any) -> None:
             "CREATE INDEX IF NOT EXISTS idx_payment_orders_status "
             "ON payment_orders(status);"
         )
+        cur.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_orders_gateway_ref_number "
+            "ON payment_orders(gateway_ref_number) "
+            "WHERE gateway_ref_number IS NOT NULL;"
+        )
 
 
 def get_connection() -> Any:
@@ -94,6 +100,15 @@ class PgOrderStore:
 
     def __init__(self, conn: Any):
         self._conn = conn
+
+    @contextlib.contextmanager
+    def lock(self, track_id: str):
+        """PostgreSQL transaction-level advisory lock per track_id so concurrent verification attempts serialize.
+        Automatically released upon transaction commit or rollback, preventing leaked locks on error."""
+        with self._conn.transaction():
+            with self._conn.cursor() as cur:
+                cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s));", (track_id,))
+            yield
 
     def create_pending_order(
         self,
@@ -135,14 +150,18 @@ class PgOrderStore:
         Atomic single UPDATE: a row already 'paid' never matches the WHERE
         clause, so a race between two verify calls can make at most one of
         them return True."""
-        with self._conn.cursor() as cur:
-            cur.execute(
-                "UPDATE payment_orders SET status = 'paid', paid_at = now(), "
-                "gateway_ref_number = %s WHERE track_id = %s "
-                "AND status IN ('pending', 'failed');",
-                (gateway_ref_number, track_id),
-            )
-            return cur.rowcount == 1
+        try:
+            with self._conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE payment_orders SET status = 'paid', paid_at = now(), "
+                    "gateway_ref_number = %s WHERE track_id = %s "
+                    "AND status IN ('pending', 'failed');",
+                    (gateway_ref_number, track_id),
+                )
+                return cur.rowcount == 1
+        except psycopg.IntegrityError:
+            # Replaying a gateway_ref_number that already belongs to another paid order
+            return False
 
     def mark_failed(self, track_id: str) -> None:
         with self._conn.cursor() as cur:
