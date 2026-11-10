@@ -18,7 +18,7 @@ Lane: **Mac** = posting_rules owner adopts it; **Laptop** = `mahansudo` lane, ha
 | 7 | Fiscal close | `accounting/services/fiscal-year.service.ts:268` (`postTypedEntry`) | 3050 income summary, 3040 retained earnings | one per year | Laptop (typed entry, outside the engine) |
 | 8 | Captured vendor invoice (`capture.expense`) | `invoice_capture/services/capture.service.ts:412` | cash 1010, receivable 1020, payable 2010, VAT 2020, revenue 4010, default expense 5030 (`invoice_capture/constants/capture.constants.ts:38`) | capture id | Laptop |
 | 9 | Data import journal lines | `data_import/registry/accounting-journal-lines.registry.ts:236` | codes come from the imported file | batch id | Laptop (stays raw) |
-| 10 | **Cheque creation/transition** (`cheque.*`) | `cheques/services/cheques.service.ts:218`; rules in `cheques/lifecycle/cheque-lifecycle.ts` | bank 1010, receivable 1020, payable 2010, notes-in-hand 1110, notes-in-collection 1120, notes payable 2110 (`cheques/constants/cheque.constants.ts:117`) | random suffix, **not idempotent** | **Mac** |
+| 10 | **Cheque creation/transition** (`cheque.*`) | `cheques/services/cheques.service.ts:218`; rules in `cheques/lifecycle/cheque-lifecycle.ts` | bank 1010, receivable 1020, payable 2010, notes-in-hand 1110, notes-in-collection 1120, notes payable 2110 (`cheques/constants/cheque.constants.ts:117`) | engine source key `cheque:<id>:<event-seq>` (read in the posting transaction); partial payment also accepts a client `idempotencyKey` | **Mac** |
 | 11 | **Payroll run** (`payroll.run`) | `hr/services/payroll-run.service.ts:610` (`PostingRulesService.post`) | engine template `payroll.run`; defaults salary expense 5010, employer insurance expense 5040, insurance payable 2030, wage tax payable 2040, other deductions 2060, salaries payable 2050 (`hr/constants/hr.constants.ts:174`) | entry number `PR-YYYYMM` (adopts existing) + engine source idempotency | **Mac** |
 | 12 | **Single payslip** (`payroll.payslip`) | `hr/services/hr.service.ts:860` (`PostingRulesService.post`) | engine template `payroll.payslip`; defaults expense 5010, payable 2010, bank 1010 | entry number per payslip + engine source idempotency | **Mac** |
 | 13 | **Corporate tax provision** (`tax.provision`) | `tax_compliance/services/corporate-tax.service.ts:97` (proposal only, `posted:false`) | accounts passed in by the caller (`expenseAccountCode`, `payableAccountCode`) | none | **Mac** |
@@ -38,7 +38,9 @@ Lane: **Mac** = posting_rules owner adopts it; **Laptop** = `mahansudo` lane, ha
    land and accumulated depreciation. New roles `cheques_receivable`, `cheques_in_collection`, `cheques_payable`
    fix this. Behaviour-preserving adoption keeps the old codes as the default for existing tenants (see
    POSTING_RULES.md, "Defaults").
-3. **No idempotency on cheques, bank, petty cash.** Only payroll and invoices adopt an existing entry by number.
+3. **No idempotency on bank and petty cash.** Only payroll and invoices adopt an existing entry by number; cheques
+   post through the engine's source key (`cheque:<id>:<event-seq>`) and a partial payment can carry a client
+   `idempotencyKey` so a retry replays instead of settling twice.
 4. **Account creation inside business services** (`ensureAccounts`, `ensurePayrollAccounts`, invoice-posting
    line 868, inventory 455) is replaced by an explicit "unmapped role" Persian error plus the settings page.
 5. **Dates:** payroll uses the Jalali month end; cheques use the event date; the rest use `new Date()`. The engine

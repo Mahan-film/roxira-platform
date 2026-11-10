@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { ConflictException } from '@nestjs/common';
 import { CurrencyService } from '../currency/services/currency.service';
 import { AccountType } from '../accounting/enums/accounting.enum';
 import { AccountingRepository } from '../accounting/repositories/accounting.repository';
@@ -165,6 +166,29 @@ describePg('Cheque lifecycle on PostgreSQL', () => {
     await service.transition(T1, c.id, { status: ChequeStatus.BOUNCED });
     expect(await balance(T1, '1020')).toBe(receivable + 600n);
     await expect(q(`UPDATE fin_cheques SET settled_amount = amount + 1 WHERE id = $1`, [c.id])).rejects.toThrow(/CHK_fin_cheques_settled/);
+  });
+
+  it('partial payment: a client idempotency key makes a retry replay instead of settling twice', async () => {
+    const c = await service.create(T1, base({ amount: '1000' }) as never);
+    await service.transition(T1, c.id, { status: ChequeStatus.DEPOSITED });
+    const bank = await balance(T1, '1010');
+    const first = await service.partialPayment(T1, c.id, { amount: '300', idempotencyKey: 'pg-pay-1' });
+    const retry = await service.partialPayment(T1, c.id, { amount: '300', idempotencyKey: 'pg-pay-1' });
+    expect(first).toMatchObject({ status: 'deposited', settledAmount: 300, remainingAmount: 700 });
+    expect(retry).toMatchObject({ status: 'deposited', settledAmount: 300, remainingAmount: 700 });
+    expect(await balance(T1, '1010')).toBe(bank + 300n);
+    const parts = await q<{ n: string }>(
+      `SELECT count(*)::text AS n FROM fin_cheque_events WHERE cheque_id = $1 AND from_status = to_status`, [c.id]);
+    expect(parts[0].n).toBe('1');
+  });
+
+  it('partial payment: reusing the same idempotency key with a different body throws 409 ConflictException', async () => {
+    const c = await service.create(T1, base({ amount: '1000' }) as never);
+    await service.transition(T1, c.id, { status: ChequeStatus.DEPOSITED });
+    await service.partialPayment(T1, c.id, { amount: '300', idempotencyKey: 'pg-pay-diff' });
+    await expect(
+      service.partialPayment(T1, c.id, { amount: '400', idempotencyKey: 'pg-pay-diff' }),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('check constraints reject a verified cheque without a verifier, a bad national id and a bad status', async () => {

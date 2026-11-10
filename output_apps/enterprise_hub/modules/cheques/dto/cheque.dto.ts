@@ -161,6 +161,18 @@ export class PartialPaymentDto {
   @Min(1)
   bankAccountId?: number;
 
+  @ApiPropertyOptional({
+    description: 'کلید یکتای سمت کلاینت؛ تکرار همان درخواست سند و مانده را دوباره ثبت نمی‌کند',
+    example: 'chq-42-pay-2026-11-05-0001',
+    maxLength: 48,
+  })
+  @IsOptional()
+  @Transform(emptyToUndefined)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(48)
+  idempotencyKey?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
