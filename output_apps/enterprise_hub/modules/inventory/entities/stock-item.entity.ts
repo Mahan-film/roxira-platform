@@ -51,4 +51,30 @@ export class StockItemEntity {
 
   @Column({ type: 'varchar', length: 64, name: 'batch_number', nullable: true })
   batchNumber: string | null;
+
+  /** Primary stock keeping unit (e.g. piece, عدد) */
+  @Column({ type: 'varchar', length: 32, name: 'primary_unit', default: 'piece' })
+  primaryUnit?: string;
+
+  /** Secondary unit of measure (e.g. carton, کارتن, بسته) */
+  @Column({ type: 'varchar', length: 32, name: 'secondary_unit', nullable: true })
+  secondaryUnit?: string | null;
+
+  /** Conversion ratio: primaryQuantity = secondaryQuantity * unitRatio */
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 4,
+    name: 'unit_ratio',
+    nullable: true,
+    transformer: {
+      to: (value: number | null) => value,
+      from: (value: string | null) => (value === null ? null : Number(value)),
+    },
+  })
+  unitRatio?: number | null;
+
+  /** Item attributes up to 10 key-value pairs (e.g. size, colour) */
+  @Column({ type: 'jsonb', nullable: true })
+  attributes?: Record<string, string> | null;
 }

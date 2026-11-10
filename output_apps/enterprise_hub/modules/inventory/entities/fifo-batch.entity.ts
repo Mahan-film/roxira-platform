@@ -80,4 +80,12 @@ export class FifoBatchEntity {
   @Index()
   @Column({ type: 'integer', name: 'warehouse_id', nullable: true })
   warehouseId: number | null;
+
+  /** Serial numbers tracked in this batch/layer */
+  @Column({ type: 'jsonb', name: 'serial_numbers', nullable: true })
+  serialNumbers?: string[] | null;
+
+  /** Attributes captured for this batch (up to 10 pairs) */
+  @Column({ type: 'jsonb', nullable: true })
+  attributes?: Record<string, string> | null;
 }
