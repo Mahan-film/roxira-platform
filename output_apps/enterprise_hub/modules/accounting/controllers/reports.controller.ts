@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, Get, HttpStatus, Param, Query, Req, Res, StreamableFile } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, HttpStatus, Param, Put, Query, Req, Res, StreamableFile } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AccessAction, AccessModule } from '../../access/catalogue';
 import { ModuleAccess, RequireAction } from '../../access/decorators';
@@ -14,9 +14,11 @@ import {
   SubsidiaryQueryDto,
   TrialBalanceQueryDto,
 } from '../dto/report.dto';
+import { BudgetVsActualQueryDto, SetAccountBudgetDto } from '../dto/budget-report.dto';
 import { CostCentreReportService } from '../services/cost-centre-report.service';
 import { FinancialReportsService, moneyJson } from '../services/financial-reports.service';
 import { ReportExportService } from '../services/report-export.service';
+import { BudgetVsActualService } from '../services/budget-vs-actual.service';
 
 /** Accounting reports of the JWT tenant. Amounts follow the ledger's exact JSON money rule. */
 @ApiTags('Accounting - گزارش‌ها و صورت‌های مالی')
@@ -27,6 +29,7 @@ export class ReportsController {
     private readonly reports: FinancialReportsService,
     private readonly exporter: ReportExportService,
     private readonly costCentres: CostCentreReportService,
+    private readonly budgetService: BudgetVsActualService,
   ) {}
 
   @Get('trial-balance')
@@ -110,5 +113,26 @@ export class ReportsController {
     response.setHeader('Content-Type', file.contentType);
     response.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
     return new StreamableFile(file.body);
+  }
+
+  @Get('budget-vs-actual')
+  @ApiOperation({ summary: 'گزارش بودجه در برابر عملکرد' })
+  @ApiResponse({ status: HttpStatus.OK })
+  async budgetVsActual(
+    @Req() request: AuthenticatedRequest,
+    @Query() query: BudgetVsActualQueryDto,
+  ) {
+    return moneyJson(await this.budgetService.getBudgetVsActual(requireTenantId(request), query));
+  }
+
+  @Put('budgets')
+  @RequireAction(AccessAction.ADMIN)
+  @ApiOperation({ summary: 'ثبت و تنظیم سقف بودجه حساب' })
+  @ApiResponse({ status: HttpStatus.OK })
+  async setBudget(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: SetAccountBudgetDto,
+  ) {
+    return this.budgetService.setBudget(requireTenantId(request), dto);
   }
 }
