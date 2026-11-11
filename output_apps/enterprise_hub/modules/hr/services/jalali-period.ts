@@ -121,3 +121,42 @@ export function isLeaveInPeriod(
 
   return startInt <= periodEnd && endInt >= periodStart;
 }
+
+/**
+ * Calculate the number of overlapping days between a leave request and a Jalali payroll period.
+ * Prorates leaves that span multiple months so days are not deducted repeatedly.
+ */
+export function leaveDaysInPeriod(
+  startDate: string | null | undefined,
+  endDate: string | null | undefined,
+  periodYear: number,
+  periodMonth: number,
+  totalLeaveDays?: number,
+): number {
+  if (!startDate || !endDate) return 0;
+  const s = parseDateToJalali(startDate);
+  const e = parseDateToJalali(endDate);
+  if (!s || !e) return 0;
+
+  const startInt = s.jy * 10000 + s.jm * 100 + s.jd;
+  const endInt = e.jy * 10000 + e.jm * 100 + e.jd;
+  if (endInt < startInt) return 0;
+
+  const monthDays = jalaliMonthDays(periodYear, periodMonth);
+  const periodStart = periodYear * 10000 + periodMonth * 100 + 1;
+  const periodEnd = periodYear * 10000 + periodMonth * 100 + monthDays;
+
+  if (startInt > periodEnd || endInt < periodStart) return 0;
+
+  const overlapStart = Math.max(startInt, periodStart);
+  const overlapEnd = Math.min(endInt, periodEnd);
+
+  const overlapStartDay = overlapStart % 100;
+  const overlapEndDay = overlapEnd % 100;
+  const days = overlapEndDay - overlapStartDay + 1;
+
+  if (totalLeaveDays !== undefined && totalLeaveDays > 0) {
+    return Math.min(days, totalLeaveDays);
+  }
+  return Math.max(0, days);
+}

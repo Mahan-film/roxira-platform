@@ -128,9 +128,13 @@ export default function SuiteAttendanceLeaveLoanPage() {
         const loanRes = await listStaffLoans();
         setLoans(loanRes);
         setCanReadLoans(true);
-      } catch {
-        setLoans([]);
-        setCanReadLoans(false);
+      } catch (err: any) {
+        if (err?.statusCode === 403 || err?.status === 403) {
+          setLoans([]);
+          setCanReadLoans(false);
+        } else {
+          setError(loadErrorMessage(err));
+        }
       }
 
       if (empRes.data.length > 0) {
@@ -219,7 +223,7 @@ export default function SuiteAttendanceLeaveLoanPage() {
     <EnterpriseRouteGuard>
       <PageHeader
         title="کارکرد، مرخصی و وام‌های پرسنلی"
-        subtitle="مدیریت حضور و غیاب ماهانه، درخواست و تأیید مرخصی، و وام‌های پرسنلی متصل به فیش حقوقی"
+        description="مدیریت حضور و غیاب ماهانه، درخواست و تأیید مرخصی، و وام‌های پرسنلی متصل به فیش حقوقی"
       />
 
       <div className="flex gap-2 border-b border-border mb-6">
@@ -263,7 +267,7 @@ export default function SuiteAttendanceLeaveLoanPage() {
         )}
       </div>
 
-      {error && <ErrorNotice message={error} />}
+      {error && <ErrorNotice title="خطا" message={error} />}
 
       {tab === "attendance" && (
         <div className="space-y-4">
@@ -307,7 +311,7 @@ export default function SuiteAttendanceLeaveLoanPage() {
             </CardHeader>
             <CardContent>
               {loading ? (
-                <LoadingLine />
+                <LoadingLine show={loading} />
               ) : attendances.length === 0 ? (
                 <div className="text-center py-8 text-sm text-muted-foreground">
                   هیچ کارکردی برای این دوره ثبت نشده است. از دکمه «ثبت کارکرد پرسنل» استفاده کنید.
@@ -360,7 +364,7 @@ export default function SuiteAttendanceLeaveLoanPage() {
           <Card>
             <CardContent className="pt-4">
               {loading ? (
-                <LoadingLine />
+                <LoadingLine show={loading} />
               ) : leaves.length === 0 ? (
                 <div className="text-center py-8 text-sm text-muted-foreground">
                   درخواست مرخصی ثبت نشده است.
@@ -446,7 +450,7 @@ export default function SuiteAttendanceLeaveLoanPage() {
           <Card>
             <CardContent className="pt-4">
               {loading ? (
-                <LoadingLine />
+                <LoadingLine show={loading} />
               ) : loans.length === 0 ? (
                 <div className="text-center py-8 text-sm text-muted-foreground">
                   هیچ وام پرسنلی ثبت نشده است.

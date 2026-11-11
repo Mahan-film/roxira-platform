@@ -73,7 +73,18 @@ import {
   QueryStaffLoanDto,
   StaffLoanResponseDto,
 } from '../dto/staff-loan.dto';
-import { gregorianToJalali, jalaliMonthDays } from './jalali-period';
+import { gregorianToJalali, jalaliMonthDays, parseDateToJalali } from './jalali-period';
+
+function isDateBefore(d1: string, d2: string): boolean {
+  const p1 = parseDateToJalali(d1);
+  const p2 = parseDateToJalali(d2);
+  if (p1 && p2) {
+    const v1 = p1.jy * 10000 + p1.jm * 100 + p1.jd;
+    const v2 = p2.jy * 10000 + p2.jm * 100 + p2.jd;
+    return v1 < v2;
+  }
+  return d1 < d2;
+}
 import { calculateEndOfService } from './end-of-service';
 import { PreviewSettlementDto, SettlementPreviewDto } from '../dto/settlement.dto';
 import { ContractAllowanceDto, ReplaceAllowancesDto } from '../dto/contract-allowance.dto';
@@ -587,7 +598,7 @@ export class HrService {
       );
     }
 
-    if (dto.endDate && dto.endDate < dto.startDate) {
+    if (dto.endDate && isDateBefore(dto.endDate, dto.startDate)) {
       throw new BadRequestException(
         'تاریخ پایان قرارداد نمی‌تواند قبل از تاریخ شروع باشد.',
       );
@@ -1082,7 +1093,7 @@ export class HrService {
     if (!employee) {
       throw new NotFoundException(`کارمند با شناسه ${dto.employeeId} یافت نشد.`);
     }
-    if (dto.endDate < dto.startDate) {
+    if (isDateBefore(dto.endDate, dto.startDate)) {
       throw new BadRequestException('تاریخ پایان مرخصی نمی‌تواند قبل از تاریخ شروع باشد.');
     }
     const saved = await this.hrRepository.createLeave(tenantId, {

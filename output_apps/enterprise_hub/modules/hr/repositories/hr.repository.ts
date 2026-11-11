@@ -28,7 +28,13 @@ import { EmployeeLeaveEntity } from '../entities/employee-leave.entity';
 import { StaffLoanEntity } from '../entities/staff-loan.entity';
 import { StaffLoanDeductionEntity } from '../entities/staff-loan-deduction.entity';
 import { fromMinor, toMinor } from '../../accounting/money';
-import { isLeaveInPeriod } from '../services/jalali-period';
+import {
+  isLeaveInPeriod,
+  isoDate,
+  jalaliMonthDays,
+  jalaliMonthEnd,
+  jalaliMonthStart,
+} from '../services/jalali-period';
 
 /**
  * سطر تجمیع حقوق قراردادهای فعال (خروجی Query Builder).
@@ -1007,10 +1013,30 @@ export class HrRepository {
     manager?: EntityManager,
   ): Promise<EmployeeLeaveEntity[]> {
     return this.use(tenantId, manager, async (r) => {
-      const leaves = await r.leaves.find({
-        where: { tenantId, status: LeaveStatus.APPROVED },
-        relations: ['employee'],
-      });
+      const monthDays = jalaliMonthDays(periodYear, periodMonth);
+      const mm = String(periodMonth).padStart(2, '0');
+      const dd = String(monthDays).padStart(2, '0');
+      const pStartSlash = `${periodYear}/${mm}/01`;
+      const pEndSlash = `${periodYear}/${mm}/${dd}`;
+      const pStartDash = `${periodYear}-${mm}-01`;
+      const pEndDash = `${periodYear}-${mm}-${dd}`;
+
+      const gStart = isoDate(jalaliMonthStart(periodYear, periodMonth));
+      const gEnd = isoDate(jalaliMonthEnd(periodYear, periodMonth));
+
+      const leaves = await r.leaves
+        .createQueryBuilder('l')
+        .where('l.tenant_id = :tenantId', { tenantId })
+        .andWhere('l.status = :status', { status: LeaveStatus.APPROVED })
+        .andWhere(
+          `((l.start_date <= :pEndSlash AND l.end_date >= :pStartSlash)
+            OR (l.start_date <= :pEndDash AND l.end_date >= :pStartDash)
+            OR (l.start_date <= :gEnd AND l.end_date >= :gStart))`,
+          { pStartSlash, pEndSlash, pStartDash, pEndDash, gStart, gEnd },
+        )
+        .leftJoinAndSelect('l.employee', 'employee')
+        .getMany();
+
       return leaves.filter((leave) =>
         isLeaveInPeriod(leave.startDate, leave.endDate, periodYear, periodMonth),
       );

@@ -15,6 +15,7 @@ import { LoanStatus } from '../enums/hr.enum';
 export class CreateStaffLoanDto {
   @ApiProperty({ description: 'شناسه کارمند', example: 1 })
   @IsInt()
+  @Min(1)
   @Type(() => Number)
   employeeId: number;
 
@@ -64,6 +65,7 @@ export class QueryStaffLoanDto {
   @ApiPropertyOptional({ description: 'شناسه کارمند' })
   @IsOptional()
   @IsInt()
+  @Min(1)
   @Type(() => Number)
   employeeId?: number;
 

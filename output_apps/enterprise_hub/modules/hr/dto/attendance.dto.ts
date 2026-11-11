@@ -16,6 +16,7 @@ import {
 export class RecordAttendanceDto {
   @ApiProperty({ description: 'شناسه کارمند', example: 1 })
   @IsInt()
+  @Min(1)
   @Type(() => Number)
   employeeId: number;
 

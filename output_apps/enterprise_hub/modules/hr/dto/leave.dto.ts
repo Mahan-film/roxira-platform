@@ -16,6 +16,7 @@ import { LeaveStatus, LeaveType } from '../enums/hr.enum';
 export class CreateLeaveDto {
   @ApiProperty({ description: 'شناسه کارمند', example: 1 })
   @IsInt()
+  @Min(1)
   @Type(() => Number)
   employeeId: number;
 
@@ -71,6 +72,7 @@ export class QueryLeaveDto {
   @ApiPropertyOptional({ description: 'شناسه کارمند' })
   @IsOptional()
   @IsInt()
+  @Min(1)
   @Type(() => Number)
   employeeId?: number;
 

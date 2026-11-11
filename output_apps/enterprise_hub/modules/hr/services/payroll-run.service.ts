@@ -64,6 +64,7 @@ import {
   jalaliMonthDays,
   jalaliMonthEnd,
   jalaliMonthStart,
+  leaveDaysInPeriod,
 } from './jalali-period';
 import {
   calculatePayroll,
@@ -370,8 +371,15 @@ export class PayrollRunService {
         const unpaidLeavesByEmployee = new Map<number, number>();
         for (const leave of approvedLeaves) {
           if (leave.leaveType === LeaveType.UNPAID) {
+            const daysInMonth = leaveDaysInPeriod(
+              leave.startDate,
+              leave.endDate,
+              dto.periodYear,
+              dto.periodMonth,
+              Number(leave.days),
+            );
             const current = unpaidLeavesByEmployee.get(leave.employeeId) ?? 0;
-            unpaidLeavesByEmployee.set(leave.employeeId, current + Number(leave.days));
+            unpaidLeavesByEmployee.set(leave.employeeId, current + daysInMonth);
           }
         }
         const month = String(dto.periodMonth).padStart(2, '0');
@@ -411,6 +419,7 @@ export class PayrollRunService {
           );
 
           let empLoanDeductionMinor = 0n;
+          const empLoanDeductions: Partial<StaffLoanDeductionEntity>[] = [];
           for (const loan of eligibleLoans) {
             const instalmentMinor = toMinor(loan.instalmentAmount);
             const remainingMinor = toMinor(loan.remainingAmount);
@@ -418,7 +427,7 @@ export class PayrollRunService {
               instalmentMinor < remainingMinor ? instalmentMinor : remainingMinor;
             if (deductionMinor > 0n) {
               empLoanDeductionMinor += deductionMinor;
-              loanDeductionsToCreate.push({
+              empLoanDeductions.push({
                 tenantId,
                 loanId: loan.id,
                 payrollRunId: run.id,
@@ -486,6 +495,7 @@ export class PayrollRunService {
             });
             continue;
           }
+          loanDeductionsToCreate.push(...empLoanDeductions);
           rows.push({
             payrollRunId: run.id,
             payslipNumber: `${PAYSLIP_NUMBER_PREFIX}-${dto.periodYear}${month}-${employee.employeeNumber}`,

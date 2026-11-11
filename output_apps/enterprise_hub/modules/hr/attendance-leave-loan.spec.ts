@@ -7,6 +7,7 @@ import {
   LeaveStatus,
   LoanStatus,
   MaritalStatus,
+  PayrollRunStatus,
   Gender,
 } from './enums/hr.enum';
 import { EmployeeEntity } from './entities/employee.entity';
@@ -887,6 +888,7 @@ describe('T67: Leave, attendance and staff loan integration with payroll', () =>
       });
       expect(run2.payslips[0].absenceDays).toBe(0);
       expect(run2.payslips[0].absenceDeduction).toBe(0);
+      await payrollRunService.postRun(T1, run2.id);
     });
 
     it('rejects loan creation when total instalments times instalment amount is less than principal', async () => {
@@ -899,6 +901,68 @@ describe('T67: Leave, attendance and staff loan integration with payroll', () =>
           totalInstalments: 5,
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('does not create loan deductions for employees whose net pay is negative and are skipped', async () => {
+      // Create a loan with an instalment amount that exceeds the employee gross pay
+      await hrService.createStaffLoan(T1, {
+        employeeId: employee.id,
+        title: 'وام سنگین',
+        principalAmount: 5_000_000_000,
+        instalmentAmount: 3_000_000_000,
+        totalInstalments: 2,
+        startDate: '1405/03',
+      });
+
+      const run = await payrollRunService.createOrRecalculate(T1, {
+        periodYear: 1405,
+        periodMonth: 3,
+      });
+
+      // Employee must be skipped because netPay < 0
+      expect(run.skipped.some((s) => s.employeeId === employee.id)).toBe(true);
+      expect(run.payslips.some((p) => p.employeeId === employee.id)).toBe(false);
+
+      // NO loan deduction must be persisted for this skipped employee!
+      expect(repository.loanDeductions.filter((d) => d.employeeId === employee.id)).toHaveLength(0);
+
+      // Attempting to post a run with 0 valid payslips must fail closed
+      await expect(payrollRunService.postRun(T1, run.id)).rejects.toBeInstanceOf(BadRequestException);
+
+      // Clean up the empty draft run so subsequent period tests run cleanly
+      repository.runs = repository.runs.filter((r) => r.id !== run.id);
+    });
+
+    it('prorates unpaid leave spanning across two months accurately between the periods', async () => {
+      // Request and approve unpaid leave from 1405/04/25 to 1405/05/05 (total 12 days: 7 in month 4, 5 in month 5)
+      const leave = await hrService.requestLeave(T1, {
+        employeeId: employee.id,
+        leaveType: LeaveType.UNPAID,
+        startDate: '1405/04/25',
+        endDate: '1405/05/05',
+        days: 12,
+      });
+      await hrService.reviewLeave(
+        T1,
+        leave.id,
+        { status: LeaveStatus.APPROVED },
+        'admin',
+      );
+
+      // Period 1405/04: must deduct only the 7 days that fall in Tir (25 to 31)
+      const run1 = await payrollRunService.createOrRecalculate(T1, {
+        periodYear: 1405,
+        periodMonth: 4,
+      });
+      expect(run1.payslips[0].absenceDays).toBe(7);
+      await payrollRunService.postRun(T1, run1.id);
+
+      // Period 1405/05: must deduct only the 5 days that fall in Mordad (1 to 5)
+      const run2 = await payrollRunService.createOrRecalculate(T1, {
+        periodYear: 1405,
+        periodMonth: 5,
+      });
+      expect(run2.payslips[0].absenceDays).toBe(5);
     });
   });
 });

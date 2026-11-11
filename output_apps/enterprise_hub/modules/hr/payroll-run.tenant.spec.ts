@@ -220,8 +220,13 @@ class InMemoryPayrollRepository {
   ): Promise<any> {
     const loan = this.loans.find((l) => l.tenantId === tenantId && l.id === loanId);
     if (!loan) return null;
+    if ((loan.remainingAmount ?? 0) < amount) {
+      throw new ConflictException(
+        `مبلغ کسر قسط وام (${amount}) بیشتر از مانده وام (${loan.remainingAmount}) است.`,
+      );
+    }
     loan.paidInstalments = (loan.paidInstalments ?? 0) + 1;
-    loan.remainingAmount = Math.max(0, (loan.remainingAmount ?? 0) - amount);
+    loan.remainingAmount = (loan.remainingAmount ?? 0) - amount;
     if (loan.remainingAmount <= 0) loan.status = 'PAID_OFF';
     return loan;
   }
