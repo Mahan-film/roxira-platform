@@ -27,7 +27,7 @@ export default function AccountingDashboardPage() {
 
   const cards = report
     ? [
-        { label: "صندوق و تنخواه", value: report.cash, href: "/app/accounting/petty-cash" },
+        { label: "صندوق و تنخواه", value: report.cash, href: "/app/treasury/petty-cash" },
         { label: "بانک", value: report.bank, href: "/app/accounting/bank" },
         { label: "مطالبات", value: report.receivables },
         { label: "بدهی به تأمین‌کنندگان", value: report.payables },
