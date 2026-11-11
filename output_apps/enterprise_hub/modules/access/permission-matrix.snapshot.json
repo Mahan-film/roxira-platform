@@ -2079,6 +2079,50 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/tax-compliance/reports/commercial-books.csv (LedgerExportController.commercialBooksCsv)": {
+    "policy": "tax:export",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/tax-compliance/reports/commercial-books.xlsx (LedgerExportController.commercialBooksXlsx)": {
+    "policy": "tax:export",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/tax-compliance/reports/electronic-books.csv (LedgerExportController.electronicBooksCsv)": {
+    "policy": "tax:export",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/tax-compliance/reports/electronic-books.xlsx (LedgerExportController.electronicBooksXlsx)": {
+    "policy": "tax:export",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/tax-compliance/reports/journal.csv (LedgerExportController.journal)": {
     "policy": "tax:export",
     "owner": true,
