@@ -22,13 +22,17 @@ import { GrossProfitReportController } from './controllers/gross-profit-report.c
 import { InvoiceEntity } from './entities/invoice.entity';
 import { InvoicePaymentGatewayConfigEntity } from './entities/invoice-payment-gateway-config.entity';
 import { InvoicePaymentLinkEntity } from './entities/invoice-payment-link.entity';
+import { PrintTemplateEntity } from './entities/print-template.entity';
 import { SuiteEventsProcessor } from './processors/suite-events.processor';
 import { InvoicingRepository } from './repositories/invoicing.repository';
 import { InvoicePaymentLinkRepository } from './repositories/invoice-payment-link.repository';
+import { PrintTemplateRepository } from './repositories/print-template.repository';
 import { InvoicePostingService } from './services/invoice-posting.service';
 import { InvoicingService } from './services/invoicing.service';
 import { InvoicePaymentLinkService } from './services/invoice-payment-link.service';
 import { PaymentGatewayAdapter } from './services/payment-gateway.adapter';
+import { PrintTemplateService } from './services/print-template.service';
+import { PrintTemplateController } from './controllers/print-template.controller';
 import { SalesReportService } from './services/sales-report.service';
 import { PurchasesReportService } from './services/purchases-report.service';
 import { GrossProfitReportService } from './services/gross-profit-report.service';
@@ -53,6 +57,7 @@ import { InvoicePaymentLinkController } from './controllers/invoice-payment-link
       StatutoryParameterEntity,
       InvoicePaymentGatewayConfigEntity,
       InvoicePaymentLinkEntity,
+      PrintTemplateEntity,
     ]),
     CurrencyModule,
     CrmModule,
@@ -71,6 +76,7 @@ import { InvoicePaymentLinkController } from './controllers/invoice-payment-link
     PurchasesReportController,
     GrossProfitReportController,
     InvoicePaymentLinkController,
+    PrintTemplateController,
   ],
   providers: [
     InvoicingService,
@@ -88,7 +94,16 @@ import { InvoicePaymentLinkController } from './controllers/invoice-payment-link
     SalesReportService,
     PurchasesReportService,
     GrossProfitReportService,
+    PrintTemplateService,
+    PrintTemplateRepository,
   ],
-  exports: [InvoicingService, InvoicingRepository, InvoicePaymentLinkService, InvoicePaymentLinkRepository],
+  exports: [
+    InvoicingService,
+    InvoicingRepository,
+    InvoicePaymentLinkService,
+    InvoicePaymentLinkRepository,
+    PrintTemplateService,
+    PrintTemplateRepository,
+  ],
 })
 export class InvoicingModule {}

@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { FileSpreadsheet, Plus, ReceiptText, Search } from "lucide-react";
+import { FileSpreadsheet, Plus, Printer, ReceiptText, Search } from "lucide-react";
 
 import {
   ErrorNotice,
@@ -222,6 +222,13 @@ function InvoicingPage() {
                 </Link>
               </>
             )}
+            <Link
+              href="/app/invoicing/print-templates"
+              className={buttonVariants({ variant: "outline" })}
+            >
+              <Printer className="size-4" />
+              قالب‌های چاپ و بارکد
+            </Link>
           </div>
         }
       />
