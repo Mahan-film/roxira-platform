@@ -1,15 +1,17 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsInt,
+  IsNotEmpty,
   IsOptional,
   IsString,
   Max,
   Min,
   Validate,
+  ValidateIf,
   ValidateNested,
   ValidationArguments,
   ValidatorConstraint,
@@ -70,7 +72,9 @@ export class LoginTimeWindowDto {
 
 export class SetLoginScheduleDto {
   @ApiPropertyOptional({ description: 'IANA Timezone name e.g. Asia/Tehran', default: 'Asia/Tehran' })
-  @IsOptional()
+  @ValidateIf((_obj: unknown, val: unknown) => val !== undefined)
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsNotEmpty({ message: 'timezone cannot be empty or null' })
   @IsString()
   @Validate(IsIanaTimezoneConstraint)
   timezone?: string;

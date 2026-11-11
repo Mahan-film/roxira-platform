@@ -11,6 +11,7 @@ import {
   AccessAction,
   AccessModule,
   SYSTEM_ROLES,
+  SystemRole,
 } from '../catalogue';
 import { AnyMember, AuthOnly, ModuleAccess, RequireAction } from '../decorators';
 import {
@@ -152,11 +153,20 @@ export class OrgController {
       throw new NotFoundException('عضو مورد نظر در این سازمان یافت نشد.');
     }
 
-    if (dto.enforceSchedule) {
+    const existing = await this.loginWindow.findByTenantUser(ctx.tenantId, userId);
+    const effectiveEnforce = dto.enforceSchedule ?? existing?.enforceSchedule ?? true;
+    if (effectiveEnforce) {
       const isCaller = userId === ctx.userId;
-      const isOwner = targetMember.roleKey === 'owner';
+      const isOwner = targetMember.roleKey === SystemRole.OWNER;
       if (isCaller || isOwner) {
-        const check = this.loginWindow.checkLoginWindow(dto, new Date());
+        const check = this.loginWindow.checkLoginWindow(
+          {
+            timezone: dto.timezone ?? existing?.timezone ?? 'Asia/Tehran',
+            enforceSchedule: true,
+            windows: dto.windows ?? existing?.windows ?? [],
+          },
+          new Date(),
+        );
         if (!check.allowed) {
           throw new BadRequestException('امکان تنظیم برنامه‌ای که دسترسی مدیر/مالک یا خود شما را در زمان فعلی مسدود کند وجود ندارد.');
         }

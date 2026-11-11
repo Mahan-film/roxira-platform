@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import {
+  ForbiddenException,
   HttpException,
   ServiceUnavailableException,
   UnauthorizedException,
@@ -499,5 +500,42 @@ describe('AuthService OTP hardening (issue #366)', () => {
     const { service, mocks } = createService();
     await service.logout('some-token');
     expect(mocks.refreshTokens.revoke).toHaveBeenCalledWith('some-token');
+  });
+
+  it('blocks session refresh when login window is violated', async () => {
+    const { service, mocks } = createService();
+    mocks.refreshTokens.consume.mockResolvedValue({
+      userId: 'user-1',
+      familyId: 'fam-1',
+      meta: { mfa: true, tenantId: 'tenant-1' },
+    });
+    (mocks.authRepository as never as { findById: jest.Mock }).findById = jest
+      .fn()
+      .mockResolvedValue(buildUser());
+    (mocks.memberships.listForUser as jest.Mock).mockResolvedValue([
+      { tenantId: 'tenant-1', roleKey: 'admin', status: 'ACTIVE' },
+    ]);
+    (mocks.memberships.findByTenantUser as jest.Mock).mockResolvedValue({
+      tenantId: 'tenant-1',
+      roleKey: 'admin',
+      status: 'ACTIVE',
+    });
+    const loginWindow = (service as any).loginWindow;
+    loginWindow.assertAllowed = jest.fn().mockRejectedValue(new ForbiddenException('خارج از ساعات مجاز'));
+
+    await expect(service.refreshSession('old-token')).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('blocks finishLogin when login window is violated', async () => {
+    const { service, mocks } = createService();
+    (mocks.memberships.listForUser as jest.Mock).mockResolvedValue([
+      { tenantId: 'tenant-1', roleKey: 'admin', status: 'ACTIVE' },
+    ]);
+    const loginWindow = (service as any).loginWindow;
+    loginWindow.assertAllowed = jest.fn().mockRejectedValue(new ForbiddenException('خارج از ساعات مجاز'));
+
+    await expect(
+      (service as any).finishLogin(buildUser(), { tenantId: 'tenant-1' }, false),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

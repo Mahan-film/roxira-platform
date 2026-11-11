@@ -23,12 +23,15 @@ export class LoginSchedulesRepository {
         schedule = m.create(UserLoginScheduleEntity, {
           tenantId,
           userId,
-          timezone: data.timezone ?? 'Asia/Tehran',
+          timezone: (data.timezone && data.timezone.trim()) || 'Asia/Tehran',
           enforceSchedule: data.enforceSchedule ?? true,
           windows: data.windows ?? [],
         });
       } else {
-        if (data.timezone !== undefined) schedule.timezone = data.timezone;
+        if (data.timezone !== undefined && data.timezone !== null) {
+          const trimmed = data.timezone.trim();
+          if (trimmed) schedule.timezone = trimmed;
+        }
         if (data.enforceSchedule !== undefined) schedule.enforceSchedule = data.enforceSchedule;
         if (data.windows !== undefined) schedule.windows = data.windows;
       }

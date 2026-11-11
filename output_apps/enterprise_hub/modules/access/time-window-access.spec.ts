@@ -224,6 +224,28 @@ describe('Access by Time Window (#230 / T76)', () => {
       expect(goodErrors.length).toBe(0);
     });
 
+    it('rejects null timezone and trims whitespace', async () => {
+      const { validate } = await import('class-validator');
+      const { plainToInstance } = await import('class-transformer');
+      const { SetLoginScheduleDto } = await import('./dto/login-schedule.dto');
+
+      const nullTz = plainToInstance(SetLoginScheduleDto, {
+        timezone: null,
+        windows: [{ dayOfWeek: 1, startMinute: 480, endMinute: 960 }],
+      });
+      const nullErrors = await validate(nullTz);
+      expect(nullErrors.length).toBeGreaterThan(0);
+      expect(nullErrors.some((e) => e.property === 'timezone')).toBe(true);
+
+      const whitespaceTz = plainToInstance(SetLoginScheduleDto, {
+        timezone: '  Asia/Tehran  ',
+        windows: [{ dayOfWeek: 1, startMinute: 480, endMinute: 960 }],
+      });
+      const wsErrors = await validate(whitespaceTz);
+      expect(wsErrors.length).toBe(0);
+      expect(whitespaceTz.timezone).toBe('Asia/Tehran');
+    });
+
     it('rejects windows where startMinute equals endMinute', async () => {
       const { validate } = await import('class-validator');
       const { plainToInstance } = await import('class-transformer');
@@ -237,6 +259,55 @@ describe('Access by Time Window (#230 / T76)', () => {
       const errors = await validate(equalWindow);
       expect(errors.length).toBeGreaterThan(0);
       expect(errors.some((e) => e.property === 'endMinute')).toBe(true);
+    });
+  });
+
+  describe('OrgController.setLoginSchedule lockout prevention', () => {
+    it('prevents self-lockout or owner lockout even when enforceSchedule is omitted', async () => {
+      const { OrgController } = await import('./controllers/org.controller');
+      const { BadRequestException } = await import('@nestjs/common');
+
+      const mockMembers = {
+        list: jest.fn().mockResolvedValue([
+          { userId: 'admin-1', roleKey: 'admin' },
+          { userId: 'owner-1', roleKey: 'owner' },
+        ]),
+      };
+      const mockLoginWindow = {
+        findByTenantUser: jest.fn().mockResolvedValue(null),
+        checkLoginWindow: jest.fn().mockReturnValue({ allowed: false, reason: 'outside window' }),
+        saveSchedule: jest.fn(),
+      };
+
+      const controller = new OrgController(
+        {} as never,
+        mockMembers as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        mockLoginWindow as never,
+      );
+
+      const req = {
+        access: {
+          tenantId: 'tenant-1',
+          userId: 'admin-1',
+          roleKey: 'admin',
+        },
+      } as never;
+
+      // Caller targeting self with empty/disallowed window and omitted enforceSchedule
+      await expect(
+        controller.setLoginSchedule(req, 'admin-1', { windows: [] }),
+      ).rejects.toThrow(BadRequestException);
+
+      // Caller targeting owner with empty/disallowed window and omitted enforceSchedule
+      await expect(
+        controller.setLoginSchedule(req, 'owner-1', { windows: [] }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });
