@@ -128,7 +128,12 @@ test.describe('Accountant day E2E · go-live gate on local stack as roxira_app',
     }
   });
 
-  async function postApi<T>(page: Page, route: string, body: unknown, expectedStatus = 201): Promise<T> {
+  async function postApi<T>(
+    page: Page,
+    route: string,
+    body: unknown,
+    expectedStatus: number | number[] = [200, 201],
+  ): Promise<T> {
     const token =
       state.accessToken ||
       (await page.evaluate((k) => {
@@ -144,11 +149,16 @@ test.describe('Accountant day E2E · go-live gate on local stack as roxira_app',
       headers: { Authorization: `Bearer ${token}` },
       data: body,
     });
-    if (res.status() !== expectedStatus) {
+    const allowed = Array.isArray(expectedStatus) ? expectedStatus : [expectedStatus];
+    if (!allowed.includes(res.status())) {
       const text = await res.text();
-      throw new Error(`POST ${route} returned ${res.status()} (expected ${expectedStatus}): ${text}`);
+      throw new Error(`POST ${route} returned ${res.status()} (expected ${allowed.join(' or ')}): ${text}`);
     }
-    return (await res.json()) as T;
+    const contentType = res.headers()['content-type'] || '';
+    if (contentType.includes('application/json')) {
+      return (await res.json()) as T;
+    }
+    return (await res.text()) as unknown as T;
   }
 
   async function getApi<T>(page: Page, route: string): Promise<T> {
@@ -619,8 +629,8 @@ test.describe('Accountant day E2E · go-live gate on local stack as roxira_app',
     const locks = await getApi<Array<{ id: number; active: boolean }>>(page, 'accounting/period-locks');
     const lock = locks.find((l) => l.active);
     if (lock) {
-      const unlockRes = await page.request.delete(
-        `/api/backend/enterprise-hub/accounting/period-locks/${lock.id}`,
+      const unlockRes = await page.request.post(
+        `/api/backend/enterprise-hub/accounting/period-locks/${lock.id}/unlock`,
         {
           headers: {
             Authorization: `Bearer ${state.accessToken || (await page.evaluate((k) => {
