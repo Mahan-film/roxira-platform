@@ -146,7 +146,6 @@ export function getJalaliYear(date: Date | string | null | undefined): number | 
  * When expectedRate is omitted, accepts any valid rate between 0 and 1.
  */
 export function validateVatRateForYear(
-  invoiceDate: Date | string,
   vatRate: number,
   expectedRate?: number | null,
 ): { valid: boolean; expected: number; isExempt: boolean } {
@@ -400,7 +399,7 @@ export function runMoadianPreFlightValidation(
 
     // Tax rate for fiscal year
     const vatRate = Number(item.vatRate ?? 0);
-    const vatCheck = validateVatRateForYear(dateObj ?? new Date(), vatRate, options?.expectedVatRate);
+    const vatCheck = validateVatRateForYear(vatRate, options?.expectedVatRate);
     if (!vatCheck.valid) {
       const displayYear = jalaliYear ? toPersianDigits(jalaliYear.toString()) : '';
       const displayExpected = toPersianDigits(Math.round(vatCheck.expected * 100).toString());

@@ -1154,7 +1154,7 @@ describe('Moadian server pre-flight validation & controller', () => {
     await expect(service.submitInvoice(TENANT_A, 'bad-inv-2')).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('VatRateResolver fallback: explicit line rate succeeds when statutory row is missing', async () => {
+  it('fails preflight and submit with VAT_RATE_UNRESOLVED when statutory row is missing or resolver throws', async () => {
     const { service } = buildMoadian();
     await service.putCredential(TENANT_A, credentialDto());
     (service as unknown as { vatRateResolver: { generalRate: jest.Mock } }).vatRateResolver.generalRate = jest
@@ -1162,37 +1162,10 @@ describe('Moadian server pre-flight validation & controller', () => {
       .mockRejectedValue(new BadRequestException('پارامترهای قانونی برای این سال ثبت نشده است'));
 
     const res = await service.preFlightValidate(TENANT_A, INVOICE_A);
-    expect(res.valid).toBe(true);
-
-    const sub = await service.submitInvoice(TENANT_A, INVOICE_A);
-    expect(sub.status).toBe(MoadianSubmissionStatus.QUEUED);
-  });
-
-  it('VatRateResolver fallback: invalid line rate fails preflight when statutory row is missing', async () => {
-    const invWithInvalidRate = buildInvoice({
-      id: 'inv-bad-rate',
-      items: [
-        {
-          taxCode: '2330001234567',
-          description: 'Bad rate item',
-          quantity: 1,
-          unitPrice: 100_000,
-          discount: 0,
-          vatRate: 1.5,
-          tax: 150_000,
-          total: 250_000,
-        },
-      ],
-    });
-    const { service } = buildMoadian({ invoices: [invWithInvalidRate] });
-    await service.putCredential(TENANT_A, credentialDto());
-    (service as unknown as { vatRateResolver: { generalRate: jest.Mock } }).vatRateResolver.generalRate = jest
-      .fn()
-      .mockRejectedValue(new BadRequestException('no statutory rate'));
-
-    const res = await service.preFlightValidate(TENANT_A, 'inv-bad-rate');
     expect(res.valid).toBe(false);
-    expect(res.errors.some((e) => e.code === 'ITEM_VAT_RATE_MISMATCH_FISCAL_YEAR')).toBe(true);
+    expect(res.errors.some((e) => e.code === 'VAT_RATE_UNRESOLVED')).toBe(true);
+
+    await expect(service.submitInvoice(TENANT_A, INVOICE_A)).rejects.toThrow(BadRequestException);
   });
 
   it('validates across fiscal years outside 1404-1405 using resolved statutory rate', async () => {
