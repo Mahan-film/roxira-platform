@@ -37,7 +37,7 @@ env:
 jobs:
   plan:
     name: Approve and plan
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 15
     # A PR also fires issue_comment events; github.event.issue.pull_request only
     # exists when the commented-on "issue" is actually a PR, so this excludes those.

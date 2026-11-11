@@ -47,7 +47,7 @@ env:
 jobs:
   run-agent-task:
     name: Run agent task
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 20
     # Job guard: kill switch + author/actor allowlist. Both must hold before any
     # checkout happens. AGENT_ALLOWED_ACTORS is a comma-separated repo variable;

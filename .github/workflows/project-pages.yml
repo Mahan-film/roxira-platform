@@ -34,7 +34,7 @@ env:
 jobs:
   build:
     name: Build static project
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 20
     if: >
       vars.FACTORY_ENABLED == 'true' &&
@@ -83,7 +83,7 @@ jobs:
   deploy:
     name: Deploy to GitHub Pages
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 10
     permissions:
       pages: write

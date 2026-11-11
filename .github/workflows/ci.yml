@@ -39,7 +39,7 @@ env:
 jobs:
   changes:
     name: Detect changes
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 5
     permissions:
       contents: read
@@ -99,7 +99,7 @@ jobs:
 
   gitleaks:
     name: Secret scan (new commits only)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 10
     steps:
       # Blobless clone: full commit graph, blobs fetched lazily only for the scanned range.
@@ -141,7 +141,7 @@ jobs:
 
   trivy-fs:
     name: Trivy filesystem scan (report-only)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 15
     continue-on-error: true
     steps:
@@ -163,7 +163,7 @@ jobs:
 
   semgrep:
     name: Semgrep (report-only)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 10
     continue-on-error: true
     steps:
@@ -179,7 +179,7 @@ jobs:
     name: Ruff (non-blocking)
     needs: changes
     if: needs.changes.outputs.python == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -232,7 +232,7 @@ jobs:
     # Always runs (no change filter), like Frontend gate, so it can be a required
     # check on every PR. This is the F821/F822/F823 guard for issue #122: a deleted
     # function whose call sites remained must fail instead of shipping.
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -250,7 +250,7 @@ jobs:
 
   system-inventory:
     name: System inventory up to date
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 5
     permissions:
       contents: read
@@ -268,7 +268,7 @@ jobs:
     name: Pytest (unit)
     needs: changes
     if: needs.changes.outputs.python == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
@@ -287,7 +287,7 @@ jobs:
     name: Generated template check (report-only)
     needs: changes
     if: needs.changes.outputs.projects == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 5
     continue-on-error: true
     steps:
@@ -301,7 +301,7 @@ jobs:
     name: Static RTL template build (report-only)
     needs: changes
     if: needs.changes.outputs.templates == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 10
     continue-on-error: true
     defaults:
@@ -347,7 +347,7 @@ jobs:
     name: Compose config
     needs: changes
     if: needs.changes.outputs.compose == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
@@ -369,7 +369,7 @@ jobs:
     name: Frontend lint + build
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 15
     defaults:
       run:
@@ -401,7 +401,7 @@ jobs:
     name: Backend (tsc + jest + Postgres specs)
     needs: changes
     if: needs.changes.outputs.backend == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 15
     defaults:
       run:
@@ -456,7 +456,7 @@ jobs:
     name: M1 gate (Playwright)
     needs: changes
     if: needs.changes.outputs.e2e == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 30
     continue-on-error: true
     services:
@@ -567,7 +567,7 @@ jobs:
     # the frontend job itself.
     needs: [changes, frontend]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 5
     steps:
       - name: Verify frontend result
