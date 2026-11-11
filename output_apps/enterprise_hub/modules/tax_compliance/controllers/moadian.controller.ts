@@ -70,17 +70,6 @@ export class MoadianController {
     return this.moadianService.preFlightValidate(this.tenantIdOf(request), invoiceId);
   }
 
-  @RequireAction(AccessAction.READ)
-  @Get('invoices/:invoiceId/pre-flight')
-  @ApiOperation({ summary: 'اعتبارسنجی پیش از ارسال صورتحساب به سامانه مودیان (GET)' })
-  @ApiResponse({ status: HttpStatus.OK })
-  async preFlightGet(
-    @Param('invoiceId', new ParseUUIDPipe()) invoiceId: string,
-    @Req() request: AuthenticatedRequest,
-  ): Promise<MoadianPreFlightResult> {
-    return this.moadianService.preFlightValidate(this.tenantIdOf(request), invoiceId);
-  }
-
   @RequireAction(AccessAction.ADMIN)
   @Put('credentials')
   @ApiOperation({
