@@ -57,7 +57,7 @@ env:
 jobs:
   resolve-pr:
     name: Resolve review eligibility
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     outputs:
       number: ${{ steps.pr.outputs.number }}
       branch: ${{ steps.pr.outputs.branch }}
@@ -98,7 +98,7 @@ jobs:
     # other branches. `issue-<n>` PRs must be opened by an allowlisted owner;
     # `agent/*` retains its existing eligibility.
     if: needs.resolve-pr.outputs.eligible == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 20
     steps:
       # Only `main` is ever checked out in this job -- see the module

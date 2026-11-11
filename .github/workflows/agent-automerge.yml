@@ -61,7 +61,7 @@ env:
 jobs:
   gate:
     name: Auto-merge gate
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 10
     if: vars.AUTO_MERGE_ENABLED == 'true'
     # contents: write is required for `gh pr merge` to push the squash-merge

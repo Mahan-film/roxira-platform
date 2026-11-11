@@ -24,7 +24,7 @@ permissions:
 jobs:
   status:
     name: Reply with progress and spend
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 10
     if: >
       vars.FACTORY_ENABLED == 'true' &&

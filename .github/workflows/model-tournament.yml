@@ -17,7 +17,7 @@ on:
 
 jobs:
   run-tournament:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 30
     continue-on-error: true
     if: vars.FACTORY_ENABLED == 'true' && contains(fromJson(vars.AGENT_ALLOWED_ACTORS), github.actor)

@@ -20,7 +20,7 @@ permissions:
 jobs:
   audit:
     name: npm audit + pip-audit
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - name: Checkout

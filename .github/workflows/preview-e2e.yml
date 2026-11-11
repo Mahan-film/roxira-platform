@@ -23,7 +23,7 @@ env:
 jobs:
   preview-e2e:
     name: Playwright preview E2E
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 15
     # Preview testing is report-only: it must not make the CI run non-green.
     continue-on-error: true
