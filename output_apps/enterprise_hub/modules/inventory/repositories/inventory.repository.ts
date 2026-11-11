@@ -2,7 +2,7 @@ import { Injectable, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
-import { parseScaled } from '../../accounting/money';
+import { parseScaled, toMinor } from '../../accounting/money';
 import {
   assertValidQuantityScale,
   MONEY_SCALE,
@@ -72,6 +72,7 @@ export interface LockedFifoLayer {
 export interface OutboundPersistResult {
   item: StockItemEntity;
   layers: ConsumedLayer[];
+  warning?: string;
 }
 
 /** تجمیع لایه‌های FIFO باز به تفکیک کالا. */
@@ -706,18 +707,82 @@ export class InventoryRepository {
           remaining = this.roundQuantity(remaining - take);
         }
 
+        let warning: string | undefined;
         if (remaining > 0) {
           const available = this.roundQuantity(input.quantity - remaining);
-          throw new InsufficientStockError(input.sku, input.quantity, available);
+          const mode = await this.getNegativeStockMode(tenantId, manager);
+          if (mode === 'refuse') {
+            throw new InsufficientStockError(input.sku, input.quantity, available);
+          }
+          let unitPurchaseCost = 0;
+          if (layers.length > 0) {
+            let totalCostMinor = 0n;
+            let totalQtyHundredths = 0n;
+            for (const l of layers) {
+              const q = BigInt(Math.round(l.quantity * 100));
+              const c = toMinor(l.unitPurchaseCost);
+              totalCostMinor += (q * c) / 100n;
+              totalQtyHundredths += q;
+            }
+            if (totalQtyHundredths > 0n) {
+              const avgMinor = (totalCostMinor * 100n) / totalQtyHundredths;
+              unitPurchaseCost = Number(avgMinor) / 100;
+            }
+          }
+          if (unitPurchaseCost === 0) {
+            const latestBatch = await manager
+              .createQueryBuilder(FifoBatchEntity, 'batch')
+              .where('batch.tenantId = :tenantId', { tenantId })
+              .andWhere('batch.sku = :sku', { sku: input.sku })
+              .orderBy('batch.receivedDate', 'DESC')
+              .addOrderBy('batch.id', 'DESC')
+              .getOne();
+            if (latestBatch) {
+              unitPurchaseCost = Number(latestBatch.unitPurchaseCost);
+            }
+          }
+          layers.push({
+            batchId: 0,
+            batchNumber: 'NEGATIVE-STOCK',
+            quantity: this.roundQuantity(remaining),
+            unitPurchaseCost,
+            warehouseId: input.warehouseId,
+          });
+          if (mode === 'warn') {
+            warning = `کسری موجودی کالا: موجودی انبار برای کالای ${input.sku} منفی شد (کسری: ${remaining}).`;
+          }
         }
 
         item.quantity = this.roundQuantity(item.quantity - input.quantity);
         const savedItem = await manager.save(item);
 
-        return { item: savedItem, layers };
+        return { item: savedItem, layers, warning };
       },
       outerManager,
     );
+  }
+
+  private async getNegativeStockMode(
+    tenantId: string,
+    manager: EntityManager,
+  ): Promise<string> {
+    const rows = (await manager.query(
+      `SELECT "value" FROM "tenant_policy_settings" WHERE "tenant_id" = $1 AND "key" = 'inventory.negative_stock.mode'`,
+      [tenantId],
+    )) as Array<{ value: unknown }>;
+    if (rows.length > 0 && rows[0].value !== null && rows[0].value !== undefined) {
+      let raw = rows[0].value;
+      if (typeof raw === 'object' && raw !== null) {
+        raw = (raw as Record<string, unknown>).value ?? '';
+      }
+      const val = typeof raw === 'string'
+        ? raw.replace(/^"|"$/g, '').trim()
+        : String(raw).trim();
+      if (val === 'allow' || val === 'warn') {
+        return val;
+      }
+    }
+    return 'refuse';
   }
 
   /**

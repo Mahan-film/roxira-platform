@@ -1,8 +1,10 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
 import { fromDb, fromMinor, minorToDecimal, scaledToDecimal, toMinor } from '../../accounting/money';
 import { PartyRole } from '../../parties/enums/party-role.enum';
 import { PartiesService } from '../../parties/services/parties.service';
+import { CreditExposureService } from '../policy/credit-exposure.service';
+import { DiscountPolicyService } from '../policy/discount-policy.service';
 import {
   ChangeSalesQuotationStatusDto,
   ConvertQuotationDto,
@@ -131,6 +133,8 @@ export class SalesService {
   constructor(
     private readonly repository: SalesRepository,
     private readonly parties: PartiesService,
+    @Optional() private readonly creditExposure?: CreditExposureService,
+    @Optional() private readonly discountPolicy?: DiscountPolicyService,
   ) {}
 
   // ------------------------------------------------------------------ quotations
@@ -139,8 +143,16 @@ export class SalesService {
     tenantId: string,
     dto: CreateSalesQuotationDto,
     userId?: string,
+    roleKey: string = '',
   ): Promise<SalesQuotationResponseDto> {
     await this.assertCustomer(tenantId, dto.partyCode);
+    if (this.discountPolicy) {
+      const lineDiscounts = dto.lines.map((l) => ({
+        discountAmountMinor: l.discount !== undefined ? toMinor(l.discount) : 0n,
+        grossAmountMinor: computeLine(parseQuantityHundredths(l.quantity), toMinor(l.unitPrice), 0n),
+      }));
+      await this.discountPolicy.checkDiscount(tenantId, roleKey, lineDiscounts);
+    }
     const id = await this.runNumbered(tenantId, async (manager, attempt) => {
       const built = await this.buildLines(tenantId, manager, dto.lines);
       const count = await this.repository.countQuotations(tenantId, manager);
@@ -163,8 +175,16 @@ export class SalesService {
     tenantId: string,
     id: number,
     dto: UpdateSalesQuotationDto,
+    roleKey: string = '',
   ): Promise<SalesQuotationResponseDto> {
     await this.assertCustomer(tenantId, dto.partyCode);
+    if (this.discountPolicy) {
+      const lineDiscounts = dto.lines.map((l) => ({
+        discountAmountMinor: l.discount !== undefined ? toMinor(l.discount) : 0n,
+        grossAmountMinor: computeLine(parseQuantityHundredths(l.quantity), toMinor(l.unitPrice), 0n),
+      }));
+      await this.discountPolicy.checkDiscount(tenantId, roleKey, lineDiscounts);
+    }
     await this.repository.runInTransaction(tenantId, async (manager) => {
       const quotation = await manager.getRepository(SalesQuotationEntity).findOne({ where: { tenantId, id } });
       if (!quotation) throw new NotFoundException(QUOTATION_NOT_FOUND);
@@ -202,7 +222,9 @@ export class SalesService {
     id: number,
     dto: ConvertQuotationDto,
     userId?: string,
+    roleKey: string = '',
   ): Promise<SalesOrderResponseDto> {
+    let warning: string | undefined;
     const orderId = await this.runNumbered(tenantId, async (manager, attempt) => {
       const quotation = await manager
         .getRepository(SalesQuotationEntity)
@@ -211,6 +233,16 @@ export class SalesService {
       if (!QUOTATION_CONVERTIBLE.includes(quotation.status)) throw new ConflictException(CONVERT_STATE);
       if (!(await this.repository.warehouseExists(tenantId, manager, dto.warehouseId))) {
         throw new BadRequestException(WAREHOUSE_MISSING);
+      }
+      if (this.creditExposure) {
+        const quotationTotalMinor = toMinor(quotation.totalAmount);
+        const exposureCheck = await this.creditExposure.checkCreditExposure(
+          tenantId,
+          quotation.partyCode,
+          quotationTotalMinor,
+          manager,
+        );
+        if (exposureCheck.warning) warning = exposureCheck.warning;
       }
       const quotationLines = await manager.getRepository(SalesQuotationLineEntity).find({
         where: { tenantId, quotationId: id },
@@ -225,6 +257,13 @@ export class SalesService {
         discount: line.discount,
         lineTotal: line.lineTotal,
       }));
+      if (this.discountPolicy) {
+        const lineDiscounts = lines.map((l) => ({
+          discountAmountMinor: l.discount !== undefined ? toMinor(l.discount) : 0n,
+          grossAmountMinor: computeLine(parseQuantityHundredths(l.quantity), toMinor(l.unitPrice), 0n),
+        }));
+        await this.discountPolicy.checkDiscount(tenantId, roleKey, lineDiscounts, 0, manager);
+      }
       const count = await this.repository.countOrders(tenantId, manager);
       const header: OrderHeaderInput = {
         number: `${SALES_ORDER_PREFIX}-${count + attempt}`,
@@ -241,7 +280,9 @@ export class SalesService {
       await this.repository.updateQuotation(tenantId, manager, id, { status: SalesQuotationStatus.CONVERTED });
       return order.id;
     });
-    return this.getOrder(tenantId, orderId);
+    const result = await this.getOrder(tenantId, orderId);
+    if (warning) result.warning = warning;
+    return result;
   }
 
   async listQuotations(tenantId: string, query: QuerySalesQuotationDto): Promise<SalesQuotationListResponseDto> {
@@ -262,13 +303,36 @@ export class SalesService {
 
   // ------------------------------------------------------------------ orders
 
-  async createOrder(tenantId: string, dto: CreateSalesOrderDto, userId?: string): Promise<SalesOrderResponseDto> {
+  async createOrder(
+    tenantId: string,
+    dto: CreateSalesOrderDto,
+    userId?: string,
+    roleKey: string = '',
+  ): Promise<SalesOrderResponseDto> {
     await this.assertCustomer(tenantId, dto.partyCode);
+    if (this.discountPolicy) {
+      const lineDiscounts = dto.lines.map((l) => ({
+        discountAmountMinor: l.discount !== undefined ? toMinor(l.discount) : 0n,
+        grossAmountMinor: computeLine(parseQuantityHundredths(l.quantity), toMinor(l.unitPrice), 0n),
+      }));
+      await this.discountPolicy.checkDiscount(tenantId, roleKey, lineDiscounts);
+    }
+    let warning: string | undefined;
     const id = await this.runNumbered(tenantId, async (manager, attempt) => {
       if (!(await this.repository.warehouseExists(tenantId, manager, dto.warehouseId))) {
         throw new BadRequestException(WAREHOUSE_MISSING);
       }
       const built = await this.buildLines(tenantId, manager, dto.lines);
+      if (this.creditExposure) {
+        const orderTotalMinor = sumLineTotals(built.lines.map((l) => toMinor(l.lineTotal)));
+        const exposureCheck = await this.creditExposure.checkCreditExposure(
+          tenantId,
+          dto.partyCode,
+          orderTotalMinor,
+          manager,
+        );
+        if (exposureCheck.warning) warning = exposureCheck.warning;
+      }
       const count = await this.repository.countOrders(tenantId, manager);
       const header: OrderHeaderInput = {
         number: `${SALES_ORDER_PREFIX}-${count + attempt}`,
@@ -284,11 +348,26 @@ export class SalesService {
       const created = await this.repository.insertOrder(tenantId, manager, header, built.lines);
       return created.id;
     });
-    return this.getOrder(tenantId, id);
+    const orderRes = await this.getOrder(tenantId, id);
+    if (warning) orderRes.warning = warning;
+    return orderRes;
   }
 
-  async updateOrder(tenantId: string, id: number, dto: UpdateSalesOrderDto): Promise<SalesOrderResponseDto> {
+  async updateOrder(
+    tenantId: string,
+    id: number,
+    dto: UpdateSalesOrderDto,
+    roleKey: string = '',
+  ): Promise<SalesOrderResponseDto> {
     await this.assertCustomer(tenantId, dto.partyCode);
+    if (this.discountPolicy) {
+      const lineDiscounts = dto.lines.map((l) => ({
+        discountAmountMinor: l.discount !== undefined ? toMinor(l.discount) : 0n,
+        grossAmountMinor: computeLine(parseQuantityHundredths(l.quantity), toMinor(l.unitPrice), 0n),
+      }));
+      await this.discountPolicy.checkDiscount(tenantId, roleKey, lineDiscounts);
+    }
+    let warning: string | undefined;
     await this.repository.runInTransaction(tenantId, async (manager) => {
       const order = await manager.getRepository(SalesOrderEntity).findOne({ where: { tenantId, id } });
       if (!order) throw new NotFoundException(ORDER_NOT_FOUND);
@@ -297,6 +376,16 @@ export class SalesService {
         throw new BadRequestException(WAREHOUSE_MISSING);
       }
       const built = await this.buildLines(tenantId, manager, dto.lines);
+      if (this.creditExposure) {
+        const orderTotalMinor = sumLineTotals(built.lines.map((l) => toMinor(l.lineTotal)));
+        const exposureCheck = await this.creditExposure.checkCreditExposure(
+          tenantId,
+          dto.partyCode,
+          orderTotalMinor,
+          manager,
+        );
+        if (exposureCheck.warning) warning = exposureCheck.warning;
+      }
       await this.repository.updateOrder(tenantId, manager, id, {
         partyCode: dto.partyCode,
         warehouseId: dto.warehouseId,
@@ -307,17 +396,32 @@ export class SalesService {
       });
       await this.repository.replaceOrderLines(tenantId, manager, id, built.lines);
     });
-    return this.getOrder(tenantId, id);
+    const orderRes = await this.getOrder(tenantId, id);
+    if (warning) orderRes.warning = warning;
+    return orderRes;
   }
 
   async confirmOrder(tenantId: string, id: number): Promise<SalesOrderResponseDto> {
+    let warning: string | undefined;
     await this.repository.runInTransaction(tenantId, async (manager) => {
       const order = await manager.getRepository(SalesOrderEntity).findOne({ where: { tenantId, id } });
       if (!order) throw new NotFoundException(ORDER_NOT_FOUND);
       if (order.status !== SalesOrderStatus.DRAFT) throw new ConflictException(WRONG_STATE);
+      if (this.creditExposure) {
+        const orderTotalMinor = toMinor(order.totalAmount);
+        const exposureCheck = await this.creditExposure.checkCreditExposure(
+          tenantId,
+          order.partyCode,
+          orderTotalMinor,
+          manager,
+        );
+        if (exposureCheck.warning) warning = exposureCheck.warning;
+      }
       await this.repository.updateOrder(tenantId, manager, id, { status: SalesOrderStatus.CONFIRMED });
     });
-    return this.getOrder(tenantId, id);
+    const orderRes = await this.getOrder(tenantId, id);
+    if (warning) orderRes.warning = warning;
+    return orderRes;
   }
 
   async cancelOrder(tenantId: string, id: number): Promise<SalesOrderResponseDto> {

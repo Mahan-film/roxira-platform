@@ -1,4 +1,5 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { fromMinor, toMinor } from '../../accounting/money';
 import { PartyEntity } from '../entities/party.entity';
 import { PartyRole } from '../enums/party-role.enum';
 import {
@@ -24,6 +25,7 @@ export function toPartyResponse(party: PartyEntity): PartyResponseDto {
     phone: party.phone ?? null,
     email: party.email ?? null,
     active: party.active,
+    creditLimit: party.creditLimit ? String(fromMinor(BigInt(party.creditLimit))) : '0',
     createdAt: party.createdAt,
     updatedAt: party.updatedAt,
   };
@@ -55,6 +57,14 @@ export class PartiesService {
 
   async create(tenantId: string, dto: CreatePartyDto): Promise<PartyResponseDto> {
     const code = dto.code.trim();
+    let creditLimit = '0';
+    if (dto.creditLimit) {
+      try {
+        creditLimit = toMinor(dto.creditLimit).toString();
+      } catch (error) {
+        throw new BadRequestException('سقف اعتبار نامعتبر است.');
+      }
+    }
     const input: PartyInput = {
       code,
       name: dto.name.trim(),
@@ -63,6 +73,7 @@ export class PartiesService {
       economicCode: dto.economicCode ?? null,
       phone: dto.phone ?? null,
       email: dto.email ?? null,
+      creditLimit,
       active: dto.active ?? true,
     };
     if (await this.repository.findByCode(tenantId, code)) throw new ConflictException(DUPLICATE_CODE_MESSAGE);
@@ -84,6 +95,13 @@ export class PartiesService {
     if (dto.economicCode !== undefined) patch.economicCode = dto.economicCode;
     if (dto.phone !== undefined) patch.phone = dto.phone;
     if (dto.email !== undefined) patch.email = dto.email;
+    if (dto.creditLimit !== undefined) {
+      try {
+        patch.creditLimit = toMinor(dto.creditLimit).toString();
+      } catch (error) {
+        throw new BadRequestException('سقف اعتبار نامعتبر است.');
+      }
+    }
     if (dto.active !== undefined) patch.active = dto.active;
     const updated = await this.repository.update(tenantId, id, patch);
     if (!updated) throw new NotFoundException(NOT_FOUND_MESSAGE);

@@ -43,6 +43,7 @@ import { LedgerReportRepository } from './repositories/ledger-report.repository'
 import { PettyCashRepository } from './repositories/petty-cash.repository';
 import { VoucherAttachmentRepository } from './repositories/voucher-attachment.repository';
 import { AccountingService } from './services/accounting.service';
+import { BudgetControlService } from './services/budget-control.service';
 import { VoucherAttachmentService } from './services/voucher-attachment.service';
 import { ChartTemplateService } from './services/chart-template.service';
 import { CostCentreReportService } from './services/cost-centre-report.service';
@@ -133,7 +134,8 @@ import { BudgetVsActualService } from './services/budget-vs-actual.service';
     PettyCashService,
     ReportExportService,
     VoucherToolsService,
+    BudgetControlService,
   ],
-  exports: [AccountingService, FinancialReportsService, ReportExportService, CostCentreReportService, BudgetVsActualService],
+  exports: [AccountingService, FinancialReportsService, ReportExportService, CostCentreReportService, BudgetVsActualService, BudgetControlService],
 })
 export class AccountingModule {}

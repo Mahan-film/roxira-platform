@@ -5,6 +5,7 @@ import {
   NotFoundException,
   Optional,
 } from '@nestjs/common';
+import { BudgetControlService } from './budget-control.service';
 import { LedgerAuditService } from '../../access/services/ledger-audit.service';
 import { EntityManager, FindOptionsWhere, ILike } from 'typeorm';
 import { createHash, randomBytes } from 'crypto';
@@ -148,6 +149,7 @@ export class AccountingService {
     private readonly currencyService: CurrencyService,
     /** Optional so unit tests and tools can build the service without the access module. */
     @Optional() private readonly ledgerAudit?: LedgerAuditService,
+    private readonly budgetControl?: BudgetControlService,
   ) {}
 
   private toAccountDto(entity: ChartOfAccountEntity): AccountResponseDto {
@@ -703,6 +705,7 @@ export class AccountingService {
     const maxAttempts = isGenerated ? 5 : 1;
     let lineInputs: JournalLineInput[] | null = null;
     let saved: JournalEntryEntity | null = null;
+    let budgetWarning: string | undefined;
     for (let attempt = 1; attempt <= maxAttempts && saved == null; attempt += 1) {
       const clash = await this.accountingRepository.findEntryByNumber(
         tenantId,
@@ -732,6 +735,47 @@ export class AccountingService {
       // Resolved once, after the number is known to be free (same order as before).
       if (lineInputs == null) {
         lineInputs = await this.resolveLineInputs(tenantId, normalizedLines, manager);
+      }
+      if (this.budgetControl && status === JournalEntryStatus.POSTED) {
+        const warnings: string[] = [];
+        const groupedSpend = new Map<
+          string,
+          { projectCode?: string | null; costCenterCode?: string | null; amountMinor: bigint }
+        >();
+
+        for (const line of lineInputs) {
+          if ((line.projectCode || line.costCenterCode) && line.debitMinor > 0n) {
+            const key = `${line.projectCode ?? ''}:::${line.costCenterCode ?? ''}`;
+            const existing = groupedSpend.get(key);
+            if (existing) {
+              existing.amountMinor += line.debitMinor;
+            } else {
+              groupedSpend.set(key, {
+                projectCode: line.projectCode,
+                costCenterCode: line.costCenterCode,
+                amountMinor: line.debitMinor,
+              });
+            }
+          }
+        }
+
+        for (const item of groupedSpend.values()) {
+          const check = await this.budgetControl.checkBudget(
+            tenantId,
+            {
+              projectCode: item.projectCode,
+              costCenterCode: item.costCenterCode,
+              amountMinor: item.amountMinor,
+            },
+            manager,
+          );
+          if (check.warning && !warnings.includes(check.warning)) {
+            warnings.push(check.warning);
+          }
+        }
+        if (warnings.length > 0) {
+          budgetWarning = warnings.join(' | ');
+        }
       }
       try {
         saved = await this.accountingRepository.persistJournalEntry(
@@ -792,7 +836,9 @@ export class AccountingService {
       );
     }
 
-    return this.toEntryDto(saved);
+    const resultDto = this.toEntryDto(saved);
+    if (budgetWarning) resultDto.warning = budgetWarning;
+    return resultDto;
   }
 
   /** Stable hash of what the caller asked for (the key itself and server-chosen values excluded). */

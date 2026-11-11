@@ -262,6 +262,7 @@ export class SalesQuotationResponseDto {
   @ApiPropertyOptional({ nullable: true }) note: string | null;
   @ApiProperty({ ...MONEY }) totalAmount: Money;
   @ApiPropertyOptional({ nullable: true }) createdBy: string | null;
+  @ApiPropertyOptional({ description: 'هشدار خط‌مشی' }) warning?: string;
   @ApiProperty() createdAt: Date;
   @ApiProperty() updatedAt: Date;
   @ApiPropertyOptional({ type: [SalesLineResponseDto] }) lines?: SalesLineResponseDto[];
@@ -289,6 +290,7 @@ export class SalesOrderResponseDto {
   @ApiPropertyOptional({ nullable: true }) note: string | null;
   @ApiProperty({ ...MONEY }) totalAmount: Money;
   @ApiPropertyOptional({ nullable: true }) createdBy: string | null;
+  @ApiPropertyOptional({ description: 'هشدار خط‌مشی' }) warning?: string;
   @ApiProperty() createdAt: Date;
   @ApiProperty() updatedAt: Date;
   @ApiPropertyOptional({ type: [SalesOrderLineResponseDto] }) lines?: SalesOrderLineResponseDto[];

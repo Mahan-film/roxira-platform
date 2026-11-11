@@ -12,6 +12,7 @@ export interface PartyInput {
   economicCode: string | null;
   phone: string | null;
   email: string | null;
+  creditLimit?: string;
   active?: boolean;
 }
 
@@ -22,6 +23,7 @@ export interface PartyPatch {
   economicCode?: string | null;
   phone?: string | null;
   email?: string | null;
+  creditLimit?: string;
   active?: boolean;
 }
 
