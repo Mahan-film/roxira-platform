@@ -94,8 +94,17 @@ describePg('tenant RLS as roxira_app through PgBouncer (transaction mode)', () =
   beforeAll(async () => {
     admin = await new DataSource({ ...options('postgres'), entities: [], migrations: [] }).initialize();
     await admin.query(`CREATE DATABASE "${db}"`);
-    await admin.query(`DROP ROLE IF EXISTS roxira_app`);
-    await admin.query(`CREATE ROLE roxira_app LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${APP_PW}'`);
+    await admin.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'roxira_app') THEN
+          CREATE ROLE roxira_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${APP_PW}';
+        ELSE
+          ALTER ROLE roxira_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${APP_PW}';
+        END IF;
+      END
+      $$;
+    `);
     owner = await new DataSource(options(db)).initialize();
     await owner.runMigrations();
     await owner.query(`GRANT CONNECT ON DATABASE "${db}" TO roxira_app`);
@@ -114,7 +123,6 @@ describePg('tenant RLS as roxira_app through PgBouncer (transaction mode)', () =
     await app?.destroy();
     await owner?.destroy();
     await admin?.query(`DROP DATABASE IF EXISTS "${db}" WITH (FORCE)`);
-    await admin?.query(`DROP ROLE IF EXISTS roxira_app`);
     await admin?.destroy();
   });
 

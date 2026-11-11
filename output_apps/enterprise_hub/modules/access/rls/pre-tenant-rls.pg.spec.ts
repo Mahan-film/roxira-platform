@@ -91,8 +91,17 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     await admin.query(`DROP ROLE IF EXISTS ${role}`);
     await admin.query(`CREATE ROLE ${role} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${APP_PW}'`);
     // Ensure standard roxira_app role exists during migration so explicit per-function grants are applied
-    await admin.query(`DROP ROLE IF EXISTS roxira_app`);
-    await admin.query(`CREATE ROLE roxira_app LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${APP_PW}'`);
+    await admin.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'roxira_app') THEN
+          CREATE ROLE roxira_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${APP_PW}';
+        ELSE
+          ALTER ROLE roxira_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${APP_PW}';
+        END IF;
+      END
+      $$;
+    `);
     owner = await new DataSource(options(db)).initialize();
     await owner.runMigrations();
 
