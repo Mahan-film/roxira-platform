@@ -100,6 +100,16 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
         entryNumber: 'V-1405-08-01',
         replayed: false,
       }),
+      describe: jest.fn().mockResolvedValue([
+        {
+          docType: 'currency.fx_revaluation',
+          title: 'تسعیر ارز',
+          roles: [
+            { role: 'fx_gain', accountCode: '4120' },
+            { role: 'fx_loss', accountCode: '5210' },
+          ],
+        },
+      ]),
     };
 
     mockAccounting = {
@@ -417,6 +427,73 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
           balances,
         }),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects revaluation or non-zero book value when account has zero ledger balance', async () => {
+      const accountsWithZero = [
+        ...defaultAccounts,
+        {
+          code: '1014',
+          name: 'بانک ارزی ین ژاپن',
+          level: AccountLevel.MOEIN,
+          accountType: AccountType.ASSET,
+          balance: 0,
+          currency: Currency.USD,
+        },
+      ];
+      (mockAccounting.listAccounts as jest.Mock).mockResolvedValue(accountsWithZero);
+
+      // Attempting to post arbitrary gain/loss on a zero-balance account
+      const balances: ForeignAccountBalance[] = [
+        {
+          accountCode: '1014',
+          accountName: 'بانک ارزی ین ژاپن',
+          currency: Currency.USD,
+          foreignAmountMinor: 1000000n, // non-zero foreign amount!
+          bookValueRialMinor: 0n,
+        },
+      ];
+
+      await expect(
+        revaluationService.postMonthEndRevaluation('tenant-1', {
+          period: '1405-08',
+          date: '2026-11-21',
+          balances,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('resolves customized tenant posting roles for fx_gain and fx_loss in voucher plan', async () => {
+      (mockPostingRules.describe as jest.Mock).mockResolvedValueOnce([
+        {
+          docType: 'currency.fx_revaluation',
+          title: 'تسعیر ارز',
+          roles: [
+            { role: 'fx_gain', accountCode: '4199' }, // Custom mapped gain account
+            { role: 'fx_loss', accountCode: '5299' }, // Custom mapped loss account
+          ],
+        },
+      ]);
+
+      const balances: ForeignAccountBalance[] = [
+        {
+          accountCode: '1012',
+          accountName: 'بانک ارزی دلاری',
+          currency: Currency.USD,
+          foreignAmountMinor: 1000000n,
+          bookValueRialMinor: 8_500_000_000n, // Gain: 700M
+        },
+      ];
+
+      const res = await revaluationService.postMonthEndRevaluation('tenant-1', {
+        period: '1405-08',
+        date: '2026-11-21',
+        balances,
+      });
+
+      // Assert plan uses the tenant's custom resolved accounts
+      expect(res.plan.voucherLines.some((l) => l.accountCode === '4199')).toBe(true);
+      expect(res.plan.voucherLines.some((l) => l.accountCode === '4120')).toBe(false);
     });
   });
 

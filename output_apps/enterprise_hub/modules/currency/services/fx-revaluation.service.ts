@@ -113,9 +113,9 @@ export class FxRevaluationService {
       throw new BadRequestException(`Invalid currency rate for ${currency}`);
     }
 
-    // Scale by 10^8 for exact integer division with half-up rounding
-    const irrScaled = floatToScaledUnits(irrPerUsd, 8);
-    const currScaled = floatToScaledUnits(currPerUsd, 8);
+    // Scale by 10^12 for high-precision integer division with half-up rounding
+    const irrScaled = floatToScaledUnits(irrPerUsd, 12);
+    const currScaled = floatToScaledUnits(currPerUsd, 12);
     return (irrScaled + (currScaled / 2n)) / currScaled;
   }
 
@@ -191,16 +191,17 @@ export class FxRevaluationService {
 
   /**
    * Generates a complete month-end FX revaluation voucher plan for all foreign-currency accounts.
-   * Resolves posting roles fx_gain and fx_loss from the posting rules template defaults.
+   * Resolves posting roles fx_gain and fx_loss from resolved roles or template defaults.
    */
   generateMonthEndVoucher(
     period: string,
     balances: ForeignAccountBalance[],
     rates?: Partial<Record<Currency, bigint>>,
+    resolvedAccounts?: { fxGain?: string; fxLoss?: string },
   ): MonthEndRevaluationVoucherPlan {
     const tpl = findTemplate('currency.fx_revaluation');
-    const fxGainAccount = tpl?.defaults?.fx_gain ?? '4120';
-    const fxLossAccount = tpl?.defaults?.fx_loss ?? '5210';
+    const fxGainAccount = resolvedAccounts?.fxGain ?? tpl?.defaults?.fx_gain ?? '4120';
+    const fxLossAccount = resolvedAccounts?.fxLoss ?? tpl?.defaults?.fx_loss ?? '5210';
 
     const items = balances.map((b) => this.revalueBalance(b, rates?.[b.currency] ?? b.rateRialPerUnit));
 
@@ -319,10 +320,17 @@ export class FxRevaluationService {
       }
     }
 
+    // Resolve posting roles for fx_gain and fx_loss for this tenant
+    const desc = await this.postingRules.describe(tenantId);
+    const revalDesc = desc.find((d) => d.docType === 'currency.fx_revaluation');
+    const fxGainAccount = revalDesc?.roles.find((r) => r.role === 'fx_gain')?.accountCode ?? '4120';
+    const fxLossAccount = revalDesc?.roles.find((r) => r.role === 'fx_loss')?.accountCode ?? '5210';
+
     const plan = this.generateMonthEndVoucher(
       request.period,
       request.balances,
       request.rates,
+      { fxGain: fxGainAccount, fxLoss: fxLossAccount },
     );
 
     const executePosting = async (em?: EntityManager) => {
@@ -363,15 +371,20 @@ export class FxRevaluationService {
           continue;
         }
 
-        // Reconcile book value against ledger only for fresh postings (not already revalued)
+        // Reconcile book value against ledger: require exact match, and block arbitrary gain/loss on zero-balance accounts
         const acc = accountMap.get(item.accountCode);
-        if (acc?.balance !== undefined && acc.balance !== null) {
-          const ledgerBalanceMinor = toMinor(acc.balance);
-          if (ledgerBalanceMinor !== 0n && item.bookValueRialMinor !== ledgerBalanceMinor) {
-            throw new BadRequestException(
-              `ارزش دفتری اعلام‌شده (${item.bookValueRialMinor}) با مانده دفتر کل حساب ${acc.code} (${ledgerBalanceMinor}) مغایرت دارد.`,
-            );
-          }
+        const ledgerBalanceMinor = acc?.balance !== undefined && acc.balance !== null ? toMinor(acc.balance) : 0n;
+
+        if (ledgerBalanceMinor === 0n && item.foreignAmountMinor !== 0n) {
+          throw new BadRequestException(
+            `حساب «${acc?.code ?? item.accountCode}» دارای مانده ریالی صفر در دفتر کل است؛ تسعیر روی حساب بدون مانده مجاز نیست.`,
+          );
+        }
+
+        if (item.bookValueRialMinor !== ledgerBalanceMinor) {
+          throw new BadRequestException(
+            `ارزش دفتری اعلام‌شده (${item.bookValueRialMinor}) با مانده دفتر کل حساب ${acc?.code ?? item.accountCode} (${ledgerBalanceMinor}) مغایرت دارد.`,
+          );
         }
 
         const postReq: PostingRequest = {
