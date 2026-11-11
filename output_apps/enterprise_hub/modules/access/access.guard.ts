@@ -3,9 +3,11 @@ import {
   ExecutionContext,
   Injectable,
   Logger,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { LoginWindowService } from './services/login-window.service';
 import { IS_PUBLIC_KEY } from '../auth/decorators/public.decorator';
 import { ROLES_KEY } from '../auth/decorators/roles.decorator';
 import { TenantRole } from '../tenants/enums/tenant-role.enum';
@@ -47,6 +49,8 @@ export class AccessGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly access: AccessService,
+    @Optional()
+    private readonly loginWindow?: LoginWindowService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -90,6 +94,10 @@ export class AccessGuard implements CanActivate {
     const ctx = await this.access.resolve(user.sub, user.tenantId);
     if (!ctx) {
       throw denied('NOT_A_MEMBER', 'You are not an active member of this organisation.');
+    }
+
+    if (this.loginWindow) {
+      await this.loginWindow.assertAllowed(ctx.tenantId, ctx.userId);
     }
 
     if (module && !anyMember) {

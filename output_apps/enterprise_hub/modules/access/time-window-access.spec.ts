@@ -1,5 +1,10 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { ACCESS_MODULE_KEY } from './decorators';
+import { AccessGuard } from './access.guard';
+import { AccessService } from './services/access.service';
 import { LoginWindowService, UserLoginSchedule } from './services/login-window.service';
+import { LoginSchedulesRepository } from './repositories/login-schedules.repository';
 
 describe('Access by Time Window (#230 / T76)', () => {
   let service: LoginWindowService;
@@ -34,68 +39,158 @@ describe('Access by Time Window (#230 / T76)', () => {
     expect(res.reason).toBe('هیچ بازه زمانی مجاز برای ورود به سیستم برای شما تعریف نشده است.');
   });
 
-  it('allows login during an active time window', () => {
-    // Window on Monday (day 1) from 08:00 (480) to 17:00 (1020)
-    const schedule: UserLoginSchedule = {
+  it('fails closed when timezone is invalid (Lesson 25)', () => {
+    const invalidTz: UserLoginSchedule = {
       userId: 'user-1',
       tenantId: 'tenant-1',
-      timezone: 'UTC',
+      timezone: 'Invalid/City_Nowhere',
       enforceSchedule: true,
-      windows: [
-        { dayOfWeek: 1, startMinute: 480, endMinute: 1020 },
-      ],
+      windows: [{ dayOfWeek: 1, startMinute: 480, endMinute: 1020 }],
     };
 
-    // 2026-11-09 is a Monday. 10:30 UTC = 10*60 + 30 = 630 min
-    const dateInside = new Date(Date.UTC(2026, 10, 9, 10, 30, 0));
-    const res = service.checkLoginWindow(schedule, dateInside);
-    expect(res.allowed).toBe(true);
-    expect(() => service.assertLoginWindow(schedule, dateInside)).not.toThrow();
-  });
-
-  it('denies login outside configured time windows with Persian message', () => {
-    const schedule: UserLoginSchedule = {
-      userId: 'user-1',
-      tenantId: 'tenant-1',
-      timezone: 'UTC',
-      enforceSchedule: true,
-      windows: [
-        { dayOfWeek: 1, startMinute: 480, endMinute: 1020 }, // Mon 08:00 - 17:00
-      ],
-    };
-
-    // 2026-11-09 20:00 UTC (after 17:00)
-    const dateAfter = new Date(Date.UTC(2026, 10, 9, 20, 0, 0));
-    const res = service.checkLoginWindow(schedule, dateAfter);
+    const res = service.checkLoginWindow(invalidTz);
     expect(res.allowed).toBe(false);
-    expect(res.reason).toBe('ورود به سیستم و تمدید نشست خارج از ساعات مجاز کاری امکان‌پذیر نیست.');
-
-    expect(() => service.assertLoginWindow(schedule, dateAfter)).toThrow(ForbiddenException);
+    expect(res.reason).toContain('منطقه زمانی نامعتبر');
+    expect(() => service.assertLoginWindow(invalidTz)).toThrow(ForbiddenException);
   });
 
-  it('supports multiple windows across different days of the week', () => {
+  it('calculates time correctly in Asia/Tehran timezone', () => {
     const schedule: UserLoginSchedule = {
+      userId: 'user-1',
+      tenantId: 'tenant-1',
+      timezone: 'Asia/Tehran',
+      enforceSchedule: true,
+      windows: [
+        // Saturday (day 6) from 08:30 (510 min) to 16:30 (990 min)
+        { dayOfWeek: 6, startMinute: 510, endMinute: 990 },
+      ],
+    };
+
+    // 2026-11-07 06:00 UTC = 2026-11-07 09:30 Tehran time (Saturday, within window)
+    const tehranMorning = new Date(Date.UTC(2026, 10, 7, 6, 0, 0));
+    expect(service.checkLoginWindow(schedule, tehranMorning).allowed).toBe(true);
+
+    // 2026-11-07 14:00 UTC = 2026-11-07 17:30 Tehran time (Saturday, after 16:30)
+    const tehranEvening = new Date(Date.UTC(2026, 10, 7, 14, 0, 0));
+    const eveningRes = service.checkLoginWindow(schedule, tehranEvening);
+    expect(eveningRes.allowed).toBe(false);
+    expect(eveningRes.reason).toBe('ورود به سیستم و تمدید نشست خارج از ساعات مجاز کاری امکان‌پذیر نیست.');
+  });
+
+  it('supports overnight windows that cross midnight', () => {
+    const overnightSchedule: UserLoginSchedule = {
       userId: 'user-1',
       tenantId: 'tenant-1',
       timezone: 'UTC',
       enforceSchedule: true,
       windows: [
-        { dayOfWeek: 6, startMinute: 540, endMinute: 780 },  // Sat morning (09:00 - 13:00)
-        { dayOfWeek: 6, startMinute: 960, endMinute: 1200 }, // Sat evening (16:00 - 20:00)
-        { dayOfWeek: 0, startMinute: 540, endMinute: 1020 }, // Sun (09:00 - 17:00)
+        // Monday 22:00 (1320) to Tuesday 06:00 (360)
+        { dayOfWeek: 1, startMinute: 1320, endMinute: 360 },
       ],
     };
 
-    // Saturday 11:00 (inside first window)
-    const sat11 = new Date(Date.UTC(2026, 10, 7, 11, 0, 0));
-    expect(service.checkLoginWindow(schedule, sat11).allowed).toBe(true);
+    // Monday 23:30 UTC -> inside overnight window
+    const monNight = new Date(Date.UTC(2026, 10, 9, 23, 30, 0));
+    expect(service.checkLoginWindow(overnightSchedule, monNight).allowed).toBe(true);
 
-    // Saturday 14:30 (between windows)
-    const sat14 = new Date(Date.UTC(2026, 10, 7, 14, 30, 0));
-    expect(service.checkLoginWindow(schedule, sat14).allowed).toBe(false);
+    // Tuesday 04:00 UTC -> inside overnight window
+    const tueEarly = new Date(Date.UTC(2026, 10, 10, 4, 0, 0));
+    expect(service.checkLoginWindow(overnightSchedule, tueEarly).allowed).toBe(true);
 
-    // Saturday 18:00 (inside second window)
-    const sat18 = new Date(Date.UTC(2026, 10, 7, 18, 0, 0));
-    expect(service.checkLoginWindow(schedule, sat18).allowed).toBe(true);
+    // Tuesday 07:00 UTC -> outside window
+    const tueLate = new Date(Date.UTC(2026, 10, 10, 7, 0, 0));
+    expect(service.checkLoginWindow(overnightSchedule, tueLate).allowed).toBe(false);
+  });
+
+  it('rejects windows with out-of-range bounds', () => {
+    const badRangeSchedule: UserLoginSchedule = {
+      userId: 'user-1',
+      tenantId: 'tenant-1',
+      timezone: 'UTC',
+      enforceSchedule: true,
+      windows: [
+        { dayOfWeek: 7, startMinute: 0, endMinute: 60 }, // dayOfWeek > 6
+        { dayOfWeek: 1, startMinute: -1, endMinute: 60 }, // negative startMinute
+        { dayOfWeek: 2, startMinute: 0, endMinute: 1500 }, // endMinute > 1439
+      ],
+    };
+
+    const now = new Date();
+    expect(service.checkLoginWindow(badRangeSchedule, now).allowed).toBe(false);
+  });
+
+  it('loads schedule from repository in assertAllowed', async () => {
+    const mockRepo: Partial<LoginSchedulesRepository> = {
+      findByTenantUser: jest.fn().mockResolvedValue({
+        tenantId: 'tenant-1',
+        userId: 'user-1',
+        timezone: 'UTC',
+        enforceSchedule: true,
+        windows: [{ dayOfWeek: 1, startMinute: 480, endMinute: 1020 }],
+      }),
+    };
+
+    const wiredService = new LoginWindowService(mockRepo as LoginSchedulesRepository);
+
+    // Mon 10:00 UTC (inside)
+    const inside = new Date(Date.UTC(2026, 10, 9, 10, 0, 0));
+    await expect(wiredService.assertAllowed('tenant-1', 'user-1', inside)).resolves.not.toThrow();
+
+    // Mon 18:00 UTC (outside)
+    const outside = new Date(Date.UTC(2026, 10, 9, 18, 0, 0));
+    await expect(wiredService.assertAllowed('tenant-1', 'user-1', outside)).rejects.toThrow(
+      ForbiddenException,
+    );
+  });
+
+  describe('AccessGuard wiring', () => {
+    it('AccessGuard blocks execution when LoginWindowService denies access', async () => {
+      const mockLoginWindow: Partial<LoginWindowService> = {
+        assertAllowed: jest.fn().mockRejectedValue(new ForbiddenException('ساعات مجاز به پایان رسیده است')),
+      };
+
+      const mockAccessService: Partial<AccessService> = {
+        isSessionActive: jest.fn().mockResolvedValue(true),
+        resolve: jest.fn().mockResolvedValue({
+          userId: 'user-1',
+          tenantId: 'tenant-1',
+          membershipId: 'm-1',
+          roleKey: 'member',
+          permissions: new Set(['inventory:read']),
+          entitledModules: new Set(['inventory']),
+          branchId: null,
+          branchScoped: false,
+          require2fa: false,
+        }),
+      };
+
+      const reflector = new Reflector();
+      const guard = new AccessGuard(
+        reflector,
+        mockAccessService as AccessService,
+        mockLoginWindow as LoginWindowService,
+      );
+
+      const mockContext = {
+        getHandler: () => ({}),
+        getClass: () => ({}),
+        switchToHttp: () => ({
+          getRequest: () => ({
+            method: 'GET',
+            originalUrl: '/v1/inventory/items',
+            user: { sub: 'user-1', tenantId: 'tenant-1', sid: 'sess-1' },
+          }),
+        }),
+      } as any;
+
+      // Mock reflector to return module access
+      jest.spyOn(reflector, 'getAllAndOverride').mockImplementation((key: string) => {
+        if (key === ACCESS_MODULE_KEY) return 'inventory';
+        return undefined;
+      });
+
+      await expect(guard.canActivate(mockContext)).rejects.toThrow(ForbiddenException);
+      expect(mockLoginWindow.assertAllowed).toHaveBeenCalledWith('tenant-1', 'user-1');
+    });
   });
 });

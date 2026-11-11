@@ -2,6 +2,7 @@ import {
   HttpException,
   HttpStatus,
   Inject,
+  Optional,
   ServiceUnavailableException,
   Injectable,
   Logger,
@@ -43,6 +44,7 @@ import { AuditService } from '../../access/services/audit.service';
 import { InvitationsService } from '../../access/services/invitations.service';
 import { OrganizationsService } from '../../access/services/organizations.service';
 import { MembershipsRepository } from '../../access/repositories/memberships.repository';
+import { LoginWindowService } from '../../access/services/login-window.service';
 import { LoginChallengeService, MfaChallenge } from './login-challenge.service';
 import { MailService } from './mail.service';
 import { SessionsService } from './sessions.service';
@@ -127,6 +129,8 @@ export class AuthService {
     private readonly audit: AuditService,
     private readonly mail: MailService,
     private readonly sessions: SessionsService,
+    @Optional()
+    private readonly loginWindow?: LoginWindowService,
   ) {}
 
   /**
@@ -437,6 +441,9 @@ export class AuthService {
 
   private async finishLogin(user: UserEntity, ctx: LoginContext, mfa: boolean): Promise<AuthSessionDto> {
     const tenantId = await this.pickTenant(user, ctx.tenantId);
+    if (tenantId && this.loginWindow) {
+      await this.loginWindow.assertAllowed(tenantId, user.id);
+    }
     const deviceHash = sha256(ctx.userAgent ?? 'unknown');
     const newDevice = await this.refreshTokens.isNewDevice(user.id, deviceHash);
     const session = await this.issueSessionForUser(user, {
@@ -511,6 +518,9 @@ export class AuthService {
       throw new UnauthorizedException(REFRESH_INVALID_ERROR);
     }
     const tenantId = await this.pickTenant(user, meta.tenantId);
+    if (tenantId && this.loginWindow) {
+      await this.loginWindow.assertAllowed(tenantId, user.id);
+    }
     return this.issueSessionForUser(user, {
       familyId,
       mfa: meta.mfa,

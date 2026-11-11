@@ -39,6 +39,9 @@ import { RolesService } from './services/roles.service';
 import { StructureService } from './services/structure.service';
 import { LoginWindowService } from './services/login-window.service';
 import { CostMaskingService } from './services/cost-masking.service';
+import { CostMaskingInterceptor } from './cost-masking.interceptor';
+import { UserLoginScheduleEntity } from './entities/user-login-schedule.entity';
+import { LoginSchedulesRepository } from './repositories/login-schedules.repository';
 
 /**
  * Organisation access control. Sits below AuthModule (Auth imports this one;
@@ -51,6 +54,7 @@ import { CostMaskingService } from './services/cost-masking.service';
     TypeOrmModule.forFeature([
       MembershipEntity, BranchEntity, DepartmentEntity, CustomRoleEntity, InvitationEntity,
       EntitlementEntity, AuditLogEntity, ModuleRequestEntity, RefreshTokenEntity, UserEntity,
+      UserLoginScheduleEntity,
     ]),
     TenantsModule,
   ],
@@ -60,12 +64,13 @@ import { CostMaskingService } from './services/cost-masking.service';
     EntitlementsRepository, ModuleRequestsRepository, TenantScope, AuditRepository, SessionCheckRepository, AuthRepository, RefreshTokenRepository, MailService,
     AccessService, AuditService, LedgerAuditService, MembersService, RolesService, StructureService,
     EntitlementsService, InvitationsService, OrganizationsService,
+    LoginSchedulesRepository,
     LoginWindowService, CostMaskingService,
-    AccessGuard, AuditInterceptor,
+    AccessGuard, AuditInterceptor, CostMaskingInterceptor,
   ],
   exports: [
     AccessService, AuditService, LedgerAuditService, MembershipsRepository, OrganizationsService, InvitationsService,
-    EntitlementsService, LoginWindowService, CostMaskingService, AccessGuard, AuditInterceptor,
+    EntitlementsService, LoginSchedulesRepository, LoginWindowService, CostMaskingService, AccessGuard, AuditInterceptor, CostMaskingInterceptor,
   ],
 })
 export class AccessModule {}

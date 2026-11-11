@@ -1,5 +1,5 @@
 import {
-  Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query, Req,
+  Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AccessRequest, requireAccess } from '../access-context';
@@ -29,6 +29,8 @@ import { MembersService } from '../services/members.service';
 import { OrganizationsService } from '../services/organizations.service';
 import { RolesService } from '../services/roles.service';
 import { StructureService } from '../services/structure.service';
+import { LoginWindowService } from '../services/login-window.service';
+import { SetLoginScheduleDto } from '../dto/login-schedule.dto';
 
 /**
  * Organisation administration: members, invitations, roles, structure, security
@@ -50,6 +52,7 @@ export class OrgController {
     private readonly orgs: OrganizationsService,
     private readonly entitlements: EntitlementsService,
     private readonly audit: AuditService,
+    private readonly loginWindow: LoginWindowService,
   ) {}
 
   // ---------------------------------------------------------------- self
@@ -121,6 +124,28 @@ export class OrgController {
   @HttpCode(HttpStatus.NO_CONTENT)
   removeMember(@Req() req: AccessRequest, @Param('id', ParseUUIDPipe) id: string) {
     return this.members.remove(requireAccess(req), id, req);
+  }
+
+  @Get('members/:userId/login-schedule')
+  @ApiOperation({ summary: 'Get allowed login time window schedule for a member' })
+  async getLoginSchedule(
+    @Req() req: AccessRequest,
+    @Param('userId', ParseUUIDPipe) userId: string,
+  ) {
+    const ctx = requireAccess(req);
+    return this.loginWindow.findByTenantUser(ctx.tenantId, userId);
+  }
+
+  @RequireAction(AccessAction.ADMIN)
+  @Put('members/:userId/login-schedule')
+  @ApiOperation({ summary: 'Update allowed login time window schedule for a member' })
+  async setLoginSchedule(
+    @Req() req: AccessRequest,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() dto: SetLoginScheduleDto,
+  ) {
+    const ctx = requireAccess(req);
+    return this.loginWindow.saveSchedule(ctx.tenantId, userId, dto);
   }
 
   // --------------------------------------------------------- invitations

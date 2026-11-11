@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { SystemRole } from '../catalogue';
+import { AccessContext } from '../access-context';
+import { SystemRole, systemRoleFieldVisibility } from '../catalogue';
+import { effectiveFieldVisibility } from '../policy-evaluator';
 
 export const COST_SENSITIVE_FIELD_NAMES: ReadonlySet<string> = new Set([
   'unitPurchaseCost',
@@ -14,31 +16,65 @@ export const COST_SENSITIVE_FIELD_NAMES: ReadonlySet<string> = new Set([
   'total_cost',
   'cogs',
   'valuation',
+  'unitPrice',
+  'unit_price',
+  'lineCost',
+  'line_cost',
+  'purchaseCost',
+  'purchase_cost',
+  'averageCost',
+  'average_cost',
+  'cost',
+  'buyPrice',
+  'buy_price',
 ]);
 
 @Injectable()
 export class CostMaskingService {
   /**
-   * Determines whether the given role is allowed to view cost and purchase prices.
-   * Sales roles and cheque reviewers are strictly forbidden from viewing cost data.
+   * Determines whether the given role or access context is allowed to view cost and purchase prices.
+   * Uses field visibility from catalogue/policy-evaluator (fail-closed, Lesson 25).
    */
-  canViewCost(roleKey: SystemRole | string): boolean {
-    if (roleKey === SystemRole.SALES || roleKey === SystemRole.CHEQUE_REVIEWER) {
+  canViewCost(roleOrCtx: SystemRole | string | AccessContext | null | undefined): boolean {
+    if (!roleOrCtx) {
       return false;
     }
-    // Fail closed if unknown role
-    if (!roleKey) {
-      return false;
+
+    // If an AccessContext is provided, evaluate effectiveFieldVisibility (includes custom roles & overrides)
+    if (typeof roleOrCtx === 'object' && 'roleKey' in roleOrCtx) {
+      const vis = effectiveFieldVisibility(roleOrCtx as AccessContext);
+      return vis?.cost === true;
     }
-    return true;
+
+    // If a role key string is provided, check systemRoleFieldVisibility
+    if (typeof roleOrCtx === 'string') {
+      const vis = systemRoleFieldVisibility(roleOrCtx);
+      return vis?.cost === true;
+    }
+
+    return false;
   }
 
   /**
    * Recursively scrubs sensitive purchase cost and price fields from API response payloads.
-   * If canViewCost is false, sensitive fields are stripped or set to null.
+   * If canViewCost is false, sensitive fields are set to null.
+   * Preserves Date, Buffer, BigInt, and primitive values without corruption.
    */
   maskCostFields<T>(payload: T, canViewCost: boolean): T {
     if (canViewCost || payload === null || payload === undefined) {
+      return payload;
+    }
+
+    // Primitive values
+    if (typeof payload !== 'object') {
+      return payload;
+    }
+
+    // Preserve Date and Buffer instances without converting to {}
+    if (
+      payload instanceof Date ||
+      (typeof Buffer !== 'undefined' && Buffer.isBuffer(payload))
+    ) {
       return payload;
     }
 
@@ -46,21 +82,17 @@ export class CostMaskingService {
       return payload.map((item) => this.maskCostFields(item, canViewCost)) as unknown as T;
     }
 
-    if (typeof payload === 'object') {
-      const sanitized: Record<string, any> = {};
-      for (const [key, value] of Object.entries(payload)) {
-        if (COST_SENSITIVE_FIELD_NAMES.has(key)) {
-          // Sensitive cost field hidden from sales roles in API response
-          sanitized[key] = null;
-        } else if (typeof value === 'object' && value !== null) {
-          sanitized[key] = this.maskCostFields(value, canViewCost);
-        } else {
-          sanitized[key] = value;
-        }
+    // Plain object
+    const sanitized: Record<string, any> = {};
+    for (const [key, value] of Object.entries(payload)) {
+      if (COST_SENSITIVE_FIELD_NAMES.has(key)) {
+        sanitized[key] = null;
+      } else if (typeof value === 'object' && value !== null) {
+        sanitized[key] = this.maskCostFields(value, canViewCost);
+      } else {
+        sanitized[key] = value;
       }
-      return sanitized as T;
     }
-
-    return payload;
+    return sanitized as T;
   }
 }

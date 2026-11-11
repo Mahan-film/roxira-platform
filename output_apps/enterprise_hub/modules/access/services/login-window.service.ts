@@ -1,17 +1,13 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, Optional } from '@nestjs/common';
+import { SetLoginScheduleDto } from '../dto/login-schedule.dto';
+import { LoginTimeWindow, UserLoginScheduleEntity } from '../entities/user-login-schedule.entity';
+import { LoginSchedulesRepository } from '../repositories/login-schedules.repository';
 
-export interface LoginTimeWindow {
-  /** Day of week: 0 = Sunday, 1 = Monday, ..., 5 = Friday, 6 = Saturday */
-  dayOfWeek: number;
-  /** Start time in minutes from midnight (e.g. 08:30 = 8*60 + 30 = 510) */
-  startMinute: number;
-  /** End time in minutes from midnight (e.g. 17:00 = 17*60 = 1020) */
-  endMinute: number;
-}
+export { LoginTimeWindow };
 
 export interface UserLoginSchedule {
-  userId: string;
-  tenantId: string;
+  userId?: string;
+  tenantId?: string;
   /** Timezone name e.g. 'Asia/Tehran' or 'UTC' */
   timezone?: string;
   /** If true, login outside windows is strictly forbidden */
@@ -27,12 +23,17 @@ export interface LoginWindowCheckResult {
 
 @Injectable()
 export class LoginWindowService {
+  constructor(
+    @Optional()
+    private readonly repository?: LoginSchedulesRepository,
+  ) {}
+
   /**
-   * Evaluates whether a user is allowed to log in or refresh tokens at the given date/time.
-   * Fails closed: if schedule enforcement is enabled and no matching window is active, access is denied.
+   * Evaluates whether a user is allowed to log in, refresh tokens, or call APIs at the given date/time.
+   * Fails closed: if schedule enforcement is enabled and no matching window is active, access is denied (Lesson 25).
    */
   checkLoginWindow(
-    schedule: UserLoginSchedule | null | undefined,
+    schedule: UserLoginSchedule | UserLoginScheduleEntity | null | undefined,
     at: Date = new Date(),
   ): LoginWindowCheckResult {
     // If no schedule configured or enforcement is explicitly disabled, allow
@@ -48,7 +49,7 @@ export class LoginWindowService {
       };
     }
 
-    // Determine day of week and current minute in target timezone
+    // Determine target timezone and validate strictly (fail closed on invalid timezone)
     const tz = schedule.timezone || 'Asia/Tehran';
     let dayOfWeek: number;
     let currentMinute: number;
@@ -62,8 +63,8 @@ export class LoginWindowService {
         minute: 'numeric',
       }).formatToParts(at);
 
-      const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? at.getUTCHours());
-      const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? at.getUTCMinutes());
+      const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? 0);
+      const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? 0);
       currentMinute = hour * 60 + minute;
 
       const weekdayStr = parts.find((p) => p.type === 'weekday')?.value ?? '';
@@ -76,19 +77,48 @@ export class LoginWindowService {
         Fri: 5,
         Sat: 6,
       };
-      dayOfWeek = weekdayMap[weekdayStr] ?? at.getUTCDay();
+      if (weekdayMap[weekdayStr] === undefined) {
+        return {
+          allowed: false,
+          reason: `روز هفته نامعتبر در منطقه زمانی: ${tz}`,
+        };
+      }
+      dayOfWeek = weekdayMap[weekdayStr];
     } catch {
-      // Fallback to UTC if timezone is invalid
-      dayOfWeek = at.getUTCDay();
-      currentMinute = at.getUTCHours() * 60 + at.getUTCMinutes();
+      // Invalid/unknown timezone: fail closed (Lesson 25)
+      return {
+        allowed: false,
+        reason: `منطقه زمانی نامعتبر است: ${tz}`,
+      };
     }
 
     // Check if current day and time falls within any configured window
     const inWindow = schedule.windows.some((w) => {
-      if (w.dayOfWeek !== dayOfWeek) {
+      // Range check on window parameters
+      if (
+        w.dayOfWeek < 0 ||
+        w.dayOfWeek > 6 ||
+        w.startMinute < 0 ||
+        w.startMinute > 1439 ||
+        w.endMinute < 0 ||
+        w.endMinute > 1439
+      ) {
         return false;
       }
-      return currentMinute >= w.startMinute && currentMinute <= w.endMinute;
+
+      if (w.startMinute <= w.endMinute) {
+        // Standard single-day window
+        return (
+          w.dayOfWeek === dayOfWeek &&
+          currentMinute >= w.startMinute &&
+          currentMinute <= w.endMinute
+        );
+      } else {
+        // Overnight window that crosses midnight into the next day (e.g. 22:00 -> 06:00)
+        const startsToday = w.dayOfWeek === dayOfWeek && currentMinute >= w.startMinute;
+        const endsToday = (w.dayOfWeek + 1) % 7 === dayOfWeek && currentMinute <= w.endMinute;
+        return startsToday || endsToday;
+      }
     });
 
     if (!inWindow) {
@@ -104,10 +134,44 @@ export class LoginWindowService {
   /**
    * Asserts login window or throws ForbiddenException.
    */
-  assertLoginWindow(schedule: UserLoginSchedule | null | undefined, at: Date = new Date()): void {
+  assertLoginWindow(
+    schedule: UserLoginSchedule | UserLoginScheduleEntity | null | undefined,
+    at: Date = new Date(),
+  ): void {
     const result = this.checkLoginWindow(schedule, at);
     if (!result.allowed) {
       throw new ForbiddenException(result.reason);
     }
+  }
+
+  /**
+   * Validates schedule in database for (tenantId, userId) and asserts access.
+   */
+  async assertAllowed(tenantId: string, userId: string, at: Date = new Date()): Promise<void> {
+    if (!this.repository) {
+      return;
+    }
+    const schedule = await this.repository.findByTenantUser(tenantId, userId);
+    if (schedule && schedule.enforceSchedule) {
+      this.assertLoginWindow(schedule, at);
+    }
+  }
+
+  /** Find stored schedule for user. */
+  async findByTenantUser(tenantId: string, userId: string): Promise<UserLoginScheduleEntity | null> {
+    if (!this.repository) return null;
+    return this.repository.findByTenantUser(tenantId, userId);
+  }
+
+  /** Save or update schedule for user. */
+  async saveSchedule(
+    tenantId: string,
+    userId: string,
+    dto: SetLoginScheduleDto,
+  ): Promise<UserLoginScheduleEntity> {
+    if (!this.repository) {
+      throw new Error('LoginSchedulesRepository is not available');
+    }
+    return this.repository.saveSchedule(tenantId, userId, dto);
   }
 }
