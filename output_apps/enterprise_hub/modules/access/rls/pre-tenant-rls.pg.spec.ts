@@ -10,7 +10,7 @@
  *      pre-auth lookups (phone, username/email, token rotation, invite redemption, public forms)
  *      via SECURITY DEFINER lookup functions and permissive INSERT policies.
  *   3. Strict cross-tenant isolation is enforced (Tenant A cannot see Tenant B's rows,
- *      and unscoped connections without session settings read 0 rows).
+ *      and unscoped connections without session settings read 0 rows even when tables are populated).
  *   4. Write paths (user signup, token issue/revocation, invitation acceptance, entitlement upsert)
  *      satisfy FORCE RLS WITH CHECK policies.
  *   5. Migration up() and down() are completely reversible.
@@ -21,9 +21,9 @@ import 'reflect-metadata';
 import * as path from 'path';
 import { DataSource } from 'typeorm';
 import {
-  EnableRlsPreTenantTables1789900001900,
+  EnableRlsPreTenantTables1789900002300,
   PRE_TENANT_RLS_TABLES,
-} from '../../../migrations/1789900001900-EnableRlsPreTenantTables';
+} from '../../../migrations/1789900002300-EnableRlsPreTenantTables';
 import { AuthRepository } from '../../auth/repositories/auth.repository';
 import { RefreshTokenRepository } from '../../auth/repositories/refresh-token.repository';
 import { UserEntity } from '../../auth/entities/user.entity';
@@ -91,6 +91,7 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     owner = await new DataSource(options(db)).initialize();
     await owner.runMigrations();
 
+    // Standard app role grants matching scripts/ops/db_app_role.sh and scripts/ci/create_app_role.sh
     await owner.query(`GRANT CONNECT ON DATABASE "${db}" TO ${role}`);
     await owner.query(`GRANT USAGE ON SCHEMA public TO ${role}`);
     await owner.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${role}`);
@@ -145,38 +146,11 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     }
   });
 
-  it('unscoped connection without session settings reads 0 rows from pre-tenant tables', async () => {
-    // Direct raw queries on app data source (unscoped NOSUPERUSER NOBYPASSRLS session)
-    const msgs = await app.getRepository(ContactMessageEntity).find();
-    expect(msgs).toHaveLength(0);
-
-    const inquiries = await app.getRepository(EnterpriseInquiryEntity).find();
-    expect(inquiries).toHaveLength(0);
-
-    const users = await app.getRepository(UserEntity).find();
-    expect(users).toHaveLength(0);
-
-    const tokens = await app.getRepository(RefreshTokenEntity).find();
-    expect(tokens).toHaveLength(0);
-
-    const memberships = await app.getRepository(MembershipEntity).find();
-    expect(memberships).toHaveLength(0);
-
-    const invitations = await app.getRepository(InvitationEntity).find();
-    expect(invitations).toHaveLength(0);
-
-    const entitlements = await app.getRepository(EntitlementEntity).find();
-    expect(entitlements).toHaveLength(0);
-
-    const requests = await app.getRepository(ModuleRequestEntity).find();
-    expect(requests).toHaveLength(0);
-  });
-
   it('allows unauthenticated pre-tenant user lookups via SECURITY DEFINER functions', async () => {
     const user1Id = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
     await owner.query(`
-      INSERT INTO users (id, phone, username, login_email, tenant_id)
-      VALUES ($1, '09121111111', 'user_one', 'user1@example.com', $2)
+      INSERT INTO users (id, phone, username, login_email, tenant_id, managed_by_tenant_id)
+      VALUES ($1, '09121111111', 'user_one', 'user1@example.com', $2, $2)
       ON CONFLICT DO NOTHING
     `, [user1Id, T1]);
 
@@ -184,18 +158,22 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     const byPhone = await authRepo.findByPhone('09121111111');
     expect(byPhone).not.toBeNull();
     expect(byPhone?.id).toBe(user1Id);
+    expect(byPhone?.managedByTenantId).toBe(T1);
 
     const byUsername = await authRepo.findByUsername('user_one');
     expect(byUsername).not.toBeNull();
     expect(byUsername?.id).toBe(user1Id);
+    expect(byUsername?.managedByTenantId).toBe(T1);
 
     const byEmail = await authRepo.findByLoginEmail('user1@example.com');
     expect(byEmail).not.toBeNull();
     expect(byEmail?.id).toBe(user1Id);
+    expect(byEmail?.managedByTenantId).toBe(T1);
 
     const byId = await authRepo.findById(user1Id);
     expect(byId).not.toBeNull();
     expect(byId?.phone).toBe('09121111111');
+    expect(byId?.managedByTenantId).toBe(T1);
   });
 
   it('allows user creation, updates, and password reset under FORCE RLS', async () => {
@@ -250,6 +228,13 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
         where: { tenantId: T1 },
       });
       expect(t1Tokens).toHaveLength(0);
+    });
+
+    // 6. Cross-user isolation: User 2 cannot see User 1's tokens
+    await app.manager.transaction(async (m) => {
+      await m.query(`SELECT set_config('app.user_id', $1, true)`, ['bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb']);
+      const tokens = await m.getRepository(RefreshTokenEntity).find({ where: { userId } });
+      expect(tokens).toHaveLength(0);
     });
   });
 
@@ -367,14 +352,7 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     });
     expect(savedInquiry.id).toBeDefined();
 
-    // 4. Unscoped connection reads 0 rows (no leakage)
-    const msgs = await app.getRepository(ContactMessageEntity).find();
-    expect(msgs).toHaveLength(0);
-
-    const inquiries = await app.getRepository(EnterpriseInquiryEntity).find();
-    expect(inquiries).toHaveLength(0);
-
-    // 5. Tenant 2 cannot see Tenant 1 contact messages
+    // 4. Tenant 2 cannot see Tenant 1 contact messages
     await scope.run(T2, async (manager) => {
       const tenant2Msgs = await manager.getRepository(ContactMessageEntity).find({
         where: { tenantId: T1 },
@@ -383,8 +361,52 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     });
   });
 
+  it('unscoped connection without session settings reads 0 rows from pre-tenant tables when rows exist', async () => {
+    // Non-vacuous check: rows exist in the tables from previous test steps, but unscoped connection reads 0
+    const msgs = await app.getRepository(ContactMessageEntity).find();
+    expect(msgs).toHaveLength(0);
+
+    const inquiries = await app.getRepository(EnterpriseInquiryEntity).find();
+    expect(inquiries).toHaveLength(0);
+
+    const users = await app.getRepository(UserEntity).find();
+    expect(users).toHaveLength(0);
+
+    const tokens = await app.getRepository(RefreshTokenEntity).find();
+    expect(tokens).toHaveLength(0);
+
+    const memberships = await app.getRepository(MembershipEntity).find();
+    expect(memberships).toHaveLength(0);
+
+    const invitations = await app.getRepository(InvitationEntity).find();
+    expect(invitations).toHaveLength(0);
+
+    const entitlements = await app.getRepository(EntitlementEntity).find();
+    expect(entitlements).toHaveLength(0);
+
+    const requests = await app.getRepository(ModuleRequestEntity).find();
+    expect(requests).toHaveLength(0);
+  });
+
+  it('denies EXECUTE to an unprivileged role without grants', async () => {
+    const unprivilegedRole = `rx_unprivileged_${process.pid}`;
+    await owner.query(`DROP ROLE IF EXISTS ${unprivilegedRole}`);
+    await owner.query(`CREATE ROLE ${unprivilegedRole} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'unprivileged_pw'`);
+    await owner.query(`GRANT CONNECT ON DATABASE "${db}" TO ${unprivilegedRole}`);
+
+    const unprivilegedDs = await new DataSource({ ...options(db, unprivilegedRole, 'unprivileged_pw') }).initialize();
+    try {
+      await expect(
+        unprivilegedDs.query(`SELECT * FROM public.lookup_user_by_phone('09121111111')`),
+      ).rejects.toThrow(/permission denied/);
+    } finally {
+      await unprivilegedDs.destroy().catch(() => undefined);
+      await owner.query(`DROP ROLE IF EXISTS ${unprivilegedRole}`).catch(() => undefined);
+    }
+  });
+
   it('reversibility: migration down() and up() work cleanly', async () => {
-    const migration = new EnableRlsPreTenantTables1789900001900();
+    const migration = new EnableRlsPreTenantTables1789900002300();
     const qr = owner.createQueryRunner();
 
     try {

@@ -39,26 +39,23 @@ export class MembershipsRepository {
         const r = rows[0];
         return this.repo.create({
           id: r.id,
-          tenantId: r.tenant_id ?? r.tenantId,
-          userId: r.user_id ?? r.userId,
-          roleKey: r.role_key ?? r.roleKey,
-          customRoleId: r.custom_role_id ?? r.customRoleId,
-          branchId: r.branch_id ?? r.branchId,
-          departmentId: r.department_id ?? r.departmentId,
-          branchScoped: r.branch_scoped ?? r.branchScoped,
+          tenantId: r.tenant_id,
+          userId: r.user_id,
+          roleKey: r.role_key,
+          customRoleId: r.custom_role_id ?? null,
+          branchId: r.branch_id ?? null,
+          departmentId: r.department_id ?? null,
+          branchScoped: r.branch_scoped,
           status: r.status,
-          invitedBy: r.invited_by ?? r.invitedBy,
-          createdAt: r.created_at ?? r.createdAt,
-          updatedAt: r.updated_at ?? r.updatedAt,
+          invitedBy: r.invited_by ?? null,
+          createdAt: r.created_at,
+          updatedAt: r.updated_at,
         } as MembershipEntity);
       }
       return null;
     } catch (err) {
-      this.logger.debug(`lookup_membership fallback: ${err}`);
-      return this.repo.manager.transaction(async (m) => {
-        await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [tenantId]);
-        return m.findOne(MembershipEntity, { where: { tenantId, userId } });
-      });
+      this.logger.error(`lookup_membership error: ${err}`);
+      throw err;
     }
   }
 
@@ -151,27 +148,17 @@ export class MembershipsRepository {
       );
       if (rows) {
         return rows.map((r: any) => ({
-          membershipId: r.membership_id ?? r.membershipId,
-          tenantId: r.tenant_id ?? r.tenantId,
-          tenantName: r.tenant_name ?? r.tenantName,
-          roleKey: r.role_key ?? r.roleKey,
+          membershipId: r.membership_id,
+          tenantId: r.tenant_id,
+          tenantName: r.tenant_name,
+          roleKey: r.role_key,
           status: r.status,
         }));
       }
+      return [];
     } catch (err) {
-      this.logger.debug(`lookup_user_memberships fallback for ${userId}: ${err}`);
+      this.logger.error(`lookup_user_memberships error for ${userId}: ${err}`);
+      throw err;
     }
-    const rows = await this.repo
-      .createQueryBuilder('m')
-      .innerJoin('tenants', 't', 't.id = m.tenant_id')
-      .where('m.user_id = :userId AND t.is_active = true', { userId })
-      .select('m.id', 'membershipId')
-      .addSelect('m.tenant_id', 'tenantId')
-      .addSelect('t.name', 'tenantName')
-      .addSelect('m.role_key', 'roleKey')
-      .addSelect('m.status', 'status')
-      .orderBy('m.created_at', 'ASC')
-      .getRawMany<MembershipWithTenant>();
-    return rows;
   }
 }

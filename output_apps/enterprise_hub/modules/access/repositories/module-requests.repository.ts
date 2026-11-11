@@ -40,18 +40,19 @@ export class ModuleRequestsRepository {
         return rows.map((r: any) =>
           this.repo.create({
             id: r.id,
-            tenantId: r.tenant_id ?? r.tenantId,
+            tenantId: r.tenant_id,
             module: r.module,
             status: r.status,
-            requestedBy: r.requested_by ?? r.requestedBy,
-            createdAt: r.created_at ?? r.createdAt,
+            requestedBy: r.requested_by,
+            createdAt: r.created_at,
           }),
         );
       }
+      return [];
     } catch (err) {
-      this.logger.debug(`list_open_module_requests fallback: ${err}`);
+      this.logger.error(`list_open_module_requests error: ${err}`);
+      throw err;
     }
-    return this.repo.find({ where: { status: 'OPEN' }, order: { createdAt: 'ASC' }, take: 500 });
   }
 
   async resolve(tenantId: string, module: string, status: 'DONE' | 'DECLINED'): Promise<void> {

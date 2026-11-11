@@ -74,14 +74,11 @@ export class RefreshTokenRepository {
       if (rows && rows.length > 0) {
         return Boolean(rows[0].revoked);
       }
+      return false;
     } catch (err) {
-      this.logger.debug(`revoke_refresh_token_if_active fallback: ${err}`);
+      this.logger.error(`revoke_refresh_token_if_active error: ${err}`);
+      throw err;
     }
-    const result = await this.repository.update(
-      { id, revokedAt: IsNull() },
-      { revokedAt: new Date() },
-    );
-    return (result.affected ?? 0) > 0;
   }
 
   async revokeFamily(familyId: string): Promise<void> {
@@ -90,14 +87,10 @@ export class RefreshTokenRepository {
         `SELECT public.revoke_refresh_token_family($1)`,
         [familyId],
       );
-      return;
     } catch (err) {
-      this.logger.debug(`revoke_refresh_token_family fallback: ${err}`);
+      this.logger.error(`revoke_refresh_token_family error: ${err}`);
+      throw err;
     }
-    await this.repository.update(
-      { familyId, revokedAt: IsNull() },
-      { revokedAt: new Date() },
-    );
   }
 
   async revokeAllForUser(userId: string): Promise<void> {
@@ -113,9 +106,16 @@ export class RefreshTokenRepository {
 
   /** Housekeeping: drop rows that expired more than a day ago. */
   async deleteExpired(now = new Date()): Promise<void> {
-    await this.repository.delete({
-      expiresAt: LessThan(new Date(now.getTime() - 24 * 3600 * 1000)),
-    });
+    const before = new Date(now.getTime() - 24 * 3600 * 1000);
+    try {
+      await this.repository.query(
+        `SELECT public.delete_expired_refresh_tokens($1)`,
+        [before],
+      );
+    } catch (err) {
+      this.logger.error(`delete_expired_refresh_tokens error: ${err}`);
+      throw err;
+    }
   }
 
   /** One active row per live session (rotation revokes the previous row). */

@@ -24,28 +24,27 @@ export class InvitationsRepository {
         const r = rows[0];
         return this.repo.create({
           id: r.id,
-          tenantId: r.tenant_id ?? r.tenantId,
+          tenantId: r.tenant_id,
           email: r.email,
           phone: r.phone,
-          roleKey: r.role_key ?? r.roleKey,
-          customRoleId: r.custom_role_id ?? r.customRoleId,
-          branchId: r.branch_id ?? r.branchId,
-          departmentId: r.department_id ?? r.departmentId,
-          branchScoped: r.branch_scoped ?? r.branchScoped,
-          tokenHash: r.token_hash ?? r.tokenHash,
-          expiresAt: r.expires_at ?? r.expiresAt,
-          acceptedAt: r.accepted_at ?? r.acceptedAt,
-          acceptedBy: r.accepted_by ?? r.acceptedBy,
-          revokedAt: r.revoked_at ?? r.revokedAt,
-          invitedBy: r.invited_by ?? r.invitedBy,
-          createdAt: r.created_at ?? r.createdAt,
-          updatedAt: r.updated_at ?? r.updatedAt,
+          roleKey: r.role_key,
+          customRoleId: r.custom_role_id ?? null,
+          branchId: r.branch_id ?? null,
+          departmentId: r.department_id ?? null,
+          branchScoped: r.branch_scoped,
+          tokenHash: r.token_hash,
+          expiresAt: r.expires_at,
+          acceptedAt: r.accepted_at,
+          acceptedBy: r.accepted_by,
+          revokedAt: r.revoked_at,
+          invitedBy: r.invited_by,
+          createdAt: r.created_at,
         } as InvitationEntity);
       }
       return null;
     } catch (err) {
-      this.logger.debug(`lookup_invitation_by_token_hash fallback: ${err}`);
-      return this.repo.findOne({ where: { tokenHash } });
+      this.logger.error(`lookup_invitation_by_token_hash error: ${err}`);
+      throw err;
     }
   }
 
@@ -85,19 +84,10 @@ export class InvitationsRepository {
       if (rows && rows.length > 0) {
         return Boolean(rows[0].accepted);
       }
+      return false;
     } catch (err) {
-      this.logger.debug(`mark_invitation_accepted fallback: ${err}`);
+      this.logger.error(`mark_invitation_accepted error: ${err}`);
+      throw err;
     }
-    return this.repo.manager.transaction(async (m) => {
-      if (tenantId) {
-        await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [tenantId]);
-      }
-      const res = await m.update(
-        InvitationEntity,
-        { id, acceptedAt: IsNull(), revokedAt: IsNull() },
-        { acceptedAt: new Date(), acceptedBy: userId },
-      );
-      return (res.affected ?? 0) > 0;
-    });
   }
 }

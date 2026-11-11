@@ -38,23 +38,24 @@ export class AuthRepository {
           id: r.id,
           phone: r.phone,
           username: r.username,
+          managedByTenantId: r.managed_by_tenant_id ?? null,
           loginEmail: r.login_email,
-          displayName: r.displayName ?? r.display_name,
+          displayName: r.display_name,
           email: r.email,
           role: r.role,
-          serviceDomain: r.serviceDomain ?? r.service_domain,
+          serviceDomain: r.service_domain,
           tenantId: r.tenant_id,
           tenantRole: r.tenant_role,
-          isActive: r.is_active ?? r.isActive,
-          lastLoginAt: r.last_login_at ?? r.lastLoginAt,
-          createdAt: r.created_at ?? r.createdAt,
-          updatedAt: r.updated_at ?? r.updatedAt,
+          isActive: r.is_active,
+          lastLoginAt: r.last_login_at,
+          createdAt: r.created_at,
+          updatedAt: r.updated_at,
         } as UserEntity);
       }
       return null;
     } catch (err) {
-      this.logger.debug(`lookup_user_by_login fallback for ${username}: ${err}`);
-      return this.repository.findOne({ where: { username } });
+      this.logger.error(`lookup_user_by_login error for ${username}: ${err}`);
+      throw err;
     }
   }
 
@@ -70,23 +71,24 @@ export class AuthRepository {
           id: r.id,
           phone: r.phone,
           username: r.username,
+          managedByTenantId: r.managed_by_tenant_id ?? null,
           loginEmail: r.login_email,
-          displayName: r.displayName ?? r.display_name,
+          displayName: r.display_name,
           email: r.email,
           role: r.role,
-          serviceDomain: r.serviceDomain ?? r.service_domain,
+          serviceDomain: r.service_domain,
           tenantId: r.tenant_id,
           tenantRole: r.tenant_role,
-          isActive: r.is_active ?? r.isActive,
-          lastLoginAt: r.last_login_at ?? r.lastLoginAt,
-          createdAt: r.created_at ?? r.createdAt,
-          updatedAt: r.updated_at ?? r.updatedAt,
+          isActive: r.is_active,
+          lastLoginAt: r.last_login_at,
+          createdAt: r.created_at,
+          updatedAt: r.updated_at,
         } as UserEntity);
       }
       return null;
     } catch (err) {
-      this.logger.debug(`lookup_user_by_login fallback for ${loginEmail}: ${err}`);
-      return this.repository.findOne({ where: { loginEmail } });
+      this.logger.error(`lookup_user_by_login error for ${loginEmail}: ${err}`);
+      throw err;
     }
   }
 
@@ -98,7 +100,7 @@ export class AuthRepository {
       let rows: any[] = [];
       if ('id' in where) {
         rows = await this.repository.query(
-          `SELECT * FROM public.lookup_user_by_id($1)`,
+          `SELECT * FROM public.lookup_user_by_id_with_password($1)`,
           [where.id],
         );
       } else if ('username' in where) {
@@ -118,45 +120,26 @@ export class AuthRepository {
           id: r.id,
           phone: r.phone,
           username: r.username,
+          managedByTenantId: r.managed_by_tenant_id ?? null,
           loginEmail: r.login_email,
-          displayName: r.displayName ?? r.display_name,
+          displayName: r.display_name,
           email: r.email,
           role: r.role,
-          serviceDomain: r.serviceDomain ?? r.service_domain,
+          serviceDomain: r.service_domain,
           tenantId: r.tenant_id,
           tenantRole: r.tenant_role,
-          isActive: r.is_active ?? r.isActive,
-          lastLoginAt: r.last_login_at ?? r.lastLoginAt,
-          createdAt: r.created_at ?? r.createdAt,
-          updatedAt: r.updated_at ?? r.updatedAt,
-          passwordHash: r.password_hash ?? r.passwordHash,
-          passwordUpdatedAt: r.password_updated_at ?? r.passwordUpdatedAt,
+          isActive: r.is_active,
+          lastLoginAt: r.last_login_at,
+          createdAt: r.created_at,
+          updatedAt: r.updated_at,
+          passwordHash: r.password_hash,
+          passwordUpdatedAt: r.password_updated_at,
         } as UserEntity);
       }
       return null;
     } catch (err) {
-      this.logger.debug(`findWithPasswordHash fallback: ${err}`);
-      return this.repository.findOne({
-        where,
-        select: {
-          id: true,
-          phone: true,
-          username: true,
-          loginEmail: true,
-          displayName: true,
-          email: true,
-          role: true,
-          serviceDomain: true,
-          tenantId: true,
-          tenantRole: true,
-          isActive: true,
-          lastLoginAt: true,
-          createdAt: true,
-          updatedAt: true,
-          passwordHash: true,
-          passwordUpdatedAt: true,
-        },
-      });
+      this.logger.error(`findWithPasswordHash error: ${err}`);
+      throw err;
     }
   }
 
@@ -172,23 +155,24 @@ export class AuthRepository {
           id: r.id,
           phone: r.phone,
           username: r.username,
+          managedByTenantId: r.managed_by_tenant_id ?? null,
           loginEmail: r.login_email,
-          displayName: r.displayName ?? r.display_name,
+          displayName: r.display_name,
           email: r.email,
           role: r.role,
-          serviceDomain: r.serviceDomain ?? r.service_domain,
+          serviceDomain: r.service_domain,
           tenantId: r.tenant_id,
           tenantRole: r.tenant_role,
-          isActive: r.is_active ?? r.isActive,
-          lastLoginAt: r.last_login_at ?? r.lastLoginAt,
-          createdAt: r.created_at ?? r.createdAt,
-          updatedAt: r.updated_at ?? r.updatedAt,
+          isActive: r.is_active,
+          lastLoginAt: r.last_login_at,
+          createdAt: r.created_at,
+          updatedAt: r.updated_at,
         } as UserEntity);
       }
       return null;
     } catch (err) {
-      this.logger.debug(`lookup_user_by_phone fallback for ${phone}: ${err}`);
-      return this.repository.findOne({ where: { phone } });
+      this.logger.error(`lookup_user_by_phone error for ${phone}: ${err}`);
+      throw err;
     }
   }
 
@@ -204,23 +188,24 @@ export class AuthRepository {
           id: r.id,
           phone: r.phone,
           username: r.username,
+          managedByTenantId: r.managed_by_tenant_id ?? null,
           loginEmail: r.login_email,
-          displayName: r.displayName ?? r.display_name,
+          displayName: r.display_name,
           email: r.email,
           role: r.role,
-          serviceDomain: r.serviceDomain ?? r.service_domain,
+          serviceDomain: r.service_domain,
           tenantId: r.tenant_id,
           tenantRole: r.tenant_role,
-          isActive: r.is_active ?? r.isActive,
-          lastLoginAt: r.last_login_at ?? r.lastLoginAt,
-          createdAt: r.created_at ?? r.createdAt,
-          updatedAt: r.updated_at ?? r.updatedAt,
+          isActive: r.is_active,
+          lastLoginAt: r.last_login_at,
+          createdAt: r.created_at,
+          updatedAt: r.updated_at,
         } as UserEntity);
       }
       return null;
     } catch (err) {
-      this.logger.debug(`lookup_user_by_id fallback for ${id}: ${err}`);
-      return this.repository.findOne({ where: { id } });
+      this.logger.error(`lookup_user_by_id error for ${id}: ${err}`);
+      throw err;
     }
   }
 

@@ -18,21 +18,19 @@ export class EntitlementsRepository {
       if (rows) {
         return rows.map((r: any) =>
           this.repo.create({
-            tenantId: r.tenant_id ?? r.tenantId,
+            tenantId: r.tenant_id,
             module: r.module,
             enabled: r.enabled,
-            updatedBy: r.updated_by ?? r.updatedBy,
-            updatedAt: r.updated_at ?? r.updatedAt,
+            updatedBy: r.updated_by ?? null,
+            updatedAt: r.updated_at,
           }),
         );
       }
+      return [];
     } catch (err) {
-      this.logger.debug(`lookup_tenant_entitlements fallback: ${err}`);
+      this.logger.error(`lookup_tenant_entitlements error: ${err}`);
+      throw err;
     }
-    return this.repo.manager.transaction(async (m) => {
-      await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [tenantId]);
-      return m.find(EntitlementEntity, { where: { tenantId } });
-    });
   }
 
   async set(tenantId: string, module: string, enabled: boolean, updatedBy: string | null): Promise<void> {

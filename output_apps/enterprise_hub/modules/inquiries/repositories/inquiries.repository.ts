@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EnterpriseInquiryEntity } from '../entities/enterprise-inquiry.entity';
@@ -13,6 +13,8 @@ import { EnterpriseInquiryEntity } from '../entities/enterprise-inquiry.entity';
  */
 @Injectable()
 export class InquiriesRepository {
+  private readonly logger = new Logger(InquiriesRepository.name);
+
   constructor(
     @InjectRepository(EnterpriseInquiryEntity)
     private readonly inquiries: Repository<EnterpriseInquiryEntity>,
@@ -41,11 +43,11 @@ export class InquiriesRepository {
           createdAt: new Date(),
         } as EnterpriseInquiryEntity);
       }
-    } catch {
-      // Fallback to direct save
+      throw new Error('submit_enterprise_inquiry returned no id');
+    } catch (err) {
+      this.logger.error(`submit_enterprise_inquiry error: ${err}`);
+      throw err;
     }
-    const entity = this.inquiries.create(data);
-    return this.inquiries.save(entity);
   }
 
   async findAndCount(options: {

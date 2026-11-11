@@ -4,7 +4,6 @@ import { AccessContext } from '../access-context';
 import { denied } from '../access-errors';
 import {
   ALL_SENSITIVE_FIELDS,
-  DEFAULT_FIELD_VISIBILITY,
   RoleScopeType,
   SYSTEM_ROLES,
   SensitiveField,
@@ -50,7 +49,7 @@ export class RolesService {
       key: r.key,
       deprecated: !!r.deprecated,
       permissions: [...r.permissions],
-      fieldVisibility: { ...(r?.fieldVisibility ?? DEFAULT_FIELD_VISIBILITY) },
+      fieldVisibility: { ...r.fieldVisibility },
     }));
   }
 
@@ -246,7 +245,7 @@ export class RolesService {
     }
     if (patch.fieldVisibility !== undefined) {
       const merged: Partial<Record<SensitiveField, boolean>> = {
-        ...(role?.fieldVisibility ?? DEFAULT_FIELD_VISIBILITY),
+        ...role.fieldVisibility,
         ...patch.fieldVisibility,
       };
       for (const f of ALL_SENSITIVE_FIELDS) {

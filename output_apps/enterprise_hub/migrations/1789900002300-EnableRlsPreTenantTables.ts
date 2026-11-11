@@ -28,50 +28,172 @@ export const PRE_TENANT_RLS_TABLES = [
   'enterprise_inquiries',
 ] as const;
 
-export class EnableRlsPreTenantTables1789900001900 implements MigrationInterface {
-  name = 'EnableRlsPreTenantTables1789900001900';
+export class EnableRlsPreTenantTables1789900002300 implements MigrationInterface {
+  name = 'EnableRlsPreTenantTables1789900002300';
 
   public async up(q: QueryRunner): Promise<void> {
     // -------------------------------------------------------------------------
-    // 1. SECURITY DEFINER Functions (owned by postgres / table owner)
+    // 1. SECURITY DEFINER Functions (owned by superuser / table owner)
     // -------------------------------------------------------------------------
     await q.query(`
       CREATE OR REPLACE FUNCTION public.lookup_user_by_phone(p_phone text)
-      RETURNS SETOF public.users
+      RETURNS TABLE (
+        id uuid,
+        phone varchar,
+        username varchar,
+        managed_by_tenant_id uuid,
+        login_email varchar,
+        display_name varchar,
+        email varchar,
+        role varchar,
+        service_domain varchar,
+        tenant_id uuid,
+        tenant_role varchar,
+        is_active boolean,
+        last_login_at timestamp,
+        created_at timestamp,
+        updated_at timestamp
+      )
       LANGUAGE sql
       SECURITY DEFINER
       SET search_path = public, pg_temp
       AS $$
-        SELECT * FROM public.users WHERE phone = p_phone LIMIT 1;
+        SELECT id, phone, username, managed_by_tenant_id, login_email,
+               "displayName" AS display_name, email, role::varchar, "serviceDomain"::varchar AS service_domain,
+               tenant_id, tenant_role, "isActive" AS is_active,
+               "lastLoginAt" AS last_login_at, "createdAt" AS created_at, "updatedAt" AS updated_at
+        FROM public.users
+        WHERE phone = p_phone
+        LIMIT 1;
       $$;
 
       CREATE OR REPLACE FUNCTION public.lookup_user_by_login(p_login text)
-      RETURNS SETOF public.users
+      RETURNS TABLE (
+        id uuid,
+        phone varchar,
+        username varchar,
+        managed_by_tenant_id uuid,
+        login_email varchar,
+        password_hash text,
+        password_updated_at timestamp,
+        display_name varchar,
+        email varchar,
+        role varchar,
+        service_domain varchar,
+        tenant_id uuid,
+        tenant_role varchar,
+        is_active boolean,
+        last_login_at timestamp,
+        created_at timestamp,
+        updated_at timestamp
+      )
       LANGUAGE sql
       SECURITY DEFINER
       SET search_path = public, pg_temp
       AS $$
-        SELECT * FROM public.users
+        SELECT id, phone, username, managed_by_tenant_id, login_email, password_hash, password_updated_at,
+               "displayName" AS display_name, email, role::varchar, "serviceDomain"::varchar AS service_domain,
+               tenant_id, tenant_role, "isActive" AS is_active,
+               "lastLoginAt" AS last_login_at, "createdAt" AS created_at, "updatedAt" AS updated_at
+        FROM public.users
         WHERE lower(username) = lower(p_login) OR lower(login_email) = lower(p_login)
+        ORDER BY (lower(username) = lower(p_login)) DESC, id ASC
         LIMIT 1;
       $$;
 
       CREATE OR REPLACE FUNCTION public.lookup_user_by_id(p_user_id uuid)
-      RETURNS SETOF public.users
+      RETURNS TABLE (
+        id uuid,
+        phone varchar,
+        username varchar,
+        managed_by_tenant_id uuid,
+        login_email varchar,
+        display_name varchar,
+        email varchar,
+        role varchar,
+        service_domain varchar,
+        tenant_id uuid,
+        tenant_role varchar,
+        is_active boolean,
+        last_login_at timestamp,
+        created_at timestamp,
+        updated_at timestamp
+      )
       LANGUAGE sql
       SECURITY DEFINER
       SET search_path = public, pg_temp
       AS $$
-        SELECT * FROM public.users WHERE id = p_user_id LIMIT 1;
+        SELECT id, phone, username, managed_by_tenant_id, login_email,
+               "displayName" AS display_name, email, role::varchar, "serviceDomain"::varchar AS service_domain,
+               tenant_id, tenant_role, "isActive" AS is_active,
+               "lastLoginAt" AS last_login_at, "createdAt" AS created_at, "updatedAt" AS updated_at
+        FROM public.users
+        WHERE id = p_user_id
+        LIMIT 1;
+      $$;
+
+      CREATE OR REPLACE FUNCTION public.lookup_user_by_id_with_password(p_user_id uuid)
+      RETURNS TABLE (
+        id uuid,
+        phone varchar,
+        username varchar,
+        managed_by_tenant_id uuid,
+        login_email varchar,
+        password_hash text,
+        password_updated_at timestamp,
+        display_name varchar,
+        email varchar,
+        role varchar,
+        service_domain varchar,
+        tenant_id uuid,
+        tenant_role varchar,
+        is_active boolean,
+        last_login_at timestamp,
+        created_at timestamp,
+        updated_at timestamp
+      )
+      LANGUAGE sql
+      SECURITY DEFINER
+      SET search_path = public, pg_temp
+      AS $$
+        SELECT id, phone, username, managed_by_tenant_id, login_email, password_hash, password_updated_at,
+               "displayName" AS display_name, email, role::varchar, "serviceDomain"::varchar AS service_domain,
+               tenant_id, tenant_role, "isActive" AS is_active,
+               "lastLoginAt" AS last_login_at, "createdAt" AS created_at, "updatedAt" AS updated_at
+        FROM public.users
+        WHERE id = p_user_id
+          AND (
+            nullif(current_setting('app.user_id', true), '') IS NULL
+            OR id = nullif(current_setting('app.user_id', true), '')::uuid
+          )
+        LIMIT 1;
       $$;
 
       CREATE OR REPLACE FUNCTION public.lookup_refresh_token_by_hash(p_token_hash text)
-      RETURNS SETOF public.auth_refresh_tokens
+      RETURNS TABLE (
+        id uuid,
+        user_id uuid,
+        tenant_id uuid,
+        token_hash varchar,
+        family_id uuid,
+        user_agent varchar,
+        ip varchar,
+        device_hash varchar,
+        mfa boolean,
+        session_started_at timestamp,
+        expires_at timestamp,
+        revoked_at timestamp,
+        created_at timestamp
+      )
       LANGUAGE sql
       SECURITY DEFINER
       SET search_path = public, pg_temp
       AS $$
-        SELECT * FROM public.auth_refresh_tokens WHERE token_hash = p_token_hash LIMIT 1;
+        SELECT id, user_id, tenant_id, token_hash, family_id, user_agent, ip, device_hash,
+               mfa, session_started_at, expires_at, revoked_at, created_at
+        FROM public.auth_refresh_tokens
+        WHERE token_hash = p_token_hash
+        LIMIT 1;
       $$;
 
       CREATE OR REPLACE FUNCTION public.revoke_refresh_token_if_active(p_id uuid)
@@ -102,6 +224,22 @@ export class EnableRlsPreTenantTables1789900001900 implements MigrationInterface
         WHERE family_id = p_family_id AND revoked_at IS NULL;
       $$;
 
+      CREATE OR REPLACE FUNCTION public.delete_expired_refresh_tokens(p_before timestamp)
+      RETURNS integer
+      LANGUAGE plpgsql
+      SECURITY DEFINER
+      SET search_path = public, pg_temp
+      AS $$
+      DECLARE
+        v_count integer;
+      BEGIN
+        DELETE FROM public.auth_refresh_tokens
+        WHERE expires_at < p_before;
+        GET DIAGNOSTICS v_count = ROW_COUNT;
+        RETURN v_count;
+      END;
+      $$;
+
       CREATE OR REPLACE FUNCTION public.lookup_user_memberships(p_user_id uuid)
       RETURNS TABLE (
         membership_id uuid,
@@ -122,12 +260,32 @@ export class EnableRlsPreTenantTables1789900001900 implements MigrationInterface
       $$;
 
       CREATE OR REPLACE FUNCTION public.lookup_invitation_by_token_hash(p_token_hash text)
-      RETURNS SETOF public.tenant_invitations
+      RETURNS TABLE (
+        id uuid,
+        tenant_id uuid,
+        email varchar,
+        phone varchar,
+        role_key varchar,
+        custom_role_id uuid,
+        branch_id uuid,
+        department_id uuid,
+        branch_scoped boolean,
+        token_hash varchar,
+        expires_at timestamp,
+        accepted_at timestamp,
+        accepted_by uuid,
+        revoked_at timestamp,
+        invited_by uuid,
+        created_at timestamp
+      )
       LANGUAGE sql
       SECURITY DEFINER
       SET search_path = public, pg_temp
       AS $$
-        SELECT * FROM public.tenant_invitations
+        SELECT id, tenant_id, email, phone, role_key, custom_role_id, branch_id, department_id,
+               branch_scoped, token_hash, expires_at, accepted_at, accepted_by, revoked_at,
+               invited_by, created_at
+        FROM public.tenant_invitations
         WHERE token_hash = p_token_hash
           AND accepted_at IS NULL
           AND revoked_at IS NULL
@@ -157,32 +315,75 @@ export class EnableRlsPreTenantTables1789900001900 implements MigrationInterface
       $$;
 
       CREATE OR REPLACE FUNCTION public.lookup_tenant_entitlements(p_tenant_id uuid)
-      RETURNS SETOF public.tenant_module_entitlements
+      RETURNS TABLE (
+        tenant_id uuid,
+        module varchar,
+        enabled boolean,
+        updated_by uuid,
+        updated_at timestamp
+      )
       LANGUAGE sql
       SECURITY DEFINER
       SET search_path = public, pg_temp
       AS $$
-        SELECT * FROM public.tenant_module_entitlements WHERE tenant_id = p_tenant_id;
+        SELECT tenant_id, module, enabled, updated_by, updated_at
+        FROM public.tenant_module_entitlements
+        WHERE tenant_id = p_tenant_id
+          AND (
+            nullif(current_setting('app.tenant_id', true), '') IS NULL
+            OR p_tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid
+          );
       $$;
 
       CREATE OR REPLACE FUNCTION public.lookup_membership(p_tenant_id uuid, p_user_id uuid)
-      RETURNS SETOF public.tenant_memberships
+      RETURNS TABLE (
+        id uuid,
+        tenant_id uuid,
+        user_id uuid,
+        role_key varchar,
+        custom_role_id uuid,
+        branch_id uuid,
+        department_id uuid,
+        branch_scoped boolean,
+        status varchar,
+        invited_by uuid,
+        created_at timestamp,
+        updated_at timestamp
+      )
       LANGUAGE sql
       SECURITY DEFINER
       SET search_path = public, pg_temp
       AS $$
-        SELECT * FROM public.tenant_memberships
+        SELECT id, tenant_id, user_id, role_key, custom_role_id, branch_id, department_id,
+               branch_scoped, status, invited_by, created_at, updated_at
+        FROM public.tenant_memberships
         WHERE tenant_id = p_tenant_id AND user_id = p_user_id
+          AND (
+            nullif(current_setting('app.user_id', true), '') IS NULL
+            OR user_id = nullif(current_setting('app.user_id', true), '')::uuid
+          )
+          AND (
+            nullif(current_setting('app.tenant_id', true), '') IS NULL
+            OR tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid
+          )
         LIMIT 1;
       $$;
 
       CREATE OR REPLACE FUNCTION public.list_open_module_requests()
-      RETURNS SETOF public.tenant_module_requests
+      RETURNS TABLE (
+        id uuid,
+        tenant_id uuid,
+        module varchar,
+        status varchar,
+        requested_by uuid,
+        created_at timestamp
+      )
       LANGUAGE sql
       SECURITY DEFINER
       SET search_path = public, pg_temp
       AS $$
-        SELECT * FROM public.tenant_module_requests
+        SELECT id, tenant_id, module, status, requested_by, created_at
+        FROM public.tenant_module_requests
         WHERE status = 'OPEN'
         ORDER BY created_at ASC
         LIMIT 500;
@@ -245,18 +446,22 @@ export class EnableRlsPreTenantTables1789900001900 implements MigrationInterface
       $$;
     `);
 
-    // Pin function ownership to postgres / current_user, revoke from PUBLIC, grant to roxira_app
+    // Pin function ownership to superuser (postgres / enterprise_admin / current_user),
+    // revoke execute from PUBLIC, and grant to roxira_app if role exists.
     await q.query(`
       DO $$
       DECLARE
         fn text;
+        v_owner text;
         funcs text[] := ARRAY[
           'lookup_user_by_phone(text)',
           'lookup_user_by_login(text)',
           'lookup_user_by_id(uuid)',
+          'lookup_user_by_id_with_password(uuid)',
           'lookup_refresh_token_by_hash(text)',
           'revoke_refresh_token_if_active(uuid)',
           'revoke_refresh_token_family(uuid)',
+          'delete_expired_refresh_tokens(timestamp)',
           'lookup_user_memberships(uuid)',
           'lookup_invitation_by_token_hash(text)',
           'mark_invitation_accepted(uuid, uuid)',
@@ -267,15 +472,20 @@ export class EnableRlsPreTenantTables1789900001900 implements MigrationInterface
           'submit_enterprise_inquiry(text, text, text, text, text, text, uuid)'
         ];
       BEGIN
+        SELECT rolname INTO v_owner FROM pg_roles WHERE rolsuper = true ORDER BY (rolname = 'postgres') DESC, (rolname = 'enterprise_admin') DESC, rolname LIMIT 1;
+        IF v_owner IS NULL THEN
+          v_owner := current_user;
+        END IF;
         FOREACH fn IN ARRAY funcs LOOP
-          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgres') THEN
-            EXECUTE format('ALTER FUNCTION public.%s OWNER TO postgres', fn);
-          END IF;
+          EXECUTE format('ALTER FUNCTION public.%s OWNER TO %I', fn, v_owner);
           EXECUTE format('REVOKE ALL ON FUNCTION public.%s FROM PUBLIC', fn);
           IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'roxira_app') THEN
             EXECUTE format('GRANT EXECUTE ON FUNCTION public.%s TO roxira_app', fn);
           END IF;
         END LOOP;
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'roxira_app') THEN
+          EXECUTE 'GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO roxira_app';
+        END IF;
       END $$;
     `);
 
@@ -391,7 +601,10 @@ export class EnableRlsPreTenantTables1789900001900 implements MigrationInterface
     await q.query(`
       CREATE POLICY "contact_messages_insert" ON "contact_messages"
       FOR INSERT
-      WITH CHECK (true);
+      WITH CHECK (
+        nullif(current_setting('app.tenant_id', true), '') IS NOT NULL
+        AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
+      );
 
       CREATE POLICY "contact_messages_tenant" ON "contact_messages"
       FOR SELECT
@@ -418,7 +631,13 @@ export class EnableRlsPreTenantTables1789900001900 implements MigrationInterface
     await q.query(`
       CREATE POLICY "enterprise_inquiries_insert" ON "enterprise_inquiries"
       FOR INSERT
-      WITH CHECK (true);
+      WITH CHECK (
+        "tenant_id" IS NULL
+        OR (
+          nullif(current_setting('app.tenant_id', true), '') IS NOT NULL
+          AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
+        )
+      );
 
       CREATE POLICY "enterprise_inquiries_tenant" ON "enterprise_inquiries"
       FOR ALL
@@ -454,9 +673,11 @@ export class EnableRlsPreTenantTables1789900001900 implements MigrationInterface
       DROP FUNCTION IF EXISTS public.lookup_user_by_phone(text);
       DROP FUNCTION IF EXISTS public.lookup_user_by_login(text);
       DROP FUNCTION IF EXISTS public.lookup_user_by_id(uuid);
+      DROP FUNCTION IF EXISTS public.lookup_user_by_id_with_password(uuid);
       DROP FUNCTION IF EXISTS public.lookup_refresh_token_by_hash(text);
       DROP FUNCTION IF EXISTS public.revoke_refresh_token_if_active(uuid);
       DROP FUNCTION IF EXISTS public.revoke_refresh_token_family(uuid);
+      DROP FUNCTION IF EXISTS public.delete_expired_refresh_tokens(timestamp);
       DROP FUNCTION IF EXISTS public.lookup_user_memberships(uuid);
       DROP FUNCTION IF EXISTS public.lookup_invitation_by_token_hash(text);
       DROP FUNCTION IF EXISTS public.mark_invitation_accepted(uuid, uuid);
