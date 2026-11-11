@@ -55,6 +55,8 @@ export const STATUTORY_KEYS = {
   contract_unemployment_addon_fraction: { kind: 'rate', label: 'کسر بیمه بیکاری افزوده بر ضریب بیمه پیمان', required: false },
   contract_tax_withholding_rate: { kind: 'rate', label: 'نرخ کسر مالیات پیمانکاران از صورت وضعیت', required: false },
   contract_advance_payment_max_rate: { kind: 'rate', label: 'سقف پیش‌پرداخت قرارداد', required: false },
+  // Electronic commercial books upload periodicity in months (Bylaw 95, Art. 6: 1, 3, 6, 12).
+  commercial_books_periodicity: { kind: 'count', label: 'دوره زمانی بارگذاری دفاتر تجاری الکترونیکی (ماه)', required: false },
 } as const satisfies Record<string, StatutoryKeyDefinition>;
 
 export type StatutoryKey = keyof typeof STATUTORY_KEYS;
