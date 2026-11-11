@@ -20,7 +20,7 @@ import {
 import { WooCommerceRepository } from './repositories/woocommerce.repository';
 import { WooCommerceSyncService } from './services/woocommerce-sync.service';
 import { computeHmacSignature, verifyHmacSignature } from './utils/woocommerce-crypto.util';
-import { CreateWooCommerceIntegration1789900002800 } from '../../migrations/1789900002800-CreateWooCommerceIntegration';
+import { CreateWooCommerceIntegration1789900002800 } from '../../../migrations/1789900002800-CreateWooCommerceIntegration';
 
 const HOST = process.env.ROXIRA_TEST_PG_HOST;
 const describePg = HOST ? describe : describe.skip;
@@ -39,7 +39,7 @@ const options = (database: string, username = ADMIN_USER, password?: string) => 
   password: password ?? process.env.ROXIRA_TEST_PG_PASSWORD,
   database,
   entities: [WooCommerceConfigEntity, WooCommerceSyncLogEntity, InvoiceEntity],
-  migrations: [path.join(__dirname, '../../migrations/*.ts')],
+  migrations: [path.join(__dirname, '../../../migrations/*.ts')],
   migrationsTransactionMode: 'each' as const,
   synchronize: false,
   logging: false,
