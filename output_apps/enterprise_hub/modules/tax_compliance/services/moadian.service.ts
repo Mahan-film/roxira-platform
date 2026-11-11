@@ -20,6 +20,7 @@ import {
   randomUUID,
 } from 'crypto';
 import { InvoicingService } from '../../invoicing/services/invoicing.service';
+import { VatRateResolver } from '../../invoicing/services/vat-rate.resolver';
 import {
   MOADIAN_DEFAULT_MAX_POLLS,
   MOADIAN_DEFAULT_POLL_DELAY_MS,
@@ -95,6 +96,7 @@ export class MoadianService implements OnModuleInit {
     private readonly config: ConfigService,
     @InjectQueue(MOADIAN_QUEUE) private readonly queue: Queue<MoadianJobData>,
     private readonly taxComplianceRepository: TaxComplianceRepository,
+    @Optional() private readonly vatRateResolver?: VatRateResolver,
   ) {}
 
   /** ثبت جاب دوره‌ای همگام‌سازی وضعیت صورتحساب‌های معوق با سامانه مودیان. */
@@ -121,9 +123,13 @@ export class MoadianService implements OnModuleInit {
   }
 
   /** Flag + whether this tenant has stored credentials; never throws when the flag is off. */
-  async getStatus(tenantId: string): Promise<{ enabled: boolean; configured: boolean }> {
+  async getStatus(tenantId: string): Promise<{ enabled: boolean; configured: boolean; defaultSstid: string | null }> {
     const credential = await this.repository.findCredential(tenantId);
-    return { enabled: this.isEnabled(), configured: credential !== null };
+    return {
+      enabled: this.isEnabled(),
+      configured: credential !== null,
+      defaultSstid: credential?.defaultSstid ?? null,
+    };
   }
 
   private numberSetting(name: string, fallback: number): number {
@@ -279,8 +285,21 @@ export class MoadianService implements OnModuleInit {
     this.assertEnabled();
     const invoice = await this.invoicingService.findOne(tenantId, invoiceId);
     const credential = await this.repository.findCredential(tenantId);
+    let expectedVatRate: number | undefined;
+    if (this.vatRateResolver && invoice.issuedAt) {
+      try {
+        const res = await this.vatRateResolver.generalRate(
+          tenantId,
+          new Date(invoice.issuedAt).toISOString().slice(0, 10),
+        );
+        expectedVatRate = res.rate;
+      } catch {
+        // ignore
+      }
+    }
     return runMoadianPreFlightValidation(invoice, {
       defaultSstid: credential?.defaultSstid,
+      expectedVatRate,
     });
   }
 
@@ -354,16 +373,6 @@ export class MoadianService implements OnModuleInit {
       throw new BadRequestException('ابتدا اطلاعات اتصال مودیان را ثبت کنید.');
     }
 
-    if (options.preFlightCheck) {
-      const preFlight = runMoadianPreFlightValidation(invoice, {
-        defaultSstid: credential.defaultSstid,
-      });
-      if (!preFlight.valid) {
-        const messages = preFlight.errors.map((e) => `${e.field}: ${e.message}`).join(' | ');
-        throw new BadRequestException(`اعتبارسنجی پیش از ارسال مودیان: ${messages}`);
-      }
-    }
-
     const existing = await this.repository.findSubmissionByInvoice(tenantId, invoiceId);
     if (existing?.status === MoadianSubmissionStatus.SUCCESS) {
       throw new ConflictException('این صورتحساب قبلاً در سامانه مودیان ثبت شده است.');
@@ -374,6 +383,29 @@ export class MoadianService implements OnModuleInit {
       existing?.status === MoadianSubmissionStatus.UNKNOWN
     ) {
       return this.toSubmissionResponse(existing);
+    }
+
+    if (options.preFlightCheck !== false) {
+      let expectedVatRate: number | undefined;
+      if (this.vatRateResolver && invoice.issuedAt) {
+        try {
+          const res = await this.vatRateResolver.generalRate(
+            tenantId,
+            new Date(invoice.issuedAt).toISOString().slice(0, 10),
+          );
+          expectedVatRate = res.rate;
+        } catch {
+          // ignore
+        }
+      }
+      const preFlight = runMoadianPreFlightValidation(invoice, {
+        defaultSstid: credential.defaultSstid,
+        expectedVatRate,
+      });
+      if (!preFlight.valid) {
+        const messages = preFlight.errors.map((e) => `${e.field}: ${e.message}`).join(' | ');
+        throw new BadRequestException(`اعتبارسنجی پیش از ارسال مودیان: ${messages}`);
+      }
     }
 
     const mapWith = (serial: number) => {

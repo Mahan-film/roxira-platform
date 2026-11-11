@@ -36,4 +36,7 @@ export class StockItemResponseDto {
 
   @ApiProperty({ description: 'ارزش موجودی کالا بر پایه FIFO (ریال)' })
   fifoValuation: number;
+
+  @ApiProperty({ description: 'شناسه ۱۳ رقمی کالا/خدمت مودیان (SSTID)', nullable: true })
+  taxCode: string | null;
 }

@@ -31,4 +31,10 @@ export class UpdateStockItemDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   minQuantity?: number;
+
+  @ApiPropertyOptional({ description: 'شناسه ۱۳ رقمی کالا/خدمت مودیان (SSTID)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(13)
+  taxCode?: string;
 }
