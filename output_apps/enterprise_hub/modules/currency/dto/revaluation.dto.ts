@@ -7,14 +7,54 @@ import {
   IsBoolean,
   IsEnum,
   IsNotEmpty,
-  IsNumberString,
   IsOptional,
   IsString,
   Matches,
   MaxLength,
+  Validate,
   ValidateNested,
+  ValidationArguments,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
 } from 'class-validator';
 import { Currency } from '../enums/currency.enum';
+
+@ValidatorConstraint({ name: 'ratesMap', async: false })
+export class RatesMapConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown) {
+    if (value === undefined || value === null) return true;
+    if (typeof value !== 'object' || Array.isArray(value)) return false;
+    const entries = Object.entries(value as Record<string, unknown>);
+    const validCurrencies = new Set(Object.values(Currency));
+    for (const [curr, rate] of entries) {
+      if (!validCurrencies.has(curr as Currency)) return false;
+      if (typeof rate !== 'string' || !/^[1-9]\d{0,17}$/.test(rate)) return false;
+    }
+    return true;
+  }
+  defaultMessage() {
+    return 'rates must be an object with valid Currency keys and strictly positive integer string values';
+  }
+}
+
+@ValidatorConstraint({ name: 'uniqueAccountCurrency', async: false })
+export class UniqueAccountCurrencyConstraint implements ValidatorConstraintInterface {
+  validate(balances: unknown) {
+    if (!Array.isArray(balances)) return true;
+    const seen = new Set<string>();
+    for (const b of balances) {
+      if (b && typeof b.accountCode === 'string' && typeof b.currency === 'string') {
+        const key = `${b.accountCode}:${b.currency}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+      }
+    }
+    return true;
+  }
+  defaultMessage() {
+    return 'balances contains duplicate (accountCode, currency) rows';
+  }
+}
 
 export class ForeignAccountBalanceDto {
   @ApiProperty({ description: 'کد حساب کل یا معین در سرفصل حساب‌ها', example: '1012' })
@@ -35,14 +75,12 @@ export class ForeignAccountBalanceDto {
 
   @ApiProperty({ description: 'مبلغ ارزی بر حسب واحدهای جزء (سنت)', example: '100000' })
   @IsNotEmpty()
-  @IsNumberString({ no_symbols: true }, { message: 'foreignAmountMinor must be a non-negative integer string' })
-  @MaxLength(32, { message: 'foreignAmountMinor must not exceed 32 digits' })
+  @Matches(/^\d{1,18}$/, { message: 'foreignAmountMinor must be a non-negative integer string up to 18 digits' })
   foreignAmountMinor: string;
 
   @ApiProperty({ description: 'ارزش دفتری ریالی فعلی در دفتر کل', example: '5000000000' })
   @IsNotEmpty()
-  @IsNumberString({ no_symbols: true }, { message: 'bookValueRialMinor must be a non-negative integer string' })
-  @MaxLength(32, { message: 'bookValueRialMinor must not exceed 32 digits' })
+  @Matches(/^\d{1,18}$/, { message: 'bookValueRialMinor must be a non-negative integer string up to 18 digits' })
   bookValueRialMinor: string;
 
   @ApiPropertyOptional({
@@ -50,8 +88,7 @@ export class ForeignAccountBalanceDto {
     example: '920000',
   })
   @IsOptional()
-  @IsNumberString({ no_symbols: true }, { message: 'rateRialPerUnit must be a non-negative integer string' })
-  @MaxLength(32, { message: 'rateRialPerUnit must not exceed 32 digits' })
+  @Matches(/^[1-9]\d{0,17}$/, { message: 'rateRialPerUnit must be a strictly positive integer string up to 18 digits' })
   rateRialPerUnit?: string;
 
   @ApiPropertyOptional({ description: 'آیا حساب بدهی است (مثل حساب پرداختنی ارزی)', default: false })
@@ -78,12 +115,14 @@ export class RevalueBalancesDto {
     example: { USD: '920000', EUR: '1000000' },
   })
   @IsOptional()
+  @Validate(RatesMapConstraint)
   rates?: Record<string, string>;
 
   @ApiProperty({ type: [ForeignAccountBalanceDto], description: 'فهرست مانده حساب‌های ارزی' })
   @IsArray()
   @ArrayNotEmpty()
   @ArrayMaxSize(100)
+  @Validate(UniqueAccountCurrencyConstraint)
   @ValidateNested({ each: true })
   @Type(() => ForeignAccountBalanceDto)
   balances: ForeignAccountBalanceDto[];

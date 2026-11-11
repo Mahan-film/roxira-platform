@@ -15,6 +15,7 @@ import { CurrencyController } from './controllers/currency.controller';
 import { ForeignAccountBalanceDto, RevalueBalancesDto } from './dto/revaluation.dto';
 import { Currency } from './enums/currency.enum';
 import { CurrencyService } from './services/currency.service';
+import { TenantScope } from '../access/services/tenant-scope';
 import {
   ForeignAccountBalance,
   FxRevaluationService,
@@ -26,6 +27,7 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
   let mockPostingRules: Partial<PostingRulesService>;
   let mockAccounting: Partial<AccountingService>;
   let mockModuleRef: Partial<ModuleRef>;
+  let mockScope: TenantScope;
 
   const defaultAccounts = [
     {
@@ -117,9 +119,15 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
       }) as any,
     };
 
+    mockScope = {
+      run: jest.fn(async (_t, work) => work({} as any)),
+      within: jest.fn(async (_t, _o, work) => work({} as any)),
+    } as unknown as TenantScope;
+
     revaluationService = new FxRevaluationService(
       currencyService,
       mockModuleRef as ModuleRef,
+      mockScope,
     );
   });
 
@@ -269,7 +277,7 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
           overrides: { monetary_asset: '1012' },
           description: expect.stringContaining('[نرخ: 920000 ریال]'),
         }),
-        undefined,
+        expect.anything(),
       );
 
       expect(res.postingResults).toHaveLength(1);
@@ -366,6 +374,39 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
           currency: Currency.USD,
           foreignAmountMinor: 1000000n,
           bookValueRialMinor: 9_999_999_999n, // Contradicts ledger balance!
+        },
+      ];
+
+      await expect(
+        revaluationService.postMonthEndRevaluation('tenant-1', {
+          period: '1405-08',
+          date: '2026-11-21',
+          balances,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects currency mismatch between account definition and balance input', async () => {
+      const accountsWithCurrency = [
+        ...defaultAccounts,
+        {
+          code: '1013',
+          name: 'بانک ارزی یورو',
+          level: AccountLevel.MOEIN,
+          accountType: AccountType.ASSET,
+          balance: 0,
+          currency: Currency.EUR,
+        },
+      ];
+      (mockAccounting.listAccounts as jest.Mock).mockResolvedValue(accountsWithCurrency);
+
+      const balances: ForeignAccountBalance[] = [
+        {
+          accountCode: '1013',
+          accountName: 'بانک ارزی یورو',
+          currency: Currency.USD, // Mismatched currency!
+          foreignAmountMinor: 1000000n,
+          bookValueRialMinor: 0n,
         },
       ];
 
@@ -481,7 +522,7 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
       expect(mockPostingRules.post).toHaveBeenCalledWith(
         'tenant-jwt-123',
         expect.anything(),
-        undefined,
+        expect.anything(),
       );
     });
 
@@ -541,17 +582,66 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
       expect(errors.some((e) => e.property === 'date')).toBe(true);
     });
 
-    it('rejects amount strings exceeding 32 digits', async () => {
+    it('rejects amount strings exceeding 18 digits or with non-digits', async () => {
       const overflowDto = plainToInstance(ForeignAccountBalanceDto, {
         accountCode: '1012',
         accountName: 'بانک دلاری',
         currency: Currency.USD,
-        foreignAmountMinor: '1'.repeat(33), // 33 digits > 32
+        foreignAmountMinor: '1'.repeat(19), // 19 digits > 18
         bookValueRialMinor: '5000000',
       });
 
       const errors = await validate(overflowDto);
       expect(errors.some((e) => e.property === 'foreignAmountMinor')).toBe(true);
+    });
+
+    it('rejects duplicate (accountCode, currency) rows in balances', async () => {
+      const dupDto = plainToInstance(RevalueBalancesDto, {
+        period: '1405-08',
+        date: '2026-11-21',
+        balances: [
+          {
+            accountCode: '1012',
+            accountName: 'بانک دلاری 1',
+            currency: Currency.USD,
+            foreignAmountMinor: '1000',
+            bookValueRialMinor: '10000',
+          },
+          {
+            accountCode: '1012',
+            accountName: 'بانک دلاری 2',
+            currency: Currency.USD, // Duplicate (1012, USD)
+            foreignAmountMinor: '2000',
+            bookValueRialMinor: '20000',
+          },
+        ],
+      });
+
+      const errors = await validate(dupDto);
+      expect(errors.some((e) => e.property === 'balances')).toBe(true);
+    });
+
+    it('rejects invalid currency keys or non-numeric/zero rates in rates map', async () => {
+      const badRatesDto = plainToInstance(RevalueBalancesDto, {
+        period: '1405-08',
+        date: '2026-11-21',
+        rates: {
+          INVALID_CURR: '1000',
+          USD: '0', // zero is invalid
+        },
+        balances: [
+          {
+            accountCode: '1012',
+            accountName: 'بانک دلاری',
+            currency: Currency.USD,
+            foreignAmountMinor: '1000',
+            bookValueRialMinor: '10000',
+          },
+        ],
+      });
+
+      const errors = await validate(badRatesDto);
+      expect(errors.some((e) => e.property === 'rates')).toBe(true);
     });
   });
 });

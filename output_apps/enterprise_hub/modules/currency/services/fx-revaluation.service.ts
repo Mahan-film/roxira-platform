@@ -76,7 +76,7 @@ export class FxRevaluationService {
   constructor(
     private readonly currencyService: CurrencyService,
     private readonly moduleRef: ModuleRef,
-    @Optional() private readonly scope?: TenantScope,
+    private readonly scope: TenantScope,
   ) {}
 
   private get postingRules(): PostingRulesService {
@@ -125,11 +125,16 @@ export class FxRevaluationService {
    * For liabilities, an increase in foreign exchange value represents an increased obligation (LOSS).
    */
   revalueBalance(balance: ForeignAccountBalance, customRate?: bigint): RevaluationItemResult {
-    const rate = customRate ?? balance.rateRialPerUnit ?? this.getRateToRial(balance.currency);
+    const rawRate = customRate ?? balance.rateRialPerUnit;
+    if (rawRate !== undefined && rawRate <= 0n) {
+      throw new BadRequestException('Exchange rate must be strictly positive');
+    }
+    const rate = rawRate !== undefined && rawRate > 0n ? rawRate : this.getRateToRial(balance.currency);
     const decimals = CURRENCY_METADATA[balance.currency]?.decimals ?? 2;
     const scale = 10n ** BigInt(decimals);
 
-    const currentValue = (balance.foreignAmountMinor * rate) / scale;
+    // Exact integer division with half-up rounding (Lesson 8)
+    const currentValue = (balance.foreignAmountMinor * rate + scale / 2n) / scale;
     const diff = currentValue - balance.bookValueRialMinor;
 
     let type: 'gain' | 'loss' | 'neutral' = 'neutral';
@@ -161,7 +166,9 @@ export class FxRevaluationService {
     }
 
     const fingerprint = createHash('sha256')
-      .update(`${balance.accountCode}:${balance.currency}:${balance.foreignAmountMinor}:${balance.bookValueRialMinor}:${rate}`)
+      .update(
+        `${balance.accountCode}:${balance.currency}:${balance.foreignAmountMinor}:${balance.bookValueRialMinor}:${rate}:${Boolean(balance.isLiability)}`,
+      )
       .digest('hex')
       .slice(0, 16);
 
@@ -292,6 +299,11 @@ export class FxRevaluationService {
           `حساب «${b.accountCode}» در سطح گروه یا کل است و سند تسعیر روی آن ثبت نمی‌شود؛ حساب معین یا تفصیلی انتخاب کنید.`,
         );
       }
+      if (acc.currency && acc.currency !== b.currency) {
+        throw new BadRequestException(
+          `واحد پول حساب «${b.accountCode}» در سیستم «${acc.currency}» است و نمی‌توان آن را با ارز «${b.currency}» تسعیر کرد.`,
+        );
+      }
       if (b.isLiability) {
         if (acc.accountType !== AccountType.LIABILITY) {
           throw new BadRequestException(
@@ -302,16 +314,6 @@ export class FxRevaluationService {
         if (acc.accountType !== AccountType.ASSET) {
           throw new BadRequestException(
             `حساب دارایی ارزی «${b.accountCode}» باید دارای ماهیت دارایی (ASSET) باشد، اما ماهیت آن «${acc.accountType}» است.`,
-          );
-        }
-      }
-
-      // Reconcile book value against ledger if a non-zero ledger balance exists
-      if (acc.balance !== undefined && acc.balance !== null) {
-        const ledgerBalanceMinor = toMinor(acc.balance);
-        if (ledgerBalanceMinor !== 0n && b.bookValueRialMinor !== ledgerBalanceMinor) {
-          throw new BadRequestException(
-            `ارزش دفتری اعلام‌شده (${b.bookValueRialMinor}) با مانده دفتر کل حساب ${acc.code} (${ledgerBalanceMinor}) مغایرت دارد.`,
           );
         }
       }
@@ -361,6 +363,17 @@ export class FxRevaluationService {
           continue;
         }
 
+        // Reconcile book value against ledger only for fresh postings (not already revalued)
+        const acc = accountMap.get(item.accountCode);
+        if (acc?.balance !== undefined && acc.balance !== null) {
+          const ledgerBalanceMinor = toMinor(acc.balance);
+          if (ledgerBalanceMinor !== 0n && item.bookValueRialMinor !== ledgerBalanceMinor) {
+            throw new BadRequestException(
+              `ارزش دفتری اعلام‌شده (${item.bookValueRialMinor}) با مانده دفتر کل حساب ${acc.code} (${ledgerBalanceMinor}) مغایرت دارد.`,
+            );
+          }
+        }
+
         const postReq: PostingRequest = {
           docType: 'currency.fx_revaluation',
           sourceType: 'currency_revaluation',
@@ -383,13 +396,10 @@ export class FxRevaluationService {
       return { plan, postingResults };
     };
 
-    // Atomic execution within a single transaction (Major 3)
+    // Atomic execution within a single transaction under TenantScope
     if (manager) {
       return executePosting(manager);
     }
-    if (this.scope) {
-      return this.scope.run(tenantId, (m) => executePosting(m));
-    }
-    return executePosting();
+    return this.scope.run(tenantId, (m) => executePosting(m));
   }
 }
