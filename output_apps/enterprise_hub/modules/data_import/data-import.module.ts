@@ -51,6 +51,9 @@ import { PackageProgressService } from './services/package-progress.service';
 import { PackageStoreService } from './services/package-store.service';
 import { UploadStoreService } from './services/upload-store.service';
 import { SepidarChequesFifoAdapter } from './migration/bak/sepidar-cheques-fifo.adapter';
+import { TenantExportService } from './services/tenant-export.service';
+import { TenantExportController } from './controllers/tenant-export.controller';
+import { TenantExportRepository } from './repositories/tenant-export.repository';
 import { TenantScope } from '../access/services/tenant-scope';
 import { BulkImportController } from './bulk/bulk-import.controller';
 import { BulkImportProcessor } from './bulk/bulk-import.processor';
@@ -105,7 +108,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
       }),
     }),
   ],
-  controllers: [DataImportController, BulkImportController],
+  controllers: [DataImportController, BulkImportController, TenantExportController],
   providers: [
     DataImportService,
     DataImportRepository,
@@ -183,12 +186,20 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     BulkImportService,
     BulkPostService,
     BulkImportProcessor,
+    TenantExportRepository,
+    TenantExportService,
     {
       provide: OBJECT_STORE,
       // R2 (S3 API) in production; a folder on disk only for development. Settings come from the environment.
       useFactory: () => (storageDriver() === 's3' ? new S3ObjectStore(s3SettingsFromEnv()) : new LocalObjectStore(localStorageRoot())),
     },
   ],
-  exports: [DataImportService, EntityImportService, SepidarChequesFifoAdapter],
+  exports: [
+    DataImportService,
+    EntityImportService,
+    SepidarChequesFifoAdapter,
+    TenantExportRepository,
+    TenantExportService,
+  ],
 })
 export class DataImportModule {}
