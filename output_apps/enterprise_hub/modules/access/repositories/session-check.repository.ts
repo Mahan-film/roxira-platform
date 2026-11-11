@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MoreThan, IsNull, Repository } from 'typeorm';
 import { RefreshTokenEntity } from '../../auth/entities/refresh-token.entity';
@@ -6,6 +6,8 @@ import { RefreshTokenEntity } from '../../auth/entities/refresh-token.entity';
 /** Read-only liveness check of a session (refresh-token family) for the access guard. */
 @Injectable()
 export class SessionCheckRepository {
+  private readonly logger = new Logger(SessionCheckRepository.name);
+
   constructor(
     @InjectRepository(RefreshTokenEntity) private readonly repo: Repository<RefreshTokenEntity>,
   ) {}
@@ -19,7 +21,10 @@ export class SessionCheckRepository {
       if (rows && rows.length > 0) {
         return Boolean(rows[0].active);
       }
-    } catch {
+    } catch (err) {
+      this.logger.warn(
+        `is_refresh_token_family_active lookup failed, falling back to scoped query: ${err}`,
+      );
       // Fallback: transaction with app.user_id set
       return this.repo.manager.transaction(async (m) => {
         await m.query(`SELECT set_config('app.user_id', $1, true)`, [userId]);

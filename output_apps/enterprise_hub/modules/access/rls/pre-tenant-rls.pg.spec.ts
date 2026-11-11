@@ -289,6 +289,7 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     // Cross-tenant isolation inside TenantScope
     await scope.run(T1, async (manager) => {
       const inScope = await manager.getRepository(MembershipEntity).find();
+      expect(inScope.length).toBeGreaterThanOrEqual(1);
       for (const m of inScope) {
         expect(m.tenantId).toBe(T1);
       }
@@ -460,6 +461,39 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     } finally {
       await unprivilegedDs.destroy().catch(() => undefined);
       await owner.query(`DROP ROLE IF EXISTS ${unprivilegedRole}`).catch(() => undefined);
+    }
+  });
+
+  it('enforces definer context guards when caller session settings are bound', async () => {
+    const userA = '00000000-0000-4000-8000-0000000000a1';
+    const userB = '00000000-0000-4000-8000-0000000000b1';
+
+    // When app.user_id is set to userA, looking up userB by id or password raises an exception
+    await app.query(`SELECT set_config('app.user_id', $1, false)`, [userA]);
+    try {
+      await expect(
+        app.query(`SELECT * FROM public.lookup_user_by_id($1::uuid)`, [userB]),
+      ).rejects.toThrow(/caller user context does not match target user/);
+
+      await expect(
+        app.query(`SELECT * FROM public.lookup_user_by_id_with_password($1::uuid)`, [userB]),
+      ).rejects.toThrow(/caller user context does not match target user/);
+
+      await expect(
+        app.query(`SELECT * FROM public.lookup_user_memberships($1::uuid)`, [userB]),
+      ).rejects.toThrow(/caller user context does not match target user/);
+    } finally {
+      await app.query(`SELECT set_config('app.user_id', '', false)`);
+    }
+
+    // When app.tenant_id is set to T1, looking up T2 entitlements raises an exception
+    await app.query(`SELECT set_config('app.tenant_id', $1, false)`, [T1]);
+    try {
+      await expect(
+        app.query(`SELECT * FROM public.lookup_tenant_entitlements($1::uuid)`, [T2]),
+      ).rejects.toThrow(/caller tenant context does not match target tenant/);
+    } finally {
+      await app.query(`SELECT set_config('app.tenant_id', '', false)`);
     }
   });
 

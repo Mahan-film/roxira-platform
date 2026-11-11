@@ -83,14 +83,27 @@ AS $$
 $$;
 
 -- 2. User lookup by username or login email (for password sign-in)
-CREATE OR REPLACE FUNCTION public.lookup_user_by_login(p_login text)
+CREATE OR REPLACE FUNCTION public.lookup_user_by_username(p_username text)
 RETURNS SETOF public.users
 LANGUAGE sql
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
   SELECT * FROM public.users 
-  WHERE lower(username) = lower(p_login) OR lower(login_email) = lower(p_login) 
+  WHERE lower(username) = lower(p_username) 
+  ORDER BY id ASC
+  LIMIT 1;
+$$;
+
+CREATE OR REPLACE FUNCTION public.lookup_user_by_login_email(p_email text)
+RETURNS SETOF public.users
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT * FROM public.users 
+  WHERE lower(login_email) = lower(p_email) 
+  ORDER BY id ASC
   LIMIT 1;
 $$;
 
@@ -279,10 +292,13 @@ WITH CHECK (
 ALTER TABLE public.contact_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.contact_messages FORCE ROW LEVEL SECURITY;
 
--- Anyone can submit a contact message (including unauthenticated visitors)
+-- Contact messages insert requires a matching tenant context
 CREATE POLICY contact_messages_insert ON public.contact_messages
 FOR INSERT
-WITH CHECK (true);
+WITH CHECK (
+  nullif(current_setting('app.tenant_id', true), '') IS NOT NULL
+  AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
+);
 
 -- Only the recipient tenant can read/manage contact messages
 CREATE POLICY contact_messages_tenant ON public.contact_messages
@@ -297,10 +313,16 @@ USING (
 ALTER TABLE public.enterprise_inquiries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.enterprise_inquiries FORCE ROW LEVEL SECURITY;
 
--- Anyone can submit an enterprise inquiry
+-- Anyone can submit an anonymous enterprise inquiry (tenant_id IS NULL) or with matching tenant
 CREATE POLICY enterprise_inquiries_insert ON public.enterprise_inquiries
 FOR INSERT
-WITH CHECK (true);
+WITH CHECK (
+  "tenant_id" IS NULL
+  OR (
+    nullif(current_setting('app.tenant_id', true), '') IS NOT NULL
+    AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
+  )
+);
 
 -- Tenants see inquiries assigned to them
 CREATE POLICY enterprise_inquiries_tenant ON public.enterprise_inquiries
@@ -309,6 +331,16 @@ USING (
   nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid
 );
 ```
+
+### 4.3 Definer Context Guards & Pre-Authentication Trade-Off
+
+During the initial pre-authentication phase (e.g. resolving a phone number, checking credentials, or validating an opaque refresh token), neither `app.user_id` nor `app.tenant_id` is yet bound in PostgreSQL session settings. Single-record lookup functions (`lookup_user_by_id`, `lookup_user_by_id_with_password`, `lookup_user_memberships`, `lookup_tenant_entitlements`, etc.) operate without caller context during this unauthenticated phase as an accepted trade-off.
+
+Once an authenticated user or tenant session is active and session settings (`app.user_id`, `app.tenant_id`) are set, the definer functions enforce strict mismatch guards:
+- `v_current_user IS NOT NULL AND v_current_user <> p_user_id` raises `'caller user context does not match target user'`
+- `v_current_tenant IS NOT NULL AND v_current_tenant <> p_tenant_id` raises `'caller tenant context does not match target tenant'`
+- `revoke_refresh_token_if_active` and `revoke_refresh_token_family` verify token ownership against `v_current_user`.
+Furthermore, platform-wide administrative functions (`list_open_module_requests`, `list_enterprise_inquiries`) are guarded at the application layer by `@Roles(UserRole.ADMIN)` decorators.
 
 ---
 

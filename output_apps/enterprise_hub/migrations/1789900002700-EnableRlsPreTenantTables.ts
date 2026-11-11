@@ -67,40 +67,6 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
         LIMIT 1;
       $$;
 
-      CREATE OR REPLACE FUNCTION public.lookup_user_by_login(p_login text)
-      RETURNS TABLE (
-        id uuid,
-        phone varchar,
-        username varchar,
-        managed_by_tenant_id uuid,
-        login_email varchar,
-        password_hash text,
-        password_updated_at timestamp,
-        display_name varchar,
-        email varchar,
-        role varchar,
-        service_domain varchar,
-        tenant_id uuid,
-        tenant_role varchar,
-        is_active boolean,
-        last_login_at timestamp,
-        created_at timestamp,
-        updated_at timestamp
-      )
-      LANGUAGE sql
-      SECURITY DEFINER
-      SET search_path = public, pg_temp
-      AS $$
-        SELECT id, phone, username, managed_by_tenant_id, login_email, password_hash, password_updated_at,
-               "displayName" AS display_name, email, role::varchar, "serviceDomain"::varchar AS service_domain,
-               tenant_id, tenant_role, "isActive" AS is_active,
-               "lastLoginAt" AS last_login_at, "createdAt" AS created_at, "updatedAt" AS updated_at
-        FROM public.users
-        WHERE lower(username) = lower(p_login) OR lower(login_email) = lower(p_login)
-        ORDER BY (lower(username) = lower(p_login)) DESC, id ASC
-        LIMIT 1;
-      $$;
-
       CREATE OR REPLACE FUNCTION public.lookup_user_by_username(p_username text)
       RETURNS TABLE (
         id uuid,
@@ -583,7 +549,6 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
           'lookup_user_by_phone(text)',
           'lookup_user_by_username(text)',
           'lookup_user_by_login_email(text)',
-          'lookup_user_by_login(text)',
           'lookup_user_by_id(uuid)',
           'lookup_user_by_id_with_password(uuid)',
           'lookup_refresh_token_by_hash(text)',
@@ -803,7 +768,6 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
       DROP FUNCTION IF EXISTS public.lookup_user_by_phone(text);
       DROP FUNCTION IF EXISTS public.lookup_user_by_username(text);
       DROP FUNCTION IF EXISTS public.lookup_user_by_login_email(text);
-      DROP FUNCTION IF EXISTS public.lookup_user_by_login(text);
       DROP FUNCTION IF EXISTS public.lookup_user_by_id(uuid);
       DROP FUNCTION IF EXISTS public.lookup_user_by_id_with_password(uuid);
       DROP FUNCTION IF EXISTS public.lookup_refresh_token_by_hash(text);
