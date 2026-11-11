@@ -26,6 +26,8 @@ import { PayslipEntity } from '../entities/payslip.entity';
 import { EmployeeAttendanceEntity } from '../entities/employee-attendance.entity';
 import { EmployeeLeaveEntity } from '../entities/employee-leave.entity';
 import { StaffLoanEntity } from '../entities/staff-loan.entity';
+import { StaffLoanDeductionEntity } from '../entities/staff-loan-deduction.entity';
+import { fromMinor, toMinor } from '../../accounting/money';
 
 /**
  * سطر تجمیع حقوق قراردادهای فعال (خروجی Query Builder).
@@ -56,6 +58,7 @@ interface HrRepos {
   attendances: Repository<EmployeeAttendanceEntity>;
   leaves: Repository<EmployeeLeaveEntity>;
   loans: Repository<StaffLoanEntity>;
+  loanDeductions: Repository<StaffLoanDeductionEntity>;
 }
 
 /**
@@ -96,6 +99,7 @@ export class HrRepository {
         attendances: m.getRepository(EmployeeAttendanceEntity),
         leaves: m.getRepository(EmployeeLeaveEntity),
         loans: m.getRepository(StaffLoanEntity),
+        loanDeductions: m.getRepository(StaffLoanDeductionEntity),
       }),
     );
   }
@@ -602,6 +606,20 @@ export class HrRepository {
     });
   }
 
+  async findPayrollRunByIdForUpdate(
+    tenantId: string,
+    id: number,
+    manager?: EntityManager,
+  ): Promise<PayrollRunEntity | null> {
+    return this.use(tenantId, manager, async (r) => {
+      return r.payrollRuns
+        .createQueryBuilder('run')
+        .setLock('pessimistic_write')
+        .where('run.id = :id AND run.tenant_id = :tenantId', { id, tenantId })
+        .getOne();
+    });
+  }
+
   async findPayrollRunByPeriod(
     tenantId: string,
     periodYear: number,
@@ -941,18 +959,102 @@ export class HrRepository {
     });
   }
 
-  async deductLoanInstalment(
+  async findLoanByNumber(
     tenantId: string,
-    loanId: number,
-    amount: number,
+    loanNumber: string,
     manager?: EntityManager,
   ): Promise<StaffLoanEntity | null> {
     return this.use(tenantId, manager, async (r) => {
-      const loan = await r.loans.findOne({ where: { tenantId, id: loanId } });
+      return r.loans.findOne({ where: { tenantId, loanNumber } });
+    });
+  }
+
+  async findApprovedLeavesForPeriod(
+    tenantId: string,
+    periodYear: number,
+    periodMonth: number,
+    manager?: EntityManager,
+  ): Promise<EmployeeLeaveEntity[]> {
+    return this.use(tenantId, manager, async (r) => {
+      return r.leaves.find({
+        where: { tenantId, status: LeaveStatus.APPROVED },
+        relations: ['employee'],
+      });
+    });
+  }
+
+  async createLoanDeductions(
+    tenantId: string,
+    rows: Partial<StaffLoanDeductionEntity>[],
+    manager?: EntityManager,
+  ): Promise<void> {
+    if (rows.length === 0) return;
+    return this.use(tenantId, manager, async (r) => {
+      const entities = rows.map((row) =>
+        r.loanDeductions.create({ ...row, tenantId }),
+      );
+      await r.loanDeductions.save(entities);
+    });
+  }
+
+  async deleteLoanDeductionsByRun(
+    tenantId: string,
+    payrollRunId: number,
+    manager?: EntityManager,
+  ): Promise<void> {
+    return this.use(tenantId, manager, async (r) => {
+      await r.loanDeductions.delete({ tenantId, payrollRunId });
+    });
+  }
+
+  async findLoanDeductionsByRun(
+    tenantId: string,
+    payrollRunId: number,
+    manager?: EntityManager,
+  ): Promise<StaffLoanDeductionEntity[]> {
+    return this.use(tenantId, manager, async (r) => {
+      return r.loanDeductions.find({
+        where: { tenantId, payrollRunId },
+        order: { id: 'ASC' },
+      });
+    });
+  }
+
+  async deductLoanInstalment(
+    tenantId: string,
+    loanId: number,
+    amount: number | string,
+    manager?: EntityManager,
+  ): Promise<StaffLoanEntity | null> {
+    return this.applyLoanDeduction(tenantId, loanId, amount, manager);
+  }
+
+  async applyLoanDeduction(
+    tenantId: string,
+    loanId: number,
+    amount: number | string,
+    manager?: EntityManager,
+  ): Promise<StaffLoanEntity | null> {
+    return this.use(tenantId, manager, async (r) => {
+      const loan = await r.loans
+        .createQueryBuilder('loan')
+        .setLock('pessimistic_write')
+        .where('loan.id = :loanId AND loan.tenant_id = :tenantId', {
+          loanId,
+          tenantId,
+        })
+        .getOne();
       if (!loan || loan.status !== LoanStatus.ACTIVE) return null;
+      const remainingMinor = toMinor(loan.remainingAmount);
+      const deductMinor = toMinor(amount);
+      const newRemainingMinor =
+        remainingMinor > deductMinor ? remainingMinor - deductMinor : 0n;
       loan.paidInstalments += 1;
-      loan.remainingAmount = Math.max(0, Number(loan.remainingAmount) - amount);
-      if (loan.remainingAmount <= 0 || loan.paidInstalments >= loan.totalInstalments) {
+      loan.remainingAmount = fromMinor(newRemainingMinor) as number;
+      if (
+        newRemainingMinor <= 0n ||
+        loan.paidInstalments >= loan.totalInstalments
+      ) {
         loan.status = LoanStatus.PAID_OFF;
       }
       loan.updatedAt = new Date();

@@ -508,6 +508,9 @@ export default function SuiteAttendanceLeaveLoanPage() {
                     <Label>کارکرد موثر (روز)</Label>
                     <Input
                       type="number"
+                      min={0}
+                      max={31}
+                      step={0.5}
                       value={attWorkDays}
                       onChange={(e) => setAttWorkDays(Number(e.target.value))}
                     />
@@ -516,6 +519,8 @@ export default function SuiteAttendanceLeaveLoanPage() {
                     <Label>اضافه‌کاری (ساعت)</Label>
                     <Input
                       type="number"
+                      min={0}
+                      step={0.5}
                       value={attOvertime}
                       onChange={(e) => setAttOvertime(Number(e.target.value))}
                     />
@@ -524,6 +529,8 @@ export default function SuiteAttendanceLeaveLoanPage() {
                     <Label>شب‌کاری (ساعت)</Label>
                     <Input
                       type="number"
+                      min={0}
+                      step={0.5}
                       value={attNight}
                       onChange={(e) => setAttNight(Number(e.target.value))}
                     />
@@ -532,6 +539,8 @@ export default function SuiteAttendanceLeaveLoanPage() {
                     <Label>تعطیل‌کاری (ساعت)</Label>
                     <Input
                       type="number"
+                      min={0}
+                      step={0.5}
                       value={attHoliday}
                       onChange={(e) => setAttHoliday(Number(e.target.value))}
                     />
@@ -540,6 +549,9 @@ export default function SuiteAttendanceLeaveLoanPage() {
                     <Label>غیبت غیرموجه (روز)</Label>
                     <Input
                       type="number"
+                      min={0}
+                      max={31}
+                      step={0.5}
                       value={attAbsence}
                       onChange={(e) => setAttAbsence(Number(e.target.value))}
                     />
@@ -548,6 +560,9 @@ export default function SuiteAttendanceLeaveLoanPage() {
                     <Label>مرخصی بدون حقوق (روز)</Label>
                     <Input
                       type="number"
+                      min={0}
+                      max={31}
+                      step={0.5}
                       value={attUnpaidLeave}
                       onChange={(e) => setAttUnpaidLeave(Number(e.target.value))}
                     />
@@ -696,6 +711,8 @@ export default function SuiteAttendanceLeaveLoanPage() {
                   <Label>اصل مبلغ وام (ریال)</Label>
                   <Input
                     type="number"
+                    min={1}
+                    step={1}
                     value={loanPrincipal}
                     onChange={(e) => setLoanPrincipal(Number(e.target.value))}
                     required
@@ -706,6 +723,9 @@ export default function SuiteAttendanceLeaveLoanPage() {
                     <Label>مبلغ قسط ماهانه (ریال)</Label>
                     <Input
                       type="number"
+                      min={1}
+                      max={loanPrincipal || undefined}
+                      step={1}
                       value={loanInstalment}
                       onChange={(e) => setLoanInstalment(Number(e.target.value))}
                       required
@@ -715,6 +735,8 @@ export default function SuiteAttendanceLeaveLoanPage() {
                     <Label>تعداد کل اقساط</Label>
                     <Input
                       type="number"
+                      min={1}
+                      step={1}
                       value={loanTotalInstalments}
                       onChange={(e) => setLoanTotalInstalments(Number(e.target.value))}
                       required

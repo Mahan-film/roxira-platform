@@ -8,6 +8,7 @@ import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
  *   - `hr_attendances`: monthly timesheet per employee (work days, overtime, night, holiday, absence)
  *   - `hr_leaves`: leave requests and approvals (annual, unpaid, sick, special)
  *   - `hr_staff_loans`: staff loans with instalment deduction from payroll
+ *   - `hr_staff_loan_deductions`: tracks which payroll run deducted what instalment for which loan (LESSONS 18)
  *
  * All tables have `tenant_id` and strict FORCE row-level security enabled.
  */
@@ -18,6 +19,7 @@ export class CreateHrAttendanceLeaveLoans1789900002400 implements MigrationInter
     'hr_attendances',
     'hr_leaves',
     'hr_staff_loans',
+    'hr_staff_loan_deductions',
   ];
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -41,6 +43,8 @@ export class CreateHrAttendanceLeaveLoans1789900002400 implements MigrationInter
         CONSTRAINT "PK_hr_attendances_id" PRIMARY KEY ("id"),
         CONSTRAINT "UQ_hr_attendances_tenant_employee_period"
           UNIQUE ("tenant_id", "employee_id", "period_year", "period_month"),
+        CONSTRAINT "CHK_hr_attendances_period_month"
+          CHECK ("period_month" BETWEEN 1 AND 12),
         CONSTRAINT "FK_hr_attendances_employee"
           FOREIGN KEY ("employee_id") REFERENCES "hr_employees"("id") ON DELETE CASCADE
       )
@@ -96,6 +100,10 @@ export class CreateHrAttendanceLeaveLoans1789900002400 implements MigrationInter
         CONSTRAINT "PK_hr_staff_loans_id" PRIMARY KEY ("id"),
         CONSTRAINT "UQ_hr_staff_loans_tenant_number"
           UNIQUE ("tenant_id", "loan_number"),
+        CONSTRAINT "CHK_hr_staff_loans_amounts"
+          CHECK ("principal_amount" > 0 AND "instalment_amount" > 0 AND "remaining_amount" >= 0),
+        CONSTRAINT "CHK_hr_staff_loans_paid_instalments"
+          CHECK ("paid_instalments" <= "total_instalments"),
         CONSTRAINT "FK_hr_staff_loans_employee"
           FOREIGN KEY ("employee_id") REFERENCES "hr_employees"("id") ON DELETE CASCADE
       )
@@ -105,6 +113,38 @@ export class CreateHrAttendanceLeaveLoans1789900002400 implements MigrationInter
     );
     await queryRunner.query(
       `CREATE INDEX IF NOT EXISTS "IDX_hr_staff_loans_tenant_status" ON "hr_staff_loans" ("tenant_id", "status")`,
+    );
+
+    // 4. hr_staff_loan_deductions
+    await queryRunner.query(`
+      CREATE TABLE IF NOT EXISTS "hr_staff_loan_deductions" (
+        "id" SERIAL NOT NULL,
+        "tenant_id" uuid NOT NULL,
+        "loan_id" integer NOT NULL,
+        "payroll_run_id" integer NOT NULL,
+        "employee_id" integer NOT NULL,
+        "amount" numeric(18,2) NOT NULL,
+        "period_year" integer NOT NULL,
+        "period_month" integer NOT NULL,
+        "status" character varying(32) NOT NULL DEFAULT 'PENDING',
+        "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+        "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+        CONSTRAINT "PK_hr_staff_loan_deductions_id" PRIMARY KEY ("id"),
+        CONSTRAINT "UQ_hr_staff_loan_deductions_run_loan"
+          UNIQUE ("tenant_id", "payroll_run_id", "loan_id"),
+        CONSTRAINT "FK_hr_staff_loan_deductions_loan"
+          FOREIGN KEY ("loan_id") REFERENCES "hr_staff_loans"("id") ON DELETE CASCADE,
+        CONSTRAINT "FK_hr_staff_loan_deductions_run"
+          FOREIGN KEY ("payroll_run_id") REFERENCES "hr_payroll_runs"("id") ON DELETE CASCADE,
+        CONSTRAINT "FK_hr_staff_loan_deductions_employee"
+          FOREIGN KEY ("employee_id") REFERENCES "hr_employees"("id") ON DELETE CASCADE
+      )
+    `);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_hr_staff_loan_deductions_tenant_loan" ON "hr_staff_loan_deductions" ("tenant_id", "loan_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_hr_staff_loan_deductions_tenant_run" ON "hr_staff_loan_deductions" ("tenant_id", "payroll_run_id")`,
     );
 
     // Enable RLS

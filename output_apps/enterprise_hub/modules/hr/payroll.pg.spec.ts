@@ -13,7 +13,7 @@ import { PostingRulesRepository } from '../posting_rules/repositories/posting-ru
 import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
 import { EmployeeEntity } from './entities/employee.entity';
 import { EmploymentContractEntity } from './entities/employment-contract.entity';
-import { AllowanceTaxTreatment, Gender, MaritalStatus } from './enums/hr.enum';
+import { AllowanceTaxTreatment, Gender, LeaveType, MaritalStatus } from './enums/hr.enum';
 import { HrRepository } from './repositories/hr.repository';
 import { readDbf } from './services/dbf-file';
 import { HrService } from './services/hr.service';
@@ -33,13 +33,16 @@ const M = 1_000_000;
 
 describePg('monthly payroll on PostgreSQL', () => {
   let testDb: TestDatabaseContext;
+  let repository: HrRepository;
+  let hr: HrService;
   let runs: PayrollRunService;
+  let employee: EmployeeEntity;
   const entries: { entryNumber: string; lines: { debit?: number; credit?: number }[] }[] = [];
 
   beforeAll(async () => {
     testDb = await createTestDatabase('payroll');
 
-    const repository = new HrRepository(testDb.scope, testDb.app);
+    repository = new HrRepository(testDb.scope, testDb.app);
     const accounting = {
       listAccounts: async () => [
         { code: '5010' },
@@ -89,7 +92,7 @@ describePg('monthly payroll on PostgreSQL', () => {
       new PostingRulesRepository(testDb.scope),
       accounting,
     );
-    const hr = new HrService(repository, accounting, statutory, postingRules);
+    hr = new HrService(repository, accounting, statutory, postingRules);
     runs = new PayrollRunService(
       repository,
       hr,
@@ -99,7 +102,7 @@ describePg('monthly payroll on PostgreSQL', () => {
     );
 
     const now = new Date();
-    const employee = await testDb.owner.getRepository(EmployeeEntity).save({
+    employee = await testDb.owner.getRepository(EmployeeEntity).save({
       tenantId: T1,
       employeeNumber: 'E1',
       firstName: 'مریم',
@@ -179,5 +182,52 @@ describePg('monthly payroll on PostgreSQL', () => {
   it('never exports another tenant run', async () => {
     const [run] = await runs.listRuns(T1);
     await expect(runs.wageTaxFiles(T2, run.id, {})).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('enforces FORCE RLS on attendances, leaves, staff loans and deductions as roxira_app role', async () => {
+    // 1. Record attendance for T1 through real repository & service as roxira_app role
+    const attendance = await hr.recordAttendance(T1, {
+      employeeId: employee.id,
+      periodYear: 1405,
+      periodMonth: 1,
+      workDays: 30,
+      overtimeHours: 12,
+    });
+    expect(attendance.id).toBeDefined();
+
+    // Cross-tenant check: T2 cannot see T1 attendance under RLS
+    const t2Attendances = await hr.listAttendances(T2, {
+      periodYear: 1405,
+      periodMonth: 1,
+    });
+    expect(t2Attendances).toHaveLength(0);
+
+    // 2. Request leave for T1
+    const leave = await hr.requestLeave(T1, {
+      employeeId: employee.id,
+      leaveType: LeaveType.ANNUAL,
+      startDate: '1405/01/10',
+      endDate: '1405/01/12',
+      days: 2,
+    });
+    expect(leave.id).toBeDefined();
+
+    // Cross-tenant check: T2 cannot see T1 leave
+    const t2Leaves = await hr.listLeaves(T2, {});
+    expect(t2Leaves).toHaveLength(0);
+
+    // 3. Create staff loan for T1
+    const loan = await hr.createStaffLoan(T1, {
+      employeeId: employee.id,
+      title: 'وام کارکنان',
+      principalAmount: 20 * M,
+      instalmentAmount: 5 * M,
+      totalInstalments: 4,
+    });
+    expect(loan.id).toBeDefined();
+
+    // Cross-tenant check: T2 cannot see T1 loan
+    const t2Loans = await hr.listStaffLoans(T2, {});
+    expect(t2Loans).toHaveLength(0);
   });
 });

@@ -6,6 +6,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  MaxLength,
   Min,
 } from 'class-validator';
 import { LeaveStatus, LeaveType } from '../enums/hr.enum';
@@ -26,10 +27,12 @@ export class CreateLeaveDto {
 
   @ApiProperty({ description: 'تاریخ شروع', example: '1403/05/10' })
   @IsString()
+  @MaxLength(16)
   startDate: string;
 
   @ApiProperty({ description: 'تاریخ پایان', example: '1403/05/12' })
   @IsString()
+  @MaxLength(16)
   endDate: string;
 
   @ApiProperty({ description: 'تعداد روز مرخصی', example: 2.5 })
@@ -41,6 +44,7 @@ export class CreateLeaveDto {
   @ApiPropertyOptional({ description: 'توضیحات یا علت مرخصی' })
   @IsOptional()
   @IsString()
+  @MaxLength(1000)
   description?: string;
 }
 
@@ -53,9 +57,10 @@ export class ReviewLeaveDto {
   @IsEnum(LeaveStatus)
   status: LeaveStatus;
 
-  @ApiPropertyOptional({ description: 'تأییدکننده', example: 'مدیر اداری' })
+  @ApiPropertyOptional({ description: 'تأییدکننده (توسط سیستم از توکن JWT کاربر تعیین می‌شود)' })
   @IsOptional()
   @IsString()
+  @MaxLength(128)
   approvedBy?: string;
 }
 

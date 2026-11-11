@@ -1082,6 +1082,9 @@ export class HrService {
     if (!employee) {
       throw new NotFoundException(`کارمند با شناسه ${dto.employeeId} یافت نشد.`);
     }
+    if (dto.endDate < dto.startDate) {
+      throw new BadRequestException('تاریخ پایان مرخصی نمی‌تواند قبل از تاریخ شروع باشد.');
+    }
     const saved = await this.hrRepository.createLeave(tenantId, {
       employeeId: dto.employeeId,
       leaveType: dto.leaveType,
@@ -1098,14 +1101,22 @@ export class HrService {
     tenantId: string,
     id: number,
     dto: ReviewLeaveDto,
+    reviewerId?: string,
   ): Promise<LeaveResponseDto> {
     const leave = await this.hrRepository.findLeaveById(tenantId, id);
     if (!leave) {
       throw new NotFoundException(`مرخصی با شناسه ${id} یافت نشد.`);
     }
+    if (leave.status !== LeaveStatus.PENDING) {
+      throw new BadRequestException('تنها مرخصی‌های در انتظار بررسی قابل تأیید یا رد هستند.');
+    }
+    if (dto.status !== LeaveStatus.APPROVED && dto.status !== LeaveStatus.REJECTED) {
+      throw new BadRequestException('وضعیت بررسی باید تایید یا رد باشد.');
+    }
+    const approvedBy = reviewerId ?? dto.approvedBy ?? 'system';
     const updated = await this.hrRepository.updateLeave(tenantId, id, {
       status: dto.status,
-      approvedBy: dto.approvedBy ?? null,
+      approvedBy,
     });
     return this.toLeaveDto(updated, leave.employee);
   }
@@ -1130,20 +1141,34 @@ export class HrService {
     if (!employee) {
       throw new NotFoundException(`کارمند با شناسه ${dto.employeeId} یافت نشد.`);
     }
+    if (dto.instalmentAmount > dto.principalAmount) {
+      throw new BadRequestException('مبلغ هر قسط نمی‌تواند بیشتر از اصل مبلغ وام باشد.');
+    }
     const loanNumber = dto.loanNumber ?? `LN-${Date.now().toString(36).toUpperCase()}-${dto.employeeId}`;
-    const saved = await this.hrRepository.createStaffLoan(tenantId, {
-      employeeId: dto.employeeId,
-      loanNumber,
-      title: dto.title,
-      principalAmount: dto.principalAmount,
-      instalmentAmount: dto.instalmentAmount,
-      totalInstalments: dto.totalInstalments,
-      paidInstalments: 0,
-      remainingAmount: dto.principalAmount,
-      status: LoanStatus.ACTIVE,
-      startDate: dto.startDate ?? null,
-    });
-    return this.toStaffLoanDto(saved, employee);
+    const existing = await this.hrRepository.findLoanByNumber(tenantId, loanNumber);
+    if (existing) {
+      throw new ConflictException(`وامی با شماره ${loanNumber} قبلاً برای این سازمان ثبت شده است.`);
+    }
+    try {
+      const saved = await this.hrRepository.createStaffLoan(tenantId, {
+        employeeId: dto.employeeId,
+        loanNumber,
+        title: dto.title,
+        principalAmount: dto.principalAmount,
+        instalmentAmount: dto.instalmentAmount,
+        totalInstalments: dto.totalInstalments,
+        paidInstalments: 0,
+        remainingAmount: dto.principalAmount,
+        status: LoanStatus.ACTIVE,
+        startDate: dto.startDate ?? null,
+      });
+      return this.toStaffLoanDto(saved, employee);
+    } catch (err: any) {
+      if (err?.code === '23505' || err?.driverError?.code === '23505') {
+        throw new ConflictException(`وامی با شماره ${loanNumber} قبلاً برای این سازمان ثبت شده است.`);
+      }
+      throw err;
+    }
   }
 
   async listStaffLoans(

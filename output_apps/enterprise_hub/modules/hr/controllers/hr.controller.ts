@@ -516,7 +516,8 @@ export class HrController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: ReviewLeaveDto,
   ): Promise<LeaveResponseDto> {
-    return this.hrService.reviewLeave(this.tenantIdOf(request), id, dto);
+    const reviewer = request.user?.sub ?? request.user?.phone ?? 'system';
+    return this.hrService.reviewLeave(this.tenantIdOf(request), id, dto, reviewer);
   }
 
   @RequireAction(AccessAction.READ)

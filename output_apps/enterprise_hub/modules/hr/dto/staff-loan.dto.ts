@@ -3,9 +3,9 @@ import { Type } from 'class-transformer';
 import {
   IsEnum,
   IsInt,
-  IsNumber,
   IsOptional,
   IsString,
+  MaxLength,
   Min,
 } from 'class-validator';
 import { LoanStatus } from '../enums/hr.enum';
@@ -19,20 +19,22 @@ export class CreateStaffLoanDto {
   @ApiPropertyOptional({ description: 'شماره پرونده وام', example: 'LN-1403-001' })
   @IsOptional()
   @IsString()
+  @MaxLength(64)
   loanNumber?: string;
 
   @ApiProperty({ description: 'عنوان وام یا مساعده', example: 'وام ضروری پرسنل' })
   @IsString()
+  @MaxLength(128)
   title: string;
 
-  @ApiProperty({ description: 'اصل مبلغ وام به ریال', example: 120_000_000 })
-  @IsNumber()
+  @ApiProperty({ description: 'اصل مبلغ وام به ریال (عدد صحیح)', example: 120_000_000 })
+  @IsInt()
   @Min(1)
   @Type(() => Number)
   principalAmount: number;
 
-  @ApiProperty({ description: 'مبلغ هر قسط ماهانه به ریال', example: 10_000_000 })
-  @IsNumber()
+  @ApiProperty({ description: 'مبلغ هر قسط ماهانه به ریال (عدد صحیح)', example: 10_000_000 })
+  @IsInt()
   @Min(1)
   @Type(() => Number)
   instalmentAmount: number;
@@ -46,6 +48,7 @@ export class CreateStaffLoanDto {
   @ApiPropertyOptional({ description: 'تاریخ شروع کسر اقساط', example: '1403/05' })
   @IsOptional()
   @IsString()
+  @MaxLength(16)
   startDate?: string;
 }
 

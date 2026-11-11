@@ -113,6 +113,8 @@ class InMemoryPayrollRepository {
   runs: PayrollRunEntity[] = [];
   attendances: any[] = [];
   loans: any[] = [];
+  loanDeductions: any[] = [];
+  leaves: any[] = [];
 
   async findAttendanceByPeriod(
     tenantId: string,
@@ -125,6 +127,51 @@ class InMemoryPayrollRepository {
         a.periodYear === periodYear &&
         a.periodMonth === periodMonth,
     );
+  }
+
+  async findApprovedLeavesForPeriod(
+    tenantId: string,
+    periodYear: number,
+    periodMonth: number,
+  ): Promise<any[]> {
+    return this.leaves.filter(
+      (l) => l.tenantId === tenantId && l.status === 'APPROVED',
+    );
+  }
+
+  async deleteLoanDeductionsByRun(
+    tenantId: string,
+    payrollRunId: number,
+  ): Promise<void> {
+    this.loanDeductions = this.loanDeductions.filter(
+      (d) => !(d.tenantId === tenantId && d.payrollRunId === payrollRunId),
+    );
+  }
+
+  async createLoanDeductions(
+    tenantId: string,
+    rows: any[],
+  ): Promise<void> {
+    for (const r of rows) {
+      this.loanDeductions.push({ ...r, tenantId });
+    }
+  }
+
+  async findLoanDeductionsByRun(
+    tenantId: string,
+    payrollRunId: number,
+  ): Promise<any[]> {
+    return this.loanDeductions.filter(
+      (d) => d.tenantId === tenantId && d.payrollRunId === payrollRunId,
+    );
+  }
+
+  async applyLoanDeduction(
+    tenantId: string,
+    loanId: number,
+    amount: any,
+  ): Promise<any> {
+    return this.deductLoanInstalment(tenantId, loanId, Number(amount));
   }
 
   async findActiveLoans(
@@ -239,6 +286,13 @@ class InMemoryPayrollRepository {
       this.runs.find((row) => row.id === id && row.tenantId === tenantId) ??
       null
     );
+  }
+
+  async findPayrollRunByIdForUpdate(
+    tenantId: string,
+    id: number,
+  ): Promise<PayrollRunEntity | null> {
+    return this.findPayrollRunById(tenantId, id);
   }
 
   async findPayrollRunByPeriod(

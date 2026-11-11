@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsString,
   Max,
+  MaxLength,
   Min,
 } from 'class-validator';
 
@@ -80,6 +81,7 @@ export class RecordAttendanceDto {
   @ApiPropertyOptional({ description: 'یادداشت یا توضیحات', example: 'شیفت اول' })
   @IsOptional()
   @IsString()
+  @MaxLength(1000)
   notes?: string;
 }
 
@@ -87,18 +89,23 @@ export class QueryAttendanceDto {
   @ApiPropertyOptional({ description: 'سال شمسی دوره', example: 1403 })
   @IsOptional()
   @IsInt()
+  @Min(1300)
+  @Max(1500)
   @Type(() => Number)
   periodYear?: number;
 
   @ApiPropertyOptional({ description: 'ماه دوره (۱ تا ۱۲)', example: 1 })
   @IsOptional()
   @IsInt()
+  @Min(1)
+  @Max(12)
   @Type(() => Number)
   periodMonth?: number;
 
   @ApiPropertyOptional({ description: 'شناسه کارمند', example: 1 })
   @IsOptional()
   @IsInt()
+  @Min(1)
   @Type(() => Number)
   employeeId?: number;
 }
