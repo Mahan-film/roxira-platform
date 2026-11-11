@@ -50,6 +50,12 @@ export class CreatePrintFormTemplates1789900002600 implements MigrationInterface
         ON "inv_print_templates" ("tenant_id", "doc_type", "is_default")
     `);
 
+    await queryRunner.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "UQ_inv_print_templates_tenant_default"
+        ON "inv_print_templates" ("tenant_id", "doc_type", "paper_size")
+        WHERE "is_default" = true
+    `);
+
     await enableTenantRls(queryRunner, CreatePrintFormTemplates1789900002600.TABLE);
   }
 

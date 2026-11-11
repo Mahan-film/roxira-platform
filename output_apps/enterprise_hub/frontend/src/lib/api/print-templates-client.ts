@@ -29,7 +29,6 @@ export async function listPrintTemplates(
     searchParams: {
       docType: params.docType,
       paperSize: params.paperSize,
-      search: params.search,
     },
     signal,
   });
@@ -118,9 +117,10 @@ export async function renderBarcodeSheetHtml(
   dto: RenderBarcodeSheetDto,
   signal?: AbortSignal,
 ): Promise<string> {
-  return apiRequest<string>(`${PRINT_TEMPLATES_ENDPOINT}/barcode-sheet`, {
+  const res = await apiRequest<{ html: string }>(`${PRINT_TEMPLATES_ENDPOINT}/barcode-sheet`, {
     method: "POST",
     body: dto,
     signal,
   });
+  return res.html;
 }

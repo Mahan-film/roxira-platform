@@ -24,6 +24,7 @@ import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
 import { requireTenantId } from '../../tenants/tenant-context';
 import {
   CreatePrintTemplateDto,
+  GetDefaultTemplateQueryDto,
   PrintTemplateResponseDto,
   QueryPrintTemplateDto,
   RenderBarcodeSheetDto,
@@ -79,10 +80,9 @@ export class PrintTemplateController {
   @ApiResponse({ status: HttpStatus.OK, type: PrintTemplateResponseDto })
   async getDefault(
     @Req() request: AuthenticatedRequest,
-    @Query('docType') docType: PrintDocType,
-    @Query('paperSize') paperSize?: PrintPaperSize,
+    @Query() query: GetDefaultTemplateQueryDto,
   ): Promise<PrintTemplateResponseDto> {
-    return this.service.findDefault(this.tenantIdOf(request), docType, paperSize);
+    return this.service.findDefault(this.tenantIdOf(request), query.docType, query.paperSize);
   }
 
   @RequireAction(AccessAction.READ)
