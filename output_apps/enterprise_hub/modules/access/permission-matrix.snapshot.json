@@ -137,6 +137,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "DELETE /enterprise-hub/invoicing/print-templates/:id (PrintTemplateController.remove)": {
+    "policy": "invoicing:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "DELETE /enterprise-hub/mcp/ (McpController.handleDelete)": {
     "policy": "assistant:create",
     "owner": true,
@@ -1817,6 +1828,39 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/invoicing/print-templates/ (PrintTemplateController.list)": {
+    "policy": "invoicing:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/invoicing/print-templates/:id (PrintTemplateController.getOne)": {
+    "policy": "invoicing:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/invoicing/print-templates/default (PrintTemplateController.getDefault)": {
+    "policy": "invoicing:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/invoicing/reports/gross-profit/ (GrossProfitReportController.report)": {
     "policy": "invoicing:read",
     "owner": true,
@@ -2713,6 +2757,17 @@
     "admin": true,
     "accountant": true,
     "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PATCH /enterprise-hub/invoicing/print-templates/:id (PrintTemplateController.update)": {
+    "policy": "invoicing:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
@@ -4437,6 +4492,28 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/invoicing/print-templates/ (PrintTemplateController.create)": {
+    "policy": "invoicing:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/invoicing/print-templates/barcode-sheet (PrintTemplateController.renderBarcodeSheet)": {
+    "policy": "invoicing:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/mcp/ (McpController.handlePost)": {

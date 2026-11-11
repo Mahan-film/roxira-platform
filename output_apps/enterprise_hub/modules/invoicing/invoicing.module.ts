@@ -19,10 +19,14 @@ import { SalesReportController } from './controllers/sales-report.controller';
 import { PurchasesReportController } from './controllers/purchases-report.controller';
 import { GrossProfitReportController } from './controllers/gross-profit-report.controller';
 import { InvoiceEntity } from './entities/invoice.entity';
+import { PrintTemplateEntity } from './entities/print-template.entity';
 import { SuiteEventsProcessor } from './processors/suite-events.processor';
 import { InvoicingRepository } from './repositories/invoicing.repository';
+import { PrintTemplateRepository } from './repositories/print-template.repository';
 import { InvoicePostingService } from './services/invoice-posting.service';
 import { InvoicingService } from './services/invoicing.service';
+import { PrintTemplateService } from './services/print-template.service';
+import { PrintTemplateController } from './controllers/print-template.controller';
 import { SalesReportService } from './services/sales-report.service';
 import { PurchasesReportService } from './services/purchases-report.service';
 import { GrossProfitReportService } from './services/gross-profit-report.service';
@@ -41,7 +45,7 @@ import { VatRateResolver } from './services/vat-rate.resolver';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([InvoiceEntity, StatutoryParameterEntity]),
+    TypeOrmModule.forFeature([InvoiceEntity, StatutoryParameterEntity, PrintTemplateEntity]),
     CurrencyModule,
     CrmModule,
     InventoryModule,
@@ -51,7 +55,14 @@ import { VatRateResolver } from './services/vat-rate.resolver';
     PartiesModule,
     BullModule.registerQueue({ name: SUITE_EVENTS_QUEUE }),
   ],
-  controllers: [InvoicingController, PosSalesController, SalesReportController, PurchasesReportController, GrossProfitReportController],
+  controllers: [
+    InvoicingController,
+    PosSalesController,
+    SalesReportController,
+    PurchasesReportController,
+    GrossProfitReportController,
+    PrintTemplateController,
+  ],
   providers: [
     InvoicingService,
     InvoicingRepository,
@@ -65,7 +76,9 @@ import { VatRateResolver } from './services/vat-rate.resolver';
     SalesReportService,
     PurchasesReportService,
     GrossProfitReportService,
+    PrintTemplateService,
+    PrintTemplateRepository,
   ],
-  exports: [InvoicingService, InvoicingRepository],
+  exports: [InvoicingService, InvoicingRepository, PrintTemplateService, PrintTemplateRepository],
 })
 export class InvoicingModule {}

@@ -17,6 +17,14 @@ const MOADIAN_TYPES: readonly EInvoiceType[] = [
   EInvoiceType.RETAIL,
 ];
 
+export interface SalesInvoicePrintCustomOptions {
+  docTitle?: string;
+  logoUrl?: string;
+  footerText?: string;
+  notes?: string;
+  showLogo?: boolean;
+}
+
 /**
  * Data for print-templates/sales-invoice-a4. The API carries no Moadian tax id, tracking code,
  * send status, pattern, reference id, QR, logo, footer, notes, settlement split or postal codes,
@@ -25,12 +33,14 @@ const MOADIAN_TYPES: readonly EInvoiceType[] = [
 export function mapInvoiceToSalesInvoiceA4Data(
   invoice: InvoiceResponseDto,
   statusLabel: string,
+  options?: SalesInvoicePrintCustomOptions,
 ): Record<string, unknown> {
   const foreign = isForeignInvoice(invoice);
   const isEinvoice = MOADIAN_TYPES.includes(invoice.einvoiceType);
+  const logo = options?.showLogo === false ? "" : (options?.logoUrl ?? "");
 
   return {
-    docTitle: "فاکتور فروش",
+    docTitle: options?.docTitle || "فاکتور فروش",
     invoiceNumber: invoice.taxInvoiceNumber,
     issueDateJalali: formatJalaliDate(invoice.issuedAt ?? invoice.createdAt),
     issueTime: "",
@@ -45,9 +55,9 @@ export function mapInvoiceToSalesInvoiceA4Data(
     relatedTaxId: "",
     qrSvg: "",
     showQr: false,
-    logoUrl: "",
-    footerText: "",
-    notes: "",
+    logoUrl: logo,
+    footerText: options?.footerText ?? "",
+    notes: options?.notes ?? "",
     settlementMethod: "",
     cashAmount: "",
     creditAmount: "",

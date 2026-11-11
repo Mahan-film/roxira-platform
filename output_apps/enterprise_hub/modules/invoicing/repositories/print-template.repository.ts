@@ -1,0 +1,138 @@
+import { Injectable } from '@nestjs/common';
+import {
+  DataSource,
+  EntityManager,
+  FindOptionsWhere,
+  Repository,
+} from 'typeorm';
+import { TenantScope } from '../../access/services/tenant-scope';
+import { PrintTemplateEntity } from '../entities/print-template.entity';
+import { PrintDocType, PrintPaperSize } from '../enums/print-template.enum';
+
+@Injectable()
+export class PrintTemplateRepository {
+  constructor(
+    private readonly scope: TenantScope,
+    private readonly dataSource: DataSource,
+  ) {}
+
+  private withRepo<T>(
+    tenantId: string,
+    manager: EntityManager | undefined,
+    work: (repo: Repository<PrintTemplateEntity>, m?: EntityManager) => Promise<T>,
+  ): Promise<T> {
+    return this.scope.within(tenantId, manager, (m) => work(m.getRepository(PrintTemplateEntity), m));
+  }
+
+  async createTemplate(
+    tenantId: string,
+    data: Partial<PrintTemplateEntity>,
+    manager?: EntityManager,
+  ): Promise<PrintTemplateEntity> {
+    return this.withRepo(tenantId, manager, async (repo) => {
+      const entity = repo.create({ ...data, tenantId });
+      return repo.save(entity);
+    });
+  }
+
+  async updateTemplate(
+    tenantId: string,
+    id: number,
+    data: Partial<PrintTemplateEntity>,
+    manager?: EntityManager,
+  ): Promise<PrintTemplateEntity | null> {
+    return this.withRepo(tenantId, manager, async (repo) => {
+      const existing = await repo.findOne({ where: { id, tenantId } });
+      if (!existing) return null;
+      Object.assign(existing, data, { updatedAt: new Date() });
+      return repo.save(existing);
+    });
+  }
+
+  async findById(
+    tenantId: string,
+    id: number,
+    manager?: EntityManager,
+  ): Promise<PrintTemplateEntity | null> {
+    return this.withRepo(tenantId, manager, async (repo) => {
+      return repo.findOne({ where: { id, tenantId } });
+    });
+  }
+
+  async findByTitle(
+    tenantId: string,
+    title: string,
+    manager?: EntityManager,
+  ): Promise<PrintTemplateEntity | null> {
+    return this.withRepo(tenantId, manager, async (repo) => {
+      return repo.findOne({ where: { tenantId, title } });
+    });
+  }
+
+  async findDefault(
+    tenantId: string,
+    docType: PrintDocType,
+    paperSize?: PrintPaperSize,
+    manager?: EntityManager,
+  ): Promise<PrintTemplateEntity | null> {
+    return this.withRepo(tenantId, manager, async (repo) => {
+      const where: FindOptionsWhere<PrintTemplateEntity> = {
+        tenantId,
+        docType,
+        isDefault: true,
+      };
+      if (paperSize) {
+        where.paperSize = paperSize;
+      }
+      return repo.findOne({ where, order: { id: 'DESC' } });
+    });
+  }
+
+  async list(
+    tenantId: string,
+    filter?: { docType?: PrintDocType; paperSize?: PrintPaperSize },
+    manager?: EntityManager,
+  ): Promise<PrintTemplateEntity[]> {
+    return this.withRepo(tenantId, manager, async (repo) => {
+      const where: FindOptionsWhere<PrintTemplateEntity> = { tenantId };
+      if (filter?.docType) where.docType = filter.docType;
+      if (filter?.paperSize) where.paperSize = filter.paperSize;
+      return repo.find({ where, order: { docType: 'ASC', isDefault: 'DESC', id: 'ASC' } });
+    });
+  }
+
+  async clearDefault(
+    tenantId: string,
+    docType: PrintDocType,
+    paperSize: PrintPaperSize,
+    excludeId?: number,
+    manager?: EntityManager,
+  ): Promise<void> {
+    return this.withRepo(tenantId, manager, async (repo) => {
+      const qb = repo
+        .createQueryBuilder()
+        .update(PrintTemplateEntity)
+        .set({ isDefault: false, updatedAt: new Date() })
+        .where('tenant_id = :tenantId AND doc_type = :docType AND paper_size = :paperSize', {
+          tenantId,
+          docType,
+          paperSize,
+        });
+      if (excludeId) {
+        qb.andWhere('id != :excludeId', { excludeId });
+      }
+      await qb.execute();
+    });
+  }
+
+  async delete(
+    tenantId: string,
+    id: number,
+    manager?: EntityManager,
+  ): Promise<boolean> {
+    return this.withRepo(tenantId, manager, async (repo) => {
+      const res = await repo.delete({ id, tenantId });
+      return (res.affected ?? 0) > 0;
+    });
+  }
+}

@@ -1,5 +1,6 @@
 import { RECEIPT_PAYMENT_VOUCHER_A5_TEMPLATE } from "../../print-templates/receipt-payment-voucher-a5.template";
 import type { TreasuryDocumentDetail } from "../../types/treasury";
+import type { PrintTemplateDto } from "../../types/print-template";
 import { mapTreasuryDocToPrintData } from "./receipt-payment-voucher";
 import { renderTemplate } from "./render-template";
 
@@ -7,10 +8,15 @@ import { renderTemplate } from "./render-template";
 export function printReceiptPaymentVoucher(
   doc: TreasuryDocumentDetail,
   companyName = "",
+  template?: Partial<PrintTemplateDto>,
 ): void {
+  const data = mapTreasuryDocToPrintData(doc, companyName);
+  if (template?.title) {
+    data.docTitle = template.title;
+  }
   const html = renderTemplate(
     RECEIPT_PAYMENT_VOUCHER_A5_TEMPLATE,
-    mapTreasuryDocToPrintData(doc, companyName),
+    data,
   );
   const printWindow = window.open("", "_blank");
   if (!printWindow) return;
