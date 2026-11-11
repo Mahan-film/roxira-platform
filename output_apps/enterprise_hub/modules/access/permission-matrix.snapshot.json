@@ -115,6 +115,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "DELETE /enterprise-hub/inventory/production/boms/:id (ProductionController.deleteBom)": {
+    "policy": "inventory:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "DELETE /enterprise-hub/mcp/ (McpController.handleDelete)": {
     "policy": "assistant:create",
     "owner": true,
@@ -1554,6 +1565,50 @@
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/openings/template (OpeningBalanceController.template)": {
+    "policy": "inventory:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/inventory/production/boms (ProductionController.listBoms)": {
+    "policy": "inventory:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/inventory/production/boms/:id (ProductionController.getBom)": {
+    "policy": "inventory:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/inventory/production/orders (ProductionController.listOrders)": {
+    "policy": "inventory:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/inventory/production/orders/:id (ProductionController.getOrder)": {
     "policy": "inventory:read",
     "owner": true,
     "admin": true,
@@ -3942,6 +3997,72 @@
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/openings/:id/review (OpeningBalanceController.markReviewed)": {
+    "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/production/boms (ProductionController.createBom)": {
+    "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/production/boms/:id/explode (ProductionController.explodeBom)": {
+    "policy": "inventory:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/production/orders (ProductionController.createOrder)": {
+    "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/production/orders/:id/cancel (ProductionController.cancelOrder)": {
+    "policy": "inventory:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/production/orders/:id/complete (ProductionController.completeOrder)": {
+    "policy": "inventory:post",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/inventory/production/orders/:id/start (ProductionController.startOrder)": {
     "policy": "inventory:create",
     "owner": true,
     "admin": true,

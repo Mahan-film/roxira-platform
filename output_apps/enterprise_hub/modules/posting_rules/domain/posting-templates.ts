@@ -269,6 +269,16 @@ export const POSTING_TEMPLATES: readonly PostingTemplate[] = [
     defaults: { inventory: '1301', purchases: '5201' },
   },
   {
+    docType: 'inventory.production',
+    title: 'سند بهای تمام‌شده تولید و کالای ساخته‌شده',
+    amounts: ['amount'],
+    lines: [
+      dr('inventory', 'amount', 'ورود کالای ساخته‌شده به انبار'),
+      cr('cogs', 'amount', 'مصرف مواد اولیه و قطعات تولید'),
+    ],
+    defaults: { inventory: '1301', cogs: '5101' },
+  },
+  {
     docType: 'pos.close',
     title: 'بستن صندوق و پایانه پوز',
     amounts: ['gross', 'fee', 'net'],

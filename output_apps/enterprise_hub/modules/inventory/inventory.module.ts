@@ -30,6 +30,14 @@ import { StoresService } from './services/stores.service';
 import { FifoBatchEntity } from './entities/fifo-batch.entity';
 import { StockItemEntity } from './entities/stock-item.entity';
 import { WarehouseEntity } from './entities/warehouse.entity';
+import { BomHeaderEntity } from './entities/bom-header.entity';
+import { BomItemEntity } from './entities/bom-item.entity';
+import { ProductionOrderEntity } from './entities/production-order.entity';
+import { ProductionController } from './controllers/production.controller';
+import { BomRepository } from './repositories/bom.repository';
+import { BomService } from './services/bom.service';
+import { ProductionOrderRepository } from './repositories/production-order.repository';
+import { ProductionOrderService } from './services/production-order.service';
 import { InventoryRepository } from './repositories/inventory.repository';
 import { InventoryService } from './services/inventory.service';
 
@@ -61,6 +69,9 @@ import { InventoryService } from './services/inventory.service';
       StoreEntity,
       StockDocumentEntity,
       StockDocumentLineEntity,
+      BomHeaderEntity,
+      BomItemEntity,
+      ProductionOrderEntity,
     ]),
   ],
   controllers: [
@@ -72,6 +83,7 @@ import { InventoryService } from './services/inventory.service';
     PurchaseController,
     SupplierInvoiceController,
     LandedCostController,
+    ProductionController,
   ],
   providers: [
     InventoryService,
@@ -87,6 +99,10 @@ import { InventoryService } from './services/inventory.service';
     SupplierInvoiceRepository,
     LandedCostService,
     LandedCostRepository,
+    BomRepository,
+    BomService,
+    ProductionOrderRepository,
+    ProductionOrderService,
     TenantScope,
   ],
   exports: [
@@ -100,6 +116,10 @@ import { InventoryService } from './services/inventory.service';
     SupplierInvoiceRepository,
     LandedCostService,
     LandedCostRepository,
+    BomRepository,
+    BomService,
+    ProductionOrderRepository,
+    ProductionOrderService,
   ],
 })
 export class InventoryModule {}
