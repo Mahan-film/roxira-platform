@@ -24,12 +24,21 @@ const EAN_PARITY = [
   'ABBAAB', 'ABBBAA', 'ABABAB', 'ABABBA', 'ABBABA',
 ];
 
+export function computeEan13CheckDigit(first12: string): number {
+  const digits = first12.split('').map(Number);
+  let sum = 0;
+  for (let i = 0; i < 12; i++) {
+    sum += i % 2 === 0 ? digits[i] : digits[i] * 3;
+  }
+  return (10 - (sum % 10)) % 10;
+}
+
 export function isEan13(value: string): boolean {
   return /^\d{13}$/.test(value.trim());
 }
 
 export function encodeCode128Svg(text: string, height = 24): string {
-  const clean = text.trim() || 'EMPTY';
+  const clean = text.trim().replace(/[^\x20-\x7E]/g, '?') || 'EMPTY';
   const codes = [104]; // Start B
   let checksum = 104;
 
@@ -62,7 +71,16 @@ export function encodeCode128Svg(text: string, height = 24): string {
 }
 
 export function encodeEan13Svg(digitsStr: string, height = 24): string {
-  const digits = digitsStr.trim().split('').map(Number);
+  let clean = digitsStr.trim();
+  if (clean.length === 12) {
+    clean += String(computeEan13CheckDigit(clean));
+  } else if (clean.length === 13) {
+    const expectedCheck = computeEan13CheckDigit(clean.slice(0, 12));
+    if (Number(clean[12]) !== expectedCheck) {
+      clean = clean.slice(0, 12) + String(expectedCheck);
+    }
+  }
+  const digits = clean.split('').map(Number);
   const first = digits[0];
   const parity = EAN_PARITY[first] ?? 'AAAAAA';
 

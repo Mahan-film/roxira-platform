@@ -23,9 +23,21 @@ export function printSalesInvoice(
       : (template as SalesInvoicePrintCustomOptions)
     : undefined;
 
-  const isA5 = (template as Partial<PrintTemplateDto>)?.paperSize === "A5";
+  const paperSize = (template as Partial<PrintTemplateDto>)?.paperSize;
+  const isA5 = paperSize === "A5";
+  const isThermal = paperSize === "THERMAL_80MM";
   const tpl = isA5 ? SALES_INVOICE_A5_TEMPLATE : SALES_INVOICE_A4_TEMPLATE;
-  const html = renderTemplate(tpl, mapInvoiceToSalesInvoiceA4Data(invoice, statusLabel, options));
+  let html = renderTemplate(tpl, mapInvoiceToSalesInvoiceA4Data(invoice, statusLabel, options));
+  if (isThermal) {
+    html = html.replace(
+      "</head>",
+      `<style>
+        @page { size: 80mm auto; margin: 2mm; }
+        body { width: 76mm !important; margin: 0 auto !important; font-size: 11px !important; }
+        table { font-size: 10px !important; width: 100% !important; }
+      </style></head>`,
+    );
+  }
   const printWindow = window.open("", "_blank");
   if (!printWindow) return;
   printWindow.document.write(html);

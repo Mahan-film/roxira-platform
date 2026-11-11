@@ -21,6 +21,7 @@ import { ErrorNotice, LoadingLine, PageHeader } from "@/components/app/app-ui";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { formatMoneyRial } from "@/lib/fa-format";
 import {
   createPrintTemplate,
   deletePrintTemplate,
@@ -217,13 +218,25 @@ function PrintFormBuilderPage() {
     setColumns(copy);
   };
 
+  const toAsciiDigits = (s: string) =>
+    s.replace(/[۰-۹٠-٩]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩".indexOf(d) % 10));
+
+  const parsePriceToRials = (raw: string): number | undefined => {
+    if (!raw.trim()) return undefined;
+    const ascii = toAsciiDigits(raw.trim()).replace(/[^\d.]/g, "");
+    if (!ascii) return undefined;
+    const parts = ascii.split(".");
+    const n = parseInt(parts[0], 10);
+    return Number.isFinite(n) && n >= 0 ? n : undefined;
+  };
+
   const addBarcodeItem = () => {
     if (!newItemSku.trim() || !newItemTitle.trim()) {
       setError("لطفاً کد کالا و نام کالا را برای برچسب وارد کنید.");
       return;
     }
     const count = parseInt(newItemCount, 10) || 1;
-    const price = newItemPrice ? parseInt(newItemPrice.replace(/\D/g, ""), 10) : undefined;
+    const price = parsePriceToRials(newItemPrice);
     setBarcodeItems((prev) => [
       ...prev,
       {
@@ -740,7 +753,7 @@ function PrintFormBuilderPage() {
                       <td className="p-2">{item.title}</td>
                       <td className="p-2 font-mono text-muted-foreground">{item.barcode || item.sku}</td>
                       <td className="p-2">
-                        {item.price ? `${item.price.toLocaleString("fa-IR")} ریال` : "—"}
+                        {item.price != null ? formatMoneyRial(item.price) : "—"}
                       </td>
                       <td className="p-2 text-center font-medium">{item.count ?? 1}</td>
                       <td className="p-2 text-center w-16">

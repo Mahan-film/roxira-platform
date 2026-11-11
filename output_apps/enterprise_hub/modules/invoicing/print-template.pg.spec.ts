@@ -27,7 +27,7 @@ describePg('PrintTemplateRepository & Service on real PostgreSQL with RLS', () =
 
   beforeAll(async () => {
     testDb = await createTestDatabase('print_templates');
-    repo = new PrintTemplateRepository(testDb.scope, testDb.app);
+    repo = new PrintTemplateRepository(testDb.scope);
     service = new PrintTemplateService(repo);
   });
 
@@ -127,5 +127,26 @@ describePg('PrintTemplateRepository & Service on real PostgreSQL with RLS', () =
 
     expect(t2Default.title).toBe('فاکتور فروش شرکت ب');
     expect(t2Default.paperSize).toBe(PrintPaperSize.A5);
+  });
+
+  it('strictly isolates updates and deletions across tenants (cross-tenant mutations refused)', async () => {
+    const t1Template = await service.create(T1, {
+      title: 'فاکتور فروش قابل محافظت T1',
+      docType: PrintDocType.SALES_INVOICE,
+      paperSize: PrintPaperSize.A4,
+    });
+
+    // T2 cannot update T1's template
+    await expect(
+      service.update(T2, t1Template.id, { title: 'تغییر غیرمجاز توسط T2' }),
+    ).rejects.toThrow();
+
+    // T1's template remains unchanged
+    const original = await service.findOne(T1, t1Template.id);
+    expect(original.title).toBe('فاکتور فروش قابل محافظت T1');
+
+    // T2 cannot delete T1's template
+    await expect(service.delete(T2, t1Template.id)).rejects.toThrow();
+    expect(await service.findOne(T1, t1Template.id)).toBeDefined();
   });
 });

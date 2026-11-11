@@ -1,10 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   IsBoolean,
+  IsDefined,
   IsEnum,
   IsIn,
   IsInt,
@@ -16,6 +17,7 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { PrintDocType, PrintPaperSize } from '../enums/print-template.enum';
@@ -154,9 +156,9 @@ export class CreatePrintTemplateDto {
 
 export class UpdatePrintTemplateDto {
   @ApiPropertyOptional({ description: 'نام یا عنوان قالب چاپی' })
-  @IsOptional()
-  @IsString()
-  @IsNotEmpty({ message: 'عنوان قالب نمی‌تواند خالی باشد' })
+  @ValidateIf((o) => o.title !== undefined)
+  @IsNotEmpty({ message: 'عنوان قالب نمی‌تواند خالی یا تهی باشد' })
+  @IsString({ message: 'عنوان قالب باید رشته متنی باشد' })
   @MaxLength(128)
   title?: string;
 
@@ -183,8 +185,8 @@ export class UpdatePrintTemplateDto {
     type: [PrintColumnConfigDto],
     description: 'تنظیمات و چیدمان ستون‌ها',
   })
-  @IsOptional()
-  @IsArray()
+  @ValidateIf((o) => o.columnsConfig !== undefined)
+  @IsArray({ message: 'پیکربندی ستون‌ها باید آرایه‌ای معتبر باشد' })
   @ArrayMaxSize(50)
   @ValidateNested({ each: true })
   @Type(() => PrintColumnConfigDto)
@@ -285,6 +287,7 @@ export class BarcodeLabelItemDto {
 
   @ApiPropertyOptional({ description: 'قیمت فروش به ریال', example: '450000000' })
   @IsOptional()
+  @Transform(({ value }) => (value !== undefined && value !== null ? String(value) : undefined))
   @IsString()
   @Matches(/^[0-9]+(\.[0-9]{1,2})?$/, { message: 'قیمت باید مقدار معتبر عددی به ریال باشد' })
   price?: string;

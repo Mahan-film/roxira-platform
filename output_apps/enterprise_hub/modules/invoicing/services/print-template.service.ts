@@ -95,19 +95,27 @@ export class PrintTemplateService {
       ...(dto.options ?? {}),
     };
 
-    const saved = await this.repository.saveWithDefault(
-      tenantId,
-      {
-        docType: dto.docType,
-        paperSize: dto.paperSize,
-        title: dto.title.trim(),
-        showLogo: dto.showLogo !== undefined ? Boolean(dto.showLogo) : true,
-        logoUrl: dto.logoUrl ?? null,
-        columnsConfig,
-        options,
-      },
-      Boolean(dto.isDefault),
-    );
+    let saved: PrintTemplateEntity;
+    try {
+      saved = await this.repository.saveWithDefault(
+        tenantId,
+        {
+          docType: dto.docType,
+          paperSize: dto.paperSize,
+          title: dto.title.trim(),
+          showLogo: dto.showLogo !== undefined ? Boolean(dto.showLogo) : true,
+          logoUrl: dto.logoUrl ?? null,
+          columnsConfig,
+          options,
+        },
+        Boolean(dto.isDefault),
+      );
+    } catch (err: any) {
+      if (err?.code === '23505' || err?.message?.includes('UQ_inv_print_templates_tenant_title')) {
+        throw new ConflictException(`قالب چاپی با عنوان «${dto.title}» قبلاً برای این سازمان تعریف شده است.`);
+      }
+      throw err;
+    }
 
     return this.toDto(saved);
   }
@@ -122,29 +130,48 @@ export class PrintTemplateService {
       throw new NotFoundException(`قالب چاپی با شناسه ${id} یافت نشد.`);
     }
 
-    if (dto.title && dto.title.trim() !== existing.title) {
-      const duplicate = await this.repository.findByTitle(tenantId, dto.title.trim());
-      if (duplicate && duplicate.id !== id) {
-        throw new ConflictException(
-          `قالب چاپی دیگری با عنوان «${dto.title}» قبلاً ثبت شده است.`,
-        );
+    if (dto.title !== undefined) {
+      if (dto.title === null || typeof dto.title !== 'string' || !dto.title.trim()) {
+        throw new BadRequestException('عنوان قالب نمی‌تواند خالی یا تهی باشد.');
+      }
+      if (dto.title.trim() !== existing.title) {
+        const duplicate = await this.repository.findByTitle(tenantId, dto.title.trim());
+        if (duplicate && duplicate.id !== id) {
+          throw new ConflictException(
+            `قالب چاپی دیگری با عنوان «${dto.title}» قبلاً ثبت شده است.`,
+          );
+        }
       }
     }
 
-    const updated = await this.repository.saveWithDefault(
-      tenantId,
-      {
-        docType: existing.docType,
-        paperSize: existing.paperSize,
-        ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
-        ...(dto.showLogo !== undefined ? { showLogo: Boolean(dto.showLogo) } : {}),
-        ...(dto.logoUrl !== undefined ? { logoUrl: dto.logoUrl } : {}),
-        ...(dto.columnsConfig !== undefined ? { columnsConfig: dto.columnsConfig } : {}),
-        ...(dto.options !== undefined ? { options: { ...existing.options, ...dto.options } } : {}),
-      },
-      dto.isDefault !== undefined ? Boolean(dto.isDefault) : existing.isDefault,
-      id,
-    );
+    if (dto.columnsConfig !== undefined) {
+      if (dto.columnsConfig === null || !Array.isArray(dto.columnsConfig)) {
+        throw new BadRequestException('پیکربندی ستون‌ها نمی‌تواند تهی باشد.');
+      }
+    }
+
+    let updated: PrintTemplateEntity;
+    try {
+      updated = await this.repository.saveWithDefault(
+        tenantId,
+        {
+          docType: existing.docType,
+          paperSize: existing.paperSize,
+          ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
+          ...(dto.showLogo !== undefined ? { showLogo: Boolean(dto.showLogo) } : {}),
+          ...(dto.logoUrl !== undefined ? { logoUrl: dto.logoUrl } : {}),
+          ...(dto.columnsConfig !== undefined ? { columnsConfig: dto.columnsConfig } : {}),
+          ...(dto.options !== undefined ? { options: { ...existing.options, ...dto.options } } : {}),
+        },
+        dto.isDefault !== undefined ? Boolean(dto.isDefault) : existing.isDefault,
+        id,
+      );
+    } catch (err: any) {
+      if (err?.code === '23505' || err?.message?.includes('UQ_inv_print_templates_tenant_title')) {
+        throw new ConflictException(`قالب چاپی با عنوان «${dto.title}» قبلاً برای این سازمان تعریف شده است.`);
+      }
+      throw err;
+    }
 
     return this.toDto(updated);
   }
