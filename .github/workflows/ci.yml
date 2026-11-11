@@ -546,7 +546,7 @@ jobs:
           E2E_BASE_URL: http://127.0.0.1:3001
           APP_E2E_SESSION_FILE_M1: ${{ runner.temp }}/session.m1.json
           CI: "true"
-        run: npx playwright test m1-shop-month --project=chromium --reporter=list,html
+        run: npx playwright test m1-shop-month m1-accountant-day --project=chromium --reporter=list,html
       - name: Upload report and service logs
         if: always()
         uses: actions/upload-artifact@v7
