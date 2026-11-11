@@ -54,6 +54,7 @@ import { SepidarChequesFifoAdapter } from './migration/bak/sepidar-cheques-fifo.
 import { TenantExportService } from './services/tenant-export.service';
 import { TenantExportController } from './controllers/tenant-export.controller';
 import { TenantExportRepository } from './repositories/tenant-export.repository';
+import { SepidarMappingAdapter } from './migration/bak/sepidar-mapping.adapter';
 import { TenantScope } from '../access/services/tenant-scope';
 import { BulkImportController } from './bulk/bulk-import.controller';
 import { BulkImportProcessor } from './bulk/bulk-import.processor';
@@ -179,6 +180,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
       ],
     },
     SepidarChequesFifoAdapter,
+    SepidarMappingAdapter,
     JwtAuthGuard,
     TenantScope,
     BulkImportRepository,
@@ -200,6 +202,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     SepidarChequesFifoAdapter,
     TenantExportRepository,
     TenantExportService,
+    SepidarMappingAdapter,
   ],
 })
 export class DataImportModule {}
