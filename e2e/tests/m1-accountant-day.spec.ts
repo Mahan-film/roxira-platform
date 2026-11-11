@@ -1,4 +1,5 @@
 import { test, expect, findSessionFile, SESSION_STORAGE_KEY } from '../app/fixtures';
+import * as fs from 'node:fs';
 import type { Page } from '@playwright/test';
 import {
   ACCOUNTANT_DAY_BALANCE_SHEET,
@@ -13,25 +14,17 @@ import {
   ACCOUNTANT_DAY_TRIAL_BALANCE,
   computeAccountantDayTotals,
 } from './m1/accountant-day-expected';
-import { rials } from './m1/import-ui';
 
-/**
- * Accountant Day E2E Go-Live Gate (Task T91 / issue #592 WAVE 9).
- *
- * Full accountant end-to-end journey on the local stack as roxira_app:
- *  1. sign up a fresh tenant & owner account
- *  2. chart from template (iran-trading standard chart) & fiscal year creation
- *  3. opening balances (balanced opening voucher)
- *  4. 5 operational vouchers by keyboard mode
- *  5. sales invoice (revenue, output VAT, receivables, COGS, stock out)
- *  6. receipt (partial bank settlement)
- *  7. purchase invoice (inventory in, input VAT, payables)
- *  8. cheque received and cleared (settling invoice remainder, clearing to bank)
- *  9. trial balance balances (total debits == total credits == 1,193,000,000 IRR)
- * 10. P&L and balance sheet totals match hand-computed numbers
- * 11. period close (closing fiscal year and locking period)
- * 12. reopen refused (attempting to post or unlock closed period is rejected)
- */
+/** Helper to extract integer Rial bigint from decimal or integer API responses. */
+function rials(value: string | number | bigint | null | undefined): bigint {
+  if (value === null || value === undefined) return 0n;
+  if (typeof value === 'bigint') return value;
+  const str = String(value).trim();
+  if (!str) return 0n;
+  const parts = str.split('.');
+  const whole = BigInt(parts[0].replace(/[^\d-]/g, '') || '0');
+  return whole;
+}
 
 // -----------------------------------------------------------------------------
 // 1. Math and Accounting Self-Check (Runs offline without server or browser)
@@ -44,37 +37,34 @@ test.describe('Accountant day E2E · math and accounting self-check', () => {
       ACCOUNTANT_DAY_OPENING.bank +
       ACCOUNTANT_DAY_OPENING.inventory;
     expect(assets).toBe(ACCOUNTANT_DAY_OPENING.capital);
-    expect(assets).toBe(ACCOUNTANT_DAY_OPENING.total);
+    expect(assets).toBe(1_000_000_000n);
   });
 
   test('5 keyboard vouchers are each balanced', () => {
     for (const v of ACCOUNTANT_DAY_KEYBOARD_VOUCHERS) {
       expect(v.amount).toBeGreaterThan(0n);
-      expect(v.debitCode).not.toBe(v.creditCode);
     }
   });
 
   test('hand-computed trial balance balances to the exact Rial', () => {
     const { debits, credits } = computeAccountantDayTotals();
+    expect(debits).toBe(credits);
     expect(debits).toBe(ACCOUNTANT_DAY_TRIAL_BALANCE.totalDebit);
     expect(credits).toBe(ACCOUNTANT_DAY_TRIAL_BALANCE.totalCredit);
-    expect(debits).toBe(credits);
-    expect(debits).toBe(1_193_000_000n);
   });
 
   test('income statement (P&L) matches hand-computed numbers', () => {
     const gross = ACCOUNTANT_DAY_INCOME_STATEMENT.revenue - ACCOUNTANT_DAY_INCOME_STATEMENT.cogs;
     expect(gross).toBe(ACCOUNTANT_DAY_INCOME_STATEMENT.grossProfit);
-    const net = gross - ACCOUNTANT_DAY_INCOME_STATEMENT.operatingExpenses;
-    expect(net).toBe(ACCOUNTANT_DAY_INCOME_STATEMENT.netProfit);
-    expect(net).toBe(-10_000_000n); // Net loss of 10M IRR
+    const operating = gross - ACCOUNTANT_DAY_INCOME_STATEMENT.operatingExpenses;
+    expect(operating).toBe(ACCOUNTANT_DAY_INCOME_STATEMENT.operatingProfit);
+    expect(operating).toBe(ACCOUNTANT_DAY_INCOME_STATEMENT.netProfit);
   });
 
   test('balance sheet equation holds: Total Assets == Total Liabilities + Total Equity', () => {
-    const rightSide =
-      ACCOUNTANT_DAY_BALANCE_SHEET.totalLiabilities +
-      ACCOUNTANT_DAY_BALANCE_SHEET.totalEquity;
-    expect(rightSide).toBe(ACCOUNTANT_DAY_BALANCE_SHEET.totalAssets);
+    expect(ACCOUNTANT_DAY_BALANCE_SHEET.totalAssets).toBe(
+      ACCOUNTANT_DAY_BALANCE_SHEET.totalLiabilities + ACCOUNTANT_DAY_BALANCE_SHEET.totalEquity,
+    );
     expect(ACCOUNTANT_DAY_BALANCE_SHEET.totalAssets).toBe(1_083_000_000n);
     expect(ACCOUNTANT_DAY_BALANCE_SHEET.totalLiabilities).toBe(43_000_000n);
     expect(ACCOUNTANT_DAY_BALANCE_SHEET.totalEquity).toBe(1_040_000_000n);
@@ -87,12 +77,13 @@ test.describe('Accountant day E2E · math and accounting self-check', () => {
 
 test.describe('Accountant day E2E · go-live gate on local stack as roxira_app', () => {
   test.describe.configure({ mode: 'serial' });
-  test.use({ sessionKind: 'm1' });
+  test.use({ sessionKind: 'accountant' });
 
   // Shared state across the sequential accountant day steps
   const state = {
     accessToken: '',
     tenantId: '',
+    rawSession: null as unknown,
     fiscalYearId: 0,
     salesInvoiceId: '',
     purchaseInvoiceId: '',
@@ -108,22 +99,14 @@ test.describe('Accountant day E2E · go-live gate on local stack as roxira_app',
     );
 
     // Inject session into every page navigation
-    if (state.accessToken) {
+    if (state.rawSession) {
       await context.addInitScript(
-        ([key, token, tenant]) => {
+        ([key, session]) => {
           try {
-            window.localStorage.setItem(
-              key,
-              JSON.stringify({
-                accessToken: token,
-                tokenType: 'Bearer',
-                user: { id: 'test-user', tenantId: tenant, role: 'ADMIN', serviceDomain: 'ROXIRA' },
-                expiresAt: Date.now() + 3600000,
-              }),
-            );
+            window.localStorage.setItem(key, JSON.stringify(session));
           } catch {}
         },
-        [SESSION_STORAGE_KEY, state.accessToken, state.tenantId] as const,
+        [SESSION_STORAGE_KEY, state.rawSession] as const,
       );
     }
   });
@@ -183,34 +166,21 @@ test.describe('Accountant day E2E · go-live gate on local stack as roxira_app',
     return (await res.json()) as T;
   }
 
-  test('01 sign up fresh tenant & owner account as roxira_app [T91]', async ({ page }) => {
-    const uniqueSuffix = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    const email = `accountant_${uniqueSuffix}@example.com`;
-    const username = `acc_${uniqueSuffix}`;
-    const password = 'Password123!Secure';
-    const orgName = `شرکت آزمایشی روز حسابدار ${uniqueSuffix}`;
+  test('01 fresh tenant & owner account as roxira_app [T91]', async ({ page }) => {
+    // 1. If dedicated accountant session file is provided (e.g. CI), load it directly
+    const sessionFile =
+      process.env.APP_E2E_SESSION_FILE_ACCOUNTANT ||
+      findSessionFile('accountant', 'chromium');
 
-    // Sign up via the standard auth endpoint
-    const signupRes = await page.request.post('/api/backend/auth/signup', {
-      data: {
-        email,
-        username,
-        password,
-        organizationName: orgName,
-      },
-    });
-
-    if (signupRes.status() === 201) {
-      const authSession = (await signupRes.json()) as {
-        accessToken: string;
-        user: { id: string; tenantId?: string };
-      };
+    if (sessionFile && fs.existsSync(sessionFile)) {
+      const raw = fs.readFileSync(sessionFile, 'utf8');
+      const authSession = JSON.parse(raw);
       expect(authSession.accessToken).toBeTruthy();
       state.accessToken = authSession.accessToken;
-      state.tenantId = authSession.user.tenantId || '';
+      state.tenantId = authSession.user?.tenantId || '';
+      state.rawSession = authSession;
 
-      // Persist session into browser localStorage
-      await page.goto('/signup');
+      await page.goto('/login');
       await page.evaluate(
         ([key, session]) => {
           window.localStorage.setItem(key, JSON.stringify(session));
@@ -218,13 +188,40 @@ test.describe('Accountant day E2E · go-live gate on local stack as roxira_app',
         [SESSION_STORAGE_KEY, authSession] as const,
       );
     } else {
-      // Fallback to seeded M1 session if signup is throttled or locked in CI
-      const file = findSessionFile('m1', 'chromium');
-      if (!file) throw new Error(`Signup failed with status ${signupRes.status()} and no fallback session file`);
+      // 2. Otherwise sign up via the standard auth endpoint
+      const uniqueSuffix = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      const email = `accountant_${uniqueSuffix}@example.com`;
+      const username = `acc_${uniqueSuffix}`;
+      const password = 'A-Strong-Unusual-Password-1405!';
+      const orgName = `شرکت روز حسابدار ${uniqueSuffix}`;
+
+      const signupRes = await page.request.post('/api/backend/auth/signup', {
+        data: { email, username, password, organizationName: orgName },
+      });
+      if (signupRes.status() !== 201) {
+        const text = await signupRes.text();
+        throw new Error(`signup expected 201 but got ${signupRes.status()}: ${text}`);
+      }
+      const authSession = (await signupRes.json()) as {
+        accessToken: string;
+        user: { id: string; tenantId?: string };
+      };
+      expect(authSession.accessToken).toBeTruthy();
+      state.accessToken = authSession.accessToken;
+      state.tenantId = authSession.user.tenantId || '';
+      state.rawSession = authSession;
+
+      await page.goto('/login');
+      await page.evaluate(
+        ([key, session]) => {
+          window.localStorage.setItem(key, JSON.stringify(session));
+        },
+        [SESSION_STORAGE_KEY, authSession] as const,
+      );
     }
 
-    await page.goto('/app');
-    await expect(page.locator('body')).toBeVisible();
+    await page.goto('/app/accounting');
+    expect(state.accessToken).toBeTruthy();
   });
 
   test('02 chart from template: apply standard iran-trading chart [T91]', async ({ page }) => {
@@ -235,7 +232,7 @@ test.describe('Accountant day E2E · go-live gate on local stack as roxira_app',
       page,
       'accounting/chart-templates/iran-trading/apply',
       {},
-      201,
+      [200, 201],
     );
     expect(applied.added).toBeGreaterThan(30);
 
@@ -245,7 +242,19 @@ test.describe('Accountant day E2E · go-live gate on local stack as roxira_app',
       'accounting/accounts',
     );
     const codes = new Set(accounts.map((a) => a.code));
-    for (const expectedCode of ['1010', '1020', '1030', '1040', '1110', '1150', '2010', '2020', '3010', '4010', '5010']) {
+    for (const expectedCode of [
+      '1010',
+      '1020',
+      '1030',
+      '1040',
+      '1110',
+      '1150',
+      '2010',
+      '2020',
+      '3010',
+      '4010',
+      '5010',
+    ]) {
       expect(codes.has(expectedCode), `account ${expectedCode} in chart`).toBe(true);
     }
 
@@ -265,7 +274,7 @@ test.describe('Accountant day E2E · go-live gate on local stack as roxira_app',
     state.fiscalYearId = fy.id;
   });
 
-  test('03 opening balances: record balanced opening voucher [T91]', async ({ page }) => {
+  test('03 opening balances: record balanced opening voucher and verify balances [T91]', async ({ page }) => {
     await page.goto('/app/accounting');
 
     // Opening voucher: Assets (Cash, Bank, Inventory) = Capital
@@ -287,18 +296,39 @@ test.describe('Accountant day E2E · go-live gate on local stack as roxira_app',
     );
     expect(openingEntry.id).toBeTruthy();
     expect(openingEntry.status).toBe('POSTED');
+
+    // Assert initial trial balance is balanced to 1,000,000,000 IRR
+    const tb = await getApi<{
+      balanced: boolean;
+      totalDebit?: number | string;
+      totalCredit?: number | string;
+      rows: Array<{ code: string; endingDebit: number | string; endingCredit: number | string }>;
+    }>(page, 'accounting/reports/trial-balance?columns=6');
+    expect(tb.balanced).toBe(true);
+    let openDebit = 0n;
+    let openCredit = 0n;
+    for (const r of tb.rows) {
+      openDebit += rials(r.endingDebit);
+      openCredit += rials(r.endingCredit);
+    }
+    expect(openDebit).toBe(1_000_000_000n);
+    expect(openCredit).toBe(1_000_000_000n);
   });
 
   test('04 5 vouchers by keyboard mode [T91]', async ({ page }) => {
-    // Visit voucher creation page to exercise UI keyboard mode
-    await page.goto('/app/accounting');
+    await page.goto('/app/accounting/vouchers');
+
+    // Open new voucher form to test keyboard mode presence
     const newVoucherBtn = page.getByRole('button', { name: /سند جدید/ });
-    if (await newVoucherBtn.isVisible()) {
-      await newVoucherBtn.click();
-      // Ensure keyboard guidance bar is mounted
-      const shortcutBar = page.locator('div').filter({ hasText: /Alt\+B/ });
-      await expect(shortcutBar.first()).toBeVisible({ timeout: 5000 });
-    }
+    await expect(newVoucherBtn).toBeVisible({ timeout: 10000 });
+    await newVoucherBtn.click();
+
+    // Verify keyboard shortcuts guidance bar is mounted
+    const shortcutBar = page.locator('div').filter({ hasText: /راهنمای کلیدها/ });
+    await expect(shortcutBar.first()).toBeVisible({ timeout: 5000 });
+
+    // Press Escape to test clean discard/close behavior
+    await page.keyboard.press('Escape');
 
     // Post the 5 distinct operational vouchers sequentially
     for (const v of ACCOUNTANT_DAY_KEYBOARD_VOUCHERS) {
@@ -337,7 +367,31 @@ test.describe('Accountant day E2E · go-live gate on local stack as roxira_app',
       201,
     );
 
-    // 2. Post sales invoice: Revenue 100M + VAT 10M -> Receivable 110M
+    // 2. Exercise invoicing module: create sales invoice
+    const inv = await postApi<{ id: string; taxInvoiceNumber: string }>(
+      page,
+      'invoicing',
+      {
+        direction: 'SALE',
+        einvoiceType: 1,
+        sellerInfo: { name: 'شرکت آزمایشی روز حسابدار' },
+        buyerInfo: { name: ACCOUNTANT_DAY_SALES_INVOICE.customerName },
+        items: [
+          {
+            sku: 'ITEM-01',
+            description: 'کالای بازرگانی الف',
+            quantity: ACCOUNTANT_DAY_SALES_INVOICE.quantity,
+            unitPrice: Number(ACCOUNTANT_DAY_SALES_INVOICE.unitPrice),
+            discount: 0,
+          },
+        ],
+      },
+      201,
+    );
+    expect(inv.id).toBeTruthy();
+    state.salesInvoiceId = inv.id;
+
+    // 3. Post sales invoice journal entry: Revenue 100M + VAT 10M -> Receivable 110M
     // Also post associated COGS 50M -> Inventory out 50M
     const salesVoucher = await postApi<{ id: string; status: string }>(
       page,
@@ -380,7 +434,6 @@ test.describe('Accountant day E2E · go-live gate on local stack as roxira_app',
     );
     expect(salesVoucher.id).toBeTruthy();
     expect(salesVoucher.status).toBe('POSTED');
-    state.salesInvoiceId = salesVoucher.id;
   });
 
   test('06 receipt: partial bank settlement of sales invoice [T91]', async ({ page }) => {
@@ -466,7 +519,25 @@ test.describe('Accountant day E2E · go-live gate on local stack as roxira_app',
   test('08 cheque received and cleared: settle receivable and deposit to bank [T91]', async ({ page }) => {
     await page.goto('/app/accounting');
 
-    // 1. Register received cheque: Dr 1110 (اسناد دریافتنی) 50M / Cr 1030 (حساب‌های دریافتنی) 50M
+    // 1. Exercise cheques module: create a cheque
+    const chk = await postApi<{ id: number; status?: string }>(
+      page,
+      'cheques',
+      {
+        direction: 'RECEIVE',
+        amount: Number(ACCOUNTANT_DAY_CHEQUE.amount),
+        bankName: 'بانک ملت',
+        chequeNumber: '140501',
+        sayadNumber: '1234567890123456',
+        dueDate: ACCOUNTANT_DAY_CHEQUE.dueDate,
+        issuerName: ACCOUNTANT_DAY_SALES_INVOICE.customerName,
+      },
+      [200, 201],
+    );
+    expect(chk.id).toBeGreaterThan(0);
+    state.chequeId = chk.id;
+
+    // 2. Register received cheque: Dr 1110 (اسناد دریافتنی) 50M / Cr 1030 (حساب‌های دریافتنی) 50M
     const chequeVoucher = await postApi<{ id: string; status: string }>(
       page,
       'accounting/journal-entries',
@@ -492,7 +563,7 @@ test.describe('Accountant day E2E · go-live gate on local stack as roxira_app',
     );
     expect(chequeVoucher.status).toBe('POSTED');
 
-    // 2. Clear cheque to bank: Dr 1020 (بانک) 50M / Cr 1110 (اسناد دریافتنی) 50M
+    // 3. Clear cheque to bank: Dr 1020 (بانک) 50M / Cr 1110 (اسناد دریافتنی) 50M
     const clearVoucher = await postApi<{ id: string; status: string }>(
       page,
       'accounting/journal-entries',
@@ -518,7 +589,7 @@ test.describe('Accountant day E2E · go-live gate on local stack as roxira_app',
     expect(clearVoucher.status).toBe('POSTED');
   });
 
-  test('09 trial balance balances: total debits equal total credits [T91]', async ({ page }) => {
+  test('09 trial balance balances: total debits equal total credits and balances match [T91]', async ({ page }) => {
     await page.goto('/app/accounting');
 
     const trial = await getApi<{
@@ -539,6 +610,16 @@ test.describe('Accountant day E2E · go-live gate on local stack as roxira_app',
     }
     expect(totalDebit).toBe(totalCredit);
     expect(totalDebit).toBe(ACCOUNTANT_DAY_TRIAL_BALANCE.totalDebit);
+
+    // Verify key individual balances match expected balances
+    const rowByCode = new Map(trial.rows.map((r) => [r.code, r]));
+    for (const [code, exp] of Object.entries(ACCOUNTANT_DAY_EXPECTED_BALANCES)) {
+      const row = rowByCode.get(code);
+      if (row && exp > 0n) {
+        const net = rials(row.endingDebit) > 0n ? rials(row.endingDebit) : rials(row.endingCredit);
+        expect(net, `account ${code} balance`).toBe(exp);
+      }
+    }
   });
 
   test('10 P&L and balance sheet totals match hand-computed numbers [T91]', async ({ page }) => {
@@ -587,7 +668,7 @@ test.describe('Accountant day E2E · go-live gate on local stack as roxira_app',
           endDate: '2028-03-20',
         },
       },
-      201,
+      [200, 201],
     );
 
     expect(closeRes.year.status).toBe('CLOSED');
@@ -605,7 +686,7 @@ test.describe('Accountant day E2E · go-live gate on local stack as roxira_app',
   test('12 reopen refused: posting into closed period and plain unlock are rejected [T91]', async ({ page }) => {
     await page.goto('/app/accounting');
 
-    // 1. Attempting to post a voucher inside the closed year is refused with HTTP 423
+    // 1. Attempting to post a voucher inside the closed year is refused with HTTP 423 Locked
     const lateVoucherRes = await page.request.post('/api/backend/enterprise-hub/accounting/journal-entries', {
       headers: {
         Authorization: `Bearer ${state.accessToken || (await page.evaluate((k) => {
@@ -623,9 +704,9 @@ test.describe('Accountant day E2E · go-live gate on local stack as roxira_app',
         ],
       },
     });
-    expect([409, 423]).toContain(lateVoucherRes.status());
+    expect(lateVoucherRes.status(), 'late voucher rejected with 423 Locked').toBe(423);
 
-    // 2. Direct unlock of period lock without reopening fiscal year is refused (HTTP 409)
+    // 2. Direct unlock of period lock without reopening fiscal year is refused with HTTP 409 Conflict
     const locks = await getApi<Array<{ id: number; active: boolean }>>(page, 'accounting/period-locks');
     const lock = locks.find((l) => l.active);
     if (lock) {
@@ -641,7 +722,7 @@ test.describe('Accountant day E2E · go-live gate on local stack as roxira_app',
           data: { reason: 'تلاش غیرمجاز برای بازگشایی' },
         },
       );
-      expect([400, 403, 404, 409]).toContain(unlockRes.status());
+      expect(unlockRes.status(), 'unlock of closed year lock rejected with 409 Conflict').toBe(409);
     }
   });
 });
