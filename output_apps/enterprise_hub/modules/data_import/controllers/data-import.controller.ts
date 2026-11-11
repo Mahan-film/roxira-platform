@@ -1,6 +1,6 @@
 import { AccessAction, AccessModule, permissionOf } from '../../access/catalogue';
 import { AccessRequest, requireAccess } from '../../access/access-context';
-import { ModuleAccess } from '../../access/decorators';
+import { ModuleAccess, RequireAction } from '../../access/decorators';
 import {
   Body,
   Controller,
@@ -52,6 +52,7 @@ import { EntityDescriptorDto } from '../dto/entity-descriptor-response.dto';
 import { EntityCommitDto, PreviewRequestDto } from '../dto/entity-commit.dto';
 import { EntityCommitResponseDto } from '../dto/entity-commit-response.dto';
 import { EntityPreviewResponseDto } from '../dto/entity-preview-response.dto';
+import { PersistSepidarDto } from '../dto/sepidar-persist.dto';
 import { PackageCommitDto, PackageReviewQueryDto } from '../dto/package-commit.dto';
 import {
   PackageCommitResponseDto,
@@ -67,6 +68,7 @@ import {
 } from '../services/data-import.service';
 import { EntityImportService } from '../services/entity-import.service';
 import { PackageImportService } from '../services/package-import.service';
+import { SepidarPersistenceService } from '../services/sepidar-persistence.service';
 
 /**
  * کنترلر ورود داده با کمک هوش مصنوعی.
@@ -98,7 +100,22 @@ export class DataImportController {
     private readonly entityImportService: EntityImportService,
     private readonly packageImportService: PackageImportService,
     private readonly chunkedUpload: ChunkedUploadService,
+    private readonly sepidarPersistenceService: SepidarPersistenceService,
   ) {}
+
+  @Post('sepidar/persist')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'انتقال و ثبت قطعی داده‌های سپیدار در دیتابیس با صدور گواهی تطبیق مغایرت' })
+  @RequireAction(AccessAction.CREATE)
+  async persistSepidar(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: PersistSepidarDto,
+  ) {
+    return this.sepidarPersistenceService.persistSepidarData(
+      this.tenantIdOf(request),
+      dto,
+    );
+  }
 
   @Get('entities')
   @ApiOperation({ summary: 'فهرست موجودیت‌های قابل ورود و فیلدهای آن‌ها' })
