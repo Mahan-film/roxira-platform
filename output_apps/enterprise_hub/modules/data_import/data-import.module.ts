@@ -13,6 +13,7 @@ import { CrmModule } from '../crm/crm.module';
 import { HrModule } from '../hr/hr.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { InvoicingModule } from '../invoicing/invoicing.module';
+import { ChequesModule } from '../cheques/cheques.module';
 import { PACKAGE_QUEUE_NAME } from './constants/package-import.constants';
 import { DataImportController } from './controllers/data-import.controller';
 import { ImportMappingMemoryEntity } from './entities/import-mapping-memory.entity';
@@ -56,6 +57,7 @@ import { TenantExportController } from './controllers/tenant-export.controller';
 import { TenantExportRepository } from './repositories/tenant-export.repository';
 import { SepidarMappingAdapter } from './migration/bak/sepidar-mapping.adapter';
 import { HolooMappingAdapter } from './migration/bak/holoo-mapping.adapter';
+import { SepidarPersistenceService } from './services/sepidar-persistence.service';
 import { TenantScope } from '../access/services/tenant-scope';
 import { BulkImportController } from './bulk/bulk-import.controller';
 import { BulkImportProcessor } from './bulk/bulk-import.processor';
@@ -90,6 +92,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     InvoicingModule,
     BankingModule,
     PartiesModule,
+    ChequesModule,
     BullModule.registerQueue({ name: PACKAGE_QUEUE_NAME }, { name: BULK_QUEUE_NAME }),
     TypeOrmModule.forFeature([
       DataImportBatchEntity,
@@ -183,6 +186,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     SepidarChequesFifoAdapter,
     SepidarMappingAdapter,
     HolooMappingAdapter,
+    SepidarPersistenceService,
     JwtAuthGuard,
     TenantScope,
     BulkImportRepository,
@@ -206,6 +210,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     TenantExportService,
     SepidarMappingAdapter,
     HolooMappingAdapter,
+    SepidarPersistenceService,
   ],
 })
 export class DataImportModule {}
