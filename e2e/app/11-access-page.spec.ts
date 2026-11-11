@@ -24,28 +24,26 @@ test.describe('Access Settings & Permission Matrix (/app/settings/access)', () =
 
     // 1. Matrix Tab: should render permissions table by default
     await expect(matrixTab).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('[data-testid="permission-matrix-view"]')).toBeVisible();
     await expect(page.getByText('حسابداری').first()).toBeVisible();
     await expect(page.getByText('صورتحساب').first()).toBeVisible();
 
     // 2. Preview as User Tab
     await previewTab.click();
     await expect(previewTab).toHaveAttribute('aria-selected', 'true');
-
-    // User selection or member card should be visible
-    const previewContainer = page.locator('[data-testid="preview-as-user-panel"], form, select, [role="combobox"]');
-    await expect(previewContainer.first()).toBeVisible();
+    await expect(page.locator('[data-testid="preview-as-user-panel"]')).toBeVisible();
+    await expect(page.getByText('پیش‌نمایش اختیارات کاربر (دیدگاه کاربر)')).toBeVisible();
 
     // 3. Explain Denial Tab
     await explainTab.click();
     await expect(explainTab).toHaveAttribute('aria-selected', 'true');
-
-    // Simulator form elements: module, action, amount inputs
-    const explainContainer = page.locator('[data-testid="explain-denial-panel"], form, button');
-    await expect(explainContainer.first()).toBeVisible();
+    await expect(page.locator('[data-testid="explain-denial-panel"]')).toBeVisible();
+    await expect(page.getByText(/تحلیل و توضیح علل رد یا قبول دسترسی/)).toBeVisible();
 
     // Switch back to Matrix tab
     await matrixTab.click();
     await expect(matrixTab).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('[data-testid="permission-matrix-view"]')).toBeVisible();
 
     await expectNoErrorNotice(page);
   });

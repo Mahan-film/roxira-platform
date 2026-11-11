@@ -25,7 +25,7 @@ test.describe('Report Builder (/app/accounting/report-builder)', () => {
     // Default dataset is accounting_ledger: column labels should be rendered
     await expect(page.getByText('تاریخ سند')).toBeVisible();
     await expect(page.getByText('شماره سند')).toBeVisible();
-    await expect(page.getByText('کد حساب')).toBeVisible();
+    await expect(page.getByText('کد حساب').first()).toBeVisible();
 
     // Filter controls
     const addFilterBtn = page.getByRole('button', { name: /افزودن فیلتر/ });
@@ -61,7 +61,7 @@ test.describe('Report Builder (/app/accounting/report-builder)', () => {
     await runBtn.click();
 
     // The results table or empty results card should be rendered
-    const tableOrNotice = page.locator('table, [data-testid="report-results"], [role="status"]');
+    const tableOrNotice = page.locator('div').filter({ hasText: /نتایج گزارش/ }).or(page.locator('table'));
     await expect(tableOrNotice.first()).toBeVisible({ timeout: 10000 });
 
     await expectNoErrorNotice(page);

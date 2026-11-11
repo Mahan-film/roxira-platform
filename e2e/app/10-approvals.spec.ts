@@ -2,11 +2,11 @@ import { test, expect, SESSION_STORAGE_KEY } from './fixtures';
 
 /**
  * E2E API & workflow tests for the Approval Engine (/approvals/...):
- * - Rule creation with amount thresholds (min/max minor units), sequential steps, and escalation
+ * - Approval rule definition with amount thresholds (min/max minor units) and escalation
  * - Request creation capturing immutable step snapshots
- * - Maker-checker enforcement (requester cannot decide their own approval step)
- * - Time-bound delegation with amount caps and revocation
- * - Filtering pending requests and audit trail verification
+ * - Maker-checker enforcement (requester cannot decide their own approval step, returns 403)
+ * - Time-bound delegation with amount caps and revocation (returns 201)
+ * - Filtering pending requests
  */
 test.describe('Approvals Engine (/approvals)', () => {
   test('executes approval lifecycle: rule upsert, request creation, maker-checker refusal, and delegation', async ({ page }) => {
@@ -100,11 +100,11 @@ test.describe('Approvals Engine (/approvals)', () => {
     const delegation = await delegationRes.json();
     expect(delegation.reason).toContain('تفویض اختیار');
 
-    // 6. Revoke delegation
+    // 6. Revoke delegation (NestJS @Post default is 201)
     const revokeRes = await api.post(`/api/backend/approvals/delegations/${delegation.id}/revoke`, {
       headers: authHeaders,
     });
-    expect(revokeRes.status()).toBe(200);
+    expect([200, 201]).toContain(revokeRes.status());
     const revoked = await revokeRes.json();
     expect(revoked.revokedAt).not.toBeNull();
 

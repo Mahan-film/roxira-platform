@@ -2,10 +2,10 @@ import { test, expect, openApp, expectNoErrorNotice } from './fixtures';
 
 /**
  * E2E tests for Voucher Actions and Rapid Keyboard Entry (/app/accounting):
- * - Status transitions in voucher list: Draft -> Temporary -> Posted, and Reversal (offset)
- * - Confirmation alert on final posting (irreversibility warning)
- * - Keyboard grid navigation in journal entry form (Enter, Tab, Alt+N, Alt+Delete)
- * - Auto-balance calculation and keyboard shortcut (Alt+B / Ctrl+B)
+ * - Journal entries table rendering with column headers
+ * - New journal entry creation form entry point
+ * - Keyboard shortcuts guidance bar (Alt+B, Ctrl+Enter)
+ * - Auto-balance button visibility
  */
 test.describe('Voucher Actions & Rapid Entry (/app/accounting)', () => {
   test('displays voucher table with status badges and lifecycle action menus', async ({ page }) => {
@@ -39,7 +39,7 @@ test.describe('Voucher Actions & Rapid Entry (/app/accounting)', () => {
     await expect(shortcutBar.first()).toBeVisible();
 
     // Auto balance button «موازنه خودکار» should be accessible
-    const autoBalanceBtn = page.getByRole('button', { name: /موازنه خودکار/ });
+    const autoBalanceBtn = page.getByRole('button', { name: /موازنه خودکار/ }).first();
     await expect(autoBalanceBtn).toBeVisible();
 
     await expectNoErrorNotice(page);

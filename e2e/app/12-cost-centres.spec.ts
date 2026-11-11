@@ -16,24 +16,29 @@ test.describe('Cost Centres & Dimensions (/app/accounting/dimensions)', () => {
 
     // Dimension kind switchers (COST_CENTER, PROJECT, DETAIL)
     const costCenterTab = page.getByRole('tab', { name: /مرکز هزینه/ }).or(page.getByRole('button', { name: /مرکز هزینه/ }));
-    const projectTab = page.getByRole('tab', { name: /پروژه/ }).or(page.getByRole('button', { name: /پروژه/ }));
+    const projectTab = page.getByRole('tab', { name: /مرکز پروژه|پروژه/ }).or(page.getByRole('button', { name: /مرکز پروژه|پروژه/ }));
     const detailTab = page.getByRole('tab', { name: /تفصیلی شناور/ }).or(page.getByRole('button', { name: /تفصیلی شناور/ }));
 
     await expect(costCenterTab.first()).toBeVisible();
     await expect(projectTab.first()).toBeVisible();
     await expect(detailTab.first()).toBeVisible();
 
+    // Default kind is COST_CENTER: verify heading «مرکز هزینه»
+    await expect(page.getByRole('heading', { level: 2, name: /مرکز هزینه/ })).toBeVisible();
+
     // Dimension list table or empty container
     const tableOrCard = page.locator('table, [data-slot="card"]');
     await expect(tableOrCard.first()).toBeVisible();
 
-    // Toggle to Project dimension tab
+    // Toggle to Project dimension tab: verify kind switches to «مرکز پروژه»
     await projectTab.first().click();
-    await expect(tableOrCard.first()).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: /مرکز پروژه/ })).toBeVisible();
+    await expect(page.getByText(/ردیابی درآمدها و هزینه‌های پروژه‌ها/)).toBeVisible();
 
-    // Toggle to Detail dimension tab
+    // Toggle to Detail dimension tab: verify kind switches to «تفصیلی شناور»
     await detailTab.first().click();
-    await expect(tableOrCard.first()).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: /تفصیلی شناور/ })).toBeVisible();
+    await expect(page.getByText(/سطح چهارم حسابداری جهت تفکیک اشخاص/)).toBeVisible();
 
     await expectNoErrorNotice(page);
   });
