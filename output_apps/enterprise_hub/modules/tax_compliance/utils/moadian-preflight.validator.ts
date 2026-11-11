@@ -1,5 +1,6 @@
 import { InvoiceResponseDto } from '../../invoicing/dto/invoice-response.dto';
 import { Currency } from '../../currency/enums/currency.enum';
+import { parseScaled } from '../../accounting/money';
 
 export interface MoadianPreFlightError {
   field: string;
@@ -162,13 +163,12 @@ export function validateVatRateForYear(
 
   const jalaliYear = getJalaliYear(invoiceDate);
   if (jalaliYear === 1404 || jalaliYear === 1405) {
-    // Statutory general VAT rate is 10% (0.10)
     const valid = Math.abs(rate - 0.1) < 1e-4;
     return { valid, expected: 0.1, isExempt: false };
   }
 
-  // Other years accept statutory rate in [0, 1]
-  return { valid: rate >= 0 && rate <= 1, expected: 0.1, isExempt: false };
+  // Without a known rate for other years, require expectedRate
+  return { valid: false, expected: 0, isExempt: false };
 }
 
 /**
@@ -198,10 +198,14 @@ function getCurrencyScale(currency?: Currency | string): number {
 
 function toMinorUnits(value: number | string | null | undefined, scale: number): bigint {
   if (value === null || value === undefined) return 0n;
-  const num = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(num)) return 0n;
-  const factor = 10 ** scale;
-  return BigInt(Math.round(num * factor));
+  try {
+    return parseScaled(value, scale);
+  } catch {
+    const num = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(num)) return 0n;
+    const factor = 10 ** scale;
+    return BigInt(Math.round(num * factor));
+  }
 }
 
 /**
@@ -366,22 +370,24 @@ export function runMoadianPreFlightValidation(
   const scale = getCurrencyScale(invoice.currency);
   const factor = 10 ** scale;
 
-  let calculatedTotalAmountUnits = 0n;
-  let calculatedTotalDiscountUnits = 0n;
-  let calculatedTotalTaxUnits = 0n;
+  let rawTotalAmount = 0;
+  let rawTotalDiscount = 0;
+  let rawTotalTax = 0;
+  let rawFinalPayable = 0;
 
   items.forEach((item, index) => {
     const fieldPrefix = `items[${index}]`;
 
     // Item tax code (SSTID)
     const itemRecord = item as unknown as Record<string, unknown>;
-    const sstid = toLatinDigits(
-      (item.taxCode as string) ??
+    const rawTaxCode = (item.taxCode && String(item.taxCode).trim().length > 0) ? String(item.taxCode) : null;
+    const rawSstid =
+      rawTaxCode ??
       (itemRecord.sstid as string) ??
       options?.itemSstids?.[index] ??
       options?.defaultSstid ??
-      '',
-    ).trim();
+      '';
+    const sstid = toLatinDigits(rawSstid).replace(/\s+/g, '');
 
     if (!sstid || !validateItemTaxCode(sstid)) {
       errors.push({
@@ -409,15 +415,16 @@ export function runMoadianPreFlightValidation(
     const unitPrice = Number(item.unitPrice ?? 0);
     const discount = Number(item.discount ?? 0);
 
-    const grossUnits = toMinorUnits(Math.round(qty * unitPrice * factor) / factor, scale);
+    rawTotalAmount += qty * unitPrice;
+    rawTotalDiscount += discount;
+    rawTotalTax += item.tax !== undefined ? Number(item.tax) : (qty * unitPrice - discount) * vatRate;
+    rawFinalPayable += item.total !== undefined ? Number(item.total) : (qty * unitPrice - discount) * (1 + vatRate);
+
+    const grossUnits = toMinorUnits(qty * unitPrice, scale);
     const discountUnits = toMinorUnits(discount, scale);
     const netUnits = grossUnits > discountUnits ? grossUnits - discountUnits : 0n;
-    const expectedTaxUnits = toMinorUnits(Math.round((Number(netUnits) / factor) * vatRate * factor) / factor, scale);
+    const expectedTaxUnits = toMinorUnits(Math.round(((qty * unitPrice) - discount) * vatRate * factor) / factor, scale);
     const expectedLineTotalUnits = netUnits + expectedTaxUnits;
-
-    calculatedTotalAmountUnits += grossUnits;
-    calculatedTotalDiscountUnits += discountUnits;
-    calculatedTotalTaxUnits += item.tax !== undefined ? toMinorUnits(item.tax, scale) : expectedTaxUnits;
 
     if (item.tax !== undefined) {
       const actualTaxUnits = toMinorUnits(item.tax, scale);
@@ -442,8 +449,12 @@ export function runMoadianPreFlightValidation(
     }
   });
 
-  // 5. Header totals consistency using exact minor units
-  if (invoice.totalAmount !== undefined && toMinorUnits(invoice.totalAmount, scale) !== calculatedTotalAmountUnits) {
+  // 5. Header totals consistency using exact minor units (sum raw then round once, matching InvoicingService)
+  const expectedTotalAmountUnits = toMinorUnits(Math.round(rawTotalAmount * factor) / factor, scale);
+  const expectedTotalTaxUnits = toMinorUnits(Math.round(rawTotalTax * factor) / factor, scale);
+  const expectedFinalPayableUnits = toMinorUnits(Math.round(rawFinalPayable * factor) / factor, scale);
+
+  if (invoice.totalAmount !== undefined && toMinorUnits(invoice.totalAmount, scale) !== expectedTotalAmountUnits) {
     errors.push({
       field: 'totalAmount',
       message: `مجموع ناخالص صورتحساب (${invoice.totalAmount}) با مجموع سطرهای اقلام مطابقت ندارد.`,
@@ -451,7 +462,7 @@ export function runMoadianPreFlightValidation(
     });
   }
 
-  if (invoice.totalTax !== undefined && toMinorUnits(invoice.totalTax, scale) !== calculatedTotalTaxUnits) {
+  if (invoice.totalTax !== undefined && toMinorUnits(invoice.totalTax, scale) !== expectedTotalTaxUnits) {
     errors.push({
       field: 'totalTax',
       message: `مجموع مالیات صورتحساب (${invoice.totalTax}) با مجموع مالیات سطرها مطابقت ندارد.`,
@@ -459,8 +470,6 @@ export function runMoadianPreFlightValidation(
     });
   }
 
-  const expectedFinalPayableUnits =
-    calculatedTotalAmountUnits - calculatedTotalDiscountUnits + calculatedTotalTaxUnits;
   if (
     invoice.finalPayable !== undefined &&
     toMinorUnits(invoice.finalPayable, scale) !== expectedFinalPayableUnits
