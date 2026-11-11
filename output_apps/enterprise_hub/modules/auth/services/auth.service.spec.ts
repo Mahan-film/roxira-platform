@@ -155,6 +155,7 @@ const createService = () => {
     mocks.audit as never,
     mocks.mail as never,
     mocks.sessions as never,
+    ((mocks as any).loginWindow ?? { assertAllowed: jest.fn().mockResolvedValue(undefined) }) as never,
   );
 
   return { service, mocks };

@@ -95,9 +95,15 @@ describePg('UserLoginScheduleEntity RLS isolation (NOSUPERUSER NOBYPASSRLS)', ()
     expect(readByT1?.userId).toBe(U1);
     expect(readByT1?.windows).toHaveLength(1);
 
-    // 3. Tenant 2 cannot see Tenant 1 schedule (RLS returns null)
-    const readByT2 = await repo.findByTenantUser(T2, U1);
-    expect(readByT2).toBeNull();
+    // 3. Tenant 2 cannot see Tenant 1 schedule even when directly queried by primary key id (FORCE RLS)
+    const readByT2Scope = await scope.within(T2, undefined, async (em) => {
+      return em.getRepository(UserLoginScheduleEntity).findOne({ where: { id: t1Schedule.id } });
+    });
+    expect(readByT2Scope).toBeNull();
+
+    // Querying without setting app.tenant_id as the unprivileged role gives 0 rows
+    const rawCount = await appDs.query('SELECT count(*) FROM user_login_schedules');
+    expect(Number(rawCount[0].count)).toBe(0);
 
     // 4. Tenant 2 cannot delete Tenant 1 schedule
     await repo.removeSchedule(T2, U1);

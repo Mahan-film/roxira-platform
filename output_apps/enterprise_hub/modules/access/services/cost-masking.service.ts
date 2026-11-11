@@ -72,21 +72,22 @@ export class CostMaskingService {
       return payload.map((item) => this.maskCostFields(item, canViewCost)) as unknown as T;
     }
 
-    // Preserve special types, streams, maps, sets, buffers, dates, and class instances without converting to {}
+    // Preserve special types, streams, maps, sets, buffers, dates without converting to {}
     if (
       payload instanceof Date ||
       (typeof Buffer !== 'undefined' && Buffer.isBuffer(payload)) ||
       payload instanceof Map ||
       payload instanceof Set ||
       payload instanceof Uint8Array ||
-      typeof (payload as any).pipe === 'function' ||
-      (payload.constructor && payload.constructor.name !== 'Object')
+      typeof (payload as any).pipe === 'function'
     ) {
       return payload;
     }
 
-    // Plain object
-    const sanitized: Record<string, any> = {};
+    // Objects and Class/Entity instances: clone with prototype preserved
+    const proto = Object.getPrototypeOf(payload);
+    const sanitized: Record<string, any> =
+      proto && proto !== Object.prototype ? Object.create(proto) : {};
     for (const [key, value] of Object.entries(payload)) {
       if (COST_SENSITIVE_FIELD_NAMES.has(key)) {
         sanitized[key] = null;

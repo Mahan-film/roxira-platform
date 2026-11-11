@@ -29,7 +29,8 @@ async function allowed(
 ): Promise<boolean> {
   const stub = new AccessStub();
   setup(stub);
-  const guard = new AccessGuard(reflector, stub as never);
+  const mockLoginWindow = { assertAllowed: jest.fn().mockResolvedValue(undefined) } as never;
+  const guard = new AccessGuard(reflector, stub as never, mockLoginWindow);
   const method = HANDLERS.find(([h]) => h === handler)![1];
   const request = { method, originalUrl: '/enterprise-hub/parties', url: '/enterprise-hub/parties', user: { ...user } };
   const context = {

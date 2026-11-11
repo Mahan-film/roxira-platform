@@ -26,6 +26,20 @@ export class CostMaskingInterceptor implements NestInterceptor {
           return data;
         }
 
+        // Scope cost masking to inventory, sales/invoicing, parties, and purchasing where item costs live.
+        // Accounting, budget, cost centres and HR responses are never masked.
+        const url = request.originalUrl || request.url || '';
+        const isCostArea =
+          !url ||
+          url.includes('/inventory') ||
+          url.includes('/sales') ||
+          url.includes('/invoicing') ||
+          url.includes('/parties') ||
+          url.includes('/purchase');
+        if (!isCostArea) {
+          return data;
+        }
+
         const canView = this.costMasking.canViewCost(request.access);
         return this.costMasking.maskCostFields(data, canView);
       }),
