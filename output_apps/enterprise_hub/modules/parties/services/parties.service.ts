@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { fromMinor, toMinor } from '../../accounting/money';
+import { CustomerGroup } from '../enums/customer-group.enum';
 import { PartyEntity } from '../entities/party.entity';
 import { PartyRole } from '../enums/party-role.enum';
 import {
@@ -26,6 +27,7 @@ export function toPartyResponse(party: PartyEntity): PartyResponseDto {
     email: party.email ?? null,
     active: party.active,
     creditLimit: party.creditLimit ? String(fromMinor(BigInt(party.creditLimit))) : '0',
+    customerGroup: party.customerGroup ?? CustomerGroup.CONSUMER,
     createdAt: party.createdAt,
     updatedAt: party.updatedAt,
   };
@@ -75,6 +77,7 @@ export class PartiesService {
       email: dto.email ?? null,
       creditLimit,
       active: dto.active ?? true,
+      customerGroup: dto.customerGroup ?? CustomerGroup.CONSUMER,
     };
     if (await this.repository.findByCode(tenantId, code)) throw new ConflictException(DUPLICATE_CODE_MESSAGE);
     try {
@@ -103,6 +106,7 @@ export class PartiesService {
       }
     }
     if (dto.active !== undefined) patch.active = dto.active;
+    if (dto.customerGroup !== undefined) patch.customerGroup = dto.customerGroup;
     const updated = await this.repository.update(tenantId, id, patch);
     if (!updated) throw new NotFoundException(NOT_FOUND_MESSAGE);
     return toPartyResponse(updated);

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager, In } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
+import { CustomerGroup } from '../enums/customer-group.enum';
 import { PartyEntity } from '../entities/party.entity';
 import { PartyRole } from '../enums/party-role.enum';
 
@@ -14,6 +15,7 @@ export interface PartyInput {
   email: string | null;
   creditLimit?: string;
   active?: boolean;
+  customerGroup?: CustomerGroup;
 }
 
 export interface PartyPatch {
@@ -25,6 +27,7 @@ export interface PartyPatch {
   email?: string | null;
   creditLimit?: string;
   active?: boolean;
+  customerGroup?: CustomerGroup;
 }
 
 export interface PartyFilter {

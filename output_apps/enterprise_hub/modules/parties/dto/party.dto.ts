@@ -13,6 +13,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+import { CustomerGroup } from '../enums/customer-group.enum';
 import { PartyRole } from '../enums/party-role.enum';
 
 /** Iranian national id: exactly 10 or 11 digits. */
@@ -77,6 +78,11 @@ export class CreatePartyDto {
   @IsString()
   @Matches(CREDIT_LIMIT, { message: 'سقف اعتبار باید یک مبلغ معتبر باشد.' })
   creditLimit?: string;
+
+  @ApiPropertyOptional({ enum: CustomerGroup, description: 'گروه مشتری (پیش‌فرض مصرف‌کننده)', default: CustomerGroup.CONSUMER })
+  @IsOptional()
+  @IsEnum(CustomerGroup)
+  customerGroup?: CustomerGroup;
 }
 
 /** `code` is the identity of the row and is never updatable. */
@@ -128,6 +134,11 @@ export class UpdatePartyDto {
   @IsString()
   @Matches(CREDIT_LIMIT, { message: 'سقف اعتبار باید یک مبلغ معتبر باشد.' })
   creditLimit?: string;
+
+  @ApiPropertyOptional({ enum: CustomerGroup, description: 'گروه مشتری' })
+  @IsOptional()
+  @IsEnum(CustomerGroup)
+  customerGroup?: CustomerGroup;
 }
 
 export class QueryPartiesDto {
@@ -177,6 +188,7 @@ export class PartyResponseDto {
   @ApiPropertyOptional({ nullable: true, type: String }) email: string | null;
   @ApiProperty() active: boolean;
   @ApiPropertyOptional({ type: String, example: '100000000' }) creditLimit: string;
+  @ApiProperty({ enum: CustomerGroup }) customerGroup: CustomerGroup;
   @ApiProperty() createdAt: Date;
   @ApiProperty() updatedAt: Date;
 }
