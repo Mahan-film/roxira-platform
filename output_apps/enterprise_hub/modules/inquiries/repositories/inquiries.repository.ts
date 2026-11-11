@@ -56,25 +56,38 @@ export class InquiriesRepository {
     skip: number;
     take: number;
   }): Promise<[EnterpriseInquiryEntity[], number]> {
-    const query = this.inquiries.createQueryBuilder('inquiry');
-
-    if (options.status) {
-      query.andWhere('inquiry.status = :status', { status: options.status });
-    }
-    if (options.search) {
-      const pattern = `%${options.search}%`;
-      query.andWhere(
-        '(inquiry.name ILIKE :pattern OR inquiry.company ILIKE :pattern OR inquiry.email ILIKE :pattern OR inquiry.phone ILIKE :pattern)',
-        { pattern },
+    try {
+      const rows = await this.inquiries.query(
+        `SELECT * FROM public.list_enterprise_inquiries($1, $2, $3, $4)`,
+        [
+          options.status ?? null,
+          options.search ?? null,
+          options.take ?? 50,
+          options.skip ?? 0,
+        ],
       );
+      if (!rows || rows.length === 0) {
+        return [[], 0];
+      }
+      const total = Number(rows[0].total_count ?? 0);
+      const entities = rows.map((r: any) =>
+        this.inquiries.create({
+          id: Number(r.id),
+          name: r.name,
+          company: r.company,
+          phone: r.phone,
+          email: r.email,
+          message: r.message,
+          source: r.source,
+          tenantId: r.tenant_id,
+          status: r.status,
+          createdAt: new Date(r.created_at),
+        }),
+      );
+      return [entities, total];
+    } catch (err) {
+      this.logger.error(`list_enterprise_inquiries error: ${err}`);
+      throw err;
     }
-
-    query
-      .orderBy('inquiry.createdAt', 'DESC')
-      .addOrderBy('inquiry.id', 'DESC')
-      .skip(options.skip)
-      .take(options.take);
-
-    return query.getManyAndCount();
   }
 }

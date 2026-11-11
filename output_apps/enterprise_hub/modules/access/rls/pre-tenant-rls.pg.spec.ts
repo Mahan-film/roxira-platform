@@ -21,9 +21,9 @@ import 'reflect-metadata';
 import * as path from 'path';
 import { DataSource } from 'typeorm';
 import {
-  EnableRlsPreTenantTables1789900002500,
+  EnableRlsPreTenantTables1789900002700,
   PRE_TENANT_RLS_TABLES,
-} from '../../../migrations/1789900002500-EnableRlsPreTenantTables';
+} from '../../../migrations/1789900002700-EnableRlsPreTenantTables';
 import { AuthRepository } from '../../auth/repositories/auth.repository';
 import { RefreshTokenRepository } from '../../auth/repositories/refresh-token.repository';
 import { SessionCheckRepository } from '../repositories/session-check.repository';
@@ -90,17 +90,21 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     await admin.query(`CREATE DATABASE "${db}"`);
     await admin.query(`DROP ROLE IF EXISTS ${role}`);
     await admin.query(`CREATE ROLE ${role} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${APP_PW}'`);
+    // Ensure standard roxira_app role exists during migration so explicit per-function grants are applied
+    await admin.query(`DROP ROLE IF EXISTS roxira_app`);
+    await admin.query(`CREATE ROLE roxira_app LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${APP_PW}'`);
     owner = await new DataSource(options(db)).initialize();
     await owner.runMigrations();
 
     // Standard app role grants matching scripts/ops/db_app_role.sh and scripts/ci/create_app_role.sh
-    await owner.query(`GRANT CONNECT ON DATABASE "${db}" TO ${role}`);
-    await owner.query(`GRANT USAGE ON SCHEMA public TO ${role}`);
-    await owner.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${role}`);
-    await owner.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${role}`);
-    await owner.query(`GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ${role}`);
+    for (const r of [role, 'roxira_app']) {
+      await owner.query(`GRANT CONNECT ON DATABASE "${db}" TO ${r}`);
+      await owner.query(`GRANT USAGE ON SCHEMA public TO ${r}`);
+      await owner.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${r}`);
+      await owner.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${r}`);
+    }
 
-    app = await new DataSource({ ...options(db, role, APP_PW), extra: { max: 8 } }).initialize();
+    app = await new DataSource({ ...options(db, 'roxira_app', APP_PW), extra: { max: 8 } }).initialize();
     scope = new TenantScope(app);
 
     authRepo = new AuthRepository(app.getRepository(UserEntity));
@@ -368,6 +372,36 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     });
     expect(savedInquiry.id).toBeDefined();
 
+    // Verify findAndCount works under non-superuser roxira_app role via definer function
+    const [inquiriesList, inqCount] = await inquiriesRepo.findAndCount({ skip: 0, take: 10 });
+    expect(inqCount).toBeGreaterThanOrEqual(1);
+    expect(inquiriesList.some((i) => i.name === 'Corporate Prospect')).toBe(true);
+
+    // Verify CRM contact history and counts under non-superuser roxira_app role
+    const lead = await crmRepo.createLead(T1, {
+      fullName: 'Lead One',
+    });
+    const leadMsg = await crmRepo.createContactMessage(T1, {
+      leadId: lead.id,
+      senderName: 'Lead Contact',
+      senderPhone: '09121111111',
+      subject: 'Lead Subject',
+      message: 'Hello lead',
+    });
+    const [messages, count] = await crmRepo.findContactMessagesAndCount(T1, lead.id, { skip: 0, take: 10 });
+    expect(count).toBe(1);
+    expect(messages[0].id).toBe(leadMsg.id);
+
+    const contactCount = await crmRepo.countContactsByLeadId(T1, lead.id);
+    expect(contactCount).toBe(1);
+
+    const countsMap = await crmRepo.getContactCountsByLeadIds(T1, [lead.id]);
+    expect(countsMap.get(lead.id)).toBe(1);
+
+    // Cross-tenant count under T2 returns 0
+    const t2Count = await crmRepo.countContactsByLeadId(T2, lead.id);
+    expect(t2Count).toBe(0);
+
     // 3. Submitting an inquiry claiming another tenant without session context is denied
     await expect(
       inquiriesRepo.create({
@@ -430,7 +464,7 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
   });
 
   it('reversibility: migration down() and up() work cleanly', async () => {
-    const migration = new EnableRlsPreTenantTables1789900002500();
+    const migration = new EnableRlsPreTenantTables1789900002700();
     const qr = owner.createQueryRunner();
 
     try {

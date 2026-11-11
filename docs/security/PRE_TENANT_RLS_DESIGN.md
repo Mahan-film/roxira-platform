@@ -325,7 +325,7 @@ USING (
 
 ## 6. Migration Rollout & Reversibility
 
-1. **Migration Script**: `output_apps/enterprise_hub/migrations/1789900002500-EnableRlsPreTenantTables.ts`
+1. **Migration Script**: `output_apps/enterprise_hub/migrations/1789900002700-EnableRlsPreTenantTables.ts`
 2. **`up()`**:
    - Creates atomic `SECURITY DEFINER` lookup and mutation functions owned by `postgres`.
    - Revokes execute from `PUBLIC` and grants execute permissions to `roxira_app`.

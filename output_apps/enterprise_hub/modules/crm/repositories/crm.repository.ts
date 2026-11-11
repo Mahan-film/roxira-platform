@@ -60,6 +60,20 @@ export class CrmRepository {
     return scope.run(tenantId, (m) => work(m.getRepository(CrmLeadEntity)));
   }
 
+  private withContacts<T>(
+    tenantId: string,
+    work: (repo: Repository<ContactMessageEntity>) => Promise<T>,
+  ): Promise<T> {
+    const scope = this.getScope();
+    if (!scope) {
+      return this.contacts.manager.transaction(async (m) => {
+        await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [tenantId]);
+        return work(m.getRepository(ContactMessageEntity));
+      });
+    }
+    return scope.run(tenantId, (m) => work(m.getRepository(ContactMessageEntity)));
+  }
+
   // ---------------------------------------------------------------------------
   // سرنخ‌ها (Leads)
   // ---------------------------------------------------------------------------
@@ -329,10 +343,9 @@ export class CrmRepository {
     tenantId: string,
     data: Partial<ContactMessageEntity>,
   ): Promise<ContactMessageEntity> {
-    return this.contacts.manager.transaction(async (m) => {
-      await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [tenantId]);
-      const entity = m.create(ContactMessageEntity, { ...data, tenantId });
-      return m.save(entity);
+    return this.withContacts(tenantId, async (repo) => {
+      const entity = repo.create({ ...data, tenantId });
+      return repo.save(entity);
     });
   }
 
@@ -341,19 +354,23 @@ export class CrmRepository {
     leadId: number,
     options: { skip: number; take: number },
   ): Promise<[ContactMessageEntity[], number]> {
-    return this.contacts.findAndCount({
-      where: { leadId, tenantId },
-      order: { createdAt: 'DESC', id: 'DESC' },
-      skip: options.skip,
-      take: options.take,
-    });
+    return this.withContacts(tenantId, (repo) =>
+      repo.findAndCount({
+        where: { leadId, tenantId },
+        order: { createdAt: 'DESC', id: 'DESC' },
+        skip: options.skip,
+        take: options.take,
+      }),
+    );
   }
 
   async countContactsByLeadId(
     tenantId: string,
     leadId: number,
   ): Promise<number> {
-    return this.contacts.count({ where: { leadId, tenantId } });
+    return this.withContacts(tenantId, (repo) =>
+      repo.count({ where: { leadId, tenantId } }),
+    );
   }
 
   /** شمارش سوابق تماس برای مجموعه‌ای از سرنخ‌ها (برای غنی‌سازی فهرست). */
@@ -365,16 +382,18 @@ export class CrmRepository {
       return new Map();
     }
 
-    const rows = await this.contacts
-      .createQueryBuilder('contact')
-      .select('contact.leadId', 'leadId')
-      .addSelect('COUNT(contact.id)', 'count')
-      .where({ leadId: In(leadIds), tenantId })
-      .groupBy('contact.leadId')
-      .getRawMany<ContactCountRow>();
+    return this.withContacts(tenantId, async (repo) => {
+      const rows = await repo
+        .createQueryBuilder('contact')
+        .select('contact.leadId', 'leadId')
+        .addSelect('COUNT(contact.id)', 'count')
+        .where({ leadId: In(leadIds), tenantId })
+        .groupBy('contact.leadId')
+        .getRawMany<ContactCountRow>();
 
-    return new Map(
-      rows.map((row) => [Number(row.leadId), Number(row.count)]),
-    );
+      return new Map(
+        rows.map((row) => [Number(row.leadId), Number(row.count)]),
+      );
+    });
   }
 }
