@@ -95,4 +95,17 @@ export class StockDocumentLineEntity {
 
   @Column({ type: 'varchar', length: 100, name: 'batch_number', nullable: true })
   batchNumber: string | null;
+
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    name: 'secondary_quantity',
+    nullable: true,
+    transformer: numeric,
+  })
+  secondaryQuantity?: number | null;
+
+  @Column({ type: 'jsonb', name: 'serial_numbers', nullable: true })
+  serialNumbers?: string[] | null;
 }
