@@ -2057,6 +2057,17 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/tax-compliance/moadian/invoices/:invoiceId/pre-flight (MoadianController.preFlightGet)": {
+    "policy": "tax:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/tax-compliance/moadian/invoices/:invoiceId/status (MoadianController.status)": {
     "policy": "tax:read",
     "owner": true,
@@ -4487,6 +4498,17 @@
     "legacy_member": false
   },
   "POST /enterprise-hub/tax-compliance/moadian/compliance/check-article-6-cap (MoadianController.checkArticle6Cap)": {
+    "policy": "tax:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/tax-compliance/moadian/invoices/:invoiceId/pre-flight (MoadianController.preFlight)": {
     "policy": "tax:read",
     "owner": true,
     "admin": true,
