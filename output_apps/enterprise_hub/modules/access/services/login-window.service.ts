@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, Optional } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { SetLoginScheduleDto } from '../dto/login-schedule.dto';
 import { LoginTimeWindow, UserLoginScheduleEntity } from '../entities/user-login-schedule.entity';
 import { LoginSchedulesRepository } from '../repositories/login-schedules.repository';

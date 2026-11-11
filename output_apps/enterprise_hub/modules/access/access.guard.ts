@@ -69,6 +69,9 @@ export class AccessGuard implements CanActivate {
     }
 
     if (this.reflector.getAllAndOverride<boolean | undefined>(AUTH_ONLY_KEY, targets)) {
+      if (user.tenantId && user.sub) {
+        await this.loginWindow.assertAllowed(user.tenantId, user.sub);
+      }
       return true;
     }
     // Platform-operator routes: RolesGuard already enforced the global role.

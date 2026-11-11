@@ -12,12 +12,12 @@ import { CostMaskingService } from './services/cost-masking.service';
 export class CostMaskingInterceptor implements NestInterceptor {
   private readonly costMasking: CostMaskingService;
 
-  /** Explicitly exempt route paths where raw financial ledger entries or auth sessions operate */
-  private readonly exemptPaths = [
+  /** Explicitly exempt route path prefixes where raw financial ledger entries or auth sessions operate */
+  private readonly exemptPrefixes = [
     '/enterprise-hub/accounting',
     '/enterprise-hub/period-locks',
     '/enterprise-hub/audit',
-    '/enterprise-hub/auth/',
+    '/enterprise-hub/auth',
   ];
 
   constructor(@Optional() costMasking?: CostMaskingService) {
@@ -34,9 +34,11 @@ export class CostMaskingInterceptor implements NestInterceptor {
           return data;
         }
 
-        const url = request.originalUrl || request.url || '';
+        // Parse pathname, stripping query parameters and hash fragments to prevent spoofing bypasses
+        const rawUrl = request.originalUrl || request.url || '';
+        const pathname = rawUrl.split('?')[0].split('#')[0];
         // Skip explicitly exempt routes (ledger accounting, audit logs, auth session endpoints)
-        if (this.exemptPaths.some((p) => url.includes(p))) {
+        if (this.exemptPrefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
           return data;
         }
 

@@ -207,6 +207,34 @@ describe('Hidden Purchase Price and Cost API Protection (#230 / T76)', () => {
       }).not.toThrow();
     });
 
+    it('handles shared references in lists/relations by returning the masked clone without leaking costs', () => {
+      const sharedProduct = { id: 'prod-1', name: 'Widget', unitPurchaseCost: 500000, landedCost: 20000 };
+      const orderLines = [
+        { lineId: 1, product: sharedProduct, quantity: 2 },
+        { lineId: 2, product: sharedProduct, quantity: 5 },
+      ];
+
+      const masked = maskingService.maskCostFields(orderLines, false);
+      expect(masked[0].product.unitPurchaseCost).toBeNull();
+      expect(masked[0].product.landedCost).toBeNull();
+      expect(masked[1].product.unitPurchaseCost).toBeNull();
+      expect(masked[1].product.landedCost).toBeNull();
+      // Verifies both rows reference the masked object
+      expect(masked[0].product).toBe(masked[1].product);
+    });
+
+    it('preserves typed arrays (Float64Array, Uint8Array) and ArrayBuffers without corruption', () => {
+      const floatArr = new Float64Array([1.23, 4.56, 7.89]);
+      const uintArr = new Uint8Array([1, 2, 3]);
+      const bufferObj = { id: 1, floatArr, uintArr };
+
+      const masked = maskingService.maskCostFields(bufferObj, false);
+      expect(masked.floatArr).toBeInstanceOf(Float64Array);
+      expect(Array.from(masked.floatArr)).toEqual([1.23, 4.56, 7.89]);
+      expect(masked.uintArr).toBeInstanceOf(Uint8Array);
+      expect(Array.from(masked.uintArr)).toEqual([1, 2, 3]);
+    });
+
     it('scans and sanitizes Maps and Sets without corruption', () => {
       const itemSet = new Set([
         { sku: 'ITEM-1', unitCost: 100 },
@@ -333,6 +361,37 @@ describe('Hidden Purchase Price and Cost API Protection (#230 / T76)', () => {
       interceptor.intercept(mockContext, mockHandler).subscribe({
         next: (result: any) => {
           expect(result.cost).toBe(5000); // Unmasked because route is exempt
+          done();
+        },
+      });
+    });
+
+    it('prevents query-string parameter injection from bypassing the interceptor (e.g. ?query=/enterprise-hub/accounting)', (done) => {
+      const interceptor = new CostMaskingInterceptor(maskingService);
+
+      const mockRequest = {
+        originalUrl: '/enterprise-hub/inventory/items?x=/enterprise-hub/accounting',
+        url: '/enterprise-hub/inventory/items?x=/enterprise-hub/accounting',
+        user: {
+          sub: 'user-sales-1',
+          tenantRole: SystemRole.SALES,
+        },
+      };
+
+      const mockContext = {
+        switchToHttp: () => ({
+          getRequest: () => mockRequest,
+        }),
+      } as any;
+
+      const mockHandler = {
+        handle: () => of({ itemId: 'item-99', unitPurchaseCost: 85000, name: 'Protected Item' }),
+      };
+
+      interceptor.intercept(mockContext, mockHandler).subscribe({
+        next: (result: any) => {
+          expect(result.name).toBe('Protected Item');
+          expect(result.unitPurchaseCost).toBeNull(); // Must be masked despite ?x=/enterprise-hub/accounting in query
           done();
         },
       });

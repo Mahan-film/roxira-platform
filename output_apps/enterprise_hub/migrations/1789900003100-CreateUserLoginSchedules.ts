@@ -7,7 +7,7 @@ import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
  * Protected with ENABLE + FORCE ROW LEVEL SECURITY.
  */
 export class CreateUserLoginSchedules1789900003100 implements MigrationInterface {
-  name = 'CreateUserLoginSchedules1789900003000';
+  name = 'CreateUserLoginSchedules1789900003100';
 
   private readonly table = 'user_login_schedules';
 

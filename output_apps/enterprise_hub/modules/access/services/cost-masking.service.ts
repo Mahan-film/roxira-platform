@@ -38,18 +38,23 @@ export class CostMaskingService {
 
   /**
    * Checks if a field name represents a sensitive purchase cost or valuation.
+   * Explicitly avoids masking cost centre dimension keys (e.g. costCenter, costCentre, costCenterId).
    */
   isCostField(key: string): boolean {
+    if (/^(cost_?cent(er|re)(_?(id|code|name|title))?)$/i.test(key)) {
+      return false;
+    }
     return COST_SENSITIVE_FIELD_REGEX.test(key);
   }
 
   /**
    * Recursively scrubs sensitive purchase cost and price fields from API response payloads.
    * If canViewCost is false, sensitive fields are set to null.
-   * Cycle-safe with WeakSet, scans nested arrays, Sets, and Maps, and preserves
-   * Date, Buffer, BigInt, Streams, and TypedArrays without corruption.
+   * Memoises cloned instances via Map to safely handle shared references and bidirectional cycles,
+   * scans nested arrays, Sets, and Maps, and preserves Date, Buffer, BigInt, Streams,
+   * ArrayBuffer, and TypedArrays without corruption.
    */
-  maskCostFields<T>(payload: T, canViewCost: boolean, visited = new WeakSet<object>()): T {
+  maskCostFields<T>(payload: T, canViewCost: boolean, visited = new Map<object, any>()): T {
     if (canViewCost || payload === null || payload === undefined) {
       return payload;
     }
@@ -59,20 +64,36 @@ export class CostMaskingService {
       return payload;
     }
 
-    // Cycle guard for bidirectional or recursive object graphs
+    // Cycle & shared reference guard: return memoised masked clone
     if (visited.has(payload)) {
+      return visited.get(payload);
+    }
+
+    // Preserve special non-plain objects: Date, Buffer, TypedArray, ArrayBuffer, Streams
+    if (
+      payload instanceof Date ||
+      (typeof Buffer !== 'undefined' && Buffer.isBuffer(payload)) ||
+      ArrayBuffer.isView(payload) ||
+      payload instanceof ArrayBuffer ||
+      typeof (payload as any).pipe === 'function'
+    ) {
       return payload;
     }
-    visited.add(payload);
 
     // Arrays: scan all elements recursively
     if (Array.isArray(payload)) {
-      return payload.map((item) => this.maskCostFields(item, canViewCost, visited)) as unknown as T;
+      const sanitizedArr: any[] = [];
+      visited.set(payload, sanitizedArr);
+      for (const item of payload) {
+        sanitizedArr.push(this.maskCostFields(item, canViewCost, visited));
+      }
+      return sanitizedArr as unknown as T;
     }
 
     // Sets: scan elements and return cloned set
     if (payload instanceof Set) {
       const sanitizedSet = new Set();
+      visited.set(payload, sanitizedSet);
       for (const item of payload) {
         sanitizedSet.add(this.maskCostFields(item, canViewCost, visited));
       }
@@ -82,6 +103,7 @@ export class CostMaskingService {
     // Maps: scan keys and values recursively
     if (payload instanceof Map) {
       const sanitizedMap = new Map();
+      visited.set(payload, sanitizedMap);
       for (const [k, v] of payload.entries()) {
         const isKeyCost = typeof k === 'string' && this.isCostField(k);
         sanitizedMap.set(k, isKeyCost ? null : this.maskCostFields(v, canViewCost, visited));
@@ -89,20 +111,11 @@ export class CostMaskingService {
       return sanitizedMap as unknown as T;
     }
 
-    // Preserve special non-plain objects: Date, Buffer, TypedArray, Streams
-    if (
-      payload instanceof Date ||
-      (typeof Buffer !== 'undefined' && Buffer.isBuffer(payload)) ||
-      payload instanceof Uint8Array ||
-      typeof (payload as any).pipe === 'function'
-    ) {
-      return payload;
-    }
-
     // Objects and Class/Entity instances: clone with prototype preserved
     const proto = Object.getPrototypeOf(payload);
     const sanitized: Record<string, any> =
       proto && proto !== Object.prototype ? Object.create(proto) : {};
+    visited.set(payload, sanitized);
     for (const [key, value] of Object.entries(payload)) {
       if (this.isCostField(key)) {
         sanitized[key] = null;
