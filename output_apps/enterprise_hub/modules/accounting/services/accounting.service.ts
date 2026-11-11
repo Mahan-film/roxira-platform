@@ -149,7 +149,7 @@ export class AccountingService {
     private readonly currencyService: CurrencyService,
     /** Optional so unit tests and tools can build the service without the access module. */
     @Optional() private readonly ledgerAudit?: LedgerAuditService,
-    @Optional() private readonly budgetControl?: BudgetControlService,
+    private readonly budgetControl?: BudgetControlService,
   ) {}
 
   private toAccountDto(entity: ChartOfAccountEntity): AccountResponseDto {
@@ -738,20 +738,39 @@ export class AccountingService {
       }
       if (this.budgetControl && status === JournalEntryStatus.POSTED) {
         const warnings: string[] = [];
+        const groupedSpend = new Map<
+          string,
+          { projectCode?: string | null; costCenterCode?: string | null; amountMinor: bigint }
+        >();
+
         for (const line of lineInputs) {
           if ((line.projectCode || line.costCenterCode) && line.debitMinor > 0n) {
-            const check = await this.budgetControl.checkBudget(
-              tenantId,
-              {
+            const key = `${line.projectCode ?? ''}:::${line.costCenterCode ?? ''}`;
+            const existing = groupedSpend.get(key);
+            if (existing) {
+              existing.amountMinor += line.debitMinor;
+            } else {
+              groupedSpend.set(key, {
                 projectCode: line.projectCode,
                 costCenterCode: line.costCenterCode,
                 amountMinor: line.debitMinor,
-              },
-              manager,
-            );
-            if (check.warning && !warnings.includes(check.warning)) {
-              warnings.push(check.warning);
+              });
             }
+          }
+        }
+
+        for (const item of groupedSpend.values()) {
+          const check = await this.budgetControl.checkBudget(
+            tenantId,
+            {
+              projectCode: item.projectCode,
+              costCenterCode: item.costCenterCode,
+              amountMinor: item.amountMinor,
+            },
+            manager,
+          );
+          if (check.warning && !warnings.includes(check.warning)) {
+            warnings.push(check.warning);
           }
         }
         if (warnings.length > 0) {

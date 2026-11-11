@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
-import { fromDb, toMinor } from '../../accounting/money';
+import { fromDb, fromMinor, toMinor } from '../../accounting/money';
 import { PolicyService } from '../../tenants/policy/policy.service';
 
 export interface CreditExposureSummary {
@@ -123,12 +123,12 @@ export class CreditExposureService {
       if (totalExposure + newAmountMinor > limit) {
         if (mode === 'refuse') {
           throw new BadRequestException(
-            `سقف اعتبار مشتری تکمیل شده است. سقف اعتبار: ${limit} ریال، میزان تعهدات فعلی (فاکتورهای باز و چک‌های صیادی وصول‌نشده): ${totalExposure} ریال، مبلغ جدید: ${newAmountMinor} ریال.`,
+            `سقف اعتبار مشتری تکمیل شده است. سقف اعتبار: ${fromMinor(limit)} ریال، میزان تعهدات فعلی (فاکتورهای باز و چک‌های صیادی وصول‌نشده): ${fromMinor(totalExposure)} ریال، مبلغ جدید: ${fromMinor(newAmountMinor)} ریال.`,
           );
         }
         return {
           allowed: true,
-          warning: `میزان تعهدات مشتری (فاکتورهای باز + چک‌های صیادی وصول‌نشده) از سقف اعتبار مصوب (${limit} ریال) فراتر رفته است.`,
+          warning: `میزان تعهدات مشتری (فاکتورهای باز + چک‌های صیادی وصول‌نشده) از سقف اعتبار مصوب (${fromMinor(limit)} ریال) فراتر رفته است.`,
           exposure: totalExposure,
           limit,
         };

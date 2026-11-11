@@ -45,7 +45,7 @@ export class SalesController {
   }
 
   private roleOf(request: AuthenticatedRequest): string {
-    return request.user?.tenantRole ?? request.user?.role ?? '';
+    return (request as any).access?.roleKey ?? request.user?.tenantRole ?? request.user?.role ?? '';
   }
 
   // ------------------------------------------------------------------ quotations

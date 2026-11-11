@@ -49,13 +49,15 @@ export class DiscountPolicyService {
 
     // Calculate maximum discount percentage requested
     let maxRequestedPercent = invoiceDiscountPercent > 0 ? invoiceDiscountPercent : 0;
+    let limitExceeded = maxRequestedPercent > roleLimit;
 
     for (const line of lines) {
       let percent = line.discountPercent ?? 0;
       if (percent <= 0 && line.discountAmountMinor && line.grossAmountMinor && line.grossAmountMinor > 0n) {
+        const pctNumber = Number((line.discountAmountMinor * 10000n) / line.grossAmountMinor) / 100;
+        percent = pctNumber;
         if (line.discountAmountMinor * 100n > line.grossAmountMinor * BigInt(roleLimit)) {
-          const ratio = (line.discountAmountMinor * 100n) / line.grossAmountMinor;
-          percent = Number(ratio);
+          limitExceeded = true;
         }
       }
       if (percent > maxRequestedPercent) {
@@ -63,7 +65,7 @@ export class DiscountPolicyService {
       }
     }
 
-    if (maxRequestedPercent > roleLimit) {
+    if (limitExceeded || maxRequestedPercent > roleLimit) {
       if (enforcement === 'refuse') {
         throw new BadRequestException(
           `درصد تخفیف اعمال‌شده (${maxRequestedPercent}٪) از سقف مجاز نقش شما (${roleLimit}٪) فراتر است.`,
@@ -100,10 +102,8 @@ export class DiscountPolicyService {
     }
 
     if (
-      normalizedRole === SystemRole.ACCOUNTANT ||
-      normalizedRole === 'accountant' ||
-      normalizedRole.includes('manager') ||
-      normalizedRole === 'sales_manager'
+      normalizedRole === 'sales_manager' ||
+      normalizedRole === 'manager'
     ) {
       const managerLimit = (await this.policyService.get(
         tenantId,

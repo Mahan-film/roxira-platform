@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
-import { fromDb } from '../money';
+import { fromDb, fromMinor } from '../money';
 import { PolicyService } from '../../tenants/policy/policy.service';
 
 export interface BudgetCheckInput {
@@ -135,12 +135,12 @@ export class BudgetControlService {
       if (totalProjected > budgetMinor) {
         if (mode === 'refuse') {
           throw new BadRequestException(
-            `مبلغ هزینه از سقف بودجه مصوب ${targetLabel} فراتر است. سقف بودجه: ${budgetMinor} ریال، مجموع هزینه‌های فعلی: ${actualSpendMinor} ریال، مبلغ جدید: ${input.amountMinor} ریال.`,
+            `مبلغ هزینه از سقف بودجه مصوب ${targetLabel} فراتر است. سقف بودجه: ${fromMinor(budgetMinor)} ریال، مجموع هزینه‌های فعلی: ${fromMinor(actualSpendMinor)} ریال، مبلغ جدید: ${fromMinor(input.amountMinor)} ریال.`,
           );
         }
         return {
           allowed: true,
-          warning: `مبلغ هزینه از سقف بودجه مصوب ${targetLabel} (${budgetMinor} ریال) فراتر رفته است. مجموع هزینه با احتساب این سند: ${totalProjected} ریال.`,
+          warning: `مبلغ هزینه از سقف بودجه مصوب ${targetLabel} (${fromMinor(budgetMinor)} ریال) فراتر رفته است. مجموع هزینه با احتساب این سند: ${fromMinor(totalProjected)} ریال.`,
           actualSpendMinor,
           budgetMinor,
         };

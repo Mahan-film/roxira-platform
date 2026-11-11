@@ -2,7 +2,7 @@ import { Injectable, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
-import { parseScaled } from '../../accounting/money';
+import { parseScaled, toMinor } from '../../accounting/money';
 import {
   assertValidQuantityScale,
   MONEY_SCALE,
@@ -716,9 +716,18 @@ export class InventoryRepository {
           }
           let unitPurchaseCost = 0;
           if (layers.length > 0) {
-            const totalCost = layers.reduce((acc, l) => acc + l.quantity * l.unitPurchaseCost, 0);
-            const totalQty = layers.reduce((acc, l) => acc + l.quantity, 0);
-            unitPurchaseCost = totalQty > 0 ? this.roundMoney(totalCost / totalQty) : 0;
+            let totalCostMinor = 0n;
+            let totalQtyHundredths = 0n;
+            for (const l of layers) {
+              const q = BigInt(Math.round(l.quantity * 100));
+              const c = toMinor(l.unitPurchaseCost);
+              totalCostMinor += (q * c) / 100n;
+              totalQtyHundredths += q;
+            }
+            if (totalQtyHundredths > 0n) {
+              const avgMinor = (totalCostMinor * 100n) / totalQtyHundredths;
+              unitPurchaseCost = Number(avgMinor) / 100;
+            }
           }
           if (unitPurchaseCost === 0) {
             const latestBatch = await manager
@@ -764,7 +773,7 @@ export class InventoryRepository {
     if (rows.length > 0 && rows[0].value !== null && rows[0].value !== undefined) {
       let raw = rows[0].value;
       if (typeof raw === 'object' && raw !== null) {
-        raw = (raw as Record<string, unknown>).value ?? JSON.stringify(raw);
+        raw = (raw as Record<string, unknown>).value ?? '';
       }
       const val = typeof raw === 'string'
         ? raw.replace(/^"|"$/g, '').trim()

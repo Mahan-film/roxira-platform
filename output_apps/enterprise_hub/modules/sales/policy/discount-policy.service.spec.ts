@@ -75,17 +75,17 @@ describe('DiscountPolicyService', () => {
     expect(result.limit).toBe(25);
   });
 
-  it('calculates percent from discountAmountMinor and grossAmountMinor when percent not provided', async () => {
+  it('calculates percent from discountAmountMinor and grossAmountMinor and catches fractional exceedance (e.g. 10.9% vs 10%)', async () => {
     mockPolicyService.get
       .mockResolvedValueOnce('refuse')
       .mockResolvedValueOnce(10);
 
-    // discount 200,000 on 1,000,000 = 20% > 10%
+    // discount 109 on 1000 = 10.9% > 10% limit
     await expect(
       service.checkDiscount('tenant-1', 'sales_agent', [
         {
-          discountAmountMinor: 20000000n,
-          grossAmountMinor: 100000000n,
+          discountAmountMinor: 109n,
+          grossAmountMinor: 1000n,
         },
       ]),
     ).rejects.toThrow(BadRequestException);
@@ -103,12 +103,12 @@ describe('DiscountPolicyService', () => {
       expect(adminRes.limit).toBe(100);
     });
 
-    it('maps SystemRole.ACCOUNTANT to manager discount limit (default 25%)', async () => {
+    it('maps explicit sales_manager / manager roles to manager discount limit (default 25%)', async () => {
       mockPolicyService.get
         .mockResolvedValueOnce('refuse') // enforcement
         .mockResolvedValueOnce(25); // manager limit
 
-      const res = await service.checkDiscount('tenant-1', SystemRole.ACCOUNTANT, [{ discountPercent: 20 }]);
+      const res = await service.checkDiscount('tenant-1', 'sales_manager', [{ discountPercent: 20 }]);
       expect(res.allowed).toBe(true);
       expect(res.limit).toBe(25);
     });
@@ -123,8 +123,16 @@ describe('DiscountPolicyService', () => {
       expect(res.limit).toBe(10);
     });
 
-    it('fails closed (0% limit) for non-sales roles like read_only, hr or empty role', async () => {
+    it('fails closed (0% limit) for non-sales roles like accountant, hr_manager, read_only or empty role', async () => {
       mockPolicyService.get.mockResolvedValue('refuse');
+
+      await expect(
+        service.checkDiscount('tenant-1', SystemRole.ACCOUNTANT, [{ discountPercent: 1 }]),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.checkDiscount('tenant-1', 'hr_manager', [{ discountPercent: 1 }]),
+      ).rejects.toThrow(BadRequestException);
 
       await expect(
         service.checkDiscount('tenant-1', SystemRole.READ_ONLY, [{ discountPercent: 1 }]),

@@ -351,18 +351,32 @@ describePg('Controls & Policies on PostgreSQL (NOSUPERUSER NOBYPASSRLS, FORCE RL
       );
       expect(ownerQuote).toBeDefined();
 
-      // 6. Real SystemRole: accountant (manager tier) and sales (agent tier)
-      const accountantQuote = await salesService.createQuotation(
+      // 6. Explicit manager role (20% <= 25%) succeeds
+      const managerExplicitQuote = await salesService.createQuotation(
         TENANT_ID,
         {
           partyCode: customerCode,
           quoteDate: '2026-11-08',
           lines: [{ itemId: testItemId, quantity: 1, unitPrice: 100000, discount: 20000 }], // 20% <= 25%
         },
-        'accountant-1',
-        'accountant',
+        'manager-explicit',
+        'manager',
       );
-      expect(accountantQuote).toBeDefined();
+      expect(managerExplicitQuote).toBeDefined();
+
+      // 7. Non-sales role (accountant / hr_manager) fails closed (refused)
+      await expect(
+        salesService.createQuotation(
+          TENANT_ID,
+          {
+            partyCode: customerCode,
+            quoteDate: '2026-11-08',
+            lines: [{ itemId: testItemId, quantity: 1, unitPrice: 100000, discount: 5000 }],
+          },
+          'accountant-1',
+          'accountant',
+        ),
+      ).rejects.toThrow(BadRequestException);
 
       const salesQuote = await salesService.createQuotation(
         TENANT_ID,
