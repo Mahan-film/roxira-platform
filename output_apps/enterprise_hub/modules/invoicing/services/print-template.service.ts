@@ -86,7 +86,8 @@ export class PrintTemplateService {
         ? dto.columnsConfig
         : DEFAULT_COLUMNS_CONFIG[dto.docType] ?? [];
 
-    const options: PrintTemplateOptions = {
+    const rawOptions: PrintTemplateOptions = {
+      headerTitle: dto.options?.headerTitle ?? PRINT_DOC_TYPE_LABELS[dto.docType],
       barcodeColumns: dto.docType === PrintDocType.BARCODE_LABELS ? 4 : undefined,
       showPrice: true,
       showSku: true,
@@ -94,6 +95,7 @@ export class PrintTemplateService {
       signatures: ['تنظیم‌کننده', 'تأییدکننده', 'دریافت‌کننده'],
       ...(dto.options ?? {}),
     };
+    const options = sanitizeOptions(rawOptions);
 
     let saved: PrintTemplateEntity;
     try {
@@ -111,7 +113,11 @@ export class PrintTemplateService {
         Boolean(dto.isDefault),
       );
     } catch (err: any) {
-      if (err?.code === '23505' || err?.message?.includes('UQ_inv_print_templates_tenant_title')) {
+      const isTitleConflict =
+        err?.message?.includes('UQ_inv_print_templates_tenant_title') ||
+        err?.detail?.includes('UQ_inv_print_templates_tenant_title') ||
+        (err?.code === '23505' && !err?.message?.includes('default'));
+      if (isTitleConflict) {
         throw new ConflictException(`قالب چاپی با عنوان «${dto.title}» قبلاً برای این سازمان تعریف شده است.`);
       }
       throw err;
@@ -161,13 +167,19 @@ export class PrintTemplateService {
           ...(dto.showLogo !== undefined ? { showLogo: Boolean(dto.showLogo) } : {}),
           ...(dto.logoUrl !== undefined ? { logoUrl: dto.logoUrl } : {}),
           ...(dto.columnsConfig !== undefined ? { columnsConfig: dto.columnsConfig } : {}),
-          ...(dto.options !== undefined ? { options: { ...existing.options, ...dto.options } } : {}),
+          ...(dto.options !== undefined
+            ? { options: sanitizeOptions({ ...existing.options, ...dto.options }) }
+            : {}),
         },
         dto.isDefault !== undefined ? Boolean(dto.isDefault) : existing.isDefault,
         id,
       );
     } catch (err: any) {
-      if (err?.code === '23505' || err?.message?.includes('UQ_inv_print_templates_tenant_title')) {
+      const isTitleConflict =
+        err?.message?.includes('UQ_inv_print_templates_tenant_title') ||
+        err?.detail?.includes('UQ_inv_print_templates_tenant_title') ||
+        (err?.code === '23505' && !err?.message?.includes('default'));
+      if (isTitleConflict) {
         throw new ConflictException(`قالب چاپی با عنوان «${dto.title}» قبلاً برای این سازمان تعریف شده است.`);
       }
       throw err;
@@ -206,6 +218,7 @@ export class PrintTemplateService {
       logoUrl: null,
       columnsConfig: DEFAULT_COLUMNS_CONFIG[docType] ?? [],
       options: {
+        headerTitle: PRINT_DOC_TYPE_LABELS[docType] ?? 'فاکتور فروش',
         barcodeColumns: 4,
         showPrice: true,
         showSku: true,
@@ -280,7 +293,7 @@ export class PrintTemplateService {
             ${showSku ? `<div class="label-sku">کد: ${escapeXml(item.sku)}</div>` : ''}
             <div class="label-barcode-box">
               ${barcodeResult.svg}
-              <div class="label-barcode-digits">${escapeXml(barcodeVal)}</div>
+              <div class="label-barcode-digits">${escapeXml(barcodeResult.encodedText)}</div>
             </div>
             ${priceStr ? `<div class="label-price">${priceStr}</div>` : ''}
           </div>
@@ -412,6 +425,19 @@ export class PrintTemplateService {
       updatedAt: entity.updatedAt.toISOString(),
     };
   }
+}
+
+function sanitizeOptions(opts?: Partial<PrintTemplateOptions>): PrintTemplateOptions {
+  if (!opts) return {};
+  return {
+    headerTitle: typeof opts.headerTitle === 'string' ? opts.headerTitle.trim().slice(0, 128) : undefined,
+    footerNote: typeof opts.footerNote === 'string' ? opts.footerNote.trim().slice(0, 500) : undefined,
+    barcodeColumns: opts.barcodeColumns === 5 ? 5 : opts.barcodeColumns === 4 ? 4 : undefined,
+    showPrice: opts.showPrice !== undefined ? Boolean(opts.showPrice) : undefined,
+    showSku: opts.showSku !== undefined ? Boolean(opts.showSku) : undefined,
+    showSignatures: opts.showSignatures !== undefined ? Boolean(opts.showSignatures) : undefined,
+    signatures: Array.isArray(opts.signatures) ? opts.signatures.map((s) => String(s).slice(0, 64)) : undefined,
+  };
 }
 
 function escapeXml(unsafe: string): string {

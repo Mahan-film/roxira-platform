@@ -207,7 +207,7 @@ describe('PrintTemplateService & Repository', () => {
         items: [
           {
             sku: 'SKU-001',
-            barcode: '6261234567890',
+            barcode: '6261234567897',
             title: 'شامپو پروتئینه',
             price: '500000', // 500,000 Rials
             count: 4,
@@ -217,7 +217,7 @@ describe('PrintTemplateService & Repository', () => {
 
       expect(html).toContain('width: 24%');
       expect(html).toContain('شامپو پروتئینه');
-      expect(html).toContain('6261234567890');
+      expect(html).toContain('6261234567897');
       expect(html).toContain('کد: SKU-001');
       expect(html).toContain('<svg class="barcode-svg"');
       expect(html).toContain('<rect x="');

@@ -10,6 +10,8 @@ import { formatJalaliDate, formatMoneyRial, formatNumber } from "@/lib/fa-format
 import { integerToPersianWords } from "@/lib/persian-words";
 import { printReceiptPaymentVoucher } from "@/lib/print/open-receipt-payment-voucher-window";
 import { formatMethodDetail } from "@/lib/print/receipt-payment-voucher";
+import { getDefaultPrintTemplate } from "@/lib/api/print-templates-client";
+import { PrintDocType, PrintPaperSize } from "@/types/print-template";
 import {
   TREASURY_KIND_LABELS,
   TREASURY_METHOD_LABELS,
@@ -37,7 +39,17 @@ export function ReceiptPaymentPrintButton({
       size={size}
       variant={variant}
       className={className}
-      onClick={() => printReceiptPaymentVoucher(doc, companyName)}
+      onClick={async () => {
+        try {
+          const tpl = await getDefaultPrintTemplate(
+            PrintDocType.RECEIPT_PAYMENT_VOUCHER,
+            PrintPaperSize.A5,
+          );
+          printReceiptPaymentVoucher(doc, companyName, tpl);
+        } catch {
+          printReceiptPaymentVoucher(doc, companyName);
+        }
+      }}
     >
       <Printer className="size-4 ml-1.5" />
       چاپ رسید

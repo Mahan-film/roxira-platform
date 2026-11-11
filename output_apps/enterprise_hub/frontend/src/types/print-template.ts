@@ -38,6 +38,7 @@ export interface PrintColumnConfig {
 }
 
 export interface PrintTemplateOptions {
+  headerTitle?: string;
   barcodeColumns?: number; // 4 یا 5 ستونه
   showPrice?: boolean;
   showSku?: boolean;

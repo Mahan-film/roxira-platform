@@ -10,6 +10,8 @@ import {
   type InvoiceResponseDto,
 } from "../../types/invoicing.ts";
 
+import type { PrintColumnConfig } from "../../types/print-template.ts";
+
 /** The Moadian e-invoice types; any other value (there is no "none" member) is not an e-invoice. */
 const MOADIAN_TYPES: readonly EInvoiceType[] = [
   EInvoiceType.WITH_BUYER,
@@ -23,6 +25,7 @@ export interface SalesInvoicePrintCustomOptions {
   footerText?: string;
   notes?: string;
   showLogo?: boolean;
+  columnsConfig?: PrintColumnConfig[];
 }
 
 /**

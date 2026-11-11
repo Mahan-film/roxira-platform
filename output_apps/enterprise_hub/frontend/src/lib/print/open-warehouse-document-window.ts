@@ -12,8 +12,14 @@ export function printWarehouseDocument(
   template?: Partial<PrintTemplateDto>,
 ): void {
   const data = mapStockDocumentToWarehouseA4Data(doc, warehouseName);
-  if (template?.title) {
-    data.docTitle = template.title;
+  if (template?.options?.headerTitle) {
+    data.docTitle = template.options.headerTitle;
+  }
+  if (template?.logoUrl && template?.showLogo !== false) {
+    data.logoUrl = template.logoUrl;
+  }
+  if (template?.options?.footerNote) {
+    data.footerText = template.options.footerNote;
   }
   const html = renderTemplate(WAREHOUSE_DOCUMENT_A4_TEMPLATE, data);
   const printWindow = window.open("", "_blank");
