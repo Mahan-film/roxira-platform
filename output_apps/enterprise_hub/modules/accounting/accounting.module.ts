@@ -48,6 +48,7 @@ import { VoucherAttachmentService } from './services/voucher-attachment.service'
 import { ChartTemplateService } from './services/chart-template.service';
 import { CostCentreReportService } from './services/cost-centre-report.service';
 import { FinancialReportsService } from './services/financial-reports.service';
+import { ConsolidatedReportService } from './services/consolidated-report.service';
 import { FiscalYearService } from './services/fiscal-year.service';
 import { PettyCashService } from './services/petty-cash.service';
 import { ReportExportService } from './services/report-export.service';
@@ -125,6 +126,7 @@ import { BudgetVsActualService } from './services/budget-vs-actual.service';
       useExisting: FIXED_ASSET_POSTING,
     },
     ChartTemplateService,
+    ConsolidatedReportService,
     CostCentreReportService,
     FinancialReportsService,
     FiscalYearRepository,
@@ -135,7 +137,8 @@ import { BudgetVsActualService } from './services/budget-vs-actual.service';
     ReportExportService,
     VoucherToolsService,
     BudgetControlService,
+    ConsolidatedReportService,
   ],
-  exports: [AccountingService, FinancialReportsService, ReportExportService, CostCentreReportService, BudgetVsActualService, BudgetControlService],
+  exports: [AccountingService, FinancialReportsService, ReportExportService, CostCentreReportService, BudgetVsActualService, BudgetControlService, ConsolidatedReportService],
 })
 export class AccountingModule {}
