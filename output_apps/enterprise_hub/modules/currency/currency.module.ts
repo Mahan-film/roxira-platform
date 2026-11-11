@@ -12,7 +12,6 @@ import { FxRevaluationService } from './services/fx-revaluation.service';
  * ثبت اسناد تسعیر ارز پایان دوره از طریق PostingRulesService به صورت تنبل و بدون وابستگی چرخه‌ای انجام می‌شود.
  */
 @Module({
-  imports: [],
   controllers: [CurrencyController],
   providers: [CurrencyService, FxRevaluationService, TenantScope],
   exports: [CurrencyService, FxRevaluationService],

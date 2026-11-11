@@ -9,6 +9,7 @@ import { ModuleRef } from '@nestjs/core';
 import { createHash } from 'crypto';
 import { EntityManager } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
+import { MONEY_SCALE } from '../../accounting/constants/accounting.constants';
 import { AccountLevel, AccountType } from '../../accounting/enums/accounting.enum';
 import { toMinor } from '../../accounting/money';
 import { AccountingService } from '../../accounting/services/accounting.service';
@@ -131,10 +132,15 @@ export class FxRevaluationService {
     }
     const rate = rawRate !== undefined && rawRate > 0n ? rawRate : this.getRateToRial(balance.currency);
     const decimals = CURRENCY_METADATA[balance.currency]?.decimals ?? 2;
-    const scale = 10n ** BigInt(decimals);
+    const foreignScale = 10n ** BigInt(decimals);
+    const rialMinorFactor = 10n ** BigInt(MONEY_SCALE);
 
-    // Exact integer division with half-up rounding (Lesson 8)
-    const currentValue = (balance.foreignAmountMinor * rate + scale / 2n) / scale;
+    // Exact integer division with half-up rounding into Rial minor units (10^MONEY_SCALE) (Lesson 8)
+    // balance.foreignAmountMinor is in foreign minor units (e.g. cents)
+    // rate is whole Rial per foreign unit
+    // rialMinorFactor scales whole Rial into Rial minor units (e.g. 100 for MONEY_SCALE=2)
+    const currentValue =
+      (balance.foreignAmountMinor * rate * rialMinorFactor + foreignScale / 2n) / foreignScale;
     const diff = currentValue - balance.bookValueRialMinor;
 
     let type: 'gain' | 'loss' | 'neutral' = 'neutral';
@@ -336,6 +342,10 @@ export class FxRevaluationService {
     const executePosting = async (em?: EntityManager) => {
       const postingResults: PostingResult[] = [];
 
+      // Re-fetch ledger accounts inside tenant transaction scope to guard against concurrent balance changes
+      const freshAccounts = await this.accounting.listAccounts(tenantId);
+      const freshAccountMap = new Map(freshAccounts.map((a) => [a.code, a]));
+
       for (const item of plan.items) {
         if (item.gainMinor === 0n && item.lossMinor === 0n) {
           continue;
@@ -372,7 +382,7 @@ export class FxRevaluationService {
         }
 
         // Reconcile book value against ledger: require exact match, and block arbitrary gain/loss on zero-balance accounts
-        const acc = accountMap.get(item.accountCode);
+        const acc = freshAccountMap.get(item.accountCode);
         const ledgerBalanceMinor = acc?.balance !== undefined && acc.balance !== null ? toMinor(acc.balance) : 0n;
 
         if (ledgerBalanceMinor === 0n && item.foreignAmountMinor !== 0n) {

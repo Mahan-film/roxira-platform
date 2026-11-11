@@ -37,7 +37,7 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
       accountType: AccountType.ASSET,
       level: AccountLevel.MOEIN,
       currency: Currency.USD,
-      balance: '85000000.00', // 8,500,000,000 minor
+      balance: '8500000000.00', // 8,500,000,000 Rials = 850,000,000,000 minor
     },
     {
       id: 2,
@@ -46,7 +46,7 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
       accountType: AccountType.ASSET,
       level: AccountLevel.MOEIN,
       currency: Currency.EUR,
-      balance: '55000000.00', // 5,500,000,000 minor
+      balance: '5500000000.00', // 5,500,000,000 Rials = 550,000,000,000 minor
     },
     {
       id: 3,
@@ -55,7 +55,7 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
       accountType: AccountType.LIABILITY,
       level: AccountLevel.MOEIN,
       currency: Currency.USD,
-      balance: '80000000.00', // 8,000,000,000 minor
+      balance: '8000000000.00', // 8,000,000,000 Rials = 800,000,000,000 minor
     },
     {
       id: 4,
@@ -167,16 +167,16 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
         accountName: 'حساب جاری ارزی دلاری',
         currency: Currency.USD,
         foreignAmountMinor: 1000000n, // 10,000 USD
-        bookValueRialMinor: 8_500_000_000n,
+        bookValueRialMinor: 850_000_000_000n, // 8.5 billion Rials in minor units
       };
 
       const result = revaluationService.revalueBalance(balance);
 
       expect(result.type).toBe('gain');
-      expect(result.currentValueRialMinor).toBe(9_200_000_000n);
-      expect(result.gainMinor).toBe(700_000_000n);
+      expect(result.currentValueRialMinor).toBe(920_000_000_000n);
+      expect(result.gainMinor).toBe(70_000_000_000n);
       expect(result.lossMinor).toBe(0n);
-      expect(result.diffRialMinor).toBe(700_000_000n);
+      expect(result.diffRialMinor).toBe(70_000_000_000n);
     });
 
     it('recognizes FX Loss on Asset when foreign currency depreciated', () => {
@@ -185,34 +185,34 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
         accountName: 'حساب دریافتنی ارزی یورو',
         currency: Currency.EUR,
         foreignAmountMinor: 500000n, // 5,000 EUR
-        bookValueRialMinor: 5_500_000_000n,
+        bookValueRialMinor: 550_000_000_000n, // 5.5 billion Rials in minor units
       };
 
       const result = revaluationService.revalueBalance(balance);
 
       expect(result.type).toBe('loss');
-      expect(result.currentValueRialMinor).toBe(5_000_000_000n);
-      expect(result.lossMinor).toBe(500_000_000n);
+      expect(result.currentValueRialMinor).toBe(500_000_000_000n);
+      expect(result.lossMinor).toBe(50_000_000_000n);
       expect(result.gainMinor).toBe(0n);
-      expect(result.diffRialMinor).toBe(-500_000_000n);
+      expect(result.diffRialMinor).toBe(-50_000_000_000n);
     });
 
     it('handles 3-decimal currencies like OMR with 1000n scale', () => {
       // OMR has 3 decimals (1000 baisa = 1 Rial Omani)
       // foreignAmountMinor: 10,000 baisa = 10 OMR
       // custom rate: 2,400,000 Rial/OMR
+      // currentValue = 10 * 2,400,000 Rial = 24,000,000 Rials = 2,400,000,000 minor
       const balance: ForeignAccountBalance = {
         accountCode: '1012',
         accountName: 'صندوق ریال عمان',
         currency: Currency.OMR,
         foreignAmountMinor: 10000n,
-        bookValueRialMinor: 20_000_000n,
+        bookValueRialMinor: 2_000_000_000n, // 20 million Rials in minor units
       };
 
       const result = revaluationService.revalueBalance(balance, 2_400_000n);
-      // currentValue = (10000n * 2400000n) / 1000n = 24,000,000n
-      expect(result.currentValueRialMinor).toBe(24_000_000n);
-      expect(result.gainMinor).toBe(4_000_000n);
+      expect(result.currentValueRialMinor).toBe(2_400_000_000n);
+      expect(result.gainMinor).toBe(400_000_000n);
     });
 
     it('handles Liability (AP) balances correctly with inverted sign', () => {
@@ -220,14 +220,14 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
         accountCode: '2010',
         accountName: 'حساب پرداختنی تجاری دلاری',
         currency: Currency.USD,
-        foreignAmountMinor: 1000000n,
-        bookValueRialMinor: 8_000_000_000n,
+        foreignAmountMinor: 1000000n, // 10,000 USD
+        bookValueRialMinor: 800_000_000_000n, // 8.0 billion Rials in minor units
         isLiability: true,
       };
 
       const result = revaluationService.revalueBalance(apLiabilityIncreased);
       expect(result.type).toBe('loss');
-      expect(result.lossMinor).toBe(1_200_000_000n);
+      expect(result.lossMinor).toBe(120_000_000_000n);
       expect(result.gainMinor).toBe(0n);
     });
   });
@@ -266,7 +266,7 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
           accountName: 'بانک ارزی دلاری',
           currency: Currency.USD,
           foreignAmountMinor: 1000000n,
-          bookValueRialMinor: 8_500_000_000n, // Gain: 700M
+          bookValueRialMinor: 850_000_000_000n, // Gain: 70B minor (700M Rial)
         },
       ];
 
@@ -283,7 +283,7 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
           sourceType: 'currency_revaluation',
           sourceId: '1405-08:1012:USD',
           date: '2026-11-21',
-          amounts: { gain: 700_000_000n, loss: 0n },
+          amounts: { gain: 70_000_000_000n, loss: 0n },
           overrides: { monetary_asset: '1012' },
           description: expect.stringContaining('[نرخ: 920000 ریال]'),
         }),
@@ -481,7 +481,7 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
           accountName: 'بانک ارزی دلاری',
           currency: Currency.USD,
           foreignAmountMinor: 1000000n,
-          bookValueRialMinor: 8_500_000_000n, // Gain: 700M
+          bookValueRialMinor: 850_000_000_000n, // Gain: 70B minor
         },
       ];
 
@@ -504,7 +504,7 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
         accountName: 'بانک دلاری',
         currency: Currency.USD,
         foreignAmountMinor: 1000000n,
-        bookValueRialMinor: 8_500_000_000n,
+        bookValueRialMinor: 850_000_000_000n,
       };
 
       const itemResult = revaluationService.revalueBalance(balance);
@@ -545,7 +545,7 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
         accountName: 'بانک دلاری',
         currency: Currency.USD,
         foreignAmountMinor: 1000000n,
-        bookValueRialMinor: 8_500_000_000n,
+        bookValueRialMinor: 850_000_000_000n,
       };
 
       // Existing source found in repository
@@ -588,7 +588,7 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
             accountName: 'بانک دلاری',
             currency: Currency.USD,
             foreignAmountMinor: '1000000',
-            bookValueRialMinor: '8500000000',
+            bookValueRialMinor: '850000000000',
             isLiability: false,
           },
         ],
