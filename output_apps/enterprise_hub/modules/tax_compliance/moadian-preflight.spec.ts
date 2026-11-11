@@ -407,4 +407,28 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
       expect(res.errors.some((e) => e.code === 'INVOICE_DATE_INVALID')).toBe(true);
     });
   });
+
+  describe('Server Pre-Flight Integration & VatRateResolver', () => {
+    it('validateVatRateForYear respects expectedRate across any year', () => {
+      // 1402 with 9% statutory rate
+      const res1402 = validateVatRateForYear('2023-05-01', 0.09, 0.09);
+      expect(res1402.valid).toBe(true);
+      expect(res1402.expected).toBe(0.09);
+
+      // 1403 with 10% statutory rate
+      const res1403 = validateVatRateForYear('2024-05-01', 0.10, 0.10);
+      expect(res1403.valid).toBe(true);
+
+      // Mismatch against resolved rate
+      const resMismatch = validateVatRateForYear('2024-05-01', 0.09, 0.10);
+      expect(resMismatch.valid).toBe(false);
+    });
+
+    it('validateItemTaxCode normalises Persian digits and whitespace', () => {
+      expect(validateItemTaxCode('۲۳۳۰۰۰۱۲۳۴۵۶۷')).toBe(true);
+      expect(validateItemTaxCode('  2330001234567  ')).toBe(true);
+      expect(validateItemTaxCode('123456789012')).toBe(false); // 12 digits
+      expect(validateItemTaxCode('12345678901234')).toBe(false); // 14 digits
+    });
+  });
 });

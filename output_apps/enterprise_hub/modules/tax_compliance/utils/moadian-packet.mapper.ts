@@ -249,7 +249,11 @@ export function mapInvoiceToMoadianPacket(
   const inty = bid || tinb ? MoadianInvoiceType.WITH_BUYER : MoadianInvoiceType.WITHOUT_BUYER;
 
   const body: Bag[] = (invoice.items ?? []).map((item, index) => {
-    const sstid = item.taxCode ?? (item as unknown as { sstid?: string }).sstid ?? ctx.defaultSstid;
+    const rawSstid =
+      (item.taxCode && item.taxCode.trim().length > 0 ? item.taxCode : null) ??
+      (item as unknown as { sstid?: string }).sstid ??
+      ctx.defaultSstid;
+    const sstid = rawSstid ? digitsOnly(rawSstid) : null;
     if (!sstid || !SSTID_PATTERN.test(sstid)) {
       throw new MoadianMappingError(`سطر ${index + 1} شناسه ۱۳ رقمی کالا/خدمت مودیان (sstid) ندارد`);
     }

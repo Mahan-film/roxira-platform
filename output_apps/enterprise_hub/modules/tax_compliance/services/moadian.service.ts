@@ -19,6 +19,7 @@ import {
   randomUUID,
 } from 'crypto';
 import { InvoicingService } from '../../invoicing/services/invoicing.service';
+import { InvoiceResponseDto } from '../../invoicing/dto/invoice-response.dto';
 import { VatRateResolver } from '../../invoicing/services/vat-rate.resolver';
 import {
   MOADIAN_DEFAULT_MAX_POLLS,
@@ -88,7 +89,7 @@ export class MoadianService implements OnModuleInit {
     private readonly client: MoadianApiClient,
     private readonly config: ConfigService,
     @InjectQueue(MOADIAN_QUEUE) private readonly queue: Queue<MoadianJobData>,
-    @Optional() private readonly vatRateResolver?: VatRateResolver,
+    private readonly vatRateResolver: VatRateResolver,
   ) {}
 
   /** ثبت جاب دوره‌ای همگام‌سازی وضعیت صورتحساب‌های معوق با سامانه مودیان. */
@@ -239,6 +240,15 @@ export class MoadianService implements OnModuleInit {
   // ارسال صورتحساب
   // ---------------------------------------------------------------------------
 
+  private async resolveExpectedVatRate(tenantId: string, invoice: InvoiceResponseDto): Promise<number> {
+    const rawDate = invoice.issuedAt ?? invoice.createdAt;
+    const dateStr = rawDate
+      ? new Date(rawDate).toISOString().slice(0, 10)
+      : new Date().toISOString().slice(0, 10);
+    const res = await this.vatRateResolver.generalRate(tenantId, dateStr);
+    return res.rate;
+  }
+
   async preFlightValidate(
     tenantId: string,
     invoiceId: string,
@@ -246,18 +256,7 @@ export class MoadianService implements OnModuleInit {
     this.assertEnabled();
     const invoice = await this.invoicingService.findOne(tenantId, invoiceId);
     const credential = await this.repository.findCredential(tenantId);
-    let expectedVatRate: number | undefined;
-    if (this.vatRateResolver && invoice.issuedAt) {
-      try {
-        const res = await this.vatRateResolver.generalRate(
-          tenantId,
-          new Date(invoice.issuedAt).toISOString().slice(0, 10),
-        );
-        expectedVatRate = res.rate;
-      } catch {
-        // ignore
-      }
-    }
+    const expectedVatRate = await this.resolveExpectedVatRate(tenantId, invoice);
     return runMoadianPreFlightValidation(invoice, {
       defaultSstid: credential?.defaultSstid,
       expectedVatRate,
@@ -344,18 +343,7 @@ export class MoadianService implements OnModuleInit {
     }
 
     if (options.preFlightCheck !== false) {
-      let expectedVatRate: number | undefined;
-      if (this.vatRateResolver && invoice.issuedAt) {
-        try {
-          const res = await this.vatRateResolver.generalRate(
-            tenantId,
-            new Date(invoice.issuedAt).toISOString().slice(0, 10),
-          );
-          expectedVatRate = res.rate;
-        } catch {
-          // ignore
-        }
-      }
+      const expectedVatRate = await this.resolveExpectedVatRate(tenantId, invoice);
       const preFlight = runMoadianPreFlightValidation(invoice, {
         defaultSstid: credential.defaultSstid,
         expectedVatRate,

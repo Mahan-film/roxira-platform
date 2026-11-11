@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -12,6 +12,7 @@ import {
   IsPositive,
   IsString,
   IsUUID,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -106,7 +107,17 @@ export class InvoiceItemDto {
   @ApiPropertyOptional({ description: 'شناسه ۱۳ رقمی کالا/خدمت مودیان (SSTID)', example: '2330001234567' })
   @IsOptional()
   @IsString()
-  @MaxLength(13)
+  @Transform(({ value }) =>
+    typeof value === 'string'
+      ? value
+          .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776))
+          .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632))
+          .replace(/\s+/g, '')
+      : value,
+  )
+  @Matches(/^\d{13}$/, {
+    message: 'شناسه کالا/خدمت مودیان (SSTID) باید دقیقاً ۱۳ رقم عددی باشد.',
+  })
   taxCode?: string;
 
   @ApiPropertyOptional({

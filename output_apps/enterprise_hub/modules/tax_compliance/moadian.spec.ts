@@ -17,6 +17,7 @@ import { InvoiceResponseDto } from '../invoicing/dto/invoice-response.dto';
 import { InvoiceJurisdiction } from '../invoicing/enums/invoice-jurisdiction.enum';
 import { InvoiceStatus } from '../invoicing/enums/invoice-status.enum';
 import { InvoicingService } from '../invoicing/services/invoicing.service';
+import { VatRateResolver } from '../invoicing/services/vat-rate.resolver';
 import { TenantRole } from '../tenants/enums/tenant-role.enum';
 import { CreateMoadianTables1789310000000 } from '../../migrations/1789310000000-CreateMoadianTables';
 import {
@@ -619,12 +620,19 @@ function buildMoadian(options: { enabled?: boolean; invoices?: InvoiceResponseDt
       throw new NotFoundException('invoice not found');
     }),
   } as unknown as InvoicingService;
+  const vatRateResolver = {
+    generalRate: jest.fn(async (_tenantId: string, _onDate: string) => ({
+      rate: 0.1,
+      source: 'statutory' as const,
+    })),
+  } as unknown as VatRateResolver;
   const service = new MoadianService(
     repository as unknown as MoadianRepository,
     invoicingService,
     client,
     config,
     queue,
+    vatRateResolver,
   );
   return { service, repository, state, jobs, env };
 }
