@@ -63,7 +63,7 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
       name: 'فروش',
       accountType: AccountType.REVENUE,
       level: AccountLevel.MOEIN,
-      currency: Currency.IRR,
+      currency: Currency.USD,
       balance: 0,
     },
     {
@@ -72,7 +72,7 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
       name: 'بهای تمام‌شده',
       accountType: AccountType.EXPENSE,
       level: AccountLevel.MOEIN,
-      currency: Currency.IRR,
+      currency: Currency.USD,
       balance: 0,
     },
     {
@@ -339,7 +339,7 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
     it('rejects revenue and expense accounts passed as monetary asset/liability', async () => {
       const revenueBalance: ForeignAccountBalance[] = [
         {
-          accountCode: '4010', // REVENUE
+          accountCode: '4010', // REVENUE with USD currency
           accountName: 'فروش ارزی',
           currency: Currency.USD,
           foreignAmountMinor: 100000n,
@@ -354,11 +354,11 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
           date: '2026-11-21',
           balances: revenueBalance,
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow('حساب دارایی ارزی «4010» باید دارای ماهیت دارایی (ASSET) باشد');
 
       const expenseBalance: ForeignAccountBalance[] = [
         {
-          accountCode: '5010', // EXPENSE
+          accountCode: '5010', // EXPENSE with USD currency
           accountName: 'هزینه ارزی',
           currency: Currency.USD,
           foreignAmountMinor: 100000n,
@@ -373,7 +373,49 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
           date: '2026-11-21',
           balances: expenseBalance,
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow('حساب بدهی ارزی «5010» باید دارای ماهیت بدهی (LIABILITY) باشد');
+    });
+
+    it('rejects asset account declared as liability, and liability account declared as asset', async () => {
+      // 1012 is ASSET, but declared as liability
+      const assetAsLiability: ForeignAccountBalance[] = [
+        {
+          accountCode: '1012',
+          accountName: 'بانک ارزی',
+          currency: Currency.USD,
+          foreignAmountMinor: 100000n,
+          bookValueRialMinor: 850000000000n,
+          isLiability: true, // wrong!
+        },
+      ];
+
+      await expect(
+        revaluationService.postMonthEndRevaluation('tenant-1', {
+          period: '1405-08',
+          date: '2026-11-21',
+          balances: assetAsLiability,
+        }),
+      ).rejects.toThrow('باید دارای ماهیت بدهی (LIABILITY) باشد، اما ماهیت آن «ASSET» است');
+
+      // 2010 is LIABILITY, but declared as asset
+      const liabilityAsAsset: ForeignAccountBalance[] = [
+        {
+          accountCode: '2010',
+          accountName: 'تسهیلات ارزی',
+          currency: Currency.USD,
+          foreignAmountMinor: 100000n,
+          bookValueRialMinor: 800000000000n,
+          isLiability: false, // wrong!
+        },
+      ];
+
+      await expect(
+        revaluationService.postMonthEndRevaluation('tenant-1', {
+          period: '1405-08',
+          date: '2026-11-21',
+          balances: liabilityAsAsset,
+        }),
+      ).rejects.toThrow('باید دارای ماهیت دارایی (ASSET) باشد، اما ماهیت آن «LIABILITY» است');
     });
 
     it('rejects bookValueRialMinor that contradicts non-zero ledger balance', async () => {

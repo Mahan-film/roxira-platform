@@ -2,8 +2,6 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
-  NotFoundException,
-  Optional,
 } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { createHash } from 'crypto';
@@ -11,8 +9,10 @@ import { EntityManager } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
 import { MONEY_SCALE } from '../../accounting/constants/accounting.constants';
 import { AccountLevel, AccountType } from '../../accounting/enums/accounting.enum';
+import { ChartOfAccountEntity } from '../../accounting/entities/chart-of-account.entity';
 import { toMinor } from '../../accounting/money';
 import { AccountingService } from '../../accounting/services/accounting.service';
+import { DEFAULT_ROLE_ACCOUNTS } from '../../posting_rules/constants/posting-roles';
 import { findTemplate } from '../../posting_rules/domain/posting-templates';
 import {
   PostingRequest,
@@ -206,8 +206,10 @@ export class FxRevaluationService {
     resolvedAccounts?: { fxGain?: string; fxLoss?: string },
   ): MonthEndRevaluationVoucherPlan {
     const tpl = findTemplate('currency.fx_revaluation');
-    const fxGainAccount = resolvedAccounts?.fxGain ?? tpl?.defaults?.fx_gain ?? '4120';
-    const fxLossAccount = resolvedAccounts?.fxLoss ?? tpl?.defaults?.fx_loss ?? '5210';
+    const fxGainAccount =
+      resolvedAccounts?.fxGain ?? tpl?.defaults?.fx_gain ?? DEFAULT_ROLE_ACCOUNTS.fx_gain ?? '4120';
+    const fxLossAccount =
+      resolvedAccounts?.fxLoss ?? tpl?.defaults?.fx_loss ?? DEFAULT_ROLE_ACCOUNTS.fx_loss ?? '5210';
 
     const items = balances.map((b) => this.revalueBalance(b, rates?.[b.currency] ?? b.rateRialPerUnit));
 
@@ -329,8 +331,10 @@ export class FxRevaluationService {
     // Resolve posting roles for fx_gain and fx_loss for this tenant
     const desc = await this.postingRules.describe(tenantId);
     const revalDesc = desc.find((d) => d.docType === 'currency.fx_revaluation');
-    const fxGainAccount = revalDesc?.roles.find((r) => r.role === 'fx_gain')?.accountCode ?? '4120';
-    const fxLossAccount = revalDesc?.roles.find((r) => r.role === 'fx_loss')?.accountCode ?? '5210';
+    const fxGainAccount =
+      revalDesc?.roles.find((r) => r.role === 'fx_gain')?.accountCode ?? DEFAULT_ROLE_ACCOUNTS.fx_gain ?? '4120';
+    const fxLossAccount =
+      revalDesc?.roles.find((r) => r.role === 'fx_loss')?.accountCode ?? DEFAULT_ROLE_ACCOUNTS.fx_loss ?? '5210';
 
     const plan = this.generateMonthEndVoucher(
       request.period,
@@ -341,10 +345,6 @@ export class FxRevaluationService {
 
     const executePosting = async (em?: EntityManager) => {
       const postingResults: PostingResult[] = [];
-
-      // Re-fetch ledger accounts inside tenant transaction scope to guard against concurrent balance changes
-      const freshAccounts = await this.accounting.listAccounts(tenantId);
-      const freshAccountMap = new Map(freshAccounts.map((a) => [a.code, a]));
 
       for (const item of plan.items) {
         if (item.gainMinor === 0n && item.lossMinor === 0n) {
@@ -381,19 +381,52 @@ export class FxRevaluationService {
           continue;
         }
 
-        // Reconcile book value against ledger: require exact match, and block arbitrary gain/loss on zero-balance accounts
-        const acc = freshAccountMap.get(item.accountCode);
-        const ledgerBalanceMinor = acc?.balance !== undefined && acc.balance !== null ? toMinor(acc.balance) : 0n;
+        // Re-read and acquire a pessimistic write lock (SELECT ... FOR UPDATE) on the bare account row
+        // within the transaction scope, ensuring concurrent transactions cannot alter the ledger balance
+        // before postingRules.post commits.
+        let ledgerBalanceMinor = 0n;
+        let accountName = item.accountName;
+
+        if (em && typeof em.getRepository === 'function') {
+          const lockedAccount = await em
+            .getRepository(ChartOfAccountEntity)
+            .createQueryBuilder('acc')
+            .setLock('pessimistic_write')
+            .where('acc.tenant_id = :tenantId AND acc.code = :code', {
+              tenantId,
+              code: item.accountCode,
+            })
+            .getOne();
+
+          if (lockedAccount) {
+            ledgerBalanceMinor =
+              lockedAccount.balance !== undefined && lockedAccount.balance !== null
+                ? toMinor(lockedAccount.balance)
+                : 0n;
+            accountName = lockedAccount.name;
+          } else {
+            // Fallback for mocked entity manager in unit tests
+            const freshAccounts = await this.accounting.listAccounts(tenantId);
+            const acc = freshAccounts.find((a) => a.code === item.accountCode);
+            ledgerBalanceMinor = acc?.balance !== undefined && acc.balance !== null ? toMinor(acc.balance) : 0n;
+            if (acc) accountName = acc.name;
+          }
+        } else {
+          const freshAccounts = await this.accounting.listAccounts(tenantId);
+          const acc = freshAccounts.find((a) => a.code === item.accountCode);
+          ledgerBalanceMinor = acc?.balance !== undefined && acc.balance !== null ? toMinor(acc.balance) : 0n;
+          if (acc) accountName = acc.name;
+        }
 
         if (ledgerBalanceMinor === 0n && item.foreignAmountMinor !== 0n) {
           throw new BadRequestException(
-            `حساب «${acc?.code ?? item.accountCode}» دارای مانده ریالی صفر در دفتر کل است؛ تسعیر روی حساب بدون مانده مجاز نیست.`,
+            `حساب «${item.accountCode}» دارای مانده ریالی صفر در دفتر کل است؛ تسعیر روی حساب بدون مانده مجاز نیست.`,
           );
         }
 
         if (item.bookValueRialMinor !== ledgerBalanceMinor) {
           throw new BadRequestException(
-            `ارزش دفتری اعلام‌شده (${item.bookValueRialMinor}) با مانده دفتر کل حساب ${acc?.code ?? item.accountCode} (${ledgerBalanceMinor}) مغایرت دارد.`,
+            `ارزش دفتری اعلام‌شده (${item.bookValueRialMinor}) با مانده دفتر کل حساب ${item.accountCode} (${ledgerBalanceMinor}) مغایرت دارد.`,
           );
         }
 
@@ -409,7 +442,7 @@ export class FxRevaluationService {
           overrides: {
             monetary_asset: item.accountCode,
           },
-          description: `سند تسعیر ارز پایان دوره ${request.period} - ${item.accountName} (${item.currency}) [نرخ: ${item.rateRialPerUnit} ریال] [fp:${item.fingerprint}]`,
+          description: `سند تسعیر ارز پایان دوره ${request.period} - ${accountName} (${item.currency}) [نرخ: ${item.rateRialPerUnit} ریال] [fp:${item.fingerprint}]`,
         };
 
         const result = await this.postingRules.post(tenantId, postReq, em);
