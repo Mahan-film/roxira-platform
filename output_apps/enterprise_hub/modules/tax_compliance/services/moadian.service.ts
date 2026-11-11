@@ -5,6 +5,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  OnModuleInit,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -20,12 +21,14 @@ import { InvoicingService } from '../../invoicing/services/invoicing.service';
 import {
   MOADIAN_DEFAULT_MAX_POLLS,
   MOADIAN_DEFAULT_POLL_DELAY_MS,
+  MOADIAN_DEFAULT_SYNC_INTERVAL_MS,
   MOADIAN_ENV,
   MOADIAN_JOB_ATTEMPTS,
   MOADIAN_JOB_BACKOFF_MS,
   MOADIAN_POLL_JOB,
   MOADIAN_QUEUE,
   MOADIAN_SEND_JOB,
+  MOADIAN_SYNC_STATUS_JOB,
 } from '../constants/moadian.constants';
 import {
   MoadianCredentialResponseDto,
@@ -69,7 +72,7 @@ export type MoadianJobOutcome = 'poll' | 'done';
  * → SUCCESS / FAILED. وضعیت هر صورتحساب در `moadian_submissions` ذخیره می‌شود.
  */
 @Injectable()
-export class MoadianService {
+export class MoadianService implements OnModuleInit {
   private readonly logger = new Logger(MoadianService.name);
 
   constructor(
@@ -79,6 +82,25 @@ export class MoadianService {
     private readonly config: ConfigService,
     @InjectQueue(MOADIAN_QUEUE) private readonly queue: Queue<MoadianJobData>,
   ) {}
+
+  /** ثبت جاب دوره‌ای همگام‌سازی وضعیت صورتحساب‌های معوق با سامانه مودیان. */
+  async onModuleInit(): Promise<void> {
+    if (process.env.NODE_ENV === 'test' || !this.queue) return;
+    await this.queue
+      .add(
+        MOADIAN_SYNC_STATUS_JOB,
+        {} as MoadianJobData,
+        {
+          repeat: { every: MOADIAN_DEFAULT_SYNC_INTERVAL_MS },
+          jobId: 'moadian-sync-status-repeatable',
+          removeOnComplete: 10,
+          removeOnFail: 10,
+        },
+      )
+      .catch((error) =>
+        this.logger.warn(`Moadian sync status schedule failed: ${(error as Error).message}`),
+      );
+  }
 
   isEnabled(): boolean {
     return String(this.config.get<string>(MOADIAN_ENV.ENABLED) ?? 'false').toLowerCase() === 'true';
@@ -531,5 +553,228 @@ export class MoadianService {
     });
     await this.schedulePoll(data, pollCount);
     return 'poll';
+  }
+
+  /**
+   * همگام‌سازی وضعیت صورتحساب‌های غیرنهایی (QUEUED, SENT, ERROR) با سامانه مودیان.
+   * استعلام وضعیت از سامانه، ذخیره وضعیت نهایی (SUCCESS / FAILED) و لیست خطاها،
+   * تکرار مجدد وضعیت‌های قابل‌اعتماد (TIMEOUT و خطاهای موقت انتقال)، بدون ارسال دوباره
+   * (idempotent, no double submit).
+   */
+  async syncNonFinalSubmissions(
+    targetTenantId?: string,
+  ): Promise<{ checked: number; updated: number; retried: number }> {
+    if (!this.isEnabled()) {
+      this.logger.debug('Moadian sync skipped: MOADIAN_ENABLED is false');
+      return { checked: 0, updated: 0, retried: 0 };
+    }
+
+    const nonFinal = await this.repository.findNonFinalSubmissions(targetTenantId);
+    if (!nonFinal.length) {
+      return { checked: 0, updated: 0, retried: 0 };
+    }
+
+    let updatedCount = 0;
+    let retriedCount = 0;
+
+    const byTenant = new Map<string, MoadianSubmissionEntity[]>();
+    for (const sub of nonFinal) {
+      const list = byTenant.get(sub.tenantId) ?? [];
+      list.push(sub);
+      byTenant.set(sub.tenantId, list);
+    }
+
+    const maxPolls = this.numberSetting(MOADIAN_ENV.MAX_POLLS, MOADIAN_DEFAULT_MAX_POLLS);
+
+    for (const [tenantId, submissions] of byTenant.entries()) {
+      let auth: MoadianAuthContext;
+      try {
+        auth = await this.loadAuth(tenantId);
+      } catch (err) {
+        this.logger.warn(
+          `Moadian sync skipped for tenant ${tenantId}: credentials not available (${(err as Error).message})`,
+        );
+        continue;
+      }
+
+      for (const sub of submissions) {
+        try {
+          if (sub.status === MoadianSubmissionStatus.QUEUED) {
+            const rows = await this.client.inquiryByUid(auth, [sub.uid]).catch(() => []);
+            const known = rows.find((r) => r.uid === sub.uid);
+
+            if (known && known.status === MoadianInquiryStatus.SUCCESS) {
+              await this.repository.updateSubmission(tenantId, sub.id, {
+                status: MoadianSubmissionStatus.SUCCESS,
+                referenceNumber: known.referenceNumber ?? sub.referenceNumber,
+                errors: [],
+                warnings: known.warnings ?? [],
+                lastPolledAt: new Date(),
+              });
+              updatedCount++;
+            } else if (known && known.status === MoadianInquiryStatus.FAILED) {
+              await this.repository.updateSubmission(tenantId, sub.id, {
+                status: MoadianSubmissionStatus.FAILED,
+                referenceNumber: known.referenceNumber ?? sub.referenceNumber,
+                errors: known.errors ?? [],
+                warnings: known.warnings ?? [],
+                lastPolledAt: new Date(),
+              });
+              updatedCount++;
+            } else if (known && (known.referenceNumber || known.status === MoadianInquiryStatus.PENDING)) {
+              await this.repository.updateSubmission(tenantId, sub.id, {
+                status: MoadianSubmissionStatus.SENT,
+                referenceNumber: known.referenceNumber ?? sub.referenceNumber,
+                sentAt: sub.sentAt ?? new Date(),
+                errors: [],
+                lastPolledAt: new Date(),
+              });
+              updatedCount++;
+            } else if (this.queue) {
+              await this.queue.add(
+                MOADIAN_SEND_JOB,
+                { tenantId, submissionId: sub.id },
+                {
+                  jobId: `moadian-send-${sub.id}-${sub.serial}`,
+                  attempts: MOADIAN_JOB_ATTEMPTS,
+                  backoff: { type: 'exponential', delay: MOADIAN_JOB_BACKOFF_MS },
+                  removeOnComplete: 1000,
+                  removeOnFail: 1000,
+                },
+              );
+              retriedCount++;
+            }
+            continue;
+          }
+
+          if (sub.status === MoadianSubmissionStatus.ERROR) {
+            const rows = await this.client.inquiryByUid(auth, [sub.uid]).catch(() => []);
+            const known = rows.find((r) => r.uid === sub.uid);
+            if (known && known.status === MoadianInquiryStatus.SUCCESS) {
+              await this.repository.updateSubmission(tenantId, sub.id, {
+                status: MoadianSubmissionStatus.SUCCESS,
+                referenceNumber: known.referenceNumber ?? sub.referenceNumber,
+                errors: [],
+                warnings: known.warnings ?? [],
+                lastPolledAt: new Date(),
+              });
+              updatedCount++;
+              continue;
+            }
+            if (known && known.status === MoadianInquiryStatus.FAILED) {
+              await this.repository.updateSubmission(tenantId, sub.id, {
+                status: MoadianSubmissionStatus.FAILED,
+                referenceNumber: known.referenceNumber ?? sub.referenceNumber,
+                errors: known.errors ?? [],
+                warnings: known.warnings ?? [],
+                lastPolledAt: new Date(),
+              });
+              updatedCount++;
+              continue;
+            }
+            if (known && known.referenceNumber) {
+              await this.repository.updateSubmission(tenantId, sub.id, {
+                status: MoadianSubmissionStatus.SENT,
+                referenceNumber: known.referenceNumber,
+                sentAt: sub.sentAt ?? new Date(),
+                errors: [],
+                lastPolledAt: new Date(),
+              });
+              updatedCount++;
+              continue;
+            }
+            if ((sub.pollCount ?? 0) < maxPolls && this.queue) {
+              await this.queue.add(
+                MOADIAN_SEND_JOB,
+                { tenantId, submissionId: sub.id },
+                {
+                  jobId: `moadian-send-${sub.id}-${sub.serial}`,
+                  attempts: MOADIAN_JOB_ATTEMPTS,
+                  backoff: { type: 'exponential', delay: MOADIAN_JOB_BACKOFF_MS },
+                  removeOnComplete: 1000,
+                  removeOnFail: 1000,
+                },
+              );
+              retriedCount++;
+            }
+            continue;
+          }
+
+          const rows = sub.referenceNumber
+            ? await this.client.inquiryByReferenceId(auth, [sub.referenceNumber])
+            : await this.client.inquiryByUid(auth, [sub.uid]);
+
+          const row =
+            rows.find(
+              (r) =>
+                (sub.referenceNumber && r.referenceNumber === sub.referenceNumber) ||
+                r.uid === sub.uid,
+            ) ?? null;
+
+          const pollCount = (sub.pollCount ?? 0) + 1;
+          const now = new Date();
+
+          if (row?.status === MoadianInquiryStatus.SUCCESS) {
+            await this.repository.updateSubmission(tenantId, sub.id, {
+              status: MoadianSubmissionStatus.SUCCESS,
+              warnings: row.warnings ?? [],
+              errors: [],
+              pollCount,
+              lastPolledAt: now,
+            });
+            updatedCount++;
+          } else if (row?.status === MoadianInquiryStatus.FAILED) {
+            await this.repository.updateSubmission(tenantId, sub.id, {
+              status: MoadianSubmissionStatus.FAILED,
+              errors: row.errors ?? [],
+              warnings: row.warnings ?? [],
+              pollCount,
+              lastPolledAt: now,
+            });
+            updatedCount++;
+          } else if (row?.status === MoadianInquiryStatus.TIMEOUT) {
+            await this.repository.updateSubmission(tenantId, sub.id, {
+              pollCount,
+              lastPolledAt: now,
+              errors: [
+                {
+                  code: 'TIMEOUT',
+                  message: `استعلام با وقفه زمانی مواجه شد (تلاش ${pollCount} از ${maxPolls})`,
+                },
+              ],
+            });
+            retriedCount++;
+          } else {
+            if (pollCount >= maxPolls) {
+              await this.repository.updateSubmission(tenantId, sub.id, {
+                pollCount,
+                lastPolledAt: now,
+                errors: [
+                  {
+                    code: 'POLL_LIMIT',
+                    message: `عدم دریافت پاسخ نهایی پس از ${pollCount} بار استعلام (آخرین وضعیت: ${row?.status ?? 'NOT_FOUND'})`,
+                  },
+                ],
+              });
+            } else {
+              await this.repository.updateSubmission(tenantId, sub.id, {
+                pollCount,
+                lastPolledAt: now,
+              });
+            }
+          }
+        } catch (subError) {
+          this.logger.error(
+            `Error syncing submission ${sub.id} for tenant ${tenantId}: ${(subError as Error).message}`,
+          );
+        }
+      }
+    }
+
+    return {
+      checked: nonFinal.length,
+      updated: updatedCount,
+      retried: retriedCount,
+    };
   }
 }

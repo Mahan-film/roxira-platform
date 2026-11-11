@@ -5,6 +5,7 @@ import {
   MOADIAN_POLL_JOB,
   MOADIAN_QUEUE,
   MOADIAN_SEND_JOB,
+  MOADIAN_SYNC_STATUS_JOB,
 } from '../constants/moadian.constants';
 import { MoadianJobData, MoadianJobOutcome, MoadianService } from '../services/moadian.service';
 
@@ -21,6 +22,11 @@ export class MoadianProcessor extends WorkerHost {
   }
 
   async process(job: Job<MoadianJobData>): Promise<{ outcome: MoadianJobOutcome | 'rejected' }> {
+    if (job.name === MOADIAN_SYNC_STATUS_JOB) {
+      await this.moadianService.syncNonFinalSubmissions(job.data?.tenantId);
+      return { outcome: 'done' };
+    }
+
     const { tenantId, submissionId } = job.data ?? ({} as MoadianJobData);
     if (
       typeof tenantId !== 'string' ||

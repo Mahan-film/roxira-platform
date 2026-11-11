@@ -1,9 +1,10 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
 import { MoadianCredentialEntity } from '../entities/moadian-credential.entity';
 import { MoadianSubmissionEntity } from '../entities/moadian-submission.entity';
+import { MoadianSubmissionStatus } from '../enums/moadian.enum';
 
 /**
  * تنها لایهٔ دسترسی به `moadian_credentials` و `moadian_submissions`.
@@ -151,6 +152,59 @@ export class MoadianRepository {
     return this.withSubmissions(tenantId, async (repo) => {
       await repo.update({ id, tenantId }, safe as never);
       return repo.findOne({ where: { tenantId, id } });
+    });
+  }
+
+  /** تمام صورتحساب‌های در وضعیت غیرنهایی (QUEUED، SENT، ERROR) جهت استعلام خودکار/زمان‌بندی‌شده. */
+  async findNonFinalSubmissions(
+    tenantId?: string,
+  ): Promise<MoadianSubmissionEntity[]> {
+    const nonFinalStatuses = [
+      MoadianSubmissionStatus.QUEUED,
+      MoadianSubmissionStatus.SENT,
+      MoadianSubmissionStatus.ERROR,
+    ];
+    if (tenantId) {
+      return this.withSubmissions(tenantId, (repo) =>
+        repo.find({
+          where: {
+            tenantId,
+            status: In(nonFinalStatuses),
+          },
+          order: { createdAt: 'ASC' },
+        }),
+      );
+    }
+    const scope = this.getScope();
+    if (!scope) {
+      return this.submissions.find({
+        where: { status: In(nonFinalStatuses) },
+        order: { createdAt: 'ASC' },
+      });
+    }
+    return this.submissions.manager.find(MoadianSubmissionEntity, {
+      where: { status: In(nonFinalStatuses) },
+      order: { createdAt: 'ASC' },
+    });
+  }
+
+  /** فهرست وضعیت ارسال‌ها برای مستأجر. */
+  async findSubmissions(
+    tenantId: string,
+    invoiceIds?: string[],
+  ): Promise<MoadianSubmissionEntity[]> {
+    return this.withSubmissions(tenantId, (repo) => {
+      if (invoiceIds && invoiceIds.length > 0) {
+        return repo.find({
+          where: { tenantId, invoiceId: In(invoiceIds) },
+          order: { createdAt: 'DESC' },
+        });
+      }
+      return repo.find({
+        where: { tenantId },
+        order: { createdAt: 'DESC' },
+        take: 100,
+      });
     });
   }
 }

@@ -130,4 +130,13 @@ export class InvoiceResponseDto {
 
   @ApiProperty({ description: 'انبار حرکت کالا', nullable: true })
   warehouseId: number | null;
+
+  @ApiProperty({ description: 'وضعیت ارسال به سامانه مودیان', nullable: true })
+  moadianStatus?: string | null;
+
+  @ApiProperty({ description: 'متن خطای سامانه مودیان (در صورت عدم موفقیت)', nullable: true })
+  moadianErrorText?: string | null;
+
+  @ApiProperty({ description: 'کد مالیاتی ۲۲ رقمی سامانه مودیان', nullable: true })
+  moadianTaxId?: string | null;
 }
