@@ -148,13 +148,12 @@ export function validateVatRateForYear(
     return { valid, expected: expectedRate, isExempt: false };
   }
 
-  const jalaliYear = getJalaliYear(invoiceDate);
-  if (jalaliYear === 1404 || jalaliYear === 1405) {
-    const valid = Math.abs(rate - 0.1) < 1e-4;
-    return { valid, expected: 0.1, isExempt: false };
+  // Without a specific expected rate, accept any valid rate between 0 and 1
+  if (rate >= 0 && rate <= 1) {
+    return { valid: true, expected: rate, isExempt: false };
   }
 
-  return { valid: rate >= 0 && rate <= 1, expected: 0.1, isExempt: false };
+  return { valid: false, expected: 0, isExempt: false };
 }
 
 /**
@@ -179,12 +178,18 @@ function getCurrencyScale(currency?: string): number {
   return 2;
 }
 
+function roundTo(value: number, scale: number): number {
+  const factor = 10 ** scale;
+  return Math.round((value + Number.EPSILON) * factor) / factor;
+}
+
 function toMinorUnits(value: number | string | null | undefined, scale: number): bigint {
   if (value === null || value === undefined) return 0n;
   const num = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(num)) return 0n;
+  const rounded = roundTo(num, scale);
   const factor = 10 ** scale;
-  return BigInt(Math.round(num * factor));
+  return BigInt(Math.round((rounded + Number.EPSILON) * factor));
 }
 
 /**
@@ -390,12 +395,16 @@ export function runMoadianPreFlightValidation(
     const qty = Number(item.quantity ?? 0);
     const unitPrice = Number(item.unitPrice ?? 0);
     const discount = Number(item.discount ?? 0);
+    const gross = qty * unitPrice;
+    const taxable = Math.max(0, gross - discount);
+    const expectedTax = roundTo(taxable * vatRate, scale);
+    const expectedLineTotal = roundTo(taxable + expectedTax, scale);
 
-    const grossUnits = toMinorUnits(Math.round(qty * unitPrice * factor) / factor, scale);
+    const grossUnits = toMinorUnits(roundTo(gross, scale), scale);
     const discountUnits = toMinorUnits(discount, scale);
-    const netUnits = grossUnits > discountUnits ? grossUnits - discountUnits : 0n;
-    const expectedTaxUnits = toMinorUnits(Math.round((Number(netUnits) / factor) * vatRate * factor) / factor, scale);
-    const expectedLineTotalUnits = netUnits + expectedTaxUnits;
+    const netUnits = toMinorUnits(roundTo(taxable, scale), scale);
+    const expectedTaxUnits = toMinorUnits(expectedTax, scale);
+    const expectedLineTotalUnits = toMinorUnits(expectedLineTotal, scale);
 
     calculatedTotalAmountUnits += grossUnits;
     calculatedTotalDiscountUnits += discountUnits;
@@ -430,6 +439,14 @@ export function runMoadianPreFlightValidation(
       field: 'totalAmount',
       message: `مجموع ناخالص صورتحساب (${invoice.totalAmount}) با مجموع سطرهای اقلام مطابقت ندارد.`,
       code: 'HEADER_TOTAL_AMOUNT_MISMATCH',
+    });
+  }
+
+  if (invoice.totalDiscount !== undefined && toMinorUnits(invoice.totalDiscount, scale) !== calculatedTotalDiscountUnits) {
+    errors.push({
+      field: 'totalDiscount',
+      message: `مجموع تخفیف‌های صورتحساب (${invoice.totalDiscount}) با مجموع سطرهای اقلام مطابقت ندارد.`,
+      code: 'HEADER_TOTAL_DISCOUNT_MISMATCH',
     });
   }
 
