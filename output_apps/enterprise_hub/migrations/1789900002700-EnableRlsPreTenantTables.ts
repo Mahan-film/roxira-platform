@@ -572,6 +572,13 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
           END IF;
           v_owner := current_user;
         END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'roxira_app') THEN
+          BEGIN
+            CREATE ROLE roxira_app NOLOGIN;
+          EXCEPTION WHEN OTHERS THEN
+            NULL;
+          END;
+        END IF;
         FOREACH fn IN ARRAY funcs LOOP
           IF v_owner <> current_user THEN
             EXECUTE format('ALTER FUNCTION public.%s OWNER TO %I', fn, v_owner);

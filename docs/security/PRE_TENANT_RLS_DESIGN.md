@@ -41,7 +41,7 @@ This document establishes the official security architecture and RLS policy mode
 - **Invariant 1 (Zero Superuser Dependency)**: All application traffic through `roxira_app` must respect row-level security without requiring superuser bypass.
 - **Invariant 2 (Strict Search Path on Security Definers)**: Every `SECURITY DEFINER` function must explicitly pin `SET search_path = public, pg_temp` to prevent search-path hijacking attacks.
 - **Invariant 3 (Self-User Privacy)**: A user may inspect and update their own user record (`id = app.user_id`), but tenant managers can only see users actively affiliated with their own tenant.
-- **Invariant 4 (Append-Only Public Ingestion)**: Public submission endpoints (`contact_messages`, `enterprise_inquiries`) allow unrestricted insert (`WITH CHECK (true)`), but forbid unauthorized reads (`USING` strictly scoped by tenant).
+- **Invariant 4 (Public and Inbound Ingestion Isolation)**: Public and inbound submission endpoints are guarded without global bypass: `contact_messages` enforces tenant-bound insert (`nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND tenant_id = app.tenant_id::uuid`), while `enterprise_inquiries` allows anonymous onboarding submission (`tenant_id IS NULL`) or tenant-scoped insert. Reads and modifications remain strictly tenant-scoped (`USING (tenant_id = app.tenant_id::uuid)`).
 
 ---
 
@@ -71,60 +71,176 @@ To reconcile RLS enforcement with pre-tenant workflows, the platform employs a d
 
 ### 4.1 Lookup Functions Specification
 
+The migration creates 17 atomic `SECURITY DEFINER` routines owned by `postgres` with `SET search_path = public, pg_temp`, returning explicit projection columns rather than whole entity stars:
+
 ```sql
 -- 1. User lookup by phone (for Kavenegar OTP sign-in)
 CREATE OR REPLACE FUNCTION public.lookup_user_by_phone(p_phone text)
-RETURNS SETOF public.users
+RETURNS TABLE (
+  id uuid,
+  phone varchar,
+  username varchar,
+  managed_by_tenant_id uuid,
+  login_email varchar,
+  display_name varchar,
+  email varchar,
+  role varchar,
+  service_domain varchar,
+  tenant_id uuid,
+  tenant_role varchar,
+  is_active boolean,
+  last_login_at timestamp,
+  created_at timestamp,
+  updated_at timestamp
+)
 LANGUAGE sql
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
-  SELECT * FROM public.users WHERE phone = p_phone LIMIT 1;
+  SELECT id, phone, username, managed_by_tenant_id, login_email,
+         "displayName" AS display_name, email, role::varchar, "serviceDomain"::varchar AS service_domain,
+         tenant_id, tenant_role, "isActive" AS is_active,
+         "lastLoginAt" AS last_login_at, "createdAt" AS created_at, "updatedAt" AS updated_at
+  FROM public.users
+  WHERE phone = p_phone
+  LIMIT 1;
 $$;
 
 -- 2. User lookup by username or login email (for password sign-in)
 CREATE OR REPLACE FUNCTION public.lookup_user_by_username(p_username text)
-RETURNS SETOF public.users
+RETURNS TABLE (
+  id uuid,
+  phone varchar,
+  username varchar,
+  managed_by_tenant_id uuid,
+  login_email varchar,
+  password_hash text,
+  password_updated_at timestamp,
+  display_name varchar,
+  email varchar,
+  role varchar,
+  service_domain varchar,
+  tenant_id uuid,
+  tenant_role varchar,
+  is_active boolean,
+  last_login_at timestamp,
+  created_at timestamp,
+  updated_at timestamp
+)
 LANGUAGE sql
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
-  SELECT * FROM public.users 
-  WHERE lower(username) = lower(p_username) 
+  SELECT id, phone, username, managed_by_tenant_id, login_email, password_hash, password_updated_at,
+         "displayName" AS display_name, email, role::varchar, "serviceDomain"::varchar AS service_domain,
+         tenant_id, tenant_role, "isActive" AS is_active,
+         "lastLoginAt" AS last_login_at, "createdAt" AS created_at, "updatedAt" AS updated_at
+  FROM public.users
+  WHERE lower(username) = lower(p_username)
   ORDER BY id ASC
   LIMIT 1;
 $$;
 
 CREATE OR REPLACE FUNCTION public.lookup_user_by_login_email(p_email text)
-RETURNS SETOF public.users
+RETURNS TABLE (
+  id uuid,
+  phone varchar,
+  username varchar,
+  managed_by_tenant_id uuid,
+  login_email varchar,
+  password_hash text,
+  password_updated_at timestamp,
+  display_name varchar,
+  email varchar,
+  role varchar,
+  service_domain varchar,
+  tenant_id uuid,
+  tenant_role varchar,
+  is_active boolean,
+  last_login_at timestamp,
+  created_at timestamp,
+  updated_at timestamp
+)
 LANGUAGE sql
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
-  SELECT * FROM public.users 
-  WHERE lower(login_email) = lower(p_email) 
+  SELECT id, phone, username, managed_by_tenant_id, login_email, password_hash, password_updated_at,
+         "displayName" AS display_name, email, role::varchar, "serviceDomain"::varchar AS service_domain,
+         tenant_id, tenant_role, "isActive" AS is_active,
+         "lastLoginAt" AS last_login_at, "createdAt" AS created_at, "updatedAt" AS updated_at
+  FROM public.users
+  WHERE lower(login_email) = lower(p_email)
   ORDER BY id ASC
   LIMIT 1;
 $$;
 
--- 3. User lookup by ID (for auth token verification)
+-- 3. User lookup by ID (with optional password hash) with caller context check
 CREATE OR REPLACE FUNCTION public.lookup_user_by_id(p_user_id uuid)
-RETURNS SETOF public.users
-LANGUAGE sql
+RETURNS TABLE (
+  id uuid,
+  phone varchar,
+  username varchar,
+  managed_by_tenant_id uuid,
+  login_email varchar,
+  display_name varchar,
+  email varchar,
+  role varchar,
+  service_domain varchar,
+  tenant_id uuid,
+  tenant_role varchar,
+  is_active boolean,
+  last_login_at timestamp,
+  created_at timestamp,
+  updated_at timestamp
+)
+LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
-  SELECT * FROM public.users WHERE id = p_user_id LIMIT 1;
+DECLARE
+  v_current_user uuid := nullif(current_setting('app.user_id', true), '')::uuid;
+BEGIN
+  IF v_current_user IS NOT NULL AND v_current_user <> p_user_id THEN
+    RAISE EXCEPTION 'caller user context does not match target user';
+  END IF;
+  RETURN QUERY
+  SELECT u.id, u.phone, u.username, u.managed_by_tenant_id, u.login_email,
+         u."displayName" AS display_name, u.email, u.role::varchar, u."serviceDomain"::varchar AS service_domain,
+         u.tenant_id, u.tenant_role, u."isActive" AS is_active,
+         u."lastLoginAt" AS last_login_at, u."createdAt" AS created_at, u."updatedAt" AS updated_at
+  FROM public.users u
+  WHERE u.id = p_user_id
+  LIMIT 1;
+END;
 $$;
 
--- 4. Refresh token lookup by SHA-256 hash
+-- 4. Refresh token lookup and token rotation mutators
 CREATE OR REPLACE FUNCTION public.lookup_refresh_token_by_hash(p_token_hash text)
-RETURNS SETOF public.auth_refresh_tokens
+RETURNS TABLE (
+  id uuid,
+  user_id uuid,
+  tenant_id uuid,
+  token_hash varchar,
+  family_id uuid,
+  user_agent varchar,
+  ip varchar,
+  device_hash varchar,
+  mfa boolean,
+  session_started_at timestamp,
+  expires_at timestamp,
+  revoked_at timestamp,
+  created_at timestamp
+)
 LANGUAGE sql
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
-  SELECT * FROM public.auth_refresh_tokens WHERE token_hash = p_token_hash LIMIT 1;
+  SELECT id, user_id, tenant_id, token_hash, family_id, user_agent, ip, device_hash,
+         mfa, session_started_at, expires_at, revoked_at, created_at
+  FROM public.auth_refresh_tokens
+  WHERE token_hash = p_token_hash
+  LIMIT 1;
 $$;
 
 -- 5. User memberships lookup (for tenant switcher upon login)
@@ -136,34 +252,67 @@ RETURNS TABLE (
   role_key varchar,
   status varchar
 )
-LANGUAGE sql
+LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
+DECLARE
+  v_current_user uuid := nullif(current_setting('app.user_id', true), '')::uuid;
+  v_current_tenant uuid := nullif(current_setting('app.tenant_id', true), '')::uuid;
+BEGIN
+  IF v_current_user IS NOT NULL AND v_current_user <> p_user_id THEN
+    RAISE EXCEPTION 'caller user context does not match target user';
+  END IF;
+  RETURN QUERY
   SELECT m.id AS membership_id, m.tenant_id, t.name AS tenant_name, m.role_key, m.status
   FROM public.tenant_memberships m
   JOIN public.tenants t ON t.id = m.tenant_id
-  WHERE m.user_id = p_user_id AND t.is_active = true
+  WHERE m.user_id = p_user_id
+    AND t.is_active = true
+    AND (v_current_tenant IS NULL OR m.tenant_id = v_current_tenant)
   ORDER BY m.created_at ASC;
+END;
 $$;
 
 -- 6. Invitation lookup by SHA-256 hash
 CREATE OR REPLACE FUNCTION public.lookup_invitation_by_token_hash(p_token_hash text)
-RETURNS SETOF public.tenant_invitations
+RETURNS TABLE (
+  id uuid,
+  tenant_id uuid,
+  email varchar,
+  phone varchar,
+  role_key varchar,
+  custom_role_id uuid,
+  branch_id uuid,
+  department_id uuid,
+  branch_scoped boolean,
+  token_hash varchar,
+  expires_at timestamp,
+  accepted_at timestamp,
+  accepted_by uuid,
+  revoked_at timestamp,
+  invited_by uuid,
+  created_at timestamp
+)
 LANGUAGE sql
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
-  SELECT * FROM public.tenant_invitations 
-  WHERE token_hash = p_token_hash 
-    AND accepted_at IS NULL 
-    AND revoked_at IS NULL 
-    AND expires_at > CURRENT_TIMESTAMP 
+  SELECT id, tenant_id, email, phone, role_key, custom_role_id, branch_id, department_id,
+         branch_scoped, token_hash, expires_at, accepted_at, accepted_by, revoked_at,
+         invited_by, created_at
+  FROM public.tenant_invitations
+  WHERE token_hash = p_token_hash
+    AND accepted_at IS NULL
+    AND revoked_at IS NULL
+    AND expires_at > CURRENT_TIMESTAMP
   LIMIT 1;
 $$;
 ```
 
 ### 4.2 Table RLS Policies Specification
+
+All policies operate purely on database session parameters (`app.tenant_id` and `app.user_id`) without arbitrary session flags:
 
 ```sql
 -- =========================================================================
@@ -172,30 +321,25 @@ $$;
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.users FORCE ROW LEVEL SECURITY;
 
-CREATE POLICY users_tenant_and_self ON public.users
+CREATE POLICY "users_tenant_and_self" ON "users"
 FOR ALL
 USING (
-  -- Tenant context: same tenant or managed by same tenant
   (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND (
-    tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid
-    OR managed_by_tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid
-    OR id IN (
-      SELECT m.user_id FROM public.tenant_memberships m
-      WHERE m.tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid
+    "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
+    OR "managed_by_tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
+    OR "id" IN (
+      SELECT m."user_id" FROM "tenant_memberships" m
+      WHERE m."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
     )
   ))
-  -- User context: self profile access
-  OR (nullif(current_setting('app.user_id', true), '') IS NOT NULL AND id = nullif(current_setting('app.user_id', true), '')::uuid)
-  -- Global auth lookup escape hatch
-  OR (current_setting('app.auth_lookup', true) = 'true')
+  OR (nullif(current_setting('app.user_id', true), '') IS NOT NULL AND "id" = nullif(current_setting('app.user_id', true), '')::uuid)
 )
 WITH CHECK (
   (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND (
-    tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid
-    OR managed_by_tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid
+    "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
+    OR "managed_by_tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
   ))
-  OR (nullif(current_setting('app.user_id', true), '') IS NOT NULL AND id = nullif(current_setting('app.user_id', true), '')::uuid)
-  OR (current_setting('app.auth_lookup', true) = 'true')
+  OR (nullif(current_setting('app.user_id', true), '') IS NOT NULL AND "id" = nullif(current_setting('app.user_id', true), '')::uuid)
 );
 
 -- =========================================================================
@@ -204,17 +348,15 @@ WITH CHECK (
 ALTER TABLE public.auth_refresh_tokens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.auth_refresh_tokens FORCE ROW LEVEL SECURITY;
 
-CREATE POLICY auth_refresh_tokens_tenant_and_user ON public.auth_refresh_tokens
+CREATE POLICY "auth_refresh_tokens_tenant_and_user" ON "auth_refresh_tokens"
 FOR ALL
 USING (
-  (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
-  OR (nullif(current_setting('app.user_id', true), '') IS NOT NULL AND user_id = nullif(current_setting('app.user_id', true), '')::uuid)
-  OR (current_setting('app.auth_lookup', true) = 'true')
+  (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid)
+  OR (nullif(current_setting('app.user_id', true), '') IS NOT NULL AND "user_id" = nullif(current_setting('app.user_id', true), '')::uuid)
 )
 WITH CHECK (
-  (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
-  OR (nullif(current_setting('app.user_id', true), '') IS NOT NULL AND user_id = nullif(current_setting('app.user_id', true), '')::uuid)
-  OR (current_setting('app.auth_lookup', true) = 'true')
+  (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid)
+  OR (nullif(current_setting('app.user_id', true), '') IS NOT NULL AND "user_id" = nullif(current_setting('app.user_id', true), '')::uuid)
 );
 
 -- =========================================================================
@@ -223,16 +365,14 @@ WITH CHECK (
 ALTER TABLE public.tenant_memberships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tenant_memberships FORCE ROW LEVEL SECURITY;
 
-CREATE POLICY tenant_memberships_tenant_and_user ON public.tenant_memberships
+CREATE POLICY "tenant_memberships_tenant_and_user" ON "tenant_memberships"
 FOR ALL
 USING (
-  (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
-  OR (nullif(current_setting('app.user_id', true), '') IS NOT NULL AND user_id = nullif(current_setting('app.user_id', true), '')::uuid)
-  OR (current_setting('app.auth_lookup', true) = 'true')
+  (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid)
+  OR (nullif(current_setting('app.user_id', true), '') IS NOT NULL AND "user_id" = nullif(current_setting('app.user_id', true), '')::uuid)
 )
 WITH CHECK (
-  (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
-  OR (current_setting('app.auth_lookup', true) = 'true')
+  nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
 );
 
 -- =========================================================================
@@ -241,15 +381,13 @@ WITH CHECK (
 ALTER TABLE public.tenant_invitations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tenant_invitations FORCE ROW LEVEL SECURITY;
 
-CREATE POLICY tenant_invitations_tenant ON public.tenant_invitations
+CREATE POLICY "tenant_invitations_tenant" ON "tenant_invitations"
 FOR ALL
 USING (
-  (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
-  OR (current_setting('app.auth_lookup', true) = 'true')
+  nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
 )
 WITH CHECK (
-  (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
-  OR (current_setting('app.auth_lookup', true) = 'true')
+  nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
 );
 
 -- =========================================================================
@@ -258,15 +396,13 @@ WITH CHECK (
 ALTER TABLE public.tenant_module_entitlements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tenant_module_entitlements FORCE ROW LEVEL SECURITY;
 
-CREATE POLICY tenant_module_entitlements_tenant ON public.tenant_module_entitlements
+CREATE POLICY "tenant_module_entitlements_tenant" ON "tenant_module_entitlements"
 FOR ALL
 USING (
-  (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
-  OR (current_setting('app.auth_lookup', true) = 'true')
+  nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
 )
 WITH CHECK (
-  (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
-  OR (current_setting('app.auth_lookup', true) = 'true')
+  nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
 );
 
 -- =========================================================================
@@ -275,15 +411,13 @@ WITH CHECK (
 ALTER TABLE public.tenant_module_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tenant_module_requests FORCE ROW LEVEL SECURITY;
 
-CREATE POLICY tenant_module_requests_tenant ON public.tenant_module_requests
+CREATE POLICY "tenant_module_requests_tenant" ON "tenant_module_requests"
 FOR ALL
 USING (
-  (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
-  OR (current_setting('app.auth_lookup', true) = 'true')
+  nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
 )
 WITH CHECK (
-  (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
-  OR (current_setting('app.auth_lookup', true) = 'true')
+  nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
 );
 
 -- =========================================================================
@@ -293,18 +427,29 @@ ALTER TABLE public.contact_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.contact_messages FORCE ROW LEVEL SECURITY;
 
 -- Contact messages insert requires a matching tenant context
-CREATE POLICY contact_messages_insert ON public.contact_messages
+CREATE POLICY "contact_messages_insert" ON "contact_messages"
 FOR INSERT
 WITH CHECK (
   nullif(current_setting('app.tenant_id', true), '') IS NOT NULL
   AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
 );
 
--- Only the recipient tenant can read/manage contact messages
-CREATE POLICY contact_messages_tenant ON public.contact_messages
+CREATE POLICY "contact_messages_tenant" ON "contact_messages"
 FOR SELECT
 USING (
-  nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid
+  nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
+);
+
+CREATE POLICY "contact_messages_modify" ON "contact_messages"
+FOR UPDATE
+USING (
+  nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
+);
+
+CREATE POLICY "contact_messages_delete" ON "contact_messages"
+FOR DELETE
+USING (
+  nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
 );
 
 -- =========================================================================
@@ -313,8 +458,7 @@ USING (
 ALTER TABLE public.enterprise_inquiries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.enterprise_inquiries FORCE ROW LEVEL SECURITY;
 
--- Anyone can submit an anonymous enterprise inquiry (tenant_id IS NULL) or with matching tenant
-CREATE POLICY enterprise_inquiries_insert ON public.enterprise_inquiries
+CREATE POLICY "enterprise_inquiries_insert" ON "enterprise_inquiries"
 FOR INSERT
 WITH CHECK (
   "tenant_id" IS NULL
@@ -324,11 +468,10 @@ WITH CHECK (
   )
 );
 
--- Tenants see inquiries assigned to them
-CREATE POLICY enterprise_inquiries_tenant ON public.enterprise_inquiries
+CREATE POLICY "enterprise_inquiries_tenant" ON "enterprise_inquiries"
 FOR ALL
 USING (
-  nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid
+  nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
 );
 ```
 
@@ -368,4 +511,4 @@ Furthermore, platform-wide administrative functions (`list_open_module_requests`
    - Disables and un-forces RLS on all 8 tables.
    - Drops the functions.
 4. **Audit Allow-List Removal**:
-   - `RLS_PENDING_ALLOWLIST` in `tenant-rls-all-tables.pg.spec.ts` is cleared of these 8 tables. All 101 tenant tables on the platform are now 100% covered under PostgreSQL FORCE ROW LEVEL SECURITY.
+   - `RLS_PENDING_ALLOWLIST` in `tenant-rls-all-tables.pg.spec.ts` is cleared of these 8 tables. All 8 pre-tenant tables are now covered under PostgreSQL FORCE ROW LEVEL SECURITY, leaving only the remaining module tables in `RLS_PENDING_ALLOWLIST`.
