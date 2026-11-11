@@ -424,6 +424,7 @@ jobs:
     env:
       DATABASE_HOST: 127.0.0.1
       DATABASE_PORT: "5432"
+      # Admin user: only migrations run here. The pg specs create roxira_app themselves (test-pg.ts).
       DATABASE_USER: postgres
       DATABASE_NAME: rxfresh
     steps:
@@ -501,11 +502,18 @@ jobs:
           npm ci --no-audit --no-fund
           npm run build
           npm run migration:run
+      - name: Create the app role (NOSUPERUSER NOBYPASSRLS, as in production)
+        # Migrations and the session minting below keep the admin user (job-level DATABASE_USER);
+        # the backend itself must run as roxira_app so RLS applies to its own queries.
+        run: bash scripts/ci/create_app_role.sh
       - name: Start backend (:3000)
         working-directory: output_apps/enterprise_hub
         env:
           NODE_ENV: production
           PORT: "3000"
+          DATABASE_USER: roxira_app
+          # CI-only literal, same as test/support/test-pg.ts; the service container is throwaway.
+          DATABASE_PASSWORD: app-role-test-only
         run: |
           nohup node dist/main > "$RUNNER_TEMP/backend.log" 2>&1 &
           for i in $(seq 1 60); do
