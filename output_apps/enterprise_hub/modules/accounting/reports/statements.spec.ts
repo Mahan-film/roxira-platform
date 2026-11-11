@@ -1,5 +1,5 @@
 import { strFromU8, unzipSync } from 'fflate';
-import { AccountType, ReportLine } from '../enums/accounting.enum';
+import { AccountLevel, AccountType, ReportLine } from '../enums/accounting.enum';
 import { formatMoney, writePdf } from './pdf-writer';
 import { ReportTable } from './report-table';
 import {
@@ -83,6 +83,90 @@ describe('statements', () => {
     expect(rows.find((r) => r.code === '3')).toMatchObject({ openingCredit: 1000n, endingCredit: 1030n, endingDebit: 0n });
     const sum = (key: 'endingDebit' | 'endingCredit') => rows.reduce((t, r) => t + r[key], 0n);
     expect(sum('endingDebit')).toBe(sum('endingCredit'));
+  });
+
+  it('rolls up hierarchical accounts for multi-level account review drill-down (kol -> moein)', () => {
+    const kolAssets: ReportAccount = {
+      id: 10,
+      code: '10',
+      name: 'دارایی‌های جاری',
+      accountType: AccountType.ASSET,
+      level: AccountLevel.KOL,
+      parentCode: null,
+      reportLine: null,
+    };
+    const moeinCash: ReportAccount = {
+      id: 1010,
+      code: '1010',
+      name: 'موجودی نقد و بانک',
+      accountType: AccountType.ASSET,
+      level: AccountLevel.MOEIN,
+      parentCode: '10',
+      reportLine: null,
+    };
+    const moeinReceivable: ReportAccount = {
+      id: 1020,
+      code: '1020',
+      name: 'حساب‌های دریافتنی',
+      accountType: AccountType.ASSET,
+      level: AccountLevel.MOEIN,
+      parentCode: '10',
+      reportLine: null,
+    };
+    const tafsiliCash: ReportAccount = {
+      id: 10101,
+      code: '10101',
+      name: 'صندوق مرکزی',
+      accountType: AccountType.ASSET,
+      level: AccountLevel.TAFSILI,
+      parentCode: '1010',
+      reportLine: null,
+    };
+    const tafsiliBank: ReportAccount = {
+      id: 10102,
+      code: '10102',
+      name: 'بانک ملت',
+      accountType: AccountType.ASSET,
+      level: AccountLevel.TAFSILI,
+      parentCode: '1010',
+      reportLine: null,
+    };
+    const tafsiliCustomer: ReportAccount = {
+      id: 10201,
+      code: '10201',
+      name: 'مشتری الف',
+      accountType: AccountType.ASSET,
+      level: AccountLevel.TAFSILI,
+      parentCode: '1020',
+      reportLine: null,
+    };
+
+    const accounts = [kolAssets, moeinCash, moeinReceivable, tafsiliCash, tafsiliBank, tafsiliCustomer];
+    const treeBalances = [
+      balance(tafsiliCash, 500n, 100n),
+      balance(tafsiliBank, 300n, 200n),
+      balance(tafsiliCustomer, 400n, 50n),
+    ];
+
+    // Kol level review
+    const kolRows = trialBalanceRows(treeBalances, accounts, { level: AccountLevel.KOL });
+    expect(kolRows).toHaveLength(1);
+    expect(kolRows[0].code).toBe('10');
+    expect(kolRows[0].openingDebit).toBe(350n);
+    expect(kolRows[0].periodDebit).toBe(1200n);
+    expect(kolRows[0].endingDebit).toBe(1550n);
+
+    // Moein level review (drill down from Kol)
+    const moeinRows = trialBalanceRows(treeBalances, accounts, { level: AccountLevel.MOEIN });
+    expect(moeinRows).toHaveLength(2);
+    const cashRow = moeinRows.find((r) => r.code === '1010')!;
+    const recRow = moeinRows.find((r) => r.code === '1020')!;
+    expect(cashRow.openingDebit).toBe(300n);
+    expect(cashRow.periodDebit).toBe(800n);
+    expect(cashRow.endingDebit).toBe(1100n);
+    expect(recRow.openingDebit).toBe(50n);
+    expect(recRow.periodDebit).toBe(400n);
+    expect(recRow.endingDebit).toBe(450n);
   });
 });
 

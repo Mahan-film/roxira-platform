@@ -50,9 +50,14 @@ import { ApiClientError } from "@/lib/api/http-client";
 import { inferServiceDomain } from "@/lib/api/auth-client";
 import { useAuth } from "@/components/auth/auth-provider";
 import { VoucherAttachments } from "@/components/accounting/voucher-attachments";
+import { AccountSearchModal } from "@/components/accounting/account-search-modal";
 import {
   computeBalancingAmount,
   getNextCellCoordinates,
+  isAccountSearchKey,
+  isCancelKey,
+  isInsertLineKey,
+  isSaveShortcut,
 } from "@/lib/voucher-keyboard";
 import { formatMoneyRial } from "@/lib/fa-format";
 import {
@@ -124,6 +129,7 @@ export function JournalEntryForm({
   const [createdEntry, setCreatedEntry] = useState<JournalEntryResponse | null>(
     null,
   );
+  const [showAccountSearch, setShowAccountSearch] = useState(false);
 
   // Load the edited voucher into the form whenever the target changes.
   useEffect(() => {
@@ -201,17 +207,35 @@ export function JournalEntryForm({
   }
 
   function handleFormKeyDown(event: KeyboardEvent<HTMLFormElement>) {
-    // Ctrl+Enter or Cmd+Enter: submit entry from anywhere
-    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+    // Ctrl+S / Cmd+S or Ctrl+Enter: submit entry from anywhere
+    if (isSaveShortcut(event)) {
       event.preventDefault();
       void submitEntry();
       return;
     }
 
-    // Alt+N: add new line and focus
-    if (event.altKey && (event.key === "n" || event.key === "N")) {
+    // Insert key or Alt+N: add new line and focus
+    if (isInsertLineKey(event) || (event.altKey && (event.key === "n" || event.key === "N"))) {
       event.preventDefault();
       addLineAndFocus();
+      return;
+    }
+
+    // F2: account search
+    if (isAccountSearchKey(event)) {
+      event.preventDefault();
+      setShowAccountSearch(true);
+      return;
+    }
+
+    // Esc: cancel modal or entire entry
+    if (isCancelKey(event)) {
+      event.preventDefault();
+      if (showAccountSearch) {
+        setShowAccountSearch(false);
+      } else if (onCancel) {
+        onCancel();
+      }
       return;
     }
 
@@ -441,17 +465,21 @@ export function JournalEntryForm({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <h3 className="text-sm font-semibold">سطرهای سند</h3>
-                <div className="hidden items-center gap-1.5 text-xs text-muted-foreground md:flex">
+                <div className="hidden items-center gap-1.5 text-xs text-muted-foreground md:flex flex-wrap">
                   <KeyboardIcon className="size-3.5 text-indigo-500" />
-                  <span>کلیدها:</span>
-                  <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px]">Enter</kbd>
-                  <span>بعدی/سطر نو</span>
-                  <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px]">Ctrl+Enter</kbd>
-                  <span>ثبت</span>
-                  <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px]">Alt+B</kbd>
-                  <span>موازنه</span>
-                  <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px]">Alt+N</kbd>
+                  <span className="font-semibold text-foreground">کلیدهای حسابدار:</span>
+                  <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[11px] font-semibold">Insert</kbd>
                   <span>سطر جدید</span>
+                  <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[11px] font-semibold">Enter</kbd>
+                  <span>سلول بعدی</span>
+                  <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[11px] font-semibold">F2</kbd>
+                  <span>جستجوی حساب</span>
+                  <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[11px] font-semibold">Ctrl+S</kbd>
+                  <span>ثبت سند</span>
+                  <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[11px] font-semibold">Esc</kbd>
+                  <span>انصراف</span>
+                  <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[11px] font-semibold">Alt+B</kbd>
+                  <span>موازنه</span>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -498,6 +526,27 @@ export function JournalEntryForm({
                             className="w-full"
                             onFocus={() => setActiveRowIndex(index)}
                             onKeyDown={(e) => {
+                              if (isAccountSearchKey(e)) {
+                                e.preventDefault();
+                                setActiveRowIndex(index);
+                                setShowAccountSearch(true);
+                                return;
+                              }
+                              if (isInsertLineKey(e)) {
+                                e.preventDefault();
+                                addLineAndFocus();
+                                return;
+                              }
+                              if (isSaveShortcut(e)) {
+                                e.preventDefault();
+                                void submitEntry();
+                                return;
+                              }
+                              if (isCancelKey(e)) {
+                                e.preventDefault();
+                                onCancel?.();
+                                return;
+                              }
                               if (e.key === "Enter" || e.key === "Tab") {
                                 if (!e.shiftKey) {
                                   e.preventDefault();
@@ -539,6 +588,27 @@ export function JournalEntryForm({
                             })
                           }
                           onKeyDown={(e) => {
+                            if (isAccountSearchKey(e)) {
+                              e.preventDefault();
+                              setActiveRowIndex(index);
+                              setShowAccountSearch(true);
+                              return;
+                            }
+                            if (isInsertLineKey(e)) {
+                              e.preventDefault();
+                              addLineAndFocus();
+                              return;
+                            }
+                            if (isSaveShortcut(e)) {
+                              e.preventDefault();
+                              void submitEntry();
+                              return;
+                            }
+                            if (isCancelKey(e)) {
+                              e.preventDefault();
+                              onCancel?.();
+                              return;
+                            }
                             if ((e.ctrlKey || e.metaKey || e.altKey) && (e.key === "b" || e.key === "B")) {
                               e.preventDefault();
                               autoBalanceRow(index);
@@ -575,6 +645,27 @@ export function JournalEntryForm({
                             })
                           }
                           onKeyDown={(e) => {
+                            if (isAccountSearchKey(e)) {
+                              e.preventDefault();
+                              setActiveRowIndex(index);
+                              setShowAccountSearch(true);
+                              return;
+                            }
+                            if (isInsertLineKey(e)) {
+                              e.preventDefault();
+                              addLineAndFocus();
+                              return;
+                            }
+                            if (isSaveShortcut(e)) {
+                              e.preventDefault();
+                              void submitEntry();
+                              return;
+                            }
+                            if (isCancelKey(e)) {
+                              e.preventDefault();
+                              onCancel?.();
+                              return;
+                            }
                             if ((e.ctrlKey || e.metaKey || e.altKey) && (e.key === "b" || e.key === "B")) {
                               e.preventDefault();
                               autoBalanceRow(index);
@@ -606,6 +697,27 @@ export function JournalEntryForm({
                           }
                           placeholder="شرح اختیاری"
                           onKeyDown={(e) => {
+                            if (isAccountSearchKey(e)) {
+                              e.preventDefault();
+                              setActiveRowIndex(index);
+                              setShowAccountSearch(true);
+                              return;
+                            }
+                            if (isInsertLineKey(e)) {
+                              e.preventDefault();
+                              addLineAndFocus();
+                              return;
+                            }
+                            if (isSaveShortcut(e)) {
+                              e.preventDefault();
+                              void submitEntry();
+                              return;
+                            }
+                            if (isCancelKey(e)) {
+                              e.preventDefault();
+                              onCancel?.();
+                              return;
+                            }
                             if (e.key === "Enter") {
                               e.preventDefault();
                               const next = getNextCellCoordinates(index, 3, lines.length, false, "next");
@@ -759,6 +871,22 @@ export function JournalEntryForm({
             )}
           </div>
         </form>
+
+        <AccountSearchModal
+          open={showAccountSearch}
+          accounts={accounts}
+          onSelect={(account) => {
+            if (activeRowIndex < lines.length) {
+              updateLine(lines[activeRowIndex].uid, { accountCode: account.code });
+            }
+            setShowAccountSearch(false);
+            setTimeout(() => focusCell(activeRowIndex, 1), 50);
+          }}
+          onClose={() => {
+            setShowAccountSearch(false);
+            setTimeout(() => focusCell(activeRowIndex, 0), 50);
+          }}
+        />
       </CardContent>
     </Card>
   );

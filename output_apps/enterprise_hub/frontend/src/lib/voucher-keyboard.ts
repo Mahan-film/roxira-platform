@@ -112,3 +112,23 @@ export function getNextCellCoordinates(
     }
   }
 }
+
+/** Check if event matches the accountant Save shortcut (Ctrl+S / Cmd+S or Ctrl+Enter) */
+export function isSaveShortcut(e: { ctrlKey?: boolean; metaKey?: boolean; key: string }): boolean {
+  return Boolean((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S" || e.key === "Enter"));
+}
+
+/** Check if event matches F2 (Account Search) */
+export function isAccountSearchKey(e: { key: string }): boolean {
+  return e.key === "F2";
+}
+
+/** Check if event matches Insert (New Line) */
+export function isInsertLineKey(e: { key: string }): boolean {
+  return e.key === "Insert";
+}
+
+/** Check if event matches Esc (Cancel) */
+export function isCancelKey(e: { key: string }): boolean {
+  return e.key === "Escape";
+}

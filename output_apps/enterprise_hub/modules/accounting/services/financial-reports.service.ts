@@ -329,7 +329,10 @@ export class FinancialReportsService {
   async trialBalance(tenantId: string, query: TrialBalanceQueryDto): Promise<TrialBalanceReport> {
     const period = await this.resolvePeriod(tenantId, query);
     const { accounts, balances } = await this.balances(tenantId, period);
-    const rows = trialBalanceRows(balances, accounts, query);
+    const scopedAccounts = query.accountCode ? this.subtree(accounts, query.accountCode) : accounts;
+    const scopedIds = new Set(scopedAccounts.map((a) => a.id));
+    const scopedBalances = query.accountCode ? balances.filter((b) => scopedIds.has(b.account.id)) : balances;
+    const rows = trialBalanceRows(scopedBalances, scopedAccounts, query);
     return this.summarize(period, query.columns ?? 6, rows);
   }
 

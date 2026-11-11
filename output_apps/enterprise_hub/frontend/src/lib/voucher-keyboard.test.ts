@@ -4,6 +4,10 @@ import assert from "node:assert/strict";
 import {
   computeBalancingAmount,
   getNextCellCoordinates,
+  isAccountSearchKey,
+  isCancelKey,
+  isInsertLineKey,
+  isSaveShortcut,
 } from "./voucher-keyboard.ts";
 
 describe("computeBalancingAmount", () => {
@@ -100,5 +104,29 @@ describe("getNextCellCoordinates", () => {
     assert.deepEqual(getNextCellCoordinates(2, 1, 3, false, "down"), { row: 2, col: 1 }); // clamp
     assert.deepEqual(getNextCellCoordinates(2, 1, 3, false, "up"), { row: 1, col: 1 });
     assert.deepEqual(getNextCellCoordinates(0, 1, 3, false, "up"), { row: 0, col: 1 }); // clamp
+  });
+});
+
+describe("accountant keyboard mode shortcuts", () => {
+  it("identifies Insert as new line trigger", () => {
+    assert.equal(isInsertLineKey({ key: "Insert" }), true);
+    assert.equal(isInsertLineKey({ key: "Enter" }), false);
+  });
+
+  it("identifies F2 as account search trigger", () => {
+    assert.equal(isAccountSearchKey({ key: "F2" }), true);
+    assert.equal(isAccountSearchKey({ key: "F1" }), false);
+  });
+
+  it("identifies Ctrl+S and Cmd+S as save shortcut", () => {
+    assert.equal(isSaveShortcut({ ctrlKey: true, key: "s" }), true);
+    assert.equal(isSaveShortcut({ metaKey: true, key: "S" }), true);
+    assert.equal(isSaveShortcut({ ctrlKey: true, key: "Enter" }), true);
+    assert.equal(isSaveShortcut({ key: "s" }), false);
+  });
+
+  it("identifies Escape as cancel trigger", () => {
+    assert.equal(isCancelKey({ key: "Escape" }), true);
+    assert.equal(isCancelKey({ key: "Enter" }), false);
   });
 });
