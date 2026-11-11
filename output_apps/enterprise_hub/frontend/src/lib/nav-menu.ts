@@ -268,6 +268,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         keywords: ["telegram", "bot", "تلگرام", "رسید", "بات"],
       },
       {
+        href: "/app/settings/integrations/woocommerce",
+        label: "اتصال به ووکامرس",
+        icon: "Plug",
+        module: "invoicing",
+        keywords: ["woocommerce", "ووکامرس", "فروشگاه", "sync"],
+      },
+      {
         href: "/app/settings/audit",
         label: "گزارش رخدادها",
         icon: "ClipboardList",

@@ -245,6 +245,28 @@
   "GET /admin/entitlements/requests/open (EntitlementsAdminController.openRequests)": {
     "policy": "platformAdmin"
   },
+  "GET /api/integrations/woocommerce/config (WooCommerceConfigController.getConfig)": {
+    "policy": "invoicing:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /api/integrations/woocommerce/logs (WooCommerceConfigController.getLogs)": {
+    "policy": "invoicing:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /approvals/requests (ApprovalsController.listRequests)": {
     "policy": "members:read",
     "owner": true,
@@ -2776,6 +2798,9 @@
   "POST /api/integrations/receipt-bot/webhook (ReceiptBotWebhookController.handleWebhook)": {
     "policy": "public"
   },
+  "POST /api/integrations/woocommerce/webhook/:tenantId (WooCommerceWebhookController.handleWebhook)": {
+    "policy": "public"
+  },
   "POST /approvals/delegations (ApprovalsController.createDelegation)": {
     "policy": "members:approve",
     "owner": true,
@@ -4863,6 +4888,17 @@
   },
   "PUT /admin/entitlements/:tenantId (EntitlementsAdminController.set)": {
     "policy": "platformAdmin"
+  },
+  "PUT /api/integrations/woocommerce/config (WooCommerceConfigController.updateConfig)": {
+    "policy": "invoicing:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
   },
   "PUT /enterprise-hub/accounting/journal-entries/:id (AccountingController.updateJournalEntry)": {
     "policy": "accounting:create",
