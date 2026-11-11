@@ -142,7 +142,8 @@ def compare(row: dict, pr_json: dict | None, since: str | None) -> list[str]:
     if st == "MERGED" and a["state"] != "MERGED":
         probs.append(f"claimed MERGED but state is {a['state']}")
     # UNKNOWN means GitHub is still computing mergeability; only a real conflict counts.
-    if st == "MERGEABLE" and (a["state"] != "OPEN" or a["mergeable"] == "CONFLICTING"):
+    # A PR that merged after the report was written satisfies a MERGEABLE claim.
+    if st == "MERGEABLE" and a["state"] != "MERGED" and (a["state"] != "OPEN" or a["mergeable"] == "CONFLICTING"):
         probs.append(f"claimed MERGEABLE but state={a['state']} mergeable={a['mergeable']}")
     if st == "CONFLICTING" and a["mergeable"] != "CONFLICTING":
         probs.append(f"claimed CONFLICTING but mergeable={a['mergeable']}")

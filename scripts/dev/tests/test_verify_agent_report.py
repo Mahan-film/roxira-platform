@@ -92,8 +92,13 @@ def test_compare_sha_mismatch():
     assert any("sha mismatch" in p for p in v.compare(row(sha="deadbeef"), pr_json(), None))
 
 
-def test_compare_mergeable_but_merged():
+def test_compare_mergeable_then_merged_is_ok():
     probs = v.compare(row(), pr_json(state="MERGED"), None)
+    assert not any("claimed MERGEABLE" in p for p in probs)
+
+
+def test_compare_mergeable_but_conflicting():
+    probs = v.compare(row(), pr_json(mergeable="CONFLICTING"), None)
     assert any("claimed MERGEABLE" in p for p in probs)
 
 
