@@ -1,6 +1,10 @@
-import { Public } from '../../auth/decorators/public.decorator';
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { AccessAction, AccessModule } from '../../access/catalogue';
+import { ModuleAccess, RequireAction } from '../../access/decorators';
+import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
+import { Public } from '../../auth/decorators/public.decorator';
+import { requireTenantId } from '../../tenants/tenant-context';
 import {
   ExchangeRatesResponseDto,
   SupportedCurrenciesResponseDto,
@@ -17,7 +21,6 @@ import { ForeignAccountBalance, FxRevaluationService } from '../services/fx-reva
  * از طریق Swagger تولید و مستند شده است (Rule #4 — Contract-First).
  */
 @ApiTags('Currency - نرخ ارز و تسویه بین‌المللی')
-@Public()
 @Controller('enterprise-hub/currency')
 export class CurrencyController {
   constructor(
@@ -25,6 +28,7 @@ export class CurrencyController {
     private readonly fxRevaluationService: FxRevaluationService,
   ) {}
 
+  @Public()
   @Get()
   @ApiOperation({ summary: 'فهرست ارزهای پشتیبانی‌شده و ارز پایه' })
   @ApiResponse({ status: 200, type: SupportedCurrenciesResponseDto })
@@ -32,6 +36,7 @@ export class CurrencyController {
     return this.currencyService.listSupported();
   }
 
+  @Public()
   @Get('rates')
   @ApiOperation({
     summary: 'نرخ تبدیل ارزها نسبت به ارز پایه (USD)',
@@ -43,12 +48,18 @@ export class CurrencyController {
     return this.currencyService.getRates();
   }
 
+  @ModuleAccess(AccessModule.ACCOUNTING)
+  @RequireAction(AccessAction.POST)
   @Post('revaluation')
   @ApiOperation({
     summary: 'ثبت سند تسعیر ارز پایان دوره برای حساب‌های ارزی',
     description: 'محاسبه مابه‌التفاوت تسعیر ارز و صدور سند حسابداری متوازن از طریق موتور قواعد ثبت.',
   })
-  async revalueMonthEnd(@Body() dto: RevalueBalancesDto) {
+  async revalueMonthEnd(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: RevalueBalancesDto,
+  ) {
+    const tenantId = requireTenantId(req);
     const balances: ForeignAccountBalance[] = dto.balances.map((b) => ({
       accountCode: b.accountCode,
       accountName: b.accountName,
@@ -57,7 +68,7 @@ export class CurrencyController {
       bookValueRialMinor: BigInt(b.bookValueRialMinor),
       isLiability: b.isLiability,
     }));
-    return this.fxRevaluationService.postMonthEndRevaluation(dto.tenantId, {
+    return this.fxRevaluationService.postMonthEndRevaluation(tenantId, {
       period: dto.period,
       date: dto.date,
       balances,

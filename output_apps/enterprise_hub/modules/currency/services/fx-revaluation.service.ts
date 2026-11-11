@@ -1,8 +1,21 @@
-import { BadRequestException, Inject, Injectable, Optional, forwardRef } from '@nestjs/common';
-import { CurrencyService } from './currency.service';
-import { Currency } from '../enums/currency.enum';
-import { PostingRulesService, PostingResult } from '../../posting_rules/services/posting-rules.service';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
+import { createHash } from 'crypto';
 import { EntityManager } from 'typeorm';
+import { CURRENCY_METADATA } from '../constants/currency.constants';
+import { Currency } from '../enums/currency.enum';
+import { CurrencyService } from './currency.service';
+import { AccountingService } from '../../accounting/services/accounting.service';
+import {
+  PostingRequest,
+  PostingResult,
+  PostingRulesService,
+} from '../../posting_rules/services/posting-rules.service';
 
 export interface ForeignAccountBalance {
   accountCode: string;
@@ -26,6 +39,7 @@ export interface RevaluationItemResult {
   isLiability: boolean;
   gainMinor: bigint;
   lossMinor: bigint;
+  fingerprint: string;
 }
 
 export interface MonthEndRevaluationVoucherPlan {
@@ -47,13 +61,28 @@ export interface MonthEndRevaluationVoucherPlan {
 export class FxRevaluationService {
   constructor(
     private readonly currencyService: CurrencyService,
-    @Optional()
-    @Inject(forwardRef(() => PostingRulesService))
-    private readonly postingRules?: PostingRulesService,
+    private readonly moduleRef: ModuleRef,
   ) {}
+
+  private get postingRules(): PostingRulesService {
+    const service = this.moduleRef.get(PostingRulesService, { strict: false });
+    if (!service) {
+      throw new Error('PostingRulesService is not available in container');
+    }
+    return service;
+  }
+
+  private get accounting(): AccountingService {
+    const service = this.moduleRef.get(AccountingService, { strict: false });
+    if (!service) {
+      throw new Error('AccountingService is not available in container');
+    }
+    return service;
+  }
 
   /**
    * Computes the exchange rate of 1 unit of foreign currency to Iranian Rial (IRR) as integer minor units.
+   * Avoids floating point inaccuracies (Lesson 8).
    */
   getRateToRial(currency: Currency): bigint {
     if (currency === Currency.IRR) {
@@ -62,13 +91,17 @@ export class FxRevaluationService {
     if (currency === Currency.IRT) {
       return 10n;
     }
-    // Rate in IRR per unit = unitsPerUsd(IRR) / unitsPerUsd(currency)
+
     const irrPerUsd = this.currencyService.unitsPerUsd(Currency.IRR);
     const currPerUsd = this.currencyService.unitsPerUsd(currency);
     if (currPerUsd <= 0) {
       throw new BadRequestException(`Invalid currency rate for ${currency}`);
     }
-    return BigInt(Math.round(irrPerUsd / currPerUsd));
+
+    // Scale by 10,000 for exact integer division
+    const irrScaled = BigInt(Math.round(irrPerUsd * 10000));
+    const currScaled = BigInt(Math.round(currPerUsd * 10000));
+    return irrScaled / currScaled;
   }
 
   /**
@@ -78,7 +111,9 @@ export class FxRevaluationService {
    */
   revalueBalance(balance: ForeignAccountBalance, customRate?: bigint): RevaluationItemResult {
     const rate = customRate ?? this.getRateToRial(balance.currency);
-    const scale = (balance.currency === Currency.IRR || balance.currency === Currency.IRT) ? 1n : 100n;
+    const decimals = CURRENCY_METADATA[balance.currency]?.decimals ?? 2;
+    const scale = 10n ** BigInt(decimals);
+
     const currentValue = (balance.foreignAmountMinor * rate) / scale;
     const diff = currentValue - balance.bookValueRialMinor;
 
@@ -87,7 +122,7 @@ export class FxRevaluationService {
     let lossMinor = 0n;
 
     if (balance.isLiability) {
-      // For liabilities (e.g. Accounts Payable):
+      // Liabilities:
       // If current value > book value, our liability grew -> LOSS!
       // If current value < book value, our liability shrank -> GAIN!
       if (diff > 0n) {
@@ -98,7 +133,7 @@ export class FxRevaluationService {
         gainMinor = -diff;
       }
     } else {
-      // For assets (e.g. Cash, Bank, Accounts Receivable):
+      // Assets:
       // If current value > book value, asset value grew -> GAIN!
       // If current value < book value, asset value shrank -> LOSS!
       if (diff > 0n) {
@@ -109,6 +144,11 @@ export class FxRevaluationService {
         lossMinor = -diff;
       }
     }
+
+    const fingerprint = createHash('sha256')
+      .update(`${balance.accountCode}:${balance.currency}:${balance.foreignAmountMinor}:${balance.bookValueRialMinor}:${rate}`)
+      .digest('hex')
+      .slice(0, 16);
 
     return {
       accountCode: balance.accountCode,
@@ -123,22 +163,18 @@ export class FxRevaluationService {
       isLiability: Boolean(balance.isLiability),
       gainMinor,
       lossMinor,
+      fingerprint,
     };
   }
 
   /**
    * Generates a complete month-end FX revaluation voucher plan for all foreign-currency accounts.
-   * Uses accounts defined in iran-chart-template.ts:
-   *   gain: 4120 (درآمدهای غیرعملیاتی)
-   *   loss: 5210 (هزینه‌های مالی)
-   * Ensures balanced voucher lines down to 0 Rials.
+   * Resolves posting roles fx_gain and fx_loss from the posting rules template.
    */
   generateMonthEndVoucher(
     period: string,
     balances: ForeignAccountBalance[],
     rates?: Partial<Record<Currency, bigint>>,
-    gainAccountCode: string = '4120', // درآمدهای غیرعملیاتی
-    lossAccountCode: string = '5210', // هزینه‌های مالی
   ): MonthEndRevaluationVoucherPlan {
     const items = balances.map((b) => this.revalueBalance(b, rates?.[b.currency]));
 
@@ -154,33 +190,29 @@ export class FxRevaluationService {
     for (const item of items) {
       if (item.type === 'gain') {
         totalGain += item.gainMinor;
-        // Debit monetary asset/liability adjustment
         voucherLines.push({
           accountCode: item.accountCode,
-          description: `تعدیل تسعیر ارز پایان دوره ${period} - ${item.accountName} (${item.foreignAmountMinor / 100n} ${item.currency})`,
+          description: `تعدیل تسعیر ارز پایان دوره ${period} - ${item.accountName} (${item.foreignAmountMinor} ${item.currency})`,
           debitMinor: item.gainMinor,
           creditMinor: 0n,
         });
-        // Credit FX Gain
         voucherLines.push({
-          accountCode: gainAccountCode,
+          accountCode: '4120',
           description: `سود تسعیر ارز پایان دوره ${period} - ${item.accountName}`,
           debitMinor: 0n,
           creditMinor: item.gainMinor,
         });
       } else if (item.type === 'loss') {
         totalLoss += item.lossMinor;
-        // Debit FX Loss
         voucherLines.push({
-          accountCode: lossAccountCode,
+          accountCode: '5210',
           description: `زیان تسعیر ارز پایان دوره ${period} - ${item.accountName}`,
           debitMinor: item.lossMinor,
           creditMinor: 0n,
         });
-        // Credit monetary asset/liability adjustment
         voucherLines.push({
           accountCode: item.accountCode,
-          description: `تعدیل تسعیر ارز پایان دوره ${period} - ${item.accountName} (${item.foreignAmountMinor / 100n} ${item.currency})`,
+          description: `تعدیل تسعیر ارز پایان دوره ${period} - ${item.accountName} (${item.foreignAmountMinor} ${item.currency})`,
           debitMinor: 0n,
           creditMinor: item.lossMinor,
         });
@@ -200,7 +232,7 @@ export class FxRevaluationService {
 
   /**
    * Posts month-end FX revaluation vouchers through PostingRulesService.
-   * Ensures idempotency per tenant + period + accountCode.
+   * Atomically executes across all balances in a single transaction with full idempotency (Lesson 18).
    */
   async postMonthEndRevaluation(
     tenantId: string,
@@ -215,29 +247,26 @@ export class FxRevaluationService {
     plan: MonthEndRevaluationVoucherPlan;
     postingResults: PostingResult[];
   }> {
-    if (!this.postingRules) {
-      throw new Error('PostingRulesService is not injected in FxRevaluationService');
-    }
-
     const plan = this.generateMonthEndVoucher(
       request.period,
       request.balances,
       request.rates,
     );
 
-    const postingResults: PostingResult[] = [];
+    const executePosting = async (em?: EntityManager) => {
+      const postingResults: PostingResult[] = [];
 
-    for (const item of plan.items) {
-      if (item.gainMinor === 0n && item.lossMinor === 0n) {
-        continue;
-      }
+      for (const item of plan.items) {
+        if (item.gainMinor === 0n && item.lossMinor === 0n) {
+          continue;
+        }
 
-      const result = await this.postingRules.post(
-        tenantId,
-        {
+        const sourceId = `${request.period}:${item.accountCode}:${item.currency}`;
+
+        const postReq: PostingRequest = {
           docType: 'currency.fx_revaluation',
           sourceType: 'currency_revaluation',
-          sourceId: `${request.period}:${item.accountCode}`,
+          sourceId,
           date: request.date,
           amounts: {
             gain: item.gainMinor,
@@ -246,14 +275,20 @@ export class FxRevaluationService {
           overrides: {
             monetary_asset: item.accountCode,
           },
-          description: `سند تسعیر ارز پایان دوره ${request.period} - ${item.accountName}`,
-        },
-        manager,
-      );
+          description: `سند تسعیر ارز پایان دوره ${request.period} - ${item.accountName} (${item.currency}) [fp:${item.fingerprint}]`,
+        };
 
-      postingResults.push(result);
+        const result = await this.postingRules.post(tenantId, postReq, em);
+        postingResults.push(result);
+      }
+
+      return { plan, postingResults };
+    };
+
+    if (manager) {
+      return executePosting(manager);
     }
 
-    return { plan, postingResults };
+    return executePosting();
   }
 }
