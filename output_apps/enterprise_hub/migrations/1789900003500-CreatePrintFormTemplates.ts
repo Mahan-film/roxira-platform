@@ -11,8 +11,8 @@ import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
  *     column selection, ordering, headers, and options.
  *   - Strict FORCE row-level security enabled.
  */
-export class CreatePrintFormTemplates1789900002600 implements MigrationInterface {
-  name = 'CreatePrintFormTemplates1789900002600';
+export class CreatePrintFormTemplates1789900003500 implements MigrationInterface {
+  name = 'CreatePrintFormTemplates1789900003500';
 
   private static readonly TABLE = 'inv_print_templates';
 
@@ -56,11 +56,11 @@ export class CreatePrintFormTemplates1789900002600 implements MigrationInterface
         WHERE "is_default" = true
     `);
 
-    await enableTenantRls(queryRunner, CreatePrintFormTemplates1789900002600.TABLE);
+    await enableTenantRls(queryRunner, CreatePrintFormTemplates1789900003500.TABLE);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await disableTenantRls(queryRunner, CreatePrintFormTemplates1789900002600.TABLE);
+    await disableTenantRls(queryRunner, CreatePrintFormTemplates1789900003500.TABLE);
     await queryRunner.query(`DROP TABLE IF EXISTS "inv_print_templates" CASCADE`);
   }
 }

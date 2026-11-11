@@ -38,6 +38,10 @@ export interface PrintTemplateOptions {
 @Unique('UQ_inv_print_templates_tenant_title', ['tenantId', 'title'])
 @Index('IDX_inv_print_templates_lookup', ['tenantId', 'docType', 'paperSize'])
 @Index('IDX_inv_print_templates_tenant_default', ['tenantId', 'docType', 'isDefault'])
+@Index('UQ_inv_print_templates_tenant_default', ['tenantId', 'docType', 'paperSize'], {
+  unique: true,
+  where: 'is_default = true',
+})
 export class PrintTemplateEntity {
   @PrimaryGeneratedColumn()
   id: number;

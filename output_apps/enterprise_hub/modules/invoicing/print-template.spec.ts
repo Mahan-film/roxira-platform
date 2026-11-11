@@ -176,6 +176,26 @@ describe('PrintTemplateService & Repository', () => {
         }),
       ).rejects.toThrow('قبلاً برای این سازمان تعریف شده است');
     });
+
+    it('rejects null or empty title and null columnsConfig on update', async () => {
+      const created = await service.create(tenantId, {
+        title: 'قالب آزمایشی اعتبارسنجی',
+        docType: PrintDocType.SALES_INVOICE,
+        paperSize: PrintPaperSize.A4,
+      });
+
+      await expect(
+        service.update(tenantId, created.id, { title: null as any }),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.update(tenantId, created.id, { title: '   ' }),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.update(tenantId, created.id, { columnsConfig: null as any }),
+      ).rejects.toThrow(BadRequestException);
+    });
   });
 
   describe('Barcode label sheets & Vector SVG encoding', () => {
