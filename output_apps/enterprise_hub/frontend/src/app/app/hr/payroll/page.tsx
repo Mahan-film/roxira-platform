@@ -201,7 +201,7 @@ export default function PayrollPage() {
         }
       />
 
-      <PayrollStepper view={payrollSteps(run, (run?.employeeCount ?? 0) > 0)} />
+      <PayrollStepper view={payrollSteps(run ?? null, (run?.payslips?.length ?? 0) > 0)} />
 
       <ErrorNotice title="عملیات حقوق انجام نشد" message={error} />
 
