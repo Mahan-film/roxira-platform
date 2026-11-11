@@ -194,18 +194,16 @@ function getCurrencyScale(currency?: Currency | string): number {
   return 2;
 }
 
-function roundTo(value: number, scale: number): number {
-  const factor = 10 ** scale;
-  return Math.round((value + Number.EPSILON) * factor) / factor;
-}
-
-function toMinorUnits(value: number | string | null | undefined, scale: number): bigint {
-  if (value === null || value === undefined) return 0n;
-  const num = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(num)) return 0n;
-  const rounded = roundTo(num, scale);
-  const factor = 10 ** scale;
-  return BigInt(Math.round((rounded + Number.EPSILON) * factor));
+export function toMinorUnits(value: number | string | null | undefined, scale: number): bigint {
+  if (value === null || value === undefined || value === '') return 0n;
+  try {
+    return parseScaled(value, scale);
+  } catch {
+    const num = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(num)) return 0n;
+    const factor = 10 ** scale;
+    return BigInt(Math.round((num + Number.EPSILON) * factor));
+  }
 }
 
 /**
@@ -368,12 +366,11 @@ export function runMoadianPreFlightValidation(
   }
 
   const scale = getCurrencyScale(invoice.currency);
-  const factor = 10 ** scale;
 
-  let rawTotalAmount = 0;
-  let rawTotalDiscount = 0;
-  let rawTotalTax = 0;
-  let rawFinalPayable = 0;
+  let calculatedTotalAmountUnits = 0n;
+  let calculatedTotalDiscountUnits = 0n;
+  let calculatedTotalTaxUnits = 0n;
+  let calculatedFinalPayableUnits = 0n;
 
   items.forEach((item, index) => {
     const fieldPrefix = `items[${index}]`;
@@ -411,22 +408,19 @@ export function runMoadianPreFlightValidation(
     }
 
     // Line math consistency using exact integer minor units
-    const qty = Number(item.quantity ?? 0);
-    const unitPrice = Number(item.unitPrice ?? 0);
-    const discount = Number(item.discount ?? 0);
-    const gross = qty * unitPrice;
-    const taxable = Math.max(0, gross - discount);
-    const expectedTax = roundTo(taxable * vatRate, scale);
-    const expectedLineTotal = roundTo(taxable + expectedTax, scale);
+    const qtyUnits = toMinorUnits(item.quantity ?? 0, 4);
+    const unitPriceUnits = toMinorUnits(item.unitPrice ?? 0, scale);
+    const discountUnits = toMinorUnits(item.discount ?? 0, scale);
+    const grossUnits = (qtyUnits * unitPriceUnits + 5000n) / 10000n;
+    const taxableUnits = grossUnits > discountUnits ? grossUnits - discountUnits : 0n;
+    const vatRateUnits = BigInt(Math.round(vatRate * 10000));
+    const expectedTaxUnits = (taxableUnits * vatRateUnits + 5000n) / 10000n;
+    const expectedLineTotalUnits = taxableUnits + expectedTaxUnits;
 
-    rawTotalAmount += gross;
-    rawTotalDiscount += discount;
-    rawTotalTax += item.tax !== undefined ? Number(item.tax) : expectedTax;
-    rawFinalPayable += item.total !== undefined ? Number(item.total) : expectedLineTotal;
-
-    const netUnits = toMinorUnits(roundTo(taxable, scale), scale);
-    const expectedTaxUnits = toMinorUnits(expectedTax, scale);
-    const expectedLineTotalUnits = toMinorUnits(expectedLineTotal, scale);
+    calculatedTotalAmountUnits += grossUnits;
+    calculatedTotalDiscountUnits += discountUnits;
+    calculatedTotalTaxUnits += item.tax !== undefined ? toMinorUnits(item.tax, scale) : expectedTaxUnits;
+    calculatedFinalPayableUnits += item.total !== undefined ? toMinorUnits(item.total, scale) : expectedLineTotalUnits;
 
     if (item.tax !== undefined) {
       const actualTaxUnits = toMinorUnits(item.tax, scale);
@@ -451,13 +445,8 @@ export function runMoadianPreFlightValidation(
     }
   });
 
-  // 5. Header totals consistency using exact minor units (sum raw then round once, matching InvoicingService)
-  const expectedTotalAmountUnits = toMinorUnits(roundTo(rawTotalAmount, scale), scale);
-  const expectedTotalDiscountUnits = toMinorUnits(roundTo(rawTotalDiscount, scale), scale);
-  const expectedTotalTaxUnits = toMinorUnits(roundTo(rawTotalTax, scale), scale);
-  const expectedFinalPayableUnits = toMinorUnits(roundTo(rawFinalPayable, scale), scale);
-
-  if (invoice.totalAmount !== undefined && toMinorUnits(invoice.totalAmount, scale) !== expectedTotalAmountUnits) {
+  // 5. Header totals consistency using exact minor units
+  if (invoice.totalAmount !== undefined && toMinorUnits(invoice.totalAmount, scale) !== calculatedTotalAmountUnits) {
     errors.push({
       field: 'totalAmount',
       message: `مجموع ناخالص صورتحساب (${invoice.totalAmount}) با مجموع سطرهای اقلام مطابقت ندارد.`,
@@ -465,7 +454,7 @@ export function runMoadianPreFlightValidation(
     });
   }
 
-  if (invoice.totalDiscount !== undefined && toMinorUnits(invoice.totalDiscount, scale) !== expectedTotalDiscountUnits) {
+  if (invoice.totalDiscount !== undefined && toMinorUnits(invoice.totalDiscount, scale) !== calculatedTotalDiscountUnits) {
     errors.push({
       field: 'totalDiscount',
       message: `مجموع تخفیف‌های صورتحساب (${invoice.totalDiscount}) با مجموع سطرهای اقلام مطابقت ندارد.`,
@@ -473,7 +462,7 @@ export function runMoadianPreFlightValidation(
     });
   }
 
-  if (invoice.totalTax !== undefined && toMinorUnits(invoice.totalTax, scale) !== expectedTotalTaxUnits) {
+  if (invoice.totalTax !== undefined && toMinorUnits(invoice.totalTax, scale) !== calculatedTotalTaxUnits) {
     errors.push({
       field: 'totalTax',
       message: `مجموع مالیات صورتحساب (${invoice.totalTax}) با مجموع مالیات سطرها مطابقت ندارد.`,
@@ -483,7 +472,7 @@ export function runMoadianPreFlightValidation(
 
   if (
     invoice.finalPayable !== undefined &&
-    toMinorUnits(invoice.finalPayable, scale) !== expectedFinalPayableUnits
+    toMinorUnits(invoice.finalPayable, scale) !== calculatedFinalPayableUnits
   ) {
     errors.push({
       field: 'finalPayable',
