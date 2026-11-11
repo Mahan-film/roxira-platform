@@ -103,7 +103,7 @@ describePg('PrintTemplateRepository & Service on real PostgreSQL with RLS', () =
           INSERT INTO inv_print_templates (
             tenant_id, doc_type, paper_size, title, is_default, show_logo, columns_config, options
           ) VALUES (
-            $1, 'SALES_INVOICE', 'A4', 'جعلی', false, true, '[]'::jsonb, '{}'::jsonb
+            $1, 'sales_invoice', 'A4', 'جعلی', false, true, '[]'::jsonb, '{}'::jsonb
           )
         `, [T2]);
       }),
@@ -146,7 +146,7 @@ describePg('PrintTemplateRepository & Service on real PostgreSQL with RLS', () =
     expect(original.title).toBe('فاکتور فروش قابل محافظت T1');
 
     // T2 cannot delete T1's template
-    await expect(service.delete(T2, t1Template.id)).rejects.toThrow();
+    await expect(service.remove(T2, t1Template.id)).rejects.toThrow();
     expect(await service.findOne(T1, t1Template.id)).toBeDefined();
   });
 });

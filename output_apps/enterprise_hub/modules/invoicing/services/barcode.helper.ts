@@ -34,11 +34,36 @@ export function computeEan13CheckDigit(first12: string): number {
 }
 
 export function isEan13(value: string): boolean {
-  return /^\d{13}$/.test(value.trim());
+  const clean = value.trim().replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776))
+                            .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632));
+  return /^\d{13}$/.test(clean);
 }
 
-export function encodeCode128Svg(text: string, height = 24): string {
-  const clean = text.trim().replace(/[^\x20-\x7E]/g, '?') || 'EMPTY';
+/**
+ * Normalises input to safe, collision-free ASCII characters for Code128.
+ * Persian/Arabic digits are converted to ASCII digits; non-ASCII characters
+ * are converted into uppercase hex escapes so different inputs never collide.
+ */
+export function toAsciiCode128(text: string): string {
+  let s = text.trim()
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776))
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632));
+
+  if (!s) return 'EMPTY';
+  if (/^[\x20-\x7E]+$/.test(s)) return s;
+
+  return s
+    .split('')
+    .map((char) => {
+      const code = char.charCodeAt(0);
+      if (code >= 32 && code <= 126) return char;
+      return `[${code.toString(16).toUpperCase()}]`;
+    })
+    .join('');
+}
+
+export function encodeCode128Svg(text: string, height = 24): { svg: string; encodedText: string } {
+  const clean = toAsciiCode128(text);
   const codes = [104]; // Start B
   let checksum = 104;
 
@@ -67,11 +92,16 @@ export function encodeCode128Svg(text: string, height = 24): string {
   }
 
   const totalWidth = x + 10;
-  return `<svg class="barcode-svg" viewBox="0 0 ${totalWidth} ${height}" preserveAspectRatio="none">\n${rects.join('\n')}\n</svg>`;
+  const svg = `<svg class="barcode-svg" viewBox="0 0 ${totalWidth} ${height}" preserveAspectRatio="none">\n${rects.join('\n')}\n</svg>`;
+  return { svg, encodedText: clean };
 }
 
-export function encodeEan13Svg(digitsStr: string, height = 24): string {
-  let clean = digitsStr.trim();
+export function encodeEan13Svg(digitsStr: string, height = 24): { svg: string; encodedText: string } {
+  let clean = digitsStr
+    .trim()
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776))
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632));
+
   if (clean.length === 12) {
     clean += String(computeEan13CheckDigit(clean));
   } else if (clean.length === 13) {
@@ -127,23 +157,31 @@ export function encodeEan13Svg(digitsStr: string, height = 24): string {
   rects.push(`<rect x="${x + 2}" y="0" width="1" height="${height}" fill="#000"/>`);
   x += 3 + 7; // end guard + quiet zone
 
-  return `<svg class="barcode-svg" viewBox="0 0 ${x} ${height}" preserveAspectRatio="none">\n${rects.join('\n')}\n</svg>`;
+  const svg = `<svg class="barcode-svg" viewBox="0 0 ${x} ${height}" preserveAspectRatio="none">\n${rects.join('\n')}\n</svg>`;
+  return { svg, encodedText: clean };
 }
 
 /**
  * Encodes value to vector SVG barcode. If the value is a 13-digit number,
  * formats as EAN-13; otherwise encodes as Code128.
  */
-export function generateBarcodeSvg(value: string, height = 24): { svg: string; symbology: 'EAN-13' | 'Code128' } {
+export function generateBarcodeSvg(
+  value: string,
+  height = 24,
+): { svg: string; symbology: 'EAN-13' | 'Code128'; encodedText: string } {
   const clean = value.trim();
   if (isEan13(clean)) {
+    const res = encodeEan13Svg(clean, height);
     return {
-      svg: encodeEan13Svg(clean, height),
+      svg: res.svg,
       symbology: 'EAN-13',
+      encodedText: res.encodedText,
     };
   }
+  const res = encodeCode128Svg(clean, height);
   return {
-    svg: encodeCode128Svg(clean, height),
+    svg: res.svg,
     symbology: 'Code128',
+    encodedText: res.encodedText,
   };
 }

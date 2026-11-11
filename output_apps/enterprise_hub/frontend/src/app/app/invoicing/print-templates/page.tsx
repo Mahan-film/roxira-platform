@@ -82,22 +82,24 @@ function PrintFormBuilderPage() {
   const [newItemCount, setNewItemCount] = useState("4");
   const [barcodePrinting, setBarcodePrinting] = useState(false);
 
-  const fetchTemplates = async () => {
+  const fetchTemplates = async (resetSelection = false) => {
     setLoading(true);
     setError(null);
     try {
       const list = await listPrintTemplates({ docType });
       setTemplates(list);
 
-      // Also load default preset or active template
-      const def = await getDefaultPrintTemplate(docType, paperSize);
-      setTitle(def.title);
-      setIsDefault(def.isDefault);
-      setShowLogo(def.showLogo);
-      setLogoUrl(def.logoUrl ?? "");
-      setFooterNote(def.options?.footerNote ?? "");
-      setColumns(def.columnsConfig ?? []);
-      setEditingTemplateId(def.id > 0 ? def.id : null);
+      // Only re-populate editing form if switching docType or nothing is selected
+      if (resetSelection || !editingTemplateId) {
+        const def = await getDefaultPrintTemplate(docType, paperSize);
+        setTitle(def.title);
+        setIsDefault(def.isDefault);
+        setShowLogo(def.showLogo);
+        setLogoUrl(def.logoUrl ?? "");
+        setFooterNote(def.options?.footerNote ?? "");
+        setColumns(def.columnsConfig ?? []);
+        setEditingTemplateId(def.id > 0 ? def.id : null);
+      }
     } catch (err: any) {
       setError(err?.message ?? "خطا در دریافت قالب‌های چاپ");
     } finally {
@@ -106,8 +108,12 @@ function PrintFormBuilderPage() {
   };
 
   useEffect(() => {
-    fetchTemplates();
-  }, [docType, paperSize]);
+    fetchTemplates(true);
+  }, [docType]);
+
+  useEffect(() => {
+    fetchTemplates(false);
+  }, [paperSize]);
 
   const handleSelectTemplate = (t: PrintTemplateDto) => {
     setEditingTemplateId(t.id);
@@ -211,11 +217,9 @@ function PrintFormBuilderPage() {
     const temp = copy[index];
     copy[index] = copy[targetIndex];
     copy[targetIndex] = temp;
-    // update order numbers
-    copy.forEach((c, idx) => {
-      c.order = idx + 1;
-    });
-    setColumns(copy);
+    // update order numbers without mutating shared objects
+    const updated = copy.map((c, idx) => ({ ...c, order: idx + 1 }));
+    setColumns(updated);
   };
 
   const toAsciiDigits = (s: string) =>

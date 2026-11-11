@@ -55,6 +55,12 @@ export class PrintColumnConfigDto {
 }
 
 export class PrintTemplateOptionsDto {
+  @ApiPropertyOptional({ description: 'عنوان سند در بالای برگه (پیش‌فرض: نام رسمی سند)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  headerTitle?: string;
+
   @ApiPropertyOptional({ description: 'یادداشت یا متن پاورقی' })
   @IsOptional()
   @IsString()
@@ -124,12 +130,12 @@ export class CreatePrintTemplateDto {
   @IsBoolean()
   showLogo?: boolean;
 
-  @ApiPropertyOptional({ description: 'آدرس تصویر لوگوی سفارشی (https یا مسیر محلی امن)' })
+  @ApiPropertyOptional({ description: 'آدرس تصویر لوگوی سفارشی (https یا مسیر محلی امن، بدون SVG)' })
   @IsOptional()
   @IsString()
   @MaxLength(512)
-  @Matches(/^(https:\/\/[a-zA-Z0-9_.-]+(:[0-9]+)?(\/[^\s]*)?|data:image\/(png|jpeg|jpg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+|\/[a-zA-Z0-9_.-]+(\/[^\s]*)?)$/, {
-    message: 'آدرس لوگو باید یک URL معتبر امن (https) یا مسیر داخلی باشد',
+  @Matches(/^(https:\/\/[a-zA-Z0-9_.-]+(:[0-9]+)?(\/[-a-zA-Z0-9@:%._+~#=/?&]*)?|data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+|\/[-a-zA-Z0-9_.~#/?&=]+)$/, {
+    message: 'آدرس لوگو باید یک URL معتبر امن (https بدون کاراکترهای خاص) یا داده تصویری شطرنجی (بدون SVG) باشد',
   })
   logoUrl?: string;
 
@@ -176,8 +182,8 @@ export class UpdatePrintTemplateDto {
   @IsOptional()
   @IsString()
   @MaxLength(512)
-  @Matches(/^(https:\/\/[a-zA-Z0-9_.-]+(:[0-9]+)?(\/[^\s]*)?|data:image\/(png|jpeg|jpg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+|\/[a-zA-Z0-9_.-]+(\/[^\s]*)?)$/, {
-    message: 'آدرس لوگو باید یک URL معتبر امن (https) یا مسیر داخلی باشد',
+  @Matches(/^(https:\/\/[a-zA-Z0-9_.-]+(:[0-9]+)?(\/[-a-zA-Z0-9@:%._+~#=/?&]*)?|data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+|\/[-a-zA-Z0-9_.~#/?&=]+)$/, {
+    message: 'آدرس لوگو باید یک URL معتبر امن (https بدون کاراکترهای خاص) یا داده تصویری شطرنجی (بدون SVG) باشد',
   })
   logoUrl?: string;
 

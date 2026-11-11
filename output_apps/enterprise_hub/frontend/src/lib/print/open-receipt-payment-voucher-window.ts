@@ -11,8 +11,14 @@ export function printReceiptPaymentVoucher(
   template?: Partial<PrintTemplateDto>,
 ): void {
   const data = mapTreasuryDocToPrintData(doc, companyName);
-  if (template?.title) {
-    data.docTitle = template.title;
+  if (template?.options?.headerTitle) {
+    data.docTitle = template.options.headerTitle;
+  }
+  if (template?.logoUrl && template?.showLogo !== false) {
+    data.logoUrl = template.logoUrl;
+  }
+  if (template?.options?.footerNote) {
+    data.footerText = template.options.footerNote;
   }
   const html = renderTemplate(
     RECEIPT_PAYMENT_VOUCHER_A5_TEMPLATE,

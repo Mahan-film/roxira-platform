@@ -58,7 +58,7 @@ export function InvoicePrintView({
 
   useEffect(() => {
     let active = true;
-    getDefaultPrintTemplate(PrintDocType.SALES_INVOICE)
+    getDefaultPrintTemplate(PrintDocType.SALES_INVOICE, PrintPaperSize.A4)
       .then((tpl) => {
         if (active) setDefaultTemplate(tpl);
       })
