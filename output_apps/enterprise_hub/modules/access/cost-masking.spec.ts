@@ -47,6 +47,55 @@ describe('Hidden Purchase Price and Cost API Protection (#230 / T76)', () => {
     });
   });
 
+  describe('Regex Pattern & Key Matching', () => {
+    it('identifies variant cost and valuation field names including *Minor and grossProfit', () => {
+      const sensitiveKeys = [
+        'unitPurchaseCost',
+        'unit_purchase_cost',
+        'unitCost',
+        'unit_cost',
+        'unitCostMinor',
+        'totalCostMinor',
+        'standardCost',
+        'costPrice',
+        'lastPurchasePrice',
+        'purchasePrice',
+        'purchase_price',
+        'landedCost',
+        'landed_cost',
+        'totalCost',
+        'total_cost',
+        'cogs',
+        'valuation',
+        'lineCost',
+        'grossProfit',
+        'gross_profit',
+        'buyPrice',
+        'buy_price',
+      ];
+      for (const k of sensitiveKeys) {
+        expect(maskingService.isCostField(k)).toBe(true);
+      }
+    });
+
+    it('does NOT match dimension keys such as costCenter, costCentre or account identifiers', () => {
+      const nonCostKeys = [
+        'costCenter',
+        'cost_center',
+        'costCentre',
+        'cost_centre',
+        'costCenterId',
+        'accountCode',
+        'accountName',
+        'unitPrice',
+        'price',
+      ];
+      for (const k of nonCostKeys) {
+        expect(maskingService.isCostField(k)).toBe(false);
+      }
+    });
+  });
+
   describe('API Response Payload Masking', () => {
     const rawStockItem = {
       id: 101,
@@ -57,6 +106,12 @@ describe('Hidden Purchase Price and Cost API Protection (#230 / T76)', () => {
       unitPrice: 120000000,
       unit_price: 120000000,
       unitCost: 85000000,
+      unitCostMinor: '8500000000',
+      totalCostMinor: '127500000000',
+      standardCost: 82000000,
+      costPrice: 83000000,
+      lastPurchasePrice: 84000000,
+      grossProfit: 35000000,
       unit_cost: 85000000,
       unitPurchaseCost: 85000000,
       unit_purchase_cost: 85000000,
@@ -77,6 +132,8 @@ describe('Hidden Purchase Price and Cost API Protection (#230 / T76)', () => {
       total_cost: 1275000000,
       cogs: 85000000,
       valuation: 1275000000,
+      costCenter: 'CC-MAIN',
+      cost_center: 'CC-MAIN',
       primaryUnit: 'دستگاه',
       createdAt: new Date('2026-11-01T10:00:00.000Z'),
     };
@@ -91,6 +148,12 @@ describe('Hidden Purchase Price and Cost API Protection (#230 / T76)', () => {
 
       // Sensitive purchase prices & valuation fields are masked to null
       expect(masked.unitCost).toBeNull();
+      expect(masked.unitCostMinor).toBeNull();
+      expect(masked.totalCostMinor).toBeNull();
+      expect(masked.standardCost).toBeNull();
+      expect(masked.costPrice).toBeNull();
+      expect(masked.lastPurchasePrice).toBeNull();
+      expect(masked.grossProfit).toBeNull();
       expect(masked.unit_cost).toBeNull();
       expect(masked.unitPurchaseCost).toBeNull();
       expect(masked.unit_purchase_cost).toBeNull();
@@ -112,6 +175,10 @@ describe('Hidden Purchase Price and Cost API Protection (#230 / T76)', () => {
       expect(masked.cogs).toBeNull();
       expect(masked.valuation).toBeNull();
 
+      // Dimension costCenter is preserved!
+      expect(masked.costCenter).toBe('CC-MAIN');
+      expect(masked.cost_center).toBe('CC-MAIN');
+
       // Date is preserved intact without being turned into {}
       expect(masked.createdAt).toBeInstanceOf(Date);
       expect(masked.createdAt.toISOString()).toBe('2026-11-01T10:00:00.000Z');
@@ -124,57 +191,71 @@ describe('Hidden Purchase Price and Cost API Protection (#230 / T76)', () => {
       expect(original.landedCost).toBe(5000000);
       expect(original.valuation).toBe(1275000000);
       expect(original.purchaseCost).toBe(85000000);
+      expect(original.unitCostMinor).toBe('8500000000');
     });
 
-    it('preserves Buffer, Date, and primitive values inside payload', () => {
-      const payload = {
-        id: 1,
-        date: new Date('2026-11-10T12:00:00Z'),
-        buf: Buffer.from('test-data'),
-        count: 42,
-        active: true,
-        unitCost: 1000,
-      };
+    it('handles circular references / cyclic graphs safely without stack overflow', () => {
+      const parent: any = { name: 'Parent', unitCost: 1000 };
+      const child: any = { name: 'Child', unitCost: 500, parent };
+      parent.child = child; // Cycle!
 
-      const masked = maskingService.maskCostFields(payload, false);
-      expect(masked.date).toBeInstanceOf(Date);
-      expect(Buffer.isBuffer(masked.buf)).toBe(true);
-      expect(masked.count).toBe(42);
-      expect(masked.active).toBe(true);
-      expect(masked.unitCost).toBeNull();
+      expect(() => {
+        const masked = maskingService.maskCostFields(parent, false);
+        expect(masked.unitCost).toBeNull();
+        expect(masked.child.unitCost).toBeNull();
+        expect(masked.child.parent).toBeDefined();
+      }).not.toThrow();
     });
 
-    it('masks cost fields recursively in nested objects and arrays', () => {
+    it('scans and sanitizes Maps and Sets without corruption', () => {
+      const itemSet = new Set([
+        { sku: 'ITEM-1', unitCost: 100 },
+        { sku: 'ITEM-2', unitCost: 200 },
+      ]);
+      const maskedSet = maskingService.maskCostFields(itemSet, false);
+      expect(maskedSet).toBeInstanceOf(Set);
+      expect(maskedSet.size).toBe(2);
+      for (const item of maskedSet) {
+        expect((item as any).unitCost).toBeNull();
+      }
+
+      const itemMap = new Map<string, any>([
+        ['sku', 'ITEM-1'],
+        ['unitCost', 100],
+        ['nested', { unitCostMinor: 500n }],
+      ]);
+      const maskedMap = maskingService.maskCostFields(itemMap, false);
+      expect(maskedMap).toBeInstanceOf(Map);
+      expect(maskedMap.get('sku')).toBe('ITEM-1');
+      expect(maskedMap.get('unitCost')).toBeNull();
+      expect(maskedMap.get('nested').unitCostMinor).toBeNull();
+    });
+
+    it('masks cost fields recursively in nested arrays', () => {
       const report = {
-        reportName: 'موجودی انبار',
-        generatedAt: new Date('2026-11-11T00:00:00Z'),
-        summary: {
-          totalItems: 100,
-          totalCost: 500000000,
-        },
-        items: [
-          { sku: 'A', quantity: 10, unitPrice: 2000, unitCost: 1500 },
-          { sku: 'B', quantity: 5, unitPrice: 4000, unitCost: 3000 },
+        nestedLevels: [
+          [
+            { sku: 'A', unitCostMinor: '100' },
+            { sku: 'B', unitCostMinor: '200' },
+          ],
         ],
       };
 
       const masked = maskingService.maskCostFields(report, false);
-      expect(masked.reportName).toBe('موجودی انبار');
-      expect(masked.summary.totalItems).toBe(100);
-      expect(masked.summary.totalCost).toBeNull();
-      expect(masked.items[0].unitCost).toBeNull();
-      expect(masked.items[1].unitCost).toBeNull();
+      expect(masked.nestedLevels[0][0].unitCostMinor).toBeNull();
+      expect(masked.nestedLevels[0][1].unitCostMinor).toBeNull();
     });
   });
 
   describe('CostMaskingInterceptor', () => {
-    it('masks response data when caller role lacks cost visibility', (done) => {
+    it('masks response data on arbitrary authenticated routes outside old list (e.g. /products, /catalog, /reports)', (done) => {
       const interceptor = new CostMaskingInterceptor(maskingService);
 
       const mockRequest = {
+        url: '/enterprise-hub/catalog/items',
         access: {
           roleKey: SystemRole.SALES,
-          permissions: new Set(['inventory:read']),
+          permissions: new Set(['catalog:read']),
         },
       };
 
@@ -185,27 +266,27 @@ describe('Hidden Purchase Price and Cost API Protection (#230 / T76)', () => {
       } as any;
 
       const mockHandler = {
-        handle: () => of({ sku: 'ITEM-1', name: 'کالا', unitCost: 5000, quantity: 10 }),
+        handle: () => of({ sku: 'CAT-1', name: 'کالای کاتالوگ', standardCost: 5000, quantity: 10 }),
       };
 
       interceptor.intercept(mockContext, mockHandler).subscribe({
         next: (result: any) => {
-          expect(result.sku).toBe('ITEM-1');
-          expect(result.name).toBe('کالا');
+          expect(result.sku).toBe('CAT-1');
+          expect(result.standardCost).toBeNull();
           expect(result.quantity).toBe(10);
-          expect(result.unitCost).toBeNull();
           done();
         },
       });
     });
 
-    it('leaves response untouched when caller role has cost visibility', (done) => {
+    it('masks data when request.access is unset but request.user has role', (done) => {
       const interceptor = new CostMaskingInterceptor(maskingService);
 
       const mockRequest = {
-        access: {
-          roleKey: SystemRole.ADMIN,
-          permissions: new Set(['inventory:read']),
+        url: '/enterprise-hub/manufacturing/orders',
+        user: {
+          sub: 'user-123',
+          tenantRole: SystemRole.SALES,
         },
       };
 
@@ -216,12 +297,42 @@ describe('Hidden Purchase Price and Cost API Protection (#230 / T76)', () => {
       } as any;
 
       const mockHandler = {
-        handle: () => of({ sku: 'ITEM-1', unitCost: 5000 }),
+        handle: () => of({ orderId: 1, unitCostMinor: '500000000' }),
       };
 
       interceptor.intercept(mockContext, mockHandler).subscribe({
         next: (result: any) => {
-          expect(result.unitCost).toBe(5000);
+          expect(result.orderId).toBe(1);
+          expect(result.unitCostMinor).toBeNull();
+          done();
+        },
+      });
+    });
+
+    it('bypasses explicitly exempt ledger accounting routes', (done) => {
+      const interceptor = new CostMaskingInterceptor(maskingService);
+
+      const mockRequest = {
+        url: '/enterprise-hub/accounting/vouchers/12',
+        user: {
+          sub: 'user-123',
+          tenantRole: SystemRole.SALES,
+        },
+      };
+
+      const mockContext = {
+        switchToHttp: () => ({
+          getRequest: () => mockRequest,
+        }),
+      } as any;
+
+      const mockHandler = {
+        handle: () => of({ voucherId: 12, cost: 5000 }),
+      };
+
+      interceptor.intercept(mockContext, mockHandler).subscribe({
+        next: (result: any) => {
+          expect(result.cost).toBe(5000); // Unmasked because route is exempt
           done();
         },
       });

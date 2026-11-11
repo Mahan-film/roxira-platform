@@ -6,7 +6,7 @@ import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
  * Stores per-user weekly schedules with timezone and time window rules.
  * Protected with ENABLE + FORCE ROW LEVEL SECURITY.
  */
-export class CreateUserLoginSchedules1789900003000 implements MigrationInterface {
+export class CreateUserLoginSchedules1789900003100 implements MigrationInterface {
   name = 'CreateUserLoginSchedules1789900003000';
 
   private readonly table = 'user_login_schedules';

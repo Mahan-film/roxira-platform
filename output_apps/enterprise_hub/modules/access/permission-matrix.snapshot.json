@@ -2312,7 +2312,7 @@
     "legacy_member": false
   },
   "GET /org/members/:userId/login-schedule (OrgController.getLoginSchedule)": {
-    "policy": "members:read",
+    "policy": "members:admin",
     "owner": true,
     "admin": true,
     "accountant": false,

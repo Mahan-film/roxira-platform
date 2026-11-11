@@ -6,11 +6,19 @@ import { CostMaskingService } from './services/cost-masking.service';
 
 /**
  * Intercepts HTTP responses and automatically scrubs sensitive purchase cost and
- * valuation fields if the caller does not have cost visibility entitlement (#738 / T76).
+ * valuation fields across authenticated routes if the caller does not have cost visibility entitlement (#738 / T76).
  */
 @Injectable()
 export class CostMaskingInterceptor implements NestInterceptor {
   private readonly costMasking: CostMaskingService;
+
+  /** Explicitly exempt route paths where raw financial ledger entries or auth sessions operate */
+  private readonly exemptPaths = [
+    '/enterprise-hub/accounting',
+    '/enterprise-hub/period-locks',
+    '/enterprise-hub/audit',
+    '/enterprise-hub/auth/',
+  ];
 
   constructor(@Optional() costMasking?: CostMaskingService) {
     this.costMasking = costMasking ?? new CostMaskingService();
@@ -21,27 +29,25 @@ export class CostMaskingInterceptor implements NestInterceptor {
 
     return next.handle().pipe(
       map((data) => {
-        // Only enforce field masking when an access context is bound to the request
-        if (!request || !request.access) {
+        // Only enforce field masking when a user is authenticated
+        if (!request || (!request.user && !request.access)) {
           return data;
         }
 
-        // Scope cost masking to inventory, sales/invoicing, parties, and purchasing where item costs live.
-        // Accounting, budget, cost centres and HR responses are never masked.
         const url = request.originalUrl || request.url || '';
-        const isCostArea =
-          !url ||
-          url.includes('/inventory') ||
-          url.includes('/sales') ||
-          url.includes('/invoicing') ||
-          url.includes('/parties') ||
-          url.includes('/purchase');
-        if (!isCostArea) {
+        // Skip explicitly exempt routes (ledger accounting, audit logs, auth session endpoints)
+        if (this.exemptPaths.some((p) => url.includes(p))) {
           return data;
         }
 
-        const canView = this.costMasking.canViewCost(request.access);
-        return this.costMasking.maskCostFields(data, canView);
+        // Evaluate field visibility for current access context or user role (fail-closed)
+        const roleOrCtx = request.access ?? request.user?.tenantRole ?? request.user?.role;
+        const canView = this.costMasking.canViewCost(roleOrCtx);
+        if (canView) {
+          return data;
+        }
+
+        return this.costMasking.maskCostFields(data, false);
       }),
     );
   }

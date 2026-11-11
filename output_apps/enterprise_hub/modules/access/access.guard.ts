@@ -3,7 +3,6 @@ import {
   ExecutionContext,
   Injectable,
   Logger,
-  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';

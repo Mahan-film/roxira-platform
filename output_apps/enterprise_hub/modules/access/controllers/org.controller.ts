@@ -128,6 +128,7 @@ export class OrgController {
     return this.members.remove(requireAccess(req), id, req);
   }
 
+  @RequireAction(AccessAction.ADMIN)
   @Get('members/:userId/login-schedule')
   @ApiOperation({ summary: 'Get allowed login time window schedule for a member' })
   async getLoginSchedule(

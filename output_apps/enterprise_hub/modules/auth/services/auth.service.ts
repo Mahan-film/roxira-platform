@@ -2,7 +2,6 @@ import {
   HttpException,
   HttpStatus,
   Inject,
-  Optional,
   ServiceUnavailableException,
   Injectable,
   Logger,
