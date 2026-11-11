@@ -87,6 +87,6 @@ import { InvoicePaymentLinkController } from './controllers/invoice-payment-link
     PurchasesReportService,
     GrossProfitReportService,
   ],
-  exports: [InvoicingService, InvoicingRepository, InvoicePaymentLinkService, InvoicePaymentLinkRepository],
+  exports: [InvoicingService, InvoicingRepository, InvoicePaymentLinkService, InvoicePaymentLinkRepository, VatRateResolver],
 })
 export class InvoicingModule {}
