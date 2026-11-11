@@ -29,7 +29,6 @@ export class EmployeeLeaveEntity {
   @Column({ type: 'uuid', name: 'tenant_id' })
   tenantId: string;
 
-  @Index()
   @Column({ type: 'integer', name: 'employee_id' })
   employeeId: number;
 

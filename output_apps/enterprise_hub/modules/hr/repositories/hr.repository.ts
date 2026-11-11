@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { TenantScope } from '../../access/services/tenant-scope';
 import {
   DataSource,
@@ -28,6 +28,7 @@ import { EmployeeLeaveEntity } from '../entities/employee-leave.entity';
 import { StaffLoanEntity } from '../entities/staff-loan.entity';
 import { StaffLoanDeductionEntity } from '../entities/staff-loan-deduction.entity';
 import { fromMinor, toMinor } from '../../accounting/money';
+import { isLeaveInPeriod } from '../services/jalali-period';
 
 /**
  * سطر تجمیع حقوق قراردادهای فعال (خروجی Query Builder).
@@ -770,20 +771,50 @@ export class HrRepository {
     manager?: EntityManager,
   ): Promise<EmployeeAttendanceEntity> {
     return this.use(tenantId, manager, async (r) => {
-      const existing = await r.attendances.findOne({
+      const now = new Date();
+      await r.attendances
+        .createQueryBuilder()
+        .insert()
+        .into(EmployeeAttendanceEntity)
+        .values({
+          tenantId,
+          employeeId: data.employeeId!,
+          periodYear: data.periodYear!,
+          periodMonth: data.periodMonth!,
+          workDays: data.workDays ?? 30,
+          overtimeHours: data.overtimeHours ?? 0,
+          nightHours: data.nightHours ?? 0,
+          holidayHours: data.holidayHours ?? 0,
+          absenceDays: data.absenceDays ?? 0,
+          unpaidLeaveDays: data.unpaidLeaveDays ?? 0,
+          notes: data.notes ?? null,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .orUpdate(
+          [
+            'work_days',
+            'overtime_hours',
+            'night_hours',
+            'holiday_hours',
+            'absence_days',
+            'unpaid_leave_days',
+            'notes',
+            'updated_at',
+          ],
+          ['tenant_id', 'employee_id', 'period_year', 'period_month'],
+        )
+        .execute();
+
+      return (await r.attendances.findOneOrFail({
         where: {
           tenantId,
           employeeId: data.employeeId,
           periodYear: data.periodYear,
           periodMonth: data.periodMonth,
         },
-      });
-      if (existing) {
-        Object.assign(existing, data, { updatedAt: new Date() });
-        return r.attendances.save(existing);
-      }
-      const created = r.attendances.create({ ...data, tenantId });
-      return r.attendances.save(created);
+        relations: ['employee'],
+      }));
     });
   }
 
@@ -976,10 +1007,29 @@ export class HrRepository {
     manager?: EntityManager,
   ): Promise<EmployeeLeaveEntity[]> {
     return this.use(tenantId, manager, async (r) => {
-      return r.leaves.find({
+      const leaves = await r.leaves.find({
         where: { tenantId, status: LeaveStatus.APPROVED },
         relations: ['employee'],
       });
+      return leaves.filter((leave) =>
+        isLeaveInPeriod(leave.startDate, leave.endDate, periodYear, periodMonth),
+      );
+    });
+  }
+
+  async hasPendingLoanDeductionsFromOtherRuns(
+    tenantId: string,
+    currentRunId: number,
+    manager?: EntityManager,
+  ): Promise<boolean> {
+    return this.use(tenantId, manager, async (r) => {
+      const count = await r.loanDeductions
+        .createQueryBuilder('d')
+        .where('d.tenant_id = :tenantId', { tenantId })
+        .andWhere('d.payroll_run_id != :currentRunId', { currentRunId })
+        .andWhere('d.status = :status', { status: 'PENDING' })
+        .getCount();
+      return count > 0;
     });
   }
 
@@ -1004,6 +1054,24 @@ export class HrRepository {
   ): Promise<void> {
     return this.use(tenantId, manager, async (r) => {
       await r.loanDeductions.delete({ tenantId, payrollRunId });
+    });
+  }
+
+  async markLoanDeductionsPosted(
+    tenantId: string,
+    payrollRunId: number,
+    manager?: EntityManager,
+  ): Promise<void> {
+    return this.use(tenantId, manager, async (r) => {
+      await r.loanDeductions
+        .createQueryBuilder()
+        .update(StaffLoanDeductionEntity)
+        .set({ status: 'POSTED', updatedAt: new Date() })
+        .where('tenant_id = :tenantId AND payroll_run_id = :payrollRunId', {
+          tenantId,
+          payrollRunId,
+        })
+        .execute();
     });
   }
 
@@ -1047,14 +1115,15 @@ export class HrRepository {
       if (!loan || loan.status !== LoanStatus.ACTIVE) return null;
       const remainingMinor = toMinor(loan.remainingAmount);
       const deductMinor = toMinor(amount);
-      const newRemainingMinor =
-        remainingMinor > deductMinor ? remainingMinor - deductMinor : 0n;
+      if (remainingMinor < deductMinor) {
+        throw new ConflictException(
+          `مانده وام ${loan.loanNumber} تغییر کرده و کمتر از قسط کسرشده است (${loan.remainingAmount} < ${amount})؛ حقوق را مجدداً محاسبه کنید.`,
+        );
+      }
+      const newRemainingMinor = remainingMinor - deductMinor;
       loan.paidInstalments += 1;
       loan.remainingAmount = fromMinor(newRemainingMinor) as number;
-      if (
-        newRemainingMinor <= 0n ||
-        loan.paidInstalments >= loan.totalInstalments
-      ) {
+      if (newRemainingMinor <= 0n) {
         loan.status = LoanStatus.PAID_OFF;
       }
       loan.updatedAt = new Date();

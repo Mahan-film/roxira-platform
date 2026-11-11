@@ -6,6 +6,8 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
+  Max,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -28,16 +30,23 @@ export class CreateLeaveDto {
   @ApiProperty({ description: 'تاریخ شروع', example: '1403/05/10' })
   @IsString()
   @MaxLength(16)
+  @Matches(/^(\d{4}[-/]\d{2}[-/]\d{2})$/, {
+    message: 'تاریخ شروع باید به فرمت YYYY/MM/DD یا YYYY-MM-DD باشد',
+  })
   startDate: string;
 
   @ApiProperty({ description: 'تاریخ پایان', example: '1403/05/12' })
   @IsString()
   @MaxLength(16)
+  @Matches(/^(\d{4}[-/]\d{2}[-/]\d{2})$/, {
+    message: 'تاریخ پایان باید به فرمت YYYY/MM/DD یا YYYY-MM-DD باشد',
+  })
   endDate: string;
 
   @ApiProperty({ description: 'تعداد روز مرخصی', example: 2.5 })
   @IsNumber()
   @Min(0.5)
+  @Max(366)
   @Type(() => Number)
   days: number;
 
@@ -56,12 +65,6 @@ export class ReviewLeaveDto {
   })
   @IsEnum(LeaveStatus)
   status: LeaveStatus;
-
-  @ApiPropertyOptional({ description: 'تأییدکننده (توسط سیستم از توکن JWT کاربر تعیین می‌شود)' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(128)
-  approvedBy?: string;
 }
 
 export class QueryLeaveDto {

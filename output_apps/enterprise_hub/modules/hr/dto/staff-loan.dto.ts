@@ -5,6 +5,8 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Matches,
+  Max,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -30,18 +32,21 @@ export class CreateStaffLoanDto {
   @ApiProperty({ description: 'اصل مبلغ وام به ریال (عدد صحیح)', example: 120_000_000 })
   @IsInt()
   @Min(1)
+  @Max(100_000_000_000_000)
   @Type(() => Number)
   principalAmount: number;
 
   @ApiProperty({ description: 'مبلغ هر قسط ماهانه به ریال (عدد صحیح)', example: 10_000_000 })
   @IsInt()
   @Min(1)
+  @Max(100_000_000_000_000)
   @Type(() => Number)
   instalmentAmount: number;
 
   @ApiProperty({ description: 'تعداد کل اقساط', example: 12 })
   @IsInt()
   @Min(1)
+  @Max(1200)
   @Type(() => Number)
   totalInstalments: number;
 
@@ -49,6 +54,9 @@ export class CreateStaffLoanDto {
   @IsOptional()
   @IsString()
   @MaxLength(16)
+  @Matches(/^(\d{4}[-/]\d{2}([-/]\d{2})?)$/, {
+    message: 'تاریخ شروع باید به فرمت YYYY/MM یا YYYY/MM/DD باشد',
+  })
   startDate?: string;
 }
 

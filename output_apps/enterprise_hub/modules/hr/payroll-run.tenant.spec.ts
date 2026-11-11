@@ -28,6 +28,7 @@ import { PayrollRunService } from './services/payroll-run.service';
 import { reconcilePayrollRun } from './services/payroll-reconciliation';
 import { fakeStatutory } from './statutory/__fixtures__/seeded-rates';
 import { fakePostingRules } from './__fixtures__/fake-posting-rules';
+import { isLeaveInPeriod } from './services/jalali-period';
 
 /** Accounting fake: keeps a per-tenant chart and rejects unbalanced entries. */
 class FakeAccountingService {
@@ -135,8 +136,34 @@ class InMemoryPayrollRepository {
     periodMonth: number,
   ): Promise<any[]> {
     return this.leaves.filter(
-      (l) => l.tenantId === tenantId && l.status === 'APPROVED',
+      (l) =>
+        l.tenantId === tenantId &&
+        l.status === 'APPROVED' &&
+        isLeaveInPeriod(l.startDate, l.endDate, periodYear, periodMonth),
     );
+  }
+
+  async hasPendingLoanDeductionsFromOtherRuns(
+    tenantId: string,
+    currentRunId: number,
+  ): Promise<boolean> {
+    return this.loanDeductions.some(
+      (d) =>
+        d.tenantId === tenantId &&
+        d.payrollRunId !== currentRunId &&
+        d.status === 'PENDING',
+    );
+  }
+
+  async markLoanDeductionsPosted(
+    tenantId: string,
+    payrollRunId: number,
+  ): Promise<void> {
+    for (const d of this.loanDeductions) {
+      if (d.tenantId === tenantId && d.payrollRunId === payrollRunId) {
+        d.status = 'POSTED';
+      }
+    }
   }
 
   async deleteLoanDeductionsByRun(

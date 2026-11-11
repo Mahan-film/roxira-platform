@@ -18,6 +18,7 @@ import {
   Req,
   Res,
   StreamableFile,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   ApiOperation,
@@ -516,7 +517,10 @@ export class HrController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: ReviewLeaveDto,
   ): Promise<LeaveResponseDto> {
-    const reviewer = request.user?.sub ?? request.user?.phone ?? 'system';
+    const reviewer = request.user?.sub ?? request.user?.phone;
+    if (!reviewer) {
+      throw new UnauthorizedException('شناسه کاربر تاییدکننده معتبر نیست.');
+    }
     return this.hrService.reviewLeave(this.tenantIdOf(request), id, dto, reviewer);
   }
 

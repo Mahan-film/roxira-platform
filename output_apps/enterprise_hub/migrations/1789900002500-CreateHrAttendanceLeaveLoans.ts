@@ -12,8 +12,8 @@ import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
  *
  * All tables have `tenant_id` and strict FORCE row-level security enabled.
  */
-export class CreateHrAttendanceLeaveLoans1789900002400 implements MigrationInterface {
-  name = 'CreateHrAttendanceLeaveLoans1789900002400';
+export class CreateHrAttendanceLeaveLoans1789900002500 implements MigrationInterface {
+  name = 'CreateHrAttendanceLeaveLoans1789900002500';
 
   private static readonly TABLES = [
     'hr_attendances',
@@ -52,6 +52,9 @@ export class CreateHrAttendanceLeaveLoans1789900002400 implements MigrationInter
     await queryRunner.query(
       `CREATE INDEX IF NOT EXISTS "IDX_hr_attendances_tenant_period" ON "hr_attendances" ("tenant_id", "period_year", "period_month")`,
     );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_hr_attendances_tenant_employee" ON "hr_attendances" ("tenant_id", "employee_id")`,
+    );
 
     // 2. hr_leaves
     await queryRunner.query(`
@@ -78,6 +81,9 @@ export class CreateHrAttendanceLeaveLoans1789900002400 implements MigrationInter
     );
     await queryRunner.query(
       `CREATE INDEX IF NOT EXISTS "IDX_hr_leaves_tenant_status" ON "hr_leaves" ("tenant_id", "status")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_hr_leaves_tenant_created" ON "hr_leaves" ("tenant_id", "created_at")`,
     );
 
     // 3. hr_staff_loans
@@ -148,13 +154,13 @@ export class CreateHrAttendanceLeaveLoans1789900002400 implements MigrationInter
     );
 
     // Enable RLS
-    for (const table of CreateHrAttendanceLeaveLoans1789900002400.TABLES) {
+    for (const table of CreateHrAttendanceLeaveLoans1789900002500.TABLES) {
       await enableTenantRls(queryRunner, table);
     }
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    for (const table of [...CreateHrAttendanceLeaveLoans1789900002400.TABLES].reverse()) {
+    for (const table of [...CreateHrAttendanceLeaveLoans1789900002500.TABLES].reverse()) {
       await disableTenantRls(queryRunner, table);
       await queryRunner.query(`DROP TABLE IF EXISTS "${table}" CASCADE`);
     }

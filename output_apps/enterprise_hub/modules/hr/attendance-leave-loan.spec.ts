@@ -20,7 +20,7 @@ import { PayslipEntity } from './entities/payslip.entity';
 import { HrService } from './services/hr.service';
 import { PayrollRunService } from './services/payroll-run.service';
 import { serviceYears } from './services/payroll-calculator';
-import { jalaliMonthEnd } from './services/jalali-period';
+import { isLeaveInPeriod, jalaliMonthEnd } from './services/jalali-period';
 import { fakeStatutory, seededRates } from './statutory/__fixtures__/seeded-rates';
 import { fakePostingRules } from './__fixtures__/fake-posting-rules';
 import { fromMinor, toMinor } from '../accounting/money';
@@ -330,8 +330,34 @@ class TestHrRepository {
     periodMonth: number,
   ): Promise<EmployeeLeaveEntity[]> {
     return this.leaves.filter(
-      (l) => l.tenantId === tenantId && l.status === LeaveStatus.APPROVED,
+      (l) =>
+        l.tenantId === tenantId &&
+        l.status === LeaveStatus.APPROVED &&
+        isLeaveInPeriod(l.startDate, l.endDate, periodYear, periodMonth),
     );
+  }
+
+  async hasPendingLoanDeductionsFromOtherRuns(
+    tenantId: string,
+    currentRunId: number,
+  ): Promise<boolean> {
+    return this.loanDeductions.some(
+      (d) =>
+        d.tenantId === tenantId &&
+        d.payrollRunId !== currentRunId &&
+        d.status === 'PENDING',
+    );
+  }
+
+  async markLoanDeductionsPosted(
+    tenantId: string,
+    payrollRunId: number,
+  ): Promise<void> {
+    for (const d of this.loanDeductions) {
+      if (d.tenantId === tenantId && d.payrollRunId === payrollRunId) {
+        d.status = 'POSTED';
+      }
+    }
   }
 
   // Staff Loans
@@ -446,14 +472,15 @@ class TestHrRepository {
     if (!loan || loan.status !== LoanStatus.ACTIVE) return null;
     const remainingMinor = toMinor(loan.remainingAmount);
     const deductMinor = toMinor(amount);
-    const newRemainingMinor =
-      remainingMinor > deductMinor ? remainingMinor - deductMinor : 0n;
+    if (remainingMinor < deductMinor) {
+      throw new ConflictException(
+        `مانده وام ${loan.loanNumber} تغییر کرده و کمتر از قسط کسرشده است (${loan.remainingAmount} < ${amount})؛ حقوق را مجدداً محاسبه کنید.`,
+      );
+    }
+    const newRemainingMinor = remainingMinor - deductMinor;
     loan.paidInstalments += 1;
     loan.remainingAmount = fromMinor(newRemainingMinor) as number;
-    if (
-      newRemainingMinor <= 0n ||
-      loan.paidInstalments >= loan.totalInstalments
-    ) {
+    if (newRemainingMinor <= 0n) {
       loan.status = LoanStatus.PAID_OFF;
     }
     loan.updatedAt = new Date();
@@ -827,6 +854,51 @@ describe('T67: Leave, attendance and staff loan integration with payroll', () =>
       // 3 days of unpaid leave automatically counted as absence
       expect(payslip.absenceDays).toBe(3);
       expect(payslip.absenceDeduction).toBeGreaterThan(0);
+    });
+
+    it('does not deduct unpaid leave from a past period in subsequent payroll runs (1405/01 leave not in 1405/02)', async () => {
+      // 1. Request and approve unpaid leave in 1405/01
+      const leave = await hrService.requestLeave(T1, {
+        employeeId: employee.id,
+        leaveType: LeaveType.UNPAID,
+        startDate: '1405/01/10',
+        endDate: '1405/01/12',
+        days: 3,
+      });
+      await hrService.reviewLeave(
+        T1,
+        leave.id,
+        { status: LeaveStatus.APPROVED },
+        'admin',
+      );
+
+      // 2. Run and post payroll for 1405/01
+      const run1 = await payrollRunService.createOrRecalculate(T1, {
+        periodYear: 1405,
+        periodMonth: 1,
+      });
+      expect(run1.payslips[0].absenceDays).toBe(3);
+      await payrollRunService.postRun(T1, run1.id);
+
+      // 3. Run payroll for 1405/02: past leave in 1405/01 must NOT be counted as absence!
+      const run2 = await payrollRunService.createOrRecalculate(T1, {
+        periodYear: 1405,
+        periodMonth: 2,
+      });
+      expect(run2.payslips[0].absenceDays).toBe(0);
+      expect(run2.payslips[0].absenceDeduction).toBe(0);
+    });
+
+    it('rejects loan creation when total instalments times instalment amount is less than principal', async () => {
+      await expect(
+        hrService.createStaffLoan(T1, {
+          employeeId: employee.id,
+          title: 'وام با اقساط ناکافی',
+          principalAmount: 10_000_000,
+          instalmentAmount: 1_000_000,
+          totalInstalments: 5,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 });

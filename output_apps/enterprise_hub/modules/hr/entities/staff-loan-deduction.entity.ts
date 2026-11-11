@@ -36,7 +36,6 @@ export class StaffLoanDeductionEntity {
   @Column({ type: 'uuid', name: 'tenant_id' })
   tenantId: string;
 
-  @Index()
   @Column({ type: 'integer', name: 'loan_id' })
   loanId: number;
 
@@ -44,7 +43,6 @@ export class StaffLoanDeductionEntity {
   @JoinColumn({ name: 'loan_id' })
   loan?: StaffLoanEntity;
 
-  @Index()
   @Column({ type: 'integer', name: 'payroll_run_id' })
   payrollRunId: number;
 
@@ -52,7 +50,6 @@ export class StaffLoanDeductionEntity {
   @JoinColumn({ name: 'payroll_run_id' })
   payrollRun?: PayrollRunEntity;
 
-  @Index()
   @Column({ type: 'integer', name: 'employee_id' })
   employeeId: number;
 

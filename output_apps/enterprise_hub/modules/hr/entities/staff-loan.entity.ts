@@ -6,6 +6,7 @@ import {
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
+  Unique,
   UpdateDateColumn,
 } from 'typeorm';
 import { LoanStatus } from '../enums/hr.enum';
@@ -19,9 +20,9 @@ import { EmployeeEntity } from './employee.entity';
  * سایر کسورات (otherDeductions) کسر شده و پس از ثبت نهایی حقوق، مانده وام به‌روز می‌شود.
  */
 @Entity({ name: 'hr_staff_loans' })
+@Unique('UQ_hr_staff_loans_tenant_number', ['tenantId', 'loanNumber'])
 @Index('IDX_hr_staff_loans_tenant_employee', ['tenantId', 'employeeId'])
 @Index('IDX_hr_staff_loans_tenant_status', ['tenantId', 'status'])
-@Index('IDX_hr_staff_loans_tenant_number', ['tenantId', 'loanNumber'], { unique: true })
 export class StaffLoanEntity {
   @PrimaryGeneratedColumn()
   id: number;
@@ -29,7 +30,6 @@ export class StaffLoanEntity {
   @Column({ type: 'uuid', name: 'tenant_id' })
   tenantId: string;
 
-  @Index()
   @Column({ type: 'integer', name: 'employee_id' })
   employeeId: number;
 

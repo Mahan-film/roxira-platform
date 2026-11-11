@@ -1113,7 +1113,10 @@ export class HrService {
     if (dto.status !== LeaveStatus.APPROVED && dto.status !== LeaveStatus.REJECTED) {
       throw new BadRequestException('وضعیت بررسی باید تایید یا رد باشد.');
     }
-    const approvedBy = reviewerId ?? dto.approvedBy ?? 'system';
+    if (!reviewerId) {
+      throw new BadRequestException('شناسه بازبین الزامی است.');
+    }
+    const approvedBy = reviewerId;
     const updated = await this.hrRepository.updateLeave(tenantId, id, {
       status: dto.status,
       approvedBy,
@@ -1143,6 +1146,11 @@ export class HrService {
     }
     if (dto.instalmentAmount > dto.principalAmount) {
       throw new BadRequestException('مبلغ هر قسط نمی‌تواند بیشتر از اصل مبلغ وام باشد.');
+    }
+    const principalMinor = toMinor(dto.principalAmount);
+    const instalmentMinor = toMinor(dto.instalmentAmount);
+    if (instalmentMinor * BigInt(dto.totalInstalments) < principalMinor) {
+      throw new BadRequestException('مجموع اقساط (مبلغ هر قسط × تعداد اقساط) باید حداقل برابر با اصل مبلغ وام باشد.');
     }
     const loanNumber = dto.loanNumber ?? `LN-${Date.now().toString(36).toUpperCase()}-${dto.employeeId}`;
     const existing = await this.hrRepository.findLoanByNumber(tenantId, loanNumber);

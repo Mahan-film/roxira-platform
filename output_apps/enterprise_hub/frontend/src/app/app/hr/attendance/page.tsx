@@ -107,21 +107,32 @@ export default function SuiteAttendanceLeaveLoanPage() {
   const [loanPrincipal, setLoanPrincipal] = useState<number>(12_000_000);
   const [loanInstalment, setLoanInstalment] = useState<number>(1_000_000);
   const [loanTotalInstalments, setLoanTotalInstalments] = useState<number>(12);
+  const [canReadLoans, setCanReadLoans] = useState<boolean>(true);
 
   const loadData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const [empRes, attRes, leaveRes, loanRes] = await Promise.all([
+      const [empRes, attRes, leaveRes] = await Promise.all([
         listEmployees({ limit: 100 }),
         listAttendances({ periodYear: year, periodMonth: month }),
         listLeaves(),
-        listStaffLoans(),
       ]);
       setEmployees(empRes.data);
       setAttendances(attRes);
       setLeaves(leaveRes);
-      setLoans(loanRes);
+
+      // GET /hr/loans allows owner and hr only. Load separately so a 403
+      // never breaks the page for admin or read_only (LESSONS 17).
+      try {
+        const loanRes = await listStaffLoans();
+        setLoans(loanRes);
+        setCanReadLoans(true);
+      } catch {
+        setLoans([]);
+        setCanReadLoans(false);
+      }
+
       if (empRes.data.length > 0) {
         if (!attEmployeeId) setAttEmployeeId(empRes.data[0].id);
         if (!leaveEmployeeId) setLeaveEmployeeId(empRes.data[0].id);
@@ -236,18 +247,20 @@ export default function SuiteAttendanceLeaveLoanPage() {
           <FileCheck2 className="w-4 h-4 inline-block ml-1.5" />
           مرخصی‌ها
         </button>
-        <button
-          type="button"
-          onClick={() => setTab("loan")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            tab === "loan"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <Coins className="w-4 h-4 inline-block ml-1.5" />
-          وام و مساعده پرسنلی
-        </button>
+        {canReadLoans && (
+          <button
+            type="button"
+            onClick={() => setTab("loan")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              tab === "loan"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Coins className="w-4 h-4 inline-block ml-1.5" />
+            وام و مساعده پرسنلی
+          </button>
+        )}
       </div>
 
       {error && <ErrorNotice message={error} />}
@@ -420,7 +433,7 @@ export default function SuiteAttendanceLeaveLoanPage() {
         </div>
       )}
 
-      {tab === "loan" && (
+      {tab === "loan" && canReadLoans && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-base font-medium">وام‌ها و مساعده‌های پرسنلی</h3>

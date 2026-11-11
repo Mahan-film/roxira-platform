@@ -45,6 +45,7 @@ export class RecordAttendanceDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
+  @Max(744)
   @Type(() => Number)
   overtimeHours?: number;
 
@@ -52,6 +53,7 @@ export class RecordAttendanceDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
+  @Max(744)
   @Type(() => Number)
   nightHours?: number;
 
@@ -59,6 +61,7 @@ export class RecordAttendanceDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
+  @Max(744)
   @Type(() => Number)
   holidayHours?: number;
 

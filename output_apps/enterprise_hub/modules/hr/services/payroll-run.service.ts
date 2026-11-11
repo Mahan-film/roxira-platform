@@ -276,6 +276,18 @@ export class PayrollRunService {
           );
         }
 
+        const hasPendingOther =
+          await this.hrRepository.hasPendingLoanDeductionsFromOtherRuns(
+            tenantId,
+            run.id,
+            manager,
+          );
+        if (hasPendingOther) {
+          throw new ConflictException(
+            'یک اجرای حقوق دیگر با اقساط کسرشده معلق وجود دارد؛ ابتدا آن را ثبت یا حذف کنید.',
+          );
+        }
+
         const employees = await this.hrRepository.findActiveEmployees(tenantId);
         const contracts = await this.hrRepository.findActiveContractsByEmployeeIds(
           tenantId,
@@ -424,6 +436,8 @@ export class PayrollRunService {
           const nightHours = item?.nightHours ?? Number(attendance?.nightHours ?? 0);
           const holidayHours = item?.holidayHours ?? Number(attendance?.holidayHours ?? 0);
           const leaveUnpaidDays = unpaidLeavesByEmployee.get(employee.id) ?? 0;
+          // If unpaid leave was recorded both through timesheet attendance and leave approval request,
+          // take the maximum to avoid double-penalizing the employee for the same unpaid absence.
           const effectiveUnpaidDays = Math.max(
             Number(attendance?.unpaidLeaveDays ?? 0),
             leaveUnpaidDays,
@@ -800,6 +814,7 @@ export class PayrollRunService {
           );
         }
       }
+      await this.hrRepository.markLoanDeductionsPosted(tenantId, run.id, manager);
     });
     return this.findRun(tenantId, run.id);
   }

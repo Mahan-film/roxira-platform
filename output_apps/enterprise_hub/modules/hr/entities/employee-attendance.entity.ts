@@ -26,6 +26,7 @@ import { EmployeeEntity } from './employee.entity';
   'periodMonth',
 ])
 @Index('IDX_hr_attendances_tenant_period', ['tenantId', 'periodYear', 'periodMonth'])
+@Index('IDX_hr_attendances_tenant_employee', ['tenantId', 'employeeId'])
 export class EmployeeAttendanceEntity {
   @PrimaryGeneratedColumn()
   id: number;
@@ -34,7 +35,6 @@ export class EmployeeAttendanceEntity {
   @Column({ type: 'uuid', name: 'tenant_id' })
   tenantId: string;
 
-  @Index()
   @Column({ type: 'integer', name: 'employee_id' })
   employeeId: number;
 

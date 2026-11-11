@@ -6,14 +6,14 @@
  *   ROXIRA_TEST_PG_HOST=127.0.0.1 ROXIRA_TEST_PG_PORT=55441 npx jest modules/hr/payroll.pg.spec.ts
  */
 import 'reflect-metadata';
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { AuditService } from '../access/services/audit.service';
 import { AccountingService } from '../accounting/services/accounting.service';
 import { PostingRulesRepository } from '../posting_rules/repositories/posting-rules.repository';
 import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
 import { EmployeeEntity } from './entities/employee.entity';
 import { EmploymentContractEntity } from './entities/employment-contract.entity';
-import { AllowanceTaxTreatment, Gender, LeaveType, MaritalStatus } from './enums/hr.enum';
+import { AllowanceTaxTreatment, Gender, LeaveType, MaritalStatus, PayrollRunStatus } from './enums/hr.enum';
 import { HrRepository } from './repositories/hr.repository';
 import { readDbf } from './services/dbf-file';
 import { HrService } from './services/hr.service';
@@ -185,6 +185,14 @@ describePg('monthly payroll on PostgreSQL', () => {
   });
 
   it('enforces FORCE RLS on attendances, leaves, staff loans and deductions as roxira_app role', async () => {
+    // 0. Confirm NOSUPERUSER NOBYPASSRLS role
+    const [roleRow] = await testDb.app.query(
+      `SELECT current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user`,
+    );
+    expect(roleRow.current_user).toBe('roxira_app');
+    expect(roleRow.rolsuper).toBe(false);
+    expect(roleRow.rolbypassrls).toBe(false);
+
     // 1. Record attendance for T1 through real repository & service as roxira_app role
     const attendance = await hr.recordAttendance(T1, {
       employeeId: employee.id,
@@ -194,6 +202,14 @@ describePg('monthly payroll on PostgreSQL', () => {
       overtimeHours: 12,
     });
     expect(attendance.id).toBeDefined();
+
+    // Positive read as T1
+    const t1Attendances = await hr.listAttendances(T1, {
+      periodYear: 1405,
+      periodMonth: 1,
+    });
+    expect(t1Attendances.length).toBeGreaterThan(0);
+    expect(t1Attendances[0].id).toBe(attendance.id);
 
     // Cross-tenant check: T2 cannot see T1 attendance under RLS
     const t2Attendances = await hr.listAttendances(T2, {
@@ -212,9 +228,25 @@ describePg('monthly payroll on PostgreSQL', () => {
     });
     expect(leave.id).toBeDefined();
 
+    // Positive read as T1
+    const t1Leaves = await hr.listLeaves(T1, {});
+    expect(t1Leaves.length).toBeGreaterThan(0);
+    expect(t1Leaves.find((l) => l.id === leave.id)).toBeDefined();
+
     // Cross-tenant check: T2 cannot see T1 leave
     const t2Leaves = await hr.listLeaves(T2, {});
     expect(t2Leaves).toHaveLength(0);
+
+    // Wrong-tenant insert (WITH CHECK policy violation) must throw RLS error
+    await expect(
+      testDb.scope.run(T1, async () => {
+        return testDb.app.query(
+          `INSERT INTO hr_leaves (tenant_id, employee_id, leave_type, start_date, end_date, days, status)
+           VALUES ($1, $2, 'ANNUAL', '1405/01/01', '1405/01/02', 1, 'PENDING')`,
+          [T2, employee.id],
+        );
+      }),
+    ).rejects.toThrow();
 
     // 3. Create staff loan for T1
     const loan = await hr.createStaffLoan(T1, {
@@ -223,11 +255,50 @@ describePg('monthly payroll on PostgreSQL', () => {
       principalAmount: 20 * M,
       instalmentAmount: 5 * M,
       totalInstalments: 4,
+      startDate: '1405/03/01',
     });
     expect(loan.id).toBeDefined();
+
+    // Positive read as T1
+    const t1Loans = await hr.listStaffLoans(T1, {});
+    expect(t1Loans.length).toBeGreaterThan(0);
+    expect(t1Loans.find((l) => l.id === loan.id)).toBeDefined();
 
     // Cross-tenant check: T2 cannot see T1 loan
     const t2Loans = await hr.listStaffLoans(T2, {});
     expect(t2Loans).toHaveLength(0);
+
+    // 4. Calculate payroll on Postgres for month 3 (includes loan deduction)
+    const run3 = await runs.createOrRecalculate(T1, {
+      periodYear: 1405,
+      periodMonth: 3,
+    });
+    expect(run3.id).toBeDefined();
+
+    // Verify loan deduction row exists for T1
+    const t1Deductions = await repository.findLoanDeductionsByRun(T1, run3.id);
+    expect(t1Deductions).toHaveLength(1);
+    expect(Number(t1Deductions[0].amount)).toBe(5 * M);
+    expect(t1Deductions[0].status).toBe('PENDING');
+
+    // Cross-tenant check: T2 cannot see T1 loan deductions
+    const t2Deductions = await repository.findLoanDeductionsByRun(T2, run3.id);
+    expect(t2Deductions).toHaveLength(0);
+
+    // 5. Post the payroll run on Postgres
+    const posted3 = await runs.postRun(T1, run3.id);
+    expect(posted3.status).toBe(PayrollRunStatus.POSTED);
+
+    // Verify loan remaining balance is atomically reduced on Postgres
+    const updatedLoan = await repository.findStaffLoanById(T1, loan.id);
+    expect(Number(updatedLoan?.remainingAmount)).toBe(15 * M);
+    expect(updatedLoan?.paidInstalments).toBe(1);
+
+    // Verify deduction status is updated to POSTED
+    const postedDeductions = await repository.findLoanDeductionsByRun(T1, run3.id);
+    expect(postedDeductions[0].status).toBe('POSTED');
+
+    // 6. Double post must fail with 409 ConflictException
+    await expect(runs.postRun(T1, run3.id)).rejects.toBeInstanceOf(ConflictException);
   });
 });
