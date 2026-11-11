@@ -36,12 +36,23 @@ export class ForeignAccountBalanceDto {
   @ApiProperty({ description: 'مبلغ ارزی بر حسب واحدهای جزء (سنت)', example: '100000' })
   @IsNotEmpty()
   @IsNumberString({ no_symbols: true }, { message: 'foreignAmountMinor must be a non-negative integer string' })
+  @MaxLength(32, { message: 'foreignAmountMinor must not exceed 32 digits' })
   foreignAmountMinor: string;
 
   @ApiProperty({ description: 'ارزش دفتری ریالی فعلی در دفتر کل', example: '5000000000' })
   @IsNotEmpty()
   @IsNumberString({ no_symbols: true }, { message: 'bookValueRialMinor must be a non-negative integer string' })
+  @MaxLength(32, { message: 'bookValueRialMinor must not exceed 32 digits' })
   bookValueRialMinor: string;
+
+  @ApiPropertyOptional({
+    description: 'نرخ تسعیر ریالی برای هر واحد ارز در تاریخ پایان دوره (اختیاری؛ در صورت عدم ارسال از جدول نرخ سیستم استفاده می‌شود)',
+    example: '920000',
+  })
+  @IsOptional()
+  @IsNumberString({ no_symbols: true }, { message: 'rateRialPerUnit must be a non-negative integer string' })
+  @MaxLength(32, { message: 'rateRialPerUnit must not exceed 32 digits' })
+  rateRialPerUnit?: string;
 
   @ApiPropertyOptional({ description: 'آیا حساب بدهی است (مثل حساب پرداختنی ارزی)', default: false })
   @IsOptional()
@@ -50,17 +61,24 @@ export class ForeignAccountBalanceDto {
 }
 
 export class RevalueBalancesDto {
-  @ApiProperty({ description: 'دوره مالی یا ماه تسعیر', example: '1405-08' })
+  @ApiProperty({ description: 'دوره مالی یا ماه تسعیر به فرمت YYYY-MM', example: '1405-08' })
   @IsString()
   @IsNotEmpty()
-  @Matches(/^\d{4}-\d{2}$/, { message: 'period must match YYYY-MM format (e.g. 1405-08)' })
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, { message: 'period must match YYYY-MM format with valid month (01-12)' })
   period: string;
 
   @ApiProperty({ description: 'تاریخ صدور سند به فرمت YYYY-MM-DD', example: '2026-11-21' })
   @IsString()
   @IsNotEmpty()
-  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'date must match YYYY-MM-DD format' })
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, { message: 'date must match valid YYYY-MM-DD format' })
   date: string;
+
+  @ApiPropertyOptional({
+    description: 'جدول نرخ‌های تسعیر پایانی به تفکیک کد ارز (اختیاری)',
+    example: { USD: '920000', EUR: '1000000' },
+  })
+  @IsOptional()
+  rates?: Record<string, string>;
 
   @ApiProperty({ type: [ForeignAccountBalanceDto], description: 'فهرست مانده حساب‌های ارزی' })
   @IsArray()

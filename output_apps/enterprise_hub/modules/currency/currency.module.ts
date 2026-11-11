@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { TenantScope } from '../access/services/tenant-scope';
 import { CurrencyController } from './controllers/currency.controller';
 import { CurrencyService } from './services/currency.service';
 import { FxRevaluationService } from './services/fx-revaluation.service';
@@ -13,7 +14,7 @@ import { FxRevaluationService } from './services/fx-revaluation.service';
 @Module({
   imports: [],
   controllers: [CurrencyController],
-  providers: [CurrencyService, FxRevaluationService],
+  providers: [CurrencyService, FxRevaluationService, TenantScope],
   exports: [CurrencyService, FxRevaluationService],
 })
 export class CurrencyModule {}

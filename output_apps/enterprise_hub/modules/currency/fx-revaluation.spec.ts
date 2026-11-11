@@ -1,31 +1,98 @@
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ModuleRef } from '@nestjs/core';
-import { validate } from 'class-validator';
+import { ModuleRef, Reflector } from '@nestjs/core';
 import { plainToInstance } from 'class-transformer';
-import { Currency } from './enums/currency.enum';
-import { CurrencyService } from './services/currency.service';
-import { FxRevaluationService, ForeignAccountBalance } from './services/fx-revaluation.service';
+import { validate } from 'class-validator';
+import { ACCESS_ACTION_KEY, ACCESS_MODULE_KEY } from '../access/decorators';
+import { AccessAction, AccessModule } from '../access/catalogue';
+import { AuthenticatedRequest } from '../auth/guards/jwt-auth.guard';
+import { AccountLevel, AccountType } from '../accounting/enums/accounting.enum';
+import { AccountingService } from '../accounting/services/accounting.service';
+import { buildProposal } from '../posting_rules/domain/posting-engine';
+import { findTemplate, POSTING_TEMPLATES } from '../posting_rules/domain/posting-templates';
+import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
 import { CurrencyController } from './controllers/currency.controller';
 import { ForeignAccountBalanceDto, RevalueBalancesDto } from './dto/revaluation.dto';
-import { findTemplate, POSTING_TEMPLATES } from '../posting_rules/domain/posting-templates';
-import { buildProposal } from '../posting_rules/domain/posting-engine';
-import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
-import { AuthenticatedRequest } from '../auth/guards/jwt-auth.guard';
+import { Currency } from './enums/currency.enum';
+import { CurrencyService } from './services/currency.service';
+import {
+  ForeignAccountBalance,
+  FxRevaluationService,
+} from './services/fx-revaluation.service';
 
 describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
   let currencyService: CurrencyService;
   let revaluationService: FxRevaluationService;
   let mockPostingRules: Partial<PostingRulesService>;
+  let mockAccounting: Partial<AccountingService>;
   let mockModuleRef: Partial<ModuleRef>;
+
+  const defaultAccounts = [
+    {
+      id: 1,
+      code: '1012',
+      name: 'حساب جاری ارزی دلاری',
+      accountType: AccountType.ASSET,
+      level: AccountLevel.MOEIN,
+      currency: Currency.USD,
+      balance: '85000000.00', // 8,500,000,000 minor
+    },
+    {
+      id: 2,
+      code: '1020',
+      name: 'حساب دریافتنی ارزی یورو',
+      accountType: AccountType.ASSET,
+      level: AccountLevel.MOEIN,
+      currency: Currency.EUR,
+      balance: '55000000.00', // 5,500,000,000 minor
+    },
+    {
+      id: 3,
+      code: '2010',
+      name: 'حساب پرداختنی تجاری دلاری',
+      accountType: AccountType.LIABILITY,
+      level: AccountLevel.MOEIN,
+      currency: Currency.USD,
+      balance: '80000000.00', // 8,000,000,000 minor
+    },
+    {
+      id: 4,
+      code: '4010',
+      name: 'فروش',
+      accountType: AccountType.REVENUE,
+      level: AccountLevel.MOEIN,
+      currency: Currency.IRR,
+      balance: 0,
+    },
+    {
+      id: 5,
+      code: '5010',
+      name: 'بهای تمام‌شده',
+      accountType: AccountType.EXPENSE,
+      level: AccountLevel.MOEIN,
+      currency: Currency.IRR,
+      balance: 0,
+    },
+    {
+      id: 6,
+      code: '1000',
+      name: 'دارایی‌های جاری',
+      accountType: AccountType.ASSET,
+      level: AccountLevel.KOL,
+      currency: Currency.IRR,
+      balance: 0,
+    },
+  ];
 
   beforeEach(() => {
     const configService = {
-      get: jest.fn((key: string, defaultVal: string) => defaultVal),
+      get: jest.fn((_key: string, defaultVal: string) => defaultVal),
     } as unknown as ConfigService;
 
     currencyService = new CurrencyService(configService);
 
     mockPostingRules = {
+      findSource: jest.fn().mockResolvedValue(null),
       post: jest.fn().mockResolvedValue({
         entryId: 42,
         entryNumber: 'V-1405-08-01',
@@ -33,9 +100,19 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
       }),
     };
 
+    mockAccounting = {
+      listAccounts: jest.fn().mockResolvedValue(defaultAccounts),
+      findOneJournalEntry: jest.fn().mockResolvedValue({
+        id: 42,
+        entryNumber: 'V-1405-08-01',
+        description: 'سند تسعیر ارز پایان دوره 1405-08 - بانک ارزی دلاری (USD) [نرخ: 920000 ریال] [fp:mocked-fingerprint]',
+      }),
+    };
+
     mockModuleRef = {
       get: jest.fn((token: any) => {
         if (token === PostingRulesService) return mockPostingRules;
+        if (token === AccountingService) return mockAccounting;
         return null;
       }) as any,
     };
@@ -105,7 +182,7 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
     it('handles 3-decimal currencies like OMR with 1000n scale', () => {
       // OMR has 3 decimals (1000 baisa = 1 Rial Omani)
       // foreignAmountMinor: 10,000 baisa = 10 OMR
-      // rate: 2,392,717 Rial/OMR
+      // custom rate: 2,400,000 Rial/OMR
       const balance: ForeignAccountBalance = {
         accountCode: '1012',
         accountName: 'صندوق ریال عمان',
@@ -137,7 +214,7 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
     });
   });
 
-  describe('Posting Rules Engine Integration', () => {
+  describe('Posting Rules Engine Integration & Template Validation', () => {
     it('currency.fx_revaluation template exists with balanced posting rules', () => {
       const tpl = findTemplate('currency.fx_revaluation');
       expect(tpl).toBeDefined();
@@ -164,7 +241,7 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
       expect(proposal.lines[1].credit).toBe(300_000_000n);
     });
 
-    it('posts through PostingRulesService with currency-scoped idempotency sourceId', async () => {
+    it('posts through PostingRulesService with currency-scoped idempotency sourceId and audit rate', async () => {
       const balances: ForeignAccountBalance[] = [
         {
           accountCode: '1012',
@@ -190,12 +267,190 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
           date: '2026-11-21',
           amounts: { gain: 700_000_000n, loss: 0n },
           overrides: { monetary_asset: '1012' },
+          description: expect.stringContaining('[نرخ: 920000 ریال]'),
         }),
         undefined,
       );
 
       expect(res.postingResults).toHaveLength(1);
       expect(res.postingResults[0].entryId).toBe(42);
+    });
+  });
+
+  describe('Account Type Verification & Reconciliation (Blocker 1)', () => {
+    it('rejects unknown accounts not present in chart of accounts', async () => {
+      const balances: ForeignAccountBalance[] = [
+        {
+          accountCode: '9999',
+          accountName: 'حساب ناموجود',
+          currency: Currency.USD,
+          foreignAmountMinor: 100000n,
+          bookValueRialMinor: 80000000n,
+        },
+      ];
+
+      await expect(
+        revaluationService.postMonthEndRevaluation('tenant-1', {
+          period: '1405-08',
+          date: '2026-11-21',
+          balances,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects header accounts (KOL or GROUP)', async () => {
+      const balances: ForeignAccountBalance[] = [
+        {
+          accountCode: '1000',
+          accountName: 'دارایی‌های جاری (کل)',
+          currency: Currency.USD,
+          foreignAmountMinor: 100000n,
+          bookValueRialMinor: 80000000n,
+        },
+      ];
+
+      await expect(
+        revaluationService.postMonthEndRevaluation('tenant-1', {
+          period: '1405-08',
+          date: '2026-11-21',
+          balances,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects revenue and expense accounts passed as monetary asset/liability', async () => {
+      const revenueBalance: ForeignAccountBalance[] = [
+        {
+          accountCode: '4010', // REVENUE
+          accountName: 'فروش ارزی',
+          currency: Currency.USD,
+          foreignAmountMinor: 100000n,
+          bookValueRialMinor: 0n,
+          isLiability: false,
+        },
+      ];
+
+      await expect(
+        revaluationService.postMonthEndRevaluation('tenant-1', {
+          period: '1405-08',
+          date: '2026-11-21',
+          balances: revenueBalance,
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      const expenseBalance: ForeignAccountBalance[] = [
+        {
+          accountCode: '5010', // EXPENSE
+          accountName: 'هزینه ارزی',
+          currency: Currency.USD,
+          foreignAmountMinor: 100000n,
+          bookValueRialMinor: 0n,
+          isLiability: true,
+        },
+      ];
+
+      await expect(
+        revaluationService.postMonthEndRevaluation('tenant-1', {
+          period: '1405-08',
+          date: '2026-11-21',
+          balances: expenseBalance,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects bookValueRialMinor that contradicts non-zero ledger balance', async () => {
+      const balances: ForeignAccountBalance[] = [
+        {
+          accountCode: '1012', // ledger balance is 8,500,000,000n
+          accountName: 'بانک دلاری',
+          currency: Currency.USD,
+          foreignAmountMinor: 1000000n,
+          bookValueRialMinor: 9_999_999_999n, // Contradicts ledger balance!
+        },
+      ];
+
+      await expect(
+        revaluationService.postMonthEndRevaluation('tenant-1', {
+          period: '1405-08',
+          date: '2026-11-21',
+          balances,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('Idempotency & Conflict Safety (Blocker 2 / Lesson 18)', () => {
+    it('returns existing voucher with replayed: true on identical rerun', async () => {
+      const balance: ForeignAccountBalance = {
+        accountCode: '1012',
+        accountName: 'بانک دلاری',
+        currency: Currency.USD,
+        foreignAmountMinor: 1000000n,
+        bookValueRialMinor: 8_500_000_000n,
+      };
+
+      const itemResult = revaluationService.revalueBalance(balance);
+
+      // Existing source found in repository
+      (mockPostingRules.findSource as jest.Mock).mockResolvedValue({
+        id: 10,
+        entryId: 99,
+        entryNumber: 'V-1405-08-EXISTING',
+      });
+
+      // Existing entry in ledger has matching fingerprint tag
+      (mockAccounting.findOneJournalEntry as jest.Mock).mockResolvedValue({
+        id: 99,
+        entryNumber: 'V-1405-08-EXISTING',
+        description: `سند تسعیر ارز پایان دوره 1405-08 - بانک دلاری (USD) [نرخ: 920000 ریال] [fp:${itemResult.fingerprint}]`,
+      });
+
+      const res = await revaluationService.postMonthEndRevaluation('tenant-1', {
+        period: '1405-08',
+        date: '2026-11-21',
+        balances: [balance],
+      });
+
+      expect(res.postingResults).toEqual([
+        {
+          entryId: 99,
+          entryNumber: 'V-1405-08-EXISTING',
+          replayed: true,
+        },
+      ]);
+      expect(mockPostingRules.post).not.toHaveBeenCalled();
+    });
+
+    it('throws HTTP 409 ConflictException when same period and currency is rerun with different parameters', async () => {
+      const balance: ForeignAccountBalance = {
+        accountCode: '1012',
+        accountName: 'بانک دلاری',
+        currency: Currency.USD,
+        foreignAmountMinor: 1000000n,
+        bookValueRialMinor: 8_500_000_000n,
+      };
+
+      // Existing source found in repository
+      (mockPostingRules.findSource as jest.Mock).mockResolvedValue({
+        id: 10,
+        entryId: 99,
+        entryNumber: 'V-1405-08-EXISTING',
+      });
+
+      // Existing entry in ledger has a DIFFERENT fingerprint tag (different amount/rate previously posted)
+      (mockAccounting.findOneJournalEntry as jest.Mock).mockResolvedValue({
+        id: 99,
+        entryNumber: 'V-1405-08-EXISTING',
+        description: `سند تسعیر ارز پایان دوره 1405-08 - بانک دلاری (USD) [نرخ: 920000 ریال] [fp:other_fp_hash_1234]`,
+      });
+
+      await expect(
+        revaluationService.postMonthEndRevaluation('tenant-1', {
+          period: '1405-08',
+          date: '2026-11-21',
+          balances: [balance],
+        }),
+      ).rejects.toThrow(ConflictException);
     });
   });
 
@@ -214,8 +469,8 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
             accountCode: '1012',
             accountName: 'بانک دلاری',
             currency: Currency.USD,
-            foreignAmountMinor: '100000',
-            bookValueRialMinor: '850000000',
+            foreignAmountMinor: '1000000',
+            bookValueRialMinor: '8500000000',
             isLiability: false,
           },
         ],
@@ -228,6 +483,21 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
         expect.anything(),
         undefined,
       );
+    });
+
+    it('enforces @ModuleAccess(AccessModule.ACCOUNTING) and @RequireAction(AccessAction.POST)', () => {
+      const reflector = new Reflector();
+      const moduleAccess = reflector.get(
+        ACCESS_MODULE_KEY,
+        CurrencyController.prototype.revalueMonthEnd,
+      );
+      const requiredAction = reflector.get(
+        ACCESS_ACTION_KEY,
+        CurrencyController.prototype.revalueMonthEnd,
+      );
+
+      expect(moduleAccess).toBe(AccessModule.ACCOUNTING);
+      expect(requiredAction).toBe(AccessAction.POST);
     });
 
     it('rejects invalid period format and non-numeric minor amounts', async () => {
@@ -249,6 +519,39 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
       expect(errors.length).toBeGreaterThan(0);
       expect(errors.some((e) => e.property === 'period')).toBe(true);
       expect(errors.some((e) => e.property === 'date')).toBe(true);
+    });
+
+    it('rejects month out of range 01-12 in period and day out of range in date', async () => {
+      const badDatesDto = plainToInstance(RevalueBalancesDto, {
+        period: '1405-13', // Month 13 is invalid
+        date: '2026-99-99', // Invalid month and day
+        balances: [
+          {
+            accountCode: '1012',
+            accountName: 'بانک دلاری',
+            currency: Currency.USD,
+            foreignAmountMinor: '100000',
+            bookValueRialMinor: '850000000',
+          },
+        ],
+      });
+
+      const errors = await validate(badDatesDto);
+      expect(errors.some((e) => e.property === 'period')).toBe(true);
+      expect(errors.some((e) => e.property === 'date')).toBe(true);
+    });
+
+    it('rejects amount strings exceeding 32 digits', async () => {
+      const overflowDto = plainToInstance(ForeignAccountBalanceDto, {
+        accountCode: '1012',
+        accountName: 'بانک دلاری',
+        currency: Currency.USD,
+        foreignAmountMinor: '1'.repeat(33), // 33 digits > 32
+        bookValueRialMinor: '5000000',
+      });
+
+      const errors = await validate(overflowDto);
+      expect(errors.some((e) => e.property === 'foreignAmountMinor')).toBe(true);
     });
   });
 });

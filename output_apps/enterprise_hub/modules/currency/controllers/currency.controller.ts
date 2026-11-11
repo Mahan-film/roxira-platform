@@ -10,6 +10,7 @@ import {
   SupportedCurrenciesResponseDto,
 } from '../dto/currency-response.dto';
 import { RevalueBalancesDto } from '../dto/revaluation.dto';
+import { Currency } from '../enums/currency.enum';
 import { CurrencyService } from '../services/currency.service';
 import { ForeignAccountBalance, FxRevaluationService } from '../services/fx-revaluation.service';
 
@@ -60,6 +61,12 @@ export class CurrencyController {
     @Body() dto: RevalueBalancesDto,
   ) {
     const tenantId = requireTenantId(req);
+    const rates: Partial<Record<Currency, bigint>> | undefined = dto.rates
+      ? Object.fromEntries(
+          Object.entries(dto.rates).map(([k, v]) => [k as Currency, BigInt(v)]),
+        )
+      : undefined;
+
     const balances: ForeignAccountBalance[] = dto.balances.map((b) => ({
       accountCode: b.accountCode,
       accountName: b.accountName,
@@ -67,11 +74,13 @@ export class CurrencyController {
       foreignAmountMinor: BigInt(b.foreignAmountMinor),
       bookValueRialMinor: BigInt(b.bookValueRialMinor),
       isLiability: b.isLiability,
+      rateRialPerUnit: b.rateRialPerUnit ? BigInt(b.rateRialPerUnit) : undefined,
     }));
     return this.fxRevaluationService.postMonthEndRevaluation(tenantId, {
       period: dto.period,
       date: dto.date,
       balances,
+      rates,
     });
   }
 }
