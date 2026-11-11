@@ -255,3 +255,94 @@ export async function deleteOpeningDraft(id: number): Promise<void> {
 export async function downloadOpeningTemplate(): Promise<string> {
   return apiRequestText(`${OPENINGS}/template`);
 }
+
+const PRODUCTION_ENDPOINT = `${INVENTORY_ENDPOINT}/production`;
+
+export interface BomItemDto {
+  id?: number;
+  componentSku: string;
+  subBomId?: number | null;
+  quantity: number;
+  wastePercent?: number;
+  notes?: string;
+}
+
+export interface BomHeaderResponse {
+  id: number;
+  bomCode: string;
+  name: string;
+  finishedItemSku: string;
+  outputQuantity: number;
+  version: number;
+  isActive: boolean;
+  notes: string | null;
+  items?: BomItemDto[];
+  createdAt: string;
+}
+
+export interface ProductionOrderResponse {
+  id: number;
+  orderNumber: string;
+  bomId: number;
+  finishedSku: string;
+  warehouseId?: number | null;
+  plannedQuantity: number;
+  completedQuantity: number;
+  status: "draft" | "in_progress" | "completed" | "cancelled";
+  totalCostMinor: string;
+  unitCostMinor: string;
+  voucherId?: number | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+export async function listBoms(finishedItemSku?: string, signal?: AbortSignal): Promise<BomHeaderResponse[]> {
+  return apiRequest<BomHeaderResponse[]>(`${PRODUCTION_ENDPOINT}/boms`, {
+    method: "GET",
+    searchParams: finishedItemSku ? { finishedItemSku } : undefined,
+    signal,
+  });
+}
+
+export async function createBom(payload: any, signal?: AbortSignal): Promise<BomHeaderResponse> {
+  return apiRequest<BomHeaderResponse>(`${PRODUCTION_ENDPOINT}/boms`, {
+    method: "POST",
+    body: payload,
+    signal,
+  });
+}
+
+export async function listProductionOrders(status?: string, signal?: AbortSignal): Promise<ProductionOrderResponse[]> {
+  return apiRequest<ProductionOrderResponse[]>(`${PRODUCTION_ENDPOINT}/orders`, {
+    method: "GET",
+    searchParams: status ? { status } : undefined,
+    signal,
+  });
+}
+
+export async function createProductionOrder(payload: any, signal?: AbortSignal): Promise<ProductionOrderResponse> {
+  return apiRequest<ProductionOrderResponse>(`${PRODUCTION_ENDPOINT}/orders`, {
+    method: "POST",
+    body: payload,
+    signal,
+  });
+}
+
+export async function startProductionOrder(id: number, signal?: AbortSignal): Promise<ProductionOrderResponse> {
+  return apiRequest<ProductionOrderResponse>(`${PRODUCTION_ENDPOINT}/orders/${id}/start`, {
+    method: "POST",
+    signal,
+  });
+}
+
+export async function completeProductionOrder(
+  id: number,
+  payload: { completedQuantity: number; destinationWarehouseId?: number },
+  signal?: AbortSignal,
+): Promise<ProductionOrderResponse> {
+  return apiRequest<ProductionOrderResponse>(`${PRODUCTION_ENDPOINT}/orders/${id}/complete`, {
+    method: "POST",
+    body: payload,
+    signal,
+  });
+}

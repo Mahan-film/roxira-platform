@@ -55,4 +55,18 @@ describe('posting-templates', () => {
   it('findTemplate returns undefined for an unknown docType', () => {
     expect(findTemplate('does.not.exist')).toBeUndefined();
   });
+
+  it('has distinct debit and credit default accounts for inventory.production template', () => {
+    const t = findTemplate('inventory.production')!;
+    expect(t).toBeDefined();
+    const debits = t.lines.filter((l) => l.side === 'debit').map((l) => t.defaults?.[l.role]);
+    const credits = t.lines.filter((l) => l.side === 'credit').map((l) => t.defaults?.[l.role]);
+    for (const d of debits) {
+      for (const c of credits) {
+        expect(d).toBeDefined();
+        expect(c).toBeDefined();
+        expect(d).not.toEqual(c);
+      }
+    }
+  });
 });
