@@ -42,15 +42,15 @@ export class TrialBalanceQueryDto extends ReportPeriodDto {
   @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()
   includeClosing?: boolean;
-}
 
-export class SubsidiaryQueryDto extends TrialBalanceQueryDto {
-  @ApiPropertyOptional({ description: 'Limit to one account and the accounts under it', example: '1020' })
+  @ApiPropertyOptional({ description: 'Limit to one account and the accounts under it (for drill-down)', example: '10' })
   @IsOptional()
   @IsString()
   @MaxLength(32)
   accountCode?: string;
 }
+
+export class SubsidiaryQueryDto extends TrialBalanceQueryDto {}
 
 export class CostCentreTrialBalanceQueryDto extends TrialBalanceQueryDto {
   @ApiPropertyOptional({ description: 'Limit to one cost centre and the centres under it', example: 'CC-100' })

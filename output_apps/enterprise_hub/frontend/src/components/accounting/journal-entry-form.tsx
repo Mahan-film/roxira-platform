@@ -50,9 +50,14 @@ import { ApiClientError } from "@/lib/api/http-client";
 import { inferServiceDomain } from "@/lib/api/auth-client";
 import { useAuth } from "@/components/auth/auth-provider";
 import { VoucherAttachments } from "@/components/accounting/voucher-attachments";
+import { AccountSearchModal } from "@/components/accounting/account-search-modal";
 import {
   computeBalancingAmount,
   getNextCellCoordinates,
+  isAccountSearchKey,
+  isCancelKey,
+  isInsertLineKey,
+  isSaveShortcut,
 } from "@/lib/voucher-keyboard";
 import { formatMoneyRial } from "@/lib/fa-format";
 import {
@@ -119,14 +124,17 @@ export function JournalEntryForm({
   ]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [submitError, setSubmitError] = useState<string[] | null>(null);
   const [conflictError, setConflictError] = useState<string | null>(null);
   const [createdEntry, setCreatedEntry] = useState<JournalEntryResponse | null>(
     null,
   );
+  const [showAccountSearch, setShowAccountSearch] = useState(false);
 
   // Load the edited voucher into the form whenever the target changes.
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     if (!entry) {
       // Leaving edit mode must not leave the old voucher in the new-voucher form.
       setEntryNumber("");
@@ -152,6 +160,7 @@ export function JournalEntryForm({
     setSubmitError(null);
     setConflictError(null);
     setCreatedEntry(null);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [entry]);
 
   const [activeRowIndex, setActiveRowIndex] = useState(0);
@@ -171,11 +180,6 @@ export function JournalEntryForm({
     setLines((prev) =>
       prev.map((line) => (line.uid === uid ? { ...line, ...patch } : line)),
     );
-  }
-
-  function addLine() {
-    const id = nextLineId.current++;
-    setLines((prev) => [...prev, createEmptyLine(`line-${id}`)]);
   }
 
   function addLineAndFocus() {
@@ -201,23 +205,61 @@ export function JournalEntryForm({
   }
 
   function handleFormKeyDown(event: KeyboardEvent<HTMLFormElement>) {
-    // Ctrl+Enter or Cmd+Enter: submit entry from anywhere
-    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+    // Ctrl+S / Cmd+S or Ctrl+Enter: submit entry from anywhere
+    if (isSaveShortcut(event)) {
       event.preventDefault();
+      event.stopPropagation();
       void submitEntry();
       return;
     }
 
-    // Alt+N: add new line and focus
-    if (event.altKey && (event.key === "n" || event.key === "N")) {
+    // Insert key or Alt+N: add new line and focus
+    if (isInsertLineKey(event) || (event.altKey && (event.key === "n" || event.key === "N"))) {
       event.preventDefault();
+      event.stopPropagation();
       addLineAndFocus();
+      return;
+    }
+
+    // F2: account search
+    if (isAccountSearchKey(event)) {
+      event.preventDefault();
+      event.stopPropagation();
+      setShowAccountSearch(true);
+      return;
+    }
+
+    // Esc: cancel modal or ask before discarding dirty entry
+    if (isCancelKey(event)) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (showAccountSearch) {
+        setShowAccountSearch(false);
+        return;
+      }
+      const isDirty = Boolean(
+        description.trim() ||
+        entryNumber.trim() ||
+        lines.some((l) => l.accountCode || l.debit || l.credit || l.description.trim()),
+      );
+      if (isDirty) {
+        const confirmed =
+          typeof window !== "undefined"
+            ? window.confirm("تغییرات ذخیره‌نشده در سند وجود دارد. آیا از انصراف اطمینان دارید؟")
+            : true;
+        if (confirmed) {
+          onCancel?.();
+        }
+      } else {
+        onCancel?.();
+      }
       return;
     }
 
     // Alt+B: auto-balance current active line
     if (event.altKey && (event.key === "b" || event.key === "B")) {
       event.preventDefault();
+      event.stopPropagation();
       autoBalanceRow(activeRowIndex);
       return;
     }
@@ -225,6 +267,7 @@ export function JournalEntryForm({
     // Alt+Delete: delete active row
     if (event.altKey && event.key === "Delete") {
       event.preventDefault();
+      event.stopPropagation();
       if (lines.length > 2 && activeRowIndex < lines.length) {
         const lineToDelete = lines[activeRowIndex];
         if (lineToDelete) {
@@ -234,6 +277,7 @@ export function JournalEntryForm({
           setTimeout(() => focusCell(nextRow, 0), 50);
         }
       }
+      return;
     }
   }
 
@@ -281,6 +325,9 @@ export function JournalEntryForm({
   }
 
   async function submitEntry() {
+    if (isSubmittingRef.current) {
+      return;
+    }
     setSubmitError(null);
     setConflictError(null);
     setCreatedEntry(null);
@@ -327,6 +374,7 @@ export function JournalEntryForm({
         }),
     };
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     try {
       if (entry) {
@@ -363,6 +411,7 @@ export function JournalEntryForm({
         ]);
       }
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   }
@@ -441,17 +490,21 @@ export function JournalEntryForm({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <h3 className="text-sm font-semibold">سطرهای سند</h3>
-                <div className="hidden items-center gap-1.5 text-xs text-muted-foreground md:flex">
+                <div className="hidden items-center gap-1.5 text-xs text-muted-foreground md:flex flex-wrap">
                   <KeyboardIcon className="size-3.5 text-indigo-500" />
-                  <span>کلیدها:</span>
-                  <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px]">Enter</kbd>
-                  <span>بعدی/سطر نو</span>
-                  <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px]">Ctrl+Enter</kbd>
-                  <span>ثبت</span>
-                  <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px]">Alt+B</kbd>
-                  <span>موازنه</span>
-                  <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px]">Alt+N</kbd>
+                  <span className="font-semibold text-foreground">کلیدهای حسابدار:</span>
+                  <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[11px] font-semibold">Insert</kbd>
                   <span>سطر جدید</span>
+                  <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[11px] font-semibold">Enter</kbd>
+                  <span>سلول بعدی</span>
+                  <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[11px] font-semibold">F2</kbd>
+                  <span>جستجوی حساب</span>
+                  <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[11px] font-semibold">Ctrl+S</kbd>
+                  <span>ثبت سند</span>
+                  <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[11px] font-semibold">Esc</kbd>
+                  <span>انصراف</span>
+                  <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[11px] font-semibold">Alt+B</kbd>
+                  <span>موازنه</span>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -498,16 +551,26 @@ export function JournalEntryForm({
                             className="w-full"
                             onFocus={() => setActiveRowIndex(index)}
                             onKeyDown={(e) => {
+                              if (isAccountSearchKey(e)) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setActiveRowIndex(index);
+                                setShowAccountSearch(true);
+                                return;
+                              }
                               if (e.key === "Enter" || e.key === "Tab") {
                                 if (!e.shiftKey) {
                                   e.preventDefault();
+                                  e.stopPropagation();
                                   focusCell(index, 1);
                                 }
                               } else if (e.key === "ArrowDown" && (e.altKey || e.ctrlKey)) {
                                 e.preventDefault();
+                                e.stopPropagation();
                                 focusCell(index + 1, 0);
                               } else if (e.key === "ArrowUp" && (e.altKey || e.ctrlKey)) {
                                 e.preventDefault();
+                                e.stopPropagation();
                                 focusCell(index - 1, 0);
                               }
                             }}
@@ -541,19 +604,23 @@ export function JournalEntryForm({
                           onKeyDown={(e) => {
                             if ((e.ctrlKey || e.metaKey || e.altKey) && (e.key === "b" || e.key === "B")) {
                               e.preventDefault();
+                              e.stopPropagation();
                               autoBalanceRow(index);
                               return;
                             }
                             if (e.key === "Enter") {
                               e.preventDefault();
+                              e.stopPropagation();
                               const next = getNextCellCoordinates(index, 1, lines.length, Boolean(line.debit), "next");
                               focusCell(next.row, next.col);
                             } else if (e.key === "ArrowDown") {
                               e.preventDefault();
+                              e.stopPropagation();
                               const next = getNextCellCoordinates(index, 1, lines.length, false, "down");
                               focusCell(next.row, next.col);
                             } else if (e.key === "ArrowUp") {
                               e.preventDefault();
+                              e.stopPropagation();
                               const next = getNextCellCoordinates(index, 1, lines.length, false, "up");
                               focusCell(next.row, next.col);
                             }
@@ -577,19 +644,23 @@ export function JournalEntryForm({
                           onKeyDown={(e) => {
                             if ((e.ctrlKey || e.metaKey || e.altKey) && (e.key === "b" || e.key === "B")) {
                               e.preventDefault();
+                              e.stopPropagation();
                               autoBalanceRow(index);
                               return;
                             }
                             if (e.key === "Enter") {
                               e.preventDefault();
+                              e.stopPropagation();
                               const next = getNextCellCoordinates(index, 2, lines.length, false, "next");
                               focusCell(next.row, next.col);
                             } else if (e.key === "ArrowDown") {
                               e.preventDefault();
+                              e.stopPropagation();
                               const next = getNextCellCoordinates(index, 2, lines.length, false, "down");
                               focusCell(next.row, next.col);
                             } else if (e.key === "ArrowUp") {
                               e.preventDefault();
+                              e.stopPropagation();
                               const next = getNextCellCoordinates(index, 2, lines.length, false, "up");
                               focusCell(next.row, next.col);
                             }
@@ -608,6 +679,7 @@ export function JournalEntryForm({
                           onKeyDown={(e) => {
                             if (e.key === "Enter") {
                               e.preventDefault();
+                              e.stopPropagation();
                               const next = getNextCellCoordinates(index, 3, lines.length, false, "next");
                               if (next.shouldAddRow) {
                                 addLineAndFocus();
@@ -616,10 +688,12 @@ export function JournalEntryForm({
                               }
                             } else if (e.key === "ArrowDown") {
                               e.preventDefault();
+                              e.stopPropagation();
                               const next = getNextCellCoordinates(index, 3, lines.length, false, "down");
                               focusCell(next.row, next.col);
                             } else if (e.key === "ArrowUp") {
                               e.preventDefault();
+                              e.stopPropagation();
                               const next = getNextCellCoordinates(index, 3, lines.length, false, "up");
                               focusCell(next.row, next.col);
                             }
@@ -759,6 +833,22 @@ export function JournalEntryForm({
             )}
           </div>
         </form>
+
+        <AccountSearchModal
+          open={showAccountSearch}
+          accounts={accounts}
+          onSelect={(account) => {
+            if (activeRowIndex < lines.length) {
+              updateLine(lines[activeRowIndex].uid, { accountCode: account.code });
+            }
+            setShowAccountSearch(false);
+            setTimeout(() => focusCell(activeRowIndex, 1), 50);
+          }}
+          onClose={() => {
+            setShowAccountSearch(false);
+            setTimeout(() => focusCell(activeRowIndex, 0), 50);
+          }}
+        />
       </CardContent>
     </Card>
   );

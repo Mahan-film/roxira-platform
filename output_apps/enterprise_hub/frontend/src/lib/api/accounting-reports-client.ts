@@ -34,7 +34,7 @@ const params = (query: ReportQuery): Params => ({ ...query });
 export const getDashboard = (query: ReportQuery, signal?: AbortSignal) =>
   report<DashboardReport>("dashboard", params(query), signal);
 export const getTrialBalanceReport = (
-  query: ReportQuery & { columns: TrialBalanceColumns; level?: string },
+  query: ReportQuery & { columns: TrialBalanceColumns; level?: string; accountCode?: string },
   signal?: AbortSignal,
 ) => report<TrialBalanceReport>("trial-balance", { ...query }, signal);
 export const getSubsidiaryReport = (
