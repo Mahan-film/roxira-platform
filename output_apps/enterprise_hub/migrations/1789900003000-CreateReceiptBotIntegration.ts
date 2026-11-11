@@ -61,6 +61,7 @@ export class CreateReceiptBotIntegration1789900003000 implements MigrationInterf
       SECURITY DEFINER
       SET search_path = public
       AS $$
+      #variable_conflict use_column
       BEGIN
         RETURN QUERY
         SELECT l.tenant_id, l.user_id, l.default_kind, l.telegram_username
@@ -81,6 +82,7 @@ export class CreateReceiptBotIntegration1789900003000 implements MigrationInterf
       SECURITY DEFINER
       SET search_path = public
       AS $$
+      #variable_conflict use_column
       DECLARE
         v_tenant_id uuid;
         v_user_id uuid;

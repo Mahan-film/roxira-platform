@@ -90,15 +90,15 @@ describePg('ReceiptBot RLS isolation (NOSUPERUSER NOBYPASSRLS)', () => {
 
   it('enforces FORCE ROW LEVEL SECURITY on receipt bot tables', async () => {
     const rows = await ownerDs.query(`
-      SELECT tablename, rowsecurity, forcerowsecurity
-      FROM pg_tables
-      WHERE tablename IN ('receipt_bot_link_codes', 'receipt_bot_user_links');
+      SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity
+      FROM pg_class c
+      WHERE c.relname IN ('receipt_bot_link_codes', 'receipt_bot_user_links');
     `);
 
     expect(rows).toHaveLength(2);
     for (const row of rows) {
-      expect(row.rowsecurity).toBe(true);
-      expect(row.forcerowsecurity).toBe(true);
+      expect(row.relrowsecurity).toBe(true);
+      expect(row.relforcerowsecurity).toBe(true);
     }
   });
 
