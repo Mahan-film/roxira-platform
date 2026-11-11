@@ -7,6 +7,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Optional,
   Param,
   ParseUUIDPipe,
   ParseIntPipe,
@@ -15,6 +16,7 @@ import {
   Put,
   Query,
   Req,
+  ServiceUnavailableException,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -100,7 +102,7 @@ export class DataImportController {
     private readonly entityImportService: EntityImportService,
     private readonly packageImportService: PackageImportService,
     private readonly chunkedUpload: ChunkedUploadService,
-    private readonly sepidarPersistenceService: SepidarPersistenceService,
+    @Optional() private readonly sepidarPersistenceService?: SepidarPersistenceService,
   ) {}
 
   @Post('sepidar/persist')
@@ -111,6 +113,9 @@ export class DataImportController {
     @Req() request: AuthenticatedRequest,
     @Body() dto: PersistSepidarDto,
   ) {
+    if (!this.sepidarPersistenceService) {
+      throw new ServiceUnavailableException('Sepidar persistence service is not configured');
+    }
     return this.sepidarPersistenceService.persistSepidarData(
       this.tenantIdOf(request),
       dto,
