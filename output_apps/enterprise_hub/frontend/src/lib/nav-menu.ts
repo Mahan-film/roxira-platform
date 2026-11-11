@@ -64,6 +64,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         module: "invoicing",
         keywords: ["invoice", "فاکتور"],
       },
+      {
+        href: "/app/invoicing/pos",
+        label: "پایانه فروش",
+        icon: "ShoppingCart",
+        module: "invoicing",
+        keywords: ["pos", "صندوق", "فروش سریع", "آفلاین"],
+      },
     ],
   },
   {
@@ -86,7 +93,7 @@ export const MENU_GROUPS: MenuGroup[] = [
       },
       {
         href: "/app/inventory/production",
-        label: "فرمول ساخت و تولید (BOM)",
+        label: "فرمول ساخت و تولید",
         icon: "Factory",
         module: "inventory",
         keywords: ["bom", "production", "تولید", "فرمول ساخت", "ضایعات"],

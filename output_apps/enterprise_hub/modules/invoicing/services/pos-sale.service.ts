@@ -10,7 +10,14 @@ import { Currency } from '../../currency/enums/currency.enum';
 import { InventoryRepository } from '../../inventory/repositories/inventory.repository';
 import { TenantsRepository } from '../../tenants/repositories/tenants.repository';
 import { CreateInvoiceDto } from '../dto/create-invoice.dto';
-import { CreatePosSaleDto, PosSaleResponseDto } from '../dto/pos-sale.dto';
+import {
+  CreatePosSaleDto,
+  PosConflictDto,
+  PosSaleResponseDto,
+  PosSyncedItemDto,
+  PosSyncResultDto,
+  SyncPosSalesDto,
+} from '../dto/pos-sale.dto';
 import { InvoiceDirection, InvoiceSubject } from '../enums/invoice-kind.enum';
 import { InvoiceStatus } from '../enums/invoice-status.enum';
 import { InvoicingRepository } from '../repositories/invoicing.repository';
@@ -315,5 +322,50 @@ export class PosSaleService {
         `جمع پرداخت‌ها (${paid}) با مبلغ قابل پرداخت (${payable}) برابر نیست.`,
       );
     }
+  }
+
+  /**
+   * Synchronises an array of queued counter sales submitted from an offline POS client (#782 / T93).
+   * Processes each sale under its client UUID idempotency key:
+   * - If already processed: replays existing invoice without duplication.
+   * - If inventory stock is insufficient: catches and records structured conflict item.
+   * - If valid: posts invoice, payments, and stock/voucher movements.
+   * Returns a comprehensive sync summary containing synced sales and conflicts for out-of-stock items.
+   */
+  async syncSales(tenantId: string, dto: SyncPosSalesDto): Promise<PosSyncResultDto> {
+    const synced: PosSyncedItemDto[] = [];
+    const conflicts: PosConflictDto[] = [];
+
+    for (const sale of dto.sales) {
+      const clientUuid = sale.idempotencyKey;
+      try {
+        const result = await this.createSale(tenantId, sale);
+        synced.push({
+          clientUuid,
+          invoice: result.invoice,
+          replayed: result.replayed,
+        });
+      } catch (error: any) {
+        const message = error?.message || 'خطا در ثبت فروش';
+        const isOutOfStock =
+          message.includes('موجودی') ||
+          message.includes('کافی نیست') ||
+          (error?.status === 400 && message.includes('موجودی'));
+        const isNotFound = error instanceof NotFoundException || error?.status === 404;
+
+        conflicts.push({
+          clientUuid,
+          code: isOutOfStock ? 'OUT_OF_STOCK' : isNotFound ? 'ITEM_NOT_FOUND' : 'CONFLICT',
+          error: message,
+          missingItems: sale.lines.map((l) => l.code).filter(Boolean) as string[],
+        });
+      }
+    }
+
+    return {
+      synced,
+      conflicts,
+      totalProcessed: dto.sales.length,
+    };
   }
 }

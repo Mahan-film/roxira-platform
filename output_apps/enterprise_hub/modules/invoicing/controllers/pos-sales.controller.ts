@@ -4,7 +4,12 @@ import { AccessModule } from '../../access/catalogue';
 import { ModuleAccess } from '../../access/decorators';
 import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
 import { requireTenantId } from '../../tenants/tenant-context';
-import { CreatePosSaleDto, PosSaleResponseDto } from '../dto/pos-sale.dto';
+import {
+  CreatePosSaleDto,
+  PosSaleResponseDto,
+  PosSyncResultDto,
+  SyncPosSalesDto,
+} from '../dto/pos-sale.dto';
 import { PosSaleService } from '../services/pos-sale.service';
 
 /** Quick sale at the counter (and the entry point a POS API will call). Tenant comes only from the token. */
@@ -26,5 +31,20 @@ export class PosSalesController {
   @ApiResponse({ status: HttpStatus.CONFLICT, description: 'کلید برای فروش دیگری استفاده شده' })
   create(@Req() request: AuthenticatedRequest, @Body() dto: CreatePosSaleDto): Promise<PosSaleResponseDto> {
     return this.posSales.createSale(requireTenantId(request), dto);
+  }
+
+  @Post('sync')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'همگام‌سازی دسته‌ای فروش‌های آفلاین',
+    description:
+      'دریافت صف فروش‌های ثبت‌شده در زمان قطع اینترنت؛ ثبت اتمیک هر فروش بر اساس کلید یکتا و بازگرداندن لیست مغایرت‌های کالاهای کسری موجودی.',
+  })
+  @ApiResponse({ status: HttpStatus.OK, type: PosSyncResultDto })
+  sync(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: SyncPosSalesDto,
+  ): Promise<PosSyncResultDto> {
+    return this.posSales.syncSales(requireTenantId(request), dto);
   }
 }
