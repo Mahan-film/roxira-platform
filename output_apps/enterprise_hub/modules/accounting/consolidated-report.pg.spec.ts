@@ -178,6 +178,24 @@ describePg('Consolidated multi-company report on PostgreSQL (T53 / #713)', () =>
     expect(result.totals.periodCredit).toBe(800000);
   });
 
+  it('deduplicates tenantIds so repeat entries do not inflate totals or rows', async () => {
+    // Passing duplicate TENANT_A, TENANT_A must dedupe and return only one instance of TENANT_A
+    const result = await consolidatedService.getConsolidatedReport(USER_1, {
+      asOfDate: '2026-12-31',
+      tenantIds: [TENANT_A, TENANT_A],
+    });
+    expect(result.companies).toHaveLength(1);
+    expect(result.companies[0].tenantId).toBe(TENANT_A);
+    expect(result.participatingTenants).toHaveLength(1);
+    expect(result.participatingTenants[0].tenantId).toBe(TENANT_A);
+
+    const row1020 = result.rows.find((r) => r.code === '1020');
+    expect(row1020).toBeDefined();
+    // Exactly 500,000 from Tenant A (not double-counted to 1,000,000)
+    expect(row1020!.periodDebit).toBe(500000);
+    expect(result.totals.periodDebit).toBe(500000);
+  });
+
   it('does not leak unauthorized Tenant C when tenantIds is omitted', async () => {
     const result = await consolidatedService.getConsolidatedReport(USER_1, { asOfDate: '2026-12-31' });
     const tenantIds = result.companies.map((c) => c.tenantId);

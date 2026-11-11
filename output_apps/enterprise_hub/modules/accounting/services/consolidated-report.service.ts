@@ -115,7 +115,8 @@ export class ConsolidatedReportService {
     let targetTenantIds: string[] = [];
 
     if (query.tenantIds && query.tenantIds.length > 0) {
-      for (const id of query.tenantIds) {
+      const dedupedIds = Array.from(new Set(query.tenantIds));
+      for (const id of dedupedIds) {
         if (!membershipMap.has(id)) {
           throw new ForbiddenException(
             `دسترسی به اطلاعات سازمان با شناسه ${id} برای کاربر مجاز نیست.`,
@@ -128,7 +129,7 @@ export class ConsolidatedReportService {
           );
         }
       }
-      targetTenantIds = query.tenantIds;
+      targetTenantIds = dedupedIds;
     } else {
       if (activeMemberships.length === 0) {
         throw new NotFoundException('هیچ سازمان فعالی برای این کاربر یافت نشد.');
@@ -222,6 +223,8 @@ export class ConsolidatedReportService {
             companyAmounts: {},
           };
           rowMap.set(row.code, agg);
+        } else if (row.name && agg.name && row.name !== agg.name && !agg.name.includes(row.name)) {
+          agg.name = `${agg.name} / ${row.name}`;
         }
 
         agg.openingDebitMinor += row.openingDebit;

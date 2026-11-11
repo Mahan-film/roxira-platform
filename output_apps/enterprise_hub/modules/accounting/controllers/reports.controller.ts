@@ -146,7 +146,10 @@ export class ReportsController {
     @Req() request: AuthenticatedRequest,
     @Query() query: ConsolidatedReportQueryDto,
   ) {
-    const userId = request.user?.sub ?? '';
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new UnauthorizedException('کاربر احراز هویت نشده است.');
+    }
     return moneyJson(await this.consolidatedService.getConsolidatedReport(userId, query));
   }
 }
