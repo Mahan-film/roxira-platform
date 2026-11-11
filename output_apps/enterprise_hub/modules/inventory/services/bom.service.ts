@@ -1,5 +1,6 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { BomRepository } from '../repositories/bom.repository';
+import { ProductionOrderRepository } from '../repositories/production-order.repository';
 import { CreateBomDto } from '../dto/bom.dto';
 import { BomHeaderEntity } from '../entities/bom-header.entity';
 
@@ -40,7 +41,10 @@ export interface BomExplosionResult {
 
 @Injectable()
 export class BomService {
-  constructor(private readonly bomRepo: BomRepository) {}
+  constructor(
+    private readonly bomRepo: BomRepository,
+    @Optional() private readonly orderRepo?: ProductionOrderRepository,
+  ) {}
 
   async createBom(tenantId: string, dto: CreateBomDto): Promise<BomHeaderEntity> {
     const existing = await this.bomRepo.findByCode(tenantId, dto.bomCode);
@@ -75,6 +79,12 @@ export class BomService {
 
   async deleteBom(tenantId: string, id: number): Promise<boolean> {
     const bom = await this.getBom(tenantId, id);
+    if (this.orderRepo) {
+      const orders = await this.orderRepo.list(tenantId);
+      if (orders.some((o) => o.bomId === id)) {
+        throw new BadRequestException('امکان حذف فرمول ساخت دارای سفارش تولید فعال یا ثبت‌شده وجود ندارد.');
+      }
+    }
     return this.bomRepo.deleteById(tenantId, bom.id);
   }
 

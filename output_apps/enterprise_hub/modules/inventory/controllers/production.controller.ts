@@ -21,6 +21,7 @@ import {
   CreateBomDto,
   CreateProductionOrderDto,
   ExplodeBomDto,
+  QueryProductionOrdersDto,
 } from '../dto/bom.dto';
 import { ProductionOrderStatus } from '../entities/production-order.entity';
 import { BomService } from '../services/bom.service';
@@ -115,10 +116,10 @@ export class ProductionController {
   @RequireAction(AccessAction.READ)
   async listOrders(
     @Req() req: AuthenticatedRequest,
-    @Query('status') status?: ProductionOrderStatus,
+    @Query() query: QueryProductionOrdersDto,
   ) {
     const tenantId = requireTenantId(req);
-    return this.productionService.listOrders(tenantId, status);
+    return this.productionService.listOrders(tenantId, query.status);
   }
 
   @Get('orders/:id')

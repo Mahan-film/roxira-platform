@@ -4,8 +4,8 @@ import {
   ArrayMaxSize,
   ArrayNotEmpty,
   IsArray,
-  IsBoolean,
   IsEnum,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
@@ -26,18 +26,19 @@ export class CreateBomItemDto {
 
   @ApiPropertyOptional({ description: 'شناسه فرمول ساخت فرعی برای ساختار چندسطحی' })
   @IsOptional()
-  @IsNumber()
+  @IsInt()
   @Min(1)
   subBomId?: number;
 
   @ApiProperty({ description: 'مقدار خالص مصرف به ازای هر واحد خروجی فرمول' })
-  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @IsNumber({ maxDecimalPlaces: 3, allowNaN: false, allowInfinity: false })
   @Min(0.001)
+  @Max(999999999)
   quantity: number;
 
   @ApiPropertyOptional({ description: 'درصد ضایعات مورد انتظار (۰ تا ۱۰۰)', default: 0 })
   @IsOptional()
-  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
   @Min(0)
   @Max(100)
   wastePercent?: number;
@@ -45,7 +46,7 @@ export class CreateBomItemDto {
   @ApiPropertyOptional({ description: 'یادداشت یا توضیحات ردیف' })
   @IsOptional()
   @IsString()
-  @MaxLength(255)
+  @MaxLength(500)
   notes?: string;
 }
 
@@ -70,19 +71,21 @@ export class CreateBomDto {
 
   @ApiPropertyOptional({ description: 'تعداد محصول نهایی خروجی (پیش‌فرض ۱)', default: 1 })
   @IsOptional()
-  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @IsNumber({ maxDecimalPlaces: 3, allowNaN: false, allowInfinity: false })
   @Min(0.001)
+  @Max(999999999)
   outputQuantity?: number;
 
   @ApiPropertyOptional({ description: 'شماره ویرایش فرمول ساخت', default: 1 })
   @IsOptional()
-  @IsNumber()
+  @IsInt()
   @Min(1)
   version?: number;
 
   @ApiPropertyOptional({ description: 'یادداشت یا توضیحات کلی' })
   @IsOptional()
   @IsString()
+  @MaxLength(500)
   notes?: string;
 
   @ApiProperty({ type: [CreateBomItemDto], description: 'فهرست مواد اولیه و قطعات' })
@@ -96,8 +99,9 @@ export class CreateBomDto {
 
 export class ExplodeBomDto {
   @ApiProperty({ description: 'مقدار محصول نهایی درخواستی برای ریزش مواد' })
-  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @IsNumber({ maxDecimalPlaces: 3, allowNaN: false, allowInfinity: false })
   @Min(0.001)
+  @Max(999999999)
   quantity: number;
 }
 
@@ -109,34 +113,46 @@ export class CreateProductionOrderDto {
   orderNumber: string;
 
   @ApiProperty({ description: 'شناسه فرمول ساخت (BOM ID)' })
-  @IsNumber()
+  @IsInt()
   @Min(1)
   bomId: number;
 
   @ApiPropertyOptional({ description: 'شناسه انبار مبدا مواد اولیه' })
   @IsOptional()
-  @IsNumber()
+  @IsInt()
+  @Min(1)
   warehouseId?: number;
 
   @ApiProperty({ description: 'تعداد برنامه‌ریزی‌شده جهت تولید' })
-  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @IsNumber({ maxDecimalPlaces: 3, allowNaN: false, allowInfinity: false })
   @Min(0.001)
+  @Max(999999999)
   plannedQuantity: number;
 
   @ApiPropertyOptional({ description: 'توضیحات سفارش تولید' })
   @IsOptional()
   @IsString()
+  @MaxLength(500)
   notes?: string;
 }
 
 export class CompleteProductionOrderDto {
   @ApiProperty({ description: 'تعداد تولیدشده نهایی' })
-  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @IsNumber({ maxDecimalPlaces: 3, allowNaN: false, allowInfinity: false })
   @Min(0.001)
+  @Max(999999999)
   completedQuantity: number;
 
   @ApiPropertyOptional({ description: 'شناسه انبار مقصد کالای ساخته‌شده' })
   @IsOptional()
-  @IsNumber()
+  @IsInt()
+  @Min(1)
   destinationWarehouseId?: number;
+}
+
+export class QueryProductionOrdersDto {
+  @ApiPropertyOptional({ enum: ProductionOrderStatus, description: 'فیلتر وضعیت سفارش تولید' })
+  @IsOptional()
+  @IsEnum(ProductionOrderStatus)
+  status?: ProductionOrderStatus;
 }

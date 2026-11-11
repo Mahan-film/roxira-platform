@@ -274,9 +274,9 @@ export const POSTING_TEMPLATES: readonly PostingTemplate[] = [
     amounts: ['amount'],
     lines: [
       dr('inventory', 'amount', 'ورود کالای ساخته‌شده به انبار'),
-      cr('cogs', 'amount', 'مصرف مواد اولیه و قطعات تولید'),
+      cr('raw_materials', 'amount', 'مصرف مواد اولیه و قطعات تولید'),
     ],
-    defaults: { inventory: '1301', cogs: '5101' },
+    defaults: { inventory: '1030', raw_materials: '1030' },
   },
   {
     docType: 'pos.close',

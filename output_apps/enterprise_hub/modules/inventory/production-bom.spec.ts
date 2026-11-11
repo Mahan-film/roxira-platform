@@ -1,13 +1,15 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { BomService } from './services/bom.service';
-import { ProductionOrderService } from './services/production-order.service';
-import { BomRepository } from './repositories/bom.repository';
-import { ProductionOrderRepository } from './repositories/production-order.repository';
-import { InventoryRepository } from './repositories/inventory.repository';
+import { EntityManager } from 'typeorm';
+import { TenantScope } from '../access/services/tenant-scope';
 import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
 import { BomHeaderEntity } from './entities/bom-header.entity';
 import { BomItemEntity } from './entities/bom-item.entity';
 import { ProductionOrderEntity, ProductionOrderStatus } from './entities/production-order.entity';
+import { BomRepository } from './repositories/bom.repository';
+import { InventoryRepository } from './repositories/inventory.repository';
+import { ProductionOrderRepository } from './repositories/production-order.repository';
+import { BomService } from './services/bom.service';
+import { ProductionOrderService } from './services/production-order.service';
 
 describe('Production BOM and Production Orders with FIFO costing (T83 / #764)', () => {
   const tenantId = '11111111-1111-4111-8111-111111111111';
@@ -18,6 +20,8 @@ describe('Production BOM and Production Orders with FIFO costing (T83 / #764)', 
   let mockOrderRepo: jest.Mocked<ProductionOrderRepository>;
   let mockInventoryRepo: jest.Mocked<InventoryRepository>;
   let mockPostingRules: jest.Mocked<PostingRulesService>;
+  let mockTenantScope: Partial<TenantScope>;
+  let mockEntityManager: Partial<EntityManager>;
 
   beforeEach(() => {
     mockBomRepo = {
@@ -46,24 +50,27 @@ describe('Production BOM and Production Orders with FIFO costing (T83 / #764)', 
       post: jest.fn(),
     } as unknown as jest.Mocked<PostingRulesService>;
 
-    bomService = new BomService(mockBomRepo);
+    mockEntityManager = {
+      getRepository: jest.fn(),
+    };
+
+    mockTenantScope = {
+      run: jest.fn((_t: string, fn: (em: EntityManager) => any) =>
+        fn(mockEntityManager as EntityManager),
+      ),
+    };
+
+    bomService = new BomService(mockBomRepo, mockOrderRepo);
     productionOrderService = new ProductionOrderService(
       mockOrderRepo,
       bomService,
       mockInventoryRepo,
       mockPostingRules,
+      mockTenantScope as TenantScope,
     );
   });
 
   describe('Multi-level BOM & Waste % Explosion', () => {
-    // Finished Good: ROX-DESK-01 (1 wooden desk)
-    // - Sub-assembly: ROX-LEG-SET (1 set of legs, sub_bom_id: 2), qty: 1, waste: 0%
-    // - Leaf component: ROX-WOOD-PLANK (wood top), qty: 2 planks, waste: 10%
-    //
-    // Sub-BOM 2 (ROX-LEG-SET, output: 1 set):
-    // - Leaf component: ROX-STEEL-TUBE, qty: 4 tubes, waste: 5%
-    // - Leaf component: ROX-SCREW, qty: 16 screws, waste: 0%
-
     const subBom: BomHeaderEntity = {
       id: 2,
       tenantId,
@@ -202,6 +209,21 @@ describe('Production BOM and Production Orders with FIFO costing (T83 / #764)', 
       await expect(bomService.explodeBom(tenantId, 10, 1)).rejects.toThrow(BadRequestException);
       await expect(bomService.explodeBom(tenantId, 10, 1)).rejects.toThrow(/Circular BOM dependency/);
     });
+
+    it('prevents deleting a BOM with active or existing production orders', async () => {
+      mockBomRepo.findById.mockResolvedValueOnce(mainBom);
+      mockOrderRepo.list.mockResolvedValueOnce([
+        {
+          id: 1,
+          bomId: 1,
+          orderNumber: 'PO-01',
+          status: ProductionOrderStatus.IN_PROGRESS,
+        } as ProductionOrderEntity,
+      ]);
+
+      await expect(bomService.deleteBom(tenantId, 1)).rejects.toThrow(BadRequestException);
+      expect(mockBomRepo.deleteById).not.toHaveBeenCalled();
+    });
   });
 
   describe('Production Order Lifecycle & FIFO Cost Accounting', () => {
@@ -268,8 +290,72 @@ describe('Production BOM and Production Orders with FIFO costing (T83 / #764)', 
       expect(mockOrderRepo.create).toHaveBeenCalled();
     });
 
-    it('completes production order, consumes FIFO layers, calculates unit cost, inbounds finished good and posts voucher', async () => {
+    it('rejects completeOrder when order is in DRAFT status (must start first)', async () => {
       const draftOrder: ProductionOrderEntity = {
+        id: 101,
+        tenantId,
+        orderNumber: 'PO-2026-001',
+        bomId: 1,
+        finishedSku: 'PROD-A',
+        warehouseId: 1,
+        plannedQuantity: 10,
+        completedQuantity: 0,
+        status: ProductionOrderStatus.DRAFT, // Still in DRAFT!
+        totalCostMinor: 0n,
+        unitCostMinor: 0n,
+        voucherId: null,
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        bom: activeBom,
+      };
+
+      (mockEntityManager.getRepository as jest.Mock).mockReturnValue({
+        findOne: jest.fn().mockResolvedValue(draftOrder),
+      });
+
+      await expect(
+        productionOrderService.completeOrder(tenantId, 101, {
+          completedQuantity: 10,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('returns existing order idempotently if already COMPLETED without moving stock', async () => {
+      const alreadyCompletedOrder: ProductionOrderEntity = {
+        id: 101,
+        tenantId,
+        orderNumber: 'PO-2026-001',
+        bomId: 1,
+        finishedSku: 'PROD-A',
+        warehouseId: 1,
+        plannedQuantity: 10,
+        completedQuantity: 10,
+        status: ProductionOrderStatus.COMPLETED,
+        totalCostMinor: 210000n,
+        unitCostMinor: 21000n,
+        voucherId: 999,
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        bom: activeBom,
+      };
+
+      (mockEntityManager.getRepository as jest.Mock).mockReturnValue({
+        findOne: jest.fn().mockResolvedValue(alreadyCompletedOrder),
+      });
+
+      const res = await productionOrderService.completeOrder(tenantId, 101, {
+        completedQuantity: 10,
+      });
+
+      expect(res.status).toBe(ProductionOrderStatus.COMPLETED);
+      expect(mockInventoryRepo.persistOutbound).not.toHaveBeenCalled();
+      expect(mockPostingRules.post).not.toHaveBeenCalled();
+    });
+
+    it('completes production order, consumes FIFO layers, calculates unit cost, inbounds finished good and posts voucher', async () => {
+      const inProgressOrder: ProductionOrderEntity = {
         id: 101,
         tenantId,
         orderNumber: 'PO-2026-001',
@@ -288,15 +374,11 @@ describe('Production BOM and Production Orders with FIFO costing (T83 / #764)', 
         bom: activeBom,
       };
 
-      mockOrderRepo.findById.mockResolvedValue(draftOrder);
+      (mockEntityManager.getRepository as jest.Mock).mockReturnValue({
+        findOne: jest.fn().mockResolvedValue(inProgressOrder),
+      });
       mockBomRepo.findById.mockResolvedValue(activeBom);
 
-      // Exploding for 10 units of PROD-A requires 20 units of RAW-01 (10 * 2)
-      // FIFO batches available for RAW-01:
-      // Layer 1: 15 units @ 10,000 Rials each = 150,000 Rials
-      // Layer 2: 5 units @ 12,000 Rials each = 60,000 Rials
-      // Total Raw Cost = 210,000 Rials
-      // Unit Cost of Finished Good = 210,000 / 10 = 21,000 Rials
       mockInventoryRepo.persistOutbound.mockResolvedValueOnce({
         item: {} as never,
         layers: [
@@ -324,7 +406,7 @@ describe('Production BOM and Production Orders with FIFO costing (T83 / #764)', 
       });
 
       mockOrderRepo.updateCompletion.mockImplementation(async (_t, _id, data) => ({
-        ...draftOrder,
+        ...inProgressOrder,
         completedQuantity: data.completedQuantity,
         totalCostMinor: data.totalCostMinor,
         unitCostMinor: data.unitCostMinor,
@@ -336,29 +418,32 @@ describe('Production BOM and Production Orders with FIFO costing (T83 / #764)', 
         completedQuantity: 10,
       });
 
-      // Assert FIFO consumption was called for 20 units of RAW-01
-      expect(mockInventoryRepo.persistOutbound).toHaveBeenCalledWith(tenantId, {
-        sku: 'RAW-01',
-        quantity: 20,
-        warehouseId: 1,
-      });
+      expect(mockInventoryRepo.persistOutbound).toHaveBeenCalledWith(
+        tenantId,
+        {
+          sku: 'RAW-01',
+          quantity: 20,
+          warehouseId: 1,
+        },
+        mockEntityManager,
+      );
 
-      // Total raw cost = 150,000 + 60,000 = 210,000 Rials
       expect(completed.totalCostMinor).toBe(210_000n);
-      // Unit cost = 210,000 / 10 = 21,000 Rials
       expect(completed.unitCostMinor).toBe(21_000n);
       expect(completed.status).toBe(ProductionOrderStatus.COMPLETED);
 
-      // Finished good inbounded into warehouse at unit cost 21,000
-      expect(mockInventoryRepo.persistInbound).toHaveBeenCalledWith(tenantId, {
-        sku: 'PROD-A',
-        quantity: 10,
-        unitPurchaseCost: 21_000,
-        batchNumber: 'BATCH-PROD-PO-2026-001',
-        warehouseId: 1,
-      });
+      expect(mockInventoryRepo.persistInbound).toHaveBeenCalledWith(
+        tenantId,
+        {
+          sku: 'PROD-A',
+          quantity: 10,
+          unitPurchaseCost: 21_000,
+          batchNumber: 'BATCH-PROD-PO-2026-001',
+          warehouseId: 1,
+        },
+        mockEntityManager,
+      );
 
-      // Posting rules voucher created for 210,000 Rials
       expect(mockPostingRules.post).toHaveBeenCalledWith(
         tenantId,
         expect.objectContaining({
@@ -367,6 +452,7 @@ describe('Production BOM and Production Orders with FIFO costing (T83 / #764)', 
           sourceId: 'PO-2026-001',
           amounts: { amount: 210_000n },
         }),
+        mockEntityManager,
       );
       expect(completed.voucherId).toBe(999);
     });
