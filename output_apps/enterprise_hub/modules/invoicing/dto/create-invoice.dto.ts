@@ -64,6 +64,12 @@ export class InvoicePartyInfoDto {
   @MaxLength(512)
   address?: string;
 
+  @ApiPropertyOptional({ description: 'کد پستی ۱۰ رقمی', example: '1234567890' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(16)
+  postalCode?: string;
+
   @ApiPropertyOptional({ description: 'تلفن تماس', example: '02112345678' })
   @IsOptional()
   @IsString()
@@ -96,6 +102,12 @@ export class InvoiceItemDto {
   @IsString()
   @MaxLength(64)
   sku?: string;
+
+  @ApiPropertyOptional({ description: 'شناسه ۱۳ رقمی کالا/خدمت مودیان (SSTID)', example: '2330001234567' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(13)
+  taxCode?: string;
 
   @ApiPropertyOptional({
     description: 'شرح کالا یا خدمت؛ در صورت انتخاب کالا از انبار خودکار پر می‌شود.',

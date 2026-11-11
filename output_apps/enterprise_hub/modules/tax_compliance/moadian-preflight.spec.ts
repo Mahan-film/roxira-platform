@@ -253,5 +253,158 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
         'مجموع مالیات صورتحساب',
       );
     });
+
+    it('accepts Persian digits in national IDs, postal codes, and SSTIDs', () => {
+      const persianInvoice = {
+        ...validInvoice,
+        sellerInfo: {
+          ...validInvoice.sellerInfo,
+          nationalId: '۱۰۳۸۰۲۸۴۷۹۰',
+          postalCode: '۱۹۸۵۹۱۳۱۱۱',
+        },
+        buyerInfo: {
+          ...validInvoice.buyerInfo,
+          nationalId: '۰۰۱۲۳۴۵۶۷۹',
+          postalCode: '۱۴۵۶۷۸۹۱۲۳',
+        },
+        items: [
+          {
+            ...validInvoice.items![0],
+            taxCode: '۲۳۳۰۰۰۱۲۳۴۵۶۷',
+          },
+        ],
+      };
+      const result = runMoadianPreFlightValidation(persianInvoice as unknown as InvoiceResponseDto);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('rejects seller ID with invalid length (neither 10 nor 11 digits)', () => {
+      const invalid = {
+        ...validInvoice,
+        sellerInfo: { ...validInvoice.sellerInfo, nationalId: '123456789' }, // 9 digits
+      };
+      const result = runMoadianPreFlightValidation(invalid as unknown as InvoiceResponseDto);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.code === 'SELLER_ID_LENGTH_INVALID')).toBe(true);
+    });
+
+    it('rejects non-numeric seller economic code', () => {
+      const invalid = {
+        ...validInvoice,
+        sellerInfo: { ...validInvoice.sellerInfo, economicCode: '10380ABCDEF' },
+      };
+      const result = runMoadianPreFlightValidation(invalid as unknown as InvoiceResponseDto);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.code === 'SELLER_ECONOMIC_CODE_INVALID')).toBe(true);
+    });
+
+    it('accepts 12-digit buyer foreign passport code and rejects bad length', () => {
+      const validForeign = {
+        ...validInvoice,
+        buyerInfo: { ...validInvoice.buyerInfo, nationalId: '123456789012' },
+      };
+      const resForeign = runMoadianPreFlightValidation(validForeign as unknown as InvoiceResponseDto);
+      expect(resForeign.errors.filter((e) => e.field === 'buyerInfo.nationalId')).toHaveLength(0);
+
+      const invalidLength = {
+        ...validInvoice,
+        buyerInfo: { ...validInvoice.buyerInfo, nationalId: '1234567890123' }, // 13 digits
+      };
+      const resLen = runMoadianPreFlightValidation(invalidLength as unknown as InvoiceResponseDto);
+      expect(resLen.errors.some((e) => e.code === 'BUYER_ID_LENGTH_INVALID')).toBe(true);
+    });
+
+    it('validates multi-currency math for IRT (scale 1)', () => {
+      const irtInvoice = {
+        ...validInvoice,
+        currency: Currency.IRT,
+        totalAmount: 2000000,
+        totalDiscount: 100000,
+        totalTax: 190000,
+        finalPayable: 2090000,
+        items: [
+          {
+            taxCode: '2330001234567',
+            description: 'کالا به تومان',
+            quantity: 2,
+            unitPrice: 1000000,
+            discount: 100000,
+            vatRate: 0.1,
+            tax: 190000,
+            total: 2090000,
+          },
+        ],
+      };
+      const result = runMoadianPreFlightValidation(irtInvoice as unknown as InvoiceResponseDto);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('falls back to options.defaultSstid when item has no taxCode', () => {
+      const noItemCodeInvoice = {
+        ...validInvoice,
+        items: [
+          {
+            description: 'بدون کد کالا',
+            quantity: 1,
+            unitPrice: 20000000,
+            discount: 1000000,
+            vatRate: 0.1,
+            tax: 1900000,
+            total: 20900000,
+          },
+        ],
+      };
+      // Without defaultSstid -> fails
+      const resWithout = runMoadianPreFlightValidation(noItemCodeInvoice as unknown as InvoiceResponseDto);
+      expect(resWithout.valid).toBe(false);
+      expect(resWithout.errors.some((e) => e.code === 'ITEM_SSTID_INVALID')).toBe(true);
+
+      // With defaultSstid -> passes
+      const resWith = runMoadianPreFlightValidation(noItemCodeInvoice as unknown as InvoiceResponseDto, {
+        defaultSstid: '2330001234567',
+      });
+      expect(resWith.valid).toBe(true);
+    });
+
+    it('validates with options.expectedVatRate', () => {
+      const customRateInvoice = {
+        ...validInvoice,
+        totalTax: 1140000,
+        finalPayable: 20140000,
+        items: [
+          {
+            taxCode: '2330001234567',
+            description: 'کالا با نرخ ۶٪',
+            quantity: 2,
+            unitPrice: 10000000,
+            discount: 1000000,
+            vatRate: 0.06,
+            tax: 1140000,
+            total: 20140000,
+          },
+        ],
+      };
+      // Without expectedVatRate, 6% fails in 1405
+      const resFail = runMoadianPreFlightValidation(customRateInvoice as unknown as InvoiceResponseDto);
+      expect(resFail.valid).toBe(false);
+
+      // With expectedVatRate: 0.06, passes
+      const resPass = runMoadianPreFlightValidation(customRateInvoice as unknown as InvoiceResponseDto, {
+        expectedVatRate: 0.06,
+      });
+      expect(resPass.valid).toBe(true);
+    });
+
+    it('rejects invalid or missing invoice date', () => {
+      const invalidDateInvoice = {
+        ...validInvoice,
+        issuedAt: new Date('invalid-date'),
+      };
+      const res = runMoadianPreFlightValidation(invalidDateInvoice as unknown as InvoiceResponseDto);
+      expect(res.valid).toBe(false);
+      expect(res.errors.some((e) => e.code === 'INVOICE_DATE_INVALID')).toBe(true);
+    });
   });
 });

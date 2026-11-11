@@ -51,4 +51,13 @@ export class CreateStockItemDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   quantity?: number;
+
+  @ApiPropertyOptional({
+    description: 'شناسه ۱۳ رقمی کالا/خدمت مودیان (SSTID)',
+    example: '2330001234567',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(13)
+  taxCode?: string;
 }

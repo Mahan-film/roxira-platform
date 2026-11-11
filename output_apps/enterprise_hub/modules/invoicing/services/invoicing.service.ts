@@ -101,6 +101,7 @@ interface PreparedLine {
   description: string;
   gross: number;
   lineDiscount: number;
+  taxCode?: string | null;
 }
 
 /** مجموع‌های محاسبه‌شده سمت سرور برای اقلام صورتحساب. */
@@ -377,6 +378,7 @@ export class InvoicingService {
       let sku = item.sku?.trim() || null;
       let derivedDescription: string | undefined;
       let derivedSku: string | undefined;
+      let derivedTaxCode: string | null = null;
 
       if (
         this.inventoryRepository &&
@@ -403,6 +405,7 @@ export class InvoicingService {
         itemId = stockItem.id;
         derivedSku = stockItem.sku;
         derivedDescription = stockItem.name;
+        derivedTaxCode = stockItem.taxCode ?? null;
       }
 
       if (derivedSku) {
@@ -434,6 +437,7 @@ export class InvoicingService {
         description,
         gross: item.quantity * item.unitPrice,
         lineDiscount: this.lineDiscount(item, scale),
+        taxCode: item.taxCode ?? derivedTaxCode ?? null,
       });
     }
 
@@ -458,6 +462,7 @@ export class InvoicingService {
         vatRate,
         tax,
         total,
+        ...(line.taxCode ? { taxCode: line.taxCode } : {}),
         ...(line.item.originalLine !== undefined ? { originalLine: line.item.originalLine } : {}),
       });
     });

@@ -129,7 +129,7 @@ function buildInvoice(overrides: Partial<InvoiceResponseDto> = {}): InvoiceRespo
     warehouseId: null,
     customerId: null,
     sellerInfo: { name: 'Seller', economicCode: '10101010101' },
-    buyerInfo: { name: 'Buyer', nationalId: '0012345678', economicCode: '00123456780012' },
+    buyerInfo: { name: 'Buyer', nationalId: '0012345679', economicCode: '00123456780012' },
     items: [
       {
         description: 'Consulting',
@@ -248,7 +248,7 @@ describe('Moadian packet mapping', () => {
     expect(header.ins).toBe(1);
     expect(header.tins).toBe('10101010101');
     expect(header.tob).toBe(MoadianBuyerType.NATURAL);
-    expect(header.bid).toBe('0012345678');
+    expect(header.bid).toBe('0012345679');
 
     expect(body).toHaveLength(2);
     expect(body[0]).toMatchObject({

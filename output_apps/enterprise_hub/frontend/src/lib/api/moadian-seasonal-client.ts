@@ -10,12 +10,21 @@ import type {
   SeasonalVatReport,
   VatReturnDraft,
 } from "@/types/moadian-seasonal";
+import type { MoadianPreFlightResult } from "@/lib/moadian-preflight";
 
 const BASE = `${API_PROXY_BASE_PATH}/${TAX_COMPLIANCE_RESOURCE_PATH}`;
 
 /** GET moadian/status — answers even when MOADIAN_ENABLED is off. */
 export function getMoadianStatus(signal?: AbortSignal) {
   return apiRequest<MoadianStatusResponse>(`${BASE}/moadian/status`, { signal });
+}
+
+/** POST moadian/invoices/:id/pre-flight */
+export function preflightMoadianInvoice(invoiceId: string, signal?: AbortSignal) {
+  return apiRequest<MoadianPreFlightResult>(
+    `${BASE}/moadian/invoices/${encodeURIComponent(invoiceId)}/pre-flight`,
+    { method: "POST", signal },
+  );
 }
 
 /** POST moadian/invoices/:id/submit (queued; 503 when the flag is off). */

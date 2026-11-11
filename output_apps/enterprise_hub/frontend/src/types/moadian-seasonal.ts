@@ -6,6 +6,7 @@
 export interface MoadianStatusResponse {
   enabled: boolean;
   configured: boolean;
+  defaultSstid?: string | null;
 }
 
 export type MoadianSubmissionStatus =

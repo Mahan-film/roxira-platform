@@ -145,6 +145,7 @@ export class InventoryService {
       isLowStock: this.isLowStock(Number(available) / 100, Number(entity.minQuantity)),
       batchNumber: entity.batchNumber,
       fifoValuation: this.roundMoney(fifoValuation),
+      taxCode: entity.taxCode ?? null,
     };
   }
 
@@ -305,6 +306,7 @@ export class InventoryService {
       quantity: this.roundQuantity(dto.quantity ?? 0),
       minQuantity: this.roundQuantity(dto.minQuantity ?? 0),
       batchNumber: dto.batchNumber ?? null,
+      taxCode: dto.taxCode ?? null,
     });
 
     return this.toStockItemResponse(created, 0);
@@ -438,6 +440,9 @@ export class InventoryService {
     if (dto.minQuantity !== undefined) {
       assertValidQuantityScale(dto.minQuantity, QUANTITY_SCALE, 'حداقل موجودی');
       entity.minQuantity = this.roundQuantity(dto.minQuantity);
+    }
+    if (dto.taxCode !== undefined) {
+      entity.taxCode = dto.taxCode;
     }
 
     const saved = await this.inventoryRepository.saveStockItem(tenantId, entity);

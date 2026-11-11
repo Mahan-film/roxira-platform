@@ -184,7 +184,7 @@ function MoadianCard() {
     if (!id) return;
     const inv = invoices.find((i) => i.id === id);
     if (inv) {
-      const pre = runMoadianPreFlightValidation(inv);
+      const pre = runMoadianPreFlightValidation(inv, { defaultSstid: status?.defaultSstid });
       setPreFlightErrors(pre.errors);
     }
     try {
@@ -204,7 +204,7 @@ function MoadianCard() {
     if (!invoiceId) return;
     const inv = invoices.find((i) => i.id === invoiceId);
     if (inv) {
-      const pre = runMoadianPreFlightValidation(inv);
+      const pre = runMoadianPreFlightValidation(inv, { defaultSstid: status?.defaultSstid });
       if (!pre.valid) {
         setPreFlightErrors(pre.errors);
         setError("خطاهای اعتبارسنجی پیش از ارسال مودیان وجود دارد؛ لطفاً اطلاعات صورتحساب را اصلاح کنید.");

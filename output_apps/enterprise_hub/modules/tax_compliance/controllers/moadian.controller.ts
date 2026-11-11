@@ -29,6 +29,7 @@ import {
   MoadianInboxAgeQueryDto,
   MoadianInboxAgeReportDto,
 } from '../dto/moadian-compliance.dto';
+import { MoadianPreFlightResult } from '../utils/moadian-preflight.validator';
 import { MoadianService } from '../services/moadian.service';
 import { MoadianCompliancePolicyService } from '../services/moadian-compliance-policy.service';
 
@@ -54,8 +55,30 @@ export class MoadianController {
     summary: 'وضعیت پرچم اتصال زنده و ثبت‌بودن اطلاعات اتصال',
     description: 'حتی وقتی MOADIAN_ENABLED خاموش است پاسخ می‌دهد.',
   })
-  async getStatus(@Req() request: AuthenticatedRequest): Promise<{ enabled: boolean; configured: boolean }> {
+  async getStatus(@Req() request: AuthenticatedRequest): Promise<{ enabled: boolean; configured: boolean; defaultSstid: string | null }> {
     return this.moadianService.getStatus(this.tenantIdOf(request));
+  }
+
+  @RequireAction(AccessAction.READ)
+  @Post('invoices/:invoiceId/pre-flight')
+  @ApiOperation({ summary: 'اعتبارسنجی پیش از ارسال صورتحساب به سامانه مودیان' })
+  @ApiResponse({ status: HttpStatus.OK })
+  async preFlight(
+    @Param('invoiceId', new ParseUUIDPipe()) invoiceId: string,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<MoadianPreFlightResult> {
+    return this.moadianService.preFlightValidate(this.tenantIdOf(request), invoiceId);
+  }
+
+  @RequireAction(AccessAction.READ)
+  @Get('invoices/:invoiceId/pre-flight')
+  @ApiOperation({ summary: 'اعتبارسنجی پیش از ارسال صورتحساب به سامانه مودیان (GET)' })
+  @ApiResponse({ status: HttpStatus.OK })
+  async preFlightGet(
+    @Param('invoiceId', new ParseUUIDPipe()) invoiceId: string,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<MoadianPreFlightResult> {
+    return this.moadianService.preFlightValidate(this.tenantIdOf(request), invoiceId);
   }
 
   @RequireAction(AccessAction.ADMIN)
