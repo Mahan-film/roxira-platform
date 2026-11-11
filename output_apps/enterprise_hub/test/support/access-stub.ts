@@ -2,6 +2,8 @@ import { AccessContext } from '../../modules/access/access-context';
 import { SELLABLE_MODULES, systemRolePermissions } from '../../modules/access/catalogue';
 import { AccessService } from '../../modules/access/services/access.service';
 import { AuditService } from '../../modules/access/services/audit.service';
+import { CostMaskingService } from '../../modules/access/services/cost-masking.service';
+import { LoginWindowService } from '../../modules/access/services/login-window.service';
 
 /**
  * Test double for the database-backed AccessService: membership is whatever the
@@ -55,6 +57,14 @@ export function accessTestProviders(stub: AccessStub = new AccessStub()) {
     providers: [
       { provide: AccessService, useValue: stub },
       { provide: AuditService, useValue: { record: jest.fn(async () => undefined) } },
+      { provide: CostMaskingService, useValue: new CostMaskingService() },
+      {
+        provide: LoginWindowService,
+        useValue: {
+          assertAllowed: jest.fn(async () => undefined),
+          checkLoginWindow: jest.fn(() => ({ allowed: true })),
+        },
+      },
     ],
   };
 }

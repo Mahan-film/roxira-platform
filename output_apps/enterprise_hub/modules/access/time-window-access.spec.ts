@@ -8,9 +8,15 @@ import { LoginSchedulesRepository } from './repositories/login-schedules.reposit
 
 describe('Access by Time Window (#230 / T76)', () => {
   let service: LoginWindowService;
+  let mockRepo: Partial<LoginSchedulesRepository>;
 
   beforeEach(() => {
-    service = new LoginWindowService();
+    mockRepo = {
+      findByTenantUser: jest.fn(),
+      saveSchedule: jest.fn(),
+      removeSchedule: jest.fn(),
+    };
+    service = new LoginWindowService(mockRepo as LoginSchedulesRepository);
   });
 
   it('allows access when no schedule is configured or enforceSchedule is false', () => {
@@ -191,6 +197,46 @@ describe('Access by Time Window (#230 / T76)', () => {
 
       await expect(guard.canActivate(mockContext)).rejects.toThrow(ForbiddenException);
       expect(mockLoginWindow.assertAllowed).toHaveBeenCalledWith('tenant-1', 'user-1');
+    });
+  });
+
+  describe('DTO Validation for Login Schedules', () => {
+    it('validates IANA timezone and rejects invalid timezone strings', async () => {
+      const { validate } = await import('class-validator');
+      const { plainToInstance } = await import('class-transformer');
+      const { SetLoginScheduleDto } = await import('./dto/login-schedule.dto');
+
+      const badDto = plainToInstance(SetLoginScheduleDto, {
+        timezone: 'Invalid/Non_Existent_Zone',
+        enforceSchedule: true,
+        windows: [{ dayOfWeek: 1, startMinute: 480, endMinute: 960 }],
+      });
+      const errors = await validate(badDto);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors.some((e) => e.property === 'timezone')).toBe(true);
+
+      const goodDto = plainToInstance(SetLoginScheduleDto, {
+        timezone: 'Asia/Tehran',
+        enforceSchedule: true,
+        windows: [{ dayOfWeek: 1, startMinute: 480, endMinute: 960 }],
+      });
+      const goodErrors = await validate(goodDto);
+      expect(goodErrors.length).toBe(0);
+    });
+
+    it('rejects windows where startMinute equals endMinute', async () => {
+      const { validate } = await import('class-validator');
+      const { plainToInstance } = await import('class-transformer');
+      const { LoginTimeWindowDto } = await import('./dto/login-schedule.dto');
+
+      const equalWindow = plainToInstance(LoginTimeWindowDto, {
+        dayOfWeek: 2,
+        startMinute: 500,
+        endMinute: 500,
+      });
+      const errors = await validate(equalWindow);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors.some((e) => e.property === 'endMinute')).toBe(true);
     });
   });
 });

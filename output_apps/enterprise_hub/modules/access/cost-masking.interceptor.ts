@@ -1,4 +1,4 @@
-import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
+import { CallHandler, ExecutionContext, Injectable, NestInterceptor, Optional } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { AccessRequest } from './access-context';
@@ -10,7 +10,11 @@ import { CostMaskingService } from './services/cost-masking.service';
  */
 @Injectable()
 export class CostMaskingInterceptor implements NestInterceptor {
-  constructor(private readonly costMasking: CostMaskingService) {}
+  private readonly costMasking: CostMaskingService;
+
+  constructor(@Optional() costMasking?: CostMaskingService) {
+    this.costMasking = costMasking ?? new CostMaskingService();
+  }
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest<AccessRequest>();

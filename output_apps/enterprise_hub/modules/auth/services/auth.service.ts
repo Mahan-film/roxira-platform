@@ -129,8 +129,7 @@ export class AuthService {
     private readonly audit: AuditService,
     private readonly mail: MailService,
     private readonly sessions: SessionsService,
-    @Optional()
-    private readonly loginWindow?: LoginWindowService,
+    private readonly loginWindow: LoginWindowService,
   ) {}
 
   /**
@@ -441,7 +440,7 @@ export class AuthService {
 
   private async finishLogin(user: UserEntity, ctx: LoginContext, mfa: boolean): Promise<AuthSessionDto> {
     const tenantId = await this.pickTenant(user, ctx.tenantId);
-    if (tenantId && this.loginWindow) {
+    if (tenantId) {
       await this.loginWindow.assertAllowed(tenantId, user.id);
     }
     const deviceHash = sha256(ctx.userAgent ?? 'unknown');
@@ -518,7 +517,7 @@ export class AuthService {
       throw new UnauthorizedException(REFRESH_INVALID_ERROR);
     }
     const tenantId = await this.pickTenant(user, meta.tenantId);
-    if (tenantId && this.loginWindow) {
+    if (tenantId) {
       await this.loginWindow.assertAllowed(tenantId, user.id);
     }
     return this.issueSessionForUser(user, {

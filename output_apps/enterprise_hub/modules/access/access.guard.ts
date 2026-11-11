@@ -49,8 +49,7 @@ export class AccessGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly access: AccessService,
-    @Optional()
-    private readonly loginWindow?: LoginWindowService,
+    private readonly loginWindow: LoginWindowService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -96,9 +95,7 @@ export class AccessGuard implements CanActivate {
       throw denied('NOT_A_MEMBER', 'You are not an active member of this organisation.');
     }
 
-    if (this.loginWindow) {
-      await this.loginWindow.assertAllowed(ctx.tenantId, ctx.userId);
-    }
+    await this.loginWindow.assertAllowed(ctx.tenantId, ctx.userId);
 
     if (module && !anyMember) {
       const handler = context.getHandler();

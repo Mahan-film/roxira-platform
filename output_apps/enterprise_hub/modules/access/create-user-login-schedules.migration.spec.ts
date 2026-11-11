@@ -1,8 +1,8 @@
 import { QueryRunner } from 'typeorm';
-import { CreateUserLoginSchedules1789900002300 } from '../../migrations/1789900002300-CreateUserLoginSchedules';
+import { CreateUserLoginSchedules1789900002500 } from '../../migrations/1789900002500-CreateUserLoginSchedules';
 import { TENANT_MATCH } from '../../migrations/data/tenant-rls';
 
-describe('CreateUserLoginSchedules1789900002300', () => {
+describe('CreateUserLoginSchedules1789900002500', () => {
   it('up() creates table with tenant_id, user_id and enables FORCE RLS', async () => {
     const queries: string[] = [];
     const runner = {
@@ -11,7 +11,7 @@ describe('CreateUserLoginSchedules1789900002300', () => {
       }),
     } as unknown as QueryRunner;
 
-    const migration = new CreateUserLoginSchedules1789900002300();
+    const migration = new CreateUserLoginSchedules1789900002500();
     await migration.up(runner);
 
     const createTable = queries.find((q) => q.includes('CREATE TABLE IF NOT EXISTS "user_login_schedules"'));
@@ -37,7 +37,7 @@ describe('CreateUserLoginSchedules1789900002300', () => {
       }),
     } as unknown as QueryRunner;
 
-    const migration = new CreateUserLoginSchedules1789900002300();
+    const migration = new CreateUserLoginSchedules1789900002500();
     await migration.down(runner);
 
     expect(queries).toContain('DROP POLICY IF EXISTS "user_login_schedules_tenant" ON "user_login_schedules"');

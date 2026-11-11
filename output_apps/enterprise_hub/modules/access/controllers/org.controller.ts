@@ -1,5 +1,6 @@
 import {
-  Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req,
+  BadRequestException,
+  Body, Controller, Delete, Get, HttpCode, HttpStatus, NotFoundException, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AccessRequest, requireAccess } from '../access-context';
@@ -145,6 +146,23 @@ export class OrgController {
     @Body() dto: SetLoginScheduleDto,
   ) {
     const ctx = requireAccess(req);
+    const members = await this.members.list(ctx);
+    const targetMember = members.find((m) => m.userId === userId);
+    if (!targetMember) {
+      throw new NotFoundException('عضو مورد نظر در این سازمان یافت نشد.');
+    }
+
+    if (dto.enforceSchedule) {
+      const isCaller = userId === ctx.userId;
+      const isOwner = targetMember.roleKey === 'owner';
+      if (isCaller || isOwner) {
+        const check = this.loginWindow.checkLoginWindow(dto, new Date());
+        if (!check.allowed) {
+          throw new BadRequestException('امکان تنظیم برنامه‌ای که دسترسی مدیر/مالک یا خود شما را در زمان فعلی مسدود کند وجود ندارد.');
+        }
+      }
+    }
+
     return this.loginWindow.saveSchedule(ctx.tenantId, userId, dto);
   }
 

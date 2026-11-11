@@ -16,8 +16,6 @@ export const COST_SENSITIVE_FIELD_NAMES: ReadonlySet<string> = new Set([
   'total_cost',
   'cogs',
   'valuation',
-  'unitPrice',
-  'unit_price',
   'lineCost',
   'line_cost',
   'purchaseCost',
@@ -58,7 +56,7 @@ export class CostMaskingService {
   /**
    * Recursively scrubs sensitive purchase cost and price fields from API response payloads.
    * If canViewCost is false, sensitive fields are set to null.
-   * Preserves Date, Buffer, BigInt, and primitive values without corruption.
+   * Preserves Date, Buffer, BigInt, Streams, Maps, Sets, and non-plain object instances without corruption.
    */
   maskCostFields<T>(payload: T, canViewCost: boolean): T {
     if (canViewCost || payload === null || payload === undefined) {
@@ -70,16 +68,21 @@ export class CostMaskingService {
       return payload;
     }
 
-    // Preserve Date and Buffer instances without converting to {}
-    if (
-      payload instanceof Date ||
-      (typeof Buffer !== 'undefined' && Buffer.isBuffer(payload))
-    ) {
-      return payload;
-    }
-
     if (Array.isArray(payload)) {
       return payload.map((item) => this.maskCostFields(item, canViewCost)) as unknown as T;
+    }
+
+    // Preserve special types, streams, maps, sets, buffers, dates, and class instances without converting to {}
+    if (
+      payload instanceof Date ||
+      (typeof Buffer !== 'undefined' && Buffer.isBuffer(payload)) ||
+      payload instanceof Map ||
+      payload instanceof Set ||
+      payload instanceof Uint8Array ||
+      typeof (payload as any).pipe === 'function' ||
+      (payload.constructor && payload.constructor.name !== 'Object')
+    ) {
+      return payload;
     }
 
     // Plain object

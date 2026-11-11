@@ -11,7 +11,7 @@ export interface UserLoginSchedule {
   /** Timezone name e.g. 'Asia/Tehran' or 'UTC' */
   timezone?: string;
   /** If true, login outside windows is strictly forbidden */
-  enforceSchedule: boolean;
+  enforceSchedule?: boolean;
   /** Array of permitted time windows throughout the week */
   windows: LoginTimeWindow[];
 }
@@ -24,8 +24,7 @@ export interface LoginWindowCheckResult {
 @Injectable()
 export class LoginWindowService {
   constructor(
-    @Optional()
-    private readonly repository?: LoginSchedulesRepository,
+    private readonly repository: LoginSchedulesRepository,
   ) {}
 
   /**
@@ -148,9 +147,6 @@ export class LoginWindowService {
    * Validates schedule in database for (tenantId, userId) and asserts access.
    */
   async assertAllowed(tenantId: string, userId: string, at: Date = new Date()): Promise<void> {
-    if (!this.repository) {
-      return;
-    }
     const schedule = await this.repository.findByTenantUser(tenantId, userId);
     if (schedule && schedule.enforceSchedule) {
       this.assertLoginWindow(schedule, at);
@@ -159,7 +155,6 @@ export class LoginWindowService {
 
   /** Find stored schedule for user. */
   async findByTenantUser(tenantId: string, userId: string): Promise<UserLoginScheduleEntity | null> {
-    if (!this.repository) return null;
     return this.repository.findByTenantUser(tenantId, userId);
   }
 
@@ -169,9 +164,6 @@ export class LoginWindowService {
     userId: string,
     dto: SetLoginScheduleDto,
   ): Promise<UserLoginScheduleEntity> {
-    if (!this.repository) {
-      throw new Error('LoginSchedulesRepository is not available');
-    }
     return this.repository.saveSchedule(tenantId, userId, dto);
   }
 }
