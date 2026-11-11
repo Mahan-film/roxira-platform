@@ -248,7 +248,7 @@ export interface ConsolidatedTenantSummary {
 export interface ConsolidatedAccountRow {
   accountCode: string;
   accountName: string;
-  companyAmounts: Record<string, { debit: number; credit: number; balance: number }>;
+  companyAmounts: Record<string, { debit: Money; credit: Money; balance: Money }>;
   totalDebit: Money;
   totalCredit: Money;
   netBalance: Money;

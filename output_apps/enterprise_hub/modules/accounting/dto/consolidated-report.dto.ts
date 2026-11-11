@@ -1,22 +1,31 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, Matches } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { ArrayMaxSize, IsArray, IsIn, IsOptional, IsUUID, Matches } from 'class-validator';
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
 export class ConsolidatedReportQueryDto {
   @ApiPropertyOptional({
-    description: 'شناسه‌های سازمان‌ها به صورت جداشده با ویرگول (اختیاری؛ پیش‌فرض: تمام سازمان‌های مجاز کاربر)',
+    description: 'شناسه‌های سازمان‌ها (حداکثر ۲۰ مورد به صورت آرایه یا کاما-جداشده)',
     example: '11111111-1111-4111-8111-111111111111,22222222-2222-4222-8222-222222222222',
+    type: [String],
   })
   @IsOptional()
-  @IsString()
-  tenantIds?: string;
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      return value.split(',').map((s: string) => s.trim()).filter(Boolean);
+    }
+    return Array.isArray(value) ? value : value;
+  })
+  @IsArray()
+  @IsUUID('4', { each: true, message: 'هر شناسه سازمان باید یک UUIDv4 معتبر باشد.' })
+  @ArrayMaxSize(20, { message: 'حداکثر ۲۰ سازمان می‌تواند همزمان انتخاب شود.' })
+  tenantIds?: string[];
 
-  @ApiPropertyOptional({ enum: ['trial-balance', 'income-statement'], default: 'trial-balance' })
+  @ApiPropertyOptional({ enum: ['trial-balance'], default: 'trial-balance' })
   @IsOptional()
-  @IsIn(['trial-balance', 'income-statement'])
-  reportType?: 'trial-balance' | 'income-statement';
+  @IsIn(['trial-balance'])
+  reportType?: 'trial-balance';
 
   @ApiPropertyOptional({ enum: [2, 4, 6, 8, 10], default: 4 })
   @IsOptional()

@@ -146,10 +146,7 @@ export class ReportsController {
     @Req() request: AuthenticatedRequest,
     @Query() query: ConsolidatedReportQueryDto,
   ) {
-    const userId = request.user?.sub;
-    if (!userId) {
-      throw new UnauthorizedException('شناسه کاربر یافت نشد.');
-    }
+    const userId = request.user?.sub ?? '';
     return moneyJson(await this.consolidatedService.getConsolidatedReport(userId, query));
   }
 }

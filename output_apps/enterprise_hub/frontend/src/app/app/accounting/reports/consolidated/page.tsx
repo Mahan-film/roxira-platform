@@ -34,9 +34,11 @@ export default function ConsolidatedReportPage() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchReport = (date?: string) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const chosenDate = date || asOfDate || today;
     setLoading(true);
     setError(null);
-    getConsolidatedReport({ asOfDate: date || undefined })
+    getConsolidatedReport({ asOfDate: chosenDate })
       .then((res) => {
         setReport(res);
         if (res.asOfDate && !asOfDate) {
@@ -204,14 +206,17 @@ export default function ConsolidatedReportPage() {
                           {report.participatingTenants.map((t) => {
                             const co = row.companyAmounts[t.tenantId];
                             const balance = co ? co.balance : 0;
+                            const isPositive = typeof balance === "number" ? balance > 0 : !String(balance).startsWith("-") && String(balance) !== "0" && String(balance) !== "0.00";
+                            const isNegative = typeof balance === "number" ? balance < 0 : String(balance).startsWith("-");
+                            const isNonZero = typeof balance === "number" ? balance !== 0 : balance !== "0" && balance !== "0.00";
                             return (
                               <TableCell
                                 key={t.tenantId}
                                 className={`text-left font-mono text-xs ${
-                                  balance > 0 ? "text-blue-600" : balance < 0 ? "text-amber-600" : "text-muted-foreground"
+                                  isPositive ? "text-blue-600" : isNegative ? "text-amber-600" : "text-muted-foreground"
                                 }`}
                               >
-                                {balance !== 0 ? formatMoneyRial(balance) : "-"}
+                                {isNonZero ? formatMoneyRial(balance) : "-"}
                               </TableCell>
                             );
                           })}
@@ -223,9 +228,9 @@ export default function ConsolidatedReportPage() {
                           </TableCell>
                           <TableCell
                             className={`text-left font-mono font-semibold ${
-                              Number(row.netBalance) > 0
+                              (typeof row.netBalance === "number" ? row.netBalance > 0 : !String(row.netBalance).startsWith("-") && String(row.netBalance) !== "0" && String(row.netBalance) !== "0.00")
                                 ? "text-blue-700"
-                                : Number(row.netBalance) < 0
+                                : (typeof row.netBalance === "number" ? row.netBalance < 0 : String(row.netBalance).startsWith("-"))
                                   ? "text-amber-700"
                                   : ""
                             }`}

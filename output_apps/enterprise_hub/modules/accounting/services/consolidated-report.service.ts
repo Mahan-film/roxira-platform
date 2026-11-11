@@ -1,8 +1,10 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConsolidatedReportQueryDto } from '../dto/consolidated-report.dto';
 import { FinancialReportsService, TrialBalanceReport } from './financial-reports.service';
 import { fromMinor } from '../money';
+import { MembershipsRepository } from '../../access/repositories/memberships.repository';
+import { AccessService } from '../../access/services/access.service';
+import { TenantScope } from '../../access/services/tenant-scope';
 
 export interface CompanyInfo {
   tenantId: string;
@@ -47,15 +49,15 @@ export interface ConsolidatedTrialBalanceRow {
   companyAmounts: Record<
     string,
     {
-      debit: number;
-      credit: number;
-      balance: number;
+      debit: number | string;
+      credit: number | string;
+      balance: number | string;
     }
   >;
 }
 
 export interface ConsolidatedReportResult {
-  reportType: 'trial-balance' | 'income-statement';
+  reportType: 'trial-balance';
   companies: CompanyInfo[];
   participatingTenants: ConsolidatedTenantSummary[];
   columns: number;
@@ -80,7 +82,9 @@ export interface ConsolidatedReportResult {
 @Injectable()
 export class ConsolidatedReportService {
   constructor(
-    private readonly dataSource: DataSource,
+    private readonly membershipsRepo: MembershipsRepository,
+    private readonly accessService: AccessService,
+    private readonly tenantScope: TenantScope,
     private readonly financialReports: FinancialReportsService,
   ) {}
 
@@ -88,39 +92,58 @@ export class ConsolidatedReportService {
     userId: string,
     query: ConsolidatedReportQueryDto,
   ): Promise<ConsolidatedReportResult> {
-    // 1. Resolve user's active tenant memberships
-    const memberships = (await this.dataSource.query(
-      `SELECT m."tenant_id", COALESCE(t."name", m."tenant_id"::text) AS tenant_name
-       FROM "tenant_memberships" m
-       LEFT JOIN "tenants" t ON t."id" = m."tenant_id"
-       WHERE m."user_id" = $1 AND m."status" = 'ACTIVE'`,
-      [userId],
-    )) as Array<{ tenant_id: string; tenant_name: string }>;
-
-    if (!memberships || memberships.length === 0) {
-      throw new NotFoundException('هیچ سازمان فعالی برای این کاربر یافت نشد.');
+    // 1. Resolve dates and validate range
+    const resolvedTo = query.to ?? query.asOfDate;
+    if (!resolvedTo) {
+      throw new BadRequestException('تعیین تاریخ مبنای گزارش (to یا asOfDate) الزامی است.');
+    }
+    const resolvedFrom = query.from;
+    if (resolvedFrom && resolvedFrom > resolvedTo) {
+      throw new BadRequestException('تاریخ شروع (from) نمی‌تواند بعد از تاریخ پایان (to) باشد.');
     }
 
-    const membershipMap = new Map(memberships.map((m) => [m.tenant_id, m.tenant_name]));
+    // 2. Resolve user's active tenant memberships securely
+    const allMemberships = await this.membershipsRepo.listForUser(userId);
+    if (!allMemberships || allMemberships.length === 0) {
+      throw new NotFoundException('هیچ سازمانی برای این کاربر یافت نشد.');
+    }
 
-    // 2. Filter requested tenant IDs if specified
+    const activeMemberships = allMemberships.filter((m) => m.status === 'ACTIVE');
+    const membershipMap = new Map(activeMemberships.map((m) => [m.tenantId, m.tenantName]));
+
+    // 3. Determine target tenants and enforce accounting:read permission per tenant
     let targetTenantIds: string[] = [];
-    if (query.tenantIds) {
-      const requested = query.tenantIds
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
 
-      for (const id of requested) {
+    if (query.tenantIds && query.tenantIds.length > 0) {
+      for (const id of query.tenantIds) {
         if (!membershipMap.has(id)) {
           throw new ForbiddenException(
             `دسترسی به اطلاعات سازمان با شناسه ${id} برای کاربر مجاز نیست.`,
           );
         }
+        const access = await this.accessService.resolve(userId, id);
+        if (!access || !access.permissions.has('accounting:read')) {
+          throw new ForbiddenException(
+            `کاربر فاقد مجوز دسترسی به دفاتر مالی (accounting:read) در سازمان ${membershipMap.get(id) ?? id} است.`,
+          );
+        }
       }
-      targetTenantIds = requested;
+      targetTenantIds = query.tenantIds;
     } else {
-      targetTenantIds = memberships.map((m) => m.tenant_id);
+      if (activeMemberships.length === 0) {
+        throw new NotFoundException('هیچ سازمان فعالی برای این کاربر یافت نشد.');
+      }
+      for (const m of activeMemberships) {
+        const access = await this.accessService.resolve(userId, m.tenantId);
+        if (access && access.permissions.has('accounting:read')) {
+          targetTenantIds.push(m.tenantId);
+        }
+      }
+      if (targetTenantIds.length === 0) {
+        throw new ForbiddenException(
+          'کاربر در هیچ‌یک از سازمان‌های عضو، مجوز مشاهده دفاتر مالی (accounting:read) ندارد.',
+        );
+      }
     }
 
     const companies: CompanyInfo[] = targetTenantIds.map((id) => ({
@@ -128,22 +151,20 @@ export class ConsolidatedReportService {
       name: membershipMap.get(id) ?? id,
     }));
 
-    // 3. Resolve dates
-    const resolvedTo = query.to ?? query.asOfDate ?? new Date().toISOString().slice(0, 10);
-    const resolvedFrom = query.from;
-
-    // 4. Query trial balance for each tenant
+    // 4. Query trial balance for each tenant within TenantScope (enforces RLS per LESSONS 6)
     const companyReports: Array<{ tenantId: string; report: TrialBalanceReport }> = [];
     for (const tenantId of targetTenantIds) {
-      const rep = await this.financialReports.trialBalance(tenantId, {
-        columns: query.columns ?? 4,
-        from: resolvedFrom,
-        to: resolvedTo,
+      const rep = await this.tenantScope.within(tenantId, undefined, async () => {
+        return this.financialReports.trialBalance(tenantId, {
+          columns: query.columns ?? 4,
+          from: resolvedFrom,
+          to: resolvedTo,
+        });
       });
       companyReports.push({ tenantId, report: rep });
     }
 
-    // 5. Consolidate rows across companies
+    // 5. Consolidate rows across companies using exact BigInt minor units
     interface AggRow {
       code: string;
       name: string;
@@ -170,9 +191,9 @@ export class ConsolidatedReportService {
       companyAmounts: Record<
         string,
         {
-          debit: number;
-          credit: number;
-          balance: number;
+          debit: number | string;
+          credit: number | string;
+          balance: number | string;
         }
       >;
     }
@@ -214,25 +235,29 @@ export class ConsolidatedReportService {
         agg.endingDebitMinor += row.endingDebit;
         agg.endingCreditMinor += row.endingCredit;
 
+        const periodDeb = fromMinor(row.periodDebit);
+        const periodCred = fromMinor(row.periodCredit);
+        const endDeb = fromMinor(row.endingDebit);
+        const endCred = fromMinor(row.endingCredit);
+        const netBalMinor = row.endingDebit - row.endingCredit;
+        const netBal = fromMinor(netBalMinor);
+
         agg.companyBreakdown[tenantId] = {
-          periodDebit: fromMinor(row.periodDebit),
-          periodCredit: fromMinor(row.periodCredit),
-          endingDebit: fromMinor(row.endingDebit),
-          endingCredit: fromMinor(row.endingCredit),
+          periodDebit: periodDeb,
+          periodCredit: periodCred,
+          endingDebit: endDeb,
+          endingCredit: endCred,
         };
 
-        const debNum = Number(fromMinor(row.periodDebit)) || 0;
-        const credNum = Number(fromMinor(row.periodCredit)) || 0;
-        const balNum = Number(fromMinor(row.endingDebit)) - Number(fromMinor(row.endingCredit));
         agg.companyAmounts[tenantId] = {
-          debit: debNum,
-          credit: credNum,
-          balance: balNum,
+          debit: periodDeb,
+          credit: periodCred,
+          balance: netBal,
         };
       }
     }
 
-    // Sort rows by code
+    // Sort rows by account code
     const sorted = Array.from(rowMap.values()).sort((a, b) => a.code.localeCompare(b.code));
 
     let totOpeningDebit = 0n;
@@ -297,7 +322,7 @@ export class ConsolidatedReportService {
     });
 
     return {
-      reportType: query.reportType ?? 'trial-balance',
+      reportType: 'trial-balance',
       companies,
       participatingTenants,
       columns: query.columns ?? 4,
