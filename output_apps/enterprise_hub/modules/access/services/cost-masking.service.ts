@@ -10,6 +10,23 @@ import { effectiveFieldVisibility } from '../policy-evaluator';
 export const COST_SENSITIVE_FIELD_REGEX =
   /^(?!.*cost_?cent[er]).*(cost|purchase.?price|buy.?price|cogs|valuation|gross.?profit)/i;
 
+/**
+ * Fields that represent sensitive purchase pricing specifically within purchasing and vendor supplier contexts.
+ * On customer-facing sales/invoicing routes, unitPrice is a selling price and is not masked;
+ * on purchasing routes, unitPrice, orderUnitPrice, and priceDifference are purchase costs and must be masked (T76).
+ */
+export const PURCHASING_COST_FIELD_REGEX =
+  /^(unit_?price|order_?unit_?price|price_?difference|unit_?cost|buy_?price|purchase_?price)$/i;
+
+/**
+ * Detects whether a request pathname targets purchasing, supplier invoices, or procurement workflows.
+ */
+export function isPurchasingPath(pathname: string): boolean {
+  if (!pathname) return false;
+  const clean = pathname.split('?')[0].split('#')[0].replace(/^\/v\d+/, '');
+  return /\/(purchas|supplier-invoice|vendor)/i.test(clean);
+}
+
 @Injectable()
 export class CostMaskingService {
   /**
@@ -39,12 +56,19 @@ export class CostMaskingService {
   /**
    * Checks if a field name represents a sensitive purchase cost or valuation.
    * Explicitly avoids masking cost centre dimension keys (e.g. costCenter, costCentre, costCenterId).
+   * When isPurchasingRoute is true, also matches purchase-specific fields like unitPrice, orderUnitPrice, and priceDifference.
    */
-  isCostField(key: string): boolean {
+  isCostField(key: string, isPurchasingRoute = false): boolean {
     if (/^(cost_?cent(er|re)(_?(id|code|name|title))?)$/i.test(key)) {
       return false;
     }
-    return COST_SENSITIVE_FIELD_REGEX.test(key);
+    if (COST_SENSITIVE_FIELD_REGEX.test(key)) {
+      return true;
+    }
+    if (isPurchasingRoute && PURCHASING_COST_FIELD_REGEX.test(key)) {
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -54,7 +78,12 @@ export class CostMaskingService {
    * scans nested arrays, Sets, and Maps, and preserves Date, Buffer, BigInt, Streams,
    * ArrayBuffer, and TypedArrays without corruption.
    */
-  maskCostFields<T>(payload: T, canViewCost: boolean, visited = new Map<object, any>()): T {
+  maskCostFields<T>(
+    payload: T,
+    canViewCost: boolean,
+    visited = new Map<object, any>(),
+    isPurchasingRoute = false,
+  ): T {
     if (canViewCost || payload === null || payload === undefined) {
       return payload;
     }
@@ -85,7 +114,7 @@ export class CostMaskingService {
       const sanitizedArr: any[] = [];
       visited.set(payload, sanitizedArr);
       for (const item of payload) {
-        sanitizedArr.push(this.maskCostFields(item, canViewCost, visited));
+        sanitizedArr.push(this.maskCostFields(item, canViewCost, visited, isPurchasingRoute));
       }
       return sanitizedArr as unknown as T;
     }
@@ -95,7 +124,7 @@ export class CostMaskingService {
       const sanitizedSet = new Set();
       visited.set(payload, sanitizedSet);
       for (const item of payload) {
-        sanitizedSet.add(this.maskCostFields(item, canViewCost, visited));
+        sanitizedSet.add(this.maskCostFields(item, canViewCost, visited, isPurchasingRoute));
       }
       return sanitizedSet as unknown as T;
     }
@@ -105,8 +134,11 @@ export class CostMaskingService {
       const sanitizedMap = new Map();
       visited.set(payload, sanitizedMap);
       for (const [k, v] of payload.entries()) {
-        const isKeyCost = typeof k === 'string' && this.isCostField(k);
-        sanitizedMap.set(k, isKeyCost ? null : this.maskCostFields(v, canViewCost, visited));
+        const isKeyCost = typeof k === 'string' && this.isCostField(k, isPurchasingRoute);
+        sanitizedMap.set(
+          k,
+          isKeyCost ? null : this.maskCostFields(v, canViewCost, visited, isPurchasingRoute),
+        );
       }
       return sanitizedMap as unknown as T;
     }
@@ -117,10 +149,10 @@ export class CostMaskingService {
       proto && proto !== Object.prototype ? Object.create(proto) : {};
     visited.set(payload, sanitized);
     for (const [key, value] of Object.entries(payload)) {
-      if (this.isCostField(key)) {
+      if (this.isCostField(key, isPurchasingRoute)) {
         sanitized[key] = null;
       } else if (typeof value === 'object' && value !== null) {
-        sanitized[key] = this.maskCostFields(value, canViewCost, visited);
+        sanitized[key] = this.maskCostFields(value, canViewCost, visited, isPurchasingRoute);
       } else {
         sanitized[key] = value;
       }

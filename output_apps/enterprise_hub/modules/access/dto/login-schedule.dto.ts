@@ -81,6 +81,11 @@ export class SetLoginScheduleDto {
 
   @ApiPropertyOptional({ description: 'Whether login schedule is enforced', default: true })
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return value;
+  })
   @IsBoolean()
   enforceSchedule?: boolean;
 

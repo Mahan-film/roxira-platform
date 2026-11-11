@@ -16,6 +16,7 @@ import {
   AccessAction,
   AccessModule,
   SensitiveField,
+  SystemRole,
   requiredFieldForHandler,
 } from './catalogue';
 import {
@@ -97,7 +98,9 @@ export class AccessGuard implements CanActivate {
       throw denied('NOT_A_MEMBER', 'You are not an active member of this organisation.');
     }
 
-    await this.loginWindow.assertAllowed(ctx.tenantId, ctx.userId);
+    if (ctx.roleKey !== SystemRole.OWNER) {
+      await this.loginWindow.assertAllowed(ctx.tenantId, ctx.userId);
+    }
 
     if (module && !anyMember) {
       const handler = context.getHandler();

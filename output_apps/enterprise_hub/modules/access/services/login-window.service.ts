@@ -145,8 +145,18 @@ export class LoginWindowService {
 
   /**
    * Validates schedule in database for (tenantId, userId) and asserts access.
+   * Organization OWNER role is always exempt from login schedule lockouts to ensure
+   * a permanent administrative recovery/break-glass path is guaranteed (#738).
    */
-  async assertAllowed(tenantId: string, userId: string, at: Date = new Date()): Promise<void> {
+  async assertAllowed(
+    tenantId: string,
+    userId: string,
+    at: Date = new Date(),
+    roleKey?: string,
+  ): Promise<void> {
+    if (roleKey === 'owner') {
+      return;
+    }
     const schedule = await this.repository.findByTenantUser(tenantId, userId);
     if (schedule && schedule.enforceSchedule) {
       this.assertLoginWindow(schedule, at);

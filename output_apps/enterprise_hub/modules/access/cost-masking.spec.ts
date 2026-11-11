@@ -87,12 +87,23 @@ describe('Hidden Purchase Price and Cost API Protection (#230 / T76)', () => {
         'costCenterId',
         'accountCode',
         'accountName',
-        'unitPrice',
-        'price',
       ];
       for (const k of nonCostKeys) {
         expect(maskingService.isCostField(k)).toBe(false);
       }
+    });
+
+    it('handles route-aware pricing: unitPrice is selling price on generic routes, but purchase cost on purchasing routes (T76)', () => {
+      // On non-purchasing routes, unitPrice / orderUnitPrice are customer selling prices
+      expect(maskingService.isCostField('unitPrice', false)).toBe(false);
+      expect(maskingService.isCostField('orderUnitPrice', false)).toBe(false);
+      expect(maskingService.isCostField('priceDifference', false)).toBe(false);
+
+      // On purchasing routes, they represent supplier purchase costs and must be masked
+      expect(maskingService.isCostField('unitPrice', true)).toBe(true);
+      expect(maskingService.isCostField('orderUnitPrice', true)).toBe(true);
+      expect(maskingService.isCostField('priceDifference', true)).toBe(true);
+      expect(maskingService.isCostField('unit_price', true)).toBe(true);
     });
   });
 
@@ -392,6 +403,121 @@ describe('Hidden Purchase Price and Cost API Protection (#230 / T76)', () => {
         next: (result: any) => {
           expect(result.name).toBe('Protected Item');
           expect(result.unitPurchaseCost).toBeNull(); // Must be masked despite ?x=/enterprise-hub/accounting in query
+          done();
+        },
+      });
+    });
+
+    it('masks unitPrice, orderUnitPrice, and priceDifference on purchasing routes when accessed by SALES (T76 goal)', (done) => {
+      const interceptor = new CostMaskingInterceptor(maskingService);
+
+      const mockRequest = {
+        originalUrl: '/v1/enterprise-hub/inventory/purchasing/invoices/inv-supplier-1',
+        url: '/v1/enterprise-hub/inventory/purchasing/invoices/inv-supplier-1',
+        user: {
+          sub: 'user-sales-42',
+          tenantRole: SystemRole.SALES,
+        },
+      };
+
+      const mockContext = {
+        switchToHttp: () => ({
+          getRequest: () => mockRequest,
+        }),
+      } as any;
+
+      const supplierInvoice = {
+        invoiceNumber: 'PINV-1403-001',
+        supplierName: 'تأمین‌کننده پایتخت',
+        lines: [
+          {
+            itemId: 'item-44',
+            quantity: 50,
+            unitPrice: 750000,
+            orderUnitPrice: 720000,
+            priceDifference: 30000,
+            unitCost: 750000,
+            lineTotal: 37500000,
+          },
+        ],
+      };
+
+      const mockHandler = {
+        handle: () => of(supplierInvoice),
+      };
+
+      interceptor.intercept(mockContext, mockHandler).subscribe({
+        next: (result: any) => {
+          expect(result.invoiceNumber).toBe('PINV-1403-001');
+          expect(result.lines[0].quantity).toBe(50);
+          // On purchasing routes, unitPrice, orderUnitPrice, and priceDifference must be masked for SALES
+          expect(result.lines[0].unitPrice).toBeNull();
+          expect(result.lines[0].orderUnitPrice).toBeNull();
+          expect(result.lines[0].priceDifference).toBeNull();
+          expect(result.lines[0].unitCost).toBeNull();
+          done();
+        },
+      });
+    });
+
+    it('matches URI-versioned URLs (/v1/enterprise-hub/accounting/...) in exemption list', (done) => {
+      const interceptor = new CostMaskingInterceptor(maskingService);
+
+      const mockRequest = {
+        originalUrl: '/v1/enterprise-hub/accounting/vouchers/99',
+        url: '/v1/enterprise-hub/accounting/vouchers/99',
+        user: {
+          sub: 'user-sales-1',
+          tenantRole: SystemRole.SALES,
+        },
+      };
+
+      const mockContext = {
+        switchToHttp: () => ({
+          getRequest: () => mockRequest,
+        }),
+      } as any;
+
+      const mockHandler = {
+        handle: () => of({ voucherId: 99, cost: 42000 }),
+      };
+
+      interceptor.intercept(mockContext, mockHandler).subscribe({
+        next: (result: any) => {
+          expect(result.cost).toBe(42000); // Unmasked because /v1/enterprise-hub/accounting is exempt
+          done();
+        },
+      });
+    });
+
+    it('fails closed on non-object / stream responses on purchasing routes for roles without cost visibility', (done) => {
+      const interceptor = new CostMaskingInterceptor(maskingService);
+
+      const mockRequest = {
+        originalUrl: '/v1/enterprise-hub/inventory/purchasing/export.csv',
+        url: '/v1/enterprise-hub/inventory/purchasing/export.csv',
+        user: {
+          sub: 'user-sales-1',
+          tenantRole: SystemRole.SALES,
+        },
+      };
+
+      const mockContext = {
+        switchToHttp: () => ({
+          getRequest: () => mockRequest,
+        }),
+      } as any;
+
+      const mockHandler = {
+        handle: () => of('item,unit_price,cost\nROX-1,1000,800'),
+      };
+
+      interceptor.intercept(mockContext, mockHandler).subscribe({
+        next: () => {
+          done(new Error('Should have thrown ForbiddenException on non-object purchasing export'));
+        },
+        error: (err: any) => {
+          expect(err.name).toBe('ForbiddenException');
           done();
         },
       });

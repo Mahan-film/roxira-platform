@@ -157,9 +157,16 @@ export class OrgController {
     const existing = await this.loginWindow.findByTenantUser(ctx.tenantId, userId);
     const effectiveEnforce = dto.enforceSchedule ?? existing?.enforceSchedule ?? true;
     if (effectiveEnforce) {
+      // Administrative break-glass protection: Organization owner can never be subjected
+      // to restrictive login schedules to guarantee emergency recovery (#738).
+      if (targetMember.roleKey === SystemRole.OWNER) {
+        throw new BadRequestException(
+          'امکان محدودسازی ساعات ورود برای مالک سازمان وجود ندارد (مسیر بازیابی اضطراری).',
+        );
+      }
+
       const isCaller = userId === ctx.userId;
-      const isOwner = targetMember.roleKey === SystemRole.OWNER;
-      if (isCaller || isOwner) {
+      if (isCaller) {
         const check = this.loginWindow.checkLoginWindow(
           {
             timezone: dto.timezone ?? existing?.timezone ?? 'Asia/Tehran',
@@ -169,7 +176,7 @@ export class OrgController {
           new Date(),
         );
         if (!check.allowed) {
-          throw new BadRequestException('امکان تنظیم برنامه‌ای که دسترسی مدیر/مالک یا خود شما را در زمان فعلی مسدود کند وجود ندارد.');
+          throw new BadRequestException('امکان تنظیم برنامه‌ای که دسترسی شما را در زمان فعلی مسدود کند وجود ندارد.');
         }
       }
     }

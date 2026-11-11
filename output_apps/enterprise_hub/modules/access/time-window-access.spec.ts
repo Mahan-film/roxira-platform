@@ -5,6 +5,7 @@ import { AccessGuard } from './access.guard';
 import { AccessService } from './services/access.service';
 import { LoginWindowService, UserLoginSchedule } from './services/login-window.service';
 import { LoginSchedulesRepository } from './repositories/login-schedules.repository';
+import { SystemRole } from './catalogue';
 
 describe('Access by Time Window (#230 / T76)', () => {
   let service: LoginWindowService;
@@ -351,6 +352,55 @@ describe('Access by Time Window (#230 / T76)', () => {
 
       await expect(guard.canActivate(mockContext)).rejects.toThrow(ForbiddenException);
       expect(mockLoginWindowService.assertAllowed).toHaveBeenCalledWith('tenant-1', 'user-1');
+    });
+
+    it('exempts organization OWNER from login schedule lockout (administrative break-glass recovery path)', async () => {
+      const reflector = new Reflector();
+      const mockAccessService = {
+        isSessionActive: jest.fn().mockResolvedValue(true),
+        resolve: jest.fn().mockResolvedValue({
+          userId: 'user-owner',
+          tenantId: 'tenant-1',
+          membershipId: 'm-owner',
+          roleKey: SystemRole.OWNER,
+          isOwner: true,
+          permissions: new Set(['members:read', 'access:read', 'access:manage']),
+          entitledModules: new Set(['members']),
+          branchId: null,
+          branchScoped: false,
+          require2fa: false,
+        }),
+      };
+      const mockLoginWindowService = {
+        assertAllowed: jest.fn().mockRejectedValue(new ForbiddenException('Never called')),
+      };
+
+      const guard = new AccessGuard(
+        reflector,
+        mockAccessService as any,
+        mockLoginWindowService as any,
+      );
+
+      const mockContext = {
+        getHandler: () => () => {},
+        getClass: () => class AdminController {},
+        switchToHttp: () => ({
+          getRequest: () => ({
+            method: 'GET',
+            url: '/enterprise-hub/access/members',
+            user: { sub: 'user-owner', tenantId: 'tenant-1', sid: 'session-1' },
+          }),
+        }),
+      } as any;
+
+      jest.spyOn(reflector, 'getAllAndOverride').mockImplementation((key) => {
+        if (key === ACCESS_MODULE_KEY) return 'members';
+        return undefined;
+      });
+
+      const allowed = await guard.canActivate(mockContext);
+      expect(allowed).toBe(true);
+      expect(mockLoginWindowService.assertAllowed).not.toHaveBeenCalled();
     });
 
     it('blocks request on @AuthOnly route when user is outside allowed login window', async () => {
