@@ -86,7 +86,7 @@ export const MENU_GROUPS: MenuGroup[] = [
       },
       {
         href: "/app/inventory/production",
-        label: "فرمول ساخت و تولید (BOM)",
+        label: "فرمول ساخت و تولید",
         icon: "Factory",
         module: "inventory",
         keywords: ["bom", "production", "تولید", "فرمول ساخت", "ضایعات"],
@@ -116,6 +116,12 @@ export const MENU_GROUPS: MenuGroup[] = [
         label: "صندوق و تنخواه",
         icon: "Wallet",
         module: "accounting",
+      },
+      {
+        href: "/app/treasury/sms",
+        label: "پیامک‌های بانکی",
+        icon: "MessageSquare",
+        module: "banking",
       },
     ],
   },

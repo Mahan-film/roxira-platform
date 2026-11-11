@@ -134,3 +134,30 @@ export interface CreateTreasuryDocumentDto {
   methods: CreateTreasuryMethodDto[];
   allocations?: CreateTreasuryAllocationDto[];
 }
+
+export interface TreasurySmsDraft {
+  id: string;
+  bank: string;
+  bankNameFa: string;
+  direction: 'deposit' | 'withdraw';
+  docKind: TreasuryDocKind;
+  amount: string;
+  balance?: string | null;
+  accountTail?: string | null;
+  cardTail?: string | null;
+  reference?: string | null;
+  dateTime?: string | null;
+  rawText: string;
+  status: 'draft' | 'confirmed' | 'rejected';
+  matchedDocumentId?: number | null;
+  createdAt: string;
+}
+
+export interface ConfirmTreasurySmsDraftDto {
+  partyCode: string;
+  partyName: string;
+  partyType?: TreasuryPartyType;
+  docDate?: string;
+  bankAccountId?: number;
+  description?: string;
+}
