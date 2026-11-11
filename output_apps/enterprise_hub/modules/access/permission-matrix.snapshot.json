@@ -138,11 +138,11 @@
     "legacy_member": false
   },
   "DELETE /enterprise-hub/sales/price-tiers/:id (PriceTiersController.deletePriceTier)": {
-    "policy": "invoicing:create",
+    "policy": "invoicing:admin",
     "owner": true,
     "admin": true,
-    "accountant": true,
-    "sales": true,
+    "accountant": false,
+    "sales": false,
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
@@ -4157,22 +4157,22 @@
     "policy": "platformAdmin"
   },
   "POST /enterprise-hub/sales/commission-policies (PriceTiersController.setCommissionPolicy)": {
-    "policy": "invoicing:create",
+    "policy": "invoicing:admin",
     "owner": true,
     "admin": true,
-    "accountant": true,
-    "sales": true,
+    "accountant": false,
+    "sales": false,
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/sales/commission/calculate (PriceTiersController.calculateCommission)": {
-    "policy": "invoicing:create",
+    "policy": "invoicing:admin",
     "owner": true,
     "admin": true,
-    "accountant": true,
-    "sales": true,
+    "accountant": false,
+    "sales": false,
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
@@ -4245,11 +4245,11 @@
     "legacy_member": false
   },
   "POST /enterprise-hub/sales/price-tiers (PriceTiersController.createPriceTier)": {
-    "policy": "invoicing:create",
+    "policy": "invoicing:admin",
     "owner": true,
     "admin": true,
-    "accountant": true,
-    "sales": true,
+    "accountant": false,
+    "sales": false,
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,

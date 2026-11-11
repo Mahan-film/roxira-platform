@@ -3,6 +3,7 @@ import { EntityManager } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
 import { CustomerGroup } from '../../parties/enums/customer-group.enum';
 import { PriceTierEntity } from '../entities/price-tier.entity';
+import { getCurrentTehranDate } from '../services/price-tier.service';
 
 export interface PriceTierInput {
   sku: string;
@@ -30,7 +31,7 @@ export class PriceTiersRepository {
         customerGroup: input.customerGroup,
         unitPrice: input.unitPrice,
         discountPercent: input.discountPercent ?? 0,
-        effectiveFrom: input.effectiveFrom ?? new Date().toISOString().slice(0, 10),
+        effectiveFrom: input.effectiveFrom ?? getCurrentTehranDate(),
         effectiveTo: input.effectiveTo ?? null,
       });
       return repo.save(entity);

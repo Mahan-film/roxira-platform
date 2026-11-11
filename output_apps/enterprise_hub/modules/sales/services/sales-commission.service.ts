@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { toMinor, fromMinor } from '../../accounting/money';
 import { CommissionPoliciesRepository } from '../repositories/commission-policies.repository';
 import { SetCommissionPolicyDto } from '../dto/price-tier.dto';
 import { SalesCommissionPolicyEntity } from '../entities/sales-commission-policy.entity';
@@ -36,6 +37,9 @@ export class SalesCommissionService {
    * Half-up rounding is applied to avoid truncation bias.
    */
   calculateCommission(saleAmountMinor: bigint, ratePercent: number): bigint {
+    if (Number.isNaN(ratePercent)) {
+      throw new Error(`Commission rate cannot be NaN`);
+    }
     if (saleAmountMinor <= 0n || ratePercent <= 0) {
       return 0n;
     }

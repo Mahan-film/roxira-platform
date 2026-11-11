@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { toMinor, fromMinor } from '../../accounting/money';
 import { CustomerGroup } from '../../parties/enums/customer-group.enum';
 import { PriceTierEntity } from '../entities/price-tier.entity';
 import { PriceTiersRepository } from '../repositories/price-tiers.repository';
@@ -54,8 +55,12 @@ export class PriceTierService {
       if (match) {
         const unitPriceMinor = BigInt(match.unitPrice);
         const discountPercent = match.discountPercent ?? 0;
+        if (Number.isNaN(discountPercent) || discountPercent < 0 || discountPercent > 100) {
+          throw new Error(`Invalid discount percent: ${discountPercent}`);
+        }
         const discountBps = BigInt(Math.round(discountPercent * 100));
-        const discountAmountMinor = (unitPriceMinor * discountBps) / 10000n;
+        // Half-up rounding for integer division: (numerator + 5000n) / 10000n
+        const discountAmountMinor = (unitPriceMinor * discountBps + 5000n) / 10000n;
         const effectiveUnitPriceMinor = unitPriceMinor - discountAmountMinor;
 
         return {

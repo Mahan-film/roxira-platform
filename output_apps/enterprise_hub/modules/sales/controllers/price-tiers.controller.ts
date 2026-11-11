@@ -12,14 +12,14 @@ import {
   Req,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { AccessModule } from '../../access/catalogue';
-import { ModuleAccess } from '../../access/decorators';
+import { AccessAction, AccessModule } from '../../access/catalogue';
+import { ModuleAccess, RequireAction } from '../../access/decorators';
 import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
 import { requireTenantId } from '../../tenants/tenant-context';
-import { CustomerGroup } from '../../parties/enums/customer-group.enum';
 import {
   CalculateCommissionDto,
   CreatePriceTierDto,
+  ListPriceTiersQueryDto,
   ResolvePriceDto,
   SetCommissionPolicyDto,
 } from '../dto/price-tier.dto';
@@ -29,6 +29,7 @@ import { SalesCommissionService } from '../services/sales-commission.service';
 /**
  * Controller for price tiers per customer group and sales representative commissions (#230 / T74).
  * Gated by INVOICING module access with strict tenant isolation.
+ * Management of price tiers and commission policies requires ADMIN privileges to protect financial controls.
  */
 @ApiTags('Sales - Price Tiers & Commission (سطوح قیمت و پورسانت)')
 @ApiBearerAuth()
@@ -44,16 +45,16 @@ export class PriceTiersController {
   @ApiOperation({ summary: 'فهرست سطوح قیمت کالاها' })
   async listPriceTiers(
     @Req() req: AuthenticatedRequest,
-    @Query('sku') sku?: string,
-    @Query('customerGroup') customerGroup?: CustomerGroup,
+    @Query() query: ListPriceTiersQueryDto,
   ) {
     const tenantId = requireTenantId(req);
-    return this.priceTierService.listTiers(tenantId, sku, customerGroup);
+    return this.priceTierService.listTiers(tenantId, query.sku, query.customerGroup);
   }
 
   @Post('price-tiers')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'تعریف یا به‌روزرسانی سطح قیمت' })
+  @RequireAction(AccessAction.ADMIN)
   async createPriceTier(
     @Req() req: AuthenticatedRequest,
     @Body() dto: CreatePriceTierDto,
@@ -87,6 +88,7 @@ export class PriceTiersController {
 
   @Delete('price-tiers/:id')
   @ApiOperation({ summary: 'حذف سطح قیمت' })
+  @RequireAction(AccessAction.ADMIN)
   async deletePriceTier(
     @Req() req: AuthenticatedRequest,
     @Param('id', ParseIntPipe) id: number,
@@ -105,6 +107,7 @@ export class PriceTiersController {
   @Post('commission-policies')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'تنظیم درصد پورسانت دسته‌بندی' })
+  @RequireAction(AccessAction.ADMIN)
   async setCommissionPolicy(
     @Req() req: AuthenticatedRequest,
     @Body() dto: SetCommissionPolicyDto,
@@ -116,6 +119,7 @@ export class PriceTiersController {
   @Post('commission/calculate')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'محاسبه گزارش ماهانه پورسانت کارشناسان فروش' })
+  @RequireAction(AccessAction.ADMIN)
   async calculateCommission(
     @Req() req: AuthenticatedRequest,
     @Body() dto: CalculateCommissionDto,
