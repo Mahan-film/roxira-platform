@@ -107,6 +107,7 @@ const COMMON_MOEINS: readonly Moein[] = [
 
 const TRADING_MOEINS: readonly Moein[] = [
   ['1030', 'موجودی کالا', ASSET, L.INVENTORY],
+  ['1031', 'موجودی مواد اولیه و قطعات', ASSET, L.INVENTORY],
   ['4020', 'درآمد فروش کالا', REVENUE, L.REVENUE],
   ['5110', 'بهای تمام‌شده کالای فروش‌رفته', EXPENSE, L.COGS],
 ];
