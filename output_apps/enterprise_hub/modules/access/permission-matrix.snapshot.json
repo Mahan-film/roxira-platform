@@ -2057,17 +2057,6 @@
     "read_only": true,
     "legacy_member": false
   },
-  "GET /enterprise-hub/tax-compliance/moadian/invoices/:invoiceId/pre-flight (MoadianController.preFlightGet)": {
-    "policy": "tax:read",
-    "owner": true,
-    "admin": true,
-    "accountant": true,
-    "sales": false,
-    "cheque_reviewer": false,
-    "hr": false,
-    "read_only": true,
-    "legacy_member": false
-  },
   "GET /enterprise-hub/tax-compliance/moadian/invoices/:invoiceId/status (MoadianController.status)": {
     "policy": "tax:read",
     "owner": true,

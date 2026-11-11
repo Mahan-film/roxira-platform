@@ -33,6 +33,7 @@ import {
   getSeasonalTransactions,
   getSeasonalVat,
   getVatReturn,
+  preflightMoadianInvoice,
   submitToMoadian,
 } from "@/lib/api/moadian-seasonal-client";
 import {
@@ -182,10 +183,17 @@ function MoadianCard() {
     setInvoiceId(id);
     selectedRef.current = id;
     if (!id) return;
-    const inv = invoices.find((i) => i.id === id);
-    if (inv) {
-      const pre = runMoadianPreFlightValidation(inv, { defaultSstid: status?.defaultSstid });
-      setPreFlightErrors(pre.errors);
+    try {
+      const pre = await preflightMoadianInvoice(id);
+      if (selectedRef.current === id) {
+        setPreFlightErrors(pre.errors);
+      }
+    } catch {
+      const inv = invoices.find((i) => i.id === id);
+      if (inv && selectedRef.current === id) {
+        const pre = runMoadianPreFlightValidation(inv, { defaultSstid: status?.defaultSstid });
+        setPreFlightErrors(pre.errors);
+      }
     }
     try {
       const existing = await getMoadianSubmission(id);
@@ -202,18 +210,22 @@ function MoadianCard() {
 
   async function submit() {
     if (!invoiceId) return;
-    const inv = invoices.find((i) => i.id === invoiceId);
-    if (inv) {
-      const pre = runMoadianPreFlightValidation(inv, { defaultSstid: status?.defaultSstid });
-      if (!pre.valid) {
-        setPreFlightErrors(pre.errors);
-        setError("خطاهای اعتبارسنجی پیش از ارسال مودیان وجود دارد؛ لطفاً اطلاعات صورتحساب را اصلاح کنید.");
-        return;
-      }
-    }
     setBusy(true);
     setError(null);
     stopPolling();
+    try {
+      const pre = await preflightMoadianInvoice(invoiceId);
+      if (!pre.valid) {
+        setPreFlightErrors(pre.errors);
+        setError("خطاهای اعتبارسنجی پیش از ارسال مودیان وجود دارد؛ لطفاً اطلاعات صورتحساب را اصلاح کنید.");
+        setBusy(false);
+        return;
+      }
+    } catch (err) {
+      setError(loadErrorMessage(err));
+      setBusy(false);
+      return;
+    }
     try {
       const id = invoiceId;
       const result = await submitToMoadian(id);

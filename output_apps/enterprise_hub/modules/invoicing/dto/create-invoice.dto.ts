@@ -107,14 +107,14 @@ export class InvoiceItemDto {
   @ApiPropertyOptional({ description: 'شناسه ۱۳ رقمی کالا/خدمت مودیان (SSTID)', example: '2330001234567' })
   @IsOptional()
   @IsString()
-  @Transform(({ value }) =>
-    typeof value === 'string'
-      ? value
-          .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776))
-          .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632))
-          .replace(/\s+/g, '')
-      : value,
-  )
+  @Transform(({ value }) => {
+    if (typeof value !== 'string') return value;
+    const cleaned = value
+      .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776))
+      .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632))
+      .replace(/\s+/g, '');
+    return cleaned === '' ? undefined : cleaned;
+  })
   @Matches(/^\d{13}$/, {
     message: 'شناسه کالا/خدمت مودیان (SSTID) باید دقیقاً ۱۳ رقم عددی باشد.',
   })

@@ -53,11 +53,6 @@ export class SubmitMoadianInvoiceDto {
   @Length(22, 22, { message: 'شماره منحصر‌به‌فرد مالیاتی مرجع باید دقیقاً ۲۲ کاراکتر باشد.' })
   referenceTaxId?: string;
 
-  @ApiPropertyOptional({ description: 'Perform pre-flight validation before submission' })
-  @IsOptional()
-  @IsBoolean()
-  preFlightCheck?: boolean;
-
   @ApiPropertyOptional({ description: 'Cash part in rials for a cash and credit settlement' })
   @IsOptional()
   @Type(() => Number)

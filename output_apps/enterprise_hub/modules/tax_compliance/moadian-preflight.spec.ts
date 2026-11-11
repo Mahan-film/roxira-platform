@@ -110,10 +110,22 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
       expect(res.isExempt).toBe(true);
     });
 
-    it('rejects outdated 9% rate for fiscal years 1404 and 1405', () => {
-      const res = validateVatRateForYear('2026-10-01', 0.09);
+    it('rejects mismatch when expectedRate is specified', () => {
+      const res = validateVatRateForYear('2026-10-01', 0.09, 0.1);
       expect(res.valid).toBe(false);
       expect(res.expected).toBe(0.1);
+    });
+
+    it('accepts explicit line rate when expectedRate is omitted', () => {
+      const res = validateVatRateForYear('2026-10-01', 0.09);
+      expect(res.valid).toBe(true);
+      expect(res.expected).toBe(0.09);
+
+      const invalidNegative = validateVatRateForYear('2026-10-01', -0.05);
+      expect(invalidNegative.valid).toBe(false);
+
+      const invalidTooHigh = validateVatRateForYear('2026-10-01', 1.5);
+      expect(invalidTooHigh.valid).toBe(false);
     });
   });
 
@@ -180,7 +192,9 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
         ...validInvoice,
         buyerInfo: { ...validInvoice.buyerInfo, nationalId: '0012345678' }, // invalid check digit
       };
-      const result = runMoadianPreFlightValidation(invalid as unknown as InvoiceResponseDto);
+      const result = runMoadianPreFlightValidation(invalid as unknown as InvoiceResponseDto, {
+        expectedVatRate: 0.1,
+      });
       expect(result.valid).toBe(false);
       expect(result.errors.some((e) => e.field === 'buyerInfo.nationalId')).toBe(true);
       expect(result.errors.find((e) => e.field === 'buyerInfo.nationalId')?.message).toContain(
@@ -193,7 +207,9 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
         ...validInvoice,
         buyerInfo: { ...validInvoice.buyerInfo, postalCode: '0123456789' }, // starts with 0
       };
-      const result = runMoadianPreFlightValidation(invalid as unknown as InvoiceResponseDto);
+      const result = runMoadianPreFlightValidation(invalid as unknown as InvoiceResponseDto, {
+        expectedVatRate: 0.1,
+      });
       expect(result.valid).toBe(false);
       expect(result.errors.some((e) => e.field === 'buyerInfo.postalCode')).toBe(true);
       expect(result.errors.find((e) => e.field === 'buyerInfo.postalCode')?.message).toContain(
@@ -215,7 +231,9 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
         totalTax: 1710000,
         finalPayable: 20710000,
       };
-      const result = runMoadianPreFlightValidation(invalid as unknown as InvoiceResponseDto);
+      const result = runMoadianPreFlightValidation(invalid as unknown as InvoiceResponseDto, {
+        expectedVatRate: 0.1,
+      });
       expect(result.valid).toBe(false);
       expect(result.errors.some((e) => e.field === 'items[0].vatRate')).toBe(true);
       expect(result.errors.find((e) => e.field === 'items[0].vatRate')?.message).toContain(
@@ -233,7 +251,9 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
           },
         ],
       };
-      const result = runMoadianPreFlightValidation(invalid as unknown as InvoiceResponseDto);
+      const result = runMoadianPreFlightValidation(invalid as unknown as InvoiceResponseDto, {
+        expectedVatRate: 0.1,
+      });
       expect(result.valid).toBe(false);
       expect(result.errors.some((e) => e.field === 'items[0].sstid')).toBe(true);
       expect(result.errors.find((e) => e.field === 'items[0].sstid')?.message).toContain(
@@ -246,7 +266,9 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
         ...validInvoice,
         totalTax: 999999, // does not match line tax 1,900,000
       };
-      const result = runMoadianPreFlightValidation(invalid as unknown as InvoiceResponseDto);
+      const result = runMoadianPreFlightValidation(invalid as unknown as InvoiceResponseDto, {
+        expectedVatRate: 0.1,
+      });
       expect(result.valid).toBe(false);
       expect(result.errors.some((e) => e.field === 'totalTax')).toBe(true);
       expect(result.errors.find((e) => e.field === 'totalTax')?.message).toContain(
@@ -284,7 +306,9 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
         ...validInvoice,
         sellerInfo: { ...validInvoice.sellerInfo, nationalId: '123456789' }, // 9 digits
       };
-      const result = runMoadianPreFlightValidation(invalid as unknown as InvoiceResponseDto);
+      const result = runMoadianPreFlightValidation(invalid as unknown as InvoiceResponseDto, {
+        expectedVatRate: 0.1,
+      });
       expect(result.valid).toBe(false);
       expect(result.errors.some((e) => e.code === 'SELLER_ID_LENGTH_INVALID')).toBe(true);
     });
@@ -294,7 +318,9 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
         ...validInvoice,
         sellerInfo: { ...validInvoice.sellerInfo, economicCode: '10380ABCDEF' },
       };
-      const result = runMoadianPreFlightValidation(invalid as unknown as InvoiceResponseDto);
+      const result = runMoadianPreFlightValidation(invalid as unknown as InvoiceResponseDto, {
+        expectedVatRate: 0.1,
+      });
       expect(result.valid).toBe(false);
       expect(result.errors.some((e) => e.code === 'SELLER_ECONOMIC_CODE_INVALID')).toBe(true);
     });
@@ -386,8 +412,10 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
           },
         ],
       };
-      // Without expectedVatRate, 6% fails in 1405
-      const resFail = runMoadianPreFlightValidation(customRateInvoice as unknown as InvoiceResponseDto);
+      // When statutory expectedVatRate is 10%, 6% fails
+      const resFail = runMoadianPreFlightValidation(customRateInvoice as unknown as InvoiceResponseDto, {
+        expectedVatRate: 0.1,
+      });
       expect(resFail.valid).toBe(false);
 
       // With expectedVatRate: 0.06, passes
@@ -395,6 +423,46 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
         expectedVatRate: 0.06,
       });
       expect(resPass.valid).toBe(true);
+    });
+
+    it('detects header total discount mismatch', () => {
+      const discountMismatchInvoice = {
+        ...validInvoice,
+        totalDiscount: 500000, // Should be 1000000 based on items
+      };
+      const res = runMoadianPreFlightValidation(discountMismatchInvoice as unknown as InvoiceResponseDto);
+      expect(res.valid).toBe(false);
+      expect(res.errors.some((e) => e.code === 'HEADER_TOTAL_DISCOUNT_MISMATCH')).toBe(true);
+    });
+
+    it('validates scale-2 currency amounts with exact Number.EPSILON rounding', () => {
+      const eurInvoice = {
+        id: 'eur-inv-1',
+        currency: 'EUR',
+        issuedAt: new Date('2026-10-01T12:00:00Z'),
+        sellerInfo: { nationalId: '10380284790', postalCode: '1985913111' },
+        buyerInfo: { nationalId: '0012345679', postalCode: '1456789123' },
+        totalAmount: 100.55,
+        totalDiscount: 10.05,
+        totalTax: 18.1,
+        finalPayable: 108.6,
+        items: [
+          {
+            taxCode: '2330001234567',
+            description: 'Item in EUR',
+            quantity: 1,
+            unitPrice: 100.55,
+            discount: 10.05,
+            vatRate: 0.2,
+            tax: 18.1,
+            total: 108.6,
+          },
+        ],
+      };
+      const res = runMoadianPreFlightValidation(eurInvoice as unknown as InvoiceResponseDto, {
+        expectedVatRate: 0.2,
+      });
+      expect(res.valid).toBe(true);
     });
 
     it('rejects invalid or missing invoice date', () => {

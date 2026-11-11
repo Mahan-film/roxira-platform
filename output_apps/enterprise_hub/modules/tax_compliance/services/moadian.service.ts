@@ -6,7 +6,6 @@ import {
   Logger,
   NotFoundException,
   OnModuleInit,
-  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -21,6 +20,7 @@ import {
 import { InvoicingService } from '../../invoicing/services/invoicing.service';
 import { InvoiceResponseDto } from '../../invoicing/dto/invoice-response.dto';
 import { VatRateResolver } from '../../invoicing/services/vat-rate.resolver';
+import { tehranIsoDate } from '../../hr/services/jalali-period';
 import {
   MOADIAN_DEFAULT_MAX_POLLS,
   MOADIAN_DEFAULT_POLL_DELAY_MS,
@@ -240,13 +240,16 @@ export class MoadianService implements OnModuleInit {
   // ارسال صورتحساب
   // ---------------------------------------------------------------------------
 
-  private async resolveExpectedVatRate(tenantId: string, invoice: InvoiceResponseDto): Promise<number> {
+  private async resolveExpectedVatRate(tenantId: string, invoice: InvoiceResponseDto): Promise<number | null> {
     const rawDate = invoice.issuedAt ?? invoice.createdAt;
-    const dateStr = rawDate
-      ? new Date(rawDate).toISOString().slice(0, 10)
-      : new Date().toISOString().slice(0, 10);
-    const res = await this.vatRateResolver.generalRate(tenantId, dateStr);
-    return res.rate;
+    const dateObj = rawDate ? new Date(rawDate) : new Date();
+    const dateStr = tehranIsoDate(dateObj);
+    try {
+      const res = await this.vatRateResolver.generalRate(tenantId, dateStr);
+      return res.rate;
+    } catch {
+      return null;
+    }
   }
 
   async preFlightValidate(
@@ -342,16 +345,14 @@ export class MoadianService implements OnModuleInit {
       return this.toSubmissionResponse(existing);
     }
 
-    if (options.preFlightCheck !== false) {
-      const expectedVatRate = await this.resolveExpectedVatRate(tenantId, invoice);
-      const preFlight = runMoadianPreFlightValidation(invoice, {
-        defaultSstid: credential.defaultSstid,
-        expectedVatRate,
-      });
-      if (!preFlight.valid) {
-        const messages = preFlight.errors.map((e) => `${e.field}: ${e.message}`).join(' | ');
-        throw new BadRequestException(`اعتبارسنجی پیش از ارسال مودیان: ${messages}`);
-      }
+    const expectedVatRate = await this.resolveExpectedVatRate(tenantId, invoice);
+    const preFlight = runMoadianPreFlightValidation(invoice, {
+      defaultSstid: credential.defaultSstid,
+      expectedVatRate,
+    });
+    if (!preFlight.valid) {
+      const messages = preFlight.errors.map((e) => `${e.field}: ${e.message}`).join(' | ');
+      throw new BadRequestException(`اعتبارسنجی پیش از ارسال مودیان: ${messages}`);
     }
 
     const mapWith = (serial: number) => {
