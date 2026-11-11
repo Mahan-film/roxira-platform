@@ -29,34 +29,11 @@ export class MembershipsRepository {
     private readonly repo: Repository<MembershipEntity>,
   ) {}
 
-  async findByTenantUser(tenantId: string, userId: string): Promise<MembershipEntity | null> {
-    try {
-      const rows = await this.repo.query(
-        `SELECT * FROM public.lookup_membership($1, $2)`,
-        [tenantId, userId],
-      );
-      if (rows && rows.length > 0) {
-        const r = rows[0];
-        return this.repo.create({
-          id: r.id,
-          tenantId: r.tenant_id,
-          userId: r.user_id,
-          roleKey: r.role_key,
-          customRoleId: r.custom_role_id ?? null,
-          branchId: r.branch_id ?? null,
-          departmentId: r.department_id ?? null,
-          branchScoped: r.branch_scoped,
-          status: r.status,
-          invitedBy: r.invited_by ?? null,
-          createdAt: r.created_at,
-          updatedAt: r.updated_at,
-        } as MembershipEntity);
-      }
-      return null;
-    } catch (err) {
-      this.logger.error(`lookup_membership error: ${err}`);
-      throw err;
-    }
+  findByTenantUser(tenantId: string, userId: string): Promise<MembershipEntity | null> {
+    return this.repo.manager.transaction(async (m) => {
+      await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [tenantId]);
+      return m.findOne(MembershipEntity, { where: { tenantId, userId } });
+    });
   }
 
   findById(tenantId: string, id: string): Promise<MembershipEntity | null> {
