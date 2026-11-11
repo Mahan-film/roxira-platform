@@ -55,7 +55,7 @@ export class CreateReceiptBotIntegration1789900003000 implements MigrationInterf
     await enableTenantRls(q, this.linksTable);
 
     await q.query(`
-      CREATE OR REPLACE FUNCTION receipt_bot_lookup_link(p_telegram_user_id varchar)
+      CREATE OR REPLACE FUNCTION receipt_bot_lookup_link(p_telegram_user_id text)
       RETURNS TABLE (tenant_id uuid, user_id uuid, default_kind varchar, telegram_username varchar)
       LANGUAGE plpgsql
       SECURITY DEFINER
@@ -72,9 +72,9 @@ export class CreateReceiptBotIntegration1789900003000 implements MigrationInterf
 
     await q.query(`
       CREATE OR REPLACE FUNCTION receipt_bot_consume_code(
-        p_code varchar,
-        p_telegram_user_id varchar,
-        p_telegram_username varchar DEFAULT NULL
+        p_code text,
+        p_telegram_user_id text,
+        p_telegram_username text DEFAULT NULL
       )
       RETURNS TABLE (tenant_id uuid, user_id uuid, default_kind varchar)
       LANGUAGE plpgsql
@@ -121,8 +121,8 @@ export class CreateReceiptBotIntegration1789900003000 implements MigrationInterf
       DO $$
       BEGIN
         IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'roxira_app') THEN
-          GRANT EXECUTE ON FUNCTION receipt_bot_lookup_link(varchar) TO roxira_app;
-          GRANT EXECUTE ON FUNCTION receipt_bot_consume_code(varchar, varchar, varchar) TO roxira_app;
+          GRANT EXECUTE ON FUNCTION receipt_bot_lookup_link(text) TO roxira_app;
+          GRANT EXECUTE ON FUNCTION receipt_bot_consume_code(text, text, text) TO roxira_app;
         END IF;
       END
       $$;
@@ -130,7 +130,9 @@ export class CreateReceiptBotIntegration1789900003000 implements MigrationInterf
   }
 
   public async down(q: QueryRunner): Promise<void> {
+    await q.query(`DROP FUNCTION IF EXISTS receipt_bot_consume_code(text, text, text)`);
     await q.query(`DROP FUNCTION IF EXISTS receipt_bot_consume_code(varchar, varchar, varchar)`);
+    await q.query(`DROP FUNCTION IF EXISTS receipt_bot_lookup_link(text)`);
     await q.query(`DROP FUNCTION IF EXISTS receipt_bot_lookup_link(varchar)`);
     await disableTenantRls(q, this.linksTable);
     await disableTenantRls(q, this.codesTable);

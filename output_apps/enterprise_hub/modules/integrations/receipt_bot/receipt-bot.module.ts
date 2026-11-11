@@ -24,7 +24,10 @@ import { ReceiptBotRateLimiter } from './utils/receipt-bot-rate-limiter';
   providers: [
     ReceiptBotService,
     ReceiptBotRepository,
-    ReceiptBotRateLimiter,
+    {
+      provide: ReceiptBotRateLimiter,
+      useFactory: () => new ReceiptBotRateLimiter(),
+    },
     TenantScope,
   ],
   exports: [ReceiptBotService],

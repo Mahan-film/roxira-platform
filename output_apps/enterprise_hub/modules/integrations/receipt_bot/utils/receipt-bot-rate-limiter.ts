@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -15,9 +15,12 @@ export class ReceiptBotRateLimiter {
   private readonly maxRequests: number;
   private readonly timestamps = new Map<string, number[]>();
 
-  constructor(windowMs = 60_000, maxRequests = 10) {
-    this.windowMs = windowMs;
-    this.maxRequests = maxRequests;
+  constructor(
+    @Optional() windowMs?: number,
+    @Optional() maxRequests?: number,
+  ) {
+    this.windowMs = typeof windowMs === 'number' ? windowMs : 60_000;
+    this.maxRequests = typeof maxRequests === 'number' ? maxRequests : 10;
   }
 
   isAllowed(key: string): RateLimitResult {
