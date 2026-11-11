@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  NotFoundException,
   Param,
   ParseIntPipe,
   Post,
@@ -94,7 +95,11 @@ export class PriceTiersController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     const tenantId = requireTenantId(req);
-    return { deleted: await this.priceTierService.deleteTier(tenantId, id) };
+    const deleted = await this.priceTierService.deleteTier(tenantId, id);
+    if (!deleted) {
+      throw new NotFoundException(`Price tier with id ${id} not found`);
+    }
+    return { deleted: true };
   }
 
   @Get('commission-policies')

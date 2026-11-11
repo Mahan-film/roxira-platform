@@ -51,6 +51,11 @@ export class CreatePriceTiersAndCommissions1789900002600 implements MigrationInt
       ON "erp_price_tiers" ("tenant_id", "sku", "customer_group")
     `);
 
+    await q.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "UQ_erp_price_tiers_window"
+      ON "erp_price_tiers" ("tenant_id", "sku", "customer_group", "effective_from")
+    `);
+
     await enableTenantRls(q, 'erp_price_tiers');
 
     // 3. erp_sales_commission_policies table
@@ -80,6 +85,7 @@ export class CreatePriceTiersAndCommissions1789900002600 implements MigrationInt
     await q.query(`DROP TABLE IF EXISTS "erp_sales_commission_policies"`);
 
     await disableTenantRls(q, 'erp_price_tiers');
+    await q.query(`DROP INDEX IF EXISTS "UQ_erp_price_tiers_window"`);
     await q.query(`DROP TABLE IF EXISTS "erp_price_tiers"`);
 
     await q.query(`

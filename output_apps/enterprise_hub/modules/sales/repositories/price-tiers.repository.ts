@@ -3,7 +3,7 @@ import { EntityManager } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
 import { CustomerGroup } from '../../parties/enums/customer-group.enum';
 import { PriceTierEntity } from '../entities/price-tier.entity';
-import { getCurrentTehranDate } from '../services/price-tier.service';
+import { getCurrentTehranDate } from '../utils/sales-date.util';
 
 export interface PriceTierInput {
   sku: string;
@@ -25,15 +25,30 @@ export class PriceTiersRepository {
   async create(tenantId: string, input: PriceTierInput): Promise<PriceTierEntity> {
     return this.within(tenantId, async (m) => {
       const repo = m.getRepository(PriceTierEntity);
-      const entity = repo.create({
-        tenantId,
-        sku: input.sku,
-        customerGroup: input.customerGroup,
-        unitPrice: input.unitPrice,
-        discountPercent: input.discountPercent ?? 0,
-        effectiveFrom: input.effectiveFrom ?? getCurrentTehranDate(),
-        effectiveTo: input.effectiveTo ?? null,
+      const effectiveFrom = input.effectiveFrom ?? getCurrentTehranDate();
+      let entity = await repo.findOne({
+        where: {
+          tenantId,
+          sku: input.sku,
+          customerGroup: input.customerGroup,
+          effectiveFrom,
+        },
       });
+      if (entity) {
+        entity.unitPrice = input.unitPrice;
+        entity.discountPercent = input.discountPercent ?? 0;
+        entity.effectiveTo = input.effectiveTo ?? null;
+      } else {
+        entity = repo.create({
+          tenantId,
+          sku: input.sku,
+          customerGroup: input.customerGroup,
+          unitPrice: input.unitPrice,
+          discountPercent: input.discountPercent ?? 0,
+          effectiveFrom,
+          effectiveTo: input.effectiveTo ?? null,
+        });
+      }
       return repo.save(entity);
     });
   }

@@ -21,6 +21,7 @@ describe('CreatePriceTiersAndCommissions migration (1789900002600)', () => {
       expect(sql).toContain(`CREATE POLICY "${table}_tenant" ON "${table}"`);
     }
 
+    expect(sql).toContain('UQ_erp_price_tiers_window');
     expect(sql).toContain('CHK_erp_price_tiers_price');
     expect(sql).toContain('CHK_erp_price_tiers_discount');
     expect(sql).toContain('CHK_erp_price_tiers_group');

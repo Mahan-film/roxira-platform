@@ -13,6 +13,7 @@ import { PriceTierEntity } from './entities/price-tier.entity';
 import { SalesCommissionPolicyEntity } from './entities/sales-commission-policy.entity';
 import { CommissionPoliciesRepository } from './repositories/commission-policies.repository';
 import { PriceTiersRepository } from './repositories/price-tiers.repository';
+import { PriceTierService } from './services/price-tier.service';
 import { TenantScope } from '../access/services/tenant-scope';
 
 const HOST = process.env.ROXIRA_TEST_PG_HOST;
@@ -103,15 +104,54 @@ describePg('PriceTiers & Commission Policies RLS isolation (NOSUPERUSER NOBYPASS
     const t2List = await priceTiersRepo.list(T2, 'SKU-RLS-01');
     expect(t2List).toHaveLength(0);
 
-    // 4. Tenant 2 cannot delete Tenant 1 tier
-    await priceTiersRepo.deleteById(T2, t1Tier.id);
+    // 4. PriceTierService exercises resolution under both tenant scopes
+    const priceTierService = new PriceTierService(priceTiersRepo);
+    const resolvedT1 = await priceTierService.resolveForTenant(
+      T1,
+      'SKU-RLS-01',
+      CustomerGroup.WHOLESALE,
+      100000000n,
+      '2026-11-05',
+    );
+    expect(resolvedT1.source).toBe('tier');
+    expect(resolvedT1.effectiveUnitPriceMinor).toBe(45000000n); // 50,000,000 - 10%
+
+    const resolvedT2 = await priceTierService.resolveForTenant(
+      T2,
+      'SKU-RLS-01',
+      CustomerGroup.WHOLESALE,
+      100000000n,
+      '2026-11-05',
+    );
+    expect(resolvedT2.source).toBe('base_default');
+    expect(resolvedT2.effectiveUnitPriceMinor).toBe(100000000n);
+
+    // 5. Cross-tenant INSERT is rejected by WITH CHECK policy
+    await expect(
+      scope.within(T2, undefined, async (em) => {
+        const repo = em.getRepository(PriceTierEntity);
+        const rogueTier = repo.create({
+          tenantId: T1, // attempting to insert as T1 while scoped as T2
+          sku: 'SKU-ROGUE-01',
+          customerGroup: CustomerGroup.CONSUMER,
+          unitPrice: 1000000n,
+          effectiveFrom: '2026-11-01',
+        });
+        return repo.save(rogueTier);
+      }),
+    ).rejects.toThrow(/row-level security policy/);
+
+    // 6. Tenant 2 cannot delete Tenant 1 tier (returns false)
+    const deleteAttempt = await priceTiersRepo.deleteById(T2, t1Tier.id);
+    expect(deleteAttempt).toBe(false);
     const stillInT1 = await priceTiersRepo.list(T1, 'SKU-RLS-01');
     expect(stillInT1).toHaveLength(1);
 
-    // 5. Tenant 1 deletes its tier
-    await priceTiersRepo.deleteById(T1, t1Tier.id);
-    const deletedInT1 = await priceTiersRepo.list(T1, 'SKU-RLS-01');
-    expect(deletedInT1).toHaveLength(0);
+    // 7. Tenant 1 deletes its tier
+    const deletedInT1 = await priceTiersRepo.deleteById(T1, t1Tier.id);
+    expect(deletedInT1).toBe(true);
+    const listAfterDelete = await priceTiersRepo.list(T1, 'SKU-RLS-01');
+    expect(listAfterDelete).toHaveLength(0);
   });
 
   it('proves Tenant 1 commission policies cannot be read or modified by Tenant 2', async () => {

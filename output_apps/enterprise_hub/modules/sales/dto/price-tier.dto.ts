@@ -21,9 +21,36 @@ import {
   registerDecorator,
 } from 'class-validator';
 import { CustomerGroup } from '../../parties/enums/customer-group.enum';
+import { getCurrentTehranDate } from '../utils/sales-date.util';
 
-const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_REGEX = /^\d{4}-\d{2}$/;
+
+function isValidCalendarDate(val: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(val)) return false;
+  const [y, m, d] = val.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
+
+export function IsCalendarDate(validationOptions?: ValidationOptions) {
+  return function (object: object, propertyName: string): void {
+    registerDecorator({
+      name: 'isCalendarDate',
+      target: object.constructor,
+      propertyName,
+      options: validationOptions,
+      validator: {
+        validate(value: unknown) {
+          if (value === undefined || value === null) return true;
+          return typeof value === 'string' && isValidCalendarDate(value);
+        },
+        defaultMessage(args: ValidationArguments) {
+          return `${args.property} must be a valid calendar date in YYYY-MM-DD format`;
+        },
+      },
+    });
+  };
+}
 
 /**
  * Validates that a date string is chronologically greater than or equal to another date property.
@@ -38,13 +65,17 @@ export function IsAfterOrEqualTo(property: string, validationOptions?: Validatio
       options: validationOptions,
       validator: {
         validate(value: unknown, args: ValidationArguments) {
-          const [relatedPropertyName] = args.constraints;
-          const relatedValue = (args.object as Record<string, unknown>)[relatedPropertyName];
-          if (value === undefined || value === null || relatedValue === undefined || relatedValue === null) {
+          if (value === undefined || value === null) {
             return true;
           }
-          if (typeof value === 'string' && typeof relatedValue === 'string') {
-            return value >= relatedValue;
+          const [relatedPropertyName] = args.constraints;
+          const relatedValue = (args.object as Record<string, unknown>)[relatedPropertyName];
+          const effectiveRelated =
+            typeof relatedValue === 'string' && relatedValue.length > 0
+              ? relatedValue
+              : getCurrentTehranDate();
+          if (typeof value === 'string') {
+            return value >= effectiveRelated;
           }
           return true;
         },
@@ -81,14 +112,12 @@ export class CreatePriceTierDto {
   customerGroup: CustomerGroup;
 
   @ApiProperty({ description: 'قیمت واحد به ریال (minor units)' })
-  @IsNumberString({ no_symbols: true }, { message: 'unitPriceMinor must be positive integer string' })
-  @MinLength(1)
-  @MaxLength(32)
+  @Matches(/^\d{1,18}$/, { message: 'unitPriceMinor must be positive integer up to 18 digits' })
   unitPriceMinor: string;
 
   @ApiPropertyOptional({ description: 'درصد تخفیف ردیف (۰ تا ۱۰۰)', default: 0 })
   @IsOptional()
-  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @IsNumber({ allowNaN: false, allowInfinity: false, maxDecimalPlaces: 2 })
   @Min(0)
   @Max(100)
   discountPercent?: number;
@@ -96,13 +125,13 @@ export class CreatePriceTierDto {
   @ApiPropertyOptional({ description: 'تاریخ شروع اعتبار (YYYY-MM-DD)' })
   @IsOptional()
   @IsString()
-  @Matches(DATE_REGEX, { message: 'effectiveFrom must be YYYY-MM-DD' })
+  @IsCalendarDate()
   effectiveFrom?: string;
 
   @ApiPropertyOptional({ description: 'تاریخ پایان اعتبار (YYYY-MM-DD)' })
   @IsOptional()
   @IsString()
-  @Matches(DATE_REGEX, { message: 'effectiveTo must be YYYY-MM-DD' })
+  @IsCalendarDate()
   @IsAfterOrEqualTo('effectiveFrom', { message: 'effectiveTo must be greater than or equal to effectiveFrom' })
   effectiveTo?: string;
 }
@@ -120,15 +149,13 @@ export class ResolvePriceDto {
   customerGroup?: CustomerGroup;
 
   @ApiProperty({ description: 'قیمت پایه به ریال' })
-  @IsNumberString({ no_symbols: true }, { message: 'basePriceMinor must be positive integer string' })
-  @MinLength(1)
-  @MaxLength(32)
+  @Matches(/^\d{1,18}$/, { message: 'basePriceMinor must be positive integer up to 18 digits' })
   basePriceMinor: string;
 
   @ApiPropertyOptional({ description: 'تاریخ مبنا (YYYY-MM-DD)' })
   @IsOptional()
   @IsString()
-  @Matches(DATE_REGEX, { message: 'referenceDate must be YYYY-MM-DD' })
+  @IsCalendarDate()
   referenceDate?: string;
 }
 
@@ -140,7 +167,7 @@ export class SetCommissionPolicyDto {
   category: string;
 
   @ApiProperty({ description: 'درصد کمیسیون فروشنده (۰ تا ۱۰۰)' })
-  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @IsNumber({ allowNaN: false, allowInfinity: false, maxDecimalPlaces: 2 })
   @Min(0)
   @Max(100)
   commissionRate: number;
@@ -171,9 +198,7 @@ export class SalesLineForCommissionDto {
   category: string;
 
   @ApiProperty({ description: 'مبلغ فروش به ریال' })
-  @IsNumberString({ no_symbols: true }, { message: 'saleAmountMinor must be positive integer string' })
-  @MinLength(1)
-  @MaxLength(32)
+  @Matches(/^\d{1,18}$/, { message: 'saleAmountMinor must be positive integer up to 18 digits' })
   saleAmountMinor: string;
 
   @ApiProperty({ description: 'شماره فاکتور' })

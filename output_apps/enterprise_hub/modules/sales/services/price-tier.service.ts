@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { toMinor, fromMinor } from '../../accounting/money';
 import { CustomerGroup } from '../../parties/enums/customer-group.enum';
 import { PriceTierEntity } from '../entities/price-tier.entity';
 import { PriceTiersRepository } from '../repositories/price-tiers.repository';
 import { CreatePriceTierDto } from '../dto/price-tier.dto';
+import { getCurrentTehranDate } from '../utils/sales-date.util';
+
+export { getCurrentTehranDate };
 
 export interface PriceResolution {
   unitPriceMinor: bigint;
@@ -12,11 +14,6 @@ export interface PriceResolution {
   effectiveUnitPriceMinor: bigint;
   source: 'tier' | 'base_default';
   customerGroup: CustomerGroup;
-}
-
-/** Returns current date in Tehran timezone formatted as YYYY-MM-DD */
-export function getCurrentTehranDate(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tehran' }).format(new Date());
 }
 
 @Injectable()
