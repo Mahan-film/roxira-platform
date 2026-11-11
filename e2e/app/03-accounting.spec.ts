@@ -1,11 +1,11 @@
 import { test, expect, openApp, expectNoErrorNotice, parseFa } from './fixtures';
 
 /**
- * /app/accounting on the seeded tenant (the data_import fixture was imported by sandbox_up.sh):
+ * /app/accounting/chart on the seeded tenant (the data_import fixture was imported by sandbox_up.sh):
  * 31 chart-of-accounts rows, a balanced trial balance and no error notice.
  */
 test('accounting page lists the 31 imported accounts with a balanced trial balance', async ({ page }) => {
-  await openApp(page, '/app/accounting');
+  await openApp(page, '/app/accounting/chart');
   await expect(page.getByRole('heading', { level: 1 })).toContainText('حساب');
 
   const accountsCard = page.locator('[data-slot="card"]').filter({ has: page.getByText('سرفصل حساب‌ها', { exact: true }) });

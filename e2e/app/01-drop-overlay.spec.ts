@@ -12,8 +12,8 @@ test.use({ sessionKind: 'import' });
 const DB_TAB = 'انتقال کامل دیتابیس';
 
 test.describe('drop overlay', () => {
-  test('shows on a file drag over /app/accounting and hides without dragleave or drop (Safari case)', async ({ page }) => {
-    await openApp(page, '/app/accounting');
+  test('shows on a file drag over /app/accounting/vouchers and hides without dragleave or drop (Safari case)', async ({ page }) => {
+    await openApp(page, '/app/accounting/vouchers');
     const overlay = page.getByText('فایل را رها کنید', { exact: true });
     await expect(overlay).toHaveCount(0);
 
@@ -51,9 +51,9 @@ test.describe('drop overlay', () => {
     // Proves the listener is alive (so the absence above is real): the same drag over another page shows it.
     await page
       .getByRole('navigation', { name: /منوی نرم.?افزار/ })
-      .locator('a[href="/app/accounting"]')
+      .locator('a[href="/app/accounting/vouchers"]')
       .click();
-    await expect(page).toHaveURL(/\/app\/accounting/);
+    await expect(page).toHaveURL(/\/app\/accounting\/vouchers/);
     await page.dispatchEvent('body', 'dragover', { dataTransfer });
     await expect(overlay).toBeVisible();
     await expect(overlay).toBeHidden({ timeout: 3_000 });
@@ -77,7 +77,7 @@ test.describe('drop overlay', () => {
   });
 
   test('dropping a .sqlite anywhere in /app opens the import page on the whole-database tab', async ({ page }) => {
-    await openApp(page, '/app/accounting');
+    await openApp(page, '/app/accounting/vouchers');
     const dataTransfer = await makeDataTransfer(page, fixturePath());
     await page.dispatchEvent('body', 'dragover', { dataTransfer });
     await expect(page.getByText('فایل را رها کنید', { exact: true })).toBeVisible();

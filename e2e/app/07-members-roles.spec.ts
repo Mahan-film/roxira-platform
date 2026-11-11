@@ -80,7 +80,8 @@ test.describe('members, invitations and role limits', () => {
     await staff.waitForURL(/\/(en\/)?app/);
     await expect(nav(staff).getByRole('link', { name: 'مشتریان و طرف‌حساب‌ها' })).toBeVisible();
     // Hidden because the role cannot read them (the server refuses them too, see the API checks below):
-    await expect(nav(staff).getByRole('link', { name: 'حساب‌ها و اسناد' })).toHaveCount(0);
+    await expect(nav(staff).getByRole('link', { name: 'اسناد حسابداری' })).toHaveCount(0);
+    await expect(nav(staff).getByRole('link', { name: 'درخت حساب‌ها' })).toHaveCount(0);
     await expect(nav(staff).getByRole('link', { name: 'اعضا و نقش‌ها' })).toHaveCount(0);
     await expect(nav(staff).getByRole('link', { name: 'گزارش رخدادها' })).toHaveCount(0);
     await expect(nav(staff).getByRole('link', { name: 'امنیت حساب' })).toBeVisible();

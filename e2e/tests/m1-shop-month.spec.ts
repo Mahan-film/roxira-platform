@@ -142,7 +142,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     for (const code of ['1101', '1201', '1301', '2101']) expect(accounts.map((a) => a.code)).toContain(code);
 
     // The chart page lists the same 18 accounts.
-    await loginAsTestTenant(page, '/app/accounting');
+    await loginAsTestTenant(page, '/app/accounting/chart');
     const tree = page.locator('[data-slot="card"]').filter({ hasText: 'سرفصل حساب‌ها' });
     await expect(tree.locator('tbody tr')).toHaveCount(18);
   });
@@ -298,7 +298,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     expect(balanceOf('1201')).toBe(README_TOTALS.receivablesOpening);
     expect(balanceOf('2101')).toBe(-README_TOTALS.payablesOpening); // debit-positive: a payable is a credit
 
-    await loginAsTestTenant(page, '/app/accounting');
+    await loginAsTestTenant(page, '/app/accounting/vouchers');
     const row = page.locator('tr').filter({ hasText: 'مانده‌های افتتاحیه' }).first();
     await expect(row).toContainText(fa(Number(README_TOTALS.openingDebit)));
   });
@@ -1429,7 +1429,7 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
   });
 
   test('17 trial balance is balanced: total debit = total credit [E3]', async ({ page }) => {
-    await loginAsTestTenant(page, '/app/accounting');
+    await loginAsTestTenant(page, '/app/accounting/chart');
     const trial = await apiGet<{ totalDebit: number | string; totalCredit: number | string }>(
       page,
       'accounting/trial-balance',

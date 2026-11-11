@@ -161,7 +161,7 @@ test.describe('prod feature tour', () => {
     expect(xlsx.status, xlsx.text.slice(0, 200)).toBe(200);
     expect(xlsx.text.length).toBeGreaterThan(2_000);
 
-    await gotoApp(page, '/app/accounting');
+    await gotoApp(page, '/app/accounting/chart');
     await expect(page.getByText('سرفصل حساب‌ها').first()).toBeVisible();
     await expect(page.getByText('1010').first()).toBeVisible();
     await gotoApp(page, '/app/accounting/reports');
@@ -188,7 +188,7 @@ test.describe('prod feature tour', () => {
     });
     expect(entry.id ?? entry.entryNumber).toBeTruthy();
 
-    await gotoApp(page, '/app/accounting');
+    await gotoApp(page, '/app/accounting/vouchers');
     const search = page.getByPlaceholder('جست‌وجوی شماره سند');
     await search.fill(entryNumber);
     await page.getByRole('button', { name: 'جست‌وجو', exact: true }).click();
@@ -490,7 +490,7 @@ test.describe('prod feature tour', () => {
     page.on('response', (r) => {
       if (r.status() === 429) hits.push(`${r.request().method()} ${r.url().replace(BASE, '')}`);
     });
-    for (const route of ['/app', '/app/accounting', '/app/invoicing', '/app/inventory', '/app/cheques', '/app/hr', '/app/tax', '/app/crm', '/app/accounting/reports', '/app/import']) {
+    for (const route of ['/app', '/app/accounting/vouchers', '/app/accounting/chart', '/app/invoicing', '/app/inventory', '/app/cheques', '/app/hr', '/app/tax', '/app/crm', '/app/accounting/reports', '/app/import']) {
       await gotoApp(page, route);
       await page.waitForTimeout(2000);
     }
