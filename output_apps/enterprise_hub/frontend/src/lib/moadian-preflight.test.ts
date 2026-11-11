@@ -38,11 +38,11 @@ test("postal code format validation", () => {
 });
 
 test("VAT rate validation for fiscal years", () => {
-  assert.equal(validateVatRateForYear("2026-11-10", 0.1, 0.1).valid, true);
-  assert.equal(validateVatRateForYear("2026-11-10", 0, 0.1).valid, true);
-  assert.equal(validateVatRateForYear("2026-11-10", 0.09, 0.1).valid, false);
-  assert.equal(validateVatRateForYear("2026-11-10", 0.09).valid, true);
-  assert.equal(validateVatRateForYear("2026-11-10", 1.5).valid, false);
+  assert.equal(validateVatRateForYear(0.1, 0.1).valid, true);
+  assert.equal(validateVatRateForYear(0, 0.1).valid, true);
+  assert.equal(validateVatRateForYear(0.09, 0.1).valid, false);
+  assert.equal(validateVatRateForYear(0.09).valid, true);
+  assert.equal(validateVatRateForYear(1.5).valid, false);
 });
 
 test("item SSTID validation", () => {
