@@ -177,18 +177,30 @@ function getCurrencyScale(currency?: string): number {
   return 2;
 }
 
-function roundTo(value: number, scale: number): number {
-  const factor = 10 ** scale;
-  return Math.round((value + Number.EPSILON) * factor) / factor;
+function parseScaled(value: number | string, scale: number): bigint {
+  const text =
+    typeof value === 'number'
+      ? value.toString().includes('e')
+        ? value.toFixed(scale)
+        : value.toString()
+      : value.trim();
+  const match = /^(\d{1,18})(?:\.(\d{1,}))?$/.exec(text);
+  if (!match || (match[2] ?? '').length > scale) {
+    throw new Error(`Invalid decimal "${value}": at most ${scale} decimals.`);
+  }
+  return BigInt(match[1] + (match[2] ?? '').padEnd(scale, '0'));
 }
 
-function toMinorUnits(value: number | string | null | undefined, scale: number): bigint {
-  if (value === null || value === undefined) return 0n;
-  const num = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(num)) return 0n;
-  const rounded = roundTo(num, scale);
-  const factor = 10 ** scale;
-  return BigInt(Math.round((rounded + Number.EPSILON) * factor));
+export function toMinorUnits(value: number | string | null | undefined, scale: number): bigint {
+  if (value === null || value === undefined || value === '') return 0n;
+  try {
+    return parseScaled(value, scale);
+  } catch {
+    const num = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(num)) return 0n;
+    const factor = 10 ** scale;
+    return BigInt(Math.round((num + Number.EPSILON) * factor));
+  }
 }
 
 /**
@@ -354,6 +366,7 @@ export function runMoadianPreFlightValidation(
   let calculatedTotalAmountUnits = 0n;
   let calculatedTotalDiscountUnits = 0n;
   let calculatedTotalTaxUnits = 0n;
+  let calculatedFinalPayableUnits = 0n;
 
   items.forEach((item, index) => {
     const fieldPrefix = `items[${index}]`;
@@ -390,22 +403,19 @@ export function runMoadianPreFlightValidation(
     }
 
     // Line math consistency using exact integer minor units
-    const qty = Number(item.quantity ?? 0);
-    const unitPrice = Number(item.unitPrice ?? 0);
-    const discount = Number(item.discount ?? 0);
-    const gross = qty * unitPrice;
-    const taxable = Math.max(0, gross - discount);
-    const expectedTax = roundTo(taxable * vatRate, scale);
-    const expectedLineTotal = roundTo(taxable + expectedTax, scale);
-
-    const grossUnits = toMinorUnits(roundTo(gross, scale), scale);
-    const discountUnits = toMinorUnits(discount, scale);
-    const expectedTaxUnits = toMinorUnits(expectedTax, scale);
-    const expectedLineTotalUnits = toMinorUnits(expectedLineTotal, scale);
+    const qtyUnits = toMinorUnits(item.quantity ?? 0, 4);
+    const unitPriceUnits = toMinorUnits(item.unitPrice ?? 0, scale);
+    const discountUnits = toMinorUnits(item.discount ?? 0, scale);
+    const grossUnits = (qtyUnits * unitPriceUnits + 5000n) / 10000n;
+    const taxableUnits = grossUnits > discountUnits ? grossUnits - discountUnits : 0n;
+    const vatRateUnits = BigInt(Math.round(vatRate * 10000));
+    const expectedTaxUnits = (taxableUnits * vatRateUnits + 5000n) / 10000n;
+    const expectedLineTotalUnits = taxableUnits + expectedTaxUnits;
 
     calculatedTotalAmountUnits += grossUnits;
     calculatedTotalDiscountUnits += discountUnits;
     calculatedTotalTaxUnits += item.tax !== undefined ? toMinorUnits(item.tax, scale) : expectedTaxUnits;
+    calculatedFinalPayableUnits += item.total !== undefined ? toMinorUnits(item.total, scale) : expectedLineTotalUnits;
 
     if (item.tax !== undefined) {
       const actualTaxUnits = toMinorUnits(item.tax, scale);
