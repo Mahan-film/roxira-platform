@@ -155,6 +155,7 @@ jobs:
         run: trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --exit-code 0 --format table . > "$RUNNER_TEMP/trivy-fs.txt"
       - name: Upload Trivy report
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
           name: trivy-fs-report
@@ -549,6 +550,7 @@ jobs:
         run: npx playwright test m1-shop-month --project=chromium --reporter=list,html
       - name: Upload report and service logs
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
           name: m1-gate-report
