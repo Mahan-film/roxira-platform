@@ -1,7 +1,7 @@
 <!-- Sources (origin/main): output_apps/enterprise_hub/modules/accounting/controllers/accounting.controller.ts, output_apps/enterprise_hub/modules/accounting/services/accounting.service.ts, output_apps/enterprise_hub/modules/accounting/services/voucher-tools.service.ts, output_apps/enterprise_hub/modules/accounting/dto/create-journal-entry.dto.ts, output_apps/enterprise_hub/modules/accounting/dto/voucher-state.dto.ts, output_apps/enterprise_hub/modules/accounting/dto/reverse-journal-entry.dto.ts, output_apps/enterprise_hub/modules/accounting/enums/accounting.enum.ts, output_apps/enterprise_hub/migrations/1789900000500-AddVoucherFinalNumber.ts, output_apps/enterprise_hub/frontend/src/components/accounting/journal-entry-form.tsx, output_apps/enterprise_hub/frontend/src/components/accounting/journal-entries-table.tsx -->
 # اسناد حسابداری: وضعیت‌ها، برگشت، کپی، قفل ویرایش، پیوست و شمارهٔ قطعی
 
-در صفحهٔ **حساب‌ها** (`/app/accounting`)، ثبت و مدیریت اسناد حسابداری دوطرفه از طریق فرم **«ثبت سند دوطرفه»** (دکمهٔ «سند جدید») و جدول **«دفتر روزنامه (اسناد حسابداری)»** انجام می‌شود.
+در صفحهٔ **اسناد حسابداری** (`/app/accounting/vouchers`)، ثبت و مدیریت اسناد حسابداری دوطرفه از طریق فرم **«ثبت سند دوطرفه»** (دکمهٔ «سند جدید») و جدول **«دفتر روزنامه (اسناد حسابداری)»** انجام می‌شود.
 
 ## ۱. ثبت و جدول اسناد در رابط کاربری
 

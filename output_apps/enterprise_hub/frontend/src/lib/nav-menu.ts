@@ -118,11 +118,18 @@ export const MENU_GROUPS: MenuGroup[] = [
     icon: "BookOpenCheck",
     items: [
       {
-        href: "/app/accounting",
-        label: "حساب‌ها و اسناد",
+        href: "/app/accounting/vouchers",
+        label: "اسناد حسابداری",
+        icon: "ReceiptText",
+        module: "accounting",
+        keywords: ["voucher", "journal", "سند", "دفتر روزنامه"],
+      },
+      {
+        href: "/app/accounting/chart",
+        label: "درخت حساب‌ها",
         icon: "BookOpenCheck",
         module: "accounting",
-        keywords: ["ledger", "journal", "دفتر", "تراز"],
+        keywords: ["chart", "ledger", "tree", "سرفصل", "کدینگ", "تراز"],
       },
       {
         href: "/app/accounting/dashboard",

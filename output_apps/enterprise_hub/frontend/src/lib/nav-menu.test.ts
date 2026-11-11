@@ -157,7 +157,8 @@ test("a role with only crm read sees exactly /app, /app/crm and /app/settings/se
 test("activeHref matches the longest href, with /app exact-match only", () => {
   const hrefs = MENU_GROUPS.flatMap((group) => group.items.map((item) => item.href));
   assert.equal(activeHref("/app/accounting/bank/reconcile", hrefs), "/app/accounting/bank");
-  assert.equal(activeHref("/app/accounting", hrefs), "/app/accounting");
+  assert.equal(activeHref("/app/accounting/vouchers", hrefs), "/app/accounting/vouchers");
+  assert.equal(activeHref("/app/accounting/chart", hrefs), "/app/accounting/chart");
   assert.equal(activeHref("/app/hr/payroll", hrefs), "/app/hr/payroll");
   assert.equal(activeHref("/app/hr/contracts/5/allowances", hrefs), "/app/hr");
   assert.equal(activeHref("/app/settings/security", hrefs), "/app/settings/security");

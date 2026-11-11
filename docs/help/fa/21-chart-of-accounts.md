@@ -1,7 +1,7 @@
 <!-- Sources (origin/main): output_apps/enterprise_hub/modules/accounting/controllers/accounting.controller.ts, output_apps/enterprise_hub/modules/accounting/controllers/dimension.controller.ts, output_apps/enterprise_hub/modules/accounting/controllers/fiscal-year.controller.ts, output_apps/enterprise_hub/modules/accounting/dto/create-account.dto.ts, output_apps/enterprise_hub/modules/accounting/dto/dimension.dto.ts, output_apps/enterprise_hub/modules/accounting/enums/accounting.enum.ts, output_apps/enterprise_hub/modules/accounting/services/accounting.service.ts, output_apps/enterprise_hub/modules/accounting/services/dimension.service.ts, output_apps/enterprise_hub/frontend/src/app/app/accounting/page.tsx, output_apps/enterprise_hub/frontend/src/components/accounting/account-tree-card.tsx, output_apps/enterprise_hub/frontend/src/lib/account-tree.ts, output_apps/enterprise_hub/frontend/src/app/app/accounting/fiscal-years/page.tsx -->
 # سرفصل حساب‌ها و تفصیلی‌های شناور
 
-در صفحهٔ **حساب‌ها** (`/app/accounting`)، کارت **«سرفصل حساب‌ها»** ساختار درختی حساب‌های دفتر کل سازمان را نشان می‌دهد. همچنین از صفحهٔ **سال مالی و سرفصل** (`/app/accounting/fiscal-years`) می‌توانید قالب‌های سرفصل استاندارد ایران را روی سازمان اعمال کنید.
+در صفحهٔ **درخت و سرفصل حساب‌ها** (`/app/accounting/chart`)، کارت **«سرفصل حساب‌ها»** ساختار درختی حساب‌های دفتر کل سازمان را نشان می‌دهد. همچنین از صفحهٔ **سال مالی و سرفصل** (`/app/accounting/fiscal-years`) می‌توانید قالب‌های سرفصل استاندارد ایران را روی سازمان اعمال کنید.
 
 ## درخت سرفصل حساب‌ها در رابط کاربری
 
