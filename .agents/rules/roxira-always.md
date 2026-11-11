@@ -32,3 +32,5 @@ python3 scripts/dev/verify_agent_report.py --since <wave start date> <report fil
 ```
 
 Fix every problem it lists (or move the row to BLOCKED with the reason) until it prints `RESULT: OK`. Paste its last line under the report.
+
+Then post the report yourself as a comment on issue 592 (`gh issue comment 592 -R Mahan-film/roxira-platform --body-file <report file>`). The first line must be `REPORT <WAVE> <date> <lane>` (e.g. `REPORT WAVE 8 2026-11-12 L2`). The coordinator reads reports from the issue; the owner does not need to copy them.
