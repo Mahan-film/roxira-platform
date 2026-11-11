@@ -80,9 +80,13 @@ describe('Bank SMS Parser (T92)', () => {
   });
 
   describe('Edge cases and error handling', () => {
-    it('throws error when bank name is missing or unknown', () => {
+    it('falls back to generic parser when bank name is missing or unknown', () => {
       const text = 'واریز: 1,000,000 ریال به حساب ...1234';
-      expect(() => parseBankSms(text)).toThrow('بانک ارسال‌کننده پیامک شناسایی نشد.');
+      const parsed = parseBankSms(text);
+      expect(parsed.bank).toBeNull();
+      expect(parsed.bankNameFa).toBe('سایر / عمومی');
+      expect(parsed.direction).toBe('deposit');
+      expect(parsed.amountDecimal).toBe('1000000.00');
     });
 
     it('throws error when direction (واریز/برداشت) is missing', () => {
@@ -93,6 +97,20 @@ describe('Bank SMS Parser (T92)', () => {
     it('throws error when amount is missing', () => {
       const text = 'بانک ملت\nواریز به حساب ...1234 انجام شد';
       expect(() => parseBankSms(text)).toThrow('مبلغ تراکنش در متن پیامک یافت نشد.');
+    });
+
+    it('correctly handles generic fallback when bank name is not recognised', () => {
+      const text = `واريز: 5,000,000 ريال
+کارت: ...9876
+1403/09/01 14:30
+پیگیری: 7654321`;
+      const parsed = parseBankSms(text);
+      expect(parsed.bank).toBeNull();
+      expect(parsed.bankNameFa).toBe('سایر / عمومی');
+      expect(parsed.direction).toBe('deposit');
+      expect(parsed.amountDecimal).toBe('5000000.00');
+      expect(parsed.cardTail).toBe('9876');
+      expect(parsed.reference).toBe('7654321');
     });
 
     it('correctly handles Toman multiplier (x10)', () => {

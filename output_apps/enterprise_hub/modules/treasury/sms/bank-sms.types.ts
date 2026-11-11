@@ -4,7 +4,7 @@ import { TreasuryDocKind } from '../enums/treasury.enum';
 export type BankSmsDirection = 'deposit' | 'withdraw';
 
 export interface BankSmsParsedResult {
-  bank: BankCode;
+  bank: BankCode | null;
   bankNameFa: string;
   direction: BankSmsDirection;
   docKind: TreasuryDocKind;

@@ -74,21 +74,24 @@ export function normaliseSms(text: string): string {
 export function isBankSms(text: string): boolean {
   if (!text || typeof text !== 'string') return false;
   const normalised = normaliseSms(text);
-  const hasDirection = /واریز|برداشت/.test(normalised);
+  const hasDirection = /واریز|واريز|برداشت/.test(normalised);
   if (!hasDirection) return false;
 
-  return BANK_RULES.some((rule) =>
-    rule.namePatterns.some((pattern) => pattern.test(normalised)),
+  return (
+    BANK_RULES.some((rule) =>
+      rule.namePatterns.some((pattern) => pattern.test(normalised)),
+    ) || /\b[\d,]{4,}\b/.test(normalised)
   );
 }
 
 /**
  * Parses Iranian bank SMS text and extracts structured transaction attributes.
+ * Supports specific bank rules with a generic fallback parser.
  */
 export function parseBankSms(rawText: string): BankSmsParsedResult {
   const normalised = normaliseSms(rawText);
 
-  // 1. Identify Bank
+  // 1. Identify Bank (or fallback to generic)
   let detectedBank: BankRule | null = null;
   for (const rule of BANK_RULES) {
     if (rule.namePatterns.some((p) => p.test(normalised))) {
@@ -97,12 +100,11 @@ export function parseBankSms(rawText: string): BankSmsParsedResult {
     }
   }
 
-  if (!detectedBank) {
-    throw new Error('بانک ارسال‌کننده پیامک شناسایی نشد.');
-  }
+  const bank = detectedBank ? detectedBank.bank : null;
+  const bankNameFa = detectedBank ? detectedBank.bankNameFa : 'سایر / عمومی';
 
   // 2. Identify Direction
-  const isDeposit = /واریز/.test(normalised);
+  const isDeposit = /واریز|واريز/.test(normalised);
   const isWithdraw = /برداشت/.test(normalised);
 
   if (!isDeposit && !isWithdraw) {
@@ -113,24 +115,35 @@ export function parseBankSms(rawText: string): BankSmsParsedResult {
   const docKind: TreasuryDocKind = isDeposit ? TreasuryDocKind.RECEIPT : TreasuryDocKind.PAYMENT;
 
   // 3. Extract Amount
-  // Matches patterns like:
-  // "واریز: 2,500,000 ریال", "واریز مبلغ: 3,000,000", "برداشت: 500,000 ریال"
   const amountMatch =
-    /(?:واریز|برداشت)(?:\s*مبلغ)?\s*[:\s]\s*([\d,]+(?:\.\d+)?)\s*(?:ریال|تومان)?/i.exec(normalised);
+    /(?:واریز|واريز|برداشت)(?:\s*مبلغ)?\s*[:\s]\s*([\d,]+(?:\.\d+)?)\s*(?:ریال|تومان|ريال)?/i.exec(normalised);
 
-  if (!amountMatch) {
-    throw new Error('مبلغ تراکنش در متن پیامک یافت نشد.');
+  let amountMinor: bigint;
+  let amountDecimal: string;
+
+  if (amountMatch) {
+    const rawAmountStr = amountMatch[1].replace(/,/g, '');
+    let amt = toMinor(rawAmountStr);
+    if (/تومان/.test(amountMatch[0])) {
+      amt = amt * 10n;
+    }
+    amountMinor = amt;
+    amountDecimal = minorToDecimal(amountMinor);
+  } else {
+    // Generic fallback: look for numbers explicitly marked with rial / toman / مبلغ
+    const genericAmountMatch =
+      /(?:مبلغ|مبلغ:\s*)?([\d,]{4,})\s*(?:ریال|تومان|ريال)/i.exec(normalised);
+    if (!genericAmountMatch) {
+      throw new Error('مبلغ تراکنش در متن پیامک یافت نشد.');
+    }
+    const rawAmountStr = genericAmountMatch[1].replace(/,/g, '');
+    let amt = toMinor(rawAmountStr);
+    if (/تومان/.test(genericAmountMatch[0])) {
+      amt = amt * 10n;
+    }
+    amountMinor = amt;
+    amountDecimal = minorToDecimal(amountMinor);
   }
-
-  const rawAmountStr = amountMatch[1].replace(/,/g, '');
-  let amountMinor = toMinor(rawAmountStr);
-
-  // If text mentions "تومان" right after the amount, convert to Rials (x10)
-  const fullAmountSegment = amountMatch[0];
-  if (/تومان/.test(fullAmountSegment)) {
-    amountMinor = amountMinor * 10n;
-  }
-  const amountDecimal = minorToDecimal(amountMinor);
 
   // 4. Extract Balance (مانده / موجودی)
   let balanceMinor: bigint | undefined;
@@ -207,8 +220,8 @@ export function parseBankSms(rawText: string): BankSmsParsedResult {
   }
 
   return {
-    bank: detectedBank.bank,
-    bankNameFa: detectedBank.bankNameFa,
+    bank,
+    bankNameFa,
     direction,
     docKind,
     amountMinor,

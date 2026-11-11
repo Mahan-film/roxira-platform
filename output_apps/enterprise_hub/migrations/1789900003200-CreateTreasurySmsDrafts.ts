@@ -17,7 +17,7 @@ export class CreateTreasurySmsDrafts1789900003200 implements MigrationInterface 
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "tenant_id" uuid NOT NULL,
         "user_id" uuid NOT NULL,
-        "bank" varchar(32) NOT NULL,
+        "bank" varchar(32) NULL,
         "bank_name_fa" varchar(64) NOT NULL,
         "direction" varchar(16) NOT NULL,
         "doc_kind" varchar(16) NOT NULL,

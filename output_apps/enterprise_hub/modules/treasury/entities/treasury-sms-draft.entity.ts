@@ -33,8 +33,8 @@ export class TreasurySmsDraftEntity {
   @Column({ type: 'uuid', name: 'user_id' })
   userId: string;
 
-  @Column({ type: 'varchar', length: 32 })
-  bank: BankCode;
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  bank: BankCode | null;
 
   @Column({ type: 'varchar', length: 64, name: 'bank_name_fa' })
   bankNameFa: string;
