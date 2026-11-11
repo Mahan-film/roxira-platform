@@ -87,7 +87,7 @@ export interface BarcodeLabelItemDto {
   sku: string;
   barcode?: string;
   title: string;
-  price?: number;
+  price?: string | number;
   count?: number;
 }
 

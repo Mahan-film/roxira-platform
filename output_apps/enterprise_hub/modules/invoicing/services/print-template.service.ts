@@ -25,6 +25,9 @@ import {
   RenderBarcodeSheetDto,
   UpdatePrintTemplateDto,
 } from '../dto/print-template.dto';
+import { toMinor } from '../../accounting/money';
+import { formatMoney } from '../../accounting/reports/pdf-writer';
+import { generateBarcodeSvg } from './barcode.helper';
 
 export const DEFAULT_COLUMNS_CONFIG: Record<PrintDocType, PrintColumnConfig[]> = {
   [PrintDocType.SALES_INVOICE]: [
@@ -78,10 +81,6 @@ export class PrintTemplateService {
       );
     }
 
-    if (dto.isDefault) {
-      await this.repository.clearDefault(tenantId, dto.docType, dto.paperSize);
-    }
-
     const columnsConfig =
       dto.columnsConfig && dto.columnsConfig.length > 0
         ? dto.columnsConfig
@@ -96,16 +95,19 @@ export class PrintTemplateService {
       ...(dto.options ?? {}),
     };
 
-    const saved = await this.repository.createTemplate(tenantId, {
-      docType: dto.docType,
-      paperSize: dto.paperSize,
-      title: dto.title.trim(),
-      isDefault: Boolean(dto.isDefault),
-      showLogo: dto.showLogo !== undefined ? Boolean(dto.showLogo) : true,
-      logoUrl: dto.logoUrl ?? null,
-      columnsConfig,
-      options,
-    });
+    const saved = await this.repository.saveWithDefault(
+      tenantId,
+      {
+        docType: dto.docType,
+        paperSize: dto.paperSize,
+        title: dto.title.trim(),
+        showLogo: dto.showLogo !== undefined ? Boolean(dto.showLogo) : true,
+        logoUrl: dto.logoUrl ?? null,
+        columnsConfig,
+        options,
+      },
+      Boolean(dto.isDefault),
+    );
 
     return this.toDto(saved);
   }
@@ -129,29 +131,20 @@ export class PrintTemplateService {
       }
     }
 
-    if (dto.isDefault) {
-      await this.repository.clearDefault(
-        tenantId,
-        existing.docType,
-        existing.paperSize,
-        id,
-      );
-    }
-
-    const data: Partial<PrintTemplateEntity> = {};
-    if (dto.title !== undefined) data.title = dto.title.trim();
-    if (dto.isDefault !== undefined) data.isDefault = Boolean(dto.isDefault);
-    if (dto.showLogo !== undefined) data.showLogo = Boolean(dto.showLogo);
-    if (dto.logoUrl !== undefined) data.logoUrl = dto.logoUrl;
-    if (dto.columnsConfig !== undefined) data.columnsConfig = dto.columnsConfig;
-    if (dto.options !== undefined) {
-      data.options = { ...existing.options, ...dto.options };
-    }
-
-    const updated = await this.repository.updateTemplate(tenantId, id, data);
-    if (!updated) {
-      throw new NotFoundException(`قالب چاپی با شناسه ${id} یافت نشد.`);
-    }
+    const updated = await this.repository.saveWithDefault(
+      tenantId,
+      {
+        docType: existing.docType,
+        paperSize: existing.paperSize,
+        ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
+        ...(dto.showLogo !== undefined ? { showLogo: Boolean(dto.showLogo) } : {}),
+        ...(dto.logoUrl !== undefined ? { logoUrl: dto.logoUrl } : {}),
+        ...(dto.columnsConfig !== undefined ? { columnsConfig: dto.columnsConfig } : {}),
+        ...(dto.options !== undefined ? { options: { ...existing.options, ...dto.options } } : {}),
+      },
+      dto.isDefault !== undefined ? Boolean(dto.isDefault) : existing.isDefault,
+      id,
+    );
 
     return this.toDto(updated);
   }
@@ -222,10 +215,24 @@ export class PrintTemplateService {
     const showPrice = dto.showPrice !== false;
     const showSku = dto.showSku !== false;
 
+    let totalCount = 0;
+    for (const item of dto.items) {
+      totalCount += item.count ?? 1;
+    }
+    if (totalCount > 500) {
+      throw new BadRequestException('حداکثر ۵۰۰ برچسب در یک درخواست مجاز است.');
+    }
+
+    const formatPriceRials = (amount?: string): string => {
+      if (!amount) return '';
+      const minor = toMinor(amount);
+      return `${formatMoney(minor)} ریال`;
+    };
+
     // Flatten items according to their requested count
     const labelItems: BarcodeLabelItemDto[] = [];
     for (const item of dto.items) {
-      const count = Math.max(1, Math.min(500, item.count ?? 1));
+      const count = Math.max(1, Math.min(100, item.count ?? 1));
       for (let i = 0; i < count; i++) {
         labelItems.push(item);
       }
@@ -234,48 +241,18 @@ export class PrintTemplateService {
     const colWidth = cols === 5 ? '19.2%' : '24%';
     const labelHeightMm = cols === 5 ? '32mm' : '36mm';
 
-    const formatPriceRials = (amount?: number): string => {
-      if (amount === undefined || amount === null) return '';
-      return `${amount.toLocaleString('fa-IR')} ریال`;
-    };
-
     const labelsHtml = labelItems
       .map((item) => {
         const barcodeVal = item.barcode?.trim() || item.sku.trim();
-        const priceStr = showPrice && item.price !== undefined ? formatPriceRials(item.price) : '';
+        const priceStr = showPrice && item.price ? formatPriceRials(item.price) : '';
+        const barcodeResult = generateBarcodeSvg(barcodeVal, 24);
+
         return `
           <div class="barcode-label" style="width: ${colWidth}; height: ${labelHeightMm};">
             <div class="label-title" title="${escapeXml(item.title)}">${escapeXml(item.title)}</div>
             ${showSku ? `<div class="label-sku">کد: ${escapeXml(item.sku)}</div>` : ''}
             <div class="label-barcode-box">
-              <svg class="barcode-svg" viewBox="0 0 100 24" preserveAspectRatio="none">
-                <!-- simulated vector 1D barcode stripes -->
-                <rect x="2" y="2" width="2" height="20" fill="#000"/>
-                <rect x="6" y="2" width="1" height="20" fill="#000"/>
-                <rect x="9" y="2" width="3" height="20" fill="#000"/>
-                <rect x="14" y="2" width="2" height="20" fill="#000"/>
-                <rect x="18" y="2" width="1" height="20" fill="#000"/>
-                <rect x="21" y="2" width="3" height="20" fill="#000"/>
-                <rect x="26" y="2" width="2" height="20" fill="#000"/>
-                <rect x="30" y="2" width="1" height="20" fill="#000"/>
-                <rect x="33" y="2" width="2" height="20" fill="#000"/>
-                <rect x="37" y="2" width="3" height="20" fill="#000"/>
-                <rect x="42" y="2" width="1" height="20" fill="#000"/>
-                <rect x="45" y="2" width="2" height="20" fill="#000"/>
-                <rect x="49" y="2" width="3" height="20" fill="#000"/>
-                <rect x="54" y="2" width="1" height="20" fill="#000"/>
-                <rect x="57" y="2" width="2" height="20" fill="#000"/>
-                <rect x="61" y="2" width="3" height="20" fill="#000"/>
-                <rect x="66" y="2" width="1" height="20" fill="#000"/>
-                <rect x="69" y="2" width="2" height="20" fill="#000"/>
-                <rect x="73" y="2" width="3" height="20" fill="#000"/>
-                <rect x="78" y="2" width="1" height="20" fill="#000"/>
-                <rect x="81" y="2" width="2" height="20" fill="#000"/>
-                <rect x="85" y="2" width="3" height="20" fill="#000"/>
-                <rect x="90" y="2" width="1" height="20" fill="#000"/>
-                <rect x="93" y="2" width="2" height="20" fill="#000"/>
-                <rect x="97" y="2" width="1" height="20" fill="#000"/>
-              </svg>
+              ${barcodeResult.svg}
               <div class="label-barcode-digits">${escapeXml(barcodeVal)}</div>
             </div>
             ${priceStr ? `<div class="label-price">${priceStr}</div>` : ''}
@@ -311,65 +288,74 @@ export class PrintTemplateService {
     .sheet-container {
       display: flex;
       flex-wrap: wrap;
-      justify-content: flex-start;
-      gap: 3mm 1.5%;
+      align-content: flex-start;
+      gap: 2mm 1.5mm;
       width: 100%;
+      margin: 0 auto;
     }
     .barcode-label {
       border: 1px dashed #bbb;
       border-radius: 4px;
-      padding: 2mm;
+      padding: 2.5mm 2mm;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
       align-items: center;
       text-align: center;
-      overflow: hidden;
       page-break-inside: avoid;
+      background: #fff;
+      overflow: hidden;
     }
     .label-title {
+      font-weight: 700;
       font-size: 7.5pt;
-      font-weight: 600;
-      line-height: 1.15;
-      max-height: 2.3em;
+      line-height: 1.2;
+      max-height: 2.4em;
       overflow: hidden;
       text-overflow: ellipsis;
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
+      width: 100%;
     }
     .label-sku {
       font-size: 6.5pt;
-      color: #333;
+      color: #444;
+      font-family: monospace;
       margin-top: 1px;
     }
     .label-barcode-box {
       width: 90%;
-      margin: 1.5px 0;
-      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 2px 0;
     }
     .barcode-svg {
       width: 100%;
-      height: 14px;
+      height: 22px;
       display: block;
     }
     .label-barcode-digits {
       font-family: monospace;
-      font-size: 6.5pt;
-      letter-spacing: 1px;
-      margin-top: 0.5px;
+      font-size: 7pt;
+      letter-spacing: 1.5px;
+      margin-top: 1px;
     }
     .label-price {
-      font-size: 7.5pt;
-      font-weight: bold;
-      color: #000;
+      font-size: 8pt;
+      font-weight: 800;
+      color: #111;
+      border-top: 1px solid #ddd;
+      width: 100%;
+      padding-top: 1.5px;
     }
     @media print {
       body {
         margin: 0;
       }
       .barcode-label {
-        border-color: #ddd;
+        border: 1px dashed #ccc;
       }
     }
   </style>
@@ -382,28 +368,27 @@ export class PrintTemplateService {
 </html>`;
   }
 
-  toDto(e: PrintTemplateEntity): PrintTemplateResponseDto {
+  private toDto(entity: PrintTemplateEntity): PrintTemplateResponseDto {
     return {
-      id: e.id,
-      docType: e.docType,
-      docTypeLabel: PRINT_DOC_TYPE_LABELS[e.docType] ?? e.docType,
-      paperSize: e.paperSize,
-      paperSizeLabel: PRINT_PAPER_SIZE_LABELS[e.paperSize] ?? e.paperSize,
-      title: e.title,
-      isDefault: e.isDefault,
-      showLogo: e.showLogo,
-      logoUrl: e.logoUrl,
-      columnsConfig: e.columnsConfig ?? [],
-      options: e.options ?? {},
-      createdAt: e.createdAt instanceof Date ? e.createdAt.toISOString() : String(e.createdAt),
-      updatedAt: e.updatedAt instanceof Date ? e.updatedAt.toISOString() : String(e.updatedAt),
+      id: entity.id,
+      docType: entity.docType,
+      docTypeLabel: PRINT_DOC_TYPE_LABELS[entity.docType] ?? entity.docType,
+      paperSize: entity.paperSize,
+      paperSizeLabel: PRINT_PAPER_SIZE_LABELS[entity.paperSize] ?? entity.paperSize,
+      title: entity.title,
+      isDefault: entity.isDefault,
+      showLogo: entity.showLogo,
+      logoUrl: entity.logoUrl,
+      columnsConfig: entity.columnsConfig,
+      options: entity.options,
+      createdAt: entity.createdAt.toISOString(),
+      updatedAt: entity.updatedAt.toISOString(),
     };
   }
 }
 
 function escapeXml(unsafe: string): string {
-  if (!unsafe) return '';
-  return unsafe
+  return (unsafe ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')

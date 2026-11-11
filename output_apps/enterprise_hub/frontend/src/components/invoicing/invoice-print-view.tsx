@@ -1,11 +1,14 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { CheckCircle2, Pencil, Printer, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { printSalesInvoice } from "@/lib/print/open-sales-invoice-window";
 import { printSalesInvoiceA5 } from "@/lib/print/open-sales-invoice-a5-window";
+import { getDefaultPrintTemplate } from "@/lib/api/print-templates-client";
+import { PrintDocType, PrintPaperSize, type PrintTemplateDto } from "@/types/print-template";
 import {
   formatGregorianDate,
   formatJalaliDate,
@@ -50,6 +53,20 @@ export function InvoicePrintView({
   const canEdit =
     invoice.status === InvoiceStatus.DRAFT ||
     invoice.status === InvoiceStatus.ISSUED;
+
+  const [defaultTemplate, setDefaultTemplate] = useState<PrintTemplateDto | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    getDefaultPrintTemplate(PrintDocType.SALES_INVOICE)
+      .then((tpl) => {
+        if (active) setDefaultTemplate(tpl);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const foreign = isForeignInvoice(invoice);
   const formatDate = (value?: string | Date | null) =>
@@ -104,7 +121,7 @@ export function InvoicePrintView({
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => printSalesInvoice(invoice, statusLabel(invoice.status))}
+              onClick={() => printSalesInvoice(invoice, statusLabel(invoice.status), defaultTemplate ?? undefined)}
             >
               <Printer />
               چاپ
@@ -112,7 +129,9 @@ export function InvoicePrintView({
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => printSalesInvoiceA5(invoice, statusLabel(invoice.status))}
+              onClick={() =>
+                printSalesInvoiceA5(invoice, statusLabel(invoice.status))
+              }
             >
               <Printer />
               چاپ A5

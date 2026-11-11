@@ -1,6 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import {
-  DataSource,
   EntityManager,
   FindOptionsWhere,
   Repository,
@@ -13,7 +12,6 @@ import { PrintDocType, PrintPaperSize } from '../enums/print-template.enum';
 export class PrintTemplateRepository {
   constructor(
     private readonly scope: TenantScope,
-    private readonly dataSource: DataSource,
   ) {}
 
   private withRepo<T>(
@@ -22,6 +20,42 @@ export class PrintTemplateRepository {
     work: (repo: Repository<PrintTemplateEntity>, m?: EntityManager) => Promise<T>,
   ): Promise<T> {
     return this.scope.within(tenantId, manager, (m) => work(m.getRepository(PrintTemplateEntity), m));
+  }
+
+  async saveWithDefault(
+    tenantId: string,
+    data: Partial<PrintTemplateEntity>,
+    isDefault: boolean,
+    existingId?: number,
+  ): Promise<PrintTemplateEntity> {
+    return this.scope.within(tenantId, undefined, async (manager) => {
+      const repo = manager.getRepository(PrintTemplateEntity);
+      if (isDefault) {
+        const qb = repo
+          .createQueryBuilder()
+          .update(PrintTemplateEntity)
+          .set({ isDefault: false, updatedAt: new Date() })
+          .where('tenant_id = :tenantId AND doc_type = :docType AND paper_size = :paperSize', {
+            tenantId,
+            docType: data.docType,
+            paperSize: data.paperSize,
+          });
+        if (existingId) {
+          qb.andWhere('id != :existingId', { existingId });
+        }
+        await qb.execute();
+      }
+      if (existingId) {
+        const existing = await repo.findOne({ where: { id: existingId, tenantId } });
+        if (!existing) {
+          throw new NotFoundException(`قالب چاپی با شناسه ${existingId} یافت نشد.`);
+        }
+        Object.assign(existing, data, { isDefault, updatedAt: new Date() });
+        return repo.save(existing);
+      }
+      const created = repo.create({ ...data, tenantId, isDefault });
+      return repo.save(created);
+    });
   }
 
   async createTemplate(

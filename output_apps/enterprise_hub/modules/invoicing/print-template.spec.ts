@@ -1,9 +1,10 @@
 import 'reflect-metadata';
+import { BadRequestException } from '@nestjs/common';
 import { PrintDocType, PrintPaperSize } from './enums/print-template.enum';
 import { PrintColumnConfig, PrintTemplateEntity } from './entities/print-template.entity';
 import { PrintTemplateService, DEFAULT_COLUMNS_CONFIG } from './services/print-template.service';
 import { PrintTemplateRepository } from './repositories/print-template.repository';
-import { CreatePrintTemplateDto, RenderBarcodeSheetDto } from './dto/print-template.dto';
+import { generateBarcodeSvg, encodeCode128Svg, encodeEan13Svg, isEan13 } from './services/barcode.helper';
 
 describe('PrintTemplateService & Repository', () => {
   let service: PrintTemplateService;
@@ -18,14 +19,27 @@ describe('PrintTemplateService & Repository', () => {
     nextId = 1;
 
     mockRepo = {
-      createTemplate: jest.fn(async (tId: string, data: any) => {
+      saveWithDefault: jest.fn(async (tId: string, data: any, isDefault: boolean, existingId?: number) => {
+        if (isDefault) {
+          for (const t of templatesStore) {
+            if (t.tenantId === tId && t.docType === data.docType && t.paperSize === data.paperSize && t.id !== existingId) {
+              t.isDefault = false;
+            }
+          }
+        }
+        if (existingId) {
+          const idx = templatesStore.findIndex((t) => t.tenantId === tId && t.id === existingId);
+          if (idx === -1) throw new Error('Not found');
+          templatesStore[idx] = { ...templatesStore[idx], ...data, isDefault, updatedAt: new Date() };
+          return templatesStore[idx];
+        }
         const entity: PrintTemplateEntity = {
           id: nextId++,
           tenantId: tId,
           docType: data.docType,
           paperSize: data.paperSize ?? PrintPaperSize.A4,
           title: data.title,
-          isDefault: data.isDefault ?? false,
+          isDefault,
           showLogo: data.showLogo ?? true,
           logoUrl: data.logoUrl ?? null,
           columnsConfig: data.columnsConfig ?? DEFAULT_COLUMNS_CONFIG[data.docType as PrintDocType],
@@ -72,12 +86,6 @@ describe('PrintTemplateService & Repository', () => {
           }
         }
       }),
-      updateTemplate: jest.fn(async (tId: string, id: number, data: any) => {
-        const idx = templatesStore.findIndex((t) => t.tenantId === tId && t.id === id);
-        if (idx === -1) return null;
-        templatesStore[idx] = { ...templatesStore[idx], ...data, updatedAt: new Date() };
-        return templatesStore[idx];
-      }),
       delete: jest.fn(async (tId: string, id: number) => {
         const idx = templatesStore.findIndex((t) => t.tenantId === tId && t.id === id);
         if (idx === -1) return false;
@@ -122,7 +130,7 @@ describe('PrintTemplateService & Repository', () => {
   });
 
   describe('CRUD operations', () => {
-    it('creates, reads, updates and deletes a print template', async () => {
+    it('creates, reads, updates and deletes a print template atomically', async () => {
       const created = await service.create(tenantId, {
         title: 'قالب حرارتی ۸۰ میلی‌متری',
         docType: PrintDocType.SALES_INVOICE,
@@ -170,8 +178,8 @@ describe('PrintTemplateService & Repository', () => {
     });
   });
 
-  describe('Barcode label sheets', () => {
-    it('generates 4-column barcode label sheet HTML', () => {
+  describe('Barcode label sheets & Vector SVG encoding', () => {
+    it('generates 4-column barcode label sheet HTML with genuine EAN-13 vector SVG', () => {
       const html = service.renderBarcodeLabelSheetHtml({
         columns: 4,
         showPrice: true,
@@ -181,7 +189,7 @@ describe('PrintTemplateService & Repository', () => {
             sku: 'SKU-001',
             barcode: '6261234567890',
             title: 'شامپو پروتئینه',
-            price: 500000,
+            price: '500000', // 500,000 Rials
             count: 4,
           },
         ],
@@ -191,9 +199,12 @@ describe('PrintTemplateService & Repository', () => {
       expect(html).toContain('شامپو پروتئینه');
       expect(html).toContain('6261234567890');
       expect(html).toContain('کد: SKU-001');
+      expect(html).toContain('<svg class="barcode-svg"');
+      expect(html).toContain('<rect x="');
+      expect(html).toContain('۵۰۰٬۰۰۰ ریال');
     });
 
-    it('generates 5-column barcode label sheet HTML', () => {
+    it('generates 5-column barcode label sheet HTML with genuine Code128 vector SVG', () => {
       const html = service.renderBarcodeLabelSheetHtml({
         columns: 5,
         showPrice: false,
@@ -201,7 +212,7 @@ describe('PrintTemplateService & Repository', () => {
         items: [
           {
             sku: 'SKU-ABC',
-            barcode: '12345678',
+            barcode: 'PROD-9988',
             title: 'روغن موتور',
             count: 5,
           },
@@ -210,7 +221,38 @@ describe('PrintTemplateService & Repository', () => {
 
       expect(html).toContain('width: 19.2%');
       expect(html).toContain('روغن موتور');
-      expect(html).toContain('12345678');
+      expect(html).toContain('PROD-9988');
+      expect(html).toContain('<svg class="barcode-svg"');
+      expect(html).toContain('<rect x="');
+    });
+
+    it('rejects requests with more than 500 total barcode labels to prevent DoS', () => {
+      expect(() =>
+        service.renderBarcodeLabelSheetHtml({
+          columns: 4,
+          items: [
+            { sku: 'A', title: 'A', count: 300 },
+            { sku: 'B', title: 'B', count: 250 },
+          ],
+        }),
+      ).toThrow(BadRequestException);
+    });
+
+    it('encodes real Code128 vector SVG with valid quiet zone and checksum', () => {
+      const res = generateBarcodeSvg('ROXIRA-POS-01');
+      expect(res.symbology).toBe('Code128');
+      expect(res.svg).toContain('<svg class="barcode-svg"');
+      expect(res.svg).toContain('<rect x="10"'); // Quiet zone
+      expect(res.svg).toContain('viewBox="0 0');
+    });
+
+    it('encodes real EAN-13 vector SVG with 30 bars and guard patterns', () => {
+      const res = generateBarcodeSvg('6260000000011');
+      expect(res.symbology).toBe('EAN-13');
+      expect(res.svg).toContain('<svg class="barcode-svg"');
+      expect(res.svg).toContain('<rect x="7"'); // EAN quiet zone
+      const matches = res.svg.match(/<rect /g);
+      expect(matches).toHaveLength(30);
     });
   });
 });

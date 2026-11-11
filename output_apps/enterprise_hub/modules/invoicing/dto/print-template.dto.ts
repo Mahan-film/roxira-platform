@@ -1,14 +1,18 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsEnum,
   IsIn,
   IsInt,
+  IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -19,6 +23,7 @@ import { PrintDocType, PrintPaperSize } from '../enums/print-template.enum';
 export class PrintColumnConfigDto {
   @ApiProperty({ description: 'کلید فنی فیلد یا ستون', example: 'description' })
   @IsString()
+  @Matches(/^[a-zA-Z0-9_-]{1,64}$/, { message: 'کلید ستون فقط می‌تواند شامل حروف، اعداد، خط فاصله و زیرخط باشد' })
   @MaxLength(64)
   key: string;
 
@@ -47,6 +52,43 @@ export class PrintColumnConfigDto {
   widthPercent?: number;
 }
 
+export class PrintTemplateOptionsDto {
+  @ApiPropertyOptional({ description: 'یادداشت یا متن پاورقی' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  footerNote?: string;
+
+  @ApiPropertyOptional({ description: 'تعداد ستون‌های بارکد (۴ یا ۵)' })
+  @IsOptional()
+  @IsIn([4, 5])
+  @Type(() => Number)
+  barcodeColumns?: 4 | 5;
+
+  @ApiPropertyOptional({ description: 'نمایش قیمت در برچسب بارکد' })
+  @IsOptional()
+  @IsBoolean()
+  showPrice?: boolean;
+
+  @ApiPropertyOptional({ description: 'نمایش کد کالا در برچسب بارکد' })
+  @IsOptional()
+  @IsBoolean()
+  showSku?: boolean;
+
+  @ApiPropertyOptional({ description: 'نمایش جایگاه‌های امضا' })
+  @IsOptional()
+  @IsBoolean()
+  showSignatures?: boolean;
+
+  @ApiPropertyOptional({ description: 'عناوین امضاکنندگان' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @IsString({ each: true })
+  @MaxLength(64, { each: true })
+  signatures?: string[];
+}
+
 export class CreatePrintTemplateDto {
   @ApiProperty({
     enum: PrintDocType,
@@ -66,6 +108,7 @@ export class CreatePrintTemplateDto {
 
   @ApiProperty({ description: 'نام یا عنوان قالب چاپی', example: 'قالب رسمی فاکتور فروش شرکتی' })
   @IsString()
+  @IsNotEmpty({ message: 'عنوان قالب نمی‌تواند خالی باشد' })
   @MaxLength(128)
   title: string;
 
@@ -79,34 +122,41 @@ export class CreatePrintTemplateDto {
   @IsBoolean()
   showLogo?: boolean;
 
-  @ApiPropertyOptional({ description: 'آدرس تصویر لوگوی سفارشی' })
+  @ApiPropertyOptional({ description: 'آدرس تصویر لوگوی سفارشی (https یا مسیر محلی امن)' })
   @IsOptional()
   @IsString()
   @MaxLength(512)
+  @Matches(/^(https:\/\/[a-zA-Z0-9_.-]+(:[0-9]+)?(\/[^\s]*)?|data:image\/(png|jpeg|jpg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+|\/[a-zA-Z0-9_.-]+(\/[^\s]*)?)$/, {
+    message: 'آدرس لوگو باید یک URL معتبر امن (https) یا مسیر داخلی باشد',
+  })
   logoUrl?: string;
 
   @ApiPropertyOptional({
     type: [PrintColumnConfigDto],
-    description: 'تنظیمات و چیدمان ستون‌های جدول چاپ',
+    description: 'تنظیمات و چیدمان ستون‌های جدول چاپ (حداکثر ۵۰ ستون)',
   })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(50)
   @ValidateNested({ each: true })
   @Type(() => PrintColumnConfigDto)
   columnsConfig?: PrintColumnConfigDto[];
 
   @ApiPropertyOptional({
+    type: PrintTemplateOptionsDto,
     description: 'سایر گزینه‌های چاپ (یادداشت‌ها، ستون‌های بارکد ۴ یا ۵، امضاها)',
-    example: { barcodeColumns: 4, showPrice: true, headerNotes: 'توضیحات سربرگ' },
   })
   @IsOptional()
-  options?: Record<string, any>;
+  @ValidateNested()
+  @Type(() => PrintTemplateOptionsDto)
+  options?: PrintTemplateOptionsDto;
 }
 
 export class UpdatePrintTemplateDto {
   @ApiPropertyOptional({ description: 'نام یا عنوان قالب چاپی' })
   @IsOptional()
   @IsString()
+  @IsNotEmpty({ message: 'عنوان قالب نمی‌تواند خالی باشد' })
   @MaxLength(128)
   title?: string;
 
@@ -124,6 +174,9 @@ export class UpdatePrintTemplateDto {
   @IsOptional()
   @IsString()
   @MaxLength(512)
+  @Matches(/^(https:\/\/[a-zA-Z0-9_.-]+(:[0-9]+)?(\/[^\s]*)?|data:image\/(png|jpeg|jpg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+|\/[a-zA-Z0-9_.-]+(\/[^\s]*)?)$/, {
+    message: 'آدرس لوگو باید یک URL معتبر امن (https) یا مسیر داخلی باشد',
+  })
   logoUrl?: string;
 
   @ApiPropertyOptional({
@@ -132,13 +185,19 @@ export class UpdatePrintTemplateDto {
   })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(50)
   @ValidateNested({ each: true })
   @Type(() => PrintColumnConfigDto)
   columnsConfig?: PrintColumnConfigDto[];
 
-  @ApiPropertyOptional({ description: 'سایر گزینه‌های چاپ' })
+  @ApiPropertyOptional({
+    type: PrintTemplateOptionsDto,
+    description: 'سایر گزینه‌های چاپ',
+  })
   @IsOptional()
-  options?: Record<string, any>;
+  @ValidateNested()
+  @Type(() => PrintTemplateOptionsDto)
+  options?: PrintTemplateOptionsDto;
 }
 
 export class QueryPrintTemplateDto {
@@ -153,6 +212,17 @@ export class QueryPrintTemplateDto {
   paperSize?: PrintPaperSize;
 }
 
+export class GetDefaultTemplateQueryDto {
+  @ApiProperty({ enum: PrintDocType, description: 'نوع سند' })
+  @IsEnum(PrintDocType)
+  docType: PrintDocType;
+
+  @ApiPropertyOptional({ enum: PrintPaperSize, description: 'سایز کاغذ' })
+  @IsOptional()
+  @IsEnum(PrintPaperSize)
+  paperSize?: PrintPaperSize;
+}
+
 export class PrintTemplateResponseDto {
   @ApiProperty()
   id: number;
@@ -160,14 +230,14 @@ export class PrintTemplateResponseDto {
   @ApiProperty({ enum: PrintDocType })
   docType: PrintDocType;
 
-  @ApiProperty()
-  docTypeLabel: string;
+  @ApiPropertyOptional()
+  docTypeLabel?: string;
 
   @ApiProperty({ enum: PrintPaperSize })
   paperSize: PrintPaperSize;
 
-  @ApiProperty()
-  paperSizeLabel: string;
+  @ApiPropertyOptional()
+  paperSizeLabel?: string;
 
   @ApiProperty()
   title: string;
@@ -178,14 +248,14 @@ export class PrintTemplateResponseDto {
   @ApiProperty()
   showLogo: boolean;
 
-  @ApiPropertyOptional()
-  logoUrl?: string | null;
+  @ApiPropertyOptional({ nullable: true })
+  logoUrl: string | null;
 
   @ApiProperty({ type: [PrintColumnConfigDto] })
   columnsConfig: PrintColumnConfigDto[];
 
-  @ApiProperty()
-  options: Record<string, any>;
+  @ApiPropertyOptional()
+  options?: PrintTemplateOptionsDto;
 
   @ApiProperty()
   createdAt: string;
@@ -195,13 +265,15 @@ export class PrintTemplateResponseDto {
 }
 
 export class BarcodeLabelItemDto {
-  @ApiProperty({ description: 'کد کالا یا کد SKU', example: 'PRD-1001' })
+  @ApiProperty({ description: 'شناسه یا کد کالا (SKU)', example: 'SKU-10023' })
   @IsString()
+  @IsNotEmpty({ message: 'کد کالا الزامی است' })
   @MaxLength(64)
   sku: string;
 
   @ApiProperty({ description: 'عنوان کالا', example: 'لپ‌تاپ گیمینگ ایسوس مدل G16' })
   @IsString()
+  @IsNotEmpty({ message: 'عنوان کالا الزامی است' })
   @MaxLength(256)
   title: string;
 
@@ -211,18 +283,17 @@ export class BarcodeLabelItemDto {
   @MaxLength(64)
   barcode?: string;
 
-  @ApiPropertyOptional({ description: 'قیمت فروش به ریال', example: 450_000_000 })
+  @ApiPropertyOptional({ description: 'قیمت فروش به ریال', example: '450000000' })
   @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Type(() => Number)
-  price?: number;
+  @IsString()
+  @Matches(/^[0-9]+(\.[0-9]{1,2})?$/, { message: 'قیمت باید مقدار معتبر عددی به ریال باشد' })
+  price?: string;
 
-  @ApiPropertyOptional({ description: 'تعداد برچسب مورد نیاز از این کالا', default: 1 })
+  @ApiPropertyOptional({ description: 'تعداد برچسب مورد نیاز از این کالا (حداکثر ۱۰۰)', default: 1 })
   @IsOptional()
   @IsInt()
   @Min(1)
-  @Max(500)
+  @Max(100)
   @Type(() => Number)
   count?: number;
 }
@@ -234,8 +305,10 @@ export class RenderBarcodeSheetDto {
   @Type(() => Number)
   columns: 4 | 5;
 
-  @ApiProperty({ type: [BarcodeLabelItemDto], description: 'فهرست اقلام برای تولید شیت بارکد' })
+  @ApiProperty({ type: [BarcodeLabelItemDto], description: 'فهرست اقلام برای تولید شیت بارکد (حداکثر ۱۰۰ قلم)' })
   @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
   @ValidateNested({ each: true })
   @Type(() => BarcodeLabelItemDto)
   items: BarcodeLabelItemDto[];
