@@ -100,6 +100,47 @@ export const EMPLOYEE_STATUS_LABELS: Record<EmployeeStatus, string> = {
   [EmployeeStatus.TERMINATED]: 'پایان همکاری',
 };
 
+/** انواع مرخصی طبق قانون کار */
+export enum LeaveType {
+  ANNUAL = 'ANNUAL',
+  UNPAID = 'UNPAID',
+  SICK = 'SICK',
+  SPECIAL = 'SPECIAL',
+}
+
+/** وضعیت درخواست مرخصی */
+export enum LeaveStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+}
+
+/** وضعیت وام پرسنلی */
+export enum LoanStatus {
+  ACTIVE = 'ACTIVE',
+  PAID_OFF = 'PAID_OFF',
+  CANCELLED = 'CANCELLED',
+}
+
+export const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
+  [LeaveType.ANNUAL]: 'استحقاقی',
+  [LeaveType.UNPAID]: 'بدون حقوق',
+  [LeaveType.SICK]: 'استعلاجی',
+  [LeaveType.SPECIAL]: 'مناسبتی (ازدواج/فوت)',
+};
+
+export const LEAVE_STATUS_LABELS: Record<LeaveStatus, string> = {
+  [LeaveStatus.PENDING]: 'در انتظار بررسی',
+  [LeaveStatus.APPROVED]: 'تأییدشده',
+  [LeaveStatus.REJECTED]: 'ردشده',
+};
+
+export const LOAN_STATUS_LABELS: Record<LoanStatus, string> = {
+  [LoanStatus.ACTIVE]: 'جاری',
+  [LoanStatus.PAID_OFF]: 'تسویه‌شده',
+  [LoanStatus.CANCELLED]: 'لغوشده',
+};
+
 export const CONTRACT_TYPE_LABELS: Record<ContractType, string> = {
   [ContractType.PERMANENT]: 'دائم',
   [ContractType.FIXED_TERM]: 'مدت معین',

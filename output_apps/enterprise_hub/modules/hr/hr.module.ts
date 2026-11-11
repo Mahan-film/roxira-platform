@@ -10,6 +10,10 @@ import { EmployeeEntity } from './entities/employee.entity';
 import { EmploymentContractEntity } from './entities/employment-contract.entity';
 import { PayrollRunEntity } from './entities/payroll-run.entity';
 import { PayslipEntity } from './entities/payslip.entity';
+import { EmployeeAttendanceEntity } from './entities/employee-attendance.entity';
+import { EmployeeLeaveEntity } from './entities/employee-leave.entity';
+import { StaffLoanEntity } from './entities/staff-loan.entity';
+import { StaffLoanDeductionEntity } from './entities/staff-loan-deduction.entity';
 import { HrRepository } from './repositories/hr.repository';
 import { HrService } from './services/hr.service';
 import { PayrollRunService } from './services/payroll-run.service';
@@ -42,6 +46,10 @@ import { StatutoryService } from './statutory/statutory.service';
       PayrollRunEntity,
       ContractAllowanceEntity,
       StatutoryParameterEntity,
+      EmployeeAttendanceEntity,
+      EmployeeLeaveEntity,
+      StaffLoanEntity,
+      StaffLoanDeductionEntity,
     ]),
     AccessModule,
     AccountingModule,

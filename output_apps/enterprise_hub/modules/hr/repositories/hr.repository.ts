@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { TenantScope } from '../../access/services/tenant-scope';
 import {
   DataSource,
@@ -13,6 +13,9 @@ import {
 import {
   ContractStatus,
   EmployeeStatus,
+  LeaveStatus,
+  LeaveType,
+  LoanStatus,
   PayslipStatus,
 } from '../enums/hr.enum';
 import { ContractAllowanceEntity } from '../entities/contract-allowance.entity';
@@ -20,6 +23,18 @@ import { EmployeeEntity } from '../entities/employee.entity';
 import { EmploymentContractEntity } from '../entities/employment-contract.entity';
 import { PayrollRunEntity } from '../entities/payroll-run.entity';
 import { PayslipEntity } from '../entities/payslip.entity';
+import { EmployeeAttendanceEntity } from '../entities/employee-attendance.entity';
+import { EmployeeLeaveEntity } from '../entities/employee-leave.entity';
+import { StaffLoanEntity } from '../entities/staff-loan.entity';
+import { StaffLoanDeductionEntity } from '../entities/staff-loan-deduction.entity';
+import { fromMinor, toMinor } from '../../accounting/money';
+import {
+  isLeaveInPeriod,
+  isoDate,
+  jalaliMonthDays,
+  jalaliMonthEnd,
+  jalaliMonthStart,
+} from '../services/jalali-period';
 
 /**
  * سطر تجمیع حقوق قراردادهای فعال (خروجی Query Builder).
@@ -47,6 +62,10 @@ interface HrRepos {
   payslips: Repository<PayslipEntity>;
   payrollRuns: Repository<PayrollRunEntity>;
   allowances: Repository<ContractAllowanceEntity>;
+  attendances: Repository<EmployeeAttendanceEntity>;
+  leaves: Repository<EmployeeLeaveEntity>;
+  loans: Repository<StaffLoanEntity>;
+  loanDeductions: Repository<StaffLoanDeductionEntity>;
 }
 
 /**
@@ -84,6 +103,10 @@ export class HrRepository {
         payslips: m.getRepository(PayslipEntity),
         payrollRuns: m.getRepository(PayrollRunEntity),
         allowances: m.getRepository(ContractAllowanceEntity),
+        attendances: m.getRepository(EmployeeAttendanceEntity),
+        leaves: m.getRepository(EmployeeLeaveEntity),
+        loans: m.getRepository(StaffLoanEntity),
+        loanDeductions: m.getRepository(StaffLoanDeductionEntity),
       }),
     );
   }
@@ -590,6 +613,20 @@ export class HrRepository {
     });
   }
 
+  async findPayrollRunByIdForUpdate(
+    tenantId: string,
+    id: number,
+    manager?: EntityManager,
+  ): Promise<PayrollRunEntity | null> {
+    return this.use(tenantId, manager, async (r) => {
+      return r.payrollRuns
+        .createQueryBuilder('run')
+        .setLock('pessimistic_write')
+        .where('run.id = :id AND run.tenant_id = :tenantId', { id, tenantId })
+        .getOne();
+    });
+  }
+
   async findPayrollRunByPeriod(
     tenantId: string,
     periodYear: number,
@@ -660,8 +697,9 @@ export class HrRepository {
   async findPayslipsByRun(
     tenantId: string,
     payrollRunId: number,
+    manager?: EntityManager,
   ): Promise<PayslipEntity[]> {
-    return this.use(tenantId, undefined, async (r) => {
+    return this.use(tenantId, manager, async (r) => {
       return r.payslips.find({
         where: { tenantId, payrollRunId },
         relations: { employee: true },
@@ -727,5 +765,395 @@ export class HrRepository {
       { tenantId, employeeNumber: ILike(term) },
       { tenantId, nationalId: ILike(term) },
     ];
+  }
+
+  // ---------------------------------------------------------------------------
+  // کارکرد و حضور و غیاب (Attendance)
+  // ---------------------------------------------------------------------------
+
+  async saveAttendance(
+    tenantId: string,
+    data: Partial<EmployeeAttendanceEntity>,
+    manager?: EntityManager,
+  ): Promise<EmployeeAttendanceEntity> {
+    return this.use(tenantId, manager, async (r) => {
+      const now = new Date();
+      await r.attendances
+        .createQueryBuilder()
+        .insert()
+        .into(EmployeeAttendanceEntity)
+        .values({
+          tenantId,
+          employeeId: data.employeeId!,
+          periodYear: data.periodYear!,
+          periodMonth: data.periodMonth!,
+          workDays: data.workDays ?? 30,
+          overtimeHours: data.overtimeHours ?? 0,
+          nightHours: data.nightHours ?? 0,
+          holidayHours: data.holidayHours ?? 0,
+          absenceDays: data.absenceDays ?? 0,
+          unpaidLeaveDays: data.unpaidLeaveDays ?? 0,
+          notes: data.notes ?? null,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .orUpdate(
+          [
+            'work_days',
+            'overtime_hours',
+            'night_hours',
+            'holiday_hours',
+            'absence_days',
+            'unpaid_leave_days',
+            'notes',
+            'updated_at',
+          ],
+          ['tenant_id', 'employee_id', 'period_year', 'period_month'],
+        )
+        .execute();
+
+      return (await r.attendances.findOneOrFail({
+        where: {
+          tenantId,
+          employeeId: data.employeeId,
+          periodYear: data.periodYear,
+          periodMonth: data.periodMonth,
+        },
+        relations: ['employee'],
+      }));
+    });
+  }
+
+  async findAttendanceByPeriod(
+    tenantId: string,
+    periodYear: number,
+    periodMonth: number,
+    manager?: EntityManager,
+  ): Promise<EmployeeAttendanceEntity[]> {
+    return this.use(tenantId, manager, async (r) => {
+      return r.attendances.find({
+        where: { tenantId, periodYear, periodMonth },
+        relations: ['employee'],
+      });
+    });
+  }
+
+  async findEmployeeAttendance(
+    tenantId: string,
+    employeeId: number,
+    periodYear: number,
+    periodMonth: number,
+    manager?: EntityManager,
+  ): Promise<EmployeeAttendanceEntity | null> {
+    return this.use(tenantId, manager, async (r) => {
+      return r.attendances.findOne({
+        where: { tenantId, employeeId, periodYear, periodMonth },
+        relations: ['employee'],
+      });
+    });
+  }
+
+  async listAttendances(
+    tenantId: string,
+    query: { periodYear?: number; periodMonth?: number; employeeId?: number },
+    manager?: EntityManager,
+  ): Promise<EmployeeAttendanceEntity[]> {
+    return this.use(tenantId, manager, async (r) => {
+      const where: FindOptionsWhere<EmployeeAttendanceEntity> = { tenantId };
+      if (query.periodYear) where.periodYear = query.periodYear;
+      if (query.periodMonth) where.periodMonth = query.periodMonth;
+      if (query.employeeId) where.employeeId = query.employeeId;
+      return r.attendances.find({
+        where,
+        order: { periodYear: 'DESC', periodMonth: 'DESC', id: 'ASC' },
+        relations: ['employee'],
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // مرخصی‌ها (Leaves)
+  // ---------------------------------------------------------------------------
+
+  async createLeave(
+    tenantId: string,
+    data: Partial<EmployeeLeaveEntity>,
+    manager?: EntityManager,
+  ): Promise<EmployeeLeaveEntity> {
+    return this.use(tenantId, manager, async (r) => {
+      const entity = r.leaves.create({ ...data, tenantId });
+      return r.leaves.save(entity);
+    });
+  }
+
+  async findLeaveById(
+    tenantId: string,
+    id: number,
+    manager?: EntityManager,
+  ): Promise<EmployeeLeaveEntity | null> {
+    return this.use(tenantId, manager, async (r) => {
+      return r.leaves.findOne({
+        where: { tenantId, id },
+        relations: ['employee'],
+      });
+    });
+  }
+
+  async updateLeave(
+    tenantId: string,
+    id: number,
+    changes: Partial<EmployeeLeaveEntity>,
+    manager?: EntityManager,
+  ): Promise<EmployeeLeaveEntity> {
+    return this.use(tenantId, manager, async (r) => {
+      const leave = await r.leaves.findOne({ where: { tenantId, id } });
+      if (!leave) throw new Error(`مرخصی با شناسه ${id} یافت نشد.`);
+      Object.assign(leave, changes, { updatedAt: new Date() });
+      return r.leaves.save(leave);
+    });
+  }
+
+  async listLeaves(
+    tenantId: string,
+    query: { employeeId?: number; status?: LeaveStatus },
+    manager?: EntityManager,
+  ): Promise<EmployeeLeaveEntity[]> {
+    return this.use(tenantId, manager, async (r) => {
+      const where: FindOptionsWhere<EmployeeLeaveEntity> = { tenantId };
+      if (query.employeeId) where.employeeId = query.employeeId;
+      if (query.status) where.status = query.status;
+      return r.leaves.find({
+        where,
+        order: { id: 'DESC' },
+        relations: ['employee'],
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // وام‌های پرسنلی (Staff Loans)
+  // ---------------------------------------------------------------------------
+
+  async createStaffLoan(
+    tenantId: string,
+    data: Partial<StaffLoanEntity>,
+    manager?: EntityManager,
+  ): Promise<StaffLoanEntity> {
+    return this.use(tenantId, manager, async (r) => {
+      const entity = r.loans.create({ ...data, tenantId });
+      return r.loans.save(entity);
+    });
+  }
+
+  async findStaffLoanById(
+    tenantId: string,
+    id: number,
+    manager?: EntityManager,
+  ): Promise<StaffLoanEntity | null> {
+    return this.use(tenantId, manager, async (r) => {
+      return r.loans.findOne({
+        where: { tenantId, id },
+        relations: ['employee'],
+      });
+    });
+  }
+
+  async findActiveLoans(
+    tenantId: string,
+    employeeIds?: number[],
+    manager?: EntityManager,
+  ): Promise<StaffLoanEntity[]> {
+    return this.use(tenantId, manager, async (r) => {
+      const where: FindOptionsWhere<StaffLoanEntity> = {
+        tenantId,
+        status: LoanStatus.ACTIVE,
+      };
+      if (employeeIds && employeeIds.length > 0) {
+        where.employeeId = In(employeeIds);
+      }
+      return r.loans.find({
+        where,
+        order: { id: 'ASC' },
+        relations: ['employee'],
+      });
+    });
+  }
+
+  async listStaffLoans(
+    tenantId: string,
+    query: { employeeId?: number; status?: LoanStatus },
+    manager?: EntityManager,
+  ): Promise<StaffLoanEntity[]> {
+    return this.use(tenantId, manager, async (r) => {
+      const where: FindOptionsWhere<StaffLoanEntity> = { tenantId };
+      if (query.employeeId) where.employeeId = query.employeeId;
+      if (query.status) where.status = query.status;
+      return r.loans.find({
+        where,
+        order: { id: 'DESC' },
+        relations: ['employee'],
+      });
+    });
+  }
+
+  async findLoanByNumber(
+    tenantId: string,
+    loanNumber: string,
+    manager?: EntityManager,
+  ): Promise<StaffLoanEntity | null> {
+    return this.use(tenantId, manager, async (r) => {
+      return r.loans.findOne({ where: { tenantId, loanNumber } });
+    });
+  }
+
+  async findApprovedLeavesForPeriod(
+    tenantId: string,
+    periodYear: number,
+    periodMonth: number,
+    manager?: EntityManager,
+  ): Promise<EmployeeLeaveEntity[]> {
+    return this.use(tenantId, manager, async (r) => {
+      const monthDays = jalaliMonthDays(periodYear, periodMonth);
+      const mm = String(periodMonth).padStart(2, '0');
+      const dd = String(monthDays).padStart(2, '0');
+      const pStartSlash = `${periodYear}/${mm}/01`;
+      const pEndSlash = `${periodYear}/${mm}/${dd}`;
+      const pStartDash = `${periodYear}-${mm}-01`;
+      const pEndDash = `${periodYear}-${mm}-${dd}`;
+
+      const gStart = isoDate(jalaliMonthStart(periodYear, periodMonth));
+      const gEnd = isoDate(jalaliMonthEnd(periodYear, periodMonth));
+
+      const leaves = await r.leaves
+        .createQueryBuilder('l')
+        .where('l.tenant_id = :tenantId', { tenantId })
+        .andWhere('l.status = :status', { status: LeaveStatus.APPROVED })
+        .andWhere(
+          `((l.start_date <= :pEndSlash AND l.end_date >= :pStartSlash)
+            OR (l.start_date <= :pEndDash AND l.end_date >= :pStartDash)
+            OR (l.start_date <= :gEnd AND l.end_date >= :gStart))`,
+          { pStartSlash, pEndSlash, pStartDash, pEndDash, gStart, gEnd },
+        )
+        .leftJoinAndSelect('l.employee', 'employee')
+        .getMany();
+
+      return leaves.filter((leave) =>
+        isLeaveInPeriod(leave.startDate, leave.endDate, periodYear, periodMonth),
+      );
+    });
+  }
+
+  async hasPendingLoanDeductionsFromOtherRuns(
+    tenantId: string,
+    currentRunId: number,
+    manager?: EntityManager,
+  ): Promise<boolean> {
+    return this.use(tenantId, manager, async (r) => {
+      const count = await r.loanDeductions
+        .createQueryBuilder('d')
+        .where('d.tenant_id = :tenantId', { tenantId })
+        .andWhere('d.payroll_run_id != :currentRunId', { currentRunId })
+        .andWhere('d.status = :status', { status: 'PENDING' })
+        .getCount();
+      return count > 0;
+    });
+  }
+
+  async createLoanDeductions(
+    tenantId: string,
+    rows: Partial<StaffLoanDeductionEntity>[],
+    manager?: EntityManager,
+  ): Promise<void> {
+    if (rows.length === 0) return;
+    return this.use(tenantId, manager, async (r) => {
+      const entities = rows.map((row) =>
+        r.loanDeductions.create({ ...row, tenantId }),
+      );
+      await r.loanDeductions.save(entities);
+    });
+  }
+
+  async deleteLoanDeductionsByRun(
+    tenantId: string,
+    payrollRunId: number,
+    manager?: EntityManager,
+  ): Promise<void> {
+    return this.use(tenantId, manager, async (r) => {
+      await r.loanDeductions.delete({ tenantId, payrollRunId });
+    });
+  }
+
+  async markLoanDeductionsPosted(
+    tenantId: string,
+    payrollRunId: number,
+    manager?: EntityManager,
+  ): Promise<void> {
+    return this.use(tenantId, manager, async (r) => {
+      await r.loanDeductions
+        .createQueryBuilder()
+        .update(StaffLoanDeductionEntity)
+        .set({ status: 'POSTED', updatedAt: new Date() })
+        .where('tenant_id = :tenantId AND payroll_run_id = :payrollRunId', {
+          tenantId,
+          payrollRunId,
+        })
+        .execute();
+    });
+  }
+
+  async findLoanDeductionsByRun(
+    tenantId: string,
+    payrollRunId: number,
+    manager?: EntityManager,
+  ): Promise<StaffLoanDeductionEntity[]> {
+    return this.use(tenantId, manager, async (r) => {
+      return r.loanDeductions.find({
+        where: { tenantId, payrollRunId },
+        order: { id: 'ASC' },
+      });
+    });
+  }
+
+  async deductLoanInstalment(
+    tenantId: string,
+    loanId: number,
+    amount: number | string,
+    manager?: EntityManager,
+  ): Promise<StaffLoanEntity | null> {
+    return this.applyLoanDeduction(tenantId, loanId, amount, manager);
+  }
+
+  async applyLoanDeduction(
+    tenantId: string,
+    loanId: number,
+    amount: number | string,
+    manager?: EntityManager,
+  ): Promise<StaffLoanEntity | null> {
+    return this.use(tenantId, manager, async (r) => {
+      const loan = await r.loans
+        .createQueryBuilder('loan')
+        .setLock('pessimistic_write')
+        .where('loan.id = :loanId AND loan.tenant_id = :tenantId', {
+          loanId,
+          tenantId,
+        })
+        .getOne();
+      if (!loan || loan.status !== LoanStatus.ACTIVE) return null;
+      const remainingMinor = toMinor(loan.remainingAmount);
+      const deductMinor = toMinor(amount);
+      if (remainingMinor < deductMinor) {
+        throw new ConflictException(
+          `مانده وام ${loan.loanNumber} تغییر کرده و کمتر از قسط کسرشده است (${loan.remainingAmount} < ${amount})؛ حقوق را مجدداً محاسبه کنید.`,
+        );
+      }
+      const newRemainingMinor = remainingMinor - deductMinor;
+      loan.paidInstalments += 1;
+      loan.remainingAmount = fromMinor(newRemainingMinor) as number;
+      if (newRemainingMinor <= 0n) {
+        loan.status = LoanStatus.PAID_OFF;
+      }
+      loan.updatedAt = new Date();
+      return r.loans.save(loan);
+    });
   }
 }

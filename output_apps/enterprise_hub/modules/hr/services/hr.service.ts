@@ -43,12 +43,48 @@ import {
   ContractStatus,
   EmployeeStatus,
   Gender,
+  LeaveStatus,
+  LeaveType,
+  LoanStatus,
+  LEAVE_STATUS_LABELS,
+  LEAVE_TYPE_LABELS,
+  LOAN_STATUS_LABELS,
   MaritalStatus,
   PayslipStatus,
   WageTaxRegime,
 } from '../enums/hr.enum';
 import { HrRepository } from '../repositories/hr.repository';
-import { gregorianToJalali, jalaliMonthDays } from './jalali-period';
+import { EmployeeAttendanceEntity } from '../entities/employee-attendance.entity';
+import { EmployeeLeaveEntity } from '../entities/employee-leave.entity';
+import { StaffLoanEntity } from '../entities/staff-loan.entity';
+import {
+  AttendanceResponseDto,
+  QueryAttendanceDto,
+  RecordAttendanceDto,
+} from '../dto/attendance.dto';
+import {
+  CreateLeaveDto,
+  LeaveResponseDto,
+  QueryLeaveDto,
+  ReviewLeaveDto,
+} from '../dto/leave.dto';
+import {
+  CreateStaffLoanDto,
+  QueryStaffLoanDto,
+  StaffLoanResponseDto,
+} from '../dto/staff-loan.dto';
+import { gregorianToJalali, jalaliMonthDays, parseDateToJalali } from './jalali-period';
+
+function isDateBefore(d1: string, d2: string): boolean {
+  const p1 = parseDateToJalali(d1);
+  const p2 = parseDateToJalali(d2);
+  if (p1 && p2) {
+    const v1 = p1.jy * 10000 + p1.jm * 100 + p1.jd;
+    const v2 = p2.jy * 10000 + p2.jm * 100 + p2.jd;
+    return v1 < v2;
+  }
+  return d1 < d2;
+}
 import { calculateEndOfService } from './end-of-service';
 import { PreviewSettlementDto, SettlementPreviewDto } from '../dto/settlement.dto';
 import { ContractAllowanceDto, ReplaceAllowancesDto } from '../dto/contract-allowance.dto';
@@ -562,7 +598,7 @@ export class HrService {
       );
     }
 
-    if (dto.endDate && dto.endDate < dto.startDate) {
+    if (dto.endDate && isDateBefore(dto.endDate, dto.startDate)) {
       throw new BadRequestException(
         'تاریخ پایان قرارداد نمی‌تواند قبل از تاریخ شروع باشد.',
       );
@@ -997,6 +1033,239 @@ export class HrService {
       totalPayslips,
       averageNetPay:
         totalPayslips > 0 ? this.round(totalNetPay / totalPayslips) : 0,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // حضور و غیاب و کارکرد ماهانه
+  // ---------------------------------------------------------------------------
+
+  async recordAttendance(
+    tenantId: string,
+    dto: RecordAttendanceDto,
+  ): Promise<AttendanceResponseDto> {
+    const employee = await this.hrRepository.findEmployeeById(tenantId, dto.employeeId);
+    if (!employee) {
+      throw new NotFoundException(`کارمند با شناسه ${dto.employeeId} یافت نشد.`);
+    }
+    const saved = await this.hrRepository.saveAttendance(tenantId, {
+      employeeId: dto.employeeId,
+      periodYear: dto.periodYear,
+      periodMonth: dto.periodMonth,
+      workDays: dto.workDays ?? 30,
+      overtimeHours: dto.overtimeHours ?? 0,
+      nightHours: dto.nightHours ?? 0,
+      holidayHours: dto.holidayHours ?? 0,
+      absenceDays: dto.absenceDays ?? 0,
+      unpaidLeaveDays: dto.unpaidLeaveDays ?? 0,
+      notes: dto.notes ?? null,
+    });
+    return this.toAttendanceDto(saved, employee);
+  }
+
+  async listAttendances(
+    tenantId: string,
+    query: QueryAttendanceDto,
+  ): Promise<AttendanceResponseDto[]> {
+    const list = await this.hrRepository.listAttendances(tenantId, query);
+    return list.map((a) => this.toAttendanceDto(a, a.employee));
+  }
+
+  async getEmployeeAttendance(
+    tenantId: string,
+    employeeId: number,
+    year: number,
+    month: number,
+  ): Promise<AttendanceResponseDto | null> {
+    const a = await this.hrRepository.findEmployeeAttendance(tenantId, employeeId, year, month);
+    return a ? this.toAttendanceDto(a, a.employee) : null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // مرخصی‌ها
+  // ---------------------------------------------------------------------------
+
+  async requestLeave(
+    tenantId: string,
+    dto: CreateLeaveDto,
+  ): Promise<LeaveResponseDto> {
+    const employee = await this.hrRepository.findEmployeeById(tenantId, dto.employeeId);
+    if (!employee) {
+      throw new NotFoundException(`کارمند با شناسه ${dto.employeeId} یافت نشد.`);
+    }
+    if (isDateBefore(dto.endDate, dto.startDate)) {
+      throw new BadRequestException('تاریخ پایان مرخصی نمی‌تواند قبل از تاریخ شروع باشد.');
+    }
+    const saved = await this.hrRepository.createLeave(tenantId, {
+      employeeId: dto.employeeId,
+      leaveType: dto.leaveType,
+      startDate: dto.startDate,
+      endDate: dto.endDate,
+      days: dto.days,
+      description: dto.description ?? null,
+      status: LeaveStatus.PENDING,
+    });
+    return this.toLeaveDto(saved, employee);
+  }
+
+  async reviewLeave(
+    tenantId: string,
+    id: number,
+    dto: ReviewLeaveDto,
+    reviewerId?: string,
+  ): Promise<LeaveResponseDto> {
+    const leave = await this.hrRepository.findLeaveById(tenantId, id);
+    if (!leave) {
+      throw new NotFoundException(`مرخصی با شناسه ${id} یافت نشد.`);
+    }
+    if (leave.status !== LeaveStatus.PENDING) {
+      throw new BadRequestException('تنها مرخصی‌های در انتظار بررسی قابل تأیید یا رد هستند.');
+    }
+    if (dto.status !== LeaveStatus.APPROVED && dto.status !== LeaveStatus.REJECTED) {
+      throw new BadRequestException('وضعیت بررسی باید تایید یا رد باشد.');
+    }
+    if (!reviewerId) {
+      throw new BadRequestException('شناسه بازبین الزامی است.');
+    }
+    const approvedBy = reviewerId;
+    const updated = await this.hrRepository.updateLeave(tenantId, id, {
+      status: dto.status,
+      approvedBy,
+    });
+    return this.toLeaveDto(updated, leave.employee);
+  }
+
+  async listLeaves(
+    tenantId: string,
+    query: QueryLeaveDto,
+  ): Promise<LeaveResponseDto[]> {
+    const list = await this.hrRepository.listLeaves(tenantId, query);
+    return list.map((l) => this.toLeaveDto(l, l.employee));
+  }
+
+  // ---------------------------------------------------------------------------
+  // وام‌های پرسنلی
+  // ---------------------------------------------------------------------------
+
+  async createStaffLoan(
+    tenantId: string,
+    dto: CreateStaffLoanDto,
+  ): Promise<StaffLoanResponseDto> {
+    const employee = await this.hrRepository.findEmployeeById(tenantId, dto.employeeId);
+    if (!employee) {
+      throw new NotFoundException(`کارمند با شناسه ${dto.employeeId} یافت نشد.`);
+    }
+    if (dto.instalmentAmount > dto.principalAmount) {
+      throw new BadRequestException('مبلغ هر قسط نمی‌تواند بیشتر از اصل مبلغ وام باشد.');
+    }
+    const principalMinor = toMinor(dto.principalAmount);
+    const instalmentMinor = toMinor(dto.instalmentAmount);
+    if (instalmentMinor * BigInt(dto.totalInstalments) < principalMinor) {
+      throw new BadRequestException('مجموع اقساط (مبلغ هر قسط × تعداد اقساط) باید حداقل برابر با اصل مبلغ وام باشد.');
+    }
+    const loanNumber = dto.loanNumber ?? `LN-${Date.now().toString(36).toUpperCase()}-${dto.employeeId}`;
+    const existing = await this.hrRepository.findLoanByNumber(tenantId, loanNumber);
+    if (existing) {
+      throw new ConflictException(`وامی با شماره ${loanNumber} قبلاً برای این سازمان ثبت شده است.`);
+    }
+    try {
+      const saved = await this.hrRepository.createStaffLoan(tenantId, {
+        employeeId: dto.employeeId,
+        loanNumber,
+        title: dto.title,
+        principalAmount: dto.principalAmount,
+        instalmentAmount: dto.instalmentAmount,
+        totalInstalments: dto.totalInstalments,
+        paidInstalments: 0,
+        remainingAmount: dto.principalAmount,
+        status: LoanStatus.ACTIVE,
+        startDate: dto.startDate ?? null,
+      });
+      return this.toStaffLoanDto(saved, employee);
+    } catch (err: any) {
+      if (err?.code === '23505' || err?.driverError?.code === '23505') {
+        throw new ConflictException(`وامی با شماره ${loanNumber} قبلاً برای این سازمان ثبت شده است.`);
+      }
+      throw err;
+    }
+  }
+
+  async listStaffLoans(
+    tenantId: string,
+    query: QueryStaffLoanDto,
+  ): Promise<StaffLoanResponseDto[]> {
+    const list = await this.hrRepository.listStaffLoans(tenantId, query);
+    return list.map((l) => this.toStaffLoanDto(l, l.employee));
+  }
+
+  // DTO mappers
+  toAttendanceDto(
+    a: EmployeeAttendanceEntity,
+    employee?: EmployeeEntity,
+  ): AttendanceResponseDto {
+    return {
+      id: a.id,
+      employeeId: a.employeeId,
+      employeeName: employee ? `${employee.firstName} ${employee.lastName}`.trim() : undefined,
+      employeeNumber: employee?.employeeNumber,
+      periodYear: a.periodYear,
+      periodMonth: a.periodMonth,
+      workDays: Number(a.workDays),
+      overtimeHours: Number(a.overtimeHours),
+      nightHours: Number(a.nightHours),
+      holidayHours: Number(a.holidayHours),
+      absenceDays: Number(a.absenceDays),
+      unpaidLeaveDays: Number(a.unpaidLeaveDays),
+      notes: a.notes,
+      createdAt: a.createdAt?.toISOString?.() ?? new Date(a.createdAt).toISOString(),
+      updatedAt: a.updatedAt?.toISOString?.() ?? new Date(a.updatedAt).toISOString(),
+    };
+  }
+
+  toLeaveDto(
+    l: EmployeeLeaveEntity,
+    employee?: EmployeeEntity,
+  ): LeaveResponseDto {
+    return {
+      id: l.id,
+      employeeId: l.employeeId,
+      employeeName: employee ? `${employee.firstName} ${employee.lastName}`.trim() : undefined,
+      employeeNumber: employee?.employeeNumber,
+      leaveType: l.leaveType,
+      leaveTypeLabel: LEAVE_TYPE_LABELS[l.leaveType] ?? l.leaveType,
+      startDate: l.startDate,
+      endDate: l.endDate,
+      days: Number(l.days),
+      status: l.status,
+      statusLabel: LEAVE_STATUS_LABELS[l.status] ?? l.status,
+      description: l.description,
+      approvedBy: l.approvedBy,
+      createdAt: l.createdAt?.toISOString?.() ?? new Date(l.createdAt).toISOString(),
+      updatedAt: l.updatedAt?.toISOString?.() ?? new Date(l.updatedAt).toISOString(),
+    };
+  }
+
+  toStaffLoanDto(
+    l: StaffLoanEntity,
+    employee?: EmployeeEntity,
+  ): StaffLoanResponseDto {
+    return {
+      id: l.id,
+      employeeId: l.employeeId,
+      employeeName: employee ? `${employee.firstName} ${employee.lastName}`.trim() : undefined,
+      employeeNumber: employee?.employeeNumber,
+      loanNumber: l.loanNumber,
+      title: l.title,
+      principalAmount: Number(l.principalAmount),
+      instalmentAmount: Number(l.instalmentAmount),
+      totalInstalments: l.totalInstalments,
+      paidInstalments: l.paidInstalments,
+      remainingAmount: Number(l.remainingAmount),
+      status: l.status,
+      statusLabel: LOAN_STATUS_LABELS[l.status] ?? l.status,
+      startDate: l.startDate,
+      createdAt: l.createdAt?.toISOString?.() ?? new Date(l.createdAt).toISOString(),
+      updatedAt: l.updatedAt?.toISOString?.() ?? new Date(l.updatedAt).toISOString(),
     };
   }
 }

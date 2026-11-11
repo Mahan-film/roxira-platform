@@ -84,3 +84,79 @@ export function isoDate(date: Date): string {
     date.getUTCDate(),
   )}`;
 }
+
+/** Parse a date string (Jalali `YYYY/MM/DD` or Gregorian ISO `YYYY-MM-DD`) into Jalali parts { jy, jm, jd }. */
+export function parseDateToJalali(dateStr: string | null | undefined): { jy: number; jm: number; jd: number } | null {
+  if (!dateStr) return null;
+  const trimmed = dateStr.trim();
+  const jMatch = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(trimmed);
+  if (jMatch) {
+    const y = Number(jMatch[1]);
+    const m = Number(jMatch[2]);
+    const d = Number(jMatch[3]);
+    if (y >= 1300 && y <= 1500) {
+      return { jy: y, jm: m, jd: d };
+    }
+  }
+  return gregorianToJalali(trimmed);
+}
+
+/** Check if a leave date range overlaps with the given Jalali payroll period. */
+export function isLeaveInPeriod(
+  startDate: string | null | undefined,
+  endDate: string | null | undefined,
+  periodYear: number,
+  periodMonth: number,
+): boolean {
+  if (!startDate || !endDate) return false;
+  const s = parseDateToJalali(startDate);
+  const e = parseDateToJalali(endDate);
+  if (!s || !e) return false;
+
+  const startInt = s.jy * 10000 + s.jm * 100 + s.jd;
+  const endInt = e.jy * 10000 + e.jm * 100 + e.jd;
+  const monthDays = jalaliMonthDays(periodYear, periodMonth);
+  const periodStart = periodYear * 10000 + periodMonth * 100 + 1;
+  const periodEnd = periodYear * 10000 + periodMonth * 100 + monthDays;
+
+  return startInt <= periodEnd && endInt >= periodStart;
+}
+
+/**
+ * Calculate the number of overlapping days between a leave request and a Jalali payroll period.
+ * Prorates leaves that span multiple months so days are not deducted repeatedly.
+ */
+export function leaveDaysInPeriod(
+  startDate: string | null | undefined,
+  endDate: string | null | undefined,
+  periodYear: number,
+  periodMonth: number,
+  totalLeaveDays?: number,
+): number {
+  if (!startDate || !endDate) return 0;
+  const s = parseDateToJalali(startDate);
+  const e = parseDateToJalali(endDate);
+  if (!s || !e) return 0;
+
+  const startInt = s.jy * 10000 + s.jm * 100 + s.jd;
+  const endInt = e.jy * 10000 + e.jm * 100 + e.jd;
+  if (endInt < startInt) return 0;
+
+  const monthDays = jalaliMonthDays(periodYear, periodMonth);
+  const periodStart = periodYear * 10000 + periodMonth * 100 + 1;
+  const periodEnd = periodYear * 10000 + periodMonth * 100 + monthDays;
+
+  if (startInt > periodEnd || endInt < periodStart) return 0;
+
+  const overlapStart = Math.max(startInt, periodStart);
+  const overlapEnd = Math.min(endInt, periodEnd);
+
+  const overlapStartDay = overlapStart % 100;
+  const overlapEndDay = overlapEnd % 100;
+  const days = overlapEndDay - overlapStartDay + 1;
+
+  if (totalLeaveDays !== undefined && totalLeaveDays > 0) {
+    return Math.min(days, totalLeaveDays);
+  }
+  return Math.max(0, days);
+}

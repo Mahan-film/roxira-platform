@@ -13,7 +13,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
-import { toMinor } from '../../accounting/money';
+import { fromMinor, toMinor } from '../../accounting/money';
 import { AccountType } from '../../accounting/enums/accounting.enum';
 import { AccountingService } from '../../accounting/services/accounting.service';
 import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
@@ -38,9 +38,14 @@ import {
 } from '../dto/payroll-run.dto';
 import { EmployeeEntity } from '../entities/employee.entity';
 import { EmploymentContractEntity } from '../entities/employment-contract.entity';
+import { EmployeeAttendanceEntity } from '../entities/employee-attendance.entity';
+import { StaffLoanEntity } from '../entities/staff-loan.entity';
+import { StaffLoanDeductionEntity } from '../entities/staff-loan-deduction.entity';
 import { PayrollRunEntity } from '../entities/payroll-run.entity';
 import { PayslipEntity } from '../entities/payslip.entity';
 import {
+  LeaveStatus,
+  LeaveType,
   MaritalStatus,
   PAYROLL_RUN_STATUS_LABELS,
   PayrollRunStatus,
@@ -54,10 +59,12 @@ import { buildInsuranceList, InsuranceListWorker } from './insurance-list';
 import { buildWageTaxFiles, WageTaxFiles } from './wage-tax-files';
 import {
   compactJalali,
+  gregorianToJalali,
   isoDate,
   jalaliMonthDays,
   jalaliMonthEnd,
   jalaliMonthStart,
+  leaveDaysInPeriod,
 } from './jalali-period';
 import {
   calculatePayroll,
@@ -86,6 +93,33 @@ interface JournalLine {
   debit?: number;
   credit?: number;
   description?: string;
+}
+
+/** Check if loan deductions start on or before the payroll period. */
+export function isLoanEligibleForPeriod(
+  startDate: string | null | undefined,
+  periodYear: number,
+  periodMonth: number,
+): boolean {
+  if (!startDate) return true;
+  const trimmed = startDate.trim();
+  const jMatch = /^(\d{4})[-/](\d{1,2})/.exec(trimmed);
+  if (jMatch) {
+    const y = Number(jMatch[1]);
+    const m = Number(jMatch[2]);
+    if (y > 1300 && y < 1500) {
+      if (y > periodYear) return false;
+      if (y === periodYear && m > periodMonth) return false;
+      return true;
+    }
+  }
+  const gJalali = gregorianToJalali(trimmed);
+  if (gJalali) {
+    if (gJalali.jy > periodYear) return false;
+    if (gJalali.jy === periodYear && gJalali.jm > periodMonth) return false;
+    return true;
+  }
+  return true;
 }
 
 /**
@@ -243,6 +277,18 @@ export class PayrollRunService {
           );
         }
 
+        const hasPendingOther =
+          await this.hrRepository.hasPendingLoanDeductionsFromOtherRuns(
+            tenantId,
+            run.id,
+            manager,
+          );
+        if (hasPendingOther) {
+          throw new ConflictException(
+            'یک اجرای حقوق دیگر با اقساط کسرشده معلق وجود دارد؛ ابتدا آن را ثبت یا حذف کنید.',
+          );
+        }
+
         const employees = await this.hrRepository.findActiveEmployees(tenantId);
         const contracts = await this.hrRepository.findActiveContractsByEmployeeIds(
           tenantId,
@@ -288,9 +334,58 @@ export class PayrollRunService {
           dto.periodYear,
           dto.periodMonth,
         );
+        await this.hrRepository.deleteLoanDeductionsByRun(
+          tenantId,
+          run.id,
+          manager,
+        );
+        const [attendances, activeLoans, approvedLeaves] = await Promise.all([
+          this.hrRepository.findAttendanceByPeriod(
+            tenantId,
+            dto.periodYear,
+            dto.periodMonth,
+            manager,
+          ),
+          this.hrRepository.findActiveLoans(
+            tenantId,
+            employees.map((employee) => employee.id),
+            manager,
+          ),
+          this.hrRepository.findApprovedLeavesForPeriod(
+            tenantId,
+            dto.periodYear,
+            dto.periodMonth,
+            manager,
+          ),
+        ]);
+        const attendanceByEmployee = new Map<number, EmployeeAttendanceEntity>();
+        for (const attendance of attendances) {
+          attendanceByEmployee.set(attendance.employeeId, attendance);
+        }
+        const loansByEmployee = new Map<number, StaffLoanEntity[]>();
+        for (const loan of activeLoans) {
+          const list = loansByEmployee.get(loan.employeeId) ?? [];
+          list.push(loan);
+          loansByEmployee.set(loan.employeeId, list);
+        }
+        const unpaidLeavesByEmployee = new Map<number, number>();
+        for (const leave of approvedLeaves) {
+          if (leave.leaveType === LeaveType.UNPAID) {
+            const daysInMonth = leaveDaysInPeriod(
+              leave.startDate,
+              leave.endDate,
+              dto.periodYear,
+              dto.periodMonth,
+              Number(leave.days),
+            );
+            const current = unpaidLeavesByEmployee.get(leave.employeeId) ?? 0;
+            unpaidLeavesByEmployee.set(leave.employeeId, current + daysInMonth);
+          }
+        }
         const month = String(dto.periodMonth).padStart(2, '0');
         const skipped: PayrollRunSkippedDto[] = [];
         const rows: Partial<PayslipEntity>[] = [];
+        const loanDeductionsToCreate: Partial<StaffLoanDeductionEntity>[] = [];
         const now = new Date();
 
         for (const employee of employees) {
@@ -312,6 +407,55 @@ export class PayrollRunService {
             continue;
           }
           const item = items.get(employee.id);
+          const attendance = attendanceByEmployee.get(employee.id);
+          const empLoans = loansByEmployee.get(employee.id) ?? [];
+          const eligibleLoans = empLoans.filter(
+            (loan) =>
+              isLoanEligibleForPeriod(
+                loan.startDate,
+                dto.periodYear,
+                dto.periodMonth,
+              ) && Number(loan.remainingAmount) > 0,
+          );
+
+          let empLoanDeductionMinor = 0n;
+          const empLoanDeductions: Partial<StaffLoanDeductionEntity>[] = [];
+          for (const loan of eligibleLoans) {
+            const instalmentMinor = toMinor(loan.instalmentAmount);
+            const remainingMinor = toMinor(loan.remainingAmount);
+            const deductionMinor =
+              instalmentMinor < remainingMinor ? instalmentMinor : remainingMinor;
+            if (deductionMinor > 0n) {
+              empLoanDeductionMinor += deductionMinor;
+              empLoanDeductions.push({
+                tenantId,
+                loanId: loan.id,
+                payrollRunId: run.id,
+                employeeId: employee.id,
+                amount: fromMinor(deductionMinor) as number,
+                periodYear: dto.periodYear,
+                periodMonth: dto.periodMonth,
+                status: 'PENDING',
+              });
+            }
+          }
+          const loanDeduction = Number(fromMinor(empLoanDeductionMinor));
+
+          const overtimeHours = item?.overtimeHours ?? Number(attendance?.overtimeHours ?? 0);
+          const nightHours = item?.nightHours ?? Number(attendance?.nightHours ?? 0);
+          const holidayHours = item?.holidayHours ?? Number(attendance?.holidayHours ?? 0);
+          const leaveUnpaidDays = unpaidLeavesByEmployee.get(employee.id) ?? 0;
+          // If unpaid leave was recorded both through timesheet attendance and leave approval request,
+          // take the maximum to avoid double-penalizing the employee for the same unpaid absence.
+          const effectiveUnpaidDays = Math.max(
+            Number(attendance?.unpaidLeaveDays ?? 0),
+            leaveUnpaidDays,
+          );
+          const absenceDays =
+            item?.absenceDays ??
+            (Number(attendance?.absenceDays ?? 0) + effectiveUnpaidDays);
+          const otherDeductions = (item?.otherDeductions ?? 0) + loanDeduction;
+
           const result = calculatePayroll({
             rates,
             employeeInsuranceRate:
@@ -336,11 +480,11 @@ export class PayrollRunService {
               dto.periodYear,
               dto.periodMonth,
             ),
-            overtimeHours: item?.overtimeHours,
-            nightHours: item?.nightHours,
-            holidayHours: item?.holidayHours,
-            absenceDays: item?.absenceDays,
-            otherDeductions: item?.otherDeductions,
+            overtimeHours,
+            nightHours,
+            holidayHours,
+            absenceDays,
+            otherDeductions,
             insuranceSubject: contract.isInsuranceSubject,
           });
           if (result.netPay < 0) {
@@ -351,6 +495,7 @@ export class PayrollRunService {
             });
             continue;
           }
+          loanDeductionsToCreate.push(...empLoanDeductions);
           rows.push({
             payrollRunId: run.id,
             payslipNumber: `${PAYSLIP_NUMBER_PREFIX}-${dto.periodYear}${month}-${employee.employeeNumber}`,
@@ -384,10 +529,10 @@ export class PayrollRunService {
             otherDeductions: result.otherDeductions,
             netPay: result.netPay,
             workDays: result.workDays,
-            overtimeHours: item?.overtimeHours ?? 0,
-            nightHours: item?.nightHours ?? 0,
-            holidayHours: item?.holidayHours ?? 0,
-            absenceDays: item?.absenceDays ?? 0,
+            overtimeHours,
+            nightHours,
+            holidayHours,
+            absenceDays,
             status: PayslipStatus.DRAFT,
             journalEntryId: null,
             journalEntryNumber: null,
@@ -398,6 +543,11 @@ export class PayrollRunService {
         }
 
         await this.hrRepository.createPayslips(tenantId, rows, manager);
+        await this.hrRepository.createLoanDeductions(
+          tenantId,
+          loanDeductionsToCreate,
+          manager,
+        );
         const sum = (key: keyof PayslipEntity): number =>
           rows.reduce((total, row) => total + Number(row[key] ?? 0), 0);
         Object.assign(run, {
@@ -599,6 +749,21 @@ export class PayrollRunService {
     // number already exists for the tenant (e.g. a post that was interrupted
     // before the transaction fix), adopt it instead of failing on the duplicate.
     await this.hrRepository.runInTransaction(async (manager) => {
+      // Row lock on the payroll run inside the transaction prevents concurrent double posting
+      const lockedRun = await this.hrRepository.findPayrollRunByIdForUpdate(
+        tenantId,
+        run.id,
+        manager,
+      );
+      if (!lockedRun) {
+        throw new NotFoundException('اجرای حقوق پیدا نشد.');
+      }
+      if (lockedRun.status === PayrollRunStatus.POSTED) {
+        throw new ConflictException(
+          'این اجرای حقوق قبلاً در حسابداری ثبت شده است.',
+        );
+      }
+
       const existing = await this.accountingService.findJournalEntryByNumber(
         tenantId,
         entryNumber,
@@ -623,14 +788,14 @@ export class PayrollRunService {
       }
 
       const now = new Date();
-      Object.assign(run, {
+      Object.assign(lockedRun, {
         status: PayrollRunStatus.POSTED,
         journalEntryId: posted.entryId,
         journalEntryNumber: posted.entryNumber,
         postedAt: now,
         updatedAt: now,
       });
-      await this.hrRepository.savePayrollRun(tenantId, run, manager);
+      await this.hrRepository.savePayrollRun(tenantId, lockedRun, manager);
       await this.hrRepository.markRunPayslips(
         tenantId,
         run.id,
@@ -642,6 +807,24 @@ export class PayrollRunService {
         },
         manager,
       );
+
+      // Deduct ONLY loan instalments that were deducted on payslips of this run (LESSONS 18)
+      const deductions = await this.hrRepository.findLoanDeductionsByRun(
+        tenantId,
+        run.id,
+        manager,
+      );
+      for (const deduction of deductions) {
+        if (Number(deduction.amount) > 0) {
+          await this.hrRepository.applyLoanDeduction(
+            tenantId,
+            deduction.loanId,
+            deduction.amount,
+            manager,
+          );
+        }
+      }
+      await this.hrRepository.markLoanDeductionsPosted(tenantId, run.id, manager);
     });
     return this.findRun(tenantId, run.id);
   }

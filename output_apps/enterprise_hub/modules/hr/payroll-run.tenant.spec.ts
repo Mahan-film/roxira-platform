@@ -28,6 +28,7 @@ import { PayrollRunService } from './services/payroll-run.service';
 import { reconcilePayrollRun } from './services/payroll-reconciliation';
 import { fakeStatutory } from './statutory/__fixtures__/seeded-rates';
 import { fakePostingRules } from './__fixtures__/fake-posting-rules';
+import { isLeaveInPeriod } from './services/jalali-period';
 
 /** Accounting fake: keeps a per-tenant chart and rejects unbalanced entries. */
 class FakeAccountingService {
@@ -111,6 +112,124 @@ class InMemoryPayrollRepository {
   contracts: EmploymentContractEntity[] = [];
   payslips: PayslipEntity[] = [];
   runs: PayrollRunEntity[] = [];
+  attendances: any[] = [];
+  loans: any[] = [];
+  loanDeductions: any[] = [];
+  leaves: any[] = [];
+
+  async findAttendanceByPeriod(
+    tenantId: string,
+    periodYear: number,
+    periodMonth: number,
+  ): Promise<any[]> {
+    return this.attendances.filter(
+      (a) =>
+        a.tenantId === tenantId &&
+        a.periodYear === periodYear &&
+        a.periodMonth === periodMonth,
+    );
+  }
+
+  async findApprovedLeavesForPeriod(
+    tenantId: string,
+    periodYear: number,
+    periodMonth: number,
+  ): Promise<any[]> {
+    return this.leaves.filter(
+      (l) =>
+        l.tenantId === tenantId &&
+        l.status === 'APPROVED' &&
+        isLeaveInPeriod(l.startDate, l.endDate, periodYear, periodMonth),
+    );
+  }
+
+  async hasPendingLoanDeductionsFromOtherRuns(
+    tenantId: string,
+    currentRunId: number,
+  ): Promise<boolean> {
+    return this.loanDeductions.some(
+      (d) =>
+        d.tenantId === tenantId &&
+        d.payrollRunId !== currentRunId &&
+        d.status === 'PENDING',
+    );
+  }
+
+  async markLoanDeductionsPosted(
+    tenantId: string,
+    payrollRunId: number,
+  ): Promise<void> {
+    for (const d of this.loanDeductions) {
+      if (d.tenantId === tenantId && d.payrollRunId === payrollRunId) {
+        d.status = 'POSTED';
+      }
+    }
+  }
+
+  async deleteLoanDeductionsByRun(
+    tenantId: string,
+    payrollRunId: number,
+  ): Promise<void> {
+    this.loanDeductions = this.loanDeductions.filter(
+      (d) => !(d.tenantId === tenantId && d.payrollRunId === payrollRunId),
+    );
+  }
+
+  async createLoanDeductions(
+    tenantId: string,
+    rows: any[],
+  ): Promise<void> {
+    for (const r of rows) {
+      this.loanDeductions.push({ ...r, tenantId });
+    }
+  }
+
+  async findLoanDeductionsByRun(
+    tenantId: string,
+    payrollRunId: number,
+  ): Promise<any[]> {
+    return this.loanDeductions.filter(
+      (d) => d.tenantId === tenantId && d.payrollRunId === payrollRunId,
+    );
+  }
+
+  async applyLoanDeduction(
+    tenantId: string,
+    loanId: number,
+    amount: any,
+  ): Promise<any> {
+    return this.deductLoanInstalment(tenantId, loanId, Number(amount));
+  }
+
+  async findActiveLoans(
+    tenantId: string,
+    employeeIds?: number[],
+  ): Promise<any[]> {
+    return this.loans.filter(
+      (l) =>
+        l.tenantId === tenantId &&
+        l.status === 'ACTIVE' &&
+        (!employeeIds || employeeIds.includes(l.employeeId)),
+    );
+  }
+
+  async deductLoanInstalment(
+    tenantId: string,
+    loanId: number,
+    amount: number,
+  ): Promise<any> {
+    const loan = this.loans.find((l) => l.tenantId === tenantId && l.id === loanId);
+    if (!loan) return null;
+    if ((loan.remainingAmount ?? 0) < amount) {
+      throw new ConflictException(
+        `مبلغ کسر قسط وام (${amount}) بیشتر از مانده وام (${loan.remainingAmount}) است.`,
+      );
+    }
+    loan.paidInstalments = (loan.paidInstalments ?? 0) + 1;
+    loan.remainingAmount = (loan.remainingAmount ?? 0) - amount;
+    if (loan.remainingAmount <= 0) loan.status = 'PAID_OFF';
+    return loan;
+  }
   private seq = 0;
 
   nextId(): number {
@@ -199,6 +318,13 @@ class InMemoryPayrollRepository {
       this.runs.find((row) => row.id === id && row.tenantId === tenantId) ??
       null
     );
+  }
+
+  async findPayrollRunByIdForUpdate(
+    tenantId: string,
+    id: number,
+  ): Promise<PayrollRunEntity | null> {
+    return this.findPayrollRunById(tenantId, id);
   }
 
   async findPayrollRunByPeriod(

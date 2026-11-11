@@ -170,6 +170,13 @@ export const MENU_GROUPS: MenuGroup[] = [
     items: [
       { href: "/app/hr", label: "کارکنان", icon: "UsersRound", module: "hr", keywords: ["employee", "کارمند", "پرسنل"] },
       {
+        href: "/app/hr/attendance",
+        label: "کارکرد، مرخصی و وام",
+        icon: "CalendarCheck",
+        module: "hr",
+        keywords: ["attendance", "leave", "loan", "کارکرد", "مرخصی", "وام", "مساعده"],
+      },
+      {
         href: "/app/hr/payroll",
         label: "حقوق ماهانه",
         icon: "Calculator",

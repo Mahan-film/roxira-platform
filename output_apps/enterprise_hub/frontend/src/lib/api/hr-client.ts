@@ -20,6 +20,14 @@ import {
   SetStatutoryParameterDto,
   StatutoryParameter,
   WageTaxFiles,
+  EmployeeAttendance,
+  RecordAttendancePayload,
+  EmployeeLeave,
+  CreateLeavePayload,
+  LeaveStatus,
+  StaffLoan,
+  CreateStaffLoanPayload,
+  LoanStatus,
 } from "@/types/hr";
 import { apiRequest } from "@/lib/api/http-client";
 import { API_PROXY_BASE_PATH, HR_RESOURCE_PATH } from "@/lib/api/config";
@@ -272,3 +280,89 @@ export async function getInsuranceList(
     signal,
   });
 }
+
+/** فهرست کارکرد و حضور و غیاب — GET /enterprise-hub/hr/attendance */
+export async function listAttendances(
+  params?: { periodYear?: number; periodMonth?: number; employeeId?: number },
+  signal?: AbortSignal,
+): Promise<EmployeeAttendance[]> {
+  return apiRequest<EmployeeAttendance[]>(`${HR_ENDPOINT}/attendance`, {
+    method: "GET",
+    searchParams: params as Record<string, string | number | undefined>,
+    signal,
+  });
+}
+
+/** ثبت یا به‌روزرسانی کارکرد ماهانه — POST /enterprise-hub/hr/attendance */
+export async function recordAttendance(
+  payload: RecordAttendancePayload,
+  signal?: AbortSignal,
+): Promise<EmployeeAttendance> {
+  return apiRequest<EmployeeAttendance>(`${HR_ENDPOINT}/attendance`, {
+    method: "POST",
+    body: payload,
+    signal,
+  });
+}
+
+/** فهرست مرخصی‌ها — GET /enterprise-hub/hr/leaves */
+export async function listLeaves(
+  params?: { employeeId?: number; status?: LeaveStatus },
+  signal?: AbortSignal,
+): Promise<EmployeeLeave[]> {
+  return apiRequest<EmployeeLeave[]>(`${HR_ENDPOINT}/leaves`, {
+    method: "GET",
+    searchParams: params as Record<string, string | number | undefined>,
+    signal,
+  });
+}
+
+/** ثبت درخواست مرخصی — POST /enterprise-hub/hr/leaves */
+export async function requestLeave(
+  payload: CreateLeavePayload,
+  signal?: AbortSignal,
+): Promise<EmployeeLeave> {
+  return apiRequest<EmployeeLeave>(`${HR_ENDPOINT}/leaves`, {
+    method: "POST",
+    body: payload,
+    signal,
+  });
+}
+
+/** بررسی مرخصی (تأیید یا رد) — PATCH /enterprise-hub/hr/leaves/:id/review */
+export async function reviewLeave(
+  id: number,
+  payload: { status: LeaveStatus; approvedBy?: string },
+  signal?: AbortSignal,
+): Promise<EmployeeLeave> {
+  return apiRequest<EmployeeLeave>(`${HR_ENDPOINT}/leaves/${id}/review`, {
+    method: "PATCH",
+    body: payload,
+    signal,
+  });
+}
+
+/** فهرست وام‌های پرسنلی — GET /enterprise-hub/hr/loans */
+export async function listStaffLoans(
+  params?: { employeeId?: number; status?: LoanStatus },
+  signal?: AbortSignal,
+): Promise<StaffLoan[]> {
+  return apiRequest<StaffLoan[]>(`${HR_ENDPOINT}/loans`, {
+    method: "GET",
+    searchParams: params as Record<string, string | number | undefined>,
+    signal,
+  });
+}
+
+/** تعریف وام پرسنلی جدید — POST /enterprise-hub/hr/loans */
+export async function createStaffLoan(
+  payload: CreateStaffLoanPayload,
+  signal?: AbortSignal,
+): Promise<StaffLoan> {
+  return apiRequest<StaffLoan>(`${HR_ENDPOINT}/loans`, {
+    method: "POST",
+    body: payload,
+    signal,
+  });
+}
+
