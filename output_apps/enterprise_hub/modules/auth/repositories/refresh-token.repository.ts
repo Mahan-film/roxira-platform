@@ -56,8 +56,8 @@ export class RefreshTokenRepository {
       }
       return null;
     } catch (err) {
-      this.logger.debug(`lookup_refresh_token_by_hash fallback: ${err}`);
-      return this.repository.findOne({ where: { tokenHash } });
+      this.logger.error(`lookup_refresh_token_by_hash error: ${err}`);
+      throw err;
     }
   }
 

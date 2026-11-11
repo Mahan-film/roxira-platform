@@ -29,7 +29,7 @@ export class AuthRepository {
   async findByUsername(username: string): Promise<UserEntity | null> {
     try {
       const rows = await this.repository.query(
-        `SELECT * FROM public.lookup_user_by_login($1)`,
+        `SELECT * FROM public.lookup_user_by_username($1)`,
         [username],
       );
       if (rows && rows.length > 0) {
@@ -54,7 +54,7 @@ export class AuthRepository {
       }
       return null;
     } catch (err) {
-      this.logger.error(`lookup_user_by_login error for ${username}: ${err}`);
+      this.logger.error(`lookup_user_by_username error for ${username}: ${err}`);
       throw err;
     }
   }
@@ -62,7 +62,7 @@ export class AuthRepository {
   async findByLoginEmail(loginEmail: string): Promise<UserEntity | null> {
     try {
       const rows = await this.repository.query(
-        `SELECT * FROM public.lookup_user_by_login($1)`,
+        `SELECT * FROM public.lookup_user_by_login_email($1)`,
         [loginEmail],
       );
       if (rows && rows.length > 0) {
@@ -87,7 +87,7 @@ export class AuthRepository {
       }
       return null;
     } catch (err) {
-      this.logger.error(`lookup_user_by_login error for ${loginEmail}: ${err}`);
+      this.logger.error(`lookup_user_by_login_email error for ${loginEmail}: ${err}`);
       throw err;
     }
   }
@@ -105,12 +105,12 @@ export class AuthRepository {
         );
       } else if ('username' in where) {
         rows = await this.repository.query(
-          `SELECT * FROM public.lookup_user_by_login($1)`,
+          `SELECT * FROM public.lookup_user_by_username($1)`,
           [where.username],
         );
       } else if ('loginEmail' in where) {
         rows = await this.repository.query(
-          `SELECT * FROM public.lookup_user_by_login($1)`,
+          `SELECT * FROM public.lookup_user_by_login_email($1)`,
           [where.loginEmail],
         );
       }

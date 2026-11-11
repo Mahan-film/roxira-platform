@@ -21,11 +21,12 @@ import 'reflect-metadata';
 import * as path from 'path';
 import { DataSource } from 'typeorm';
 import {
-  EnableRlsPreTenantTables1789900002300,
+  EnableRlsPreTenantTables1789900002500,
   PRE_TENANT_RLS_TABLES,
-} from '../../../migrations/1789900002300-EnableRlsPreTenantTables';
+} from '../../../migrations/1789900002500-EnableRlsPreTenantTables';
 import { AuthRepository } from '../../auth/repositories/auth.repository';
 import { RefreshTokenRepository } from '../../auth/repositories/refresh-token.repository';
+import { SessionCheckRepository } from '../repositories/session-check.repository';
 import { UserEntity } from '../../auth/entities/user.entity';
 import { RefreshTokenEntity } from '../../auth/entities/refresh-token.entity';
 import { MembershipEntity } from '../entities/membership.entity';
@@ -82,6 +83,7 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
   let moduleRequestsRepo: ModuleRequestsRepository;
   let crmRepo: CrmRepository;
   let inquiriesRepo: InquiriesRepository;
+  let sessionCheckRepo: SessionCheckRepository;
 
   beforeAll(async () => {
     admin = await new DataSource({ ...options('postgres'), entities: [], migrations: [] }).initialize();
@@ -109,6 +111,7 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     moduleRequestsRepo = new ModuleRequestsRepository(app.getRepository(ModuleRequestEntity));
     crmRepo = new CrmRepository(app.getRepository(CrmLeadEntity), app.getRepository(ContactMessageEntity));
     inquiriesRepo = new InquiriesRepository(app.getRepository(EnterpriseInquiryEntity));
+    sessionCheckRepo = new SessionCheckRepository(app.getRepository(RefreshTokenEntity));
 
     for (const tenantId of [T1, T2]) {
       await owner
@@ -170,6 +173,12 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     expect(byEmail?.id).toBe(user1Id);
     expect(byEmail?.managedByTenantId).toBe(T1);
 
+    // Strict column separation: username lookup does not match email and vice versa
+    const notUsername = await authRepo.findByUsername('user1@example.com');
+    expect(notUsername).toBeNull();
+    const notEmail = await authRepo.findByLoginEmail('user_one');
+    expect(notEmail).toBeNull();
+
     const byId = await authRepo.findById(user1Id);
     expect(byId).not.toBeNull();
     expect(byId?.phone).toBe('09121111111');
@@ -215,12 +224,26 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     expect(token?.familyId).toBe(familyId);
     expect(token?.tenantId).toBe(T1);
 
+    // 2b. Liveness check via SessionCheckRepository under unauthenticated NOSUPERUSER role (guard check)
+    const isFamilyActive = await sessionCheckRepo.isFamilyActive(familyId, userId);
+    expect(isFamilyActive).toBe(true);
+
+    const isWrongUserActive = await sessionCheckRepo.isFamilyActive(familyId, '00000000-0000-4000-8000-000000000000');
+    expect(isWrongUserActive).toBe(false);
+
+    const isWrongFamilyActive = await sessionCheckRepo.isFamilyActive('00000000-0000-4000-8000-000000000000', userId);
+    expect(isWrongFamilyActive).toBe(false);
+
     // 3. Revoke single token atomically
     const revoked = await refreshRepo.revokeIfActive(createdToken.id);
     expect(revoked).toBe(true);
 
     // 4. Revoke whole family
     await refreshRepo.revokeFamily(familyId);
+
+    // Verify session liveness reflects revocation
+    const isRevokedActive = await sessionCheckRepo.isFamilyActive(familyId, userId);
+    expect(isRevokedActive).toBe(false);
 
     // 5. Cross-tenant direct query isolation: Tenant 2 cannot see Tenant 1's tokens
     await scope.run(T2, async (manager) => {
@@ -335,14 +358,7 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     });
     expect(savedMsg.id).toBeDefined();
 
-    // 2. Submit contact message via SECURITY DEFINER function
-    const fnRows = await app.query(
-      `SELECT public.submit_contact_message($1, $2, $3, $4, $5, $6) AS id`,
-      [T1, 'Visitor Two', '09128888888', 'v2@example.com', 'Subject 2', 'Message 2'],
-    );
-    expect(fnRows[0].id).toBeDefined();
-
-    // 3. Anonymous visitor submits enterprise inquiry (null tenant) via InquiriesRepository
+    // 2. Anonymous visitor submits enterprise inquiry (null tenant) via InquiriesRepository
     const savedInquiry = await inquiriesRepo.create({
       tenantId: null,
       name: 'Corporate Prospect',
@@ -351,6 +367,14 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
       message: 'Enterprise pricing details please',
     });
     expect(savedInquiry.id).toBeDefined();
+
+    // 3. Submitting an inquiry claiming another tenant without session context is denied
+    await expect(
+      inquiriesRepo.create({
+        tenantId: T1,
+        name: 'Spoofed Prospect',
+      }),
+    ).rejects.toThrow();
 
     // 4. Tenant 2 cannot see Tenant 1 contact messages
     await scope.run(T2, async (manager) => {
@@ -406,7 +430,7 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
   });
 
   it('reversibility: migration down() and up() work cleanly', async () => {
-    const migration = new EnableRlsPreTenantTables1789900002300();
+    const migration = new EnableRlsPreTenantTables1789900002500();
     const qr = owner.createQueryRunner();
 
     try {

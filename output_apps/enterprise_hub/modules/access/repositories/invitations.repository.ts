@@ -78,8 +78,8 @@ export class InvitationsRepository {
   async markAccepted(id: string, userId: string, tenantId?: string): Promise<boolean> {
     try {
       const rows = await this.repo.query(
-        `SELECT public.mark_invitation_accepted($1, $2) AS accepted`,
-        [id, userId],
+        `SELECT public.mark_invitation_accepted($1, $2, $3) AS accepted`,
+        [id, userId, tenantId ?? null],
       );
       if (rows && rows.length > 0) {
         return Boolean(rows[0].accepted);
