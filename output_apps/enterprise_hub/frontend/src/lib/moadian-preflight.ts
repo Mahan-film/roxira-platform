@@ -351,7 +351,6 @@ export function runMoadianPreFlightValidation(
   }
 
   const scale = getCurrencyScale(invoice.currency);
-  const factor = 10 ** scale;
 
   let calculatedTotalAmountUnits = 0n;
   let calculatedTotalDiscountUnits = 0n;
@@ -402,7 +401,6 @@ export function runMoadianPreFlightValidation(
 
     const grossUnits = toMinorUnits(roundTo(gross, scale), scale);
     const discountUnits = toMinorUnits(discount, scale);
-    const netUnits = toMinorUnits(roundTo(taxable, scale), scale);
     const expectedTaxUnits = toMinorUnits(expectedTax, scale);
     const expectedLineTotalUnits = toMinorUnits(expectedLineTotal, scale);
 
