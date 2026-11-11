@@ -124,6 +124,7 @@ export function JournalEntryForm({
   ]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [submitError, setSubmitError] = useState<string[] | null>(null);
   const [conflictError, setConflictError] = useState<string | null>(null);
   const [createdEntry, setCreatedEntry] = useState<JournalEntryResponse | null>(
@@ -133,6 +134,7 @@ export function JournalEntryForm({
 
   // Load the edited voucher into the form whenever the target changes.
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     if (!entry) {
       // Leaving edit mode must not leave the old voucher in the new-voucher form.
       setEntryNumber("");
@@ -158,6 +160,7 @@ export function JournalEntryForm({
     setSubmitError(null);
     setConflictError(null);
     setCreatedEntry(null);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [entry]);
 
   const [activeRowIndex, setActiveRowIndex] = useState(0);
@@ -177,11 +180,6 @@ export function JournalEntryForm({
     setLines((prev) =>
       prev.map((line) => (line.uid === uid ? { ...line, ...patch } : line)),
     );
-  }
-
-  function addLine() {
-    const id = nextLineId.current++;
-    setLines((prev) => [...prev, createEmptyLine(`line-${id}`)]);
   }
 
   function addLineAndFocus() {
@@ -210,6 +208,7 @@ export function JournalEntryForm({
     // Ctrl+S / Cmd+S or Ctrl+Enter: submit entry from anywhere
     if (isSaveShortcut(event)) {
       event.preventDefault();
+      event.stopPropagation();
       void submitEntry();
       return;
     }
@@ -217,6 +216,7 @@ export function JournalEntryForm({
     // Insert key or Alt+N: add new line and focus
     if (isInsertLineKey(event) || (event.altKey && (event.key === "n" || event.key === "N"))) {
       event.preventDefault();
+      event.stopPropagation();
       addLineAndFocus();
       return;
     }
@@ -224,17 +224,34 @@ export function JournalEntryForm({
     // F2: account search
     if (isAccountSearchKey(event)) {
       event.preventDefault();
+      event.stopPropagation();
       setShowAccountSearch(true);
       return;
     }
 
-    // Esc: cancel modal or entire entry
+    // Esc: cancel modal or ask before discarding dirty entry
     if (isCancelKey(event)) {
       event.preventDefault();
+      event.stopPropagation();
       if (showAccountSearch) {
         setShowAccountSearch(false);
-      } else if (onCancel) {
-        onCancel();
+        return;
+      }
+      const isDirty = Boolean(
+        description.trim() ||
+        entryNumber.trim() ||
+        lines.some((l) => l.accountCode || l.debit || l.credit || l.description.trim()),
+      );
+      if (isDirty) {
+        const confirmed =
+          typeof window !== "undefined"
+            ? window.confirm("تغییرات ذخیره‌نشده در سند وجود دارد. آیا از انصراف اطمینان دارید؟")
+            : true;
+        if (confirmed) {
+          onCancel?.();
+        }
+      } else {
+        onCancel?.();
       }
       return;
     }
@@ -242,6 +259,7 @@ export function JournalEntryForm({
     // Alt+B: auto-balance current active line
     if (event.altKey && (event.key === "b" || event.key === "B")) {
       event.preventDefault();
+      event.stopPropagation();
       autoBalanceRow(activeRowIndex);
       return;
     }
@@ -249,6 +267,7 @@ export function JournalEntryForm({
     // Alt+Delete: delete active row
     if (event.altKey && event.key === "Delete") {
       event.preventDefault();
+      event.stopPropagation();
       if (lines.length > 2 && activeRowIndex < lines.length) {
         const lineToDelete = lines[activeRowIndex];
         if (lineToDelete) {
@@ -258,6 +277,7 @@ export function JournalEntryForm({
           setTimeout(() => focusCell(nextRow, 0), 50);
         }
       }
+      return;
     }
   }
 
@@ -305,6 +325,9 @@ export function JournalEntryForm({
   }
 
   async function submitEntry() {
+    if (isSubmittingRef.current) {
+      return;
+    }
     setSubmitError(null);
     setConflictError(null);
     setCreatedEntry(null);
@@ -351,6 +374,7 @@ export function JournalEntryForm({
         }),
     };
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     try {
       if (entry) {
@@ -387,6 +411,7 @@ export function JournalEntryForm({
         ]);
       }
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   }
@@ -528,35 +553,24 @@ export function JournalEntryForm({
                             onKeyDown={(e) => {
                               if (isAccountSearchKey(e)) {
                                 e.preventDefault();
+                                e.stopPropagation();
                                 setActiveRowIndex(index);
                                 setShowAccountSearch(true);
-                                return;
-                              }
-                              if (isInsertLineKey(e)) {
-                                e.preventDefault();
-                                addLineAndFocus();
-                                return;
-                              }
-                              if (isSaveShortcut(e)) {
-                                e.preventDefault();
-                                void submitEntry();
-                                return;
-                              }
-                              if (isCancelKey(e)) {
-                                e.preventDefault();
-                                onCancel?.();
                                 return;
                               }
                               if (e.key === "Enter" || e.key === "Tab") {
                                 if (!e.shiftKey) {
                                   e.preventDefault();
+                                  e.stopPropagation();
                                   focusCell(index, 1);
                                 }
                               } else if (e.key === "ArrowDown" && (e.altKey || e.ctrlKey)) {
                                 e.preventDefault();
+                                e.stopPropagation();
                                 focusCell(index + 1, 0);
                               } else if (e.key === "ArrowUp" && (e.altKey || e.ctrlKey)) {
                                 e.preventDefault();
+                                e.stopPropagation();
                                 focusCell(index - 1, 0);
                               }
                             }}
@@ -588,42 +602,25 @@ export function JournalEntryForm({
                             })
                           }
                           onKeyDown={(e) => {
-                            if (isAccountSearchKey(e)) {
-                              e.preventDefault();
-                              setActiveRowIndex(index);
-                              setShowAccountSearch(true);
-                              return;
-                            }
-                            if (isInsertLineKey(e)) {
-                              e.preventDefault();
-                              addLineAndFocus();
-                              return;
-                            }
-                            if (isSaveShortcut(e)) {
-                              e.preventDefault();
-                              void submitEntry();
-                              return;
-                            }
-                            if (isCancelKey(e)) {
-                              e.preventDefault();
-                              onCancel?.();
-                              return;
-                            }
                             if ((e.ctrlKey || e.metaKey || e.altKey) && (e.key === "b" || e.key === "B")) {
                               e.preventDefault();
+                              e.stopPropagation();
                               autoBalanceRow(index);
                               return;
                             }
                             if (e.key === "Enter") {
                               e.preventDefault();
+                              e.stopPropagation();
                               const next = getNextCellCoordinates(index, 1, lines.length, Boolean(line.debit), "next");
                               focusCell(next.row, next.col);
                             } else if (e.key === "ArrowDown") {
                               e.preventDefault();
+                              e.stopPropagation();
                               const next = getNextCellCoordinates(index, 1, lines.length, false, "down");
                               focusCell(next.row, next.col);
                             } else if (e.key === "ArrowUp") {
                               e.preventDefault();
+                              e.stopPropagation();
                               const next = getNextCellCoordinates(index, 1, lines.length, false, "up");
                               focusCell(next.row, next.col);
                             }
@@ -645,42 +642,25 @@ export function JournalEntryForm({
                             })
                           }
                           onKeyDown={(e) => {
-                            if (isAccountSearchKey(e)) {
-                              e.preventDefault();
-                              setActiveRowIndex(index);
-                              setShowAccountSearch(true);
-                              return;
-                            }
-                            if (isInsertLineKey(e)) {
-                              e.preventDefault();
-                              addLineAndFocus();
-                              return;
-                            }
-                            if (isSaveShortcut(e)) {
-                              e.preventDefault();
-                              void submitEntry();
-                              return;
-                            }
-                            if (isCancelKey(e)) {
-                              e.preventDefault();
-                              onCancel?.();
-                              return;
-                            }
                             if ((e.ctrlKey || e.metaKey || e.altKey) && (e.key === "b" || e.key === "B")) {
                               e.preventDefault();
+                              e.stopPropagation();
                               autoBalanceRow(index);
                               return;
                             }
                             if (e.key === "Enter") {
                               e.preventDefault();
+                              e.stopPropagation();
                               const next = getNextCellCoordinates(index, 2, lines.length, false, "next");
                               focusCell(next.row, next.col);
                             } else if (e.key === "ArrowDown") {
                               e.preventDefault();
+                              e.stopPropagation();
                               const next = getNextCellCoordinates(index, 2, lines.length, false, "down");
                               focusCell(next.row, next.col);
                             } else if (e.key === "ArrowUp") {
                               e.preventDefault();
+                              e.stopPropagation();
                               const next = getNextCellCoordinates(index, 2, lines.length, false, "up");
                               focusCell(next.row, next.col);
                             }
@@ -697,29 +677,9 @@ export function JournalEntryForm({
                           }
                           placeholder="شرح اختیاری"
                           onKeyDown={(e) => {
-                            if (isAccountSearchKey(e)) {
-                              e.preventDefault();
-                              setActiveRowIndex(index);
-                              setShowAccountSearch(true);
-                              return;
-                            }
-                            if (isInsertLineKey(e)) {
-                              e.preventDefault();
-                              addLineAndFocus();
-                              return;
-                            }
-                            if (isSaveShortcut(e)) {
-                              e.preventDefault();
-                              void submitEntry();
-                              return;
-                            }
-                            if (isCancelKey(e)) {
-                              e.preventDefault();
-                              onCancel?.();
-                              return;
-                            }
                             if (e.key === "Enter") {
                               e.preventDefault();
+                              e.stopPropagation();
                               const next = getNextCellCoordinates(index, 3, lines.length, false, "next");
                               if (next.shouldAddRow) {
                                 addLineAndFocus();
@@ -728,10 +688,12 @@ export function JournalEntryForm({
                               }
                             } else if (e.key === "ArrowDown") {
                               e.preventDefault();
+                              e.stopPropagation();
                               const next = getNextCellCoordinates(index, 3, lines.length, false, "down");
                               focusCell(next.row, next.col);
                             } else if (e.key === "ArrowUp") {
                               e.preventDefault();
+                              e.stopPropagation();
                               const next = getNextCellCoordinates(index, 3, lines.length, false, "up");
                               focusCell(next.row, next.col);
                             }

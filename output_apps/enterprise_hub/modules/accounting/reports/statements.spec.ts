@@ -1,5 +1,7 @@
 import { strFromU8, unzipSync } from 'fflate';
+import { NotFoundException } from '@nestjs/common';
 import { AccountLevel, AccountType, ReportLine } from '../enums/accounting.enum';
+import { FinancialReportsService } from '../services/financial-reports.service';
 import { formatMoney, writePdf } from './pdf-writer';
 import { ReportTable } from './report-table';
 import {
@@ -167,6 +169,79 @@ describe('statements', () => {
     expect(recRow.openingDebit).toBe(50n);
     expect(recRow.periodDebit).toBe(400n);
     expect(recRow.endingDebit).toBe(450n);
+  });
+
+  it('filters trialBalance by account subtree in FinancialReportsService and rejects unknown code with 404', async () => {
+    const kolAssets: ReportAccount = {
+      id: 10,
+      code: '10',
+      name: 'دارایی‌های جاری',
+      accountType: AccountType.ASSET,
+      level: AccountLevel.KOL,
+      parentCode: null,
+      reportLine: null,
+    };
+    const moeinCash: ReportAccount = {
+      id: 1010,
+      code: '1010',
+      name: 'موجودی نقد و بانک',
+      accountType: AccountType.ASSET,
+      level: AccountLevel.MOEIN,
+      parentCode: '10',
+      reportLine: null,
+    };
+    const kolLiab: ReportAccount = {
+      id: 20,
+      code: '20',
+      name: 'بدهی‌های جاری',
+      accountType: AccountType.LIABILITY,
+      level: AccountLevel.KOL,
+      parentCode: null,
+      reportLine: null,
+    };
+    const moeinPayable: ReportAccount = {
+      id: 2010,
+      code: '2010',
+      name: 'حساب‌های پرداختنی',
+      accountType: AccountType.LIABILITY,
+      level: AccountLevel.MOEIN,
+      parentCode: '20',
+      reportLine: null,
+    };
+
+    const service = new FinancialReportsService({} as never, {} as never, {} as never);
+    jest.spyOn(service as never, 'resolvePeriod').mockResolvedValue({
+      start: '2026-03-21T00:00:00.000Z',
+      end: '2027-03-20T23:59:59.999Z',
+      from: '2026-03-21',
+      to: '2027-03-20',
+      yearId: 1,
+      yearName: '1405',
+    } as never);
+    jest.spyOn(service as never, 'balances').mockResolvedValue({
+      accounts: [kolAssets, moeinCash, kolLiab, moeinPayable],
+      balances: [
+        balance(moeinCash, 800n, 300n),
+        balance(moeinPayable, -500n, -200n),
+      ],
+    } as never);
+
+    // Subtree filtering under '10' includes only '10' and its children
+    const tb = await service.trialBalance('tenant-1', {
+      columns: 6,
+      accountCode: '10',
+    });
+    expect(tb.rows.length).toBeGreaterThan(0);
+    expect(tb.rows.every((r) => r.code.startsWith('10'))).toBe(true);
+    expect(tb.rows.some((r) => r.code.startsWith('20'))).toBe(false);
+
+    // Unknown account code throws NotFoundException (404)
+    await expect(
+      service.trialBalance('tenant-1', {
+        columns: 6,
+        accountCode: 'NON_EXISTENT_9999',
+      }),
+    ).rejects.toThrow(NotFoundException);
   });
 });
 

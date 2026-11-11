@@ -5,8 +5,6 @@ import {
   ArrowLeft,
   ChevronLeft,
   Eye,
-  FileSpreadsheet,
-  Filter,
   Layers,
   ListTree,
   Loader2,
@@ -16,6 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { JalaliDateInput } from "@/components/ui/jalali-date-input";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -38,7 +37,6 @@ import type {
   LedgerReport,
   TrialBalanceColumns,
   TrialBalanceReport,
-  TrialBalanceRow,
 } from "@/types/accounting-reports";
 import { VoucherDetailModal } from "./voucher-detail-modal";
 
@@ -59,6 +57,8 @@ export function AccountReview() {
   // Filter states
   const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([]);
   const [selectedFiscalYearId, setSelectedFiscalYearId] = useState<number | undefined>(undefined);
+  const [fromDate, setFromDate] = useState<string | undefined>(undefined);
+  const [toDate, setToDate] = useState<string | undefined>(undefined);
   const [columns, setColumns] = useState<TrialBalanceColumns>(6);
   const [searchFilter, setSearchFilter] = useState("");
 
@@ -88,11 +88,14 @@ export function AccountReview() {
   // Load data based on current level and selections
   useEffect(() => {
     const controller = new AbortController();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch loading trigger
     setLoading(true);
     setError(null);
 
     const query = {
       fiscalYearId: selectedFiscalYearId,
+      from: fromDate || undefined,
+      to: toDate || undefined,
       columns,
     };
 
@@ -144,7 +147,7 @@ export function AccountReview() {
     } else if (level === "LINES" && selectedMoein) {
       getLedgerReport(
         {
-          fiscalYearId: selectedFiscalYearId,
+          ...query,
           accountCode: selectedMoein.code,
           partyCode: selectedParty?.code,
         },
@@ -164,7 +167,7 @@ export function AccountReview() {
     }
 
     return () => controller.abort();
-  }, [level, selectedKol, selectedMoein, selectedParty, selectedFiscalYearId, columns, refreshTrigger]);
+  }, [level, selectedKol, selectedMoein, selectedParty, selectedFiscalYearId, fromDate, toDate, columns, refreshTrigger]);
 
   function drillToKol() {
     setLevel("KOL");
@@ -248,6 +251,20 @@ export function AccountReview() {
                   </select>
                 </div>
               )}
+
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="text-muted-foreground">از:</span>
+                <div className="w-28">
+                  <JalaliDateInput value={fromDate ?? ""} onChange={(v) => setFromDate(v || undefined)} />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="text-muted-foreground">تا:</span>
+                <div className="w-28">
+                  <JalaliDateInput value={toDate ?? ""} onChange={(v) => setToDate(v || undefined)} />
+                </div>
+              </div>
 
               {level !== "LINES" && (
                 <div className="flex items-center gap-1.5 text-xs">

@@ -113,8 +113,9 @@ export function getNextCellCoordinates(
   }
 }
 
-/** Check if event matches the accountant Save shortcut (Ctrl+S / Cmd+S or Ctrl+Enter) */
-export function isSaveShortcut(e: { ctrlKey?: boolean; metaKey?: boolean; key: string }): boolean {
+/** Check if event matches the accountant Save shortcut (Ctrl+S / Cmd+S or Ctrl+Enter), ignoring key repeat */
+export function isSaveShortcut(e: { ctrlKey?: boolean; metaKey?: boolean; key: string; repeat?: boolean }): boolean {
+  if (e.repeat) return false;
   return Boolean((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S" || e.key === "Enter"));
 }
 
