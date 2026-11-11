@@ -276,7 +276,7 @@ export const POSTING_TEMPLATES: readonly PostingTemplate[] = [
       dr('inventory', 'amount', 'ورود کالای ساخته‌شده به انبار'),
       cr('raw_materials', 'amount', 'مصرف مواد اولیه و قطعات تولید'),
     ],
-    defaults: { inventory: '1030', raw_materials: '1030' },
+    defaults: { inventory: '1030', raw_materials: '1031' },
   },
   {
     docType: 'pos.close',

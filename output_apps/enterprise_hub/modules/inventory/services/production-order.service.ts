@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
+import { fromMinor, toMinor } from '../../accounting/money';
 import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
 import {
   CompleteProductionOrderDto,
@@ -80,12 +81,13 @@ export class ProductionOrderService {
       tenantId,
       id,
       ProductionOrderStatus.IN_PROGRESS,
+      [ProductionOrderStatus.DRAFT],
     );
   }
 
   /**
    * Completes production order atomically and idempotently (Lesson 18):
-   * 1. Acquires pessimistic write lock on the order row inside a TenantScope transaction.
+   * 1. Acquires pessimistic write lock on the bare order row inside a TenantScope transaction.
    * 2. Checks order status (must be IN_PROGRESS; if already COMPLETED, returns existing order).
    * 3. Explodes multi-level BOM for the completed quantity.
    * 4. Issues raw components from inventory at FIFO cost (consuming FIFO layers).
@@ -100,11 +102,10 @@ export class ProductionOrderService {
     dto: CompleteProductionOrderDto,
   ): Promise<ProductionOrderEntity> {
     return this.tenantScope.run(tenantId, async (m: EntityManager) => {
-      // 1. Pessimistic write lock on order row
+      // 1. Pessimistic write lock on bare order row (no joined relations to prevent Postgres FOR UPDATE rejection)
       const order = await m.getRepository(ProductionOrderEntity).findOne({
         where: { id, tenantId },
         lock: { mode: 'pessimistic_write' },
-        relations: ['bom', 'bom.items'],
       });
 
       if (!order) {
@@ -153,10 +154,10 @@ export class ProductionOrderService {
         );
 
         for (const layer of outboundRes.layers) {
-          const qtyScaled = BigInt(Math.round(layer.quantity * 1000));
-          const unitCost = BigInt(Math.round(layer.unitPurchaseCost));
-          const layerCost = (qtyScaled * unitCost) / 1000n;
-          totalRawCostMinor += layerCost;
+          const qtyMilli = BigInt(Math.round(layer.quantity * 1000));
+          const layerUnitCostMinor = toMinor(layer.unitPurchaseCost);
+          const layerCostMinor = (qtyMilli * layerUnitCostMinor + 500n) / 1000n;
+          totalRawCostMinor += layerCostMinor;
         }
       }
 
@@ -167,11 +168,11 @@ export class ProductionOrderService {
         );
       }
 
-      // 5. Finished good unit cost = totalRawCostMinor / completedQuantity
-      const completedUnitsScaled = BigInt(Math.round(dto.completedQuantity * 1000));
+      // 5. Finished good unit cost = totalRawCostMinor / completedQuantity (with half-up rounding)
+      const completedUnitsMilli = BigInt(Math.round(dto.completedQuantity * 1000));
       const unitCostMinor =
-        completedUnitsScaled > 0n
-          ? (totalRawCostMinor * 1000n) / completedUnitsScaled
+        completedUnitsMilli > 0n
+          ? (totalRawCostMinor * 1000n + completedUnitsMilli / 2n) / completedUnitsMilli
           : 0n;
 
       // 6. Inbound finished good into warehouse at the summed cost
@@ -183,7 +184,7 @@ export class ProductionOrderService {
         {
           sku: order.finishedSku,
           quantity: dto.completedQuantity,
-          unitPurchaseCost: Number(unitCostMinor),
+          unitPurchaseCost: Number(fromMinor(unitCostMinor)),
           batchNumber: `BATCH-PROD-${order.orderNumber}`,
           warehouseId: destWarehouse,
         },
@@ -236,6 +237,7 @@ export class ProductionOrderService {
       tenantId,
       id,
       ProductionOrderStatus.CANCELLED,
+      [ProductionOrderStatus.DRAFT, ProductionOrderStatus.IN_PROGRESS],
     );
   }
 }

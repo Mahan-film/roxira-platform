@@ -111,7 +111,7 @@ export default function ProductionBomPage() {
         title="فرمول ساخت و سفارشات تولید (BOM)"
         description="مدیریت فرمول‌های ساخت چندسطحی با درصد ضایعات و صدور سفارشات تولید با بهای تمام‌شده FIFO"
         icon={<Factory className="h-6 w-6 text-primary" />}
-        action={
+        actions={
           <div className="flex gap-2">
             <Button
               variant={activeTab === "boms" ? "default" : "outline"}

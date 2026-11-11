@@ -23,9 +23,17 @@ import {
   ExplodeBomDto,
   QueryProductionOrdersDto,
 } from '../dto/bom.dto';
-import { ProductionOrderStatus } from '../entities/production-order.entity';
+import { ProductionOrderEntity, ProductionOrderStatus } from '../entities/production-order.entity';
 import { BomService } from '../services/bom.service';
 import { ProductionOrderService } from '../services/production-order.service';
+
+function formatProductionOrder(order: ProductionOrderEntity) {
+  return {
+    ...order,
+    totalCostMinor: order.totalCostMinor != null ? order.totalCostMinor.toString() : '0',
+    unitCostMinor: order.unitCostMinor != null ? order.unitCostMinor.toString() : '0',
+  };
+}
 
 /**
  * Controller for multi-level BOMs and production orders with FIFO costing (#764 / T83).
@@ -108,7 +116,8 @@ export class ProductionController {
     @Body() dto: CreateProductionOrderDto,
   ) {
     const tenantId = requireTenantId(req);
-    return this.productionService.createOrder(tenantId, dto);
+    const order = await this.productionService.createOrder(tenantId, dto);
+    return formatProductionOrder(order);
   }
 
   @Get('orders')
@@ -119,7 +128,8 @@ export class ProductionController {
     @Query() query: QueryProductionOrdersDto,
   ) {
     const tenantId = requireTenantId(req);
-    return this.productionService.listOrders(tenantId, query.status);
+    const orders = await this.productionService.listOrders(tenantId, query.status);
+    return orders.map(formatProductionOrder);
   }
 
   @Get('orders/:id')
@@ -130,7 +140,8 @@ export class ProductionController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     const tenantId = requireTenantId(req);
-    return this.productionService.getOrder(tenantId, id);
+    const order = await this.productionService.getOrder(tenantId, id);
+    return formatProductionOrder(order);
   }
 
   @Post('orders/:id/start')
@@ -142,7 +153,8 @@ export class ProductionController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     const tenantId = requireTenantId(req);
-    return this.productionService.startOrder(tenantId, id);
+    const order = await this.productionService.startOrder(tenantId, id);
+    return formatProductionOrder(order);
   }
 
   @Post('orders/:id/complete')
@@ -156,11 +168,7 @@ export class ProductionController {
   ) {
     const tenantId = requireTenantId(req);
     const order = await this.productionService.completeOrder(tenantId, id, dto);
-    return {
-      ...order,
-      totalCostMinor: order.totalCostMinor.toString(),
-      unitCostMinor: order.unitCostMinor.toString(),
-    };
+    return formatProductionOrder(order);
   }
 
   @Post('orders/:id/cancel')
@@ -172,6 +180,7 @@ export class ProductionController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     const tenantId = requireTenantId(req);
-    return this.productionService.cancelOrder(tenantId, id);
+    const order = await this.productionService.cancelOrder(tenantId, id);
+    return formatProductionOrder(order);
   }
 }

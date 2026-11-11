@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
 import { BomHeaderEntity } from '../entities/bom-header.entity';
@@ -14,35 +14,51 @@ export class BomRepository {
   }
 
   async createBom(tenantId: string, dto: CreateBomDto): Promise<BomHeaderEntity> {
-    return this.within(tenantId, async (m) => {
-      const headerRepo = m.getRepository(BomHeaderEntity);
-      const itemRepo = m.getRepository(BomItemEntity);
+    try {
+      return await this.within(tenantId, async (m) => {
+        const headerRepo = m.getRepository(BomHeaderEntity);
+        const itemRepo = m.getRepository(BomItemEntity);
 
-      const header = headerRepo.create({
-        tenantId,
-        bomCode: dto.bomCode,
-        name: dto.name,
-        finishedItemSku: dto.finishedItemSku,
-        outputQuantity: dto.outputQuantity ?? 1,
-        version: dto.version ?? 1,
-        notes: dto.notes ?? null,
-        isActive: true,
-      });
-      const savedHeader = await headerRepo.save(header);
-
-      const items = dto.items.map((item) =>
-        itemRepo.create({
+        const header = headerRepo.create({
           tenantId,
-          bomId: savedHeader.id,
-          componentSku: item.componentSku,
-          subBomId: item.subBomId ?? null,
-          quantity: item.quantity,
-          wastePercent: item.wastePercent ?? 0,
-          notes: item.notes ?? null,
-        }),
-      );
-      savedHeader.items = await itemRepo.save(items);
-      return savedHeader;
+          bomCode: dto.bomCode,
+          name: dto.name,
+          finishedItemSku: dto.finishedItemSku,
+          outputQuantity: dto.outputQuantity ?? 1,
+          version: dto.version ?? 1,
+          notes: dto.notes ?? null,
+          isActive: true,
+        });
+        const savedHeader = await headerRepo.save(header);
+
+        const items = dto.items.map((item) =>
+          itemRepo.create({
+            tenantId,
+            bomId: savedHeader.id,
+            componentSku: item.componentSku,
+            subBomId: item.subBomId ?? null,
+            quantity: item.quantity,
+            wastePercent: item.wastePercent ?? 0,
+            notes: item.notes ?? null,
+          }),
+        );
+        savedHeader.items = await itemRepo.save(items);
+        return savedHeader;
+      });
+    } catch (err: any) {
+      if (err?.code === '23505' || err?.message?.includes('IDX_erp_bom_headers_tenant_code')) {
+        throw new BadRequestException(`BOM with code "${dto.bomCode}" already exists`);
+      }
+      throw err;
+    }
+  }
+
+  async isUsedAsSubBom(tenantId: string, subBomId: number): Promise<boolean> {
+    return this.within(tenantId, async (m) => {
+      const count = await m.getRepository(BomItemEntity).count({
+        where: { tenantId, subBomId },
+      });
+      return count > 0;
     });
   }
 

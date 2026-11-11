@@ -52,12 +52,18 @@ export class BomService {
       throw new BadRequestException(`BOM with code "${dto.bomCode}" already exists`);
     }
 
-    // Validate that sub-BOMs exist and do not create immediate self-cycles
+    // Validate that sub-BOMs exist, are active, and do not create self-referencing cycles
     for (const item of dto.items) {
       if (item.subBomId) {
         const sub = await this.bomRepo.findById(tenantId, item.subBomId);
         if (!sub) {
           throw new NotFoundException(`Sub-BOM #${item.subBomId} not found`);
+        }
+        if (!sub.isActive) {
+          throw new BadRequestException(`Sub-BOM #${item.subBomId} (${sub.bomCode}) is inactive`);
+        }
+        if (sub.bomCode === dto.bomCode) {
+          throw new BadRequestException(`Self-referencing sub-BOM detected in BOM "${dto.bomCode}"`);
         }
       }
     }
@@ -84,6 +90,10 @@ export class BomService {
       if (orders.some((o) => o.bomId === id)) {
         throw new BadRequestException('امکان حذف فرمول ساخت دارای سفارش تولید فعال یا ثبت‌شده وجود ندارد.');
       }
+    }
+    const isUsedAsSubBom = await this.bomRepo.isUsedAsSubBom(tenantId, id);
+    if (isUsedAsSubBom) {
+      throw new BadRequestException('امکان حذف فرمول ساختی که به عنوان زیرمجموعه در فرمول ساخت دیگری استفاده شده است وجود ندارد.');
     }
     return this.bomRepo.deleteById(tenantId, bom.id);
   }
@@ -120,7 +130,6 @@ export class BomService {
       visited.add(currentBomId);
 
       const currentBom = await this.getBom(tenantId, currentBomId);
-      const ratio = multiplier / (currentBom.outputQuantity || 1);
 
       const explodedTree: ExplodedBomTree = {
         bomId: currentBom.id,
@@ -130,11 +139,21 @@ export class BomService {
         components: [],
       };
 
+      const multMilli = BigInt(Math.round(multiplier * 1000));
+      const outQtyMilli = BigInt(Math.round((currentBom.outputQuantity || 1) * 1000));
+
       for (const item of currentBom.items ?? []) {
-        const netQty = Number((item.quantity * ratio).toFixed(3));
-        const wasteRate = (item.wastePercent ?? 0) / 100;
-        const grossQty = Number((netQty * (1 + wasteRate)).toFixed(3));
-        const wasteQty = Number((grossQty - netQty).toFixed(3));
+        // Scaled integer arithmetic (milli-units) to eliminate float accumulation
+        const itemQtyMilli = BigInt(Math.round(item.quantity * 1000));
+        const netQtyMilli = (itemQtyMilli * multMilli + (outQtyMilli / 2n)) / outQtyMilli;
+
+        const wasteBps = BigInt(Math.round((item.wastePercent ?? 0) * 100));
+        const wasteQtyMilli = (netQtyMilli * wasteBps + 5000n) / 10000n;
+        const grossQtyMilli = netQtyMilli + wasteQtyMilli;
+
+        const netQty = Number(netQtyMilli) / 1000;
+        const grossQty = Number(grossQtyMilli) / 1000;
+        const wasteQty = Number(wasteQtyMilli) / 1000;
 
         const componentData: ExplodedComponent = {
           componentSku: item.componentSku,
@@ -164,9 +183,13 @@ export class BomService {
             totalWasteQuantity: 0,
           };
 
-          existing.totalGrossQuantity = Number((existing.totalGrossQuantity + grossQty).toFixed(3));
-          existing.totalNetQuantity = Number((existing.totalNetQuantity + netQty).toFixed(3));
-          existing.totalWasteQuantity = Number((existing.totalWasteQuantity + wasteQty).toFixed(3));
+          const existingGrossMilli = BigInt(Math.round(existing.totalGrossQuantity * 1000));
+          const existingNetMilli = BigInt(Math.round(existing.totalNetQuantity * 1000));
+          const existingWasteMilli = BigInt(Math.round(existing.totalWasteQuantity * 1000));
+
+          existing.totalGrossQuantity = Number(existingGrossMilli + grossQtyMilli) / 1000;
+          existing.totalNetQuantity = Number(existingNetMilli + netQtyMilli) / 1000;
+          existing.totalWasteQuantity = Number(existingWasteMilli + wasteQtyMilli) / 1000;
           leafMap.set(item.componentSku, existing);
         }
       }

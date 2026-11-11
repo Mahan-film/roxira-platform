@@ -33,7 +33,7 @@ export class BomItemEntity {
   @Column({ type: 'int', name: 'sub_bom_id', nullable: true })
   subBomId: number | null;
 
-  @ManyToOne(() => BomHeaderEntity, { onDelete: 'SET NULL', nullable: true })
+  @ManyToOne(() => BomHeaderEntity, { onDelete: 'RESTRICT', nullable: true })
   @JoinColumn({ name: 'sub_bom_id' })
   subBom: BomHeaderEntity | null;
 

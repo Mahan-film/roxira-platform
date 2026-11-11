@@ -71,7 +71,7 @@ export const DEFAULT_ROLE_ACCOUNTS: Readonly<Partial<Record<PostingRole, string>
   payable: '2010',
   cogs: '5110',
   inventory: '1030',
-  raw_materials: '1030',
+  raw_materials: '1031',
   cash: '1011',
   bank: '1012',
   petty_cash: '1013',

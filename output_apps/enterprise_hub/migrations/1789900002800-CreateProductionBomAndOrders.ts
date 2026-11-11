@@ -49,7 +49,7 @@ export class CreateProductionBomAndOrders1789900002800 implements MigrationInter
         "tenant_id" uuid NOT NULL,
         "bom_id" int NOT NULL REFERENCES "erp_bom_headers"("id") ON DELETE CASCADE,
         "component_sku" varchar(100) NOT NULL,
-        "sub_bom_id" int NULL REFERENCES "erp_bom_headers"("id") ON DELETE SET NULL,
+        "sub_bom_id" int NULL REFERENCES "erp_bom_headers"("id") ON DELETE RESTRICT,
         "quantity" numeric(12, 3) NOT NULL,
         "waste_percent" numeric(5, 2) NOT NULL DEFAULT 0.00,
         "notes" varchar(255) NULL,

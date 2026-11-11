@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { EntityManager } from 'typeorm';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { EntityManager, In } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
 import {
   ProductionOrderEntity,
@@ -113,16 +113,26 @@ export class ProductionOrderRepository {
     tenantId: string,
     id: number,
     status: ProductionOrderStatus,
+    expectedStatuses?: ProductionOrderStatus[],
     em?: EntityManager,
   ): Promise<ProductionOrderEntity> {
     return this.within(
       tenantId,
       async (m) => {
         const repo = m.getRepository(ProductionOrderEntity);
-        await repo.update({ id, tenantId }, { status });
+        const whereClause: any = { id, tenantId };
+        if (expectedStatuses && expectedStatuses.length > 0) {
+          whereClause.status = In(expectedStatuses);
+        }
+        const res = await repo.update(whereClause, { status });
+        if (res.affected === 0) {
+          throw new BadRequestException(
+            `Cannot update status of order #${id} to "${status}": order not found or invalid current status`,
+          );
+        }
         const updated = await repo.findOne({ where: { id, tenantId } });
         if (!updated) {
-          throw new Error(`Production order #${id} not found`);
+          throw new NotFoundException(`Production order #${id} not found`);
         }
         return updated;
       },

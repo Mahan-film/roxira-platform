@@ -30,6 +30,7 @@ describe('Production BOM and Production Orders with FIFO costing (T83 / #764)', 
       findByCode: jest.fn(),
       list: jest.fn(),
       deleteById: jest.fn(),
+      isUsedAsSubBom: jest.fn().mockResolvedValue(false),
     } as unknown as jest.Mocked<BomRepository>;
 
     mockOrderRepo = {
@@ -223,6 +224,56 @@ describe('Production BOM and Production Orders with FIFO costing (T83 / #764)', 
 
       await expect(bomService.deleteBom(tenantId, 1)).rejects.toThrow(BadRequestException);
       expect(mockBomRepo.deleteById).not.toHaveBeenCalled();
+    });
+
+    it('prevents deleting a BOM when it is referenced as a sub-BOM in other BOM items', async () => {
+      mockBomRepo.findById.mockResolvedValue({
+        id: 2,
+        tenantId,
+        bomCode: 'BOM-SUB-01',
+      } as BomHeaderEntity);
+      mockOrderRepo.list.mockResolvedValue([]);
+      mockBomRepo.isUsedAsSubBom.mockResolvedValue(true);
+
+      await expect(bomService.deleteBom(tenantId, 2)).rejects.toThrow(
+        'امکان حذف فرمول ساختی که به عنوان زیرمجموعه در فرمول ساخت دیگری استفاده شده است وجود ندارد.',
+      );
+      expect(mockBomRepo.deleteById).not.toHaveBeenCalled();
+    });
+
+    it('rejects createBom when sub-BOM is inactive or self-referencing', async () => {
+      mockBomRepo.findByCode.mockResolvedValue(null);
+      mockBomRepo.findById.mockResolvedValueOnce({
+        id: 99,
+        tenantId,
+        bomCode: 'BOM-INACTIVE',
+        isActive: false,
+      } as BomHeaderEntity);
+
+      await expect(
+        bomService.createBom(tenantId, {
+          bomCode: 'BOM-NEW',
+          name: 'تست',
+          finishedItemSku: 'FG-01',
+          items: [{ componentSku: 'SUB-SKU', subBomId: 99, quantity: 1 }],
+        }),
+      ).rejects.toThrow('is inactive');
+
+      mockBomRepo.findById.mockResolvedValueOnce({
+        id: 100,
+        tenantId,
+        bomCode: 'BOM-SELF',
+        isActive: true,
+      } as BomHeaderEntity);
+
+      await expect(
+        bomService.createBom(tenantId, {
+          bomCode: 'BOM-SELF',
+          name: 'تست خودارجاعی',
+          finishedItemSku: 'FG-01',
+          items: [{ componentSku: 'SUB-SKU', subBomId: 100, quantity: 1 }],
+        }),
+      ).rejects.toThrow('Self-referencing');
     });
   });
 
@@ -428,8 +479,8 @@ describe('Production BOM and Production Orders with FIFO costing (T83 / #764)', 
         mockEntityManager,
       );
 
-      expect(completed.totalCostMinor).toBe(210_000n);
-      expect(completed.unitCostMinor).toBe(21_000n);
+      expect(completed.totalCostMinor).toBe(21_000_000n);
+      expect(completed.unitCostMinor).toBe(2_100_000n);
       expect(completed.status).toBe(ProductionOrderStatus.COMPLETED);
 
       expect(mockInventoryRepo.persistInbound).toHaveBeenCalledWith(
@@ -450,11 +501,86 @@ describe('Production BOM and Production Orders with FIFO costing (T83 / #764)', 
           docType: 'inventory.production',
           sourceType: 'production_order',
           sourceId: 'PO-2026-001',
-          amounts: { amount: 210_000n },
+          amounts: { amount: 21_000_000n },
         }),
         mockEntityManager,
       );
       expect(completed.voucherId).toBe(999);
+    });
+
+    it('fails closed and rolls back without inbounding or posting if outbound throws (insufficient stock)', async () => {
+      const inProgressOrder: ProductionOrderEntity = {
+        id: 102,
+        tenantId,
+        orderNumber: 'PO-2026-002',
+        bomId: 1,
+        finishedSku: 'PROD-A',
+        warehouseId: 1,
+        plannedQuantity: 5,
+        completedQuantity: 0,
+        status: ProductionOrderStatus.IN_PROGRESS,
+        totalCostMinor: 0n,
+        unitCostMinor: 0n,
+        voucherId: null,
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        bom: activeBom,
+      };
+
+      (mockEntityManager.getRepository as jest.Mock).mockReturnValue({
+        findOne: jest.fn().mockResolvedValue(inProgressOrder),
+      });
+      mockBomRepo.findById.mockResolvedValue(activeBom);
+
+      mockInventoryRepo.persistOutbound.mockRejectedValueOnce(
+        new Error('کسری موجودی کالا'),
+      );
+
+      await expect(
+        productionOrderService.completeOrder(tenantId, 102, {
+          completedQuantity: 5,
+        }),
+      ).rejects.toThrow('کسری موجودی کالا');
+
+      expect(mockInventoryRepo.persistInbound).not.toHaveBeenCalled();
+      expect(mockPostingRules.post).not.toHaveBeenCalled();
+      expect(mockOrderRepo.updateCompletion).not.toHaveBeenCalled();
+    });
+
+    it('verifies startOrder and cancelOrder enforce status guards', async () => {
+      mockOrderRepo.findById.mockResolvedValueOnce({
+        id: 201,
+        tenantId,
+        orderNumber: 'PO-DRAFT',
+        status: ProductionOrderStatus.DRAFT,
+      } as ProductionOrderEntity);
+
+      mockOrderRepo.updateStatus.mockResolvedValueOnce({
+        id: 201,
+        tenantId,
+        orderNumber: 'PO-DRAFT',
+        status: ProductionOrderStatus.IN_PROGRESS,
+      } as ProductionOrderEntity);
+
+      await productionOrderService.startOrder(tenantId, 201);
+      expect(mockOrderRepo.updateStatus).toHaveBeenCalledWith(
+        tenantId,
+        201,
+        ProductionOrderStatus.IN_PROGRESS,
+        [ProductionOrderStatus.DRAFT],
+      );
+
+      mockOrderRepo.findById.mockResolvedValueOnce({
+        id: 202,
+        tenantId,
+        orderNumber: 'PO-COMPLETED',
+        status: ProductionOrderStatus.COMPLETED,
+      } as ProductionOrderEntity);
+
+      await expect(productionOrderService.cancelOrder(tenantId, 202)).rejects.toThrow(
+        'Cannot cancel completed order',
+      );
     });
   });
 });

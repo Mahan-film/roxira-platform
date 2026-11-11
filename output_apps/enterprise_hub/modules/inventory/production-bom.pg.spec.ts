@@ -144,12 +144,11 @@ describePg('Production BOM & Orders RLS isolation (NOSUPERUSER NOBYPASSRLS)', ()
     const t2List = await orderRepo.list(T2);
     expect(t2List).toHaveLength(0);
 
-    // 4. Tenant 2 cannot modify Tenant 1 order status
-    try {
-      await orderRepo.updateStatus(T2, t1Order.id, ProductionOrderStatus.CANCELLED);
-    } catch (e) {
-      // Expected: order not found under Tenant 2 scope
-    }
+    // 4. Tenant 2 cannot modify Tenant 1 order status (fail-closed)
+    await expect(
+      orderRepo.updateStatus(T2, t1Order.id, ProductionOrderStatus.CANCELLED),
+    ).rejects.toThrow();
+
     const stillInT1 = await orderRepo.findById(T1, t1Order.id);
     expect(stillInT1?.status).toBe(ProductionOrderStatus.DRAFT);
   });
