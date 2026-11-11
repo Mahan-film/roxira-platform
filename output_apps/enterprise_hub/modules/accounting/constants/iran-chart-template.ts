@@ -53,6 +53,7 @@ const COMMON_MOEINS: readonly Moein[] = [
   ['1011', 'صندوق', ASSET, L.CASH],
   ['1012', 'بانک‌ها', ASSET, L.BANK],
   ['1013', 'تنخواه‌گردان', ASSET, L.PETTY_CASH],
+  ['1015', 'حساب واسط پوز', ASSET, L.CASH],
   ['1020', 'حساب‌های دریافتنی تجاری', ASSET, L.RECEIVABLE],
   ['1021', 'اسناد دریافتنی', ASSET, L.RECEIVABLE],
   ['1022', 'سایر دریافتنی‌ها', ASSET, L.RECEIVABLE],

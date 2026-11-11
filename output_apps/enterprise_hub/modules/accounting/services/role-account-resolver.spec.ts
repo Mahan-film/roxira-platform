@@ -115,7 +115,7 @@ describe('decideRoleAccount per role over the real charts', () => {
       purchases: 'create 5201',
       payable: 'use 2010',
       vatReceivable: 'use 1045',
-      posClearing: 'create 1015',
+      posClearing: 'use 1015',
       stockAdjustment: 'create 5301',
       // 3030 is «سایر اندوخته‌ها» here: not reused, the new account takes the next free code.
       openingEquity: 'create 3031',

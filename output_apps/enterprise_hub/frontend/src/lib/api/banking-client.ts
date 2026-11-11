@@ -4,8 +4,12 @@ import type {
   AutoMatchResult,
   BankAccount,
   BookLine,
-  CreateBankAccountDto,
+  CashBankTransferDto,
   CashBox,
+  CreateBankAccountDto,
+  CreateCashBoxDto,
+  PosSettlementDto,
+  PosSettlementResult,
   ReconciliationSummary,
   StatementLine,
 } from "@/types/banking";
@@ -113,4 +117,39 @@ export function createEntryFromStatementLine(
 /** GET /enterprise-hub/banking/cash-boxes */
 export function listCashBoxes(signal?: AbortSignal): Promise<CashBox[]> {
   return apiRequest<CashBox[]>(`${BANKING_ENDPOINT}/cash-boxes`, { method: "GET", signal });
+}
+/** POST /enterprise-hub/banking/cash-boxes */
+export function createCashBox(
+  payload: CreateCashBoxDto,
+  signal?: AbortSignal,
+): Promise<CashBox> {
+  return apiRequest<CashBox>(`${BANKING_ENDPOINT}/cash-boxes`, {
+    method: "POST",
+    body: payload,
+    signal,
+  });
+}
+
+/** POST /enterprise-hub/banking/transfers/cash-bank */
+export function transferCashBank(
+  payload: CashBankTransferDto,
+  signal?: AbortSignal,
+): Promise<{ transfer: CashBankTransferDto; voucher: { entryId: number; entryNumber: string } }> {
+  return apiRequest(`${BANKING_ENDPOINT}/transfers/cash-bank`, {
+    method: "POST",
+    body: payload,
+    signal,
+  });
+}
+
+/** POST /enterprise-hub/banking/pos-settlements */
+export function settlePos(
+  payload: PosSettlementDto,
+  signal?: AbortSignal,
+): Promise<PosSettlementResult> {
+  return apiRequest<PosSettlementResult>(`${BANKING_ENDPOINT}/pos-settlements`, {
+    method: "POST",
+    body: payload,
+    signal,
+  });
 }

@@ -287,6 +287,29 @@ export const POSTING_TEMPLATES: readonly PostingTemplate[] = [
     amounts: ['amount'],
     lines: [dr('counter', 'amount', ''), cr('petty_cash', 'amount', '')],
   },
+  {
+    docType: 'treasury.cash_bank_transfer',
+    title: 'انتقال وجه از صندوق به بانک (واریز به بانک)',
+    amounts: ['amount'],
+    lines: [dr('bank', 'amount', 'واریز وجه از صندوق به بانک'), cr('cash', 'amount', 'برداشت وجه از صندوق')],
+  },
+  {
+    docType: 'treasury.bank_cash_transfer',
+    title: 'انتقال وجه از بانک به صندوق (برداشت نقدی)',
+    amounts: ['amount'],
+    lines: [dr('cash', 'amount', 'دریافت نقدی از بانک به صندوق'), cr('bank', 'amount', 'برداشت از حساب بانکی')],
+  },
+  {
+    docType: 'treasury.pos_settlement',
+    title: 'تسویه پایانه کارتخوان و کارمزد بانکی',
+    amounts: ['gross', 'fee', 'net'],
+    lines: [
+      dr('bank', 'net', 'واریز خالص تسویه کارتخوان'),
+      dr('bank_fee', 'fee', 'کارمزد خدمات بانکی'),
+      cr('pos_clearing', 'gross', 'تسویه وجوه در راه کارتخوان'),
+    ],
+    defaults: { pos_clearing: '1015', bank_fee: '5210' },
+  },
 ];
 
 const BY_TYPE = new Map(POSTING_TEMPLATES.map((t) => [t.docType, t]));
