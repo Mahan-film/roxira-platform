@@ -116,6 +116,8 @@ describe('DataImportController (access control)', () => {
     stub.grant('owner', 'tenant-1', 'owner');
     stub.grant('admin', 'tenant-1', 'owner');
     stub.grant('member', 'tenant-1', 'legacy_member');
+    stub.grant('accountant', 'tenant-1', 'accountant');
+    stub.grant('sales', 'tenant-1', 'sales');
 
     app = moduleRef.createNestApplication();
     app.useGlobalPipes(
@@ -276,6 +278,36 @@ describe('DataImportController (access control)', () => {
         )
         .send(validSepidarBody)
         .expect(200);
+    });
+
+    it('allows tenant ACCOUNTANT (200) and rejects SALES (403)', async () => {
+      await request(app.getHttpServer())
+        .post(sepidarUrl)
+        .set(
+          'Authorization',
+          `Bearer ${token({
+            sub: 'accountant',
+            role: UserRole.USER,
+            tenantId: 'tenant-1',
+            tenantRole: TenantRole.MEMBER,
+          })}`,
+        )
+        .send(validSepidarBody)
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .post(sepidarUrl)
+        .set(
+          'Authorization',
+          `Bearer ${token({
+            sub: 'sales',
+            role: UserRole.USER,
+            tenantId: 'tenant-1',
+            tenantRole: TenantRole.MEMBER,
+          })}`,
+        )
+        .send(validSepidarBody)
+        .expect(403);
     });
   });
 });

@@ -8,6 +8,7 @@ import { minorToDecimal, parseMinor } from '../accounting/money';
 import { ChequeEventEntity } from '../cheques/entities/cheque-event.entity';
 import { ChequeEntity } from '../cheques/entities/cheque.entity';
 import { ChequesRepository } from '../cheques/repositories/cheques.repository';
+import { ImportMappingMemoryEntity } from './entities/import-mapping-memory.entity';
 import { PartyEntity } from '../parties/entities/party.entity';
 import { StockItemEntity } from '../inventory/entities/stock-item.entity';
 import {
@@ -44,6 +45,7 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
   let linesStore: JournalEntryLineEntity[];
   let chequesStore: ChequeEntity[];
   let chequeEventsStore: ChequeEventEntity[];
+  let idempotencyStore: ImportMappingMemoryEntity[];
 
   let mockTenantScope: Partial<TenantScope>;
 
@@ -55,6 +57,7 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
     lines: JournalEntryLineEntity[],
     cheques: ChequeEntity[],
     events: ChequeEventEntity[],
+    idem: ImportMappingMemoryEntity[],
   ): EntityManager {
     const matchAll = <T extends Record<string, any>>(arr: T[], where: Record<string, any>): T[] =>
       arr.filter((row) =>
@@ -151,6 +154,16 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
             }),
           };
         }
+        if (entityClass === ImportMappingMemoryEntity) {
+          return {
+            findOne: jest.fn(async ({ where }) => matchAll(idem, where)[0] ?? null),
+            create: jest.fn((dto) => ({ ...dto })),
+            save: jest.fn(async (entity) => {
+              idem.push(entity);
+              return entity;
+            }),
+          };
+        }
         throw new Error(`Unexpected entity class: ${entityClass.name}`);
       }),
     } as unknown as EntityManager;
@@ -164,6 +177,7 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
     linesStore = [];
     chequesStore = [];
     chequeEventsStore = [];
+    idempotencyStore = [];
 
     mockTenantScope = {
       run: jest.fn(async (_t: string, fn: (em: EntityManager) => any) => {
@@ -175,7 +189,8 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
         const snapLin = linesStore.map((x) => ({ ...x }));
         const snapChq = chequesStore.map((x) => ({ ...x }));
         const snapEv = chequeEventsStore.map((x) => ({ ...x }));
-        const txEm = buildEm(snapAcc, snapPar, snapItm, snapEnt, snapLin, snapChq, snapEv);
+        const snapIdem = idempotencyStore.map((x) => ({ ...x }));
+        const txEm = buildEm(snapAcc, snapPar, snapItm, snapEnt, snapLin, snapChq, snapEv, snapIdem);
         const result = await fn(txEm);
         accountsStore = snapAcc;
         partiesStore = snapPar;
@@ -184,6 +199,7 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
         linesStore = snapLin;
         chequesStore = snapChq;
         chequeEventsStore = snapEv;
+        idempotencyStore = snapIdem;
         return result;
       }),
     };
@@ -224,18 +240,18 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
 
       expect(cert.counts.openingLines).toBe(SYNTHETIC_SEPIDAR_OPENING_VOUCHER.length);
       expect(cert.idempotencySummary.openingVoucherCreated).toBe(true);
-      expect(cert.totals.openingDebitMinor).toBe('250000000');
-      expect(cert.totals.openingCreditMinor).toBe('250000000');
+      expect(cert.totals.openingDebitMinor).toBe('25000000000');
+      expect(cert.totals.openingCreditMinor).toBe('25000000000');
       expect(entriesStore.some((e) => e.entryNumber === 'JV-OPENING-SEPIDAR')).toBe(true);
       expect(linesStore).toHaveLength(5);
 
-      // Account balances updated via atomic SQL delta
-      expect(accountsStore.find((a) => a.code === '1010')?.balance).toBe('500000.00');
-      expect(accountsStore.find((a) => a.code === '3010')?.balance).toBe('-1800000.00');
+      // Account balances stored in exact IRR decimal (150M / 50M IRR, not 1/100th)
+      expect(accountsStore.find((a) => a.code === '1010')?.balance).toBe('50000000.00');
+      expect(accountsStore.find((a) => a.code === '3010')?.balance).toBe('-180000000.00');
 
       // Cheques persisted with sayadVerified=false (never falsified) + ChequeEventEntity audit row
       expect(cert.counts.cheques).toBe(5);
-      expect(cert.totals.chequesAmountMinor).toBe('955000000');
+      expect(cert.totals.chequesAmountMinor).toBe('95500000000');
       expect(chequesStore.every((c) => c.sayadVerified === false && c.sayadVerifiedBy === null && c.sayadVerifiedAt === null)).toBe(true);
       expect(chequeEventsStore).toHaveLength(5);
     });
@@ -368,6 +384,77 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
     it('executes all 5 entity groups atomically inside one TenantScope transaction', async () => {
       await service.persistSepidarData(tenantId, { useSynthetic: true });
       expect(mockTenantScope.run).toHaveBeenCalledTimes(1);
+    });
+
+    it('treats distinct Sayad numbers on same bank and chequeNumber as distinct cheques and deduplicates certificate counts', async () => {
+      const chq1 = {
+        ...SYNTHETIC_SEPIDAR_CHEQUES[0],
+        ChequeId: 3001,
+        ChequeNumber: 'SERIAL-99',
+        SayadNumber: '1234567890123456',
+        BankName: 'بانک ملت',
+        Amount: 10_000_000,
+      };
+      const chq2DifferentSayadSameBank = {
+        ...SYNTHETIC_SEPIDAR_CHEQUES[0],
+        ChequeId: 3002,
+        ChequeNumber: 'SERIAL-99',
+        SayadNumber: '6543210987654321',
+        BankName: 'بانک ملت',
+        Amount: 20_000_000,
+      };
+      const duplicateOfChq1 = { ...chq1 };
+
+      const cert = await service.persistSepidarData(
+        tenantId,
+        { cheques: [chq1, duplicateOfChq1, chq2DifferentSayadSameBank] },
+        'cheques-only-key',
+      );
+
+      expect(chequesStore).toHaveLength(2);
+      expect(cert.counts.cheques).toBe(2);
+      expect(cert.totals.chequesAmountMinor).toBe('3000000000');
+
+      // Reusing same Idempotency-Key on a cheques-only import with a different body must throw 409
+      await expect(
+        service.persistSepidarData(
+          tenantId,
+          { cheques: [chq2DifferentSayadSameBank] },
+          'cheques-only-key',
+        ),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('rejects fractional IRR inputs, production useSynthetic, and re-runs with conflicting attributes', async () => {
+      await expect(
+        service.persistSepidarData(tenantId, {
+          accounts: SYNTHETIC_SEPIDAR_ACCOUNTS,
+          openingVoucher: [
+            { VoucherItemID: 1, AccountCode: '1010', Debit: 1000.5, Credit: 0 },
+            { VoucherItemID: 2, AccountCode: '3010', Debit: 0, Credit: 1000.5 },
+          ],
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      const prevEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+      try {
+        await expect(
+          service.persistSepidarData(tenantId, { useSynthetic: true }),
+        ).rejects.toThrow(BadRequestException);
+      } finally {
+        process.env.NODE_ENV = prevEnv;
+      }
+
+      // First run succeeds, re-running same account code with changed name fails with 409 Conflict
+      await service.persistSepidarData(tenantId, {
+        accounts: [{ AccountID: 1, Code: '1010', Title: 'صندوق اصلی', Level: 1, ParentAccountID: null }],
+      });
+      await expect(
+        service.persistSepidarData(tenantId, {
+          accounts: [{ AccountID: 1, Code: '1010', Title: 'نام تغییریافته', Level: 1, ParentAccountID: null }],
+        }),
+      ).rejects.toThrow(ConflictException);
     });
   });
 });
