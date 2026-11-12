@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 
+import { todayJalaliIso } from "./jalali-date-input.ts";
 import {
   ONBOARDING_STEPS,
   defaultFiscalYear,
@@ -90,4 +91,13 @@ test("default fiscal year is the Jalali year containing today", () => {
   // 1403 is a leap year: Esfand has 30 days and ends on 2025-03-20.
   assert.deepEqual(defaultFiscalYear("2024-05-01"), { name: "1403", startDate: "2024-03-20", endDate: "2025-03-20" });
   assert.equal(defaultFiscalYear("not-a-date"), null);
+});
+
+test("default fiscal year works end-to-end with todayJalaliIso()", () => {
+  const today = todayJalaliIso();
+  const year = defaultFiscalYear(today);
+  assert.ok(year !== null);
+  assert.match(year.name, /^[1-9][0-9]{3}$/);
+  assert.match(year.startDate, /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/);
+  assert.match(year.endDate, /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/);
 });
