@@ -3889,6 +3889,28 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/data-import/dry-run/holoo (ImportDryRunController.dryRunHoloo)": {
+    "policy": "data_import:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/data-import/dry-run/sepidar (ImportDryRunController.dryRunSepidar)": {
+    "policy": "data_import:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/data-import/packages (DataImportController.createPackage)": {
     "policy": "data_import:create",
     "owner": true,
