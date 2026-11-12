@@ -2487,6 +2487,17 @@
     "read_only": true,
     "legacy_member": true
   },
+  "GET /tenants/me/onboarding/ (OnboardingController.get)": {
+    "policy": "anyMember",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": true,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": true
+  },
   "PATCH /enterprise-hub/assistant/capture/documents/:id (CaptureController.update)": {
     "policy": "accounting:create",
     "owner": true,
@@ -2645,6 +2656,17 @@
     "policy": "security:admin",
     "owner": true,
     "admin": false,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PATCH /tenants/me/onboarding/ (OnboardingController.update)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
     "accountant": false,
     "sales": false,
     "cheque_reviewer": false,
@@ -4895,6 +4917,28 @@
     "legacy_member": false
   },
   "PUT /policies/:key (PolicyController.set)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PUT /tenants/me/onboarding/profile (OnboardingController.saveProfile)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PUT /tenants/me/onboarding/steps/:step (OnboardingController.setStep)": {
     "policy": "members:admin",
     "owner": true,
     "admin": true,

@@ -41,6 +41,7 @@ import { SalesDeliveryModule } from './modules/sales/delivery/sales-delivery.mod
 import { SalesReturnModule } from './modules/sales/returns/sales-return.module';
 import { ContractingModule } from './modules/contracting/contracting.module';
 import { CountryPacksModule } from './modules/country_packs/country-packs.module';
+import { OnboardingModule } from './modules/onboarding/onboarding.module';
 
 const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(process.cwd(), '.env')].filter(
   (file) => {
@@ -121,6 +122,7 @@ const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(proce
     SalesReturnModule,
     ContractingModule,
     CountryPacksModule,
+    OnboardingModule,
   ],
 })
 export class AppModule {}

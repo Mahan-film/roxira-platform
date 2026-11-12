@@ -36,6 +36,11 @@ export class TenantsRepository {
     return this.findById(id);
   }
 
+  async updateName(id: string, name: string): Promise<TenantEntity | null> {
+    await this.repository.update({ id }, { name });
+    return this.findById(id);
+  }
+
   async updateRequire2fa(id: string, require2fa: boolean): Promise<void> {
     await this.repository.update({ id }, { require2fa });
   }

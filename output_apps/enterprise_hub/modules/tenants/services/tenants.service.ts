@@ -54,6 +54,11 @@ export class TenantsService {
     return tenant;
   }
 
+  /** تغییر نام سازمان (اسلاگ ثابت می‌ماند تا نشانی‌ها نشکنند). */
+  async updateName(tenantId: string, name: string): Promise<TenantEntity | null> {
+    return this.tenantsRepository.updateName(tenantId, name.trim());
+  }
+
   /**
    * ساخت اسلاگ امن از نام سازمان.
    *
