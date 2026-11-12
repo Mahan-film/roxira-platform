@@ -72,6 +72,9 @@ export class CreateFiscalMemoryProfiles1789900003600 implements MigrationInterfa
     await q.query(`DROP INDEX IF EXISTS "public"."IDX_moadian_submissions_tenant_root"`);
     await q.query(`DROP INDEX IF EXISTS "public"."IDX_moadian_submissions_tenant_invoice_ins"`);
 
+    // Temporarily disable RLS on moadian_submissions so migration cleanup can see all tenants
+    await disableTenantRls(q, 'moadian_submissions');
+
     // Archive any multi-ins rows or reference chain data before restoring the single-submission index
     // so accepted taxIds and audit history are never silently lost on rollback.
     await q.query(`
@@ -87,7 +90,6 @@ export class CreateFiscalMemoryProfiles1789900003600 implements MigrationInterfa
         "archived_at" timestamptz NOT NULL DEFAULT now()
       )
     `);
-    await enableTenantRls(q, 'moadian_submissions_archive');
     await q.query(`
       INSERT INTO "moadian_submissions_archive"
         ("id", "tenant_id", "invoice_id", "ins", "reference_tax_id", "active_reference_tax_id", "profile_id", "archived_row")
@@ -96,6 +98,7 @@ export class CreateFiscalMemoryProfiles1789900003600 implements MigrationInterfa
       WHERE s."ins" > 1 OR s."reference_tax_id" IS NOT NULL OR s."active_reference_tax_id" IS NOT NULL OR s."profile_id" IS NOT NULL
       ON CONFLICT ("id") DO NOTHING
     `);
+    await enableTenantRls(q, 'moadian_submissions_archive');
 
     // Archive fiscal memory profiles before dropping the table
     await q.query(`
@@ -106,13 +109,13 @@ export class CreateFiscalMemoryProfiles1789900003600 implements MigrationInterfa
         "archived_at" timestamptz NOT NULL DEFAULT now()
       )
     `);
-    await enableTenantRls(q, 'fiscal_memory_profiles_archive');
     await q.query(`
       INSERT INTO "fiscal_memory_profiles_archive" ("id", "tenant_id", "archived_row")
       SELECT "id", "tenant_id", to_jsonb(p)
       FROM "fiscal_memory_profiles" p
       ON CONFLICT ("id") DO NOTHING
     `);
+    await enableTenantRls(q, 'fiscal_memory_profiles_archive');
 
     // After archiving safely, remove extra-ins rows so restoring the pre-migration unique index succeeds.
     await q.query(`
@@ -134,6 +137,10 @@ export class CreateFiscalMemoryProfiles1789900003600 implements MigrationInterfa
         DROP COLUMN IF EXISTS "root_invoice_id",
         DROP COLUMN IF EXISTS "ins"
     `);
+
+    // Re-enable RLS on moadian_submissions
+    await enableTenantRls(q, 'moadian_submissions');
+
     await disableTenantRls(q, 'fiscal_memory_profiles');
     await q.query(`DROP TABLE IF EXISTS "fiscal_memory_profiles"`);
   }

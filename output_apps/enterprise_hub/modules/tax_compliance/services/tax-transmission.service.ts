@@ -242,9 +242,18 @@ export class TaxTransmissionService {
       return 'poll';
     }
     if (status === MoadianInquiryStatus.NOT_FOUND) return 'resend';
-    // TIMEOUT or any status we do not know: stay UNKNOWN and ask again later.
-    await this.repository.update(tenantId, submission.id, { status: MoadianSubmissionStatus.UNKNOWN });
-    return 'retry';
+    // TIMEOUT or any status we do not know: preserve SENT or UNKNOWN, increment pollCount, and schedule next poll.
+    await this.repository.update(tenantId, submission.id, {
+      status: this.wasEverSent(submission) ? MoadianSubmissionStatus.SENT : MoadianSubmissionStatus.UNKNOWN,
+      pollCount,
+      lastPolledAt: new Date(),
+    });
+    const maxPolls = this.numberSetting(MOADIAN_ENV.MAX_POLLS, MOADIAN_DEFAULT_MAX_POLLS);
+    if (pollCount < maxPolls) {
+      await this.schedulePoll(data, pollCount);
+      return 'poll';
+    }
+    return 'done';
   }
 
   /** Sends the stored packet with the stored uid/taxid after winning an atomic DB claim. */

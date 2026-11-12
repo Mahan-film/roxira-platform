@@ -250,6 +250,20 @@ describe('TaxTransmissionService send path', () => {
     expect(sentSetup.repo.row.status).toBe(St.SENT);
   });
 
+  it('an inquiry returning TIMEOUT status preserves SENT, increments pollCount, and schedules poll', async () => {
+    const { service, fake, repo } = setup(
+      makeSubmission({ status: St.SENT, referenceNumber: 'R1', sentAt: new Date(), pollCount: 0 }),
+    );
+    jest.spyOn(fake, 'inquireByUid').mockResolvedValueOnce([
+      { uid: 'u1', status: Inq.TIMEOUT, referenceNumber: null, errors: [], warnings: [] },
+    ]);
+    const outcome = await service.process(data);
+    expect(outcome).toBe('poll');
+    expect(repo.row.status).toBe(St.SENT);
+    expect(repo.row.pollCount).toBe(1);
+    expect(repo.row.lastPolledAt).toBeDefined();
+  });
+
   it('non-MoadianApiError preserves status and records CLIENT error', async () => {
     const { service, fake, repo } = setup(makeSubmission({ status: St.UNKNOWN }));
     jest.spyOn(fake, 'inquireByUid').mockRejectedValue(new Error('x'));
