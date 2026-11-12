@@ -38,6 +38,17 @@ const options = (database: string, username = OWNER, password = OWNER_PW) => ({
   logging: false,
 });
 
+/** Revert executed migrations newest-first until (and including) `name`. */
+async function undoThrough(ds: DataSource, name: string): Promise<void> {
+  for (let i = 0; i < 50; i++) {
+    const [last] = await ds.query(`SELECT "name" FROM "migrations" ORDER BY "timestamp" DESC, "id" DESC LIMIT 1`);
+    if (!last) break;
+    await ds.undoLastMigration({ transaction: 'each' });
+    if (last.name === name) return;
+  }
+  throw new Error(`migration ${name} was not found among executed migrations`);
+}
+
 describePg('Tax transmission core on PostgreSQL (NOSUPERUSER, FORCE RLS)', () => {
   const db = `rx_ttx_${process.pid}_${Date.now()}`;
   const role = `rx_ttx_app_${process.pid}`;
@@ -260,7 +271,8 @@ describePg('Tax transmission core on PostgreSQL (NOSUPERUSER, FORCE RLS)', () =>
     await outbox.confirm(T1, rootRow, [], 1, 'REF-REV-1');
     await enqueue(T1, sharedInv, S.CORRECTIVE, sharedInv);
 
-    await owner.undoLastMigration();
+    // Newer migrations on main may run after this one, so undo until T94's own down() has run.
+    await undoThrough(owner, 'CreateFiscalMemoryProfiles1789900003600');
 
     // Verify extra-ins and reference-chain rows were archived into moadian_submissions_archive
     const [archivedSub] = await owner.query(
