@@ -196,15 +196,23 @@ export class PrintTemplateService {
     return this.toDto(item);
   }
 
+  /**
+   * The tenant's saved default for this document and paper size, or null when
+   * none was saved. No synthetic preset is returned: callers must then print
+   * with the original built-in layout so nothing changes for tenants who never
+   * saved a template.
+   */
   async findDefault(
     tenantId: string,
     docType: PrintDocType,
     paperSize?: PrintPaperSize,
-  ): Promise<PrintTemplateResponseDto> {
+  ): Promise<PrintTemplateResponseDto | null> {
     const saved = await this.repository.findDefault(tenantId, docType, paperSize);
-    if (saved) return this.toDto(saved);
+    return saved ? this.toDto(saved) : null;
+  }
 
-    // If no custom template is saved as default, return the system default preset
+  /** Starting values for the template builder form only. Never used for printing. */
+  getPreset(docType: PrintDocType, paperSize?: PrintPaperSize): PrintTemplateResponseDto {
     const chosenSize = paperSize ?? (docType === PrintDocType.RECEIPT_PAYMENT_VOUCHER ? PrintPaperSize.A5 : PrintPaperSize.A4);
     return {
       id: 0,

@@ -5,6 +5,7 @@ import type { PrintColumnConfig, PrintTemplateDto } from "../../types/print-temp
 import { formatNumber } from "../fa-format.ts";
 
 import { renderTemplate } from "./render-template.ts";
+import { mapInvoiceToSalesInvoiceA5Data } from "./sales-invoice-a5.ts";
 import { mapInvoiceToSalesInvoiceA4Data, SalesInvoicePrintCustomOptions } from "./sales-invoice.ts";
 
 function escapeHtml(unsafe: unknown): string {
@@ -27,7 +28,7 @@ function escapeHtml(unsafe: unknown): string {
   });
 }
 
-function buildDynamicTableHtml(
+export function buildDynamicTableHtml(
   invoice: InvoiceResponseDto,
   columnsConfig: PrintColumnConfig[],
 ): string {
@@ -54,7 +55,8 @@ function buildDynamicTableHtml(
       case "discount":
         return `<td class="n">${formatNumber(item.discount)}</td>`;
       case "vat":
-        return `<td class="c">${formatNumber(item.vatRate * 100)}٪</td>`;
+        // The "مالیات و عوارض" column is the line tax AMOUNT, formatted like the other money cells.
+        return `<td class="n">${formatNumber(item.tax)}</td>`;
       case "totalPrice":
         return `<td class="n">${formatNumber(item.total)}</td>`;
       default:
@@ -73,7 +75,8 @@ function buildDynamicTableHtml(
       case "unit":
         return `<td></td>`;
       case "unitPrice":
-        return `<td class="n">${formatNumber(invoice.totalAmount)}</td>`;
+        // A sum of line totals does not belong under a unit-price header.
+        return `<td></td>`;
       case "discount":
         return `<td class="n">${formatNumber(invoice.totalDiscount)}</td>`;
       case "vat":
@@ -106,34 +109,39 @@ function buildDynamicTableHtml(
   </table>`;
 }
 
-/** Opens the sales invoice in its own window and starts printing. Does nothing if a pop-up blocker stops it. */
-export function printSalesInvoice(
+/** Renders the sales invoice HTML. With no saved template this is the original layout. */
+export function buildSalesInvoiceHtml(
   invoice: InvoiceResponseDto,
   statusLabel: string,
-  template?: Partial<PrintTemplateDto> | SalesInvoicePrintCustomOptions,
-): void {
-  const options: SalesInvoicePrintCustomOptions | undefined = template
-    ? "title" in template || "showLogo" in template
-      ? {
-          docTitle:
-            (template as Partial<PrintTemplateDto>).options?.headerTitle ||
-            "فاکتور فروش",
-          logoUrl: (template as Partial<PrintTemplateDto>).logoUrl ?? undefined,
-          showLogo: (template as Partial<PrintTemplateDto>).showLogo,
-          footerText: (template as Partial<PrintTemplateDto>).options?.footerNote,
-          columnsConfig: (template as Partial<PrintTemplateDto>).columnsConfig,
-        }
-      : (template as SalesInvoicePrintCustomOptions)
-    : undefined;
+  template?: Partial<PrintTemplateDto> | null,
+): string {
+  // No saved template: the original layout, byte for byte.
+  if (!template) {
+    return renderTemplate(
+      SALES_INVOICE_A4_TEMPLATE,
+      mapInvoiceToSalesInvoiceA4Data(invoice, statusLabel),
+    );
+  }
 
-  const paperSize = (template as Partial<PrintTemplateDto>)?.paperSize;
-  const isA5 = paperSize === "A5";
-  const isThermal = paperSize === "THERMAL_80MM";
-  const tpl = isA5 ? SALES_INVOICE_A5_TEMPLATE : SALES_INVOICE_A4_TEMPLATE;
-  let html = renderTemplate(
-    tpl,
-    mapInvoiceToSalesInvoiceA4Data(invoice, statusLabel, options),
-  );
+  const options: SalesInvoicePrintCustomOptions = {
+    docTitle: template.options?.headerTitle || undefined,
+    logoUrl: template.logoUrl ?? undefined,
+    showLogo: template.showLogo,
+    footerText: template.options?.footerNote,
+    columnsConfig: template.columnsConfig,
+  };
+
+  const isA5 = template.paperSize === "A5";
+  const isThermal = template.paperSize === "THERMAL_80MM";
+  let html = isA5
+    ? renderTemplate(SALES_INVOICE_A5_TEMPLATE, {
+        ...mapInvoiceToSalesInvoiceA5Data(invoice, statusLabel),
+        ...(options.docTitle ? { docTitle: options.docTitle } : {}),
+      })
+    : renderTemplate(
+        SALES_INVOICE_A4_TEMPLATE,
+        mapInvoiceToSalesInvoiceA4Data(invoice, statusLabel, options),
+      );
 
   if (
     options?.columnsConfig &&
@@ -156,6 +164,16 @@ export function printSalesInvoice(
       </style></head>`,
     );
   }
+  return html;
+}
+
+/** Opens the sales invoice in its own window and starts printing. Does nothing if a pop-up blocker stops it. */
+export function printSalesInvoice(
+  invoice: InvoiceResponseDto,
+  statusLabel: string,
+  template?: Partial<PrintTemplateDto> | null,
+): void {
+  const html = buildSalesInvoiceHtml(invoice, statusLabel, template);
   const printWindow = window.open("", "_blank");
   if (!printWindow) return;
   printWindow.document.write(html);

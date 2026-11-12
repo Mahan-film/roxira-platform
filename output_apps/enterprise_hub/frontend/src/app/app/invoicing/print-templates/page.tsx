@@ -26,6 +26,7 @@ import {
   createPrintTemplate,
   deletePrintTemplate,
   getDefaultPrintTemplate,
+  getPrintTemplatePreset,
   listPrintTemplates,
   updatePrintTemplate,
 } from "@/lib/api/print-templates-client";
@@ -91,7 +92,9 @@ function PrintFormBuilderPage() {
 
       // Only re-populate editing form if switching docType or nothing is selected
       if (resetSelection || !editingTemplateId) {
-        const def = await getDefaultPrintTemplate(docType, paperSize);
+        const def =
+          (await getDefaultPrintTemplate(docType, paperSize)) ??
+          (await getPrintTemplatePreset(docType, paperSize));
         setTitle(def.title);
         setIsDefault(def.isDefault);
         setShowLogo(def.showLogo);
@@ -130,7 +133,7 @@ function PrintFormBuilderPage() {
   const handleResetToDefault = async () => {
     try {
       setLoading(true);
-      const def = await getDefaultPrintTemplate(docType, paperSize);
+      const def = await getPrintTemplatePreset(docType, paperSize);
       setTitle(def.title);
       setIsDefault(true);
       setShowLogo(def.showLogo);
@@ -290,7 +293,7 @@ function PrintFormBuilderPage() {
     <>
       <PageHeader
         title="سازنده فرم‌های چاپی و برچسب بارکد"
-        description="سفارشی‌سازی ستون‌ها، لوگو و قطع کاغذ (A4، A5 و حرارتی ۸۰ میلی‌متری) برای هر سازمان و تولید شیت برچسب بارکد"
+        description="سفارشی‌سازی ستون‌ها، لوگو و قطع کاغذ (فاکتور فروش: A4، A5 و حرارتی ۸۰ میلی‌متری؛ رسید: A5؛ سند انبار: A4) برای هر سازمان و تولید شیت برچسب بارکد"
         icon={<Printer className="size-6 text-indigo-500" />}
         actions={
           <div className="flex gap-2">
@@ -354,7 +357,13 @@ function PrintFormBuilderPage() {
                   </label>
                   <select
                     value={docType}
-                    onChange={(e) => setDocType(e.target.value as PrintDocType)}
+                    onChange={(e) => {
+                      const next = e.target.value as PrintDocType;
+                      setDocType(next);
+                      // Vouchers print on A5 and stock documents on A4 only.
+                      if (next === PrintDocType.RECEIPT_PAYMENT_VOUCHER) setPaperSize(PrintPaperSize.A5);
+                      else if (next === PrintDocType.STOCK_DOCUMENT) setPaperSize(PrintPaperSize.A4);
+                    }}
                     className="w-full rounded-md border border-input bg-background p-2 text-sm"
                   >
                     <option value={PrintDocType.SALES_INVOICE}>
@@ -378,11 +387,17 @@ function PrintFormBuilderPage() {
                     onChange={(e) => setPaperSize(e.target.value as PrintPaperSize)}
                     className="w-full rounded-md border border-input bg-background p-2 text-sm"
                   >
-                    <option value={PrintPaperSize.A4}>{PRINT_PAPER_SIZE_LABELS[PrintPaperSize.A4]}</option>
-                    <option value={PrintPaperSize.A5}>{PRINT_PAPER_SIZE_LABELS[PrintPaperSize.A5]}</option>
-                    <option value={PrintPaperSize.THERMAL_80MM}>
-                      {PRINT_PAPER_SIZE_LABELS[PrintPaperSize.THERMAL_80MM]}
-                    </option>
+                    {docType !== PrintDocType.RECEIPT_PAYMENT_VOUCHER && (
+                      <option value={PrintPaperSize.A4}>{PRINT_PAPER_SIZE_LABELS[PrintPaperSize.A4]}</option>
+                    )}
+                    {docType !== PrintDocType.STOCK_DOCUMENT && (
+                      <option value={PrintPaperSize.A5}>{PRINT_PAPER_SIZE_LABELS[PrintPaperSize.A5]}</option>
+                    )}
+                    {docType === PrintDocType.SALES_INVOICE && (
+                      <option value={PrintPaperSize.THERMAL_80MM}>
+                        {PRINT_PAPER_SIZE_LABELS[PrintPaperSize.THERMAL_80MM]}
+                      </option>
+                    )}
                   </select>
                 </div>
               </div>

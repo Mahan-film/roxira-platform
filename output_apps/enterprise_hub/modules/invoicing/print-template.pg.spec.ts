@@ -122,11 +122,11 @@ describePg('PrintTemplateRepository & Service on real PostgreSQL with RLS', () =
     const t1Default = await service.findDefault(T1, PrintDocType.SALES_INVOICE);
     const t2Default = await service.findDefault(T2, PrintDocType.SALES_INVOICE);
 
-    expect(t1Default.title).toBe('فاکتور فروش رسمی شرکت الف');
-    expect(t1Default.paperSize).toBe(PrintPaperSize.A4);
+    expect(t1Default?.title).toBe('فاکتور فروش رسمی شرکت الف');
+    expect(t1Default?.paperSize).toBe(PrintPaperSize.A4);
 
-    expect(t2Default.title).toBe('فاکتور فروش شرکت ب');
-    expect(t2Default.paperSize).toBe(PrintPaperSize.A5);
+    expect(t2Default?.title).toBe('فاکتور فروش شرکت ب');
+    expect(t2Default?.paperSize).toBe(PrintPaperSize.A5);
   });
 
   it('strictly isolates updates and deletions across tenants (cross-tenant mutations refused)', async () => {
