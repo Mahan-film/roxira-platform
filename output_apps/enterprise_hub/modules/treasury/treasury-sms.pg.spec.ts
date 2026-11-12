@@ -4,6 +4,7 @@
  */
 import 'reflect-metadata';
 import * as path from 'path';
+import { ConflictException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { TenantScope } from '../access/services/tenant-scope';
 import { TreasurySmsDraftEntity, TreasurySmsDraftStatus } from './entities/treasury-sms-draft.entity';
@@ -82,9 +83,9 @@ describePg('TreasurySmsDrafts RLS isolation (NOSUPERUSER NOBYPASSRLS)', () => {
 
   it('enforces FORCE ROW LEVEL SECURITY on fin_treasury_sms_drafts', async () => {
     const rows = await ownerDs.query(`
-      SELECT tablename, rowsecurity, forcerowsecurity
-      FROM pg_tables
-      WHERE tablename = 'fin_treasury_sms_drafts';
+      SELECT relname AS tablename, relrowsecurity AS rowsecurity, relforcerowsecurity AS forcerowsecurity
+      FROM pg_class
+      WHERE relname = 'fin_treasury_sms_drafts' AND relkind = 'r';
     `);
 
     expect(rows).toHaveLength(1);
@@ -119,5 +120,33 @@ describePg('TreasurySmsDrafts RLS isolation (NOSUPERUSER NOBYPASSRLS)', () => {
       [draftT1.id],
     );
     expect(crossRows).toHaveLength(0); // RLS filtered out because app.tenant_id is not T1
+  });
+
+  it('posts exactly once when two confirms of one draft run concurrently', async () => {
+    const SMS = `بانک ملی ایران
+واریز: ۱,۰۰۰,۰۰۰ ریال
+حساب: ...۴۳۲۱
+مانده: ۱۰,۰۰۰,۰۰۰ ریال
+۱۴۰۳/۰۸/۲۲-۱۴:۳۰`;
+    const createDocument = jest.fn(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+      return { id: 7 };
+    });
+    const racing = new TreasurySmsService(repository, { createDocument } as unknown as TreasuryService);
+    const draft = await racing.captureSms(T1, U1, SMS);
+    const body = { partyCode: 'C1', partyName: 'Customer' };
+
+    const results = await Promise.allSettled([
+      racing.confirmDraft(T1, U1, draft.id, body),
+      racing.confirmDraft(T1, U1, draft.id, body),
+    ]);
+
+    expect(createDocument).toHaveBeenCalledTimes(1);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const failed = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect(failed.reason).toBeInstanceOf(ConflictException);
+    const after = await racing.getDraft(T1, draft.id);
+    expect(after.status).toBe(TreasurySmsDraftStatus.CONFIRMED);
+    expect(after.matchedDocumentId).toBe(7);
   });
 });

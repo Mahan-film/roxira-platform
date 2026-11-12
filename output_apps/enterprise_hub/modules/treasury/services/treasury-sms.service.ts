@@ -128,15 +128,18 @@ export class TreasurySmsService {
       description: dto.description ?? `ثبت خودکار از پیامک ${draft.bankNameFa}`,
     };
 
-    const doc = await this.treasuryService.createDocument(tenantId, docDto);
-    await this.smsRepository.updateStatus(
-      tenantId,
-      id,
-      TreasurySmsDraftStatus.CONFIRMED,
-      doc.id,
-    );
-
-    return doc;
+    // One transaction: claim the draft (conditional UPDATE draft -> confirmed, which also locks the
+    // row), post the document on the same manager, record the link. A failure anywhere rolls the
+    // claim back; a second concurrent confirm gets 0 affected rows and posts nothing.
+    return this.smsRepository.runInTransaction(tenantId, async (manager) => {
+      const claimed = await this.smsRepository.claimDraftForConfirm(tenantId, id, manager);
+      if (!claimed) {
+        throw new ConflictException('این پیش‌نویس پیامک بانکی قبلاً تأیید و صادر شده است.');
+      }
+      const doc = await this.treasuryService.createDocument(tenantId, docDto, manager);
+      await this.smsRepository.setMatchedDocument(tenantId, id, doc.id, manager);
+      return doc;
+    });
   }
 
   /**

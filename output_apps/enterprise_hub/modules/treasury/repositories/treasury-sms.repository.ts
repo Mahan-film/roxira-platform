@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOptionsWhere, Repository } from 'typeorm';
+import { EntityManager, FindOptionsWhere, Repository } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
 import {
   TreasurySmsDraftEntity,
@@ -86,5 +86,29 @@ export class TreasurySmsRepository {
       );
       return draftRepo.findOne({ where: { tenantId, id } });
     });
+  }
+
+  /** Runs `work` in one tenant-scoped database transaction. */
+  runInTransaction<T>(tenantId: string, work: (manager: EntityManager) => Promise<T>): Promise<T> {
+    return this.tenantScope.run(tenantId, work);
+  }
+
+  /**
+   * Atomically moves a draft from `draft` to `confirmed` (conditional UPDATE; it also takes the row
+   * lock until the transaction ends). Returns false when the draft was not in `draft` any more, so a
+   * concurrent or repeated confirm can never pass twice.
+   */
+  async claimDraftForConfirm(tenantId: string, id: string, manager: EntityManager): Promise<boolean> {
+    const result = await manager.getRepository(TreasurySmsDraftEntity).update(
+      { tenantId, id, status: TreasurySmsDraftStatus.DRAFT },
+      { status: TreasurySmsDraftStatus.CONFIRMED, updatedAt: new Date() },
+    );
+    return (result.affected ?? 0) === 1;
+  }
+
+  async setMatchedDocument(tenantId: string, id: string, documentId: number, manager: EntityManager): Promise<void> {
+    await manager
+      .getRepository(TreasurySmsDraftEntity)
+      .update({ tenantId, id }, { matchedDocumentId: documentId, updatedAt: new Date() });
   }
 }

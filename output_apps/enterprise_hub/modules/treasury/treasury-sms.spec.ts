@@ -54,6 +54,17 @@ describe('TreasurySmsService & Controller (T92)', () => {
     findDraftById: jest.fn(async (tenantId, id) => {
       return draftsDb.find((d) => d.tenantId === tenantId && d.id === id) ?? null;
     }),
+    runInTransaction: jest.fn(async (_tenantId, work) => work({ tx: true })),
+    claimDraftForConfirm: jest.fn(async (tenantId, id) => {
+      const draft = draftsDb.find((d) => d.tenantId === tenantId && d.id === id);
+      if (!draft || draft.status !== TreasurySmsDraftStatus.DRAFT) return false;
+      draft.status = TreasurySmsDraftStatus.CONFIRMED;
+      return true;
+    }),
+    setMatchedDocument: jest.fn(async (tenantId, id, docId) => {
+      const draft = draftsDb.find((d) => d.tenantId === tenantId && d.id === id);
+      if (draft) draft.matchedDocumentId = docId;
+    }),
     updateStatus: jest.fn(async (tenantId, id, status, matchedDocId) => {
       const draft = draftsDb.find((d) => d.tenantId === tenantId && d.id === id);
       if (!draft) return null;
@@ -190,6 +201,7 @@ describe('TreasurySmsService & Controller (T92)', () => {
             }),
           ],
         }),
+        { tx: true },
       );
 
       const updatedDraft = await service.getDraft(TENANT, draft.id);
@@ -210,6 +222,31 @@ describe('TreasurySmsService & Controller (T92)', () => {
           partyName: 'مشتری الف',
         }),
       ).rejects.toThrow(ConflictException);
+    });
+
+    it('posts only once when two confirms race past the status read', async () => {
+      const draft = await service.captureSms(TENANT, USER, MELLI_SMS);
+      const body = { partyCode: 'CUST-01', partyName: 'مشتری الف' };
+
+      const results = await Promise.allSettled([
+        service.confirmDraft(TENANT, USER, draft.id, body),
+        service.confirmDraft(TENANT, USER, draft.id, body),
+      ]);
+
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      const rejected = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+      expect(rejected.reason).toBeInstanceOf(ConflictException);
+      expect(mockTreasuryService.createDocument).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not post when the conditional claim updates 0 rows', async () => {
+      const draft = await service.captureSms(TENANT, USER, MELLI_SMS);
+      (mockRepo.claimDraftForConfirm as jest.Mock).mockResolvedValueOnce(false);
+
+      await expect(
+        service.confirmDraft(TENANT, USER, draft.id, { partyCode: 'C', partyName: 'x' }),
+      ).rejects.toThrow(ConflictException);
+      expect(mockTreasuryService.createDocument).not.toHaveBeenCalled();
     });
 
     it('refuses to confirm a rejected draft', async () => {
