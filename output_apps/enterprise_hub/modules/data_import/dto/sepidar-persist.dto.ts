@@ -8,7 +8,6 @@ import {
   IsIn,
   IsInt,
   IsNotEmpty,
-  IsNumber,
   IsOptional,
   IsPositive,
   IsString,
@@ -172,7 +171,8 @@ export class SepidarVoucherItemDto {
     value === null || value === undefined ? value : String(value).trim(),
   )
   @IsString()
-  @Matches(/^\d+$/, { message: 'Debit must be a non-negative integer string' })
+  @MaxLength(16)
+  @Matches(/^\d+$/, { message: 'Debit must be a non-negative integer Rial string' })
   Debit: string;
 
   @ApiProperty()
@@ -180,7 +180,8 @@ export class SepidarVoucherItemDto {
     value === null || value === undefined ? value : String(value).trim(),
   )
   @IsString()
-  @Matches(/^\d+$/, { message: 'Credit must be a non-negative integer string' })
+  @MaxLength(16)
+  @Matches(/^\d+$/, { message: 'Credit must be a non-negative integer Rial string' })
   Credit: string;
 
   @ApiPropertyOptional({ nullable: true })
@@ -215,9 +216,10 @@ export class SepidarChequeDto {
   @IsIn(['in_hand', 'deposited', 'spent', 'delivered', 'cleared', 'bounced', 'returned'])
   State: 'in_hand' | 'deposited' | 'spent' | 'delivered' | 'cleared' | 'bounced' | 'returned';
 
-  @ApiProperty()
-  @IsNumber()
+  @ApiProperty({ description: 'Whole IRR integer amount (max 15 digits to fit numeric(18,2) after x100 minor conversion)' })
+  @IsInt()
   @IsPositive()
+  @Max(999_999_999_999_999)
   Amount: number;
 
   @ApiProperty()

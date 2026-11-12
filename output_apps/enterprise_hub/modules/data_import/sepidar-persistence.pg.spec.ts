@@ -140,7 +140,7 @@ describePg('Sepidar Data Persistence on PostgreSQL (NOSUPERUSER NOBYPASSRLS)', (
       const cash = await em.getRepository(ChartOfAccountEntity).findOne({
         where: { tenantId: TENANT_A, code: '1010' },
       });
-      expect(cash?.balance).toBe('500000.00');
+      expect(cash?.balance).toBe('50000000.00');
 
       const cheques = await em.getRepository(ChequeEntity).find({
         where: { tenantId: TENANT_A },
@@ -178,7 +178,7 @@ describePg('Sepidar Data Persistence on PostgreSQL (NOSUPERUSER NOBYPASSRLS)', (
       const cash = await em.getRepository(ChartOfAccountEntity).findOne({
         where: { tenantId: TENANT_B, code: '1010' },
       });
-      expect(cash?.balance).toBe('500000.00');
+      expect(cash?.balance).toBe('50000000.00');
     });
 
     // TENANT_A cannot read TENANT_B rows under RLS
@@ -210,26 +210,47 @@ describePg('Sepidar Data Persistence on PostgreSQL (NOSUPERUSER NOBYPASSRLS)', (
       expect(await em.getRepository(JournalEntryLineEntity).count({ where: { tenantId: TENANT_C } })).toBe(0);
     });
 
-    // Two cheques sharing chequeNumber across different banks both persist
-    const cert = await service.persistSepidarData(TENANT_C, {
-      cheques: [
-        {
-          ...SYNTHETIC_SEPIDAR_CHEQUES[0],
-          ChequeId: 9001,
-          ChequeNumber: 'DUP-777',
-          SayadNumber: '9111222233334444',
-          BankName: 'بانک ملت',
-        },
-        {
-          ...SYNTHETIC_SEPIDAR_CHEQUES[0],
-          ChequeId: 9002,
-          ChequeNumber: 'DUP-777',
-          SayadNumber: '9555666677778888',
-          BankName: 'بانک صادرات',
-        },
-      ],
-    });
-    expect(cert.counts.cheques).toBe(2);
+    // Two cheques sharing chequeNumber across different banks both persist;
+    // distinct Sayad numbers on same bank + chequeNumber also both persist
+    const cert = await service.persistSepidarData(
+      TENANT_C,
+      {
+        cheques: [
+          {
+            ...SYNTHETIC_SEPIDAR_CHEQUES[0],
+            ChequeId: 9001,
+            ChequeNumber: 'DUP-777',
+            SayadNumber: '9111222233334444',
+            BankName: 'بانک ملت',
+          },
+          {
+            ...SYNTHETIC_SEPIDAR_CHEQUES[0],
+            ChequeId: 9002,
+            ChequeNumber: 'DUP-777',
+            SayadNumber: '9555666677778888',
+            BankName: 'بانک صادرات',
+          },
+          {
+            ...SYNTHETIC_SEPIDAR_CHEQUES[0],
+            ChequeId: 9003,
+            ChequeNumber: 'DUP-777',
+            SayadNumber: '9666777788889999',
+            BankName: 'بانک ملت',
+          },
+        ],
+      },
+      'pg-cheques-only-c',
+    );
+    expect(cert.counts.cheques).toBe(3);
+
+    // Reusing TENANT_C's cheques-only Idempotency-Key with a different payload throws 409
+    await expect(
+      service.persistSepidarData(
+        TENANT_C,
+        { cheques: [SYNTHETIC_SEPIDAR_CHEQUES[1]] },
+        'pg-cheques-only-c',
+      ),
+    ).rejects.toThrow(ConflictException);
 
     // Reusing TENANT_A's Idempotency-Key with a different payload throws 409
     await expect(
