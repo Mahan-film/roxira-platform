@@ -500,3 +500,36 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
     });
   });
 });
+
+describe('Moadian server error hints (0301 / 0202 / 0012)', () => {
+  const base = {
+    currency: Currency.IRR,
+    issuedAt: new Date('2026-11-10T12:00:00.000Z'),
+    sellerInfo: { name: 's', nationalId: '10380284790', economicCode: '10380284790' },
+    buyerInfo: { name: 'b' },
+    items: [],
+  } as unknown as InvoiceResponseDto;
+  const now = new Date('2026-11-10T12:00:00.000Z');
+
+  it('0202: flags an issue date more than 2 minutes in the future, accepts 1 minute', () => {
+    const future = { ...base, issuedAt: new Date(now.getTime() + 3 * 60_000) } as InvoiceResponseDto;
+    expect(runMoadianPreFlightValidation(future, { now }).errors.map((e) => e.code)).toContain('ISSUE_DATE_IN_FUTURE');
+    const near = { ...base, issuedAt: new Date(now.getTime() + 60_000) } as InvoiceResponseDto;
+    expect(runMoadianPreFlightValidation(near, { now }).errors.map((e) => e.code)).not.toContain('ISSUE_DATE_IN_FUTURE');
+  });
+
+  it('0301: memory id must be 6 chars and prefix the taxid', () => {
+    const codes = (o: object) => runMoadianPreFlightValidation(base, { now, ...o }).errors.map((e) => e.code);
+    expect(codes({ memoryId: 'AB12' })).toContain('MEMORY_ID_INVALID');
+    expect(codes({ memoryId: 'ABC123', taxId: 'XYZ999000000' })).toContain('TAXID_MEMORY_ID_MISMATCH');
+    const ok = codes({ memoryId: 'ABC123', taxId: 'ABC123000000' });
+    expect(ok).not.toContain('MEMORY_ID_INVALID');
+    expect(ok).not.toContain('TAXID_MEMORY_ID_MISMATCH');
+  });
+
+  it('0012: type-1 invoice without any buyer identification is flagged', () => {
+    const errs = runMoadianPreFlightValidation(base, { now, invoiceType: 1 }).errors;
+    expect(errs.find((e) => e.code === 'BUYER_ID_REQUIRED_TYPE1')?.message).toContain('0012');
+    expect(runMoadianPreFlightValidation(base, { now, invoiceType: 2 }).errors.map((e) => e.code)).not.toContain('BUYER_ID_REQUIRED_TYPE1');
+  });
+});

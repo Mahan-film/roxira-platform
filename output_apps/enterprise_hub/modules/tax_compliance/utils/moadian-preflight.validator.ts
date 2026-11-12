@@ -1,6 +1,15 @@
 import { InvoiceResponseDto } from '../../invoicing/dto/invoice-response.dto';
 import { Currency } from '../../currency/enums/currency.enum';
 import { parseScaled } from '../../accounting/money';
+import {
+  computeLineMath,
+  LINE_PRICE_EXTRA_DECIMALS,
+  LINE_QUANTITY_DECIMALS,
+  LINE_RATE_DECIMALS,
+  LineMathResult,
+  numberToScaled,
+  sumGrossMinor,
+} from '../../invoicing/services/invoice-line-math';
 
 export interface MoadianPreFlightError {
   field: string;
@@ -183,7 +192,25 @@ export interface MoadianPreFlightOptions {
   defaultSstid?: string | null;
   itemSstids?: Array<string | null>;
   expectedVatRate?: number | null;
+  /** شناسه حافظه مالیاتی ۶ کاراکتری (برای خطای مودیان 0301). */
+  memoryId?: string | null;
+  /** شناسه یکتای مالیاتی (taxid) در صورت وجود؛ ۶ نویسه اول باید با memoryId برابر باشد (0301). */
+  taxId?: string | null;
+  /** نوع صورتحساب مودیان (۱ = با خریدار)؛ برای خطای 0012. */
+  invoiceType?: number | null;
+  /** زمان مرجع برای بررسی تاریخ آینده (0202)؛ پیش‌فرض: اکنون. */
+  now?: Date;
 }
+
+/** حداکثر اختلاف ساعت مجاز با سرور مودیان (۲ دقیقه). */
+export const MOADIAN_MAX_CLOCK_SKEW_MS = 2 * 60 * 1000;
+
+/** راهنمای فارسی کدهای خطای رایج سرور مودیان، برای نمایش پیش از ارسال. */
+export const MOADIAN_ERROR_HINTS: Readonly<Record<string, string>> = {
+  '0301': 'شش نویسه اول شناسه مالیاتی (taxid) باید با شناسه حافظه مالیاتی برابر باشد.',
+  '0202': 'تاریخ صدور نباید در آینده باشد و اختلاف ساعت با سرور مودیان نباید بیش از ۲ دقیقه باشد.',
+  '0012': 'در صورتحساب نوع اول، نوع و کد اقتصادی/شناسه خریدار الزامی است.',
+};
 
 /**
  * Scale according to currency: IRR = 0, IRT = 1, others = 2 decimals.
@@ -365,9 +392,48 @@ export function runMoadianPreFlightValidation(
     });
   }
 
+  // Moadian 0202: issue date in the future or clock skew above 2 minutes.
+  if (dateObj && !isNaN(dateObj.getTime())) {
+    const nowMs = (options?.now ?? new Date()).getTime();
+    if (dateObj.getTime() - nowMs > MOADIAN_MAX_CLOCK_SKEW_MS) {
+      errors.push({
+        field: 'issuedAt',
+        message: `تاریخ صدور در آینده است. ${MOADIAN_ERROR_HINTS['0202']} (کد 0202)`,
+        code: 'ISSUE_DATE_IN_FUTURE',
+      });
+    }
+  }
+
+  // Moadian 0301: first 6 characters of taxid must equal the memory id.
+  const memoryId = (options?.memoryId ?? '').trim();
+  if (options?.memoryId !== undefined && options.memoryId !== null) {
+    if (!/^[A-Za-z0-9]{6}$/.test(memoryId)) {
+      errors.push({
+        field: 'memoryId',
+        message: `شناسه حافظه مالیاتی باید ۶ نویسه باشد. ${MOADIAN_ERROR_HINTS['0301']} (کد 0301)`,
+        code: 'MEMORY_ID_INVALID',
+      });
+    } else if (options.taxId && options.taxId.slice(0, 6).toUpperCase() !== memoryId.toUpperCase()) {
+      errors.push({
+        field: 'taxid',
+        message: `شناسه مالیاتی با شناسه حافظه مالیاتی همخوان نیست. ${MOADIAN_ERROR_HINTS['0301']} (کد 0301)`,
+        code: 'TAXID_MEMORY_ID_MISMATCH',
+      });
+    }
+  }
+
+  // Moadian 0012: type-1 invoices need the buyer's identification.
+  if (options?.invoiceType === 1 && !buyerId && !buyerEco) {
+    errors.push({
+      field: 'buyerInfo.economicCode',
+      message: `برای صورتحساب نوع اول اطلاعات خریدار ثبت نشده است. ${MOADIAN_ERROR_HINTS['0012']} (کد 0012)`,
+      code: 'BUYER_ID_REQUIRED_TYPE1',
+    });
+  }
+
   const scale = getCurrencyScale(invoice.currency);
 
-  let calculatedTotalAmountUnits = 0n;
+  const lineMaths: LineMathResult[] = [];
   let calculatedTotalDiscountUnits = 0n;
   let calculatedTotalTaxUnits = 0n;
   let calculatedFinalPayableUnits = 0n;
@@ -408,16 +474,18 @@ export function runMoadianPreFlightValidation(
     }
 
     // Line math consistency using exact integer minor units
-    const qtyUnits = toMinorUnits(item.quantity ?? 0, 4);
-    const unitPriceUnits = toMinorUnits(item.unitPrice ?? 0, scale);
+    // Same math as InvoicingService (shared helper): gross is never rounded per line.
     const discountUnits = toMinorUnits(item.discount ?? 0, scale);
-    const grossUnits = (qtyUnits * unitPriceUnits + 5000n) / 10000n;
-    const taxableUnits = grossUnits > discountUnits ? grossUnits - discountUnits : 0n;
-    const vatRateUnits = BigInt(Math.round(vatRate * 10000));
-    const expectedTaxUnits = (taxableUnits * vatRateUnits + 5000n) / 10000n;
-    const expectedLineTotalUnits = taxableUnits + expectedTaxUnits;
+    const math = computeLineMath({
+      quantity: toMinorUnits(item.quantity ?? 0, LINE_QUANTITY_DECIMALS),
+      unitPrice: toMinorUnits(item.unitPrice ?? 0, scale + LINE_PRICE_EXTRA_DECIMALS),
+      discount: discountUnits,
+      vatRate: numberToScaled(vatRate, LINE_RATE_DECIMALS),
+    });
+    lineMaths.push(math);
+    const expectedTaxUnits = math.tax;
+    const expectedLineTotalUnits = math.total;
 
-    calculatedTotalAmountUnits += grossUnits;
     calculatedTotalDiscountUnits += discountUnits;
     calculatedTotalTaxUnits += item.tax !== undefined ? toMinorUnits(item.tax, scale) : expectedTaxUnits;
     calculatedFinalPayableUnits += item.total !== undefined ? toMinorUnits(item.total, scale) : expectedLineTotalUnits;
@@ -446,6 +514,7 @@ export function runMoadianPreFlightValidation(
   });
 
   // 5. Header totals consistency using exact minor units
+  const calculatedTotalAmountUnits = sumGrossMinor(lineMaths);
   if (invoice.totalAmount !== undefined && toMinorUnits(invoice.totalAmount, scale) !== calculatedTotalAmountUnits) {
     errors.push({
       field: 'totalAmount',
