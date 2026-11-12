@@ -3,10 +3,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypt
 const VERSION = 'v1';
 
 function getMasterKey(): Buffer {
-  const envKey =
-    process.env.PAYMENT_GATEWAY_ENCRYPTION_KEY ||
-    process.env.MOADIAN_KEY_ENCRYPTION_KEY ||
-    process.env.APP_SECRET;
+  const envKey = process.env.PAYMENT_GATEWAY_ENCRYPTION_KEY;
   if (!envKey || envKey.trim().length === 0) {
     throw new Error('PAYMENT_GATEWAY_ENCRYPTION_KEY is not configured (fail closed)');
   }
@@ -58,5 +55,5 @@ export function maskMerchantId(key: string): string {
   if (!key) return '';
   const trimmed = key.trim();
   if (trimmed.length <= 6) return '****';
-  return `${trimmed.slice(0, 3)}-****-${trimmed.slice(-3)}`;
+  return `****${trimmed.slice(-4)}`;
 }

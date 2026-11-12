@@ -133,10 +133,21 @@ export class PaymentGatewayAdapter {
       };
 
       if (data.result === 100 || data.result === 201) {
+        let amountRials: bigint | undefined;
+        if (
+          data.amount !== undefined &&
+          data.amount !== null &&
+          /^\d+$/.test(String(data.amount).trim())
+        ) {
+          const parsed = BigInt(String(data.amount).trim());
+          if (parsed > 0n) {
+            amountRials = parsed;
+          }
+        }
         return {
           success: true,
           paid: true,
-          amountRials: data.amount ? BigInt(data.amount) : undefined,
+          amountRials,
           refNumber: data.refNumber ? String(data.refNumber) : undefined,
           cardNumber: data.cardNumber,
           paidAt: data.paidAt ? new Date(data.paidAt) : new Date(),

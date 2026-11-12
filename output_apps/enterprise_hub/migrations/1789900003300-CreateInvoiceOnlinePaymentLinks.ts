@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateInvoiceOnlinePaymentLinks1789900002900 implements MigrationInterface {
-  name = 'CreateInvoiceOnlinePaymentLinks1789900002900';
+export class CreateInvoiceOnlinePaymentLinks1789900003300 implements MigrationInterface {
+  name = 'CreateInvoiceOnlinePaymentLinks1789900003300';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // 1. Table: invoice_payment_gateway_configs
@@ -38,6 +38,7 @@ export class CreateInvoiceOnlinePaymentLinks1789900002900 implements MigrationIn
       );
       CREATE INDEX IF NOT EXISTS "IDX_invoice_payment_links_tenant_invoice" ON "invoice_payment_links" ("tenant_id", "invoice_id");
       CREATE INDEX IF NOT EXISTS "IDX_invoice_payment_links_tenant_gateway_ref" ON "invoice_payment_links" ("tenant_id", "gateway_ref");
+      CREATE UNIQUE INDEX IF NOT EXISTS "UQ_invoice_payment_links_tenant_gateway_ref" ON "invoice_payment_links" ("tenant_id", "gateway_ref") WHERE "gateway_ref" IS NOT NULL;
     `);
 
     // 3. FORCE ROW LEVEL SECURITY on both tenant tables
@@ -54,7 +55,7 @@ export class CreateInvoiceOnlinePaymentLinks1789900002900 implements MigrationIn
       `);
     }
 
-    // 4. Narrow SECURITY DEFINER lookup function for pre-tenant callback routing (Lesson 26)
+    // 4. Narrow SECURITY DEFINER lookup function for pre-tenant callback routing
     await queryRunner.query(`
       CREATE OR REPLACE FUNCTION public.lookup_invoice_payment_tenant_by_track_id(p_track_id text)
       RETURNS TABLE (
