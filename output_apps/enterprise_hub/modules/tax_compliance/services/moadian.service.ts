@@ -652,6 +652,9 @@ export class MoadianService implements OnModuleInit {
       }
 
       for (const sub of submissions) {
+        if ((sub.errors ?? []).some((e) => e.code === 'POLL_LIMIT')) {
+          continue;
+        }
         try {
           if (
             sub.status === MoadianSubmissionStatus.QUEUED ||
@@ -670,12 +673,12 @@ export class MoadianService implements OnModuleInit {
             const nextRetryCount = (sub.pollCount ?? 0) + 1;
             if (nextRetryCount > maxPolls) {
               await this.repository.updateSubmission(tenantId, sub.id, {
-                pollCount: nextRetryCount,
+                status: MoadianSubmissionStatus.ERROR,
                 lastPolledAt: new Date(),
                 errors: [
                   {
                     code: 'POLL_LIMIT',
-                    message: `عدم امکان ارسال/بازیابی پس از ${nextRetryCount - 1} بار تلاش مجدد.`,
+                    message: `عدم امکان ارسال/بازیابی پس از ${sub.pollCount ?? 0} بار تلاش مجدد.`,
                   },
                 ],
               });
@@ -751,7 +754,6 @@ export class MoadianService implements OnModuleInit {
                 },
               ],
             });
-            retriedCount++;
           } else {
             await this.repository.updateSubmission(tenantId, sub.id, {
               pollCount,

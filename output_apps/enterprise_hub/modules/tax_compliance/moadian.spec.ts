@@ -476,12 +476,10 @@ class InMemoryMoadianRepository {
       MoadianSubmissionStatus.ERROR,
     ];
     return this.submissions.filter(
-      (s) => nonFinal.includes(s.status) && s.tenantId === tenantId,
-    );
-  }
-  async findSubmissions(tenantId: string, invoiceIds?: string[]) {
-    return this.submissions.filter(
-      (s) => s.tenantId === tenantId && (!invoiceIds || invoiceIds.includes(s.invoiceId)),
+      (s) =>
+        nonFinal.includes(s.status) &&
+        s.tenantId === tenantId &&
+        !(s.errors ?? []).some((e) => e.code === 'POLL_LIMIT'),
     );
   }
 }
@@ -1131,7 +1129,7 @@ describe('Moadian status sync (T82)', () => {
     });
 
     const res = await service.syncNonFinalSubmissions(TENANT_A);
-    expect(res).toMatchObject({ checked: 1, retried: 1 });
+    expect(res).toMatchObject({ checked: 1, updated: 0, retried: 0 });
 
     const updated = await repository.findSubmissionById(TENANT_A, sub.id);
     expect(updated?.status).toBe(MoadianSubmissionStatus.SENT);
@@ -1210,6 +1208,42 @@ describe('Moadian status sync (T82)', () => {
     const updated = await repository.findSubmissionById(TENANT_A, sub.id);
     expect(updated?.pollCount).toBe(3);
     expect(updated?.errors[0]?.code).toBe('POLL_LIMIT');
+
+    // Subsequent sync runs must exclude POLL_LIMIT rows so polling stops completely.
+    const callsBefore = state.authHeaders.length;
+    const nextRun = await service.syncNonFinalSubmissions(TENANT_A);
+    expect(nextRun).toEqual({ checked: 0, updated: 0, retried: 0 });
+    expect((await repository.findSubmissionById(TENANT_A, sub.id))?.pollCount).toBe(3);
+    expect(state.authHeaders.length).toBe(callsBefore);
+  });
+
+  it('syncNonFinalSubmissions stops retrying QUEUED/ERROR after POLL_LIMIT and excludes them on subsequent runs', async () => {
+    const { service, repository, state, jobs } = buildMoadian();
+    await service.putCredential(TENANT_A, credentialDto());
+    state.uidInquiryStatus = 'NOT_FOUND';
+
+    const sub = await repository.createSubmission(TENANT_A, {
+      invoiceId: INVOICE_A,
+      uid: 'uid-err-max-polls',
+      taxId: 'TAXID123',
+      serial: '12',
+      referenceNumber: null,
+      status: MoadianSubmissionStatus.QUEUED,
+      errors: [],
+      warnings: [],
+      pollCount: 3, // already at MAX_POLLS=3
+    });
+
+    const res = await service.syncNonFinalSubmissions(TENANT_A);
+    expect(res).toMatchObject({ checked: 1, retried: 0 });
+    expect(jobs).toHaveLength(0);
+    const updated = await repository.findSubmissionById(TENANT_A, sub.id);
+    expect(updated?.status).toBe(MoadianSubmissionStatus.ERROR);
+    expect(updated?.errors[0]?.code).toBe('POLL_LIMIT');
+    expect(updated?.pollCount).toBe(3);
+
+    const nextRun = await service.syncNonFinalSubmissions(TENANT_A);
+    expect(nextRun).toEqual({ checked: 0, updated: 0, retried: 0 });
   });
 
   it('syncNonFinalSubmissions moves ERROR to QUEUED with a fresh jobId and executes processSend without double submit', async () => {
@@ -1245,10 +1279,17 @@ describe('Moadian status sync (T82)', () => {
     });
     expect(retryJob?.opts?.jobId).toBe(`moadian-retry-${sub.id}-12-1`);
 
-    // Simulate the worker running: if Moadian already knows the uid before send executes, processSend must NOT call /invoice again.
+    // Simulate the worker running through MoadianProcessor: checkExistingFirst must be forwarded
+    // even when attemptsMade is 0 so Moadian /invoice is NOT called again.
     state.uidInquiryStatus = 'PENDING';
-    const outcome = await service.processSend(retryJob!.data as any, false, 0);
-    expect(outcome).toBe('poll');
+    const processor = new MoadianProcessor(service);
+    const outcome = await processor.process({
+      name: MOADIAN_SEND_JOB,
+      data: retryJob!.data,
+      attemptsMade: 0,
+      opts: { attempts: 5 },
+    } as any);
+    expect(outcome).toEqual({ outcome: 'poll' });
     expect(state.received).toHaveLength(0);
     const afterWorker = await repository.findSubmissionById(TENANT_A, sub.id);
     expect(afterWorker?.status).toBe(MoadianSubmissionStatus.SENT);
@@ -1337,7 +1378,7 @@ describe('Moadian status sync (T82)', () => {
     expect(finalSub?.status).toBe(MoadianSubmissionStatus.SUCCESS);
   });
 
-  it('MoadianProcessor processes MOADIAN_SYNC_STATUS_JOB', async () => {
+  it('MoadianProcessor processes MOADIAN_SYNC_STATUS_JOB with repeatable empty payload {}', async () => {
     const { service } = buildMoadian();
     const processor = new MoadianProcessor(service);
     const syncSpy = jest
@@ -1346,11 +1387,11 @@ describe('Moadian status sync (T82)', () => {
 
     const job = {
       name: MOADIAN_SYNC_STATUS_JOB,
-      data: { tenantId: TENANT_A },
+      data: {},
     } as any;
 
     const result = await processor.process(job);
     expect(result).toEqual({ outcome: 'done' });
-    expect(syncSpy).toHaveBeenCalledWith(TENANT_A);
+    expect(syncSpy).toHaveBeenCalledWith(undefined);
   });
 });

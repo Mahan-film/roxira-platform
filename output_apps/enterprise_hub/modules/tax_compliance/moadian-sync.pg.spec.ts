@@ -85,7 +85,8 @@ describePg('T82 Moadian sync repositories on PostgreSQL (NOSUPERUSER, FORCE RLS)
     await ownerDs.query(
       `INSERT INTO "tenants" ("id", "slug", "name", "is_active") VALUES
         ($1, 't82-a', 'Tenant A', true),
-        ($2, 't82-b', 'Tenant B', true)
+        ($2, 't82-b', 'Tenant B', true),
+        ('33333333-3333-4333-8333-333333333333', 't82-inactive', 'Tenant Inactive', false)
        ON CONFLICT DO NOTHING`,
       [TENANT_A, TENANT_B],
     );
@@ -114,7 +115,7 @@ describePg('T82 Moadian sync repositories on PostgreSQL (NOSUPERUSER, FORCE RLS)
       warnings: [],
       pollCount: 1,
     });
-  });
+  }, 120_000);
 
   afterAll(async () => {
     if (appDs?.isInitialized) await appDs.destroy();
@@ -141,9 +142,23 @@ describePg('T82 Moadian sync repositories on PostgreSQL (NOSUPERUSER, FORCE RLS)
     }
   });
 
-  it('listTenantIds + findNonFinalSubmissions enumerate both tenants cleanly inside TenantScope', async () => {
+  it('listTenantIds + findNonFinalSubmissions enumerate active tenants and exclude POLL_LIMIT rows inside TenantScope', async () => {
+    await moadianRepo.createSubmission(TENANT_A, {
+      invoiceId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      uid: '33333333-cccc-4333-8333-000000000003',
+      taxId: 'TAX-A-LIMIT',
+      serial: '1002',
+      referenceNumber: 'REF-A-LIMIT',
+      packet: { header: {}, body: [] } as never,
+      status: MoadianSubmissionStatus.SENT,
+      errors: [{ code: 'POLL_LIMIT', message: 'max polls reached' }],
+      warnings: [],
+      pollCount: 30,
+    });
+
     const tenantIds = await moadianRepo.listTenantIds();
     expect(tenantIds).toEqual(expect.arrayContaining([TENANT_A, TENANT_B]));
+    expect(tenantIds).not.toContain('33333333-3333-4333-8333-333333333333');
 
     const aSubs = await moadianRepo.findNonFinalSubmissions(TENANT_A);
     expect(aSubs.map((s) => s.invoiceId)).toEqual([INV_A]);

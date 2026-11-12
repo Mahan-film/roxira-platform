@@ -27,7 +27,7 @@ export class MoadianProcessor extends WorkerHost {
       return { outcome: 'done' };
     }
 
-    const { tenantId, submissionId } = job.data ?? ({} as MoadianJobData);
+    const { tenantId, submissionId, checkExistingFirst } = job.data ?? ({} as MoadianJobData);
     if (
       typeof tenantId !== 'string' ||
       tenantId.trim().length === 0 ||
@@ -43,7 +43,11 @@ export class MoadianProcessor extends WorkerHost {
       case MOADIAN_SEND_JOB:
         return {
           outcome: await this.moadianService.processSend(
-            { tenantId, submissionId },
+            {
+              tenantId,
+              submissionId,
+              ...(checkExistingFirst ? { checkExistingFirst: true } : {}),
+            },
             isFinalAttempt,
             job.attemptsMade,
           ),
