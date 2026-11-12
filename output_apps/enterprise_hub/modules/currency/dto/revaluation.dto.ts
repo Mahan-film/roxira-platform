@@ -7,6 +7,7 @@ import {
   IsBoolean,
   IsEnum,
   IsNotEmpty,
+  IsNotIn,
   IsOptional,
   IsString,
   Matches,
@@ -56,6 +57,28 @@ export class UniqueAccountCurrencyConstraint implements ValidatorConstraintInter
   }
 }
 
+@ValidatorConstraint({ name: 'isoCalendarDate', async: false })
+export class IsoCalendarDateConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown) {
+    if (typeof value !== 'string') return false;
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) return false;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+    const utc = new Date(Date.UTC(year, month - 1, day));
+    return (
+      utc.getUTCFullYear() === year &&
+      utc.getUTCMonth() + 1 === month &&
+      utc.getUTCDate() === day
+    );
+  }
+  defaultMessage() {
+    return 'date must be a valid Gregorian calendar YYYY-MM-DD date';
+  }
+}
+
 export class ForeignAccountBalanceDto {
   @ApiProperty({ description: 'کد حساب کل یا معین در سرفصل حساب‌ها', example: '1012' })
   @IsString()
@@ -71,6 +94,9 @@ export class ForeignAccountBalanceDto {
 
   @ApiProperty({ enum: Currency, description: 'کد ارز', example: Currency.USD })
   @IsEnum(Currency)
+  @IsNotIn([Currency.IRR, Currency.IRT], {
+    message: 'حساب ریالی یا تومانی مشمول تسعیر ارز نیست',
+  })
   currency: Currency;
 
   @ApiProperty({ description: 'مبلغ ارزی بر حسب واحدهای جزء (سنت)', example: '100000' })
@@ -108,6 +134,7 @@ export class RevalueBalancesDto {
   @IsString()
   @IsNotEmpty()
   @Matches(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, { message: 'date must match valid YYYY-MM-DD format' })
+  @Validate(IsoCalendarDateConstraint)
   date: string;
 
   @ApiPropertyOptional({

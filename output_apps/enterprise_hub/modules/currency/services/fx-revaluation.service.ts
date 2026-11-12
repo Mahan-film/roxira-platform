@@ -10,7 +10,8 @@ import { TenantScope } from '../../access/services/tenant-scope';
 import { MONEY_SCALE } from '../../accounting/constants/accounting.constants';
 import { AccountLevel, AccountType } from '../../accounting/enums/accounting.enum';
 import { ChartOfAccountEntity } from '../../accounting/entities/chart-of-account.entity';
-import { toMinor } from '../../accounting/money';
+import { JournalEntryEntity } from '../../accounting/entities/journal-entry.entity';
+import { parseScaled, toMinor } from '../../accounting/money';
 import { AccountingService } from '../../accounting/services/accounting.service';
 import { DEFAULT_ROLE_ACCOUNTS } from '../../posting_rules/constants/posting-roles';
 import { findTemplate } from '../../posting_rules/domain/posting-templates';
@@ -64,6 +65,22 @@ export interface MonthEndRevaluationVoucherPlan {
   }>;
 }
 
+/** Validates strict Gregorian calendar YYYY-MM-DD (rejecting rolled-over dates like 2026-02-31). */
+function isValidIsoCalendarDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const utc = new Date(Date.UTC(year, month - 1, day));
+  return (
+    utc.getUTCFullYear() === year &&
+    utc.getUTCMonth() + 1 === month &&
+    utc.getUTCDate() === day
+  );
+}
+
 /** Converts floating number to fixed-precision integer without float math drift */
 function floatToScaledUnits(val: number, scale = 8): bigint {
   const fixed = val.toFixed(scale);
@@ -96,16 +113,12 @@ export class FxRevaluationService {
     return service;
   }
 
-  /**
-   * Computes the exchange rate of 1 unit of foreign currency to Iranian Rial (IRR) as integer minor units.
-   * Uses exact scaled integer division with half-up rounding (Lesson 8).
-   */
-  getRateToRial(currency: Currency): bigint {
+  private getScaledRateRatio(currency: Currency): { numerator: bigint; denominator: bigint } {
     if (currency === Currency.IRR) {
-      return 1n;
+      return { numerator: 1n, denominator: 1n };
     }
     if (currency === Currency.IRT) {
-      return 10n;
+      return { numerator: 10n, denominator: 1n };
     }
 
     const irrPerUsd = this.currencyService.unitsPerUsd(Currency.IRR);
@@ -114,10 +127,20 @@ export class FxRevaluationService {
       throw new BadRequestException(`Invalid currency rate for ${currency}`);
     }
 
-    // Scale by 10^12 for high-precision integer division with half-up rounding
-    const irrScaled = floatToScaledUnits(irrPerUsd, 12);
-    const currScaled = floatToScaledUnits(currPerUsd, 12);
-    return (irrScaled + (currScaled / 2n)) / currScaled;
+    // Scale by 10^12 so balance revaluation performs a single final integer division
+    return {
+      numerator: floatToScaledUnits(irrPerUsd, 12),
+      denominator: floatToScaledUnits(currPerUsd, 12),
+    };
+  }
+
+  /**
+   * Computes the exchange rate of 1 unit of foreign currency to Iranian Rial (IRR) as integer minor units.
+   * Uses exact scaled integer division with half-up rounding (Lesson 8).
+   */
+  getRateToRial(currency: Currency): bigint {
+    const { numerator, denominator } = this.getScaledRateRatio(currency);
+    return (numerator + denominator / 2n) / denominator;
   }
 
   /**
@@ -125,22 +148,46 @@ export class FxRevaluationService {
    * Accurately handles assets vs liabilities (AP):
    * For liabilities, an increase in foreign exchange value represents an increased obligation (LOSS).
    */
-  revalueBalance(balance: ForeignAccountBalance, customRate?: bigint): RevaluationItemResult {
+  revalueBalance(
+    balance: ForeignAccountBalance,
+    customRate?: bigint,
+    postingDate?: string,
+  ): RevaluationItemResult {
+    if (balance.currency === Currency.IRR || balance.currency === Currency.IRT) {
+      throw new BadRequestException('حساب ریالی یا تومانی مشمول تسعیر ارز نیست');
+    }
+    const meta = CURRENCY_METADATA[balance.currency];
+    if (!meta) {
+      throw new BadRequestException(`متادیتای ارز «${balance.currency}» تعریف نشده است`);
+    }
+
     const rawRate = customRate ?? balance.rateRialPerUnit;
     if (rawRate !== undefined && rawRate <= 0n) {
       throw new BadRequestException('Exchange rate must be strictly positive');
     }
-    const rate = rawRate !== undefined && rawRate > 0n ? rawRate : this.getRateToRial(balance.currency);
-    const decimals = CURRENCY_METADATA[balance.currency]?.decimals ?? 2;
-    const foreignScale = 10n ** BigInt(decimals);
+
+    const foreignScale = 10n ** BigInt(meta.decimals);
     const rialMinorFactor = 10n ** BigInt(MONEY_SCALE);
 
-    // Exact integer division with half-up rounding into Rial minor units (10^MONEY_SCALE) (Lesson 8)
-    // balance.foreignAmountMinor is in foreign minor units (e.g. cents)
-    // rate is whole Rial per foreign unit
-    // rialMinorFactor scales whole Rial into Rial minor units (e.g. 100 for MONEY_SCALE=2)
-    const currentValue =
-      (balance.foreignAmountMinor * rate * rialMinorFactor + foreignScale / 2n) / foreignScale;
+    // Exact single integer division with half-up rounding into Rial minor units (10^MONEY_SCALE)
+    let rate: bigint;
+    let currentValue: bigint;
+    let rateFingerprintKey: string;
+
+    if (rawRate !== undefined && rawRate > 0n) {
+      rate = rawRate;
+      currentValue =
+        (balance.foreignAmountMinor * rate * rialMinorFactor + foreignScale / 2n) / foreignScale;
+      rateFingerprintKey = `${rate}`;
+    } else {
+      const { numerator, denominator } = this.getScaledRateRatio(balance.currency);
+      rate = (numerator + denominator / 2n) / denominator;
+      const totalDen = denominator * foreignScale;
+      currentValue =
+        (balance.foreignAmountMinor * numerator * rialMinorFactor + totalDen / 2n) / totalDen;
+      rateFingerprintKey = `${numerator}/${denominator}`;
+    }
+
     const diff = currentValue - balance.bookValueRialMinor;
 
     let type: 'gain' | 'loss' | 'neutral' = 'neutral';
@@ -173,7 +220,7 @@ export class FxRevaluationService {
 
     const fingerprint = createHash('sha256')
       .update(
-        `${balance.accountCode}:${balance.currency}:${balance.foreignAmountMinor}:${balance.bookValueRialMinor}:${rate}:${Boolean(balance.isLiability)}`,
+        `${balance.accountCode}:${balance.currency}:${balance.foreignAmountMinor}:${balance.bookValueRialMinor}:${rateFingerprintKey}:${Boolean(balance.isLiability)}:${postingDate ?? ''}`,
       )
       .digest('hex')
       .slice(0, 16);
@@ -226,6 +273,7 @@ export class FxRevaluationService {
     balances: ForeignAccountBalance[],
     rates?: Partial<Record<Currency, bigint>>,
     resolvedAccounts?: { fxGain?: string; fxLoss?: string },
+    postingDate?: string,
   ): MonthEndRevaluationVoucherPlan {
     const tpl = findTemplate('currency.fx_revaluation');
     const fxGainAccount = this.requireRoleAccount(
@@ -237,7 +285,9 @@ export class FxRevaluationService {
       resolvedAccounts?.fxLoss ?? tpl?.defaults?.fx_loss ?? DEFAULT_ROLE_ACCOUNTS.fx_loss,
     );
 
-    const items = balances.map((b) => this.revalueBalance(b, rates?.[b.currency] ?? b.rateRialPerUnit));
+    const items = balances.map((b) =>
+      this.revalueBalance(b, rates?.[b.currency] ?? b.rateRialPerUnit, postingDate),
+    );
 
     let totalGain = 0n;
     let totalLoss = 0n;
@@ -314,8 +364,8 @@ export class FxRevaluationService {
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(request.period)) {
       throw new BadRequestException('period must match YYYY-MM format with valid month (01-12)');
     }
-    if (!/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(request.date) || isNaN(Date.parse(request.date))) {
-      throw new BadRequestException('date must match valid YYYY-MM-DD format');
+    if (!isValidIsoCalendarDate(request.date)) {
+      throw new BadRequestException('date must match a valid Gregorian YYYY-MM-DD calendar date');
     }
 
     // 2. Validate Accounts & Reconcile against Chart of Accounts (Blocker 1)
@@ -323,6 +373,9 @@ export class FxRevaluationService {
     const accountMap = new Map(accounts.map((a) => [a.code, a]));
 
     for (const b of request.balances) {
+      if (b.currency === Currency.IRR || b.currency === Currency.IRT) {
+        throw new BadRequestException('حساب ریالی یا تومانی مشمول تسعیر ارز نیست');
+      }
       const acc = accountMap.get(b.accountCode);
       if (!acc) {
         throw new BadRequestException(
@@ -371,18 +424,49 @@ export class FxRevaluationService {
       request.balances,
       request.rates,
       { fxGain: fxGainAccount, fxLoss: fxLossAccount },
+      request.date,
     );
 
     const executePosting = async (em?: EntityManager) => {
-      const postingResults: PostingResult[] = [];
+      if (!em || typeof em.getRepository !== 'function') {
+        throw new Error('TenantScope transactional EntityManager is required for FX revaluation');
+      }
 
-      for (const item of plan.items) {
-        if (item.gainMinor === 0n && item.lossMinor === 0n) {
-          continue;
+      const postingResults: PostingResult[] = [];
+      const orderedItems = [...plan.items].sort((a, b) =>
+        a.accountCode < b.accountCode
+          ? -1
+          : a.accountCode > b.accountCode
+            ? 1
+            : a.currency < b.currency
+              ? -1
+              : a.currency > b.currency
+                ? 1
+                : 0,
+      );
+
+      for (const item of orderedItems) {
+        // 1. Lock the account row FIRST (SELECT ... FOR UPDATE) in deterministic accountCode order
+        //    to avoid deadlocks and ensure concurrent identical requests observe the committed
+        //    posting_sources row on wake-up and replay cleanly instead of failing balance checks.
+        const lockedAccount = await em
+          .getRepository(ChartOfAccountEntity)
+          .createQueryBuilder('acc')
+          .setLock('pessimistic_write')
+          .where('acc.tenant_id = :tenantId AND acc.code = :code', {
+            tenantId,
+            code: item.accountCode,
+          })
+          .getOne();
+
+        if (!lockedAccount) {
+          throw new BadRequestException(
+            `حساب با کد «${item.accountCode}» در سرفصل حساب‌های این سازمان یافت نشد.`,
+          );
         }
 
-        // A reversed voucher no longer counts: the month's revaluation is missing again, so the next
-        // attempt posts under a new deterministic sourceId (<base>:r1, :r2, ...) instead of replaying.
+        // 2. Check existing active (non-reversed) source under the account lock.
+        //    A reversed voucher no longer counts, so the next attempt posts under :r1, :r2, ...
         const baseSourceId = `${request.period}:${item.accountCode}:${item.currency}`;
         let sourceId = baseSourceId;
         let existingSource = await this.postingRules.findSource(
@@ -409,57 +493,39 @@ export class FxRevaluationService {
         }
 
         if (existingSource?.entryId) {
-          const existingEntry = await this.accounting.findOneJournalEntry(
-            tenantId,
-            existingSource.entryId,
-          );
+          let existingEntry: { entryNumber: string; description?: string | null } | null = null;
+          try {
+            existingEntry = await this.accounting.findOneJournalEntry(
+              tenantId,
+              existingSource.entryId,
+            );
+          } catch {
+            existingEntry = await em
+              .getRepository(JournalEntryEntity)
+              .findOne({ where: { tenantId, id: existingSource.entryId } });
+          }
           const expectedFpTag = `[fp:${item.fingerprint}]`;
           if (!existingEntry?.description?.includes(expectedFpTag)) {
             throw new ConflictException(
               `تسعیر ارز برای دوره «${request.period}»، حساب «${item.accountCode}» و ارز «${item.currency}» قبلاً با پارامترهای متفاوتی ثبت شده است؛ اجرای مجدد با پارامترهای متفاوت مجاز نیست (HTTP 409 Conflict).`,
             );
           }
-          postingResults.push({
-            entryId: existingSource.entryId,
-            entryNumber: existingSource.entryNumber ?? existingEntry.entryNumber,
-            replayed: true,
-          });
+          if (item.gainMinor !== 0n || item.lossMinor !== 0n) {
+            postingResults.push({
+              entryId: existingSource.entryId,
+              entryNumber: existingSource.entryNumber ?? existingEntry.entryNumber,
+              replayed: true,
+            });
+          }
           continue;
         }
 
-        // Re-read and acquire a pessimistic write lock (SELECT ... FOR UPDATE) on the bare account row
-        // within the transaction scope, ensuring concurrent transactions cannot alter the ledger balance
-        // before postingRules.post commits.
-        let ledgerBalanceMinor = 0n;
-        let accountName = item.accountName;
-
-        if (em && typeof em.getRepository === 'function') {
-          const lockedAccount = await em
-            .getRepository(ChartOfAccountEntity)
-            .createQueryBuilder('acc')
-            .setLock('pessimistic_write')
-            .where('acc.tenant_id = :tenantId AND acc.code = :code', {
-              tenantId,
-              code: item.accountCode,
-            })
-            .getOne();
-
-          if (lockedAccount) {
-            ledgerBalanceMinor = this.naturalBookValueMinor(lockedAccount.balance, lockedAccount.accountType);
-            accountName = lockedAccount.name;
-          } else {
-            // Fallback for mocked entity manager in unit tests
-            const freshAccounts = await this.accounting.listAccounts(tenantId);
-            const acc = freshAccounts.find((a) => a.code === item.accountCode);
-            ledgerBalanceMinor = this.naturalBookValueMinor(acc?.balance, acc?.accountType);
-            if (acc) accountName = acc.name;
-          }
-        } else {
-          const freshAccounts = await this.accounting.listAccounts(tenantId);
-          const acc = freshAccounts.find((a) => a.code === item.accountCode);
-          ledgerBalanceMinor = this.naturalBookValueMinor(acc?.balance, acc?.accountType);
-          if (acc) accountName = acc.name;
-        }
+        // 3. Reconcile bookValueRialMinor (and subledger amount_fx when recorded) BEFORE skipping zero-diff items.
+        const ledgerBalanceMinor = this.naturalBookValueMinor(
+          lockedAccount.balance,
+          lockedAccount.accountType,
+        );
+        const accountName = lockedAccount.name;
 
         if (ledgerBalanceMinor === 0n && item.foreignAmountMinor !== 0n) {
           throw new BadRequestException(
@@ -471,6 +537,52 @@ export class FxRevaluationService {
           throw new BadRequestException(
             `ارزش دفتری اعلام‌شده (${item.bookValueRialMinor}) با مانده دفتر کل حساب ${item.accountCode} (${ledgerBalanceMinor}) مغایرت دارد.`,
           );
+        }
+
+        if (typeof em.query === 'function') {
+          const fxRows = (await em.query(
+            `SELECT
+               COUNT(l.amount_fx) AS fx_count,
+               COALESCE(SUM(CASE WHEN l.debit > 0 THEN l.amount_fx WHEN l.credit > 0 THEN -l.amount_fx ELSE 0 END), 0) AS net_fx
+             FROM fin_journal_entry_lines l
+             INNER JOIN fin_journal_entries e ON e.id = l.journal_entry_id AND e.tenant_id = l.tenant_id
+             WHERE l.tenant_id = $1
+               AND l.account_id = $2
+               AND l.currency = $3
+               AND e.status = 'POSTED'`,
+            [tenantId, lockedAccount.id, item.currency],
+          )) as Array<{ fx_count?: string | number; net_fx?: string | number }>;
+
+          const fxCount = Number(fxRows?.[0]?.fx_count ?? 0);
+          if (fxCount > 0) {
+            const rawNetFx = String(fxRows[0].net_fx ?? '0').trim();
+            const isNeg = rawNetFx.startsWith('-');
+            const absScaled6 = parseScaled(isNeg ? rawNetFx.slice(1) : rawNetFx, 6);
+            const signedScaled6 = isNeg ? -absScaled6 : absScaled6;
+            const fxDecimals = CURRENCY_METADATA[item.currency].decimals;
+            const scaleDiff = 6 - fxDecimals;
+            let ledgerFxMinor: bigint;
+            if (scaleDiff === 0) {
+              ledgerFxMinor = signedScaled6;
+            } else if (scaleDiff > 0) {
+              const div = 10n ** BigInt(scaleDiff);
+              const absVal = signedScaled6 < 0n ? -signedScaled6 : signedScaled6;
+              const rounded = (absVal + div / 2n) / div;
+              ledgerFxMinor = signedScaled6 < 0n ? -rounded : rounded;
+            } else {
+              ledgerFxMinor = signedScaled6 * (10n ** BigInt(-scaleDiff));
+            }
+            const naturalFxMinor = item.isLiability ? -ledgerFxMinor : ledgerFxMinor;
+            if (naturalFxMinor !== item.foreignAmountMinor) {
+              throw new BadRequestException(
+                `مانده ارزی اعلام‌شده (${item.foreignAmountMinor}) با مانده ارزی ثبت‌شده در دفتر کل حساب ${item.accountCode} (${naturalFxMinor}) مغایرت دارد.`,
+              );
+            }
+          }
+        }
+
+        if (item.gainMinor === 0n && item.lossMinor === 0n) {
+          continue;
         }
 
         const postReq: PostingRequest = {
