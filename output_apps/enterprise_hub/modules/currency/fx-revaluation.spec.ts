@@ -688,6 +688,62 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
         }),
       ).rejects.toThrow(ConflictException);
     });
+
+    describe('after a reversal of the period voucher', () => {
+      const bal = (): ForeignAccountBalance => ({
+        accountCode: '1012',
+        accountName: 'بانک دلاری',
+        currency: Currency.USD,
+        foreignAmountMinor: 1000000n,
+        bookValueRialMinor: 850_000_000_000n,
+      });
+      const run = (b: ForeignAccountBalance) =>
+        revaluationService.postMonthEndRevaluation('tenant-1', { period: '1405-08', date: '2026-11-21', balances: [b] });
+      const reversedBase = () =>
+        (mockPostingRules.findSource as jest.Mock).mockImplementation(async (_t, _st, sid: string) =>
+          sid === '1405-08:1012:USD' ? { id: 10, entryId: 99, entryNumber: 'V-OLD', reversalEntryId: 100 } : null,
+        );
+
+      it('identical rerun posts again under :r1 instead of replaying', async () => {
+        reversedBase();
+        const res = await run(bal());
+        expect(mockPostingRules.post).toHaveBeenCalledWith(
+          'tenant-1',
+          expect.objectContaining({ sourceId: '1405-08:1012:USD:r1' }),
+          expect.anything(),
+        );
+        expect(res.postingResults[0].replayed).toBe(false);
+      });
+
+      it('corrected rerun (different book value) posts under :r1 instead of 409', async () => {
+        reversedBase();
+        (mockAccounting.listAccounts as jest.Mock).mockResolvedValue(
+          defaultAccounts.map((a) => (a.code === '1012' ? { ...a, balance: '8000000000.00' } : a)),
+        );
+        await run({ ...bal(), bookValueRialMinor: 800_000_000_000n });
+        expect(mockPostingRules.post).toHaveBeenCalledWith(
+          'tenant-1',
+          expect.objectContaining({ sourceId: '1405-08:1012:USD:r1' }),
+          expect.anything(),
+        );
+      });
+
+      it('walks to :r2 when :r1 was reversed too', async () => {
+        (mockPostingRules.findSource as jest.Mock).mockImplementation(async (_t, _st, sid: string) =>
+          sid.endsWith(':r1')
+            ? { id: 11, entryId: 101, entryNumber: 'V-R1', reversalEntryId: 102 }
+            : sid === '1405-08:1012:USD'
+              ? { id: 10, entryId: 99, entryNumber: 'V-OLD', reversalEntryId: 100 }
+              : null,
+        );
+        await run(bal());
+        expect(mockPostingRules.post).toHaveBeenCalledWith(
+          'tenant-1',
+          expect.objectContaining({ sourceId: '1405-08:1012:USD:r2' }),
+          expect.anything(),
+        );
+      });
+    });
   });
 
   describe('CurrencyController & DTO Validation', () => {

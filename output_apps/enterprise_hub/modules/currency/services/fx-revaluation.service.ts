@@ -381,16 +381,32 @@ export class FxRevaluationService {
           continue;
         }
 
-        const sourceId = `${request.period}:${item.accountCode}:${item.currency}`;
-
-        // Idempotency check with HTTP 409 on conflicting rerun (Lesson 18)
-        const existingSource = await this.postingRules.findSource(
+        // A reversed voucher no longer counts: the month's revaluation is missing again, so the next
+        // attempt posts under a new deterministic sourceId (<base>:r1, :r2, ...) instead of replaying.
+        const baseSourceId = `${request.period}:${item.accountCode}:${item.currency}`;
+        let sourceId = baseSourceId;
+        let existingSource = await this.postingRules.findSource(
           tenantId,
           'currency_revaluation',
           sourceId,
           'currency.fx_revaluation',
           em,
         );
+        for (let n = 1; existingSource?.entryId && existingSource.reversalEntryId; n++) {
+          if (n > 50) {
+            throw new ConflictException(
+              `تسعیر ارز دوره «${request.period}» برای حساب «${item.accountCode}» بیش از حد مجاز برگشت خورده است؛ موضوع را بررسی کنید.`,
+            );
+          }
+          sourceId = `${baseSourceId}:r${n}`;
+          existingSource = await this.postingRules.findSource(
+            tenantId,
+            'currency_revaluation',
+            sourceId,
+            'currency.fx_revaluation',
+            em,
+          );
+        }
 
         if (existingSource?.entryId) {
           const existingEntry = await this.accounting.findOneJournalEntry(
