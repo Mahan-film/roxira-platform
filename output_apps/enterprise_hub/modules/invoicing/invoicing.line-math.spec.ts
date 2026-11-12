@@ -67,12 +67,31 @@ describe('invoice line math (shared by InvoicingService and the Moadian pre-flig
     expect(math).toEqual([]);
   });
 
-  it('stays consistent with the service across fractional quantities and discounts', async () => {
+  it('stays consistent with the service across fractional quantities, fractional prices, and discounts', async () => {
     const service = buildService();
-    for (const [qty, price] of [[0.5, 29], [1.25, 333], [2.75, 17], [0.01, 999], [3.5, 15]]) {
+    for (const [qty, price] of [
+      [0.5, 29],
+      [2, 0.5],
+      [3, 333.33],
+      [1.25, 333],
+      [2.75, 17],
+      [0.01, 999],
+      [3.5, 15],
+    ]) {
       const created = await service.create('tenant-a', dto(qty, price));
       const result = runMoadianPreFlightValidation(created, { expectedVatRate: 0.1 });
       expect(result.errors.filter((e) => /MATH_MISMATCH|HEADER_/.test(e.code))).toEqual([]);
     }
+
+    // Foreign currency (USD, scale 2) with fractional unitPrice
+    const usdDto = {
+      ...dto(2, 10.555),
+      currency: Currency.USD,
+      fxRate: 900000,
+    };
+    const usdInvoice = await service.create('tenant-a', usdDto);
+    expect(usdInvoice.items[0].unitPrice).toBe(10.56);
+    const usdResult = runMoadianPreFlightValidation(usdInvoice, { expectedVatRate: 0.1 });
+    expect(usdResult.errors.filter((e) => /MATH_MISMATCH|HEADER_/.test(e.code))).toEqual([]);
   });
 });

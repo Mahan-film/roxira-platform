@@ -15,7 +15,10 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { SubmitMoadianInvoiceDto } from '../dto/submit-moadian-invoice.dto';
+import {
+  MoadianInvoiceIdParamDto,
+  SubmitMoadianInvoiceDto,
+} from '../dto/submit-moadian-invoice.dto';
 import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
 import { requireTenantId } from '../../tenants/tenant-context';
 import {
@@ -64,10 +67,10 @@ export class MoadianController {
   @ApiOperation({ summary: 'اعتبارسنجی پیش از ارسال صورتحساب به سامانه مودیان' })
   @ApiResponse({ status: HttpStatus.OK })
   async preFlight(
-    @Param('invoiceId', new ParseUUIDPipe()) invoiceId: string,
+    @Param() params: MoadianInvoiceIdParamDto,
     @Req() request: AuthenticatedRequest,
   ): Promise<MoadianPreFlightResult> {
-    return this.moadianService.preFlightValidate(this.tenantIdOf(request), invoiceId);
+    return this.moadianService.preFlightValidate(this.tenantIdOf(request), params.invoiceId);
   }
 
   @RequireAction(AccessAction.ADMIN)

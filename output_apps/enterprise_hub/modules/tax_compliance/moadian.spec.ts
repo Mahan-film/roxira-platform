@@ -1086,12 +1086,67 @@ describe('Moadian server pre-flight validation & controller', () => {
     const requestWith = (user: unknown) => ({ user }) as unknown as AuthenticatedRequest;
 
     await expect(
-      controller.preFlight(INVOICE_A, requestWith({ tenantId: null, role: UserRole.ADMIN })),
+      controller.preFlight({ invoiceId: INVOICE_A }, requestWith({ tenantId: null, role: UserRole.ADMIN })),
     ).rejects.toBeInstanceOf(ForbiddenException);
 
     const owner = requestWith({ tenantId: TENANT_A, role: UserRole.USER, tenantRole: TenantRole.OWNER });
-    const res = await controller.preFlight(INVOICE_A, owner);
+    const res = await controller.preFlight({ invoiceId: INVOICE_A }, owner);
     expect(res.valid).toBe(true);
+  });
+
+  it('MoadianInvoiceIdParamDto validates UUIDv4 and rejects non-UUID invoiceId', async () => {
+    const { validate } = await import('class-validator');
+    const { plainToInstance } = await import('class-transformer');
+    const { MoadianInvoiceIdParamDto } = await import('./dto/submit-moadian-invoice.dto');
+
+    const bad = plainToInstance(MoadianInvoiceIdParamDto, { invoiceId: 'not-a-uuid' });
+    const badErrors = await validate(bad);
+    expect(badErrors.length).toBeGreaterThan(0);
+
+    const good = plainToInstance(MoadianInvoiceIdParamDto, {
+      invoiceId: '11111111-1111-4111-8111-111111111111',
+    });
+    expect(await validate(good)).toEqual([]);
+  });
+
+  it('AccessGuard refuses pre-flight endpoint for sales, hr, and cheque_reviewer (403)', async () => {
+    const { Reflector } = await import('@nestjs/core');
+    const { AccessGuard } = await import('../access/access.guard');
+    const { SystemRole } = await import('../access/catalogue');
+    const { AccessStub } = await import('../../test/support/access-stub');
+
+    for (const role of [SystemRole.SALES, SystemRole.HR, SystemRole.CHEQUE_REVIEWER]) {
+      const access = new AccessStub();
+      access.grant('user-1', TENANT_A, role);
+      const loginWindow = { assertAllowed: jest.fn(async () => undefined) };
+      const guard = new AccessGuard(new Reflector(), access as never, loginWindow as never);
+      const ctx = {
+        getHandler: () => MoadianController.prototype.preFlight,
+        getClass: () => MoadianController,
+        switchToHttp: () => ({
+          getRequest: () => ({
+            method: 'POST',
+            originalUrl: '/v1/enterprise-hub/tax-compliance/moadian/invoices/11111111-1111-4111-8111-111111111111/pre-flight',
+            user: { sub: 'user-1', tenantId: TENANT_A, role },
+          }),
+        }),
+      } as never;
+
+      await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
+    }
+  });
+
+  it('preFlightValidate returns VAT_RATE_UNRESOLVED when invoice date is invalid', async () => {
+    const badDateInvoice = buildInvoice({
+      id: 'inv-bad-date',
+      issuedAt: 'not-a-valid-date' as unknown as Date,
+    });
+    const { service } = buildMoadian({ invoices: [badDateInvoice] });
+    await service.putCredential(TENANT_A, credentialDto());
+
+    const res = await service.preFlightValidate(TENANT_A, 'inv-bad-date');
+    expect(res.valid).toBe(false);
+    expect(res.errors.some((e) => e.code === 'VAT_RATE_UNRESOLVED')).toBe(true);
   });
 
   it('submitInvoice rejects with BadRequestException on pre-flight failure', async () => {
