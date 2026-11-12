@@ -279,14 +279,25 @@ export class MoadianService implements OnModuleInit {
   // ارسال صورتحساب
   // ---------------------------------------------------------------------------
 
+  private resolveInvoiceType(invoice: InvoiceResponseDto): MoadianInvoiceType {
+    const buyerBid = invoice.buyerInfo?.nationalId?.replace(/\s+/g, '') ?? null;
+    const buyerTinb = invoice.buyerInfo?.economicCode?.replace(/\s+/g, '') ?? null;
+    return buyerBid || buyerTinb
+      ? MoadianInvoiceType.WITH_BUYER
+      : MoadianInvoiceType.WITHOUT_BUYER;
+  }
+
   private async resolveExpectedVatRate(
     tenantId: string,
     invoice: InvoiceResponseDto,
   ): Promise<{ rate: number } | { error: MoadianPreFlightError }> {
-    const rawDate = invoice.issuedAt ?? invoice.createdAt;
-    const dateObj = rawDate ? new Date(rawDate) : new Date();
-    const dateStr = tehranIsoDate(dateObj);
     try {
+      const rawDate = invoice.issuedAt ?? invoice.createdAt;
+      const dateObj = rawDate ? new Date(rawDate) : new Date();
+      if (Number.isNaN(dateObj.getTime())) {
+        throw new BadRequestException('Invalid invoice date');
+      }
+      const dateStr = tehranIsoDate(dateObj);
       const res = await this.vatRateResolver.generalRate(tenantId, dateStr);
       return { rate: res.rate };
     } catch {
@@ -307,11 +318,13 @@ export class MoadianService implements OnModuleInit {
     this.assertEnabled();
     const invoice = await this.invoicingService.findOne(tenantId, invoiceId);
     const credential = await this.repository.findCredential(tenantId);
+    const invoiceType = this.resolveInvoiceType(invoice);
     const vatResolution = await this.resolveExpectedVatRate(tenantId, invoice);
     if ('error' in vatResolution) {
       const baseResult = runMoadianPreFlightValidation(invoice, {
         defaultSstid: credential?.defaultSstid,
         memoryId: credential?.memoryId,
+        invoiceType,
       });
       return {
         valid: false,
@@ -322,6 +335,7 @@ export class MoadianService implements OnModuleInit {
       defaultSstid: credential?.defaultSstid,
       memoryId: credential?.memoryId,
       expectedVatRate: vatResolution.rate,
+      invoiceType,
     });
   }
 

@@ -6,7 +6,6 @@ import {
   LINE_QUANTITY_DECIMALS,
   LINE_RATE_DECIMALS,
   LineMathResult,
-  numberToScaled,
   sumGrossMinor,
 } from '../../invoicing/services/invoice-line-math';
 
@@ -494,17 +493,20 @@ export function runMoadianPreFlightValidation(
       });
     }
 
-    // Tax rate for fiscal year
-    const vatRate = Number(item.vatRate ?? 0);
-    const vatCheck = validateVatRateForYear(vatRate, options?.expectedVatRate);
-    if (!vatCheck.valid) {
-      const displayYear = jalaliYear ? toPersianDigits(jalaliYear.toString()) : '';
-      const displayExpected = toPersianDigits(Math.round(vatCheck.expected * 100).toString());
-      errors.push({
-        field: `${fieldPrefix}.vatRate`,
-        message: `سطر ${index + 1}: نرخ مالیات بر ارزش افزوده برای سال مالی ${displayYear} باید ${displayExpected}٪ (یا ۰٪ برای اقلام معاف) باشد؛ مقدار فعلی ${toPersianDigits(Math.round(vatRate * 100).toString())}٪ است.`,
-        code: 'ITEM_VAT_RATE_MISMATCH_FISCAL_YEAR',
-      });
+    // Tax rate for fiscal year & exact minor-unit line math
+    const vatRateUnits = amount(item.vatRate ?? 0, LINE_RATE_DECIMALS, `${fieldPrefix}.vatRate`);
+    const vatRate = vatRateUnits !== null ? Number(vatRateUnits) / 10 ** LINE_RATE_DECIMALS : 0;
+    if (vatRateUnits !== null) {
+      const vatCheck = validateVatRateForYear(vatRate, options?.expectedVatRate);
+      if (!vatCheck.valid) {
+        const displayYear = jalaliYear ? toPersianDigits(jalaliYear.toString()) : '';
+        const displayExpected = toPersianDigits(Math.round(vatCheck.expected * 100).toString());
+        errors.push({
+          field: `${fieldPrefix}.vatRate`,
+          message: `سطر ${index + 1}: نرخ مالیات بر ارزش افزوده برای سال مالی ${displayYear} باید ${displayExpected}٪ (یا ۰٪ برای اقلام معاف) باشد؛ مقدار فعلی ${toPersianDigits(Math.round(vatRate * 100).toString())}٪ است.`,
+          code: 'ITEM_VAT_RATE_MISMATCH_FISCAL_YEAR',
+        });
+      }
     }
 
     // Line math consistency using exact integer minor units
@@ -515,6 +517,7 @@ export function runMoadianPreFlightValidation(
     const actualTaxUnits = item.tax !== undefined ? amount(item.tax, scale, `${fieldPrefix}.tax`) : null;
     const actualTotalUnits = item.total !== undefined ? amount(item.total, scale, `${fieldPrefix}.total`) : null;
     if (
+      vatRateUnits === null ||
       discountUnits === null ||
       quantityUnits === null ||
       unitPriceUnits === null ||
@@ -528,7 +531,7 @@ export function runMoadianPreFlightValidation(
       quantity: quantityUnits,
       unitPrice: unitPriceUnits,
       discount: discountUnits,
-      vatRate: numberToScaled(vatRate, LINE_RATE_DECIMALS),
+      vatRate: vatRateUnits,
     });
     lineMaths.push(math);
     const expectedTaxUnits = math.tax;

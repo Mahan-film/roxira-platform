@@ -169,8 +169,11 @@ function rialFactor(invoice: InvoiceResponseDto): number {
 }
 
 function digitsOnly(value: string | undefined | null): string | null {
-  const trimmed = (value ?? '').replace(/\s+/g, '');
-  return /^\d+$/.test(trimmed) ? trimmed : null;
+  const normalized = (value ?? '')
+    .replace(/[۰-۹]/g, (c) => String(c.charCodeAt(0) - 0x06f0))
+    .replace(/[٠-٩]/g, (c) => String(c.charCodeAt(0) - 0x0660))
+    .replace(/\s+/g, '');
+  return /^\d+$/.test(normalized) ? normalized : null;
 }
 
 /** نوع خریدار بر اساس طول شناسه ملی: ۱۰ رقم = حقیقی، ۱۱ رقم = حقوقی. */

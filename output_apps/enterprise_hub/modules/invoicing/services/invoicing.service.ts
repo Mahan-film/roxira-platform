@@ -103,6 +103,7 @@ export interface InvoiceDiscountInput {
 
 interface PreparedLine {
   item: InvoiceItemDto;
+  unitPrice: number;
   itemId: number | null;
   sku: string | null;
   description: string;
@@ -437,13 +438,15 @@ export class InvoicingService {
         `تعداد سطر «${description}»`,
       );
 
+      const unitPrice = this.roundTo(item.unitPrice, scale);
       prepared.push({
         item,
+        unitPrice,
         itemId,
         sku,
         description,
-        gross: item.quantity * item.unitPrice,
-        lineDiscount: this.lineDiscount(item, scale),
+        gross: item.quantity * unitPrice,
+        lineDiscount: this.lineDiscount({ ...item, unitPrice }, scale),
         taxCode: item.taxCode ?? derivedTaxCode ?? null,
       });
     }
@@ -456,7 +459,7 @@ export class InvoicingService {
       const vatRate = this.normalizeVatRate(line.item.vatRate, defaultVatRate);
       const math = computeLineMath({
         quantity: numberToScaled(line.item.quantity, LINE_QUANTITY_DECIMALS),
-        unitPrice: numberToScaled(line.item.unitPrice, scale + LINE_PRICE_EXTRA_DECIMALS),
+        unitPrice: numberToScaled(line.unitPrice, scale + LINE_PRICE_EXTRA_DECIMALS),
         discount: toUnits(discount, scale),
         vatRate: numberToScaled(vatRate, LINE_RATE_DECIMALS),
       });
@@ -468,7 +471,7 @@ export class InvoicingService {
         sku: line.sku,
         description: line.description,
         quantity: line.item.quantity,
-        unitPrice: this.roundTo(line.item.unitPrice, scale),
+        unitPrice: line.unitPrice,
         discount,
         ...(invoiceDiscount ? { invoiceDiscountShare: share } : {}),
         vatRate,
