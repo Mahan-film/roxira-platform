@@ -56,8 +56,11 @@ export type ElectronicBookRowValues = [
  * Builds an official XLSX workbook matching `docs/tax/official/electronic-books-template.xlsx`.
  * One sheet (`Sheet1`), right-to-left, row 1 headers, rows 2..N account turnover records.
  */
-export function writeElectronicBooksXlsx(rows: ElectronicBookRowValues[]): Buffer {
-  const headerCells = OFFICIAL_ELECTRONIC_BOOKS_HEADERS.map(
+export function writeElectronicBooksXlsx(
+  rows: ElectronicBookRowValues[],
+  headers: readonly string[] = OFFICIAL_ELECTRONIC_BOOKS_HEADERS,
+): Buffer {
+  const headerCells = headers.map(
     (h, idx) =>
       `<c r="${COLS[idx]}1" s="1" t="inlineStr"><is><t xml:space="preserve">${escapeXml(h)}</t></is></c>`,
   ).join('');

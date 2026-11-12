@@ -9,6 +9,7 @@
  * ROXIRA_TEST_PG_HOST=127.0.0.1 ROXIRA_TEST_PG_PORT=55471 npx jest modules/tax_compliance/electronic-books.pg.spec.ts --runInBand
  */
 import 'reflect-metadata';
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DataSource } from 'typeorm';
@@ -28,7 +29,7 @@ const OWNER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
 const OWNER_PW = process.env.ROXIRA_TEST_PG_PASSWORD;
 const PORT = Number(process.env.ROXIRA_TEST_PG_PORT ?? 5432);
 const ADMIN_DB = process.env.ROXIRA_TEST_PG_ADMIN_DB ?? (OWNER === 'mac' ? 'template1' : 'postgres');
-const APP_PW = 'electronic-books-test-only';
+const APP_PW = crypto.randomBytes(16).toString('hex');
 
 const TENANT_A = '11111111-1111-4111-8111-111111111111';
 const TENANT_B = '22222222-2222-4222-8222-222222222222';
@@ -204,5 +205,25 @@ describePg('T80: Statutory Electronic Commercial Books Export on PostgreSQL (NOS
     const sumCreditMillion = rows.reduce((acc, r) => acc + Number(r[7]), 0);
     expect(sumDebitMillion).toBe(40);
     expect(sumCreditMillion).toBe(40);
+  });
+
+  it('verifies FORCE RLS (relforcerowsecurity = true) on queried fin_* and statutory tables', async () => {
+    const rlsRows: Array<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean }> =
+      await ownerDs.query(`
+        SELECT relname, relrowsecurity, relforcerowsecurity
+          FROM pg_class
+         WHERE relname IN (
+           'fin_chart_of_accounts',
+           'fin_dimensions',
+           'fin_journal_entries',
+           'fin_journal_entry_lines'
+         )
+         ORDER BY relname
+      `);
+    expect(rlsRows).toHaveLength(4);
+    for (const row of rlsRows) {
+      expect(row.relrowsecurity).toBe(true);
+      expect(row.relforcerowsecurity).toBe(true);
+    }
   });
 });

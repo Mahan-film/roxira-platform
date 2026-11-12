@@ -210,6 +210,12 @@ export const MENU_GROUPS: MenuGroup[] = [
     icon: "Landmark",
     items: [
       { href: "/app/tax", label: "مالیات و مودیان", icon: "Landmark", module: "tax" },
+      {
+        href: "/app/tax/electronic-books",
+        label: "دفاتر تجاری الکترونیکی",
+        icon: "BookOpen",
+        module: "tax",
+      },
     ],
   },
   {

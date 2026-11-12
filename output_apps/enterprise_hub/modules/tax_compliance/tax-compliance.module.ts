@@ -42,6 +42,7 @@ import { MoadianService } from './services/moadian.service';
 import { TaxComplianceService } from './services/tax-compliance.service';
 import { MoadianCompliancePolicyService } from './services/moadian-compliance-policy.service';
 import { TenantPolicyModule } from '../tenants/policy/policy.module';
+import { AccessModule } from '../access/access.module';
 
 /**
  * ماژول تطبیق سامانه مودیان و امضای الکترونیک صورتحساب‌ها.
@@ -68,6 +69,7 @@ import { TenantPolicyModule } from '../tenants/policy/policy.module';
     ]),
     InvoicingModule,
     TenantPolicyModule,
+    AccessModule,
     BullModule.registerQueue({ name: MOADIAN_QUEUE }),
   ],
   controllers: [TaxComplianceController, MoadianController, SeasonalReportController, LedgerExportController, CorporateTaxController, BusinessTaxController, RentalTaxController, DoctorWithholdingController],

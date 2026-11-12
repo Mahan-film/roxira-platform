@@ -133,13 +133,18 @@ export function scaledToDecimal(scaled: bigint, scale: number): string {
 }
 
 /**
- * Rounding rule for the electronic commercial books export (دفاتر تجاری الکترونیکی).
- *
- * TODO(owner): rounding rule — until the accountant confirms whether the tax administration's
- * electronic books system expects whole integer million rials (e.g. rounded to nearest million)
- * or exact decimal strings for fractions of a million rials.
+ * Exact half-up BigInt rounding from minor units (`scale 2`: 100 minor = 1 Rial)
+ * to whole units of size `unitMinor` (e.g. `100n` for whole Rials, `100_000_000n` for million Rials).
  */
-export const ELECTRONIC_BOOKS_ROUNDING_RULE = 'EXACT_DECIMAL' as const; // TODO(owner): rounding rule
+export function roundMinorHalfUp(minor: bigint, unitMinor: bigint): bigint {
+  if (unitMinor <= 0n) {
+    throw new MoneyFormatError(`Invalid rounding unit: ${unitMinor}`);
+  }
+  const negative = minor < 0n;
+  const abs = negative ? -minor : minor;
+  const rounded = (abs + unitMinor / 2n) / unitMinor;
+  return negative ? -rounded : rounded;
+}
 
 /**
  * Exact million-rials representation of minor units (bigint, scale 2: 100 minor units = 1 Rial).

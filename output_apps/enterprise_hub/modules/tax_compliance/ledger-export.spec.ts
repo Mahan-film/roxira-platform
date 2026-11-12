@@ -5,8 +5,10 @@ import { strFromU8, unzipSync } from 'fflate';
 import { LedgerExportController } from './controllers/ledger-export.controller';
 import { toCsv } from './reports/csv.util';
 import {
+  DEFAULT_ROUNDING_ACCOUNT_CODE,
   ELECTRONIC_BOOKS_LAYOUT_STATUS,
   OFFICIAL_ELECTRONIC_BOOKS_HEADERS,
+  RIAL_ELECTRONIC_BOOKS_HEADERS,
 } from './reports/electronic-books.constants';
 import {
   AccountTurnoverGroup,
@@ -51,6 +53,7 @@ const build = (
   opening: Record<string, bigint> = {},
   turnover: AccountTurnoverGroup[] = [],
   statutoryRows: any[] = [],
+  auditLogs: any[] = [],
 ) => {
   const repo = {
     lines: jest.fn().mockResolvedValue(lines),
@@ -60,12 +63,18 @@ const build = (
   const statutory = {
     findForYear: jest.fn().mockResolvedValue(statutoryRows),
   };
+  const audit = {
+    record: jest.fn().mockResolvedValue(undefined),
+    list: jest.fn().mockResolvedValue(auditLogs),
+  };
   return {
     repo,
     statutory,
+    audit,
     service: new LedgerExportService(
       repo as unknown as LedgerExportRepository,
       statutory as any,
+      audit as any,
     ),
   };
 };
@@ -169,8 +178,8 @@ describe('T80: Statutory electronic commercial books export (دفاتر تجار
     '../../../../docs/tax/official/electronic-books-template.xlsx',
   );
 
-  it('layout is declared official', () => {
-    expect(ELECTRONIC_BOOKS_LAYOUT_STATUS).toBe('official');
+  it('layout is declared unverified until live portal upload confirms rounding and unit rules', () => {
+    expect(ELECTRONIC_BOOKS_LAYOUT_STATUS).toBe('unverified');
   });
 
   it('official template file exists and matches the 9 official headers', () => {
@@ -288,7 +297,7 @@ describe('T80: Statutory electronic commercial books export (دفاتر تجار
     );
   });
 
-  it('resolves periodicity from statutory settings store when quarter/month is omitted', async () => {
+  it('covers the full Jalali year when sub-period is omitted regardless of periodicity and builds matching presets', async () => {
     const { service, repo, statutory } = build([], {}, [], [
       {
         paramKey: 'commercial_books_periodicity',
@@ -299,10 +308,205 @@ describe('T80: Statutory electronic commercial books export (دفاتر تجار
       },
     ]);
 
-    // For 6-month periodicity, defaults to half 1 (Farvardin 1 to Mehr 1: 2026-03-21 to 2026-09-23)
     await service.electronicBooksCsv('tenant-a', { year: 1405 });
     expect(statutory.findForYear).toHaveBeenCalledWith('tenant-a', 'IR', 1405);
-    expect(repo.accountTurnover).toHaveBeenCalledWith('tenant-a', '2026-03-21', '2026-09-23');
+    expect(repo.accountTurnover).toHaveBeenCalledWith('tenant-a', '2026-03-21', '2027-03-21');
+
+    const presets1405Override = await service.getElectronicBooksPresets('tenant-a', 1405);
+    expect(presets1405Override.periodicityMonths).toBe(6);
+    expect(presets1405Override.presets.map((p) => p.key)).toEqual(['1405-H1', '1405-H2']);
+
+    // Also verify default periodicity per year when statutory override is absent: 1404=6m, 1405=3m, 1406=1m
+    const defaults = build([], {}, [], []);
+    expect((await defaults.service.getElectronicBooksPresets('tenant-a', 1404)).presets).toHaveLength(2);
+    expect((await defaults.service.getElectronicBooksPresets('tenant-a', 1405)).presets).toHaveLength(4);
+    expect((await defaults.service.getElectronicBooksPresets('tenant-a', 1406)).presets).toHaveLength(12);
+  });
+
+  it('propagates statutory repository errors instead of silently ignoring them', async () => {
+    const { service, statutory } = build([], {}, []);
+    statutory.findForYear.mockRejectedValue(new Error('DB down'));
+
+    await expect(service.electronicBooksXlsx('tenant-a', { year: 1405 })).rejects.toThrow('DB down');
+  });
+
+  it('rejects mutually exclusive period parameters (e.g. quarter + month)', async () => {
+    const { service } = build([], {}, []);
+    await expect(
+      service.getTurnoverData('tenant-a', { year: 1405, quarter: 1, month: 2 }),
+    ).rejects.toThrow(/تنها یکی از پارامترهای/);
+  });
+
+  it('splits groups with both debit and credit into separate single-side rows', async () => {
+    const { service } = build([], {}, [
+      turnoverGroup({
+        debitMinor: 300_000_000n,
+        creditMinor: 300_000_000n,
+      }),
+    ]);
+
+    const csv = await service.electronicBooksCsv('tenant-a', { year: 1405, quarter: 1 });
+    const rows = parse(csv);
+    expect(rows).toHaveLength(3); // 1 header + 2 rows (debit only + credit only)
+    expect(rows[1][6]).toBe('3');
+    expect(rows[1][7]).toBe('0');
+    expect(rows[2][6]).toBe('0');
+    expect(rows[2][7]).toBe('3');
+  });
+
+  it('supports rial unit headers and balances half-up rounding differences with one adjustment row in both units', async () => {
+    // Two debits of 1.4M (= 2.8M) vs one credit of 2.8M (= 2.8M).
+    // Half-up rounding to integer million_rial: 1 + 1 = 2 debit vs 3 credit -> difference = -1M.
+    // Half-up rounding to whole rial: 1,400,000.40 + 1,400,000.40 -> 1400000 + 1400000 = 2800000 vs 2,800,000.80 -> 2800001 -> diff = -1 Rial.
+    const groups = [
+      turnoverGroup({
+        moeinCode: '1010',
+        debitMinor: 140_000_040n,
+        creditMinor: 0n,
+      }),
+      turnoverGroup({
+        moeinCode: '1020',
+        debitMinor: 140_000_040n,
+        creditMinor: 0n,
+      }),
+      turnoverGroup({
+        kolCode: '40',
+        moeinCode: '4010',
+        debitMinor: 0n,
+        creditMinor: 280_000_080n,
+      }),
+    ];
+
+    const millionResult = await build([], {}, groups).service.getTurnoverData('tenant-a', {
+      year: 1405,
+      quarter: 1,
+      unit: 'million_rial',
+      roundingAccountCode: '8888',
+      roundingAccountName: 'تعدیل گرد کردن تست',
+    });
+    expect(millionResult.headers).toEqual([...OFFICIAL_ELECTRONIC_BOOKS_HEADERS]);
+    expect(millionResult.roundingDifference).toBe(-1n);
+    const millionAdj = millionResult.rows.find((r) => r[2] === '8888');
+    expect(millionAdj?.[6]).toBe('1');
+    expect(millionAdj?.[7]).toBe('0');
+    expect(millionAdj?.[8]).toBe('1405/03/31');
+    const mDebit = millionResult.rows.reduce((s, r) => s + BigInt(r[6]), 0n);
+    const mCredit = millionResult.rows.reduce((s, r) => s + BigInt(r[7]), 0n);
+    expect(mDebit).toBe(mCredit);
+    expect(millionResult.warnings.some((w) => w.includes('8888'))).toBe(true);
+
+    const rialResult = await build([], {}, groups).service.getTurnoverData('tenant-a', {
+      year: 1405,
+      quarter: 1,
+      unit: 'rial',
+    });
+    expect(rialResult.headers).toEqual([...RIAL_ELECTRONIC_BOOKS_HEADERS]);
+    expect(rialResult.roundingDifference).toBe(-1n);
+    const rialAdj = rialResult.rows.find((r) => r[2] === DEFAULT_ROUNDING_ACCOUNT_CODE);
+    expect(rialAdj?.[6]).toBe('1');
+    expect(rialAdj?.[7]).toBe('0');
+    const rDebit = rialResult.rows.reduce((s, r) => s + BigInt(r[6]), 0n);
+    const rCredit = rialResult.rows.reduce((s, r) => s + BigInt(r[7]), 0n);
+    expect(rDebit).toBe(rCredit);
+  });
+
+  it('auto-selects XLSX for <= 1,000 rows and CSV for > 1,000 rows', async () => {
+    const small = build([], {}, [turnoverGroup({ debitMinor: 100_000_000n, creditMinor: 100_000_000n })]);
+    const smallFile = await small.service.electronicBooksAuto('tenant-a', { year: 1405, quarter: 1 });
+    expect(smallFile.format).toBe('xlsx');
+    expect(Buffer.isBuffer(smallFile.data)).toBe(true);
+
+    const manyGroups = Array.from({ length: 600 }, (_, idx) =>
+      turnoverGroup({
+        moeinCode: String(1000 + idx),
+        debitMinor: 100_000_000n,
+        creditMinor: 100_000_000n,
+      }),
+    ); // 600 groups * 2 sides = 1,200 rows > 1,000
+    const large = build([], {}, manyGroups);
+    const largeFile = await large.service.electronicBooksAuto('tenant-a', { year: 1405, quarter: 1 });
+    expect(largeFile.format).toBe('csv');
+    expect(typeof largeFile.data).toBe('string');
+  });
+
+  it('passes separate voucherScope filters and aggregates monthly per moein dated last day of month', async () => {
+    const { service, repo } = build([], {}, [
+      turnoverGroup({
+        kolCode: '10',
+        moeinCode: '1010',
+        tafsiliCode: 'TF-1',
+        date: new Date('2026-04-05T08:00:00Z'), // 1405/01/16
+        debitMinor: 100_000_000n,
+        creditMinor: 0n,
+      }),
+      turnoverGroup({
+        kolCode: '10',
+        moeinCode: '1010',
+        tafsiliCode: 'TF-2',
+        date: new Date('2026-04-12T08:00:00Z'), // 1405/01/23
+        debitMinor: 200_000_000n,
+        creditMinor: 0n,
+      }),
+      turnoverGroup({
+        kolCode: '40',
+        moeinCode: '4010',
+        tafsiliCode: '',
+        date: new Date('2026-04-12T08:00:00Z'),
+        debitMinor: 0n,
+        creditMinor: 300_000_000n,
+      }),
+    ]);
+
+    const res = await service.getTurnoverData('tenant-a', {
+      year: 1405,
+      quarter: 1,
+      voucherScope: 'closing_temp',
+      monthlyAggregate: true,
+    });
+    expect(repo.accountTurnover).toHaveBeenCalledWith('tenant-a', '2026-03-21', '2026-06-22', {
+      voucherScope: 'closing_temp',
+      monthlyAggregate: true,
+    });
+    expect(res.rows).toHaveLength(2);
+    expect(res.rows[0][2]).toBe('1010');
+    expect(res.rows[0][4]).toBe(''); // blank tafsili when monthly-aggregated at moein level
+    expect(res.rows[0][6]).toBe('3');
+    expect(res.rows[0][8]).toBe('1405/01/31'); // last day of Farvardin 1405
+
+    await service.getTurnoverData('tenant-a', { year: 1405, quarter: 1, voucherScope: 'opening' });
+    await service.getTurnoverData('tenant-a', { year: 1405, quarter: 1, voucherScope: 'closing_perm' });
+    expect(repo.accountTurnover).toHaveBeenCalledWith('tenant-a', '2026-03-21', '2026-06-22', {
+      voucherScope: 'opening',
+      monthlyAggregate: false,
+    });
+    expect(repo.accountTurnover).toHaveBeenCalledWith('tenant-a', '2026-03-21', '2026-06-22', {
+      voucherScope: 'closing_perm',
+      monthlyAggregate: false,
+    });
+  });
+
+  it('warns on presets and export preview when a period was already exported', async () => {
+    const priorLogs = [
+      {
+        createdAt: new Date('2026-07-01T10:00:00Z'),
+        metadata: {
+          label: '1405-Q1',
+          fromDay: '2026-03-21',
+          toDay: '2026-06-22',
+          endDateJalali: '1405/03/31',
+        },
+      },
+    ];
+    const { service } = build([], {}, [], [], priorLogs);
+    const presets = await service.getElectronicBooksPresets('tenant-a', 1405);
+    expect(presets.lastExportedEndDate).toBe('1405/03/31');
+    expect(presets.presets[0].alreadyExported).toBe(true);
+    expect(presets.presets[1].alreadyExported).toBe(false);
+
+    const turnover = await service.getTurnoverData('tenant-a', { year: 1405, quarter: 1 });
+    expect(turnover.alreadyExported).toBe(true);
+    expect(turnover.lastExportedEndDate).toBe('1405/03/31');
+    expect(turnover.warnings.some((w) => w.includes('1405/03/31'))).toBe(true);
   });
 
   it('supports explicit month and half parameters', async () => {
@@ -320,7 +524,12 @@ describe('T80: Statutory electronic commercial books export (دفاتر تجار
   it('controller enforces tenant isolation from JWT for electronic commercial books', async () => {
     const electronicBooksXlsx = jest.fn().mockResolvedValue(Buffer.from('fake'));
     const electronicBooksCsv = jest.fn().mockResolvedValue('fake-csv');
-    const controller = new LedgerExportController({ electronicBooksXlsx, electronicBooksCsv } as never);
+    const getElectronicBooksPresets = jest.fn().mockResolvedValue({ year: 1405, presets: [] });
+    const controller = new LedgerExportController({
+      electronicBooksXlsx,
+      electronicBooksCsv,
+      getElectronicBooksPresets,
+    } as never);
 
     const request = { user: { tenantId: 'tenant-jwt', tenantRole: 'ADMIN', role: 'ADMIN' } } as never;
     const response = { setHeader: jest.fn() };
@@ -330,5 +539,8 @@ describe('T80: Statutory electronic commercial books export (دفاتر تجار
 
     await controller.electronicBooksCsv(request, { year: 1405, quarter: 1, tenantId: 'tenant-evil' } as never, response);
     expect(electronicBooksCsv).toHaveBeenCalledWith('tenant-jwt', expect.anything());
+
+    await controller.electronicBooksPresets(request, { year: 1405 } as never);
+    expect(getElectronicBooksPresets).toHaveBeenCalledWith('tenant-jwt', 1405);
   });
 });
