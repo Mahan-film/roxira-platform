@@ -6,8 +6,8 @@ import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
  *   - `fin_treasury_sms_drafts`: stores parsed incoming bank SMS receipts and payments.
  *   - Protected with `ENABLE` + `FORCE ROW LEVEL SECURITY`.
  */
-export class CreateTreasurySmsDrafts1789900003200 implements MigrationInterface {
-  name = 'CreateTreasurySmsDrafts1789900003200';
+export class CreateTreasurySmsDrafts1789900004400 implements MigrationInterface {
+  name = 'CreateTreasurySmsDrafts1789900004400';
 
   private readonly tableName = 'fin_treasury_sms_drafts';
 

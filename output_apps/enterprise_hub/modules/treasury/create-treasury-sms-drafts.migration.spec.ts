@@ -1,4 +1,4 @@
-import { CreateTreasurySmsDrafts1789900003200 } from '../../migrations/1789900003200-CreateTreasurySmsDrafts';
+import { CreateTreasurySmsDrafts1789900004400 } from '../../migrations/1789900004400-CreateTreasurySmsDrafts';
 
 const runner = () => {
   const queries: string[] = [];
@@ -8,7 +8,7 @@ const runner = () => {
 describe('CreateTreasurySmsDrafts migration (T92)', () => {
   it('creates fin_treasury_sms_drafts with tenant_id and FORCE row level security', async () => {
     const { q, queries } = runner();
-    await new CreateTreasurySmsDrafts1789900003200().up(q as never);
+    await new CreateTreasurySmsDrafts1789900004400().up(q as never);
     const sql = queries.join('\n');
 
     expect(queries.find((x) => x.includes('CREATE TABLE IF NOT EXISTS "fin_treasury_sms_drafts"'))).toContain('"tenant_id" uuid NOT NULL');
@@ -21,7 +21,7 @@ describe('CreateTreasurySmsDrafts migration (T92)', () => {
 
   it('down() removes policies and drops table', async () => {
     const { q, queries } = runner();
-    await new CreateTreasurySmsDrafts1789900003200().down(q as never);
+    await new CreateTreasurySmsDrafts1789900004400().down(q as never);
     const sql = queries.join('\n');
 
     expect(sql).toContain('DROP POLICY IF EXISTS "fin_treasury_sms_drafts_tenant"');
