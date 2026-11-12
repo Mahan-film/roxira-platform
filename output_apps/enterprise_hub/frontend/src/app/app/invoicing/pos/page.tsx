@@ -38,10 +38,13 @@ import {
 import { printPosReceipt } from "@/lib/print/open-pos-receipt-window";
 import {
   clearSyncedSales,
+  getCachedTenantVatRate,
   getQueuedSales,
   queueOfflineSale,
   removeQueuedSale,
   retryQueuedSale,
+  setCachedTenantVatRate,
+  setUnsyncedOfflineSalesCount,
   type QueuedPosSale,
 } from "@/lib/pos-offline-db";
 import { syncOfflineSalesQueue } from "@/lib/pos-sync-manager";
@@ -77,7 +80,23 @@ function isOfflineOrTransientError(err: unknown): boolean {
   if (err instanceof ApiClientError) {
     return err.statusCode >= 500 || err.statusCode === 408 || err.statusCode === 429;
   }
-  return true;
+  // Only fall back to the offline queue on network/fetch failures (TypeError), not arbitrary bugs.
+  return err instanceof TypeError;
+}
+
+function generateClientUuid(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+  throw new Error("مرورگر امکان تولید شناسه یکتا را ندارد.");
 }
 
 const subscribeOnlineStatus = (onStoreChange: () => void) => {
@@ -105,7 +124,16 @@ export default function PosCounterPage() {
     getOnlineSnapshot,
     getOnlineServerSnapshot,
   );
-  const [vatRate, setVatRate] = useState<number>(10);
+  const [vatRateState, setVatRateState] = useState<{ tenantId: string; rate: number | null }>({
+    tenantId: "",
+    rate: null,
+  });
+  const vatRate =
+    vatRateState.tenantId === tenantId && vatRateState.rate !== null
+      ? vatRateState.rate
+      : tenantId
+        ? getCachedTenantVatRate(tenantId)
+        : null;
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
@@ -128,6 +156,10 @@ export default function PosCounterPage() {
   const refreshQueue = useCallback(async (activeTenantId = tenantId) => {
     if (!activeTenantId) return;
     const list = await getQueuedSales(activeTenantId);
+    setUnsyncedOfflineSalesCount(
+      activeTenantId,
+      list.filter((item) => item.status !== "synced").length,
+    );
     setQueuedSalesState({ tenantId: activeTenantId, items: list });
   }, [tenantId]);
 
@@ -200,13 +232,18 @@ export default function PosCounterPage() {
     getMyTenant(controller.signal)
       .then((tenant) => {
         if (typeof tenant.defaultVatRate === "number" && Number.isFinite(tenant.defaultVatRate)) {
-          setVatRate(tenant.defaultVatRate);
+          setCachedTenantVatRate(tenantId, tenant.defaultVatRate);
+          setVatRateState({ tenantId, rate: tenant.defaultVatRate });
         }
       })
       .catch(() => undefined);
 
     void getQueuedSales(tenantId).then((items) => {
       if (!controller.signal.aborted) {
+        setUnsyncedOfflineSalesCount(
+          tenantId,
+          items.filter((item) => item.status !== "synced").length,
+        );
         setQueuedSalesState({ tenantId, items });
       }
     });
@@ -235,7 +272,7 @@ export default function PosCounterPage() {
     const price = parsePosUnitPrice(l.unitPrice);
     return qty !== null && price !== null;
   });
-  const cartTotals = computePosCartTotals(validLines, vatRate);
+  const cartTotals = computePosCartTotals(validLines, vatRate ?? 0);
   const estimatedPayableNumber = bigintToSafeJsonNumber(cartTotals.payableTotal);
 
   function resetForm() {
@@ -250,6 +287,13 @@ export default function PosCounterPage() {
     event.preventDefault();
     if (!canCreate || !tenantId) {
       setNotice({ type: "error", message: "شما مجوز ثبت فروش در پایانه را ندارید." });
+      return;
+    }
+    if (vatRate === null) {
+      setNotice({
+        type: "error",
+        message: "نرخ مالیات بر ارزش افزوده سازمان هنوز دریافت نشده است؛ برای محاسبه دقیق، ابتدا در حالت آنلاین صفحه را بارگذاری کنید.",
+      });
       return;
     }
     if (validLines.length === 0) {
@@ -291,7 +335,7 @@ export default function PosCounterPage() {
     const normalizedWh = warehouseId.trim() ? normaliseNumericInput(warehouseId) : "";
     const parsedWh = normalizedWh ? Number.parseInt(normalizedWh, 10) : undefined;
 
-    const clientUuid = `pos-${crypto.randomUUID()}`;
+    const clientUuid = `pos-${generateClientUuid()}`;
     const salePayload: CreatePosSaleDto = {
       idempotencyKey: clientUuid,
       customer:
@@ -452,6 +496,12 @@ export default function PosCounterPage() {
                     size="sm"
                     className="h-7 text-xs text-rose-600"
                     onClick={async () => {
+                      if (
+                        typeof window !== "undefined" &&
+                        !window.confirm("این فروش هنوز در سرور ثبت نشده است. آیا از حذف دائمی آن اطمینان دارید؟")
+                      ) {
+                        return;
+                      }
                       await removeQueuedSale(item.clientUuid, tenantId);
                       await refreshQueue(tenantId);
                     }}
@@ -474,7 +524,9 @@ export default function PosCounterPage() {
               <div className="flex items-center justify-between border-b pb-3">
                 <h2 className="text-base font-semibold">ثبت فروش پایانه</h2>
                 <span className="text-xs text-muted-foreground">
-                  مالیات بر ارزش افزوده {toFaDigits(vatRate)}٪ به‌صورت خودکار محاسبه می‌شود
+                  {vatRate !== null
+                    ? `مالیات بر ارزش افزوده ${toFaDigits(vatRate)}٪ به‌صورت خودکار محاسبه می‌شود`
+                    : "نرخ مالیات سازمان هنوز بارگذاری نشده است (نیازمند یک‌بار اتصال آنلاین)"}
                 </span>
               </div>
 
@@ -609,7 +661,7 @@ export default function PosCounterPage() {
                   <span className="font-semibold">{formatMoneyRial(estimatedPayableNumber)}</span>
                 </div>
 
-                <Button type="submit" disabled={busy || validLines.length === 0 || !canCreate}>
+                <Button type="submit" disabled={busy || validLines.length === 0 || !canCreate || vatRate === null}>
                   <ShoppingBag className="h-4 w-4" />
                   {isOnline ? "ثبت فروش آنلاین" : "ثبت در صف آفلاین"}
                 </Button>
@@ -667,7 +719,7 @@ export default function PosCounterPage() {
                   <span>{formatMoneyRial(bigintToSafeJsonNumber(cartTotals.netTotal))}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>مالیات ({toFaDigits(vatRate)}٪):</span>
+                  <span>مالیات ({vatRate !== null ? `${toFaDigits(vatRate)}٪` : "نامشخص"}):</span>
                   <span>{formatMoneyRial(bigintToSafeJsonNumber(cartTotals.vatTotal))}</span>
                 </div>
                 <div className="flex justify-between font-semibold text-foreground border-t pt-1.5">

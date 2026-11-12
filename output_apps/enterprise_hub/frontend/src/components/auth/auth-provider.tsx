@@ -26,8 +26,14 @@ import {
   toStoredSession,
   UiLocale,
 } from "@/lib/api/auth-client";
-import { accessNeedsRefresh, canRefresh, msUntilRefresh } from "@/lib/api/session-logic";
+import {
+  accessNeedsRefresh,
+  canRefresh,
+  extractTenantIdFromToken,
+  msUntilRefresh,
+} from "@/lib/api/session-logic";
 import { refreshStoredSession } from "@/lib/api/session-store";
+import { getUnsyncedOfflineSalesCount } from "@/lib/pos-offline-db";
 import { LoginModal } from "@/components/auth/login-modal";
 
 interface OpenLoginOptions {
@@ -209,7 +215,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    const refreshToken = loadStoredSession()?.refreshToken ?? fallbackSession?.refreshToken;
+    const activeSession = loadStoredSession() ?? fallbackSession;
+    const activeTenantId = extractTenantIdFromToken(activeSession?.accessToken);
+    if (activeTenantId && typeof window !== "undefined") {
+      const unsyncedCount = getUnsyncedOfflineSalesCount(activeTenantId);
+      if (
+        unsyncedCount > 0 &&
+        !window.confirm(
+          `شما ${unsyncedCount} فروش همگام‌نشده در صف آفلاین دارید. این فروش‌ها در مرورگر باقی می‌مانند اما تا ورود مجدد ارسال نخواهند شد. آیا از خروج اطمینان دارید؟`,
+        )
+      ) {
+        return;
+      }
+    }
+    const refreshToken = activeSession?.refreshToken;
     if (refreshToken) void serverLogout(refreshToken);
     discardSession();
   }, []);

@@ -121,9 +121,9 @@ async function executeTenantSync(
     const statusCode = extractStatusCode(err);
     const message = err instanceof Error && err.message ? err.message : "خطای ارتباط با سرور";
 
-    // If a batch was rejected by request validation (400/422) and has multiple items,
+    // If a batch was rejected by request validation / payload size (400/413/422) and has multiple items,
     // probe one-by-one so valid items succeed and only malformed rows become conflicts.
-    if ((statusCode === 400 || statusCode === 422) && pending.length > 1) {
+    if ((statusCode === 400 || statusCode === 413 || statusCode === 422) && pending.length > 1) {
       return isolateBadBatchItems(pending.map((p) => p.sale), tenantId, caller);
     }
 

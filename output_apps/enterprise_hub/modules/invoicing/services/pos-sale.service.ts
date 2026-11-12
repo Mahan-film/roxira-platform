@@ -436,10 +436,7 @@ export class PosSaleService {
     if (missingMatch?.[1]) {
       return [missingMatch[1]];
     }
-    const allCodes = (sale.lines ?? [])
-      .map((l) => l.code?.trim())
-      .filter((c): c is string => Boolean(c));
-    return Array.from(new Set(allCodes));
+    return [];
   }
 
   private formatValidationErrors(errors: ValidationError[]): string {

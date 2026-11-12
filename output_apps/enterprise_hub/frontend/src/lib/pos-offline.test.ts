@@ -1,16 +1,46 @@
 import assert from "node:assert/strict";
+import * as nodeModule from "node:module";
 import { afterEach, test } from "node:test";
+import { pathToFileURL } from "node:url";
+
+const SRC_ROOT = new URL("../", import.meta.url).pathname;
+const registerHooksFn = (
+  nodeModule as unknown as {
+    registerHooks?: (hooks: {
+      resolve: (
+        specifier: string,
+        context: unknown,
+        nextResolve: (specifier: string, context: unknown) => unknown,
+      ) => unknown;
+    }) => void;
+  }
+).registerHooks;
+
+registerHooksFn?.({
+  resolve(specifier, context, nextResolve) {
+    if (specifier.startsWith("@/")) {
+      const rel = specifier.slice(2);
+      const tsPath = rel.endsWith(".ts") ? `${SRC_ROOT}${rel}` : `${SRC_ROOT}${rel}.ts`;
+      return nextResolve(pathToFileURL(tsPath).href, context);
+    }
+    return nextResolve(specifier, context);
+  },
+});
 
 import type { CreatePosSaleDto, InvoiceResponseDto } from "../types/invoicing.ts";
 import { computePosCartTotals, parsePosQuantity, parsePosUnitPrice, splitPosPayment } from "./pos-money.ts";
 import {
   clearAllOfflineSales,
   clearSyncedSales,
+  getCachedTenantVatRate,
   getPendingSales,
   getQueuedSales,
+  getUnsyncedOfflineSalesCount,
   queueOfflineSale,
   removeQueuedSale,
   retryQueuedSale,
+  setCachedTenantVatRate,
+  setUnsyncedOfflineSalesCount,
   updateQueuedSale,
   type QueuedPosSale,
 } from "./pos-offline-db.ts";
@@ -344,4 +374,136 @@ test("pos-money computes BigInt cart totals, dynamic VAT, Persian digits, and sp
   ]);
   assert.equal(splitPosPayment(BigInt(220_000), "300000", "CASH"), null);
   assert.equal(splitPosPayment(BigInt(220_000), "10.5", "CASH"), null);
+});
+
+test("computePosCartTotals rounds VAT per line matching InvoicingService.quote on multi-line odd carts", () => {
+  // 2 lines of 1 x 105 Rial at 10% VAT:
+  // Per-line VAT rounding gives 11 Rial per line = 22 Rial total VAT, 232 Rial payable
+  // (whole-cart VAT rounding on 210 Rial would have been 21 Rial -> 231, causing server conflict).
+  const oddTwoLine = computePosCartTotals(
+    [
+      { quantity: "1", unitPrice: "105" },
+      { quantity: "1", unitPrice: "105" },
+    ],
+    10,
+  );
+  assert.equal(oddTwoLine.netTotal, BigInt(210));
+  assert.equal(oddTwoLine.vatTotal, BigInt(22));
+  assert.equal(oddTwoLine.payableTotal, BigInt(232));
+
+  // Fractional quantity lines: 2 x (1.5 * 15 = 22.5) at 10% -> lineTax=2, lineTotal=round(24.5)=25 -> 50
+  const fractionalMulti = computePosCartTotals(
+    [
+      { quantity: "1.5", unitPrice: "15" },
+      { quantity: "1.5", unitPrice: "15" },
+    ],
+    10,
+  );
+  assert.equal(fractionalMulti.netTotal, BigInt(45));
+  assert.equal(fractionalMulti.vatTotal, BigInt(4));
+  assert.equal(fractionalMulti.payableTotal, BigInt(50));
+});
+
+test("per-tenant VAT rate cache and unsynced logout counter are tenant-isolated and validated", () => {
+  const store = new Map<string, string>();
+  (globalThis as { window?: unknown }).window = {
+    localStorage: {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => store.set(k, v),
+      removeItem: (k: string) => store.delete(k),
+    },
+  };
+
+  assert.equal(getCachedTenantVatRate(TENANT_A), null);
+  setCachedTenantVatRate(TENANT_A, 10);
+  setCachedTenantVatRate(TENANT_B, 0);
+  setCachedTenantVatRate(TENANT_A, Number.NaN); // ignored
+  setCachedTenantVatRate(TENANT_A, -5); // ignored
+
+  assert.equal(getCachedTenantVatRate(TENANT_A), 10);
+  assert.equal(getCachedTenantVatRate(TENANT_B), 0);
+
+  setUnsyncedOfflineSalesCount(TENANT_A, 3);
+  assert.equal(getUnsyncedOfflineSalesCount(TENANT_A), 3);
+  assert.equal(getUnsyncedOfflineSalesCount(TENANT_B), 0);
+  setUnsyncedOfflineSalesCount(TENANT_A, 0);
+  assert.equal(getUnsyncedOfflineSalesCount(TENANT_A), 0);
+});
+
+test("syncOfflineSalesQueue falls back one-by-one on HTTP 413 oversized batch responses", async () => {
+  await queueOfflineSale(makeValidSale("pos-413-split-1", "SKU-1", 100_000), TENANT_A);
+  await queueOfflineSale(makeValidSale("pos-413-split-2", "SKU-2", 100_000), TENANT_A);
+  const splitRes = await syncOfflineSalesQueue(TENANT_A, async ({ sales }) => {
+    if (sales.length > 1) {
+      throw Object.assign(new Error("Request Entity Too Large"), { statusCode: 413 });
+    }
+    return {
+      synced: [
+        {
+          clientUuid: sales[0].idempotencyKey,
+          invoice: makeFakeInvoice(sales[0].idempotencyKey, 200_000),
+          replayed: false,
+        },
+      ],
+      conflicts: [],
+      totalProcessed: 1,
+    };
+  });
+  assert.equal(splitRes.syncedCount, 2);
+  assert.equal(splitRes.conflictCount, 0);
+});
+
+test("removeSession preserves pending and conflict offline sales while purging only synced rows for the signed-out tenant", async () => {
+  await queueOfflineSale(makeValidSale("pos-keep-pending"), TENANT_A);
+  await queueOfflineSale(makeValidSale("pos-keep-conflict"), TENANT_A);
+  await updateQueuedSale("pos-keep-conflict", { status: "conflict", conflictCode: "OUT_OF_STOCK" }, TENANT_A);
+  await queueOfflineSale(makeValidSale("pos-purge-synced"), TENANT_A);
+  await updateQueuedSale("pos-purge-synced", { status: "synced" }, TENANT_A);
+  await queueOfflineSale(makeValidSale("pos-other-tenant-synced"), TENANT_B);
+  await updateQueuedSale("pos-other-tenant-synced", { status: "synced" }, TENANT_B);
+
+  const jwtPayload = Buffer.from(JSON.stringify({ sub: "u-1", tenantId: TENANT_A })).toString("base64url");
+  const storage = new Map<string, string>([
+    [
+      "roxira.auth.session",
+      JSON.stringify({
+        accessToken: `eyJhbGciOiJIUzI1NiJ9.${jwtPayload}.sig`,
+        tokenType: "Bearer",
+        user: { id: "u-1" },
+        expiresAt: Date.now() + 60_000,
+      }),
+    ],
+  ]);
+  (globalThis as { window?: unknown }).window = {
+    localStorage: {
+      getItem: (k: string) => storage.get(k) ?? null,
+      setItem: (k: string, v: string) => storage.set(k, v),
+      removeItem: (k: string) => storage.delete(k),
+    },
+    dispatchEvent: () => true,
+  };
+  (globalThis as { Event?: unknown }).Event = class FakeEvent {
+    type: string;
+    constructor(type: string) {
+      this.type = type;
+    }
+  };
+
+  const { removeSession } = await import("./api/session-store.ts");
+  removeSession();
+  await new Promise((r) => setTimeout(r, 20));
+
+  assert.equal(storage.has("roxira.auth.session"), false);
+  const tenantARows = (await getQueuedSales(TENANT_A))
+    .map((r) => [r.clientUuid, r.status] as const)
+    .sort((a, b) => a[0].localeCompare(b[0]));
+  assert.deepEqual(tenantARows, [
+    ["pos-keep-conflict", "conflict"],
+    ["pos-keep-pending", "pending"],
+  ]);
+  const tenantBRows = await getQueuedSales(TENANT_B);
+  assert.deepEqual(
+    tenantBRows.map((r) => [r.clientUuid, r.status]),
+    [["pos-other-tenant-synced", "synced"]],
+  );
 });

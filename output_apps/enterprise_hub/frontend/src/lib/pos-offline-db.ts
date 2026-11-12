@@ -229,11 +229,106 @@ export async function clearSyncedSales(tenantId: string): Promise<void> {
   }
 }
 
+const TENANT_VAT_RATE_KEY_PREFIX = "roxira.pos.tenantVatRate:";
+const TENANT_UNSYNCED_COUNT_KEY_PREFIX = "roxira.pos.unsyncedCount:";
+const inMemoryTenantVatRates = new Map<string, number>();
+const inMemoryUnsyncedCounts = new Map<string, number>();
+
 /**
- * Clears every queued offline sale across all tenants (called on explicit logout).
+ * Stores a tenant's verified server VAT percentage for offline counter sales fallback.
+ */
+export function setCachedTenantVatRate(tenantId: string, rate: number): void {
+  const scoped = tenantId.trim();
+  if (!scoped || !Number.isFinite(rate) || rate < 0 || rate > 100) {
+    return;
+  }
+  inMemoryTenantVatRates.set(scoped, rate);
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(`${TENANT_VAT_RATE_KEY_PREFIX}${scoped}`, String(rate));
+    } catch {
+      // Ignore storage quota/availability errors in restricted environments
+    }
+  }
+}
+
+/**
+ * Loads the last verified server VAT percentage cached for this tenant, or null if unknown.
+ */
+export function getCachedTenantVatRate(tenantId: string): number | null {
+  const scoped = tenantId.trim();
+  if (!scoped) {
+    return null;
+  }
+  if (typeof window !== "undefined") {
+    try {
+      const raw = window.localStorage.getItem(`${TENANT_VAT_RATE_KEY_PREFIX}${scoped}`);
+      if (raw !== null) {
+        const parsed = Number(raw);
+        if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 100) {
+          inMemoryTenantVatRates.set(scoped, parsed);
+          return parsed;
+        }
+      }
+    } catch {
+      // Fall through to in-memory cache
+    }
+  }
+  return inMemoryTenantVatRates.get(scoped) ?? null;
+}
+
+/**
+ * Records how many unsynced (pending / syncing / conflict) POS sales exist locally for a tenant
+ * so logout guards can warn synchronously before signing out.
+ */
+export function setUnsyncedOfflineSalesCount(tenantId: string, count: number): void {
+  const scoped = tenantId.trim();
+  if (!scoped) return;
+  const normalized = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+  inMemoryUnsyncedCounts.set(scoped, normalized);
+  if (typeof window !== "undefined") {
+    try {
+      const key = `${TENANT_UNSYNCED_COUNT_KEY_PREFIX}${scoped}`;
+      if (normalized > 0) {
+        window.localStorage.setItem(key, String(normalized));
+      } else {
+        window.localStorage.removeItem(key);
+      }
+    } catch {
+      // no-op
+    }
+  }
+}
+
+/**
+ * Returns the cached count of unsynced offline POS sales for a tenant (0 if none recorded).
+ */
+export function getUnsyncedOfflineSalesCount(tenantId: string): number {
+  const scoped = tenantId.trim();
+  if (!scoped) return 0;
+  if (typeof window !== "undefined") {
+    try {
+      const raw = window.localStorage.getItem(`${TENANT_UNSYNCED_COUNT_KEY_PREFIX}${scoped}`);
+      if (raw !== null) {
+        const parsed = Number.parseInt(raw, 10);
+        if (Number.isFinite(parsed) && parsed > 0) {
+          return parsed;
+        }
+      }
+    } catch {
+      // Fall through to in-memory cache
+    }
+  }
+  return inMemoryUnsyncedCounts.get(scoped) ?? 0;
+}
+
+/**
+ * Clears every queued offline sale across all tenants (used by full resets and test cleanup).
  */
 export async function clearAllOfflineSales(): Promise<void> {
   inMemoryStore.clear();
+  inMemoryTenantVatRates.clear();
+  inMemoryUnsyncedCounts.clear();
   if (!hasIndexedDb()) {
     return;
   }

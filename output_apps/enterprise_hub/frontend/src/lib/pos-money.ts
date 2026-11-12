@@ -92,10 +92,14 @@ export function computePosCartTotals(
   lines: PosMoneyLineInput[],
   vatRatePercent: string | number,
 ): PosCartTotals {
-  // rateBpsScale = percent * 10^4, so divided by 10^6 gives fraction
+  // rateBpsScale = percent * 10^4, so dividing (lineGrossHundredths * vatRateScaled) by 100 * 10^6 yields whole-Rial line tax
   const vatRateScaled = parseScaledNonNegativeInt(vatRatePercent, 4) ?? BIGINT_ZERO;
+  const lineTaxScaleDivisor = BIGINT_HUNDRED * BIGINT_MILLION;
 
-  let netTotal = BIGINT_ZERO;
+  let grossHundredthsTotal = BIGINT_ZERO;
+  let vatTotal = BIGINT_ZERO;
+  let payableTotal = BIGINT_ZERO;
+
   for (const line of lines) {
     const qtyScaled = parseScaledNonNegativeInt(line.quantity, 2);
     const unitPriceRial = parseScaledNonNegativeInt(line.unitPrice, 0);
@@ -107,15 +111,21 @@ export function computePosCartTotals(
     ) {
       continue;
     }
-    const lineNet = divideHalfUp(qtyScaled * unitPriceRial, BIGINT_HUNDRED);
-    netTotal += lineNet;
+    // Match InvoicingService.normalizeItems + computeTotals (scale = 0 for IRR):
+    // round tax half-up per line, then line total = round(lineGross + lineTax), and sum lines.
+    const lineGrossHundredths = qtyScaled * unitPriceRial;
+    const lineTax = divideHalfUp(lineGrossHundredths * vatRateScaled, lineTaxScaleDivisor);
+    const lineTotal = divideHalfUp(lineGrossHundredths + lineTax * BIGINT_HUNDRED, BIGINT_HUNDRED);
+
+    grossHundredthsTotal += lineGrossHundredths;
+    vatTotal += lineTax;
+    payableTotal += lineTotal;
   }
 
-  const vatTotal = divideHalfUp(netTotal * vatRateScaled, BIGINT_MILLION);
   return {
-    netTotal,
+    netTotal: divideHalfUp(grossHundredthsTotal, BIGINT_HUNDRED),
     vatTotal,
-    payableTotal: netTotal + vatTotal,
+    payableTotal,
   };
 }
 

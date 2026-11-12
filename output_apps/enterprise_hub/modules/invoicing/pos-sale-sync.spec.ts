@@ -10,10 +10,13 @@ import { Reflector } from '@nestjs/core';
 import { AccessGuard } from '../access/access.guard';
 import { AccessStub } from '../../test/support/access-stub';
 import { PosSaleService } from './services/pos-sale.service';
+import { InvoicingService } from './services/invoicing.service';
+import { fixtureVatRates } from './__fixtures__/vat-rate.fixture';
 import { PosSalesController } from './controllers/pos-sales.controller';
 import { CreatePosSaleDto, SyncPosSalesDto } from './dto/pos-sale.dto';
 import { Currency } from '../currency/enums/currency.enum';
 import { InvoiceStatus } from './enums/invoice-status.enum';
+import { computePosCartTotals } from '../../frontend/src/lib/pos-money';
 
 describe('Offline Counter Sales Sync & Conflict Detection (#782 / T93)', () => {
   let posSaleService: PosSaleService;
@@ -296,7 +299,8 @@ describe('Offline Counter Sales Sync & Conflict Detection (#782 / T93)', () => {
     accessStub.grant('u-readonly', TENANT_ID, 'read_only');
     accessStub.grant('u-sales', TENANT_ID, 'sales');
 
-    const guard = new AccessGuard(new Reflector(), accessStub as any);
+    const mockLoginWindow = { assertAllowed: jest.fn().mockResolvedValue(undefined) } as any;
+    const guard = new AccessGuard(new Reflector(), accessStub as any, mockLoginWindow);
     const makeCtx = (sub: string) =>
       ({
         getHandler: () => PosSalesController.prototype.sync,
@@ -312,5 +316,120 @@ describe('Offline Counter Sales Sync & Conflict Detection (#782 / T93)', () => {
 
     await expect(guard.canActivate(makeCtx('u-readonly'))).rejects.toThrow(ForbiddenException);
     await expect(guard.canActivate(makeCtx('u-sales'))).resolves.toBe(true);
+  });
+
+  it('does not flag innocent cart SKUs as missingItems when error message has no SKU match', async () => {
+    mockInvoicing.create.mockRejectedValueOnce(new BadRequestException('خطای عمومی پرداخت یا تاریخ'));
+    const multiSkuSale: CreatePosSaleDto = {
+      idempotencyKey: 'pos-uuid-unrelated-err',
+      lines: [
+        { code: 'SKU-VALID', description: 'کالای ۱', quantity: 1, unitPrice: 1000000 },
+        { code: 'SKU-VALID-2', description: 'کالای ۲', quantity: 1, unitPrice: 1000000 },
+      ],
+      payments: [{ method: 'CASH', amount: 2200000 }],
+    };
+    mockInvoicingRepo.findByIdempotencyKey.mockResolvedValue(null);
+    mockInventoryRepo.findStockItemByCode.mockResolvedValue({ id: 11, sku: 'SKU-VALID', name: 'کالای موجود' });
+    mockInventoryRepo.availableQuantity.mockResolvedValue(50);
+
+    const res = await posSaleService.syncSales(TENANT_ID, { sales: [multiSkuSale] });
+    expect(res.conflicts).toHaveLength(1);
+    expect(res.conflicts[0].code).toBe('VALIDATION_FAILED');
+    expect(res.conflicts[0].missingItems).toBeUndefined();
+  });
+
+  it('computes identical finalPayable between frontend computePosCartTotals and real InvoicingService.quote on multi-line odd-rounding carts', async () => {
+    const cases = [
+      {
+        vatPercent: 10,
+        lines: [
+          { quantity: 1, unitPrice: 105 },
+          { quantity: 1, unitPrice: 105 },
+        ],
+      },
+      {
+        vatPercent: 9,
+        lines: [
+          { quantity: 1, unitPrice: 333 },
+          { quantity: 1, unitPrice: 333 },
+          { quantity: 1, unitPrice: 333 },
+        ],
+      },
+      {
+        vatPercent: 10,
+        lines: [
+          { quantity: 1.5, unitPrice: 15 },
+          { quantity: 1.5, unitPrice: 15 },
+        ],
+      },
+      {
+        vatPercent: 10,
+        lines: [
+          { quantity: 1.25, unitPrice: 1001 },
+          { quantity: 2.75, unitPrice: 777 },
+          { quantity: 1, unitPrice: 999 },
+        ],
+      },
+    ];
+
+    for (const c of cases) {
+      const realInvoicing = new InvoicingService(
+        mockInvoicingRepo,
+        {
+          getRate: () => 1,
+          round: (val: number) => Math.round(val),
+        } as any,
+        undefined,
+        undefined,
+        mockTenantsRepo,
+        undefined,
+        undefined,
+        fixtureVatRates(c.vatPercent / 100),
+      );
+
+      const clientTotals = computePosCartTotals(
+        c.lines.map((l) => ({ quantity: String(l.quantity), unitPrice: String(l.unitPrice) })),
+        c.vatPercent,
+      );
+      const quote = await realInvoicing.quote(TENANT_ID, {
+        items: c.lines.map((l, idx) => ({
+          description: `کالا ${idx + 1}`,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+        })),
+        currency: Currency.IRR,
+      });
+
+      expect(Number(clientTotals.payableTotal)).toBe(quote.totals.finalPayable);
+      expect(Number(clientTotals.vatTotal)).toBe(quote.totals.totalTax);
+
+      // Verify PosSaleService.createSale accepts client payable without 1-Rial mismatch
+      const realPosService = new PosSaleService(
+        {
+          create: jest.fn().mockResolvedValue({
+            id: 'inv-parity',
+            taxInvoiceNumber: 'TI-PARITY',
+            status: InvoiceStatus.PAID,
+          }),
+          findOne: jest.fn(),
+          quote: realInvoicing.quote.bind(realInvoicing),
+        } as any,
+        mockInvoicingRepo,
+        mockInventoryRepo,
+        mockCustomerIdentity,
+        mockTenantsRepo,
+      );
+
+      const created = await realPosService.createSale(TENANT_ID, {
+        idempotencyKey: `pos-parity-${c.vatPercent}-${c.lines.length}`,
+        lines: c.lines.map((l, idx) => ({
+          description: `کالا ${idx + 1}`,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+        })),
+        payments: [{ method: 'CASH', amount: Number(clientTotals.payableTotal) }],
+      });
+      expect(created.invoice.taxInvoiceNumber).toBe('TI-PARITY');
+    }
   });
 });

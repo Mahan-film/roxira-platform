@@ -9,9 +9,10 @@ import { API_PROXY_BASE_PATH, AUTH_RESOURCE_PATH } from "@/lib/api/config";
 import {
   accessNeedsRefresh,
   canRefresh,
+  extractTenantIdFromToken,
   isSessionAlive,
 } from "@/lib/api/session-logic";
-import { clearAllOfflineSales } from "@/lib/pos-offline-db";
+import { clearSyncedSales } from "@/lib/pos-offline-db";
 
 export const SESSION_STORAGE_KEY = "roxira.auth.session";
 const AUTH_ENDPOINT = `${API_PROXY_BASE_PATH}/${AUTH_RESOURCE_PATH}`;
@@ -89,13 +90,19 @@ export function writeSession(session: StoredSessionBase): void {
 
 export function removeSession(): void {
   if (typeof window === "undefined") return;
+  const raw = readRawSession();
+  const tenantId = extractTenantIdFromToken(raw?.accessToken);
   try {
     window.localStorage.removeItem(SESSION_STORAGE_KEY);
     window.dispatchEvent(new Event("roxira-auth-changed"));
   } catch {
     // no-op
   }
-  void clearAllOfflineSales().catch(() => undefined);
+  // Preserve pending, syncing, and conflict offline POS sales across refresh expiry or logout;
+  // only already-synced rows of the signed-out tenant are safe to purge automatically.
+  if (tenantId) {
+    void clearSyncedSales(tenantId).catch(() => undefined);
+  }
 }
 
 interface RefreshResponse {
