@@ -1,3 +1,4 @@
+import { bigintsToStrings } from '../dto/revaluation-response';
 import { Body, Controller, Get, Post, Req } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AccessAction, AccessModule } from '../../access/catalogue';
@@ -76,11 +77,12 @@ export class CurrencyController {
       isLiability: b.isLiability,
       rateRialPerUnit: b.rateRialPerUnit ? BigInt(b.rateRialPerUnit) : undefined,
     }));
-    return this.fxRevaluationService.postMonthEndRevaluation(tenantId, {
+    const result = await this.fxRevaluationService.postMonthEndRevaluation(tenantId, {
       period: dto.period,
       date: dto.date,
       balances,
       rates,
     });
+    return bigintsToStrings(result);
   }
 }

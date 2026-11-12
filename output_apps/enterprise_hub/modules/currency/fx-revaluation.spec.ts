@@ -721,6 +721,30 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
       );
     });
 
+    it('controller response is JSON-serialisable (no raw bigint) with minor amounts as strings', async () => {
+      const controller = new CurrencyController(currencyService, revaluationService);
+      const dto = plainToInstance(RevalueBalancesDto, {
+        period: '1405-08',
+        date: '2026-11-21',
+        balances: [
+          {
+            accountCode: '1012',
+            accountName: 'بانک ارزی دلاری',
+            currency: Currency.USD,
+            foreignAmountMinor: '1000000',
+            bookValueRialMinor: '850000000000',
+          },
+        ],
+      });
+      const res: any = await controller.revalueMonthEnd(
+        { user: { tenantId: 'tenant-1' } } as unknown as AuthenticatedRequest,
+        dto,
+      );
+      expect(() => JSON.stringify(res)).not.toThrow();
+      expect(res.plan.totalGainMinor).toBe('70000000000');
+      expect(res.plan.items[0].foreignAmountMinor).toBe('1000000');
+    });
+
     it('enforces @ModuleAccess(AccessModule.ACCOUNTING) and @RequireAction(AccessAction.POST)', () => {
       const reflector = new Reflector();
       const moduleAccess = reflector.get(
