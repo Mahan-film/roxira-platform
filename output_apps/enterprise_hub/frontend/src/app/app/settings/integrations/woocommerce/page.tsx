@@ -41,7 +41,7 @@ export default function WooCommerceSettingsPage() {
       if (cfg) {
         setConfig(cfg);
         setStoreUrl(cfg.storeUrl || "");
-        setWebhookSecret(cfg.webhookSecret || "");
+        setWebhookSecret("");
         setAutoSyncOrders(cfg.autoSyncOrders);
         setAutoSyncStock(cfg.autoSyncStock);
       }
@@ -66,8 +66,8 @@ export default function WooCommerceSettingsPage() {
     try {
       const updated = await updateWooCommerceConfig({
         storeUrl,
-        consumerKey,
-        consumerSecret,
+        consumerKey: consumerKey || undefined,
+        consumerSecret: consumerSecret || undefined,
         webhookSecret: webhookSecret || undefined,
         autoSyncOrders,
         autoSyncStock,
@@ -76,6 +76,7 @@ export default function WooCommerceSettingsPage() {
       setSuccess("تنظیمات اتصال با موفقیت ذخیره شد.");
       setConsumerKey("");
       setConsumerSecret("");
+      setWebhookSecret("");
       loadData();
     } catch (err: any) {
       setError(err?.message || "خطا در ذخیره تنظیمات");
@@ -143,6 +144,12 @@ export default function WooCommerceSettingsPage() {
                         <span className="font-mono">{config.maskedConsumerKey}</span>
                       </div>
                     )}
+                    {config.webhookSecret && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">کلید وب‌هوک فعال:</span>
+                        <span className="font-mono">{config.webhookSecret}</span>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -189,9 +196,14 @@ export default function WooCommerceSettingsPage() {
                   <Input
                     id="webhookSecret"
                     dir="ltr"
+                    type="password"
                     value={webhookSecret}
                     onChange={(e) => setWebhookSecret(e.target.value)}
-                    placeholder="تولید خودکار در صورت خالی بودن"
+                    placeholder={
+                      config?.webhookSecret
+                        ? `${config.webhookSecret} (برای تغییر مقدار جدید وارد کنید)`
+                        : "تولید خودکار در صورت خالی بودن"
+                    }
                   />
                 </div>
 

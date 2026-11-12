@@ -12,8 +12,8 @@ export interface WooCommerceConfig {
 
 export interface UpdateWooCommerceConfigInput {
   storeUrl: string;
-  consumerKey: string;
-  consumerSecret: string;
+  consumerKey?: string;
+  consumerSecret?: string;
   webhookSecret?: string;
   autoSyncOrders?: boolean;
   autoSyncStock?: boolean;
