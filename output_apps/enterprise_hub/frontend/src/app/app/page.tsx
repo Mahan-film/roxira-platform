@@ -34,6 +34,7 @@ import {
 } from "@/components/app/app-ui";
 import { useAccess } from "@/components/app/access-provider";
 import { PasswordSettingsCard } from "@/components/auth/password-settings-card";
+import { OnboardingBanner } from "@/components/onboarding/onboarding-banner";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getTrialBalance } from "@/lib/api/accounting-client";
@@ -188,6 +189,8 @@ export default function SuiteDashboardPage() {
           </div>
         }
       />
+
+      <OnboardingBanner />
 
       {/* Role-tailored workspace banner */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-gradient-to-l from-indigo-500/10 via-background to-muted/30 p-4">
