@@ -77,7 +77,11 @@ export class LedgerExportController {
     @Query() query: QueryElectronicBooksDto,
     @Res({ passthrough: true }) response: { setHeader(name: string, value: string): void },
   ): Promise<StreamableFile | string> {
-    const file = await this.exports.electronicBooksAuto(requireTenantId(request), query);
+    const file = await this.exports.electronicBooksAuto(
+      requireTenantId(request),
+      query,
+      request.user?.sub ?? null,
+    );
     response.setHeader('Content-Type', file.contentType);
     response.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
     response.setHeader('X-Electronic-Books-Format', file.format);
@@ -92,14 +96,18 @@ export class LedgerExportController {
   @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   @Header('Cache-Control', 'no-store')
   @Header('X-Layout-Status', ELECTRONIC_BOOKS_LAYOUT_STATUS)
-  @ApiOperation({ summary: 'خروجی اکسل (XLSX) رسمی سامانه دفاتر تجاری الکترونیکی' })
+  @ApiOperation({ summary: 'خروجی اکسل (XLSX) پیشنهادی سامانه دفاتر تجاری الکترونیکی' })
   async electronicBooksXlsx(
     @Req() request: AuthenticatedRequest,
     @Query() query: QueryElectronicBooksDto,
     @Res({ passthrough: true }) response: { setHeader(name: string, value: string): void },
   ): Promise<StreamableFile> {
     const tenantId = requireTenantId(request);
-    const buffer = await this.exports.electronicBooksXlsx(tenantId, query);
+    const buffer = await this.exports.electronicBooksXlsx(
+      tenantId,
+      query,
+      request.user?.sub ?? null,
+    );
     response.setHeader(
       'Content-Disposition',
       `attachment; filename="electronic-books-${query.year}.xlsx"`,
@@ -112,7 +120,7 @@ export class LedgerExportController {
   @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   @Header('Cache-Control', 'no-store')
   @Header('X-Layout-Status', ELECTRONIC_BOOKS_LAYOUT_STATUS)
-  @ApiOperation({ summary: 'خروجی اکسل (XLSX) رسمی سامانه دفاتر تجاری الکترونیکی (نام مستعار)' })
+  @ApiOperation({ summary: 'خروجی اکسل (XLSX) پیشنهادی سامانه دفاتر تجاری الکترونیکی (نام مستعار)' })
   commercialBooksXlsx(
     @Req() request: AuthenticatedRequest,
     @Query() query: QueryElectronicBooksDto,
@@ -126,7 +134,7 @@ export class LedgerExportController {
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @Header('Cache-Control', 'no-store')
   @Header('X-Layout-Status', ELECTRONIC_BOOKS_LAYOUT_STATUS)
-  @ApiOperation({ summary: 'خروجی CSV (با BOM) رسمی سامانه دفاتر تجاری الکترونیکی' })
+  @ApiOperation({ summary: 'خروجی CSV (با BOM) پیشنهادی سامانه دفاتر تجاری الکترونیکی' })
   async electronicBooksCsv(
     @Req() request: AuthenticatedRequest,
     @Query() query: QueryElectronicBooksDto,
@@ -137,7 +145,7 @@ export class LedgerExportController {
       'Content-Disposition',
       `attachment; filename="electronic-books-${query.year}.csv"`,
     );
-    return this.exports.electronicBooksCsv(tenantId, query);
+    return this.exports.electronicBooksCsv(tenantId, query, request.user?.sub ?? null);
   }
 
   @RequireAction(AccessAction.EXPORT)
@@ -145,7 +153,7 @@ export class LedgerExportController {
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @Header('Cache-Control', 'no-store')
   @Header('X-Layout-Status', ELECTRONIC_BOOKS_LAYOUT_STATUS)
-  @ApiOperation({ summary: 'خروجی CSV (با BOM) رسمی سامانه دفاتر تجاری الکترونیکی (نام مستعار)' })
+  @ApiOperation({ summary: 'خروجی CSV (با BOM) پیشنهادی سامانه دفاتر تجاری الکترونیکی (نام مستعار)' })
   commercialBooksCsv(
     @Req() request: AuthenticatedRequest,
     @Query() query: QueryElectronicBooksDto,

@@ -65,8 +65,6 @@ export interface ElectronicBooksExportParams {
   unit?: ElectronicBooksUnit;
   voucherScope?: ElectronicBooksVoucherScope;
   monthlyAggregate?: boolean;
-  roundingAccountCode?: string;
-  roundingAccountName?: string;
 }
 
 export function getElectronicBooksPresets(
@@ -92,8 +90,6 @@ export function getElectronicBooksPreview(
       unit: params.unit,
       voucherScope: params.voucherScope,
       monthlyAggregate: params.monthlyAggregate ? "true" : undefined,
-      roundingAccountCode: params.roundingAccountCode,
-      roundingAccountName: params.roundingAccountName,
     },
     signal,
   });
@@ -119,8 +115,6 @@ export async function downloadElectronicBooks(
     unit: params.unit,
     voucherScope: params.voucherScope,
     monthlyAggregate: params.monthlyAggregate ? "true" : undefined,
-    roundingAccountCode: params.roundingAccountCode,
-    roundingAccountName: params.roundingAccountName,
   });
 
   const resolvedExt =

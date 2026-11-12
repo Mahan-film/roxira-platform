@@ -213,7 +213,7 @@ export const MENU_GROUPS: MenuGroup[] = [
       {
         href: "/app/tax/electronic-books",
         label: "دفاتر تجاری الکترونیکی",
-        icon: "BookOpen",
+        icon: "BookOpenCheck",
         module: "tax",
       },
     ],

@@ -101,7 +101,11 @@ describePg('T80: Statutory Electronic Commercial Books Export on PostgreSQL (NOS
 
     exportRepo = new LedgerExportRepository(tenantScope);
     statutoryRepo = new StatutoryRepository(tenantScope);
-    exportService = new LedgerExportService(exportRepo, statutoryRepo);
+    const auditStub = {
+      record: jest.fn().mockResolvedValue(undefined),
+      list: jest.fn().mockResolvedValue([]),
+    };
+    exportService = new LedgerExportService(exportRepo, statutoryRepo, auditStub as never);
 
     // 1. Seed Chart of Accounts for Tenant A & Tenant B
     await ownerDs.query(`
@@ -207,7 +211,7 @@ describePg('T80: Statutory Electronic Commercial Books Export on PostgreSQL (NOS
     expect(sumCreditMillion).toBe(40);
   });
 
-  it('verifies FORCE RLS (relforcerowsecurity = true) on queried fin_* and statutory tables', async () => {
+  it('verifies FORCE RLS (relforcerowsecurity = true) on queried fin_* ledger tables', async () => {
     const rlsRows: Array<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean }> =
       await ownerDs.query(`
         SELECT relname, relrowsecurity, relforcerowsecurity

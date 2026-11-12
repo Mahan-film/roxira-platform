@@ -50,7 +50,6 @@ export default function ElectronicBooksPage() {
   const [unit, setUnit] = useState<ElectronicBooksUnit>("million_rial");
   const [voucherScope, setVoucherScope] = useState<ElectronicBooksVoucherScope>("operational");
   const [monthlyAggregate, setMonthlyAggregate] = useState(false);
-  const [roundingCode, setRoundingCode] = useState("9999");
   const [preview, setPreview] = useState<ElectronicBooksPreviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
@@ -70,9 +69,8 @@ export default function ElectronicBooksPage() {
       unit,
       voucherScope,
       monthlyAggregate,
-      roundingAccountCode: roundingCode.trim() || undefined,
     }),
-    [year, selectedPreset, unit, voucherScope, monthlyAggregate, roundingCode],
+    [year, selectedPreset, unit, voucherScope, monthlyAggregate],
   );
 
   const fetchPreviewData = useCallback(
@@ -88,13 +86,12 @@ export default function ElectronicBooksPage() {
           unit,
           voucherScope,
           monthlyAggregate,
-          roundingAccountCode: roundingCode.trim() || undefined,
         },
         signal,
       );
       return { loadedPresets, loadedPreview };
     },
-    [year, selectedPresetKey, unit, voucherScope, monthlyAggregate, roundingCode],
+    [year, selectedPresetKey, unit, voucherScope, monthlyAggregate],
   );
 
   const refreshAll = useCallback(
@@ -158,7 +155,7 @@ export default function ElectronicBooksPage() {
       <div className="space-y-6 p-6" dir="rtl">
         <PageHeader
           title="دفاتر تجاری الکترونیکی"
-          description="خروجی رسمی دفاتر روزنامه و کل برای درگاه سازمان امور مالیاتی با دوره‌های پیش‌فرض، کنترل تکرار دوره و تراز خودکار گرد کردن."
+          description="خروجی دفاتر روزنامه و کل منطبق با قالب نمونه سازمان امور مالیاتی (وضعیت تأیید درگاه: unverified) با تبدیل اعشار دقیق و کنترل تکرار دوره."
         />
 
         <ErrorNotice title="خطا در بارگذاری دفاتر تجاری" message={error} />
@@ -171,7 +168,7 @@ export default function ElectronicBooksPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <div>
                 <label className="mb-1 block text-xs font-medium text-muted-foreground">
                   سال مالی (شمسی)
@@ -201,7 +198,7 @@ export default function ElectronicBooksPage() {
                   value={unit}
                   onChange={(e) => setUnit(e.target.value as ElectronicBooksUnit)}
                 >
-                  <option value="million_rial">میلیون ریال (رسمی با گرد کردن نیم به بالا)</option>
+                  <option value="million_rial">میلیون ریال (اعشار دقیق — در انتظار تأیید درگاه)</option>
                   <option value="rial">ریال</option>
                 </select>
               </div>
@@ -223,18 +220,6 @@ export default function ElectronicBooksPage() {
                     ),
                   )}
                 </select>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                  کد حساب تعدیل گرد کردن
-                </label>
-                <input
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                  value={roundingCode}
-                  onChange={(e) => setRoundingCode(e.target.value)}
-                  placeholder="9999"
-                />
               </div>
             </div>
 

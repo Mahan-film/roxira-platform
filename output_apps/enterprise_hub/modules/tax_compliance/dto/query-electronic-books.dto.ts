@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsEnum, IsInt, IsOptional, Max, Min } from 'class-validator';
 
 export enum ElectronicBooksFormat {
   AUTO = 'auto',
@@ -79,18 +79,6 @@ export class QueryElectronicBooksDto {
   @Transform(({ value }) => value === true || value === 'true' || value === '1')
   @IsBoolean({ message: 'مقدار تجمیع ماهانه باید بولی باشد.' })
   monthlyAggregate?: boolean;
-
-  @ApiPropertyOptional({ description: 'کد حساب تفاوت گرد کردن (پیش‌فرض ۹۹۹۹)' })
-  @IsOptional()
-  @IsString({ message: 'کد حساب تفاوت گرد کردن باید رشته باشد.' })
-  @MaxLength(64)
-  roundingAccountCode?: string;
-
-  @ApiPropertyOptional({ description: 'نام حساب تفاوت گرد کردن' })
-  @IsOptional()
-  @IsString({ message: 'نام حساب تفاوت گرد کردن باید رشته باشد.' })
-  @MaxLength(120)
-  roundingAccountName?: string;
 }
 
 export class QueryElectronicBooksPresetsDto {

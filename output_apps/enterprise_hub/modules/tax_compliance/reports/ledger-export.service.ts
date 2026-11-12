@@ -1,5 +1,5 @@
-import { BadRequestException, Injectable, Optional } from '@nestjs/common';
-import { minorToDecimal, minorToMillionRials, roundMinorHalfUp } from '../../accounting/money';
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { minorToDecimal, minorToMillionRials } from '../../accounting/money';
 import { AuditService } from '../../access/services/audit.service';
 import { tehranMidnight } from '../../assistant/services/jalali-period';
 import { isoDate, jalaliMonthDays, jalaliMonthEnd } from '../../hr/services/jalali-period';
@@ -10,10 +10,6 @@ import { jalaliQuarterRange } from '../utils/jalali-quarter.util';
 import { toCsv } from './csv.util';
 import {
   AUDIT_ACTION_ELECTRONIC_BOOKS_EXPORT,
-  DEFAULT_ROUNDING_ACCOUNT_CODE,
-  DEFAULT_ROUNDING_ACCOUNT_NAME,
-  DEFAULT_ROUNDING_KOL_CODE,
-  DEFAULT_ROUNDING_KOL_NAME,
   ELECTRONIC_BOOKS_CSV_MAX_BYTES,
   ELECTRONIC_BOOKS_LAYOUT_STATUS,
   ELECTRONIC_BOOKS_XLSX_ROW_LIMIT,
@@ -119,8 +115,8 @@ export const LEDGER_HEADERS = [
 export class LedgerExportService {
   constructor(
     private readonly repository: LedgerExportRepository,
-    @Optional() private readonly statutory?: StatutoryRepository,
-    @Optional() private readonly audit?: AuditService,
+    private readonly statutory: StatutoryRepository,
+    private readonly audit: AuditService,
   ) {}
 
   private bounds(year: number, quarter: number): { fromDay: string; toDay: string } {
@@ -146,7 +142,6 @@ export class LedgerExportService {
   /** Resolves upload periodicity (months) from statutory settings without swallowing repository failures. */
   async resolvePeriodicityMonths(tenantId: string, year: number): Promise<number> {
     const fallback = this.defaultPeriodicityMonths(year);
-    if (!this.statutory) return fallback;
     const rows = await this.statutory.findForYear(tenantId, IRAN, year);
     const resolved = resolveParameters(rows, isoDate(jalaliMonthEnd(year, 12)));
     const param = resolved.get('commercial_books_periodicity');
@@ -228,7 +223,6 @@ export class LedgerExportService {
       createdAt: string;
     }>
   > {
-    if (!this.audit) return [];
     const logs = await this.audit.list(tenantId, {
       limit: 100,
       action: AUDIT_ACTION_ELECTRONIC_BOOKS_EXPORT,
@@ -430,15 +424,19 @@ export class LedgerExportService {
           creditMinor: g.creditMinor,
         }));
 
-    const unitDivisor = unit === 'rial' ? 100n : 100_000_000n;
+    const formatTurnoverAmount = (minor: bigint): string => {
+      if (unit === 'million_rial') {
+        return minorToMillionRials(minor);
+      }
+      return minorToDecimal(minor)
+        .replace(/(\.\d*?[1-9])0+$/, '$1')
+        .replace(/\.0+$/, '');
+    };
+
     const rows: ElectronicBookRowValues[] = [];
-    let roundedDebitSum = 0n;
-    let roundedCreditSum = 0n;
 
     for (const g of baseGroups) {
       if (g.debitMinor > 0n) {
-        const debitRounded = roundMinorHalfUp(g.debitMinor, unitDivisor);
-        roundedDebitSum += debitRounded;
         rows.push([
           g.kolCode,
           g.kolName,
@@ -446,14 +444,12 @@ export class LedgerExportService {
           g.moeinName,
           g.tafsiliCode,
           g.tafsiliName,
-          debitRounded.toString(),
+          formatTurnoverAmount(g.debitMinor),
           '0',
           g.turnoverDateJalali,
         ]);
       }
       if (g.creditMinor > 0n) {
-        const creditRounded = roundMinorHalfUp(g.creditMinor, unitDivisor);
-        roundedCreditSum += creditRounded;
         rows.push([
           g.kolCode,
           g.kolName,
@@ -462,57 +458,14 @@ export class LedgerExportService {
           g.tafsiliCode,
           g.tafsiliName,
           '0',
-          creditRounded.toString(),
+          formatTurnoverAmount(g.creditMinor),
           g.turnoverDateJalali,
         ]);
       }
     }
 
-    const roundingDifference = roundedDebitSum - roundedCreditSum;
+    const roundingDifference = 0n;
     const warnings: string[] = [];
-
-    if (roundingDifference !== 0n) {
-      const roundingCode = (query.roundingAccountCode ?? DEFAULT_ROUNDING_ACCOUNT_CODE).trim() || DEFAULT_ROUNDING_ACCOUNT_CODE;
-      const roundingName = (query.roundingAccountName ?? DEFAULT_ROUNDING_ACCOUNT_NAME).trim() || DEFAULT_ROUNDING_ACCOUNT_NAME;
-      const roundingKol = roundingCode.length >= 2 ? roundingCode.slice(0, 2) : DEFAULT_ROUNDING_KOL_CODE;
-      const absDiff = roundingDifference > 0n ? roundingDifference : -roundingDifference;
-
-      if (roundingDifference > 0n) {
-        rows.push([
-          roundingKol,
-          DEFAULT_ROUNDING_KOL_NAME,
-          roundingCode,
-          roundingName,
-          '',
-          '',
-          '0',
-          absDiff.toString(),
-          bounds.endDateJalali,
-        ]);
-        roundedCreditSum += absDiff;
-      } else {
-        rows.push([
-          roundingKol,
-          DEFAULT_ROUNDING_KOL_NAME,
-          roundingCode,
-          roundingName,
-          '',
-          '',
-          absDiff.toString(),
-          '0',
-          bounds.endDateJalali,
-        ]);
-        roundedDebitSum += absDiff;
-      }
-
-      warnings.push(
-        `تفاوت گرد کردن (${absDiff.toString()} ${unit === 'rial' ? 'ریال' : 'میلیون ریال'}) در ردیف حساب تعدیل ${roundingCode} (${roundingName}) ثبت شد.`,
-      );
-    }
-
-    if (roundedDebitSum !== roundedCreditSum) {
-      throw new BadRequestException('تراز دفاتر تجاری پس از گرد کردن برقرار نشد.');
-    }
 
     const history = await this.getPriorExportRecords(tenantId);
     let maxToDay = '';
@@ -551,11 +504,11 @@ export class LedgerExportService {
     tenantId: string,
     format: 'xlsx' | 'csv',
     meta: TurnoverExportResult,
+    actorUserId: string | null = null,
   ): Promise<void> {
-    if (!this.audit) return;
     await this.audit.record({
       tenantId,
-      actorUserId: null,
+      actorUserId,
       action: AUDIT_ACTION_ELECTRONIC_BOOKS_EXPORT,
       resourceType: 'electronic_books',
       resourceId: meta.bounds.label,
@@ -585,10 +538,11 @@ export class LedgerExportService {
     return csv;
   }
 
-  /** Official electronic commercial books export choosing XLSX (<= 1,000 rows) or CSV (> 1,000 rows) automatically unless format is specified. */
+  /** Electronic commercial books export choosing XLSX (<= 1,000 rows) or CSV (> 1,000 rows) automatically unless format is specified (`X-Layout-Status: unverified`). */
   async electronicBooksAuto(
     tenantId: string,
     query: QueryElectronicBooksDto,
+    actorUserId: string | null = null,
   ): Promise<ElectronicBooksAutoFile> {
     const meta = await this.getTurnoverData(tenantId, query);
     const chosen: 'xlsx' | 'csv' =
@@ -603,7 +557,7 @@ export class LedgerExportService {
     const suffix = `${meta.bounds.label}-${meta.voucherScope}`.replace(/[^a-zA-Z0-9._-]/g, '-');
     if (chosen === 'csv') {
       const csv = this.encodeCsvChecked(meta.headers, meta.rows);
-      await this.recordExportAudit(tenantId, 'csv', meta);
+      await this.recordExportAudit(tenantId, 'csv', meta, actorUserId);
       return {
         format: 'csv',
         filename: `electronic-books-${suffix}.csv`,
@@ -614,7 +568,7 @@ export class LedgerExportService {
     }
 
     const xlsx = writeElectronicBooksXlsx(meta.rows, meta.headers);
-    await this.recordExportAudit(tenantId, 'xlsx', meta);
+    await this.recordExportAudit(tenantId, 'xlsx', meta, actorUserId);
     return {
       format: 'xlsx',
       filename: `electronic-books-${suffix}.xlsx`,
@@ -624,19 +578,27 @@ export class LedgerExportService {
     };
   }
 
-  /** Official electronic commercial books export in XLSX matching my.tax.gov.ir template. */
-  async electronicBooksXlsx(tenantId: string, query: QueryElectronicBooksDto): Promise<Buffer> {
+  /** Electronic commercial books export in XLSX matching my.tax.gov.ir template (`X-Layout-Status: unverified`). */
+  async electronicBooksXlsx(
+    tenantId: string,
+    query: QueryElectronicBooksDto,
+    actorUserId: string | null = null,
+  ): Promise<Buffer> {
     const meta = await this.getTurnoverData(tenantId, query);
     const buffer = writeElectronicBooksXlsx(meta.rows, meta.headers);
-    await this.recordExportAudit(tenantId, 'xlsx', meta);
+    await this.recordExportAudit(tenantId, 'xlsx', meta, actorUserId);
     return buffer;
   }
 
-  /** Official electronic commercial books export in CSV UTF-8 with BOM and formula protection. */
-  async electronicBooksCsv(tenantId: string, query: QueryElectronicBooksDto): Promise<string> {
+  /** Electronic commercial books export in CSV UTF-8 with BOM and formula protection (`X-Layout-Status: unverified`). */
+  async electronicBooksCsv(
+    tenantId: string,
+    query: QueryElectronicBooksDto,
+    actorUserId: string | null = null,
+  ): Promise<string> {
     const meta = await this.getTurnoverData(tenantId, query);
     const csv = this.encodeCsvChecked(meta.headers, meta.rows);
-    await this.recordExportAudit(tenantId, 'csv', meta);
+    await this.recordExportAudit(tenantId, 'csv', meta, actorUserId);
     return csv;
   }
 

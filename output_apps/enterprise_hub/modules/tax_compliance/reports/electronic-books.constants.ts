@@ -37,16 +37,12 @@ export function getElectronicBooksHeaders(unit: ElectronicBooksUnit = 'million_r
   return unit === 'rial' ? RIAL_ELECTRONIC_BOOKS_HEADERS : OFFICIAL_ELECTRONIC_BOOKS_HEADERS;
 }
 
-/** Threshold above which auto format switches from XLSX to UTF-8 CSV (official guideline). */
+/** Threshold above which auto format switches from XLSX to UTF-8 CSV. */
 export const ELECTRONIC_BOOKS_XLSX_ROW_LIMIT = 1000;
 export const ELECTRONIC_BOOKS_CSV_MAX_BYTES = 100 * 1024 * 1024;
-export const DEFAULT_ROUNDING_KOL_CODE = '99';
-export const DEFAULT_ROUNDING_KOL_NAME = 'حساب‌های انتظامی و تعدیل';
-export const DEFAULT_ROUNDING_ACCOUNT_CODE = '9999';
-export const DEFAULT_ROUNDING_ACCOUNT_NAME = 'تفاوت گرد کردن دفاتر تجاری';
 export const AUDIT_ACTION_ELECTRONIC_BOOKS_EXPORT = 'TAX_ELECTRONIC_BOOKS_EXPORTED';
 
-/** Marked unverified until live portal upload confirms rounding and unit rules against my.tax.gov.ir. */
+/** Marked unverified until live portal upload confirms format and unit rules against my.tax.gov.ir. */
 export const ELECTRONIC_BOOKS_LAYOUT_STATUS = 'unverified' as const;
 
 export interface ElectronicBookTurnoverRow {

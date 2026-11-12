@@ -5,7 +5,7 @@ import { strFromU8, unzipSync } from 'fflate';
 import { LedgerExportController } from './controllers/ledger-export.controller';
 import { toCsv } from './reports/csv.util';
 import {
-  DEFAULT_ROUNDING_ACCOUNT_CODE,
+  ELECTRONIC_BOOKS_CSV_MAX_BYTES,
   ELECTRONIC_BOOKS_LAYOUT_STATUS,
   OFFICIAL_ELECTRONIC_BOOKS_HEADERS,
   RIAL_ELECTRONIC_BOOKS_HEADERS,
@@ -354,26 +354,23 @@ describe('T80: Statutory electronic commercial books export (دفاتر تجار
     expect(rows[2][7]).toBe('3');
   });
 
-  it('supports rial unit headers and balances half-up rounding differences with one adjustment row in both units', async () => {
-    // Two debits of 1.4M (= 2.8M) vs one credit of 2.8M (= 2.8M).
-    // Half-up rounding to integer million_rial: 1 + 1 = 2 debit vs 3 credit -> difference = -1M.
-    // Half-up rounding to whole rial: 1,400,000.40 + 1,400,000.40 -> 1400000 + 1400000 = 2800000 vs 2,800,000.80 -> 2800001 -> diff = -1 Rial.
+  it('emits exact decimals in both units without rounding or synthetic 9999 adjustment rows (preserving <0.5M accounts)', async () => {
     const groups = [
       turnoverGroup({
         moeinCode: '1010',
-        debitMinor: 140_000_040n,
+        debitMinor: 140_000_040n, // 1.4000004M rials = 1400000.4 rials
         creditMinor: 0n,
       }),
       turnoverGroup({
         moeinCode: '1020',
-        debitMinor: 140_000_040n,
+        debitMinor: 20_000_000n, // 0.2M rials (< 0.5M threshold, must NOT round to 0)
         creditMinor: 0n,
       }),
       turnoverGroup({
         kolCode: '40',
         moeinCode: '4010',
         debitMinor: 0n,
-        creditMinor: 280_000_080n,
+        creditMinor: 160_000_040n, // 1.6000004M rials = 1600000.4 rials
       }),
     ];
 
@@ -381,19 +378,14 @@ describe('T80: Statutory electronic commercial books export (دفاتر تجار
       year: 1405,
       quarter: 1,
       unit: 'million_rial',
-      roundingAccountCode: '8888',
-      roundingAccountName: 'تعدیل گرد کردن تست',
     });
     expect(millionResult.headers).toEqual([...OFFICIAL_ELECTRONIC_BOOKS_HEADERS]);
-    expect(millionResult.roundingDifference).toBe(-1n);
-    const millionAdj = millionResult.rows.find((r) => r[2] === '8888');
-    expect(millionAdj?.[6]).toBe('1');
-    expect(millionAdj?.[7]).toBe('0');
-    expect(millionAdj?.[8]).toBe('1405/03/31');
-    const mDebit = millionResult.rows.reduce((s, r) => s + BigInt(r[6]), 0n);
-    const mCredit = millionResult.rows.reduce((s, r) => s + BigInt(r[7]), 0n);
-    expect(mDebit).toBe(mCredit);
-    expect(millionResult.warnings.some((w) => w.includes('8888'))).toBe(true);
+    expect(millionResult.roundingDifference).toBe(0n);
+    expect(millionResult.rows).toHaveLength(3);
+    expect(millionResult.rows.find((r) => r[2] === '9999')).toBeUndefined();
+    expect(millionResult.rows.find((r) => r[2] === '1010')?.[6]).toBe('1.4000004');
+    expect(millionResult.rows.find((r) => r[2] === '1020')?.[6]).toBe('0.2');
+    expect(millionResult.rows.find((r) => r[2] === '4010')?.[7]).toBe('1.6000004');
 
     const rialResult = await build([], {}, groups).service.getTurnoverData('tenant-a', {
       year: 1405,
@@ -401,13 +393,26 @@ describe('T80: Statutory electronic commercial books export (دفاتر تجار
       unit: 'rial',
     });
     expect(rialResult.headers).toEqual([...RIAL_ELECTRONIC_BOOKS_HEADERS]);
-    expect(rialResult.roundingDifference).toBe(-1n);
-    const rialAdj = rialResult.rows.find((r) => r[2] === DEFAULT_ROUNDING_ACCOUNT_CODE);
-    expect(rialAdj?.[6]).toBe('1');
-    expect(rialAdj?.[7]).toBe('0');
-    const rDebit = rialResult.rows.reduce((s, r) => s + BigInt(r[6]), 0n);
-    const rCredit = rialResult.rows.reduce((s, r) => s + BigInt(r[7]), 0n);
-    expect(rDebit).toBe(rCredit);
+    expect(rialResult.roundingDifference).toBe(0n);
+    expect(rialResult.rows).toHaveLength(3);
+    expect(rialResult.rows.find((r) => r[2] === '9999')).toBeUndefined();
+    expect(rialResult.rows.find((r) => r[2] === '1010')?.[6]).toBe('1400000.4');
+    expect(rialResult.rows.find((r) => r[2] === '1020')?.[6]).toBe('200000');
+    expect(rialResult.rows.find((r) => r[2] === '4010')?.[7]).toBe('1600000.4');
+  });
+
+  it('rejects CSV exports exceeding 100 MB (ELECTRONIC_BOOKS_CSV_MAX_BYTES)', async () => {
+    const { service } = build([], {}, [
+      turnoverGroup({ debitMinor: 100_000_000n, creditMinor: 100_000_000n }),
+    ]);
+    const spy = jest.spyOn(Buffer, 'byteLength').mockReturnValueOnce(ELECTRONIC_BOOKS_CSV_MAX_BYTES + 1);
+    try {
+      await expect(service.electronicBooksCsv('tenant-a', { year: 1405, quarter: 1 })).rejects.toThrow(
+        /۱۰۰ مگابایت/,
+      );
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('auto-selects XLSX for <= 1,000 rows and CSV for > 1,000 rows', async () => {
@@ -521,7 +526,7 @@ describe('T80: Statutory electronic commercial books export (دفاتر تجار
     expect(repo.accountTurnover).toHaveBeenCalledWith('tenant-a', '2026-09-23', '2027-03-21');
   });
 
-  it('controller enforces tenant isolation from JWT for electronic commercial books', async () => {
+  it('controller enforces tenant isolation and forwards actorUserId from JWT for electronic commercial books', async () => {
     const electronicBooksXlsx = jest.fn().mockResolvedValue(Buffer.from('fake'));
     const electronicBooksCsv = jest.fn().mockResolvedValue('fake-csv');
     const getElectronicBooksPresets = jest.fn().mockResolvedValue({ year: 1405, presets: [] });
@@ -531,16 +536,27 @@ describe('T80: Statutory electronic commercial books export (دفاتر تجار
       getElectronicBooksPresets,
     } as never);
 
-    const request = { user: { tenantId: 'tenant-jwt', tenantRole: 'ADMIN', role: 'ADMIN' } } as never;
+    const request = {
+      user: { sub: 'user-jwt', tenantId: 'tenant-jwt', tenantRole: 'ADMIN', role: 'ADMIN' },
+    } as never;
     const response = { setHeader: jest.fn() };
 
     await controller.electronicBooksXlsx(request, { year: 1405, quarter: 1, tenantId: 'tenant-evil' } as never, response);
-    expect(electronicBooksXlsx).toHaveBeenCalledWith('tenant-jwt', expect.anything());
+    expect(electronicBooksXlsx).toHaveBeenCalledWith('tenant-jwt', expect.anything(), 'user-jwt');
 
     await controller.electronicBooksCsv(request, { year: 1405, quarter: 1, tenantId: 'tenant-evil' } as never, response);
-    expect(electronicBooksCsv).toHaveBeenCalledWith('tenant-jwt', expect.anything());
+    expect(electronicBooksCsv).toHaveBeenCalledWith('tenant-jwt', expect.anything(), 'user-jwt');
 
     await controller.electronicBooksPresets(request, { year: 1405 } as never);
     expect(getElectronicBooksPresets).toHaveBeenCalledWith('tenant-jwt', 1405);
+
+    const { service, audit } = build([], {}, [turnoverGroup({})]);
+    await service.electronicBooksXlsx('tenant-jwt', { year: 1405, quarter: 1 }, 'user-jwt');
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: 'tenant-jwt',
+        actorUserId: 'user-jwt',
+      }),
+    );
   });
 });
