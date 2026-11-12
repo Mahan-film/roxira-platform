@@ -49,7 +49,8 @@ describePg('KartableReconciliation on real PostgreSQL (NOSUPERUSER, NOBYPASSRLS)
     admin = await new DataSource({ ...options(ADMIN_DB), entities: [], migrations: [] }).initialize();
     await admin.query(`CREATE DATABASE "${db}"`);
     await admin.query(`DROP ROLE IF EXISTS ${role}`);
-    await admin.query(`CREATE ROLE ${role} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${APP_PW}'`);
+    const escapedPw = APP_PW.replace(/'/g, "''");
+    await admin.query(`CREATE ROLE ${role} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${escapedPw}'`);
 
     ownerDs = await new DataSource(options(db)).initialize();
     await ownerDs.runMigrations();
@@ -64,13 +65,16 @@ describePg('KartableReconciliation on real PostgreSQL (NOSUPERUSER, NOBYPASSRLS)
     const repository = new KartableReconciliationRepository(scope);
     service = new KartableReconciliationService(repository);
 
-    // Seed Tenant A: Q1 sale (2026-04-10 -> 1405-01-21), Q1 purchase (2026-05-05 -> 1405-02-15), Q2 sale (2026-07-10 -> 1405-04-19)
+    // Seed Tenant A: Q1 original sale (subject 1), Q1 purchase (subject 1), Q2 sale (subject 1),
+    // and Q1 subject 3 (cancelled) & subject 4 (return) invoices which MUST be excluded from original totals.
     await ownerDs.query(`
       INSERT INTO "invoices" ("id", "tenant_id", "taxInvoiceNumber", "sellerInfo", "buyerInfo", "items", "totalAmount", "totalTax", "finalPayable", "direction", "status", "subject", "jurisdiction", "issued_at", "createdAt")
       VALUES
         ('aaaaaaaa-1111-4111-8111-111111111111', '${TENANT_A}', 'INV-A-Q1', '{"name":"فروشنده الف"}'::jsonb, '{"name":"خریدار الف"}'::jsonb, '[]'::jsonb, 10000000.00, 1000000.00, 11000000.00, 'SALE', 'ISSUED', 1, 'IR', '2026-04-10 10:00:00', '2026-04-10 10:00:00'),
         ('aaaaaaaa-2222-4111-8111-111111111111', '${TENANT_A}', 'PINV-A-Q1', '{"name":"تامین الف"}'::jsonb, '{"name":"ما"}'::jsonb, '[]'::jsonb, 4000000.00, 400000.00, 4400000.00, 'PURCHASE', 'PAID', 1, 'IR', '2026-05-05 10:00:00', '2026-05-05 10:00:00'),
         ('aaaaaaaa-3333-4111-8111-111111111111', '${TENANT_A}', 'INV-A-Q2', '{"name":"فروشنده الف"}'::jsonb, '{"name":"خریدار فصل دو"}'::jsonb, '[]'::jsonb, 5000000.00, 500000.00, 5500000.00, 'SALE', 'ISSUED', 1, 'IR', '2026-07-10 10:00:00', '2026-07-10 10:00:00'),
+        ('aaaaaaaa-4444-4111-8111-111111111111', '${TENANT_A}', 'INV-A-Q1-CANCEL', '{"name":"فروشنده الف"}'::jsonb, '{"name":"خریدار الف"}'::jsonb, '[]'::jsonb, 2000000.00, 200000.00, 2200000.00, 'SALE', 'ISSUED', 3, 'IR', '2026-04-20 10:00:00', '2026-04-20 10:00:00'),
+        ('aaaaaaaa-5555-4111-8111-111111111111', '${TENANT_A}', 'INV-A-Q1-RETURN', '{"name":"فروشنده الف"}'::jsonb, '{"name":"خریدار الف"}'::jsonb, '[]'::jsonb, 3000000.00, 300000.00, 3300000.00, 'SALE', 'ISSUED', 4, 'IR', '2026-04-22 10:00:00', '2026-04-22 10:00:00'),
         ('bbbbbbbb-1111-4222-8222-222222222222', '${TENANT_B}', 'INV-B-Q1', '{"name":"فروشنده ب"}'::jsonb, '{"name":"خریدار ب"}'::jsonb, '[]'::jsonb, 7000000.00, 700000.00, 7700000.00, 'SALE', 'PAID', 1, 'IR', '2026-04-15 10:00:00', '2026-04-15 10:00:00')
       ON CONFLICT DO NOTHING
     `);

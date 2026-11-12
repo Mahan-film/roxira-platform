@@ -335,7 +335,14 @@ export async function parseKartableExportFile(
           continue;
         }
 
-        const vatMinor = vatParsed ?? 0n;
+        if (vatParsed === null) {
+          throw new BadRequestException(`مبلغ مالیات در ردیف ${rowNumber} خالی است.`);
+        }
+        if (netParsed === null && totalParsed === null) {
+          throw new BadRequestException(`مبلغ مشمول مالیات یا مبلغ کل در ردیف ${rowNumber} خالی است.`);
+        }
+
+        const vatMinor = vatParsed;
         let netMinor: bigint;
         let totalMinor: bigint;
 
@@ -345,12 +352,9 @@ export async function parseKartableExportFile(
         } else if (totalParsed !== null) {
           totalMinor = totalParsed;
           netMinor = totalParsed - vatMinor;
-        } else if (netParsed !== null) {
-          netMinor = netParsed;
-          totalMinor = netParsed + vatMinor;
         } else {
-          netMinor = 0n;
-          totalMinor = vatMinor;
+          netMinor = netParsed!;
+          totalMinor = netParsed! + vatMinor;
         }
 
         const counterpartyNameRaw = normaliseText(stringifyCell(cellAt('counterpartyName')));

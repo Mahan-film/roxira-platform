@@ -82,6 +82,32 @@ describe('KartableReconciliation (parser, matching, quarterly VAT, AccessGuard)'
     expect(parseKartableMoneyToMinor('   ')).toBeNull();
   });
 
+  it('rejects rows with blank VAT cell with 400 and row number', async () => {
+    const csvWithBlankVat = Buffer.from(
+      [
+        'taxId,issueDate,netAmount,vatAmount,totalAmount',
+        'TAX-BLANK-VAT,1405/01/15,1000000,,1100000',
+      ].join('\n'),
+      'utf8',
+    );
+    await expect(parseKartableExportFile(csvWithBlankVat, 'blank-vat.csv')).rejects.toThrow(
+      /مبلغ مالیات در ردیف 2 خالی است/,
+    );
+  });
+
+  it('rejects rows with both net and total amount blank with 400 and row number', async () => {
+    const csvWithBlankNetAndTotal = Buffer.from(
+      [
+        'taxId,issueDate,netAmount,vatAmount,totalAmount',
+        'TAX-BLANK-AMOUNTS,1405/01/15,,100000,',
+      ].join('\n'),
+      'utf8',
+    );
+    await expect(parseKartableExportFile(csvWithBlankNetAndTotal, 'blank-net-total.csv')).rejects.toThrow(
+      /مبلغ مشمول مالیات یا مبلغ کل در ردیف 2 خالی است/,
+    );
+  });
+
   it('parses numeric Excel serial dates in XLSX exports into Gregorian ISO and Jalali quarter', async () => {
     // 46102 => 2026-03-21 UTC (1405-01-01, Jalali 1405 Q1)
     const xlsxSerial = buildSyntheticXlsxBuffer(
@@ -287,6 +313,68 @@ describe('KartableReconciliation (parser, matching, quarterly VAT, AccessGuard)'
     expect(res.sales.undatedSkippedCount).toBe(2);
     expect(res.sales.kartableVatTotal).toBe(100_000);
     expect(res.quarterlyVat.kartable.salesVat).toBe(100_000);
+  });
+
+  it('excludes subject 3 (cancelled) and subject 4 (return) invoices from quarterly VAT calculations', async () => {
+    const dbInvoices: QuarterDbInvoiceRecord[] = [
+      {
+        id: 'inv-orig',
+        direction: InvoiceDirection.SALE,
+        subject: 1,
+        taxInvoiceNumber: 'INV-ORIG',
+        taxId: 'TAX-ORIG',
+        issueDate: '1405/01/15',
+        counterpartyName: 'خریدار اصلی',
+        salesMinor: 1_000_000_000n,
+        vatMinor: 100_000_000n,
+        receivableMinor: 1_100_000_000n,
+      },
+      {
+        id: 'inv-cancel',
+        direction: InvoiceDirection.SALE,
+        subject: 3, // ابطالی
+        taxInvoiceNumber: 'INV-CANCEL',
+        taxId: 'TAX-CANCEL',
+        issueDate: '1405/01/16',
+        counterpartyName: 'خریدار اصلی',
+        salesMinor: 1_000_000_000n,
+        vatMinor: 100_000_000n,
+        receivableMinor: 1_100_000_000n,
+      },
+      {
+        id: 'inv-return',
+        direction: InvoiceDirection.SALE,
+        subject: 4, // برگشتی
+        taxInvoiceNumber: 'INV-RETURN',
+        taxId: 'TAX-RETURN',
+        issueDate: '1405/01/17',
+        counterpartyName: 'خریدار اصلی',
+        salesMinor: 200_000_000n,
+        vatMinor: 20_000_000n,
+        receivableMinor: 220_000_000n,
+      },
+    ];
+
+    const repo = {
+      loadQuarterInvoices: jest.fn(async () => dbInvoices),
+    } as unknown as KartableReconciliationRepository;
+    const service = new KartableReconciliationService(repo);
+
+    const kartableSalesCsv = Buffer.from(
+      [
+        'شماره منحصر به فرد مالیاتی,شماره صورتحساب,تاریخ صدور,مبلغ مشمول مالیات,مالیات بر ارزش افزوده,مجموع مبلغ صورتحساب',
+        'TAX-ORIG,INV-ORIG,1405/01/15,10000000,1000000,11000000',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const res = await service.reconcile('tenant-sub', 1405, 1, {
+      salesFile: { buffer: kartableSalesCsv, originalname: 'sales.csv' },
+    });
+
+    expect(res.sales.ourInvoiceCount).toBe(1);
+    expect(res.quarterlyVat.our.salesVat).toBe(1_000_000);
+    expect(res.quarterlyVat.our.netVatPayable).toBe(1_000_000);
   });
 
   it('rejects files missing an exact VAT header (no substring fallback onto مبلغ مشمول مالیات) and rejects oversize files', async () => {

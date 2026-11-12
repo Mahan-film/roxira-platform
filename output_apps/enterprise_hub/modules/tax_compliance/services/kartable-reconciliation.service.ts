@@ -82,8 +82,14 @@ export class KartableReconciliationService {
       period.to,
     );
 
-    const dbSales = dbInvoices.filter((i) => i.direction === InvoiceDirection.SALE);
-    const dbPurchases = dbInvoices.filter((i) => i.direction === InvoiceDirection.PURCHASE);
+    // Only subject = 1 (original invoices) are counted in the quarterly VAT return
+    // (subjects 2, 3, 4 are corrective, cancelled, or return adjustments)
+    const dbSales = dbInvoices.filter(
+      (i) => i.direction === InvoiceDirection.SALE && (i.subject === undefined || i.subject === 1),
+    );
+    const dbPurchases = dbInvoices.filter(
+      (i) => i.direction === InvoiceDirection.PURCHASE && (i.subject === undefined || i.subject === 1),
+    );
 
     const salesResult = await this.reconcileSection(
       'SALE',

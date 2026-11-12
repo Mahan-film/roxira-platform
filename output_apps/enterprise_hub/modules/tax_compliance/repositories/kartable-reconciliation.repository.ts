@@ -13,6 +13,7 @@ import { tehranDay } from '../reports/jalali-format.util';
 export interface QuarterDbInvoiceRecord {
   id: string;
   direction: InvoiceDirection;
+  subject?: number;
   taxInvoiceNumber: string;
   taxId: string | null;
   issueDate: string;
@@ -39,6 +40,7 @@ export class KartableReconciliationRepository {
         .andWhere('invoice.status IN (:...statuses)', {
           statuses: [InvoiceStatus.ISSUED, InvoiceStatus.PAID],
         })
+        .andWhere('invoice.subject = :subject', { subject: 1 })
         .andWhere('invoice.jurisdiction = :jurisdiction', {
           jurisdiction: InvoiceJurisdiction.IR,
         })
@@ -106,6 +108,7 @@ export class KartableReconciliationRepository {
         return {
           id: invoice.id,
           direction: invoice.direction,
+          subject: invoice.subject,
           taxInvoiceNumber: invoice.taxInvoiceNumber,
           taxId: taxIdByInvoiceId.get(invoice.id) ?? null,
           issueDate: tehranDay(instant),
