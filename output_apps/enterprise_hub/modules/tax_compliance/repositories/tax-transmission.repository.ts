@@ -23,6 +23,16 @@ export interface OutboxEnqueueInput {
   build: (input: OutboxBuildInput) => { taxId: string; packet: Record<string, unknown> };
 }
 
+const MUTABLE_FIELDS = [
+  'status',
+  'referenceNumber',
+  'errors',
+  'warnings',
+  'pollCount',
+  'sentAt',
+  'lastPolledAt',
+] as const;
+
 const uniqueViolation = (error: unknown): boolean =>
   ((error as { code?: string }).code ?? (error as { driverError?: { code?: string } }).driverError?.code) ===
   '23505';
@@ -137,7 +147,12 @@ export class TaxTransmissionRepository {
   ): Promise<MoadianSubmissionEntity | null> {
     return this.scope.run(tenantId, async (m) => {
       const repo = m.getRepository(MoadianSubmissionEntity);
-      await repo.update({ id, tenantId }, patch as never);
+      // Runtime whitelist: the type alone does not stop a caller from passing uid/taxId/serial/packet.
+      const safe: Record<string, unknown> = {};
+      for (const key of MUTABLE_FIELDS) {
+        if (key in patch) safe[key] = (patch as Record<string, unknown>)[key];
+      }
+      if (Object.keys(safe).length > 0) await repo.update({ id, tenantId }, safe as never);
       return repo.findOne({ where: { tenantId, id } });
     });
   }
