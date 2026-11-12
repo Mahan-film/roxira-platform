@@ -61,13 +61,20 @@ class AccountTypeMapConstraint implements ValidatorConstraintInterface {
   validate(value: unknown): boolean {
     if (value === undefined) return true;
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    return Object.values(value as Record<string, unknown>).every(
-      (v) => typeof v === 'string' && this.validValues.has(v),
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length > MAX_SEPIDAR_ARRAY_ITEMS) return false;
+    return entries.every(
+      ([code, v]) =>
+        typeof code === 'string' &&
+        code.length > 0 &&
+        code.length <= 32 &&
+        typeof v === 'string' &&
+        this.validValues.has(v),
     );
   }
 
   defaultMessage(): string {
-    return 'accountTypeMap must map account codes to valid AccountType enum values';
+    return `accountTypeMap must map <= ${MAX_SEPIDAR_ARRAY_ITEMS} account codes (max 32 chars) to valid AccountType enum values`;
   }
 }
 

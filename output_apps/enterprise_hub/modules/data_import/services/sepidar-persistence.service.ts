@@ -15,6 +15,7 @@ import {
 } from '../../accounting/enums/accounting.enum';
 import { MoneyFormatError, minorToDecimal, parseMinor } from '../../accounting/money';
 import { ChartOfAccountEntity } from '../../accounting/entities/chart-of-account.entity';
+import { CHART_TEMPLATES } from '../../accounting/constants/iran-chart-template';
 import { JournalEntryEntity } from '../../accounting/entities/journal-entry.entity';
 import { JournalEntryLineEntity } from '../../accounting/entities/journal-entry-line.entity';
 import { ChequeEntity } from '../../cheques/entities/cheque.entity';
@@ -106,6 +107,16 @@ const SYNTHETIC_FLOAT_ACCOUNT_TYPES: Record<string, AccountType> = {
   'F-001': AccountType.EXPENSE,
   'F-002': AccountType.EXPENSE,
 };
+
+/** Canonical Iranian group account types sourced directly from iran-chart-template.ts (1=ASSET, 2=LIABILITY, 3=EQUITY, 4=REVENUE, 5=EXPENSE). */
+const STANDARD_IRAN_GROUP_TYPES = new Map<string, AccountType>();
+for (const template of CHART_TEMPLATES) {
+  for (const acc of template.accounts) {
+    if (acc.level === AccountLevel.GROUP) {
+      STANDARD_IRAN_GROUP_TYPES.set(acc.code, acc.accountType);
+    }
+  }
+}
 
 /**
  * Converts a whole-IRR Sepidar amount into scale-2 Roxira minor units via `parseMinor`.
@@ -299,6 +310,7 @@ export class SepidarPersistenceService {
         });
       }
 
+      const openRawChequeInputs: SepidarRawCheque[] = [];
       const openRawCheques: Array<{
         chequeNumber: string;
         bankName: string | null;
@@ -314,6 +326,7 @@ export class SepidarPersistenceService {
             `Invalid Sepidar cheque ${rawChq.ChequeNumber}: Amount must be positive`,
           );
         }
+        openRawChequeInputs.push(rawChq);
         openRawCheques.push({
           chequeNumber: rawChq.ChequeNumber.trim(),
           bankName: rawChq.BankName ? rawChq.BankName.trim() : null,
@@ -355,7 +368,7 @@ export class SepidarPersistenceService {
         };
       });
 
-      const mappedCheques = this.chequesAdapter.mapCheques(rawCheques);
+      const mappedCheques = this.chequesAdapter.mapCheques(openRawChequeInputs);
       if (mappedCheques.errors.length > 0) {
         const firstErr = mappedCheques.errors[0];
         throw new BadRequestException(
@@ -413,7 +426,7 @@ export class SepidarPersistenceService {
         barcode: i.barcode || i.sku,
         primaryUnit: i.primaryUnit,
         secondaryUnit: i.secondaryUnit ?? null,
-        unitRatio: i.unitRatio !== null && i.unitRatio !== undefined ? Number(i.unitRatio) : null,
+        unitRatio: i.unitRatio !== null && i.unitRatio !== undefined ? String(i.unitRatio) : null,
       })),
       openingLines: mappedOpeningLines.map((l) => ({
         accountCode: l.accountCode,
@@ -437,6 +450,7 @@ export class SepidarPersistenceService {
         spentToCode: c.spentToCode ?? null,
         spentToNationalId: c.spentToNationalId ?? null,
         status: c.status ?? ChequeStatus.REGISTERED,
+        description: c.description ?? null,
       })),
       totals: {
         openingDebitMinor: totalOpeningDebitMinor,
@@ -453,6 +467,7 @@ export class SepidarPersistenceService {
         ]);
       }
 
+      let isIdempotencyReplay = false;
       if (idempotencyKey) {
         const entryRepo = em.getRepository(JournalEntryEntity);
         const existingByKey = await entryRepo.findOne({
@@ -471,7 +486,7 @@ export class SepidarPersistenceService {
         const idemRepo = em.getRepository(ImportMappingMemoryEntity);
         const idemSignature = crypto
           .createHash('sha256')
-          .update(`sepidar_idempotency:${idempotencyKey}`)
+          .update(`sepidar_idempotency:${tenantId}:${idempotencyKey}`)
           .digest('hex');
         const existingRecord = await idemRepo.findOne({
           where: { tenantId, signature: idemSignature },
@@ -483,6 +498,10 @@ export class SepidarPersistenceService {
               `Idempotency-Key "${idempotencyKey}" was already used with a different Sepidar payload.`,
             );
           }
+          isIdempotencyReplay = true;
+          existingRecord.uses = (existingRecord.uses || 0) + 1;
+          existingRecord.updatedAt = new Date();
+          await idemRepo.save(existingRecord);
         } else {
           const now = new Date();
           await idemRepo.save(
@@ -508,9 +527,21 @@ export class SepidarPersistenceService {
         mappedAccounts,
         explicitAccountTypesByCode,
         em,
+        isIdempotencyReplay,
       );
-      const partyResult = await this.persistParties(tenantId, mappedParties, customerGroup, em);
-      const itemResult = await this.persistItems(tenantId, mappedItems, em);
+      const partyResult = await this.persistParties(
+        tenantId,
+        mappedParties,
+        customerGroup,
+        em,
+        isIdempotencyReplay,
+      );
+      const itemResult = await this.persistItems(
+        tenantId,
+        mappedItems,
+        em,
+        isIdempotencyReplay,
+      );
       const voucherResult = await this.persistOpeningVoucher(
         tenantId,
         mappedOpeningLines,
@@ -519,8 +550,14 @@ export class SepidarPersistenceService {
         idempotencyKey,
         requestFingerprint,
         em,
+        isIdempotencyReplay,
       );
-      const chequeResult = await this.persistCheques(tenantId, validCheques, em);
+      const chequeResult = await this.persistCheques(
+        tenantId,
+        validCheques,
+        em,
+        isIdempotencyReplay,
+      );
 
       // Step 3: Reconcile certificate from actual persisted database rows
       return this.buildDbReconciliationCertificate(
@@ -546,34 +583,22 @@ export class SepidarPersistenceService {
   }
 
   /**
-   * Uses explicit AccountType if supplied; otherwise maps Iranian COA group prefixes
-   * per `iran-chart-template.ts` (1=ASSET, 2=LIABILITY, 3/9=EQUITY, 4/7=REVENUE, 5/6/8=EXPENSE).
-   * Rejects unknown prefixes when no explicit AccountType is given.
+   * Uses explicit AccountType if supplied; otherwise checks standard Iranian COA group prefix
+   * verified against `iran-chart-template.ts` (1=ASSET, 2=LIABILITY, 3=EQUITY, 4=REVENUE, 5=EXPENSE).
+   * Any non-standard prefix (e.g. 6, 7, 8, 9, floating) requires an explicit AccountType or accountTypeMap entry.
    */
   private resolveAccountType(code: string, explicitType?: AccountType): AccountType {
     if (explicitType !== undefined) {
       return explicitType;
     }
-    switch (code.charAt(0)) {
-      case '1':
-        return AccountType.ASSET;
-      case '2':
-        return AccountType.LIABILITY;
-      case '3':
-      case '9':
-        return AccountType.EQUITY;
-      case '4':
-      case '7':
-        return AccountType.REVENUE;
-      case '5':
-      case '6':
-      case '8':
-        return AccountType.EXPENSE;
-      default:
-        throw new BadRequestException(
-          `Cannot infer accountType for account code "${code}": provide explicit AccountType.`,
-        );
+    const groupPrefix = code.charAt(0);
+    const standardType = STANDARD_IRAN_GROUP_TYPES.get(groupPrefix);
+    if (standardType !== undefined) {
+      return standardType;
     }
+    throw new BadRequestException(
+      `Account "${code}" has non-standard prefix "${groupPrefix}": requires an explicit AccountType or accountTypeMap entry.`,
+    );
   }
 
   private async persistAccounts(
@@ -581,6 +606,7 @@ export class SepidarPersistenceService {
     accounts: MappedChartAccount[],
     explicitAccountTypesByCode: Map<string, AccountType>,
     em: EntityManager,
+    isIdempotencyReplay = false,
   ): Promise<{ inserted: number; skipped: number }> {
     const repo = em.getRepository(ChartOfAccountEntity);
     let inserted = 0;
@@ -604,15 +630,17 @@ export class SepidarPersistenceService {
 
       const existing = await repo.findOne({ where: { tenantId, code: acc.code } });
       if (existing) {
-        if (
-          existing.name !== acc.name ||
-          existing.level !== levelEnum ||
-          (existing.parentCode ?? null) !== (acc.parentCode ?? null) ||
-          existing.accountType !== accountType
-        ) {
-          throw new ConflictException(
-            `Account ${acc.code} already exists in database with conflicting attributes.`,
-          );
+        if (!isIdempotencyReplay) {
+          if (
+            existing.name !== acc.name ||
+            existing.level !== levelEnum ||
+            (existing.parentCode ?? null) !== (acc.parentCode ?? null) ||
+            existing.accountType !== accountType
+          ) {
+            throw new ConflictException(
+              `Account ${acc.code} already exists in database with conflicting attributes.`,
+            );
+          }
         }
         skipped++;
         continue;
@@ -641,6 +669,7 @@ export class SepidarPersistenceService {
     parties: MappedPartyRecord[],
     customerGroup: CustomerGroup,
     em: EntityManager,
+    isIdempotencyReplay = false,
   ): Promise<{ inserted: number; skipped: number }> {
     const repo = em.getRepository(PartyEntity);
     let inserted = 0;
@@ -653,17 +682,19 @@ export class SepidarPersistenceService {
 
       const existing = await repo.findOne({ where: { tenantId, code: p.code } });
       if (existing) {
-        if (
-          existing.name !== p.name ||
-          existing.role !== roleEnum ||
-          existing.customerGroup !== customerGroup ||
-          (existing.nationalId ?? null) !== (p.nationalId ?? null) ||
-          (existing.economicCode ?? null) !== (p.economicCode ?? null) ||
-          (existing.phone ?? null) !== (p.phone ?? null)
-        ) {
-          throw new ConflictException(
-            `Party ${p.code} already exists in database with conflicting attributes.`,
-          );
+        if (!isIdempotencyReplay) {
+          if (
+            existing.name !== p.name ||
+            existing.role !== roleEnum ||
+            existing.customerGroup !== customerGroup ||
+            (existing.nationalId ?? null) !== (p.nationalId ?? null) ||
+            (existing.economicCode ?? null) !== (p.economicCode ?? null) ||
+            (existing.phone ?? null) !== (p.phone ?? null)
+          ) {
+            throw new ConflictException(
+              `Party ${p.code} already exists in database with conflicting attributes.`,
+            );
+          }
         }
         skipped++;
         continue;
@@ -692,6 +723,7 @@ export class SepidarPersistenceService {
     tenantId: string,
     items: MappedItemRecord[],
     em: EntityManager,
+    isIdempotencyReplay = false,
   ): Promise<{ inserted: number; skipped: number }> {
     const repo = em.getRepository(StockItemEntity);
     let inserted = 0;
@@ -714,20 +746,22 @@ export class SepidarPersistenceService {
 
       const existing = await repo.findOne({ where: { tenantId, sku: item.sku } });
       if (existing) {
-        const existingRatio =
-          existing.unitRatio !== null && existing.unitRatio !== undefined
-            ? Number(existing.unitRatio)
-            : null;
-        if (
-          existing.name !== item.name ||
-          (existing.barcode ?? null) !== expectedBarcode ||
-          (existing.primaryUnit ?? 'piece') !== expectedUnit ||
-          (existing.secondaryUnit ?? null) !== expectedSecondaryUnit ||
-          existingRatio !== expectedRatio
-        ) {
-          throw new ConflictException(
-            `Stock item ${item.sku} already exists in database with conflicting attributes.`,
-          );
+        if (!isIdempotencyReplay) {
+          const existingRatio =
+            existing.unitRatio !== null && existing.unitRatio !== undefined
+              ? Number(existing.unitRatio)
+              : null;
+          if (
+            existing.name !== item.name ||
+            (existing.barcode ?? null) !== expectedBarcode ||
+            (existing.primaryUnit ?? 'piece') !== expectedUnit ||
+            (existing.secondaryUnit ?? null) !== expectedSecondaryUnit ||
+            existingRatio !== expectedRatio
+          ) {
+            throw new ConflictException(
+              `Stock item ${item.sku} already exists in database with conflicting attributes.`,
+            );
+          }
         }
         skipped++;
         continue;
@@ -760,6 +794,7 @@ export class SepidarPersistenceService {
     idempotencyKey: string | undefined,
     requestFingerprint: string,
     em: EntityManager,
+    isIdempotencyReplay = false,
   ): Promise<{ created: boolean }> {
     const entryRepo = em.getRepository(JournalEntryEntity);
     const lineRepo = em.getRepository(JournalEntryLineEntity);
@@ -780,14 +815,15 @@ export class SepidarPersistenceService {
         );
       }
 
-      if (
-        explicitOpeningDate !== null &&
-        new Date(existing.date).getTime() !== openingDate.getTime()
-      ) {
-        throw new ConflictException(
-          `Opening voucher ${OPENING_ENTRY_NUMBER} already exists in database with a different openingDate.`,
-        );
-      }
+      if (!isIdempotencyReplay) {
+        if (
+          explicitOpeningDate !== null &&
+          new Date(existing.date).getTime() !== openingDate.getTime()
+        ) {
+          throw new ConflictException(
+            `Opening voucher ${OPENING_ENTRY_NUMBER} already exists in database with a different openingDate.`,
+          );
+        }
 
       if (lines.length > 0) {
         const storedLines = await lineRepo.find({
@@ -841,6 +877,7 @@ export class SepidarPersistenceService {
           );
         }
       }
+    }
 
       return { created: false };
     }
@@ -928,6 +965,7 @@ export class SepidarPersistenceService {
     tenantId: string,
     cheques: MappedRoxiraCheque[],
     em: EntityManager,
+    isIdempotencyReplay = false,
   ): Promise<{ inserted: number; skipped: number }> {
     const repo = em.getRepository(ChequeEntity);
     let inserted = 0;
@@ -948,53 +986,77 @@ export class SepidarPersistenceService {
       }
 
       if (existing) {
-        const expectedStatus = c.status ?? ChequeStatus.REGISTERED;
-        if (
-          parseMinor(existing.amount) !== c.amountMinor ||
-          existing.direction !== c.direction ||
-          existing.issueDate !== c.issueDate ||
-          existing.dueDate !== c.dueDate ||
-          (existing.bankName ?? null) !== (c.bankName ?? null) ||
-          existing.partyName !== c.partyName ||
-          (existing.partyCode ?? null) !== (c.partyCode ?? null) ||
-          (existing.receiverNationalId ?? null) !== (c.receiverNationalId ?? null) ||
-          (existing.spentToName ?? null) !== (c.spentToName ?? null) ||
-          (existing.spentToCode ?? null) !== (c.spentToCode ?? null) ||
-          (existing.spentToNationalId ?? null) !== (c.spentToNationalId ?? null) ||
-          existing.status !== expectedStatus
-        ) {
-          throw new ConflictException(
-            `Cheque ${c.chequeNumber} already exists in database with conflicting attributes or amount.`,
-          );
+        if (!isIdempotencyReplay) {
+          const expectedStatus = c.status ?? ChequeStatus.REGISTERED;
+          const expectedDescription = c.description ?? 'انتقال چک اول دوره از سپیدار';
+          if (
+            parseMinor(existing.amount) !== c.amountMinor ||
+            existing.direction !== c.direction ||
+            existing.issueDate !== c.issueDate ||
+            existing.dueDate !== c.dueDate ||
+            (existing.bankName ?? null) !== (c.bankName ?? null) ||
+            existing.partyName !== c.partyName ||
+            (existing.partyCode ?? null) !== (c.partyCode ?? null) ||
+            (existing.receiverNationalId ?? null) !== (c.receiverNationalId ?? null) ||
+            (existing.spentToName ?? null) !== (c.spentToName ?? null) ||
+            (existing.spentToCode ?? null) !== (c.spentToCode ?? null) ||
+            (existing.spentToNationalId ?? null) !== (c.spentToNationalId ?? null) ||
+            (existing.description ?? null) !== expectedDescription ||
+            existing.status !== expectedStatus
+          ) {
+            throw new ConflictException(
+              `Cheque ${c.chequeNumber} already exists in database with conflicting attributes or amount.`,
+            );
+          }
         }
         skipped++;
         continue;
       }
 
-      const entity = repo.create({
+      const targetStatus = c.status ?? ChequeStatus.REGISTERED;
+      const expectedDescription = c.description ?? 'انتقال چک اول دوره از سپیدار';
+      const saved = await this.chequesRepository.create(
         tenantId,
-        direction: c.direction,
-        sayadNumber: c.sayadNumber || null,
-        sayadVerified: false,
-        sayadVerifiedBy: null,
-        sayadVerifiedAt: null,
-        sayadRegistrationStatus: SayadRegistrationStatus.UNKNOWN,
-        chequeNumber: c.chequeNumber,
-        bankName: c.bankName ?? null,
-        amount: minorToDecimal(c.amountMinor),
-        issueDate: c.issueDate,
-        dueDate: c.dueDate,
-        partyName: c.partyName,
-        partyCode: c.partyCode ?? null,
-        receiverNationalId: c.receiverNationalId ?? null,
-        spentToName: c.spentToName ?? null,
-        spentToCode: c.spentToCode ?? null,
-        spentToNationalId: c.spentToNationalId ?? null,
-        status: c.status ?? ChequeStatus.REGISTERED,
-        description: c.description ?? 'انتقال چک اول دوره از سپیدار',
-      });
+        {
+          direction: c.direction,
+          sayadNumber: c.sayadNumber || null,
+          sayadVerified: false,
+          sayadVerifiedBy: null,
+          sayadVerifiedAt: null,
+          sayadRegistrationStatus: SayadRegistrationStatus.UNKNOWN,
+          chequeNumber: c.chequeNumber,
+          bankName: c.bankName ?? null,
+          amount: minorToDecimal(c.amountMinor),
+          issueDate: c.issueDate,
+          dueDate: c.dueDate,
+          partyName: c.partyName,
+          partyCode: c.partyCode ?? null,
+          receiverNationalId: c.receiverNationalId ?? null,
+          description: expectedDescription,
+        },
+        em,
+      );
 
-      const saved = await repo.save(entity);
+      if (
+        targetStatus !== ChequeStatus.REGISTERED ||
+        c.spentToName ||
+        c.spentToCode ||
+        c.spentToNationalId
+      ) {
+        await this.chequesRepository.updateStatus(
+          tenantId,
+          saved.id,
+          {
+            status: targetStatus,
+            spentToName: c.spentToName ?? null,
+            spentToCode: c.spentToCode ?? null,
+            spentToNationalId: c.spentToNationalId ?? null,
+          },
+          em,
+        );
+        saved.status = targetStatus;
+      }
+
       await this.chequesRepository.addEvent(
         tenantId,
         {
@@ -1190,7 +1252,7 @@ export class SepidarPersistenceService {
         barcode: string | null;
         primaryUnit: string;
         secondaryUnit: string | null;
-        unitRatio: number | null;
+        unitRatio: string | null;
       }>;
       openingLines: Array<{
         accountCode: string;
@@ -1214,6 +1276,7 @@ export class SepidarPersistenceService {
         spentToCode: string | null;
         spentToNationalId: string | null;
         status: string;
+        description: string | null;
       }>;
       totals: {
         openingDebitMinor: bigint;
