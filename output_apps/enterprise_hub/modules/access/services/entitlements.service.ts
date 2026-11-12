@@ -78,8 +78,8 @@ export class EntitlementsService {
     return { requested: true };
   }
 
-  listOpenRequests() {
-    return this.requests.listOpen();
+  listOpenRequests(operatorUserId?: string) {
+    return this.requests.listOpen(operatorUserId);
   }
 
   /** Platform operator only (route is @Roles(ADMIN)); the target tenant is explicit by design. */

@@ -29,8 +29,8 @@ export class EntitlementsAdminController {
   }
 
   @Get('requests/open')
-  openRequests() {
-    return this.entitlements.listOpenRequests();
+  openRequests(@Req() req: AccessRequest) {
+    return this.entitlements.listOpenRequests(req.user!.sub);
   }
 
   @Get(':tenantId')

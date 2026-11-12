@@ -418,7 +418,7 @@ export class AuthController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Start authenticator-app setup; returns the secret and otpauth URI once' })
   async totpSetup(@Req() request: AuthenticatedRequest) {
-    const user = await this.users.findById(request.user!.sub);
+    const user = await this.users.findById(request.user!.sub, { callerUserId: request.user!.sub });
     return this.totp.begin(request.user!.sub, user?.loginEmail ?? user?.username ?? user?.phone ?? 'account');
   }
 

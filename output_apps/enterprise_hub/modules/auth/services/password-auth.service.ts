@@ -296,7 +296,7 @@ export class PasswordAuthService {
     if (!userId) {
       throw new BadRequestException(RESET_INVALID_ERROR);
     }
-    const user = await this.authRepository.findById(userId);
+    const user = await this.authRepository.findById(userId, { callerUserId: userId });
     if (!user || !user.isActive) {
       await this.redis.del(key);
       throw new BadRequestException(RESET_INVALID_ERROR);
@@ -339,7 +339,7 @@ export class PasswordAuthService {
     dto: SetPasswordDto,
     current: { mfa?: boolean; tenantId?: string | null; ip?: string; userAgent?: string } = {},
   ): Promise<AuthSessionDto> {
-    const user = await this.authRepository.findWithPasswordHash({ id: userId });
+    const user = await this.authRepository.findWithPasswordHash({ id: userId }, userId);
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Not signed in.');
     }

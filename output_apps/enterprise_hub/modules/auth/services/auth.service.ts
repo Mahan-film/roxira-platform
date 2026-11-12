@@ -394,7 +394,7 @@ export class AuthService {
     if (!organizationName) {
       return;
     }
-    if ((await this.memberships.listForUser(user.id)).length > 0) {
+    if ((await this.memberships.listForUser(user.id, user.id)).length > 0) {
       return;
     }
     await this.organizations.create(user.id, organizationName);
@@ -411,7 +411,7 @@ export class AuthService {
   }
 
   private async pickTenant(user: UserEntity, requested?: string | null): Promise<string | null> {
-    const active = (await this.memberships.listForUser(user.id)).filter((m) => m.status === 'ACTIVE');
+    const active = (await this.memberships.listForUser(user.id, user.id)).filter((m) => m.status === 'ACTIVE');
     const ids = active.map((m) => m.tenantId);
     if (requested && ids.includes(requested)) return requested;
     if (user.tenantId && ids.includes(user.tenantId)) return user.tenantId;
@@ -438,7 +438,7 @@ export class AuthService {
   /** Second step for TOTP accounts: challenge + code -> session. */
   async verifyMfa(challenge: string, code: string): Promise<AuthSessionDto> {
     const { userId, ctx } = await this.challenges.complete(challenge, code);
-    const user = await this.authRepository.findById(userId);
+    const user = await this.authRepository.findById(userId, { callerUserId: userId });
     if (!user || !user.isActive) throw new UnauthorizedException('Sign-in failed.');
     return this.finishLogin(user, ctx, true);
   }
@@ -516,7 +516,7 @@ export class AuthService {
    */
   async refreshSession(refreshToken: string, ctx: LoginContext = {}): Promise<AuthSessionDto> {
     const { userId, familyId, meta } = await this.refreshTokens.consume(refreshToken);
-    const user = await this.authRepository.findById(userId);
+    const user = await this.authRepository.findById(userId, { callerUserId: userId });
     if (!user || !user.isActive) {
       await this.refreshTokens.revokeAllForUser(userId);
       throw new UnauthorizedException(REFRESH_INVALID_ERROR);
@@ -539,7 +539,7 @@ export class AuthService {
     request?: Parameters<AuditService['record']>[0]['request'],
   ): Promise<{ accessToken: string; expiresIn: number; tenantId: string }> {
     await this.sessions.switchTenant(claims.sub, claims.sid, tenantId, request);
-    const user = await this.authRepository.findById(claims.sub);
+    const user = await this.authRepository.findById(claims.sub, { callerUserId: claims.sub });
     if (!user || !user.isActive) throw new UnauthorizedException('Sign in again.');
     const m = await this.memberships.findByTenantUser(tenantId, user.id);
     const accessToken = await this.jwtService.signAsync({
@@ -562,7 +562,7 @@ export class AuthService {
 
   /** دریافت سشن/پروفایل کاربر جاری بر اساس شناسه توکن. */
   async getProfile(userId: string): Promise<AuthUserDto> {
-    const user = await this.authRepository.findById(userId);
+    const user = await this.authRepository.findById(userId, { callerUserId: userId });
     if (!user) {
       throw new UnauthorizedException('کاربر یافت نشد.');
     }

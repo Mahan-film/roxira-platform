@@ -103,7 +103,7 @@ export class ConsolidatedReportService {
     }
 
     // 2. Resolve user's active tenant memberships securely
-    const allMemberships = await this.membershipsRepo.listForUser(userId);
+    const allMemberships = await this.membershipsRepo.listForUser(userId, userId);
     if (!allMemberships || allMemberships.length === 0) {
       throw new NotFoundException('هیچ سازمانی برای این کاربر یافت نشد.');
     }

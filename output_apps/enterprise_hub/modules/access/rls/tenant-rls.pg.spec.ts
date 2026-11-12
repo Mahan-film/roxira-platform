@@ -36,7 +36,7 @@ const OWNER_PW = process.env.ROXIRA_TEST_PG_PASSWORD;
 const PORT = Number(process.env.ROXIRA_TEST_PG_PORT ?? 5432);
 const PGB_HOST = process.env.ROXIRA_TEST_PGB_HOST ?? HOST;
 const PGB_PORT = Number(process.env.ROXIRA_TEST_PGB_PORT ?? PORT);
-const APP_PW = 'app-role-test-only';
+const APP_PW = process.env.ROXIRA_TEST_APP_PASSWORD ?? `app_pw_${process.pid}_sec`;
 const T1 = '11111111-1111-4111-8111-111111111111';
 const T2 = '22222222-2222-4222-8222-222222222222';
 
@@ -85,6 +85,7 @@ const options = (database: string, username = OWNER, password = OWNER_PW, host =
 
 describePg('tenant RLS as roxira_app through PgBouncer (transaction mode)', () => {
   const db = `rls_${process.pid}`;
+  const role = `roxira_app_${process.pid}`;
   let admin: DataSource;
   let owner: DataSource;
   let app: DataSource;
@@ -94,16 +95,16 @@ describePg('tenant RLS as roxira_app through PgBouncer (transaction mode)', () =
   beforeAll(async () => {
     admin = await new DataSource({ ...options('postgres'), entities: [], migrations: [] }).initialize();
     await admin.query(`CREATE DATABASE "${db}"`);
-    await admin.query(`DROP ROLE IF EXISTS roxira_app`);
-    await admin.query(`CREATE ROLE roxira_app LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${APP_PW}'`);
+    await admin.query(`DROP ROLE IF EXISTS "${role}"`);
+    await admin.query(`CREATE ROLE "${role}" LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${APP_PW}'`);
     owner = await new DataSource(options(db)).initialize();
     await owner.runMigrations();
-    await owner.query(`GRANT CONNECT ON DATABASE "${db}" TO roxira_app`);
-    await owner.query(`GRANT USAGE ON SCHEMA public TO roxira_app`);
-    await owner.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO roxira_app`);
-    await owner.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO roxira_app`);
+    await owner.query(`GRANT CONNECT ON DATABASE "${db}" TO "${role}"`);
+    await owner.query(`GRANT USAGE ON SCHEMA public TO "${role}"`);
+    await owner.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "${role}"`);
+    await owner.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO "${role}"`);
     app = await new DataSource({
-      ...options(db, 'roxira_app', APP_PW, PGB_HOST, PGB_PORT),
+      ...options(db, role, APP_PW, PGB_HOST, PGB_PORT),
       extra: { max: 8 },
     }).initialize();
     scope = new TenantScope(app);
@@ -114,7 +115,7 @@ describePg('tenant RLS as roxira_app through PgBouncer (transaction mode)', () =
     await app?.destroy();
     await owner?.destroy();
     await admin?.query(`DROP DATABASE IF EXISTS "${db}" WITH (FORCE)`);
-    await admin?.query(`DROP ROLE IF EXISTS roxira_app`);
+    await admin?.query(`DROP ROLE IF EXISTS "${role}"`);
     await admin?.destroy();
   });
 
@@ -122,7 +123,7 @@ describePg('tenant RLS as roxira_app through PgBouncer (transaction mode)', () =
     const [r] = await app.query(
       `SELECT current_user AS u, r.rolsuper, r.rolbypassrls FROM pg_roles r WHERE r.rolname = current_user`,
     );
-    expect(r).toMatchObject({ u: 'roxira_app', rolsuper: false, rolbypassrls: false });
+    expect(r).toMatchObject({ u: role, rolsuper: false, rolbypassrls: false });
   });
 
   it('every covered table has ENABLE + FORCE RLS and a tenant policy', async () => {

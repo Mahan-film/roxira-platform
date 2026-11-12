@@ -99,12 +99,14 @@ export class InquiriesService {
 
   async list(
     query: QueryInquiryDto,
+    operatorUserId?: string,
   ): Promise<PaginatedInquiriesResponseDto> {
     const [entities, total] = await this.inquiriesRepository.findAndCount({
       status: query.status,
       search: query.search?.trim() || undefined,
       skip: (query.page - 1) * query.limit,
       take: query.limit,
+      ...(operatorUserId ? { operatorUserId } : {}),
     });
 
     return {

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EnterpriseInquiryEntity } from '../entities/enterprise-inquiry.entity';
@@ -13,6 +13,8 @@ import { EnterpriseInquiryEntity } from '../entities/enterprise-inquiry.entity';
  */
 @Injectable()
 export class InquiriesRepository {
+  private readonly logger = new Logger(InquiriesRepository.name);
+
   constructor(
     @InjectRepository(EnterpriseInquiryEntity)
     private readonly inquiries: Repository<EnterpriseInquiryEntity>,
@@ -21,8 +23,31 @@ export class InquiriesRepository {
   async create(
     data: Partial<EnterpriseInquiryEntity>,
   ): Promise<EnterpriseInquiryEntity> {
-    const entity = this.inquiries.create(data);
-    return this.inquiries.save(entity);
+    try {
+      const rows = await this.inquiries.query(
+        `SELECT public.submit_enterprise_inquiry($1, $2, $3, $4, $5, $6, $7) AS id`,
+        [
+          data.name ?? '',
+          data.company ?? null,
+          data.phone ?? null,
+          data.email ?? null,
+          data.message ?? null,
+          data.source ?? null,
+          data.tenantId ?? null,
+        ],
+      );
+      if (rows && rows.length > 0) {
+        return this.inquiries.create({
+          ...data,
+          id: Number(rows[0].id),
+          createdAt: new Date(),
+        } as EnterpriseInquiryEntity);
+      }
+      throw new Error('submit_enterprise_inquiry returned no id');
+    } catch (err) {
+      this.logger.error(`submit_enterprise_inquiry error: ${err}`);
+      throw err;
+    }
   }
 
   async findAndCount(options: {
@@ -30,26 +55,59 @@ export class InquiriesRepository {
     search?: string;
     skip: number;
     take: number;
+    operatorUserId?: string;
   }): Promise<[EnterpriseInquiryEntity[], number]> {
-    const query = this.inquiries.createQueryBuilder('inquiry');
+    try {
+      const queryFn = options.operatorUserId
+        ? <T>(fn: (executor: { query: Repository<EnterpriseInquiryEntity>['query'] }) => Promise<T>) =>
+            this.inquiries.manager.transaction(async (m) => {
+              await m.query(`SELECT set_config('app.user_id', $1, true)`, [options.operatorUserId]);
+              return fn(m);
+            })
+        : <T>(fn: (executor: { query: Repository<EnterpriseInquiryEntity>['query'] }) => Promise<T>) =>
+            fn(this.inquiries);
 
-    if (options.status) {
-      query.andWhere('inquiry.status = :status', { status: options.status });
+      return await queryFn(async (exec) => {
+        const rows = await exec.query(
+          `SELECT * FROM public.list_enterprise_inquiries($1, $2, $3, $4)`,
+          [
+            options.status ?? null,
+            options.search ?? null,
+            options.take ?? 50,
+            options.skip ?? 0,
+          ],
+        );
+        if (!rows || rows.length === 0) {
+          if (options.skip > 0) {
+            const firstPage = await exec.query(
+              `SELECT total_count FROM public.list_enterprise_inquiries($1, $2, 1, 0)`,
+              [options.status ?? null, options.search ?? null],
+            );
+            const total = firstPage && firstPage.length > 0 ? Number(firstPage[0].total_count ?? 0) : 0;
+            return [[], total];
+          }
+          return [[], 0];
+        }
+        const total = Number(rows[0].total_count ?? 0);
+        const entities = rows.map((r: any) =>
+          this.inquiries.create({
+            id: Number(r.id),
+            name: r.name,
+            company: r.company,
+            phone: r.phone,
+            email: r.email,
+            message: r.message,
+            source: r.source,
+            tenantId: r.tenant_id,
+            status: r.status,
+            createdAt: new Date(r.created_at),
+          }),
+        );
+        return [entities, total];
+      });
+    } catch (err) {
+      this.logger.error(`list_enterprise_inquiries error: ${err}`);
+      throw err;
     }
-    if (options.search) {
-      const pattern = `%${options.search}%`;
-      query.andWhere(
-        '(inquiry.name ILIKE :pattern OR inquiry.company ILIKE :pattern OR inquiry.email ILIKE :pattern OR inquiry.phone ILIKE :pattern)',
-        { pattern },
-      );
-    }
-
-    query
-      .orderBy('inquiry.createdAt', 'DESC')
-      .addOrderBy('inquiry.id', 'DESC')
-      .skip(options.skip)
-      .take(options.take);
-
-    return query.getManyAndCount();
   }
 }

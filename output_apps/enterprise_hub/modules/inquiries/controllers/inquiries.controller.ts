@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
@@ -58,8 +59,9 @@ export class InquiriesController {
   @ApiResponse({ status: HttpStatus.OK, type: PaginatedInquiriesResponseDto })
   @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'دسترسی غیرمجاز' })
   async list(
+    @Req() request: { user?: { sub?: string } },
     @Query() query: QueryInquiryDto,
   ): Promise<PaginatedInquiriesResponseDto> {
-    return this.inquiriesService.list(query);
+    return this.inquiriesService.list(query, request.user?.sub);
   }
 }

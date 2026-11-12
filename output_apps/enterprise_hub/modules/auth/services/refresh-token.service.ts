@@ -72,15 +72,15 @@ export class RefreshTokenService {
     }
     if (record.revokedAt) {
       // A rotated token came back: assume theft and drop the family.
-      await this.repository.revokeFamily(record.familyId);
+      await this.repository.revokeFamily(record.familyId, record.userId);
       throw new UnauthorizedException(REFRESH_INVALID_ERROR);
     }
     if (record.expiresAt.getTime() <= Date.now()) {
       throw new UnauthorizedException(REFRESH_INVALID_ERROR);
     }
-    if (!(await this.repository.revokeIfActive(record.id))) {
+    if (!(await this.repository.revokeIfActive(record.id, record.userId))) {
       // Lost a race with a parallel refresh of the same token.
-      await this.repository.revokeFamily(record.familyId);
+      await this.repository.revokeFamily(record.familyId, record.userId);
       throw new UnauthorizedException(REFRESH_INVALID_ERROR);
     }
     return {
@@ -101,7 +101,7 @@ export class RefreshTokenService {
   async revoke(rawToken: string): Promise<void> {
     const record = await this.repository.findByHash(sha256(rawToken));
     if (record) {
-      await this.repository.revokeFamily(record.familyId);
+      await this.repository.revokeFamily(record.familyId, record.userId);
     }
   }
 
