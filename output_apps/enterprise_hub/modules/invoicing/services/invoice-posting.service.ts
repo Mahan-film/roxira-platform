@@ -741,10 +741,14 @@ export class InvoicePostingService {
         description,
         entryNumber: this.entryNumber(invoice, suffix),
         overrides,
-        // Sales-cycle invoices name their customer, so the receivable line lands in the party ledger.
-        ...(this.directionOf(invoice) === InvoiceDirection.SALE && invoice.buyerInfo?.partyCode
-          ? { partyCode: invoice.buyerInfo.partyCode }
-          : {}),
+        // Sales name their customer on the receivable line; purchases name their supplier on the payable line.
+        ...(() => {
+          const partyCode =
+            this.directionOf(invoice) === InvoiceDirection.PURCHASE
+              ? invoice.sellerInfo?.partyCode
+              : invoice.buyerInfo?.partyCode;
+          return partyCode ? { partyCode } : {};
+        })(),
       },
       manager,
     );
