@@ -9,7 +9,7 @@ import 'reflect-metadata';
 import { CurrencyService } from '../../currency/services/currency.service';
 import { InvoiceEntity } from '../../invoicing/entities/invoice.entity';
 import { InvoicingRepository } from '../../invoicing/repositories/invoicing.repository';
-import { CreateWooCommerceIntegration1789900003400 } from '../../../migrations/1789900003400-CreateWooCommerceIntegration';
+import { CreateWooCommerceIntegration1789900004300 } from '../../../migrations/1789900004300-CreateWooCommerceIntegration';
 import {
   createTestDatabase,
   describePg,
@@ -170,8 +170,26 @@ describePg('WooCommerce Integration on PostgreSQL (NOSUPERUSER NOBYPASSRLS) (T85
     expect(verifyHmacSignature(payload, invalidSig, realSecret!)).toBe(false);
   });
 
+  it('allows multiple outbound stock pushes for the same sku without unique index violation', async () => {
+    await wooRepo.createSyncLog(T1, {
+      direction: WooCommerceSyncDirection.OUTBOUND_STOCK,
+      status: WooCommerceSyncStatus.SUCCESS,
+      externalId: 'SKU-REPEAT-1',
+      payloadSummary: { stock: 10 },
+    });
+
+    await expect(
+      wooRepo.createSyncLog(T1, {
+        direction: WooCommerceSyncDirection.OUTBOUND_STOCK,
+        status: WooCommerceSyncStatus.SUCCESS,
+        externalId: 'SKU-REPEAT-1',
+        payloadSummary: { stock: 9 },
+      }),
+    ).resolves.toBeDefined();
+  });
+
   it('reversibility: migration down() and up() succeed', async () => {
-    const migration = new CreateWooCommerceIntegration1789900003400();
+    const migration = new CreateWooCommerceIntegration1789900004300();
     const qr = testDb.owner.createQueryRunner();
 
     try {

@@ -1,4 +1,42 @@
 import { createCipheriv, createDecipheriv, createHmac, createHash, randomBytes, timingSafeEqual } from 'crypto';
+import * as net from 'net';
+
+const PRIVATE_BLOCKLIST = new net.BlockList();
+PRIVATE_BLOCKLIST.addSubnet('127.0.0.0', 8, 'ipv4');
+PRIVATE_BLOCKLIST.addSubnet('10.0.0.0', 8, 'ipv4');
+PRIVATE_BLOCKLIST.addSubnet('172.16.0.0', 12, 'ipv4');
+PRIVATE_BLOCKLIST.addSubnet('192.168.0.0', 16, 'ipv4');
+PRIVATE_BLOCKLIST.addSubnet('169.254.0.0', 16, 'ipv4');
+PRIVATE_BLOCKLIST.addSubnet('0.0.0.0', 8, 'ipv4');
+PRIVATE_BLOCKLIST.addSubnet('100.64.0.0', 10, 'ipv4');
+PRIVATE_BLOCKLIST.addSubnet('192.0.0.0', 24, 'ipv4');
+PRIVATE_BLOCKLIST.addSubnet('198.18.0.0', 15, 'ipv4');
+PRIVATE_BLOCKLIST.addSubnet('224.0.0.0', 4, 'ipv4');
+PRIVATE_BLOCKLIST.addSubnet('240.0.0.0', 4, 'ipv4');
+
+PRIVATE_BLOCKLIST.addSubnet('::1', 128, 'ipv6');
+PRIVATE_BLOCKLIST.addSubnet('::', 128, 'ipv6');
+PRIVATE_BLOCKLIST.addSubnet('fc00::', 7, 'ipv6');
+PRIVATE_BLOCKLIST.addSubnet('fe80::', 10, 'ipv6');
+PRIVATE_BLOCKLIST.addSubnet('ff00::', 8, 'ipv6');
+
+export { PRIVATE_BLOCKLIST };
+
+export function isPrivateOrLoopbackHost(host: string): boolean {
+  const cleanHost = host.replace(/^\[|\]$/g, '').toLowerCase();
+  const ipType = net.isIP(cleanHost);
+  if (ipType !== 0) {
+    return PRIVATE_BLOCKLIST.check(cleanHost, ipType === 4 ? 'ipv4' : 'ipv6');
+  }
+  return (
+    cleanHost === 'localhost' ||
+    cleanHost.endsWith('.local') ||
+    cleanHost.endsWith('.internal') ||
+    cleanHost.endsWith('.localhost') ||
+    cleanHost.endsWith('.lan') ||
+    cleanHost.endsWith('.home.arpa')
+  );
+}
 
 const VERSION = 'v1';
 
@@ -24,21 +62,7 @@ export function assertSafeStoreUrl(rawUrl: string): URL {
     throw new Error('WooCommerce storeUrl must use https');
   }
   const host = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase();
-  if (
-    host === 'localhost' ||
-    host === '127.0.0.1' ||
-    host === '::1' ||
-    host === '0.0.0.0' ||
-    host.endsWith('.local') ||
-    host.endsWith('.internal') ||
-    /^10\./.test(host) ||
-    /^192\.168\./.test(host) ||
-    /^169\.254\./.test(host) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
-    /^(fc|fd)[0-9a-f]{0,2}:/.test(host) ||
-    /^fe[89ab][0-9a-f]:/.test(host) ||
-    /^::ffff:(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)
-  ) {
+  if (isPrivateOrLoopbackHost(host)) {
     throw new Error('WooCommerce storeUrl cannot point to a private or loopback address');
   }
   return parsed;

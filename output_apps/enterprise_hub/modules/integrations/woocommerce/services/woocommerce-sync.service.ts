@@ -6,13 +6,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import * as dns from 'dns/promises';
+import * as net from 'net';
 import { minorToDecimal, toMinor } from '../../../accounting/money';
 import { BASE_CURRENCY } from '../../../currency/constants/currency.constants';
 import { Currency } from '../../../currency/enums/currency.enum';
 import { CurrencyService } from '../../../currency/services/currency.service';
 import { InvoiceItem, InvoicePartyInfo } from '../../../invoicing/entities/invoice.entity';
 import { InvoiceJurisdiction } from '../../../invoicing/enums/invoice-jurisdiction.enum';
-import { InvoiceDirection } from '../../../invoicing/enums/invoice-kind.enum';
+import { EInvoiceType, InvoiceDirection } from '../../../invoicing/enums/invoice-kind.enum';
 import { InvoiceStatus } from '../../../invoicing/enums/invoice-status.enum';
 import { InvoicingRepository } from '../../../invoicing/repositories/invoicing.repository';
 import {
@@ -28,6 +30,7 @@ import {
 } from '../entities/woocommerce-sync-log.entity';
 import { WooCommerceRepository } from '../repositories/woocommerce.repository';
 import {
+  PRIVATE_BLOCKLIST,
   assertSafeStoreUrl,
   maskApiKey,
   openSecret,
@@ -71,7 +74,7 @@ export class WooCommerceSyncService {
       maskedConsumerKey: maskApiKey(openKey),
       hasConsumerSecret: Boolean(config.consumerSecretEncrypted),
       webhookSecret: maskApiKey(plainWebhookSecret),
-      webhookUrl: `/api/integrations/woocommerce/webhook/${tenantId}`,
+      webhookUrl: `/api/backend/enterprise-hub/integrations/woocommerce/webhook/${tenantId}`,
       autoSyncOrders: config.autoSyncOrders,
       autoSyncStock: config.autoSyncStock,
       lastSyncAt: config.lastSyncAt,
@@ -141,7 +144,7 @@ export class WooCommerceSyncService {
       maskedConsumerKey: maskApiKey(plainKey),
       hasConsumerSecret: Boolean(saved.consumerSecretEncrypted),
       webhookSecret: maskApiKey(plainWebhook),
-      webhookUrl: `/api/integrations/woocommerce/webhook/${tenantId}`,
+      webhookUrl: `/api/backend/enterprise-hub/integrations/woocommerce/webhook/${tenantId}`,
       autoSyncOrders: saved.autoSyncOrders,
       autoSyncStock: saved.autoSyncStock,
       lastSyncAt: saved.lastSyncAt,
@@ -249,7 +252,7 @@ export class WooCommerceSyncService {
         };
 
         const sellerInfo: InvoicePartyInfo = {
-          name: 'فروشگاه اینترنتی ووکامرس',
+          name: 'فروشنده',
         };
 
         const orderTotalMinor = toMinor(order.total || '0');
@@ -298,6 +301,20 @@ export class WooCommerceSyncService {
           };
         });
 
+        const shippingMinor = toMinor(order.shipping_total || '0');
+        if (shippingMinor > 0n) {
+          items.push({
+            sku: 'SHIPPING',
+            description: 'هزینه ارسال سفارش',
+            quantity: 1,
+            unitPrice: minorToDecimal(shippingMinor) as unknown as number,
+            discount: 0,
+            vatRate: 0,
+            tax: 0,
+            total: minorToDecimal(shippingMinor) as unknown as number,
+          });
+        }
+
         const totalDiscountMinor =
           orderDiscountMinor > 0n ? orderDiscountMinor : sumLineDiscountsMinor;
         // Net merchandise/shipping before tax and before discount so totalAmount - totalDiscount + totalTax === finalPayable
@@ -311,6 +328,9 @@ export class WooCommerceSyncService {
             : InvoiceJurisdiction.INTL;
 
         const taxInvoiceNumber = `WOO-${order.id}`;
+        const einvoiceType = order.billing?.company
+          ? EInvoiceType.WITH_BUYER
+          : EInvoiceType.WITHOUT_BUYER;
 
         const invoice = await this.invoicingRepo.create(
           tenantId,
@@ -328,7 +348,7 @@ export class WooCommerceSyncService {
             baseTotalAmount: minorToDecimal(baseTotalAmountMinor) as unknown as number,
             baseTotalTax: minorToDecimal(baseTotalTaxMinor) as unknown as number,
             baseFinalPayable: minorToDecimal(baseFinalPayableMinor) as unknown as number,
-            einvoiceType: 1,
+            einvoiceType,
             subject: 1,
             sellerInfo,
             buyerInfo,
@@ -417,7 +437,24 @@ export class WooCommerceSyncService {
       return { success: false, externalId: sku };
     }
 
-    const safeBase = assertSafeStoreUrl(config.storeUrl).origin;
+    const parsed = assertSafeStoreUrl(config.storeUrl);
+    const basePath = parsed.pathname.replace(/\/+$/, '');
+    const origin = parsed.origin;
+
+    const host = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+    if (!net.isIP(host)) {
+      try {
+        const resolved = await dns.lookup(host, { all: true });
+        for (const addr of resolved) {
+          if (PRIVATE_BLOCKLIST.check(addr.address, addr.family === 4 ? 'ipv4' : 'ipv6')) {
+            throw new BadRequestException('WooCommerce storeUrl resolves to a private or loopback address');
+          }
+        }
+      } catch (err: any) {
+        if (err instanceof BadRequestException) throw err;
+      }
+    }
+
     const consumerKey = openSecret(config.consumerKeyEncrypted, tenantId);
     const consumerSecret = openSecret(config.consumerSecretEncrypted, tenantId);
     const authHeader = `Basic ${Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64')}`;
@@ -433,7 +470,7 @@ export class WooCommerceSyncService {
 
     try {
       const lookupRes = await fetch(
-        `${safeBase}/wp-json/wc/v3/products?sku=${encodeURIComponent(sku)}`,
+        `${origin}${basePath}/wp-json/wc/v3/products?sku=${encodeURIComponent(sku)}`,
         {
           method: 'GET',
           headers: { Authorization: authHeader },
@@ -448,7 +485,7 @@ export class WooCommerceSyncService {
         throw new NotFoundException(`WooCommerce product not found for SKU ${sku}`);
       }
 
-      const updateRes = await fetch(`${safeBase}/wp-json/wc/v3/products/${products[0].id}`, {
+      const updateRes = await fetch(`${origin}${basePath}/wp-json/wc/v3/products/${products[0].id}`, {
         method: 'PUT',
         headers: {
           Authorization: authHeader,

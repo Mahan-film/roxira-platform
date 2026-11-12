@@ -22,7 +22,7 @@ import { verifyHmacSignature } from '../utils/woocommerce-crypto.util';
 
 @ApiTags('Integrations - WooCommerce Webhook')
 @Public()
-@Controller('api/integrations/woocommerce')
+@Controller('enterprise-hub/integrations/woocommerce')
 export class WooCommerceWebhookController {
   constructor(private readonly syncService: WooCommerceSyncService) {}
 

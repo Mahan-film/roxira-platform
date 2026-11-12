@@ -245,28 +245,6 @@
   "GET /admin/entitlements/requests/open (EntitlementsAdminController.openRequests)": {
     "policy": "platformAdmin"
   },
-  "GET /api/integrations/woocommerce/config (WooCommerceConfigController.getConfig)": {
-    "policy": "invoicing:read",
-    "owner": true,
-    "admin": true,
-    "accountant": true,
-    "sales": true,
-    "cheque_reviewer": false,
-    "hr": false,
-    "read_only": true,
-    "legacy_member": false
-  },
-  "GET /api/integrations/woocommerce/logs (WooCommerceConfigController.getLogs)": {
-    "policy": "invoicing:read",
-    "owner": true,
-    "admin": true,
-    "accountant": true,
-    "sales": true,
-    "cheque_reviewer": false,
-    "hr": false,
-    "read_only": true,
-    "legacy_member": false
-  },
   "GET /approvals/requests (ApprovalsController.listRequests)": {
     "policy": "members:read",
     "owner": true,
@@ -1542,6 +1520,28 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/integrations/woocommerce/config (WooCommerceConfigController.getConfig)": {
+    "policy": "invoicing:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/integrations/woocommerce/logs (WooCommerceConfigController.getLogs)": {
+    "policy": "invoicing:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/inventory/documents/ (StockDocumentsController.list)": {
     "policy": "inventory:read",
     "owner": true,
@@ -2796,20 +2796,6 @@
     "legacy_member": false
   },
   "POST /api/integrations/receipt-bot/webhook (ReceiptBotWebhookController.handleWebhook)": {
-    "policy": "public"
-  },
-  "POST /api/integrations/woocommerce/stock-push (WooCommerceConfigController.pushStock)": {
-    "policy": "invoicing:approve",
-    "owner": true,
-    "admin": true,
-    "accountant": true,
-    "sales": false,
-    "cheque_reviewer": false,
-    "hr": false,
-    "read_only": false,
-    "legacy_member": false
-  },
-  "POST /api/integrations/woocommerce/webhook/:tenantId (WooCommerceWebhookController.handleWebhook)": {
     "policy": "public"
   },
   "POST /approvals/delegations (ApprovalsController.createDelegation)": {
@@ -4123,6 +4109,20 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/integrations/woocommerce/stock-push (WooCommerceConfigController.pushStock)": {
+    "policy": "invoicing:approve",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/integrations/woocommerce/webhook/:tenantId (WooCommerceWebhookController.handleWebhook)": {
+    "policy": "public"
+  },
   "POST /enterprise-hub/inventory/documents/adjustments (StockDocumentsController.createAdjustment)": {
     "policy": "inventory:post",
     "owner": true,
@@ -4900,17 +4900,6 @@
   "PUT /admin/entitlements/:tenantId (EntitlementsAdminController.set)": {
     "policy": "platformAdmin"
   },
-  "PUT /api/integrations/woocommerce/config (WooCommerceConfigController.updateConfig)": {
-    "policy": "invoicing:approve",
-    "owner": true,
-    "admin": true,
-    "accountant": true,
-    "sales": false,
-    "cheque_reviewer": false,
-    "hr": false,
-    "read_only": false,
-    "legacy_member": false
-  },
   "PUT /enterprise-hub/accounting/journal-entries/:id (AccountingController.updateJournalEntry)": {
     "policy": "accounting:create",
     "owner": true,
@@ -5045,6 +5034,17 @@
   },
   "PUT /enterprise-hub/integrations/receipt-bot/preferences (ReceiptBotController.updatePreferences)": {
     "policy": "accounting:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PUT /enterprise-hub/integrations/woocommerce/config (WooCommerceConfigController.updateConfig)": {
+    "policy": "invoicing:approve",
     "owner": true,
     "admin": true,
     "accountant": true,
