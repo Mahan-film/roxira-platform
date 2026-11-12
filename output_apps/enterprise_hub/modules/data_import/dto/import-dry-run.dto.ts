@@ -22,7 +22,7 @@ import {
 import { AccountType } from '../../accounting/enums/accounting.enum';
 import { CustomerGroup } from '../../parties/enums/customer-group.enum';
 
-/** Maximum rows allowed per entity array in one dry-run batch (keeps payloads within the 100 KB JSON limit). */
+/** Maximum rows allowed per entity array in one dry-run batch (payloads up to 10 MB accepted by NestJS body parser). */
 export const MAX_DRY_RUN_ARRAY_ITEMS = 200;
 
 const toTrimmedString = ({ value }: { value: unknown }): unknown =>

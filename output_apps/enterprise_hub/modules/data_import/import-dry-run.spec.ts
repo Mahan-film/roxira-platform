@@ -400,7 +400,10 @@ describe('ImportDryRunService & ImportDryRunController (T100)', () => {
 
   it('enforces AccessGuard module permission on ImportDryRunController handlers', async () => {
     const stub = new AccessStub();
-    stub.grant('viewer-u', TENANT_ID, 'viewer');
+    stub.grant('readonly-u', TENANT_ID, 'read_only');
+    stub.grant('sales-u', TENANT_ID, 'sales');
+    stub.grant('hr-u', TENANT_ID, 'hr');
+    stub.grant('cheque-u', TENANT_ID, 'cheque_reviewer');
     stub.grant('accountant-u', TENANT_ID, 'accountant');
 
     const guard = new AccessGuard(
@@ -421,7 +424,10 @@ describe('ImportDryRunService & ImportDryRunController (T100)', () => {
         }),
       }) as unknown as ExecutionContext;
 
-    await expect(guard.canActivate(buildCtx('viewer-u'))).rejects.toThrow(ForbiddenException);
+    await expect(guard.canActivate(buildCtx('readonly-u'))).rejects.toThrow(ForbiddenException);
+    await expect(guard.canActivate(buildCtx('sales-u'))).rejects.toThrow(ForbiddenException);
+    await expect(guard.canActivate(buildCtx('hr-u'))).rejects.toThrow(ForbiddenException);
+    await expect(guard.canActivate(buildCtx('cheque-u'))).rejects.toThrow(ForbiddenException);
     await expect(guard.canActivate(buildCtx('accountant-u'))).resolves.toBe(true);
   });
 
@@ -466,7 +472,7 @@ describe('ImportDryRunService & ImportDryRunController (T100)', () => {
         await request(app.getHttpServer())
           .post('/enterprise-hub/data-import/dry-run/holoo')
           .send({
-            parties: [{ PartyId: 1, Code: 'P1', Name: 'Test', IsCustomer: 'false' }],
+            parties: [{ PartyId: 1, Code: 'P1', Name: 'Test', IsCustomer: 'false', IsSupplier: true }],
           })
           .expect(400);
 

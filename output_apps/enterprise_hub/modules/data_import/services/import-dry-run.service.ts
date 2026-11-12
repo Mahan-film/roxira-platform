@@ -10,7 +10,25 @@ import {
   JournalEntryStatus,
   JournalEntryType,
 } from '../../accounting/enums/accounting.enum';
+import { CHART_TEMPLATES } from '../../accounting/constants/iran-chart-template';
 import { MoneyFormatError, minorToDecimal, parseMinor } from '../../accounting/money';
+
+/** Canonical Iranian group account types sourced directly from iran-chart-template.ts (1=ASSET, 2=LIABILITY, 3=EQUITY, 4=REVENUE, 5=EXPENSE). */
+const STANDARD_IRAN_GROUP_TYPES = new Map<string, AccountType>();
+for (const template of CHART_TEMPLATES) {
+  for (const acc of template.accounts) {
+    if (acc.level === AccountLevel.GROUP) {
+      STANDARD_IRAN_GROUP_TYPES.set(acc.code, acc.accountType);
+    }
+  }
+}
+
+const SYNTHETIC_FLOAT_ACCOUNT_TYPES: Record<string, AccountType> = {
+  'F-001': AccountType.EXPENSE,
+  'F-002': AccountType.EXPENSE,
+  'F-101': AccountType.EXPENSE,
+  'F-900': AccountType.EXPENSE,
+};
 import { ChequeEventEntity } from '../../cheques/entities/cheque-event.entity';
 import { ChequeEntity } from '../../cheques/entities/cheque.entity';
 import { ChequeDirection, ChequeStatus } from '../../cheques/enums/cheque.enum';
@@ -271,6 +289,9 @@ interface NormalizedImportBatch {
   closedChequesCount: number;
   chequeErrors: Array<{ chequeNumber: string; reason: string }>;
   incomingChequesCount: number;
+  accountErrors?: Array<{ code: string; reason: string }>;
+  partyErrors?: Array<{ code: string; reason: string }>;
+  itemErrors?: Array<{ sku: string; reason: string }>;
 }
 
 class DryRunRollbackSignal {
@@ -315,14 +336,25 @@ export class ImportDryRunService {
     const customerGroup = input?.customerGroup ?? CustomerGroup.CONSUMER;
 
     const accounts = this.mapSepidarAccounts(rawAccounts);
-    const parties: NormalizedParty[] = rawParties.map((raw) => ({
-      code: raw.Code.trim(),
-      name: raw.Title.trim(),
-      role: raw.IsCustomer && raw.IsVendor ? 'both' : raw.IsVendor ? 'supplier' : 'customer',
-      nationalId: raw.NationalCode ? raw.NationalCode.trim() : null,
-      economicCode: raw.EconomicCode ? raw.EconomicCode.trim() : null,
-      phone: raw.Phone ? raw.Phone.trim() : null,
-    }));
+    const partyErrors: Array<{ code: string; reason: string }> = [];
+    const parties: NormalizedParty[] = [];
+    for (const raw of rawParties) {
+      if (!raw.IsCustomer && !raw.IsVendor) {
+        partyErrors.push({
+          code: raw.Code,
+          reason: `طرف‌حساب «${raw.Code}» (${raw.Title}) فاقد نقش مشتری یا تأمین‌کننده است.`,
+        });
+        continue;
+      }
+      parties.push({
+        code: raw.Code.trim(),
+        name: raw.Title.trim(),
+        role: raw.IsCustomer && raw.IsVendor ? 'both' : raw.IsVendor ? 'supplier' : 'customer',
+        nationalId: raw.NationalCode ? raw.NationalCode.trim() : null,
+        economicCode: raw.EconomicCode ? raw.EconomicCode.trim() : null,
+        phone: raw.Phone ? raw.Phone.trim() : null,
+      });
+    }
     const items = this.mapSepidarItems(rawItems);
     const openingLines = rawVoucher.map((v, idx) =>
       this.normalizeVoucherLine(
@@ -348,6 +380,7 @@ export class ImportDryRunService {
       closedChequesCount: chequeResult.closedCount,
       chequeErrors: chequeResult.errors,
       incomingChequesCount: rawCheques.length,
+      partyErrors,
     });
   }
 
@@ -377,14 +410,25 @@ export class ImportDryRunService {
     const customerGroup = input?.customerGroup ?? CustomerGroup.CONSUMER;
 
     const accounts = this.mapHolooAccounts(rawAccounts);
-    const parties: NormalizedParty[] = rawParties.map((raw) => ({
-      code: raw.Code.trim(),
-      name: raw.Name.trim(),
-      role: raw.IsCustomer && raw.IsSupplier ? 'both' : raw.IsSupplier ? 'supplier' : 'customer',
-      nationalId: raw.NationalCode ? raw.NationalCode.trim() : null,
-      economicCode: raw.EconomicCode ? raw.EconomicCode.trim() : null,
-      phone: raw.Phone ? raw.Phone.trim() : raw.Mobile ? raw.Mobile.trim() : null,
-    }));
+    const partyErrors: Array<{ code: string; reason: string }> = [];
+    const parties: NormalizedParty[] = [];
+    for (const raw of rawParties) {
+      if (!raw.IsCustomer && !raw.IsSupplier) {
+        partyErrors.push({
+          code: raw.Code,
+          reason: `طرف‌حساب «${raw.Code}» (${raw.Name}) فاقد نقش مشتری یا تأمین‌کننده است.`,
+        });
+        continue;
+      }
+      parties.push({
+        code: raw.Code.trim(),
+        name: raw.Name.trim(),
+        role: raw.IsCustomer && raw.IsSupplier ? 'both' : raw.IsSupplier ? 'supplier' : 'customer',
+        nationalId: raw.NationalCode ? raw.NationalCode.trim() : null,
+        economicCode: raw.EconomicCode ? raw.EconomicCode.trim() : null,
+        phone: raw.Phone ? raw.Phone.trim() : raw.Mobile ? raw.Mobile.trim() : null,
+      });
+    }
     const items = this.mapHolooItems(rawItems);
     const openingLines = rawVoucher.map((v, idx) =>
       this.normalizeVoucherLine(
@@ -410,6 +454,7 @@ export class ImportDryRunService {
       closedChequesCount: chequeResult.closedCount,
       chequeErrors: chequeResult.errors,
       incomingChequesCount: rawCheques.length,
+      partyErrors,
     });
   }
 
@@ -823,13 +868,21 @@ export class ImportDryRunService {
           dbOpeningLinesAfterInsert,
           dbChequesAfterInsert,
         ] = await Promise.all([
-          accountRepo.count({ where: { tenantId } }),
-          partyRepo.count({ where: { tenantId } }),
-          itemRepo.count({ where: { tenantId } }),
+          accResult.insertedIds.length > 0
+            ? accountRepo.count({ where: { tenantId, id: In(accResult.insertedIds) } })
+            : Promise.resolve(0),
+          partyResult.insertedIds.length > 0
+            ? partyRepo.count({ where: { tenantId, id: In(partyResult.insertedIds) } })
+            : Promise.resolve(0),
+          itemResult.insertedIds.length > 0
+            ? itemRepo.count({ where: { tenantId, id: In(itemResult.insertedIds) } })
+            : Promise.resolve(0),
           voucherAnalysis.entryId !== null
             ? lineRepo.count({ where: { tenantId, journalEntryId: voucherAnalysis.entryId } })
             : Promise.resolve(0),
-          chequeRepo.count({ where: { tenantId } }),
+          chequeResult.insertedIds.length > 0
+            ? chequeRepo.count({ where: { tenantId, id: In(chequeResult.insertedIds) } })
+            : Promise.resolve(0),
         ]);
 
         const blockersFa: string[] = [];
@@ -843,6 +896,21 @@ export class ImportDryRunService {
         if (batch.openingLines.length > 0 && !voucherAnalysis.balanced) {
           blockersFa.push(
             `سند افتتاحیه تراز نیست (اختلاف: ${minorToDecimal(voucherAnalysis.varianceMinor)} ریال).`,
+          );
+        }
+        if (batch.accountErrors && batch.accountErrors.length > 0) {
+          blockersFa.push(
+            `${batch.accountErrors.length} حساب دارای خطای ساختاری یا کدینگ نامعتبر است.`,
+          );
+        }
+        if (batch.partyErrors && batch.partyErrors.length > 0) {
+          blockersFa.push(
+            `${batch.partyErrors.length} طرف‌حساب دارای خطای ساختاری یا فاقد نقش مشتری/تأمین‌کننده است.`,
+          );
+        }
+        if (batch.itemErrors && batch.itemErrors.length > 0) {
+          blockersFa.push(
+            `${batch.itemErrors.length} کالا دارای خطای ساختاری است.`,
           );
         }
         if (batch.chequeErrors.length > 0) {
@@ -867,23 +935,23 @@ export class ImportDryRunService {
           warningsFa,
           counts: {
             accounts: {
-              incoming: batch.accounts.length,
+              incoming: batch.accounts.length + (batch.accountErrors?.length ?? 0),
               wouldInsert: accResult.inserted,
               existingSkipped: accResult.skipped,
-              invalidCount: 0,
+              invalidCount: batch.accountErrors?.length ?? 0,
             },
             parties: {
-              incoming: batch.parties.length,
+              incoming: batch.parties.length + (batch.partyErrors?.length ?? 0),
               wouldInsert: partyResult.inserted,
               existingSkipped: partyResult.existingSkipped,
-              invalidCount: 0,
+              invalidCount: batch.partyErrors?.length ?? 0,
               duplicates: partyResult.duplicates.length,
             },
             items: {
-              incoming: batch.items.length,
+              incoming: batch.items.length + (batch.itemErrors?.length ?? 0),
               wouldInsert: itemResult.inserted,
               existingSkipped: itemResult.skipped,
-              invalidCount: 0,
+              invalidCount: batch.itemErrors?.length ?? 0,
             },
             openingLines: {
               incoming: batch.openingLines.length,
@@ -945,9 +1013,9 @@ export class ImportDryRunService {
     tenantId: string,
     accounts: NormalizedAccount[],
     em: EntityManager,
-  ): Promise<{ inserted: number; skipped: number }> {
+  ): Promise<{ inserted: number; skipped: number; insertedIds: number[] }> {
     if (accounts.length === 0) {
-      return { inserted: 0, skipped: 0 };
+      return { inserted: 0, skipped: 0, insertedIds: [] };
     }
     const repo = em.getRepository(ChartOfAccountEntity);
     const sorted = [...accounts].sort((a, b) => a.level - b.level);
@@ -971,7 +1039,7 @@ export class ImportDryRunService {
           tenantId,
           code: acc.code,
           name: acc.name,
-          accountType: acc.accountType ?? this.inferAccountType(acc.code),
+          accountType: this.resolveAccountType(acc.code, acc.accountType),
           currency: 'IRR',
           balance: '0',
           level: this.toAccountLevel(acc.level),
@@ -980,37 +1048,35 @@ export class ImportDryRunService {
       );
     }
 
+    let insertedIds: number[] = [];
     if (toInsert.length > 0) {
-      await repo.save(toInsert);
+      const saved = await repo.save(toInsert);
+      insertedIds = saved.map((a) => a.id).filter((id): id is number => typeof id === 'number');
     }
 
-    return { inserted: toInsert.length, skipped };
+    return { inserted: toInsert.length, skipped, insertedIds };
   }
 
   /**
-   * Falls back to Iranian standard chart-of-accounts group prefixes (`iran-chart-template.ts` GROUPS:
-   * 1=ASSET, 2=LIABILITY, 3=EQUITY, 4=REVENUE, 5=EXPENSE; 6=EXPENSE/COGS, 7=OTHER REVENUE, 8=OTHER EXPENSE, 9=MEMO/EQUITY)
-   * only when the caller omits explicit `AccountType` on the source account row.
+   * Uses explicit AccountType if supplied; otherwise checks standard Iranian COA group prefix
+   * verified against `iran-chart-template.ts` (1=ASSET, 2=LIABILITY, 3=EQUITY, 4=REVENUE, 5=EXPENSE).
+   * Any non-standard prefix (e.g. 6, 7, 8, 9, floating) requires an explicit AccountType.
    */
-  private inferAccountType(code: string): AccountType {
-    switch (code.charAt(0)) {
-      case '1':
-        return AccountType.ASSET;
-      case '2':
-        return AccountType.LIABILITY;
-      case '3':
-      case '9':
-        return AccountType.EQUITY;
-      case '4':
-      case '7':
-        return AccountType.REVENUE;
-      case '5':
-      case '6':
-      case '8':
-        return AccountType.EXPENSE;
-      default:
-        return AccountType.ASSET;
+  private resolveAccountType(code: string, explicitType?: AccountType): AccountType {
+    if (explicitType !== undefined) {
+      return explicitType;
     }
+    if (SYNTHETIC_FLOAT_ACCOUNT_TYPES[code] !== undefined) {
+      return SYNTHETIC_FLOAT_ACCOUNT_TYPES[code];
+    }
+    const groupPrefix = code.charAt(0);
+    const standardType = STANDARD_IRAN_GROUP_TYPES.get(groupPrefix);
+    if (standardType !== undefined) {
+      return standardType;
+    }
+    throw new BadRequestException(
+      `Account "${code}" has non-standard prefix "${groupPrefix}": requires an explicit AccountType.`,
+    );
   }
 
   private toAccountLevel(level: number): AccountLevel | null {
@@ -1037,9 +1103,10 @@ export class ImportDryRunService {
     inserted: number;
     existingSkipped: number;
     duplicates: ImportDryRunDuplicateParty[];
+    insertedIds: number[];
   }> {
     if (parties.length === 0) {
-      return { inserted: 0, existingSkipped: 0, duplicates: [] };
+      return { inserted: 0, existingSkipped: 0, duplicates: [], insertedIds: [] };
     }
     const repo = em.getRepository(PartyEntity);
     const codes = Array.from(new Set(parties.map((p) => p.code)));
@@ -1136,20 +1203,22 @@ export class ImportDryRunService {
       );
     }
 
+    let insertedIds: number[] = [];
     if (toInsert.length > 0) {
-      await repo.save(toInsert);
+      const saved = await repo.save(toInsert);
+      insertedIds = saved.map((p) => p.id).filter((id): id is number => typeof id === 'number');
     }
 
-    return { inserted: toInsert.length, existingSkipped, duplicates };
+    return { inserted: toInsert.length, existingSkipped, duplicates, insertedIds };
   }
 
   private async persistItemsInTx(
     tenantId: string,
     items: NormalizedItem[],
     em: EntityManager,
-  ): Promise<{ inserted: number; skipped: number }> {
+  ): Promise<{ inserted: number; skipped: number; insertedIds: number[] }> {
     if (items.length === 0) {
-      return { inserted: 0, skipped: 0 };
+      return { inserted: 0, skipped: 0, insertedIds: [] };
     }
     const repo = em.getRepository(StockItemEntity);
     const existingRows = await repo.find({
@@ -1192,11 +1261,13 @@ export class ImportDryRunService {
       );
     }
 
+    let insertedIds: number[] = [];
     if (toInsert.length > 0) {
-      await repo.save(toInsert);
+      const saved = await repo.save(toInsert);
+      insertedIds = saved.map((i) => i.id).filter((id): id is number => typeof id === 'number');
     }
 
-    return { inserted: toInsert.length, skipped };
+    return { inserted: toInsert.length, skipped, insertedIds };
   }
 
   private async analyzeAndPersistOpeningVoucherInTx(
@@ -1362,6 +1433,7 @@ export class ImportDryRunService {
         entryId = savedEntry.id;
 
         const deltaByAccount = new Map<number, bigint>();
+        const linesToSave: JournalEntryLineEntity[] = [];
         for (const l of batch.openingLines) {
           const acc = dbByCode.get(l.accountCode)!;
           const journalLine = lineRepo.create({
@@ -1374,11 +1446,14 @@ export class ImportDryRunService {
             partyCode: l.floatingDetailCode,
             description: l.description,
           });
-          await lineRepo.save(journalLine);
+          linesToSave.push(journalLine);
           deltaByAccount.set(
             acc.id,
             (deltaByAccount.get(acc.id) ?? 0n) + l.debitMinor - l.creditMinor,
           );
+        }
+        if (linesToSave.length > 0) {
+          await lineRepo.save(linesToSave);
         }
 
         const sortedAccountIds = Array.from(deltaByAccount.keys()).sort((a, b) => a - b);
@@ -1414,6 +1489,7 @@ export class ImportDryRunService {
   ): Promise<{
     inserted: number;
     skipped: number;
+    insertedIds: number[];
     totals: Omit<
       ImportDryRunReport['openCheques'],
       'wouldInsertCount' | 'existingSkippedCount' | 'invalidErrors'
@@ -1497,8 +1573,10 @@ export class ImportDryRunService {
     }
 
     let inserted = 0;
+    let insertedIds: number[] = [];
     if (toInsert.length > 0) {
       const savedCheques = await repo.save(toInsert);
+      insertedIds = savedCheques.map((c) => c.id);
       const events = savedCheques.map((saved) =>
         eventRepo.create({
           tenantId,
@@ -1520,6 +1598,7 @@ export class ImportDryRunService {
     return {
       inserted,
       skipped,
+      insertedIds,
       totals: {
         totalCount: cheques.length,
         totalAmountMinor: totalAmountMinor.toString(),

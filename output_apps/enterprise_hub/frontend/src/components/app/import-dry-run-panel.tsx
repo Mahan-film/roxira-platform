@@ -207,17 +207,19 @@ export function ImportDryRunPanel() {
               <Upload className="ml-1.5 size-3.5" aria-hidden="true" />
               {fileName ? `فایل: ${fileName}` : "بارگذاری فایل JSON"}
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              onClick={handleRunSynthetic}
-              disabled={loading}
-              title="فقط در محیط غیرتولیدی با داده‌های آزمایشی ساختگی کار می‌کند"
-            >
-              <FileJson className="ml-1.5 size-3.5" aria-hidden="true" />
-              اجرا با دادهٔ آزمایشی استاندارد
-            </Button>
+            {process.env.NODE_ENV !== "production" && (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={handleRunSynthetic}
+                disabled={loading}
+                title="فقط در محیط توسعه/آزمایش با داده‌های آزمایشی استاندارد کار می‌کند"
+              >
+                <FileJson className="ml-1.5 size-3.5" aria-hidden="true" />
+                اجرا با دادهٔ آزمایشی استاندارد (محیط آزمایشی)
+              </Button>
+            )}
           </div>
         </div>
 
