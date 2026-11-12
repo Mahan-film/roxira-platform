@@ -12,8 +12,8 @@ export function printReceiptPaymentVoucher(
   template?: Partial<PrintTemplateDto>,
 ): void {
   const data = mapTreasuryDocToPrintData(doc, companyName);
-  if (template?.options?.headerTitle) {
-    data.docTitle = template.options.headerTitle;
+  if (template?.options?.headerTitle?.trim()) {
+    data.docTitle = template.options.headerTitle.trim();
   }
   if (template?.logoUrl && template?.showLogo !== false) {
     data.logoUrl = safeLogoUrl(template.logoUrl);

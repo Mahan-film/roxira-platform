@@ -188,6 +188,14 @@ describe('PrintTemplateService & Repository', () => {
       });
 
       await expect(
+        service.create(tenantId, {
+          title: '   ',
+          docType: PrintDocType.SALES_INVOICE,
+          paperSize: PrintPaperSize.A4,
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
         service.update(tenantId, created.id, { title: null as any }),
       ).rejects.toThrow(BadRequestException);
 
@@ -198,6 +206,21 @@ describe('PrintTemplateService & Repository', () => {
       await expect(
         service.update(tenantId, created.id, { columnsConfig: null as any }),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('does not store a synthetic headerTitle when user sets none, preserving mapper title', async () => {
+      const created = await service.create(tenantId, {
+        title: 'قالب بدون عنوان سربرگ سفارشی',
+        docType: PrintDocType.RECEIPT_PAYMENT_VOUCHER,
+        paperSize: PrintPaperSize.A5,
+      });
+
+      expect(created.options?.headerTitle).toBeUndefined();
+
+      const updated = await service.update(tenantId, created.id, {
+        options: { headerTitle: 'رسید سفارشی' },
+      });
+      expect(updated.options?.headerTitle).toBe('رسید سفارشی');
     });
   });
 
@@ -283,6 +306,10 @@ describe('PrintTemplateService & Repository', () => {
       const res = generateBarcodeSvg('6260000000011'); // check digit should be 9
       expect(res.symbology).toBe('Code128');
       expect(res.encodedText).toBe('6260000000011');
+    });
+
+    it('refuses non-ASCII characters in Code128 encoding to prevent corrupt barcodes', () => {
+      expect(() => generateBarcodeSvg('کالای-۱')).toThrow(BadRequestException);
     });
 
     it('HTML-escapes tenant-supplied title, sku and barcode text in the label sheet', () => {

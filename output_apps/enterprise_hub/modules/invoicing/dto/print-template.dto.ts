@@ -115,6 +115,7 @@ export class CreatePrintTemplateDto {
   paperSize: PrintPaperSize;
 
   @ApiProperty({ description: 'نام یا عنوان قالب چاپی', example: 'قالب رسمی فاکتور فروش شرکتی' })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @IsNotEmpty({ message: 'عنوان قالب نمی‌تواند خالی باشد' })
   @MaxLength(128)
@@ -295,7 +296,7 @@ export class BarcodeLabelItemDto {
   @IsOptional()
   @Transform(({ value }) => (value !== undefined && value !== null ? String(value) : undefined))
   @IsString()
-  @Matches(/^[0-9]+(\.[0-9]{1,2})?$/, { message: 'قیمت باید مقدار معتبر عددی به ریال باشد' })
+  @Matches(/^[0-9]+$/, { message: 'قیمت باید مقدار عدد صحیح به ریال باشد' })
   price?: string;
 
   @ApiPropertyOptional({ description: 'تعداد برچسب مورد نیاز از این کالا (حداکثر ۱۰۰)', default: 1 })

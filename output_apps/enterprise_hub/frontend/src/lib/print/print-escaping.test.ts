@@ -1,14 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { Currency } from "../../types/currency.ts";
-import {
-  InvoiceDirection,
-  InvoiceJurisdiction,
-  InvoiceStatus,
-  InvoiceSubject,
-  type InvoiceResponseDto,
-} from "../../types/invoicing.ts";
+import type { InvoiceResponseDto } from "../../types/invoicing.ts";
 import type { PrintTemplateDto } from "../../types/print-template.ts";
 
 import { buildSalesInvoiceHtml } from "./open-sales-invoice-window.ts";
@@ -54,15 +47,15 @@ test("a sales invoice built from a hostile template carries no live script or ja
     items: [
       { description: XSS, sku: ONERROR, quantity: 1, unitPrice: 1, discount: 0, vatRate: 0.1, tax: 1, total: 2 },
     ],
-    currency: Currency.IRR,
-    jurisdiction: InvoiceJurisdiction.IR,
+    currency: "IRR",
+    jurisdiction: "IR",
     exchangeRate: 1,
     fxRate: 0,
     amountFx: null,
-    baseCurrency: Currency.IRR,
-    direction: InvoiceDirection.SALE,
-    subject: InvoiceSubject.ORIGINAL,
-    status: InvoiceStatus.ISSUED,
+    baseCurrency: "IRR",
+    direction: "SALE",
+    subject: "ORIGINAL",
+    status: "ISSUED",
     totalAmount: 1,
     totalDiscount: 0,
     totalTax: 1,
