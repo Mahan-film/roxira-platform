@@ -1,13 +1,13 @@
-import { CreateTenantOnboardingProgress1789900002900 } from '../../migrations/1789900002900-CreateTenantOnboardingProgress';
+import { CreateTenantOnboardingProgress1789900003700 } from '../../migrations/1789900003700-CreateTenantOnboardingProgress';
 
 const run = async (direction: 'up' | 'down') => {
   const queries: string[] = [];
   const runner = { query: jest.fn(async (sql: string) => void queries.push(sql)) };
-  await new CreateTenantOnboardingProgress1789900002900()[direction](runner as never);
+  await new CreateTenantOnboardingProgress1789900003700()[direction](runner as never);
   return queries;
 };
 
-describe('CreateTenantOnboardingProgress migration (1789900002900)', () => {
+describe('CreateTenantOnboardingProgress migration (1789900003700)', () => {
   it('creates a tenant-keyed table and backfills existing tenants BEFORE enabling FORCE RLS', async () => {
     const queries = await run('up');
     const sql = queries.join('\n');
