@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/table";
 
 import { cancelInvoice, listInvoices } from "@/lib/api/invoicing-client";
+import { MoadianStatusBadge } from "./invoice-list-table";
 import { ApiClientError } from "@/lib/api/http-client";
 import { formatPersianDate, formatRial } from "@/lib/format";
 import {
@@ -226,6 +227,7 @@ export function InvoiceHistoryTable({ refreshKey = 0 }: InvoiceHistoryTableProps
               <TableHead>مالیات</TableHead>
               <TableHead>قابل پرداخت</TableHead>
               <TableHead>وضعیت</TableHead>
+              <TableHead>سامانه مودیان</TableHead>
               <TableHead className="w-24">عملیات</TableHead>
             </TableRow>
           </TableHeader>
@@ -233,7 +235,7 @@ export function InvoiceHistoryTable({ refreshKey = 0 }: InvoiceHistoryTableProps
             {isLoading ? (
               Array.from({ length: 5 }).map((_, index) => (
                 <TableRow key={`skeleton-${index}`}>
-                  {Array.from({ length: 9 }).map((__, cellIndex) => (
+                  {Array.from({ length: 10 }).map((__, cellIndex) => (
                     <TableCell key={cellIndex}>
                       <Skeleton className="h-4 w-full" />
                     </TableCell>
@@ -283,6 +285,13 @@ export function InvoiceHistoryTable({ refreshKey = 0 }: InvoiceHistoryTableProps
                       </Badge>
                     </TableCell>
                     <TableCell>
+                      <MoadianStatusBadge
+                        status={invoice.moadianStatus}
+                        errorText={invoice.moadianErrorText}
+                        taxId={invoice.moadianTaxId}
+                      />
+                    </TableCell>
+                    <TableCell>
                       <Button
                         type="button"
                         variant="ghost"
@@ -305,7 +314,7 @@ export function InvoiceHistoryTable({ refreshKey = 0 }: InvoiceHistoryTableProps
             ) : (
               <TableRow>
                 <TableCell
-                  colSpan={9}
+                  colSpan={10}
                   className="py-10 text-center text-muted-foreground"
                 >
                   هیچ صورتحسابی یافت نشد.

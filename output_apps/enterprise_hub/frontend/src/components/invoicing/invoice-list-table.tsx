@@ -63,6 +63,62 @@ function StatusBadge({ status }: { status: InvoiceStatus }) {
   );
 }
 
+const MOADIAN_STATUS_CONFIG: Record<string, { label: string; className: string }> = {
+  SUCCESS: {
+    label: "ثبت مودیان",
+    className: "bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 border-emerald-200",
+  },
+  SENT: {
+    label: "ارسال‌شده",
+    className: "bg-sky-50 text-sky-800 dark:bg-sky-950 dark:text-sky-200 border-sky-200",
+  },
+  QUEUED: {
+    label: "در صف",
+    className: "bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-200 border-amber-200",
+  },
+  FAILED: {
+    label: "رد مودیان",
+    className: "bg-red-50 text-red-800 dark:bg-red-950 dark:text-red-200 border-red-200",
+  },
+  ERROR: {
+    label: "خطای ارسال",
+    className: "bg-rose-50 text-rose-800 dark:bg-rose-950 dark:text-rose-200 border-rose-200",
+  },
+};
+
+export function MoadianStatusBadge({
+  status,
+  errorText,
+  taxId,
+}: {
+  status?: string | null;
+  errorText?: string | null;
+  taxId?: string | null;
+}) {
+  if (!status) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+  const conf = MOADIAN_STATUS_CONFIG[status] ?? {
+    label: status,
+    className: "bg-muted text-foreground border-border",
+  };
+  return (
+    <div className="flex flex-col gap-0.5 max-w-[14rem]">
+      <span
+        title={taxId ? `شناسه یکتا مالیاتی: ${taxId}` : undefined}
+        className={`inline-flex items-center w-fit rounded px-1.5 py-0.5 text-[11px] font-medium border ${conf.className}`}
+      >
+        {conf.label}
+      </span>
+      {errorText && (
+        <span className="text-[11px] text-destructive truncate leading-tight" title={errorText}>
+          {errorText}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export interface InvoiceListActions {
   onView: (invoice: InvoiceResponseDto) => void;
   onEdit: (invoice: InvoiceResponseDto) => void;
@@ -200,6 +256,7 @@ export function InvoiceListTable({ invoices, loading, busyId, selected, onToggle
               <TableHead>مبلغ کل</TableHead>
               <TableHead>مانده</TableHead>
               <TableHead>وضعیت</TableHead>
+              <TableHead>سامانه مودیان</TableHead>
               <TableHead className="w-28">
                 <span className="sr-only">عملیات</span>
               </TableHead>
@@ -241,6 +298,13 @@ export function InvoiceListTable({ invoices, loading, busyId, selected, onToggle
                     <StatusBadge status={invoice.status} />
                   </TableCell>
                   <TableCell>
+                    <MoadianStatusBadge
+                      status={invoice.moadianStatus}
+                      errorText={invoice.moadianErrorText}
+                      taxId={invoice.moadianTaxId}
+                    />
+                  </TableCell>
+                  <TableCell>
                     <div className="flex items-center justify-end gap-1">
                       <Button variant="ghost" size="sm" onClick={() => actions.onView(invoice)}>
                         <Eye />
@@ -275,7 +339,16 @@ export function InvoiceListTable({ invoices, loading, busyId, selected, onToggle
               >
                 <span className="flex w-full items-center justify-between gap-2">
                   <span className="font-mono text-xs">{invoice.taxInvoiceNumber}</span>
-                  <StatusBadge status={invoice.status} />
+                  <div className="flex items-center gap-1.5">
+                    <StatusBadge status={invoice.status} />
+                    {invoice.moadianStatus && (
+                      <MoadianStatusBadge
+                        status={invoice.moadianStatus}
+                        errorText={invoice.moadianErrorText}
+                        taxId={invoice.moadianTaxId}
+                      />
+                    )}
+                  </div>
                 </span>
                 <span className="text-sm font-medium">{invoiceParty(invoice).name ?? "نام ثبت نشده"}</span>
                 <span className="flex w-full items-center justify-between gap-2 text-sm">

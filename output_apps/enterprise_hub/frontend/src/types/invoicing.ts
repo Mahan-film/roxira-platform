@@ -179,6 +179,9 @@ export interface InvoiceResponseDto {
   subject: InvoiceSubject;
   relatedInvoiceId: string | null;
   warehouseId: number | null;
+  moadianStatus?: 'QUEUED' | 'SENT' | 'SUCCESS' | 'FAILED' | 'ERROR' | null;
+  moadianErrorText?: string | null;
+  moadianTaxId?: string | null;
 }
 
 export type InvoiceResponse = InvoiceResponseDto;

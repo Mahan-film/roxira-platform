@@ -59,6 +59,9 @@ class Repo {
   async updatePosting(tenantId: string, id: string, data: Partial<InvoiceEntity>) {
     Object.assign(this.rows.find((r) => r.id === id && r.tenantId === tenantId)!, data);
   }
+  async findMoadianSubmissionsForInvoices() {
+    return new Map();
+  }
 }
 
 type Line = { accountCode: string; debit?: string; credit?: string };

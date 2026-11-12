@@ -21,9 +21,11 @@ export const MOADIAN_PRODUCTION_BASE_URL = 'https://tp.tax.gov.ir/requestsmanage
 export const MOADIAN_QUEUE = 'moadian';
 export const MOADIAN_SEND_JOB = 'moadian.send';
 export const MOADIAN_POLL_JOB = 'moadian.poll';
+export const MOADIAN_SYNC_STATUS_JOB = 'moadian.sync-status';
 
 export const MOADIAN_DEFAULT_POLL_DELAY_MS = 60_000;
 export const MOADIAN_DEFAULT_MAX_POLLS = 30;
+export const MOADIAN_DEFAULT_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 export const MOADIAN_DEFAULT_HTTP_TIMEOUT_MS = 20_000;
 /** عمر nonce درخواستی (ثانیه) برای توکن احراز هویت. */
 export const MOADIAN_NONCE_TTL_SECONDS = 20;

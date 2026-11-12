@@ -86,6 +86,10 @@ class InMemoryInvoicingRepository {
     const rows = this.rows.filter((row) => row.tenantId === tenantId);
     return [rows, rows.length];
   }
+
+  async findMoadianSubmissionsForInvoices() {
+    return new Map();
+  }
 }
 
 const buildDto = (taxInvoiceNumber: string): CreateInvoiceDto => ({
