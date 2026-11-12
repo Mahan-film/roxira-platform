@@ -7,6 +7,7 @@ import * as path from 'path';
 import { ConflictException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { TenantScope } from '../access/services/tenant-scope';
+import { APP_PASSWORD } from '../../test/support/test-pg';
 import { TreasurySmsDraftEntity, TreasurySmsDraftStatus } from './entities/treasury-sms-draft.entity';
 import { TreasurySmsRepository } from './repositories/treasury-sms.repository';
 import { TreasurySmsService } from './services/treasury-sms.service';
@@ -18,7 +19,7 @@ const OWNER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
 const OWNER_PW = process.env.ROXIRA_TEST_PG_PASSWORD;
 const PORT = Number(process.env.ROXIRA_TEST_PG_PORT ?? 5432);
 const ROLE_NAME = `rx_treasury_sms_${process.pid}`;
-const ROLE_PW = 'treasury-sms-rls-test';
+const ROLE_PW = APP_PASSWORD;
 
 const T1 = '11111111-1111-4111-8111-111111111111';
 const T2 = '22222222-2222-4222-8222-222222222222';
@@ -69,7 +70,7 @@ describePg('TreasurySmsDrafts RLS isolation (NOSUPERUSER NOBYPASSRLS)', () => {
     scope = new TenantScope(appDs);
     repository = new TreasurySmsRepository(appDs.getRepository(TreasurySmsDraftEntity), scope);
     service = new TreasurySmsService(repository, {} as TreasuryService);
-  });
+  }, 60_000);
 
   afterAll(async () => {
     await appDs?.destroy();
@@ -79,7 +80,7 @@ describePg('TreasurySmsDrafts RLS isolation (NOSUPERUSER NOBYPASSRLS)', () => {
       await adminDs.query(`DROP ROLE IF EXISTS "${ROLE_NAME}"`);
       await adminDs.destroy();
     }
-  });
+  }, 30_000);
 
   it('enforces FORCE ROW LEVEL SECURITY on fin_treasury_sms_drafts', async () => {
     const rows = await ownerDs.query(`
@@ -114,12 +115,23 @@ describePg('TreasurySmsDrafts RLS isolation (NOSUPERUSER NOBYPASSRLS)', () => {
     // Tenant 2 cannot reject or modify Tenant 1 draft
     await expect(service.rejectDraft(T2, draftT1.id)).rejects.toThrow();
 
-    // Direct appDs SQL query under Tenant 2 context sees 0 rows
-    const crossRows = await appDs.query(
-      `SELECT * FROM fin_treasury_sms_drafts WHERE id = $1`,
-      [draftT1.id],
+    // Direct scoped SQL query under Tenant 2 context sees 0 rows
+    const crossRows = await scope.run(T2, (manager) =>
+      manager.query(`SELECT * FROM fin_treasury_sms_drafts WHERE id = $1`, [draftT1.id]),
     );
-    expect(crossRows).toHaveLength(0); // RLS filtered out because app.tenant_id is not T1
+    expect(crossRows).toHaveLength(0); // RLS filtered out because app.tenant_id is T2
+  });
+
+  it('rejects duplicate SMS capture within same tenant (smsHash unique index) while allowing across tenants', async () => {
+    const SMS = `بانک ملت
+واریز: ۳,۵۰۰,۰۰۰ ریال
+حساب: ...۸۷۶۵
+مانده: ۹,۰۰۰,۰۰۰ ریال
+۱۴۰۳/۰۸/۲۳-۱۰:۰۰`;
+    await service.captureSms(T1, U1, SMS);
+    await expect(service.captureSms(T1, U1, SMS)).rejects.toThrow(ConflictException);
+    const otherTenantDraft = await service.captureSms(T2, U2, SMS);
+    expect(otherTenantDraft.tenantId).toBe(T2);
   });
 
   it('posts exactly once when two confirms of one draft run concurrently', async () => {
@@ -128,6 +140,13 @@ describePg('TreasurySmsDrafts RLS isolation (NOSUPERUSER NOBYPASSRLS)', () => {
 حساب: ...۴۳۲۱
 مانده: ۱۰,۰۰۰,۰۰۰ ریال
 ۱۴۰۳/۰۸/۲۲-۱۴:۳۰`;
+    await ownerDs.query(
+      `INSERT INTO "fin_treasury_documents"
+        ("id", "tenant_id", "kind", "doc_number", "doc_date", "party_type", "party_code", "party_name", "total")
+       VALUES (7, $1, 'receipt', 'RC-TEST-7', '2024-11-12', 'customer', 'C1', 'Customer', 1000000.00)
+       ON CONFLICT DO NOTHING`,
+      [T1],
+    );
     const createDocument = jest.fn(async () => {
       await new Promise((r) => setTimeout(r, 50));
       return { id: 7 };
@@ -148,5 +167,8 @@ describePg('TreasurySmsDrafts RLS isolation (NOSUPERUSER NOBYPASSRLS)', () => {
     const after = await racing.getDraft(T1, draft.id);
     expect(after.status).toBe(TreasurySmsDraftStatus.CONFIRMED);
     expect(after.matchedDocumentId).toBe(7);
+
+    // Concurrent reject against confirmed draft also fails atomically
+    await expect(racing.rejectDraft(T1, draft.id)).rejects.toThrow(ConflictException);
   });
 });

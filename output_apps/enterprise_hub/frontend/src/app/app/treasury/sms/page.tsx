@@ -6,7 +6,6 @@ import {
   ArrowRight,
   CheckCircle,
   Clock,
-  FileText,
   MessageSquare,
   RefreshCw,
   Send,
@@ -90,10 +89,26 @@ export default function TreasurySmsPage() {
   };
 
   useEffect(() => {
-    void fetchDrafts();
-    listBankAccounts()
-      .then(setBankAccounts)
-      .catch((err) => setError((err as Error).message));
+    let active = true;
+    (async () => {
+      try {
+        const [draftRows, accountRows] = await Promise.all([
+          listTreasurySmsDrafts(),
+          listBankAccounts(),
+        ]);
+        if (active) {
+          setDrafts(draftRows);
+          setBankAccounts(accountRows);
+        }
+      } catch (err) {
+        if (active) setError((err as Error).message);
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handlePreview = async () => {
@@ -162,22 +177,24 @@ export default function TreasurySmsPage() {
         <PageHeader
           title="دریافت و پرداخت از پیامک بانک"
           description="استخراج هوشمند تراکنش‌های پیامک بانک‌های معتبر کشور و صدور اسناد دریافت و پرداخت خزانه"
-        >
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/app/treasury">
+          actions={
+            <div className="flex items-center gap-2">
+              <Link
+                href="/app/treasury"
+                className="inline-flex h-8 items-center justify-center rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground"
+              >
                 <ArrowRight className="ml-1 h-4 w-4" />
                 بازگشت به خزانه
               </Link>
-            </Button>
-            <Button variant="outline" size="sm" onClick={fetchDrafts} disabled={loading}>
-              <RefreshCw className={`ml-1 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              تازه‌سازی
-            </Button>
-          </div>
-        </PageHeader>
+              <Button variant="outline" size="sm" onClick={fetchDrafts} disabled={loading}>
+                <RefreshCw className={`ml-1 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                تازه‌سازی
+              </Button>
+            </div>
+          }
+        />
 
-        {error && <ErrorNotice message={error} onDismiss={() => setError(null)} />}
+        {error && <ErrorNotice title="خطا در عملیات پیامک بانک" message={error} />}
 
         {/* SMS Input Card */}
         <Card>
@@ -281,7 +298,7 @@ export default function TreasurySmsPage() {
           </CardHeader>
           <CardContent>
             {loading ? (
-              <LoadingLine />
+              <LoadingLine show />
             ) : drafts.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground text-sm">
                 هنوز هیچ پیامک بانکی ثبت نشده است. متن پیامک را الصاق فرمایید.

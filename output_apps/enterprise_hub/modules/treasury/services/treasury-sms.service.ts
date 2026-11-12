@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -6,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { TreasuryService } from './treasury.service';
 import { TreasurySmsRepository } from '../repositories/treasury-sms.repository';
-import { parseBankSms, isBankSms } from '../sms/bank-sms.parser';
+import { normaliseSms, parseBankSms } from '../sms/bank-sms.parser';
 import { BankSmsParsedResult } from '../sms/bank-sms.types';
 import {
   TreasurySmsDraftEntity,
@@ -63,10 +64,6 @@ export class TreasurySmsService {
     };
   }
 
-  isRecognisedSms(text: string): boolean {
-    return isBankSms(text);
-  }
-
   /**
    * Captures bank SMS, extracts fields, and records a draft treasury receipt or payment.
    */
@@ -76,7 +73,10 @@ export class TreasurySmsService {
     text: string,
   ): Promise<TreasurySmsDraftEntity> {
     const parsed = this.parseSms(text);
-    return this.smsRepository.createDraft(tenantId, userId, parsed);
+    const smsHash = createHash('sha256')
+      .update(normaliseSms(text).replace(/\s+/g, ' ').trim())
+      .digest('hex');
+    return this.smsRepository.createDraft(tenantId, userId, parsed, smsHash);
   }
 
   /**
@@ -125,9 +125,10 @@ export class TreasurySmsService {
 
     const docDate =
       dto.docDate ??
-      (draft.dateTime
-        ? draft.dateTime.toISOString().slice(0, 10)
-        : new Date().toISOString().slice(0, 10));
+      (draft.dateTime ? draft.dateTime.toISOString().slice(0, 10) : null);
+    if (!docDate) {
+      throw new BadRequestException('تاریخ تراکنش در پیامک یافت نشد؛ لطفاً تاریخ سند را ارسال کنید.');
+    }
 
     const docDto: CreateTreasuryDocumentDto = {
       kind: draft.docKind,
@@ -162,20 +163,13 @@ export class TreasurySmsService {
   }
 
   /**
-   * Rejects an unneeded draft.
+   * Rejects an unneeded draft atomically.
    */
   async rejectDraft(tenantId: string, id: string): Promise<TreasurySmsDraftEntity> {
-    const draft = await this.getDraft(tenantId, id);
-    if (draft.status === TreasurySmsDraftStatus.CONFIRMED) {
-      throw new ConflictException('سند قطعی صادر شده و پیش‌نویس قابل رد کردن نیست.');
+    const updated = await this.smsRepository.rejectDraftAtomically(tenantId, id);
+    if (!updated) {
+      throw new NotFoundException('پیش‌نویس پیامک بانکی یافت نشد.');
     }
-
-    const updated = await this.smsRepository.updateStatus(
-      tenantId,
-      id,
-      TreasurySmsDraftStatus.REJECTED,
-      null,
-    );
-    return updated!;
+    return updated;
   }
 }

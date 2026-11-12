@@ -132,8 +132,8 @@ export class TreasurySmsDraftResponseDto {
   @ApiProperty()
   id: string;
 
-  @ApiProperty({ enum: BankCode })
-  bank: BankCode;
+  @ApiPropertyOptional({ enum: BankCode, nullable: true })
+  bank: BankCode | null;
 
   @ApiProperty()
   bankNameFa: string;

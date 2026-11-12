@@ -21,6 +21,7 @@ export enum TreasurySmsDraftStatus {
  * Scoped by TenantScope and protected by FORCE ROW LEVEL SECURITY.
  */
 @Entity({ name: 'fin_treasury_sms_drafts' })
+@Index('UQ_fin_treasury_sms_drafts_tenant_hash', ['tenantId', 'smsHash'], { unique: true })
 @Index('IDX_fin_treasury_sms_drafts_tenant_status', ['tenantId', 'status'])
 @Index('IDX_fin_treasury_sms_drafts_tenant_created', ['tenantId', 'createdAt'])
 export class TreasurySmsDraftEntity {
@@ -65,6 +66,9 @@ export class TreasurySmsDraftEntity {
 
   @Column({ type: 'text', name: 'raw_text' })
   rawText: string;
+
+  @Column({ type: 'varchar', length: 64, name: 'sms_hash' })
+  smsHash: string;
 
   @Column({
     type: 'varchar',

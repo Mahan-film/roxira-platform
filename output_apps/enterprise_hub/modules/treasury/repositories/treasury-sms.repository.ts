@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, FindOptionsWhere, Repository } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
@@ -8,6 +8,12 @@ import {
 } from '../entities/treasury-sms-draft.entity';
 import { BankSmsParsedResult } from '../sms/bank-sms.types';
 import { QueryTreasurySmsDraftsDto } from '../dto/treasury-sms.dto';
+
+function isUniqueViolation(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const e = err as { code?: string; driverError?: { code?: string } };
+  return e.code === '23505' || e.driverError?.code === '23505';
+}
 
 @Injectable()
 export class TreasurySmsRepository {
@@ -21,12 +27,14 @@ export class TreasurySmsRepository {
     tenantId: string,
     userId: string,
     parsed: BankSmsParsedResult,
+    smsHash: string,
   ): Promise<TreasurySmsDraftEntity> {
     return this.tenantScope.run(tenantId, async (manager) => {
       const draftRepo = manager.getRepository(TreasurySmsDraftEntity);
       const entity = draftRepo.create({
         tenantId,
         userId,
+        smsHash,
         bank: parsed.bank,
         bankNameFa: parsed.bankNameFa,
         direction: parsed.direction,
@@ -40,7 +48,14 @@ export class TreasurySmsRepository {
         rawText: parsed.rawText,
         status: TreasurySmsDraftStatus.DRAFT,
       });
-      return draftRepo.save(entity);
+      try {
+        return await draftRepo.save(entity);
+      } catch (err) {
+        if (isUniqueViolation(err)) {
+          throw new ConflictException('این پیامک بانکی قبلاً ثبت شده است.');
+        }
+        throw err;
+      }
     });
   }
 
@@ -85,6 +100,35 @@ export class TreasurySmsRepository {
         },
       );
       return draftRepo.findOne({ where: { tenantId, id } });
+    });
+  }
+
+  /**
+   * Atomically transitions a draft from `draft` to `rejected`.
+   * Returns `null` when no matching row exists, or throws `ConflictException` when the draft was already confirmed or rejected.
+   */
+  async rejectDraftAtomically(
+    tenantId: string,
+    id: string,
+  ): Promise<TreasurySmsDraftEntity | null> {
+    return this.tenantScope.run(tenantId, async (manager) => {
+      const draftRepo = manager.getRepository(TreasurySmsDraftEntity);
+      const res = await draftRepo.update(
+        { tenantId, id, status: TreasurySmsDraftStatus.DRAFT },
+        {
+          status: TreasurySmsDraftStatus.REJECTED,
+          matchedDocumentId: null,
+          updatedAt: new Date(),
+        },
+      );
+      if ((res.affected ?? 0) === 1) {
+        return draftRepo.findOne({ where: { tenantId, id } });
+      }
+      const existing = await draftRepo.findOne({ where: { tenantId, id } });
+      if (!existing) {
+        return null;
+      }
+      throw new ConflictException('سند قطعی صادر شده یا پیش‌نویس قبلاً تغییر وضعیت داده و قابل رد کردن نیست.');
     });
   }
 

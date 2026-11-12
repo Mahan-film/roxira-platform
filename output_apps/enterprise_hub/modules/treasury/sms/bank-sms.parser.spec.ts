@@ -121,5 +121,34 @@ describe('Bank SMS Parser (T92)', () => {
       const parsed = parseBankSms(text);
       expect(parsed.amountDecimal).toBe('1000000.00'); // 100,000 Toman = 1,000,000 Rials
     });
+
+    it('folds Arabic decimal/thousands separators (U+066C, U+066B) without mangling digits', () => {
+      const text = `بانک سامان
+واریز: ۱٬۲۵۰٬۵۰۰ ریال
+حساب: ...۱۲۳۴
+۱۴۰۳/۰۸/۲۲ ۱۰:۰۰`;
+      const parsed = parseBankSms(text);
+      expect(parsed.amountDecimal).toBe('1250500.00');
+    });
+
+    it('does not treat a date (1403/08/22) appearing before the amount label as the transaction amount', () => {
+      const text = `بانک ملی ایران
+برداشت در تاریخ ۱۴۰۳/۰۸/۲۲
+مبلغ: ۵۰۰,۰۰۰ ریال
+حساب: ...۴۳۲۱`;
+      const parsed = parseBankSms(text);
+      expect(parsed.direction).toBe('withdraw');
+      expect(parsed.amountDecimal).toBe('500000.00');
+    });
+
+    it('converts Tehran +03:30 wall clock time cleanly to UTC ISO instant', () => {
+      const text = `بانک ملی ایران
+واریز: ۲,۵۰۰,۰۰۰ ریال
+حساب: ...۴۳۲۱
+۱۴۰۳/۰۸/۲۲-۱۴:۳۰`;
+      const parsed = parseBankSms(text);
+      // 1403/08/22 = 2024-11-12; 14:30 IRST (+03:30) = 11:00:00Z UTC
+      expect(parsed.dateTime).toBe('2024-11-12T11:00:00.000Z');
+    });
   });
 });

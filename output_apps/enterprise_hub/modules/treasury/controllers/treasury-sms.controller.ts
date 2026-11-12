@@ -9,6 +9,7 @@ import {
   Post,
   Query,
   Req,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AccessAction, AccessModule } from '../../access/catalogue';
@@ -47,35 +48,36 @@ export class TreasurySmsController {
   @RequireAction(AccessAction.CREATE)
   @ApiOperation({ summary: 'پردازش پیامک بانکی و ایجاد پیش‌نویس دریافت/پرداخت خزانه' })
   @ApiResponse({ status: HttpStatus.CREATED, type: TreasurySmsDraftResponseDto })
-  capture(
+  async capture(
     @Req() request: AuthenticatedRequest,
     @Body() dto: CaptureBankSmsDto,
-  ): Promise<TreasurySmsDraftEntity> {
+  ): Promise<TreasurySmsDraftResponseDto> {
     const tenantId = requireTenantId(request);
-    const userId = request.user?.sub ?? '00000000-0000-0000-0000-000000000000';
-    return this.smsService.captureSms(tenantId, userId, dto.text);
+    const userId = this.requireUserId(request);
+    return this.toDraftResponse(await this.smsService.captureSms(tenantId, userId, dto.text));
   }
 
   @Get('drafts')
   @RequireAction(AccessAction.READ)
   @ApiOperation({ summary: 'فهرست پیش‌نویس‌های پیامک بانکی' })
   @ApiResponse({ status: HttpStatus.OK, type: [TreasurySmsDraftResponseDto] })
-  listDrafts(
+  async listDrafts(
     @Req() request: AuthenticatedRequest,
     @Query() query: QueryTreasurySmsDraftsDto,
-  ): Promise<TreasurySmsDraftEntity[]> {
-    return this.smsService.listDrafts(requireTenantId(request), query);
+  ): Promise<TreasurySmsDraftResponseDto[]> {
+    const drafts = await this.smsService.listDrafts(requireTenantId(request), query);
+    return drafts.map((d) => this.toDraftResponse(d));
   }
 
   @Get('drafts/:id')
   @RequireAction(AccessAction.READ)
   @ApiOperation({ summary: 'مشاهده یک پیش‌نویس پیامک بانکی' })
   @ApiResponse({ status: HttpStatus.OK, type: TreasurySmsDraftResponseDto })
-  getDraft(
+  async getDraft(
     @Req() request: AuthenticatedRequest,
     @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<TreasurySmsDraftEntity> {
-    return this.smsService.getDraft(requireTenantId(request), id);
+  ): Promise<TreasurySmsDraftResponseDto> {
+    return this.toDraftResponse(await this.smsService.getDraft(requireTenantId(request), id));
   }
 
   @Post('drafts/:id/confirm')
@@ -83,13 +85,13 @@ export class TreasurySmsController {
   @RequireAction(AccessAction.POST)
   @ApiOperation({ summary: 'تأیید پیش‌نویس پیامک و صدور سند قطعی دریافت/پرداخت با سند حسابداری خودکار' })
   @ApiResponse({ status: HttpStatus.CREATED, type: TreasuryDocumentDetailResponseDto })
-  confirmDraft(
+  async confirmDraft(
     @Req() request: AuthenticatedRequest,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ConfirmTreasurySmsDraftDto,
   ): Promise<TreasuryDocumentDetailResponseDto> {
     const tenantId = requireTenantId(request);
-    const userId = request.user?.sub ?? '00000000-0000-0000-0000-000000000000';
+    const userId = this.requireUserId(request);
     return this.smsService.confirmDraft(tenantId, userId, id, dto);
   }
 
@@ -98,10 +100,38 @@ export class TreasurySmsController {
   @RequireAction(AccessAction.CREATE)
   @ApiOperation({ summary: 'رد کردن پیش‌نویس پیامک بانکی' })
   @ApiResponse({ status: HttpStatus.OK, type: TreasurySmsDraftResponseDto })
-  rejectDraft(
+  async rejectDraft(
     @Req() request: AuthenticatedRequest,
     @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<TreasurySmsDraftEntity> {
-    return this.smsService.rejectDraft(requireTenantId(request), id);
+  ): Promise<TreasurySmsDraftResponseDto> {
+    return this.toDraftResponse(await this.smsService.rejectDraft(requireTenantId(request), id));
+  }
+
+  private requireUserId(request: AuthenticatedRequest): string {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new UnauthorizedException('شناسه کاربر در توکن احراز هویت یافت نشد.');
+    }
+    return userId;
+  }
+
+  private toDraftResponse(draft: TreasurySmsDraftEntity): TreasurySmsDraftResponseDto {
+    return {
+      id: draft.id,
+      bank: draft.bank,
+      bankNameFa: draft.bankNameFa,
+      direction: draft.direction,
+      docKind: draft.docKind,
+      amount: draft.amount,
+      balance: draft.balance ?? null,
+      accountTail: draft.accountTail ?? null,
+      cardTail: draft.cardTail ?? null,
+      reference: draft.reference ?? null,
+      dateTime: draft.dateTime ? draft.dateTime.toISOString() : null,
+      rawText: draft.rawText,
+      status: draft.status,
+      matchedDocumentId: draft.matchedDocumentId ?? null,
+      createdAt: draft.createdAt,
+    };
   }
 }

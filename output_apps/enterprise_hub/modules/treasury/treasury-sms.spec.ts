@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
@@ -23,11 +28,15 @@ describe('TreasurySmsService & Controller (T92)', () => {
   let nextId = 1;
 
   const mockRepo = {
-    createDraft: jest.fn(async (tenantId, userId, parsed) => {
+    createDraft: jest.fn(async (tenantId, userId, parsed, smsHash) => {
+      if (draftsDb.some((d) => d.tenantId === tenantId && d.smsHash === smsHash)) {
+        throw new ConflictException('این پیامک بانکی قبلاً ثبت شده است.');
+      }
       const draft: TreasurySmsDraftEntity = {
         id: `draft-${nextId++}`,
         tenantId,
         userId,
+        smsHash,
         bank: parsed.bank,
         bankNameFa: parsed.bankNameFa,
         direction: parsed.direction,
@@ -74,6 +83,17 @@ describe('TreasurySmsService & Controller (T92)', () => {
       if (!draft) return null;
       draft.status = status;
       if (matchedDocId !== undefined) draft.matchedDocumentId = matchedDocId;
+      draft.updatedAt = new Date();
+      return draft;
+    }),
+    rejectDraftAtomically: jest.fn(async (tenantId, id) => {
+      const draft = draftsDb.find((d) => d.tenantId === tenantId && d.id === id);
+      if (!draft) return null;
+      if (draft.status !== TreasurySmsDraftStatus.DRAFT) {
+        throw new ConflictException('سند قطعی صادر شده یا پیش‌نویس قبلاً تغییر وضعیت داده و قابل رد کردن نیست.');
+      }
+      draft.status = TreasurySmsDraftStatus.REJECTED;
+      draft.matchedDocumentId = null;
       draft.updatedAt = new Date();
       return draft;
     }),
@@ -305,11 +325,43 @@ describe('TreasurySmsService & Controller (T92)', () => {
       expect(json).not.toHaveProperty('balanceMinor');
     });
 
-    it('controller.capture saves draft and returns it', async () => {
+    it('controller.capture saves draft and returns response DTO without tenantId/userId', async () => {
       const req = authRequest();
       const res = await controller.capture(req, { text: MELLI_SMS });
       expect(res.id).toBeDefined();
+      expect(res).not.toHaveProperty('tenantId');
+      expect(res).not.toHaveProperty('userId');
       expect(draftsDb).toHaveLength(1);
+    });
+
+    it('controller.capture and confirmDraft throw UnauthorizedException when user.sub is missing', async () => {
+      const reqNoSub = { user: { tenantId: TENANT } } as unknown as AuthenticatedRequest;
+      await expect(controller.capture(reqNoSub, { text: MELLI_SMS })).rejects.toThrow(
+        UnauthorizedException,
+      );
+      await expect(
+        controller.confirmDraft(reqNoSub, '00000000-0000-4000-8000-000000000001', {
+          partyCode: 'C1',
+          partyName: 'x',
+          bankAccountId: 5,
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('captureSms rejects duplicate normalised SMS within same tenant', async () => {
+      await service.captureSms(TENANT, USER, MELLI_SMS);
+      await expect(service.captureSms(TENANT, USER, MELLI_SMS)).rejects.toThrow(ConflictException);
+    });
+
+    it('confirmDraft fails closed with BadRequestException when neither SMS nor dto has a date', async () => {
+      const draft = await service.captureSms(TENANT, USER, 'واریز: ۱,۰۰۰,۰۰۰ ریال به حساب ...۱۲۳۴');
+      await expect(
+        service.confirmDraft(TENANT, USER, draft.id, {
+          partyCode: 'C1',
+          partyName: 'x',
+          bankAccountId: 5,
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 

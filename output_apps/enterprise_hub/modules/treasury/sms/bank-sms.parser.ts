@@ -62,6 +62,8 @@ export const BANK_RULES: readonly BankRule[] = [
  */
 export function normaliseSms(text: string): string {
   return fixPersianChars(toAsciiDigits(text ?? ''))
+    .replace(/\u066C/g, ',')
+    .replace(/\u066B/g, '.')
     .replace(/[‌‍‎‏]/g, ' ')
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
@@ -114,36 +116,26 @@ export function parseBankSms(rawText: string): BankSmsParsedResult {
   const direction: BankSmsDirection = isDeposit ? 'deposit' : 'withdraw';
   const docKind: TreasuryDocKind = isDeposit ? TreasuryDocKind.RECEIPT : TreasuryDocKind.PAYMENT;
 
-  // 3. Extract Amount
+  // 3. Extract Amount (prefer explicit currency unit so dates/times/cards cannot match as money)
+  const amountWithUnit =
+    /(?:واریز|واريز|برداشت|مبلغ)\s*[:\s]?\s*([\d,]+(?:\.\d+)?)\s*(ریال|تومان|ريال)/i.exec(normalised);
+  const amountColonNoDate =
+    amountWithUnit ??
+    /(?:واریز|واريز|برداشت|مبلغ)\s*:\s*([\d,]+(?:\.\d+)?)(?![\d\/\-:])/i.exec(normalised);
   const amountMatch =
-    /(?:واریز|واريز|برداشت)(?:\s*مبلغ)?\s*[:\s]\s*([\d,]+(?:\.\d+)?)\s*(?:ریال|تومان|ريال)?/i.exec(normalised);
+    amountColonNoDate ??
+    /([\d,]{4,}(?:\.\d+)?)\s*(ریال|تومان|ريال)/i.exec(normalised);
 
-  let amountMinor: bigint;
-  let amountDecimal: string;
-
-  if (amountMatch) {
-    const rawAmountStr = amountMatch[1].replace(/,/g, '');
-    let amt = toMinor(rawAmountStr);
-    if (/تومان/.test(amountMatch[0])) {
-      amt = amt * 10n;
-    }
-    amountMinor = amt;
-    amountDecimal = minorToDecimal(amountMinor);
-  } else {
-    // Generic fallback: look for numbers explicitly marked with rial / toman / مبلغ
-    const genericAmountMatch =
-      /(?:مبلغ|مبلغ:\s*)?([\d,]{4,})\s*(?:ریال|تومان|ريال)/i.exec(normalised);
-    if (!genericAmountMatch) {
-      throw new Error('مبلغ تراکنش در متن پیامک یافت نشد.');
-    }
-    const rawAmountStr = genericAmountMatch[1].replace(/,/g, '');
-    let amt = toMinor(rawAmountStr);
-    if (/تومان/.test(genericAmountMatch[0])) {
-      amt = amt * 10n;
-    }
-    amountMinor = amt;
-    amountDecimal = minorToDecimal(amountMinor);
+  if (!amountMatch) {
+    throw new Error('مبلغ تراکنش در متن پیامک یافت نشد.');
   }
+  const rawAmountStr = amountMatch[1].replace(/,/g, '');
+  let amt = toMinor(rawAmountStr);
+  if (/تومان/.test(amountMatch[0])) {
+    amt = amt * 10n;
+  }
+  const amountMinor: bigint = amt;
+  const amountDecimal: string = minorToDecimal(amountMinor);
 
   // 4. Extract Balance (مانده / موجودی)
   let balanceMinor: bigint | undefined;
@@ -207,13 +199,16 @@ export function parseBankSms(rawText: string): BankSmsParsedResult {
 
     try {
       const g = jalaliToGregorian(jy, jm, jd);
-      const isoDate = `${String(g.gy).padStart(4, '0')}-${String(g.gm).padStart(2, '0')}-${String(
+      const tehranIso = `${String(g.gy).padStart(4, '0')}-${String(g.gm).padStart(2, '0')}-${String(
         g.gd,
       ).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(minute).padStart(
         2,
         '0',
-      )}:${String(second).padStart(2, '0')}.000Z`;
-      dateTime = isoDate;
+      )}:${String(second).padStart(2, '0')}+03:30`;
+      const instant = new Date(tehranIso);
+      if (!Number.isNaN(instant.getTime())) {
+        dateTime = instant.toISOString();
+      }
     } catch {
       // Date conversion fallback
     }
