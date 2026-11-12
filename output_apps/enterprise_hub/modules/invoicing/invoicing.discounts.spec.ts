@@ -33,6 +33,9 @@ class MemoryRepo {
   async findByTaxInvoiceNumber(tenantId: string, number: string) {
     return this.rows.find((row) => row.taxInvoiceNumber === number && row.tenantId === tenantId) ?? null;
   }
+  async findMoadianSubmissionsForInvoices() {
+    return new Map();
+  }
 }
 
 const build = () => {

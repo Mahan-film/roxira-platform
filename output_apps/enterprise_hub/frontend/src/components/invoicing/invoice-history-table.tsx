@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/table";
 
 import { cancelInvoice, listInvoices } from "@/lib/api/invoicing-client";
+import { MoadianStatusBadge } from "./invoice-list-table";
 import { ApiClientError } from "@/lib/api/http-client";
 import { formatPersianDate, formatRial } from "@/lib/format";
 import {
@@ -284,40 +285,11 @@ export function InvoiceHistoryTable({ refreshKey = 0 }: InvoiceHistoryTableProps
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {invoice.moadianStatus ? (
-                        <div className="flex flex-col gap-0.5 max-w-[14rem]">
-                          <span
-                            title={invoice.moadianTaxId ? `شناسه مالیاتی: ${invoice.moadianTaxId}` : undefined}
-                            className={`inline-flex items-center w-fit rounded px-1.5 py-0.5 text-[11px] font-medium border ${
-                              invoice.moadianStatus === 'SUCCESS'
-                                ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 border-emerald-200'
-                                : invoice.moadianStatus === 'SENT'
-                                  ? 'bg-sky-50 text-sky-800 dark:bg-sky-950 dark:text-sky-200 border-sky-200'
-                                  : invoice.moadianStatus === 'QUEUED'
-                                    ? 'bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-200 border-amber-200'
-                                    : 'bg-red-50 text-red-800 dark:bg-red-950 dark:text-red-200 border-red-200'
-                            }`}
-                          >
-                            {invoice.moadianStatus === 'SUCCESS'
-                              ? 'ثبت مودیان'
-                              : invoice.moadianStatus === 'SENT'
-                                ? 'ارسال‌شده'
-                                : invoice.moadianStatus === 'QUEUED'
-                                  ? 'در صف'
-                                  : 'رد مودیان'}
-                          </span>
-                          {invoice.moadianErrorText && (
-                            <span
-                              className="text-[11px] text-destructive truncate leading-tight"
-                              title={invoice.moadianErrorText}
-                            >
-                              {invoice.moadianErrorText}
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
+                      <MoadianStatusBadge
+                        status={invoice.moadianStatus}
+                        errorText={invoice.moadianErrorText}
+                        taxId={invoice.moadianTaxId}
+                      />
                     </TableCell>
                     <TableCell>
                       <Button

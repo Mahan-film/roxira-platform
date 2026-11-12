@@ -1075,13 +1075,10 @@ export class InvoicingService {
           take: limit,
         },
       );
-      const moadianMap =
-        typeof this.invoicingRepository.findMoadianSubmissionsForInvoices === 'function'
-          ? await this.invoicingRepository.findMoadianSubmissionsForInvoices(
-              tenantId,
-              entities.map((e) => e.id),
-            )
-          : new Map();
+      const moadianMap = await this.invoicingRepository.findMoadianSubmissionsForInvoices(
+        tenantId,
+        entities.map((e) => e.id),
+      );
       return {
         data: entities.map((entity) => {
           const dto = this.toResponseDto(entity);
@@ -1123,13 +1120,10 @@ export class InvoicingService {
       },
     );
 
-    const moadianMap =
-      typeof this.invoicingRepository.findMoadianSubmissionsForInvoices === 'function'
-        ? await this.invoicingRepository.findMoadianSubmissionsForInvoices(
-            tenantId,
-            entities.map((e) => e.id),
-          )
-        : new Map();
+    const moadianMap = await this.invoicingRepository.findMoadianSubmissionsForInvoices(
+      tenantId,
+      entities.map((e) => e.id),
+    );
 
     return {
       data: entities.map((entity) => {
@@ -1156,10 +1150,10 @@ export class InvoicingService {
     }
 
     const dto = this.toResponseDto(entity);
-    const moadianMap =
-      typeof this.invoicingRepository.findMoadianSubmissionsForInvoices === 'function'
-        ? await this.invoicingRepository.findMoadianSubmissionsForInvoices(tenantId, [id])
-        : new Map();
+    const moadianMap = await this.invoicingRepository.findMoadianSubmissionsForInvoices(
+      tenantId,
+      [id],
+    );
     const m = moadianMap.get(id);
     if (m) {
       dto.moadianStatus = m.status;

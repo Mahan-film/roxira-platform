@@ -155,37 +155,32 @@ export class MoadianRepository {
     });
   }
 
-  /** تمام صورتحساب‌های در وضعیت غیرنهایی (QUEUED، SENT، ERROR) جهت استعلام خودکار/زمان‌بندی‌شده. */
+  /** جدول tenants دارای RLS نیست؛ فهرست مستأجران را برای کارهای دوره‌ای برمی‌گرداند. */
+  async listTenantIds(): Promise<string[]> {
+    const rows = await this.submissions.manager.query<Array<{ id: string }>>(
+      `SELECT "id" FROM "tenants" ORDER BY "id" ASC`,
+    );
+    return rows.map((row) => row.id);
+  }
+
+  /** تمام صورتحساب‌های در وضعیت غیرنهایی (QUEUED، SENT، ERROR) برای یک مستأجر درون TenantScope. */
   async findNonFinalSubmissions(
-    tenantId?: string,
+    tenantId: string,
   ): Promise<MoadianSubmissionEntity[]> {
     const nonFinalStatuses = [
       MoadianSubmissionStatus.QUEUED,
       MoadianSubmissionStatus.SENT,
       MoadianSubmissionStatus.ERROR,
     ];
-    if (tenantId) {
-      return this.withSubmissions(tenantId, (repo) =>
-        repo.find({
-          where: {
-            tenantId,
-            status: In(nonFinalStatuses),
-          },
-          order: { createdAt: 'ASC' },
-        }),
-      );
-    }
-    const scope = this.getScope();
-    if (!scope) {
-      return this.submissions.find({
-        where: { status: In(nonFinalStatuses) },
+    return this.withSubmissions(tenantId, (repo) =>
+      repo.find({
+        where: {
+          tenantId,
+          status: In(nonFinalStatuses),
+        },
         order: { createdAt: 'ASC' },
-      });
-    }
-    return this.submissions.manager.find(MoadianSubmissionEntity, {
-      where: { status: In(nonFinalStatuses) },
-      order: { createdAt: 'ASC' },
-    });
+      }),
+    );
   }
 
   /** فهرست وضعیت ارسال‌ها برای مستأجر. */
