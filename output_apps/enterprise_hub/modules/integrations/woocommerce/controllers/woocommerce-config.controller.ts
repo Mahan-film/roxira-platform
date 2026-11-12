@@ -24,7 +24,7 @@ import { WooCommerceSyncService } from '../services/woocommerce-sync.service';
 @ApiTags('Integrations - WooCommerce')
 @ApiBearerAuth()
 @ModuleAccess(AccessModule.INVOICING)
-@Controller('api/integrations/woocommerce')
+@Controller('enterprise-hub/integrations/woocommerce')
 export class WooCommerceConfigController {
   constructor(private readonly syncService: WooCommerceSyncService) {}
 

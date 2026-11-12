@@ -53,6 +53,12 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
       expect(() => assertSafeStoreUrl('https://[::1]/wp')).toThrow();
       expect(() => assertSafeStoreUrl('https://[fd00::1]/wp')).toThrow();
       expect(() => assertSafeStoreUrl('https://[fe80::1]/wp')).toThrow();
+      expect(() => assertSafeStoreUrl('https://[::ffff:127.0.0.1]/wp')).toThrow();
+      expect(() => assertSafeStoreUrl('https://[::ffff:7f00:1]/wp')).toThrow();
+      expect(() => assertSafeStoreUrl('https://[::ffff:a9fe:a9fe]/wp')).toThrow();
+      expect(() => assertSafeStoreUrl('https://[::ffff:169.254.169.254]/wp')).toThrow();
+      expect(() => assertSafeStoreUrl('https://[::ffff:10.0.0.1]/wp')).toThrow();
+      expect(() => assertSafeStoreUrl('https://[::ffff:192.168.1.1]/wp')).toThrow();
       expect(() => assertSafeStoreUrl('ftp://shop.example.com')).toThrow();
       expect(assertSafeStoreUrl('https://shop.example.com/store').origin).toBe(
         'https://shop.example.com',
@@ -210,6 +216,35 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
       );
     });
 
+    it('creates a SHIPPING item line when order has shipping_total', async () => {
+      const orderWithShipping = {
+        id: 202,
+        currency: 'IRR',
+        total: '150000',
+        total_tax: '0',
+        shipping_total: '30000',
+        billing: { first_name: 'سارا', company: 'شرکت الف' },
+        line_items: [
+          { id: 1, name: 'کتاب', product_id: 10, quantity: 1, total: '120000' },
+        ],
+      };
+
+      await service.importOrder(tenantId, orderWithShipping as any);
+
+      expect(mockInvoicingRepo.create).toHaveBeenCalledWith(
+        tenantId,
+        expect.objectContaining({
+          taxInvoiceNumber: 'WOO-202',
+          einvoiceType: 1, // WITH_BUYER because company is provided
+          items: expect.arrayContaining([
+            expect.objectContaining({ sku: 'WOO-10', total: '120000.00' }),
+            expect.objectContaining({ sku: 'SHIPPING', description: 'هزینه ارسال سفارش', total: '30000.00' }),
+          ]),
+        }),
+        undefined,
+      );
+    });
+
     it('rejects missing or unsupported currencies instead of coercing to IRR', async () => {
       await expect(
         service.importOrder(tenantId, {
@@ -304,7 +339,7 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
     it('returns 401 before DTO validation when HMAC signature is invalid', async () => {
       const badPayload = JSON.stringify({ not_an_order: true });
       await request(app.getHttpServer())
-        .post(`/api/integrations/woocommerce/webhook/${tenantId}`)
+        .post(`/enterprise-hub/integrations/woocommerce/webhook/${tenantId}`)
         .set('x-wc-webhook-signature', 'invalid-sig')
         .set('x-wc-webhook-topic', 'order.created')
         .set('Content-Type', 'application/json')
@@ -343,7 +378,7 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
       const sig = computeHmacSignature(fullWooPayload, webhookSecret);
 
       const res = await request(app.getHttpServer())
-        .post(`/api/integrations/woocommerce/webhook/${tenantId}`)
+        .post(`/enterprise-hub/integrations/woocommerce/webhook/${tenantId}`)
         .set('x-wc-webhook-signature', sig)
         .set('x-wc-webhook-topic', 'order.created')
         .set('Content-Type', 'application/json')
@@ -362,7 +397,7 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
       const sig = computeHmacSignature(invalidOrder, webhookSecret);
 
       await request(app.getHttpServer())
-        .post(`/api/integrations/woocommerce/webhook/${tenantId}`)
+        .post(`/enterprise-hub/integrations/woocommerce/webhook/${tenantId}`)
         .set('x-wc-webhook-signature', sig)
         .set('x-wc-webhook-topic', 'order.created')
         .set('Content-Type', 'application/json')
