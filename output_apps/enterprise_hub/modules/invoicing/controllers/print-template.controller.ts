@@ -7,6 +7,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  NotFoundException,
   Param,
   ParseIntPipe,
   Patch,
@@ -82,7 +83,23 @@ export class PrintTemplateController {
     @Req() request: AuthenticatedRequest,
     @Query() query: GetDefaultTemplateQueryDto,
   ): Promise<PrintTemplateResponseDto> {
-    return this.service.findDefault(this.tenantIdOf(request), query.docType, query.paperSize);
+    const saved = await this.service.findDefault(
+      this.tenantIdOf(request),
+      query.docType,
+      query.paperSize,
+    );
+    if (!saved) {
+      throw new NotFoundException('برای این سند و قطع کاغذ قالب پیش‌فرضی ذخیره نشده است.');
+    }
+    return saved;
+  }
+
+  @RequireAction(AccessAction.READ)
+  @Get('preset')
+  @ApiOperation({ summary: 'مقادیر اولیه فرم قالب‌ساز (فقط برای ویرایشگر، نه برای چاپ)' })
+  @ApiResponse({ status: HttpStatus.OK, type: PrintTemplateResponseDto })
+  getPreset(@Query() query: GetDefaultTemplateQueryDto): PrintTemplateResponseDto {
+    return this.service.getPreset(query.docType, query.paperSize);
   }
 
   @RequireAction(AccessAction.READ)

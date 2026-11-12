@@ -10,7 +10,7 @@ import { formatJalaliDate, formatMoneyRial, formatNumber } from "@/lib/fa-format
 import { integerToPersianWords } from "@/lib/persian-words";
 import { printReceiptPaymentVoucher } from "@/lib/print/open-receipt-payment-voucher-window";
 import { formatMethodDetail } from "@/lib/print/receipt-payment-voucher";
-import { getDefaultPrintTemplate } from "@/lib/api/print-templates-client";
+import { getDefaultPrintTemplateOrNull } from "@/lib/api/print-templates-client";
 import { PrintDocType, PrintPaperSize } from "@/types/print-template";
 import {
   TREASURY_KIND_LABELS,
@@ -40,15 +40,12 @@ export function ReceiptPaymentPrintButton({
       variant={variant}
       className={className}
       onClick={async () => {
-        try {
-          const tpl = await getDefaultPrintTemplate(
-            PrintDocType.RECEIPT_PAYMENT_VOUCHER,
-            PrintPaperSize.A5,
-          );
-          printReceiptPaymentVoucher(doc, companyName, tpl);
-        } catch {
-          printReceiptPaymentVoucher(doc, companyName);
-        }
+        // null (none saved, or lookup failed) prints the original layout, once.
+        const tpl = await getDefaultPrintTemplateOrNull(
+          PrintDocType.RECEIPT_PAYMENT_VOUCHER,
+          PrintPaperSize.A5,
+        );
+        printReceiptPaymentVoucher(doc, companyName, tpl ?? undefined);
       }}
     >
       <Printer className="size-4 ml-1.5" />

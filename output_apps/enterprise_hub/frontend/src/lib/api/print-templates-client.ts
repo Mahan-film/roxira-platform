@@ -1,5 +1,5 @@
 import { API_PROXY_BASE_PATH, INVOICING_RESOURCE_PATH } from "@/lib/api/config";
-import { apiRequest } from "@/lib/api/http-client";
+import { ApiClientError, apiRequest } from "@/lib/api/http-client";
 import {
   CreatePrintTemplateDto,
   PrintDocType,
@@ -54,13 +54,47 @@ export async function getDefaultPrintTemplate(
   docType: PrintDocType,
   paperSize?: PrintPaperSize,
   signal?: AbortSignal,
+): Promise<PrintTemplateDto | null> {
+  try {
+    return await apiRequest<PrintTemplateDto>(`${PRINT_TEMPLATES_ENDPOINT}/default`, {
+      method: "GET",
+      searchParams: {
+        docType,
+        paperSize,
+      },
+      signal,
+    });
+  } catch (err) {
+    // 404 = this tenant never saved a default: callers print the original layout.
+    if (err instanceof ApiClientError && err.statusCode === 404) return null;
+    throw err;
+  }
+}
+
+/**
+ * Like getDefaultPrintTemplate, but never throws: any failure (network, 5xx)
+ * also means "use the original layout", so printing is never blocked.
+ */
+export async function getDefaultPrintTemplateOrNull(
+  docType: PrintDocType,
+  paperSize?: PrintPaperSize,
+): Promise<PrintTemplateDto | null> {
+  try {
+    return await getDefaultPrintTemplate(docType, paperSize);
+  } catch {
+    return null;
+  }
+}
+
+/** Starting values for the builder form (not a saved template, never used for printing). */
+export async function getPrintTemplatePreset(
+  docType: PrintDocType,
+  paperSize?: PrintPaperSize,
+  signal?: AbortSignal,
 ): Promise<PrintTemplateDto> {
-  return apiRequest<PrintTemplateDto>(`${PRINT_TEMPLATES_ENDPOINT}/default`, {
+  return apiRequest<PrintTemplateDto>(`${PRINT_TEMPLATES_ENDPOINT}/preset`, {
     method: "GET",
-    searchParams: {
-      docType,
-      paperSize,
-    },
+    searchParams: { docType, paperSize },
     signal,
   });
 }

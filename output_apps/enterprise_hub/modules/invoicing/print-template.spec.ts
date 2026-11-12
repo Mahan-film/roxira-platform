@@ -98,13 +98,16 @@ describe('PrintTemplateService & Repository', () => {
   });
 
   describe('Default templates', () => {
-    it('returns built-in default template when no custom template exists', async () => {
+    it('returns none (no synthetic preset) when the tenant has no saved template', async () => {
       const template = await service.findDefault(tenantId, PrintDocType.SALES_INVOICE);
-      expect(template).toBeDefined();
-      expect(template.docType).toBe(PrintDocType.SALES_INVOICE);
-      expect(template.paperSize).toBe(PrintPaperSize.A4);
-      expect(template.columnsConfig.length).toBeGreaterThan(0);
-      expect(template.columnsConfig.some((c: PrintColumnConfig) => c.key === 'totalPrice')).toBe(true);
+      expect(template).toBeNull();
+      expect(await service.findDefault(tenantId, PrintDocType.SALES_INVOICE, PrintPaperSize.A5)).toBeNull();
+    });
+
+    it('offers builder-only preset values that are not a saved template', () => {
+      const preset = service.getPreset(PrintDocType.SALES_INVOICE);
+      expect(preset.id).toBe(0);
+      expect(preset.columnsConfig.some((c: PrintColumnConfig) => c.key === 'totalPrice')).toBe(true);
     });
 
     it('returns custom template when one is configured as default', async () => {
@@ -122,10 +125,10 @@ describe('PrintTemplateService & Repository', () => {
       });
 
       const template = await service.findDefault(tenantId, PrintDocType.SALES_INVOICE, PrintPaperSize.A5);
-      expect(template.title).toBe('قالب سفارشی فاکتور فروش');
-      expect(template.paperSize).toBe(PrintPaperSize.A5);
-      expect(template.showLogo).toBe(false);
-      expect(template.columnsConfig).toHaveLength(3);
+      expect(template?.title).toBe('قالب سفارشی فاکتور فروش');
+      expect(template?.paperSize).toBe(PrintPaperSize.A5);
+      expect(template?.showLogo).toBe(false);
+      expect(template?.columnsConfig).toHaveLength(3);
     });
   });
 

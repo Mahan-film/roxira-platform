@@ -1861,6 +1861,17 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/invoicing/print-templates/preset (PrintTemplateController.getPreset)": {
+    "policy": "invoicing:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/invoicing/reports/gross-profit/ (GrossProfitReportController.report)": {
     "policy": "invoicing:read",
     "owner": true,
