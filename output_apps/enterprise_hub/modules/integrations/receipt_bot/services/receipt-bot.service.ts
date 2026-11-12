@@ -16,12 +16,32 @@ import {
 import { ReceiptBotRepository } from '../repositories/receipt-bot.repository';
 import { ReceiptBotRateLimiter } from '../utils/receipt-bot-rate-limiter';
 
+/**
+ * Capture documents only support the `purchase` / `sales` kinds. The link's `defaultKind`
+ * (`purchase` | `petty_cash`) is mapped here: both are expense-side documents, so both map to
+ * `purchase`; the petty-cash distinction is carried in the user text/label sent to extraction.
+ */
+export function captureKindFor(defaultKind: 'petty_cash' | 'purchase'): 'purchase' | 'sales' {
+  switch (defaultKind) {
+    case 'petty_cash':
+    case 'purchase':
+    default:
+      return 'purchase';
+  }
+}
+
 export type FetchFunction = typeof fetch;
 
 @Injectable()
 export class ReceiptBotService {
   private readonly logger = new Logger(ReceiptBotService.name);
   private fetchFn: FetchFunction = globalThis.fetch;
+  /**
+   * Failed link-code attempts. A 6-digit code is brute-forceable, so failures are capped per chat
+   * and, as a backstop, globally for the whole process.
+   */
+  private readonly failedCodeByChat = new ReceiptBotRateLimiter(15 * 60_000, 5);
+  private readonly failedCodeGlobal = new ReceiptBotRateLimiter(10 * 60_000, 100);
 
   constructor(
     private readonly repository: ReceiptBotRepository,
@@ -165,6 +185,20 @@ export class ReceiptBotService {
     }
 
     if (code) {
+      const chatKey = `chat:${chatId}`;
+      const userKey = `user:${telegramUserId}`;
+      const blocked = [
+        this.failedCodeByChat.isBlocked(chatKey),
+        this.failedCodeByChat.isBlocked(userKey),
+        this.failedCodeGlobal.isBlocked('global'),
+      ].find((r) => !r.allowed);
+      if (blocked) {
+        await this.sendTelegramMessage(
+          chatId,
+          `⚠️ تعداد تلاش‌های ناموفق اتصال بیش از حد مجاز است. لطفاً ${blocked.retryAfterSeconds} ثانیه دیگر تلاش فرمایید.`,
+        );
+        return { status: 'rate_limited' };
+      }
       const linked = await this.repository.consumeCode(code, telegramUserId, telegramUsername);
       if (linked) {
         await this.sendTelegramMessage(
@@ -174,6 +208,9 @@ export class ReceiptBotService {
         );
         return { status: 'linked', message: 'User linked successfully' };
       }
+      this.failedCodeByChat.record(chatKey);
+      this.failedCodeByChat.record(userKey);
+      this.failedCodeGlobal.record('global');
       await this.sendTelegramMessage(
         chatId,
         '❌ کد وارد شده نامعتبر است یا منقضی شده است.\nلطفاً از پنل رکسایرا در بخش «تنظیمات > بات دریافت رسید» کد جدیدی دریافت فرمایید.',
@@ -265,7 +302,7 @@ export class ReceiptBotService {
       const userText = msg.caption ? `${msg.caption} [${kindLabel}]` : `[${kindLabel}]`;
 
       const doc = await this.captureService.create(link.tenantId, link.userId, uploadedFile, {
-        kind: 'purchase',
+        kind: captureKindFor(link.defaultKind),
         text: userText,
       });
 

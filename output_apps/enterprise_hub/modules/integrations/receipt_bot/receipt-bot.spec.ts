@@ -1,5 +1,5 @@
 import { ConfigService } from '@nestjs/config';
-import { ReceiptBotService } from './services/receipt-bot.service';
+import { ReceiptBotService, captureKindFor } from './services/receipt-bot.service';
 import { ReceiptBotRepository, TelegramLinkedUser } from './repositories/receipt-bot.repository';
 import { ReceiptBotRateLimiter } from './utils/receipt-bot-rate-limiter';
 import { CaptureService } from '../../invoice_capture/services/capture.service';
@@ -312,7 +312,7 @@ describe('ReceiptBotService & RateLimiter Unit Tests', () => {
           size: expect.any(Number),
         }),
         expect.objectContaining({
-          kind: 'purchase',
+          kind: 'purchase', // capture only knows purchase|sales; see captureKindFor()
           text: 'رسید بنزین اسنپ [تنخواه‌گردان]',
         }),
       );
@@ -339,6 +339,58 @@ describe('ReceiptBotService & RateLimiter Unit Tests', () => {
 
       expect(outcome.status).toBe('rate_limited');
       expect(sentMessages[0].text).toContain('تعداد پیام‌های ارسالی شما بیش از حد مجاز است');
+    });
+
+    it('derives the capture kind from the link default and keeps the label in sync', async () => {
+      expect(captureKindFor('petty_cash')).toBe('purchase');
+      expect(captureKindFor('purchase')).toBe('purchase');
+
+      (mockRepo.lookupLinkByTelegramId as jest.Mock).mockResolvedValue({
+        tenantId,
+        userId,
+        defaultKind: 'purchase',
+        telegramUsername: null,
+      });
+      await service.handleTelegramUpdate({
+        update_id: 20,
+        message: {
+          message_id: 30,
+          date: Math.floor(Date.now() / 1000),
+          chat: { id: 555, type: 'private' },
+          from: { id: 555, first_name: 'A' },
+          photo: [{ file_id: 'p', file_unique_id: 'u', width: 10, height: 10 }],
+        },
+      });
+      expect(mockCaptureService.create).toHaveBeenCalledWith(
+        tenantId,
+        userId,
+        expect.anything(),
+        expect.objectContaining({ kind: 'purchase', text: '[فاکتور خرید]' }),
+      );
+      expect(sentMessages[0].text).toContain('فاکتور خرید');
+    });
+
+    it('blocks a chat after 5 failed link-code attempts and does not consume further codes', async () => {
+      (mockRepo.consumeCode as jest.Mock).mockResolvedValue(null);
+      const send = (n: number) =>
+        service.handleTelegramUpdate({
+          update_id: 100 + n,
+          message: {
+            message_id: 100 + n,
+            date: Math.floor(Date.now() / 1000),
+            chat: { id: 4242, type: 'private' },
+            // vary from.id to prove the per-chat key holds even when from.id is spoofed
+            from: { id: 9000 + n, first_name: 'X' },
+            text: String(100000 + n),
+          },
+        });
+
+      for (let i = 0; i < 5; i++) {
+        expect((await send(i)).status).toBe('invalid_code');
+      }
+      const blocked = await send(5);
+      expect(blocked.status).toBe('rate_limited');
+      expect(mockRepo.consumeCode).toHaveBeenCalledTimes(5);
     });
   });
 });

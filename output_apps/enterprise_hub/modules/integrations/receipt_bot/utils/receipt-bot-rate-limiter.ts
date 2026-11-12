@@ -39,6 +39,25 @@ export class ReceiptBotRateLimiter {
     return { allowed: true };
   }
 
+  /** Non-recording check: true when `key` already used up its quota in the window. */
+  isBlocked(key: string): RateLimitResult {
+    const now = Date.now();
+    const valid = (this.timestamps.get(key) ?? []).filter((ts) => now - ts < this.windowMs);
+    if (valid.length >= this.maxRequests) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((valid[0] + this.windowMs - now) / 1000));
+      return { allowed: false, retryAfterSeconds };
+    }
+    return { allowed: true };
+  }
+
+  /** Record one event (e.g. a failed attempt) for `key` without checking the quota. */
+  record(key: string): void {
+    const now = Date.now();
+    const valid = (this.timestamps.get(key) ?? []).filter((ts) => now - ts < this.windowMs);
+    valid.push(now);
+    this.timestamps.set(key, valid);
+  }
+
   reset(key?: string): void {
     if (key) {
       this.timestamps.delete(key);
