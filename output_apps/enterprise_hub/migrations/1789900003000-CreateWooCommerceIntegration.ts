@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateWooCommerceIntegration1789900002800 implements MigrationInterface {
-  name = 'CreateWooCommerceIntegration1789900002800';
+export class CreateWooCommerceIntegration1789900003000 implements MigrationInterface {
+  name = 'CreateWooCommerceIntegration1789900003000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // 1. Create woocommerce_configs table
@@ -12,7 +12,7 @@ export class CreateWooCommerceIntegration1789900002800 implements MigrationInter
         "store_url" varchar(500) NOT NULL,
         "consumer_key_encrypted" text NOT NULL,
         "consumer_secret_encrypted" text NOT NULL,
-        "webhook_secret" varchar(128) NOT NULL,
+        "webhook_secret" varchar(255) NOT NULL,
         "auto_sync_orders" boolean NOT NULL DEFAULT true,
         "auto_sync_stock" boolean NOT NULL DEFAULT true,
         "last_sync_at" timestamptz,
@@ -55,6 +55,9 @@ export class CreateWooCommerceIntegration1789900002800 implements MigrationInter
         ON "woocommerce_sync_logs" ("tenant_id", "created_at" DESC);
       CREATE INDEX IF NOT EXISTS "IDX_wc_sync_logs_tenant_ext"
         ON "woocommerce_sync_logs" ("tenant_id", "direction", "external_id");
+      CREATE UNIQUE INDEX IF NOT EXISTS "UQ_wc_sync_logs_tenant_success"
+        ON "woocommerce_sync_logs" ("tenant_id", "direction", "external_id")
+        WHERE "status" = 'SUCCESS';
     `);
 
     await queryRunner.query(`
@@ -68,6 +71,17 @@ export class CreateWooCommerceIntegration1789900002800 implements MigrationInter
         FOR ALL
         USING ("tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid)
         WITH CHECK ("tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);
+    `);
+
+    // Grants for roxira_app
+    await queryRunner.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'roxira_app') THEN
+          GRANT SELECT, INSERT, UPDATE, DELETE ON "woocommerce_configs" TO roxira_app;
+          GRANT SELECT, INSERT, UPDATE, DELETE ON "woocommerce_sync_logs" TO roxira_app;
+        END IF;
+      END $$;
     `);
   }
 

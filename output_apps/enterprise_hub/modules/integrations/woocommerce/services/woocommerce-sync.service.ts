@@ -55,7 +55,7 @@ export class WooCommerceSyncService {
       storeUrl: config.storeUrl,
       maskedConsumerKey: maskedKey,
       hasConsumerSecret: hasSecret,
-      webhookSecret: config.webhookSecret,
+      webhookSecret: maskApiKey(config.webhookSecret),
       webhookUrl: `/api/integrations/woocommerce/webhook/${tenantId}`,
       autoSyncOrders: config.autoSyncOrders,
       autoSyncStock: config.autoSyncStock,
@@ -89,7 +89,7 @@ export class WooCommerceSyncService {
       storeUrl: saved.storeUrl,
       maskedConsumerKey: maskApiKey(dto.consumerKey.trim()),
       hasConsumerSecret: true,
-      webhookSecret: saved.webhookSecret,
+      webhookSecret: maskApiKey(saved.webhookSecret),
       webhookUrl: `/api/integrations/woocommerce/webhook/${tenantId}`,
       autoSyncOrders: saved.autoSyncOrders,
       autoSyncStock: saved.autoSyncStock,
@@ -108,6 +108,16 @@ export class WooCommerceSyncService {
     order: WooCommerceOrderWebhookDto,
   ): Promise<{ success: boolean; invoiceId?: string; skipped?: boolean; reason?: string }> {
     const externalId = String(order.id);
+
+    // 0. Auto-sync check
+    const config = await this.wooRepo.findConfig(tenantId);
+    if (config && !config.autoSyncOrders) {
+      return {
+        success: true,
+        skipped: true,
+        reason: 'autoSyncOrders is disabled',
+      };
+    }
 
     // 1. Idempotency Check on the WooCommerce Order ID
     const existingLog = await this.wooRepo.findSyncLogByExternalId(
@@ -152,36 +162,40 @@ export class WooCommerceSyncService {
         name: 'فروشگاه اینترنتی ووکامرس',
       };
 
-      // 3. Build Invoice Line Items
-      let calculatedTotal = 0;
-      const items: InvoiceItem[] = (order.line_items || []).map((line, idx) => {
-        const qty = line.quantity || 1;
-        const lineTotalNum = Number(line.total || line.subtotal || 0);
-        const unitPriceNum = Number(line.price || 0) || Math.round(lineTotalNum / qty);
-        calculatedTotal += lineTotalNum;
+      // 3. Currency and BigInt minor units via money.ts
+      const orderCurrency = (order.currency || 'IRR').toUpperCase() === 'IRT' ? Currency.IRT : Currency.IRR;
+      const orderTotalMinor = toMinor(order.total || '0');
+      const totalTaxMinor = toMinor(order.total_tax || '0');
+
+      // 4. Build Invoice Line Items
+      const items: InvoiceItem[] = (order.line_items || []).map((line) => {
+        const qty = Math.max(1, line.quantity || 1);
+        const lineTotalMinor = toMinor(line.total || line.subtotal || '0');
+        const unitPriceMinor = line.price !== undefined ? toMinor(String(line.price)) : lineTotalMinor / BigInt(qty);
 
         return {
           sku: line.sku || `WOO-${line.product_id}`,
           description: line.name || `کالای ووکامرس #${line.product_id}`,
           quantity: qty,
-          unitPrice: unitPriceNum,
+          unitPrice: Number(fromMinor(unitPriceMinor)),
           discount: 0,
           vatRate: 0,
           tax: 0,
-          total: lineTotalNum,
+          total: Number(fromMinor(lineTotalMinor)),
         };
       });
 
-      const grandTotal = calculatedTotal > 0 ? calculatedTotal : Number(order.total || 0);
-      const taxInvoiceNumber = `WOO-${order.id}-${randomBytes(3).toString('hex')}`;
+      const grandTotal = Number(fromMinor(orderTotalMinor));
+      const totalTax = Number(fromMinor(totalTaxMinor));
+      const taxInvoiceNumber = `WOO-${order.id}`;
 
-      // 4. Create Draft Sales Invoice
+      // 5. Create Draft Sales Invoice
       const invoice = await this.invoicingRepo.create(tenantId, {
         tenantId,
         taxInvoiceNumber,
         direction: InvoiceDirection.SALE,
         status: InvoiceStatus.DRAFT,
-        currency: Currency.IRR,
+        currency: orderCurrency,
         jurisdiction: InvoiceJurisdiction.IR,
         exchangeRate: 1,
         fxRate: 1,
@@ -196,11 +210,11 @@ export class WooCommerceSyncService {
         items,
         totalAmount: grandTotal,
         totalDiscount: 0,
-        totalTax: Number(order.total_tax || 0),
+        totalTax,
         finalPayable: grandTotal,
       });
 
-      // 5. Record Success in Sync Logs
+      // 6. Record Success in Sync Logs
       await this.wooRepo.createSyncLog(tenantId, {
         direction: WooCommerceSyncDirection.INBOUND_ORDER,
         status: WooCommerceSyncStatus.SUCCESS,
@@ -210,6 +224,7 @@ export class WooCommerceSyncService {
           orderId: order.id,
           orderNumber: order.number || String(order.id),
           total: order.total,
+          currency: orderCurrency,
           itemCount: items.length,
           buyer: buyerName,
         },
@@ -227,6 +242,20 @@ export class WooCommerceSyncService {
         invoiceId: invoice.id,
       };
     } catch (err: any) {
+      if (err?.code === '23505') {
+        // Duplicate key (concurrency race on external_id or taxInvoiceNumber)
+        const existing = await this.wooRepo.findSyncLogByExternalId(
+          tenantId,
+          WooCommerceSyncDirection.INBOUND_ORDER,
+          externalId,
+        );
+        return {
+          success: true,
+          skipped: true,
+          invoiceId: existing?.internalId || undefined,
+          reason: 'Order already imported concurrently',
+        };
+      }
       this.logger.error(`Failed to import WooCommerce order #${externalId}: ${err?.message || err}`);
       await this.wooRepo.createSyncLog(tenantId, {
         direction: WooCommerceSyncDirection.INBOUND_ORDER,
@@ -250,10 +279,11 @@ export class WooCommerceSyncService {
       throw new NotFoundException('WooCommerce not configured');
     }
 
+    if (!config.autoSyncStock) {
+      return { success: false, externalId: sku };
+    }
+
     try {
-      // In production, this issues a REST API call to WooCommerce endpoint:
-      // PUT ${config.storeUrl}/wp-json/wc/v3/products?sku=${sku}
-      // using Basic Auth with decrypted consumer key/secret.
       const payload: Record<string, any> = {
         sku,
         stock_quantity: quantity,
