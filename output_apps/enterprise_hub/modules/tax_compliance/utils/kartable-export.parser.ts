@@ -161,7 +161,11 @@ function buildColumnMap(columnNames: string[]): Partial<Record<FieldKey, string>
 /**
  * تبدیل متن مبلغ (مثلاً «۱۲٬۵۰۰٬۰۰۰ ریال» یا «۲٬۵۰۰٬۰۰۰ تومان») به واحد فرعی دقیق ریال (BigInt × ۱۰۰) بدون حساب اعشاری.
  */
-export function parseKartableMoneyToMinor(raw: unknown): bigint | null {
+export function parseKartableMoneyToMinor(
+  raw: unknown,
+  fieldLabel = 'مبلغ',
+  rowNumber?: number,
+): bigint | null {
   if (raw === null || raw === undefined) return null;
   const text = fixPersianChars(toAsciiDigits(stringifyCell(raw))).trim();
   if (!text) return null;
@@ -173,13 +177,16 @@ export function parseKartableMoneyToMinor(raw: unknown): bigint | null {
     .replace(/[٬,\s_']/g, '')
     .replace(/٫/g, '.')
     .trim();
-  if (!cleaned) return null;
+  const rowSuffix = rowNumber !== undefined ? ` در ردیف ${rowNumber}` : '';
+  if (!cleaned) {
+    throw new BadRequestException(`مقدار ستون «${fieldLabel}»${rowSuffix} نامعتبر است.`);
+  }
 
   try {
     const minor = parseMinor(cleaned);
     return isToman && !isRial ? minor * 10n : minor;
   } catch {
-    return null;
+    throw new BadRequestException(`مقدار ستون «${fieldLabel}»${rowSuffix} نامعتبر است («${text}»).`);
   }
 }
 
@@ -219,16 +226,22 @@ function parseIssueDate(raw: unknown): {
   isoDate: string | null;
   jalaliPeriod: { year: number; quarter: number } | null;
 } {
-  if (typeof raw === 'number' && Number.isFinite(raw) && raw > 20000 && raw < 80000) {
+  const text = stringifyCell(raw).trim();
+  const serialCandidate =
+    typeof raw === 'number'
+      ? raw
+      : /^\d{5}(\.\d+)?$/.test(toAsciiDigits(text))
+        ? Number(toAsciiDigits(text))
+        : NaN;
+  if (Number.isFinite(serialCandidate) && serialCandidate > 20000 && serialCandidate < 80000) {
     // Excel date serial (days since 1899-12-30 UTC with 1900 leap-year offset)
-    const utcMs = Math.round((raw - 25569) * 86_400_000);
+    const utcMs = Math.round((serialCandidate - 25569) * 86_400_000);
     const serialDate = new Date(utcMs);
     if (!Number.isNaN(serialDate.getTime())) {
       const isoDate = serialDate.toISOString().slice(0, 10);
       return { isoDate, jalaliPeriod: tehranJalaliYearQuarter(serialDate) };
     }
   }
-  const text = stringifyCell(raw).trim();
   if (!text) return { isoDate: null, jalaliPeriod: null };
   const isoDate = parseJalaliDate(text);
   if (!isoDate) return { isoDate: null, jalaliPeriod: null };
@@ -313,9 +326,9 @@ export async function parseKartableExportFile(
         const invoiceNumberRaw = normaliseText(stringifyCell(cellAt('invoiceNumber')));
         const invoiceNumber = invoiceNumberRaw || null;
 
-        const vatParsed = parseKartableMoneyToMinor(cellAt('vatAmount'));
-        const netParsed = parseKartableMoneyToMinor(cellAt('netAmount'));
-        const totalParsed = parseKartableMoneyToMinor(cellAt('totalAmount'));
+        const vatParsed = parseKartableMoneyToMinor(cellAt('vatAmount'), 'مالیات', rowNumber);
+        const netParsed = parseKartableMoneyToMinor(cellAt('netAmount'), 'مبلغ مشمول مالیات', rowNumber);
+        const totalParsed = parseKartableMoneyToMinor(cellAt('totalAmount'), 'مبلغ کل', rowNumber);
 
         // Skip completely empty trailing rows
         if (!taxId && !invoiceNumber && vatParsed === null && netParsed === null && totalParsed === null) {

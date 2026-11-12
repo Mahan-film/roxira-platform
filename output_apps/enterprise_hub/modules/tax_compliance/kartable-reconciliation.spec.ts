@@ -13,6 +13,7 @@ import {
 import { KartableReconciliationService } from './services/kartable-reconciliation.service';
 import { parseKartableExportFile, parseKartableMoneyToMinor } from './utils/kartable-export.parser';
 import {
+  buildSyntheticXlsxBuffer,
   SYNTHETIC_KARTABLE_PURCHASES_XLSX,
   SYNTHETIC_KARTABLE_SALES_CSV,
 } from './__fixtures__/synthetic-kartable.fixture';
@@ -64,6 +65,33 @@ describe('KartableReconciliation (parser, matching, quarterly VAT, AccessGuard)'
       vatMinor: 40_000_000n,
       totalMinor: 440_000_000n,
     });
+  });
+
+  it('rejects non-empty unparsable VAT/amount cells with 400 and row number instead of silently defaulting to 0', async () => {
+    const csvWithMalformedVat = Buffer.from(
+      [
+        'taxId,issueDate,netAmount,vatAmount,totalAmount',
+        'TAX-MAL-1,1405/01/15,1000000,۱٫۰۰۰٫۰۰۰ ریال,2000000',
+      ].join('\n'),
+      'utf8',
+    );
+    await expect(parseKartableExportFile(csvWithMalformedVat, 'bad-vat.csv')).rejects.toThrow(
+      /ردیف 2/,
+    );
+    expect(() => parseKartableMoneyToMinor('نامعتبر', 'مالیات', 2)).toThrow(BadRequestException);
+    expect(parseKartableMoneyToMinor('   ')).toBeNull();
+  });
+
+  it('parses numeric Excel serial dates in XLSX exports into Gregorian ISO and Jalali quarter', async () => {
+    // 46102 => 2026-03-21 UTC (1405-01-01, Jalali 1405 Q1)
+    const xlsxSerial = buildSyntheticXlsxBuffer(
+      ['taxId', 'issueDate', 'netAmount', 'vatAmount', 'totalAmount'],
+      [['TAX-SER-1', 46102, '1000000', '100000', '1100000']],
+    );
+    const parsed = await parseKartableExportFile(xlsxSerial, 'serial.xlsx');
+    expect(parsed.rows).toHaveLength(1);
+    expect(parsed.rows[0].issueDate).toBe('2026-03-21');
+    expect(parsed.rows[0].jalaliPeriod).toEqual({ year: 1405, quarter: 1 });
   });
 
   it('rejects empty buffer, non-spreadsheet JSON/binary payloads, and requests without any file', async () => {
