@@ -67,6 +67,13 @@ import {
 } from './invoice-import';
 import { VatRateResolver } from './vat-rate.resolver';
 import { allocateDiscount, fromUnits, percentOf, toUnits } from './invoice-discount';
+import {
+  computeLineMath,
+  LINE_PRICE_EXTRA_DECIMALS,
+  LINE_QUANTITY_DECIMALS,
+  LINE_RATE_DECIMALS,
+  numberToScaled,
+} from './invoice-line-math';
 
 /** What a caller adds to `create` beyond the invoice itself (POS sales, invoices from deliveries). */
 export interface CreateInvoiceOptions {
@@ -446,10 +453,15 @@ export class InvoicingService {
     prepared.forEach((line, index) => {
       const share = fromUnits(shares[index], scale);
       const discount = this.roundTo(line.lineDiscount + share, scale);
-      const taxable = Math.max(0, line.gross - discount);
       const vatRate = this.normalizeVatRate(line.item.vatRate, defaultVatRate);
-      const tax = this.roundTo(taxable * vatRate, scale);
-      const total = this.roundTo(taxable + tax, scale);
+      const math = computeLineMath({
+        quantity: numberToScaled(line.item.quantity, LINE_QUANTITY_DECIMALS),
+        unitPrice: numberToScaled(line.item.unitPrice, scale + LINE_PRICE_EXTRA_DECIMALS),
+        discount: toUnits(discount, scale),
+        vatRate: numberToScaled(vatRate, LINE_RATE_DECIMALS),
+      });
+      const tax = fromUnits(math.tax, scale);
+      const total = fromUnits(math.total, scale);
 
       normalized.push({
         itemId: line.itemId,
