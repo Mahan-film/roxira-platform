@@ -78,58 +78,134 @@ export class InvoicePaymentLinkRepository {
   /**
    * Atomically claims a payment link for server-side gateway verification so
    * concurrent GET/POST callbacks cannot both verify and settle the same link.
+   * Reclaims rows stuck in VERIFYING longer than `staleTimeoutMs` (process crash / hung call).
    */
   async claimPaymentLinkForVerification(
     tenantId: string,
     trackId: string,
+    staleTimeoutMs = 2 * 60 * 1000,
   ): Promise<InvoicePaymentLinkEntity | null> {
+    const staleCutoff = new Date(Date.now() - staleTimeoutMs);
+    return this.tenantScope.run(tenantId, async (manager) => {
+      const mgr = manager ?? this.linkRepo.manager;
+      const rows = await mgr.query(
+        `UPDATE invoice_payment_links
+         SET status = 'VERIFYING', updated_at = NOW()
+         WHERE tenant_id = $1
+           AND track_id = $2
+           AND (
+             status IN ('PENDING', 'UNVERIFIED', 'FAILED')
+             OR (status = 'VERIFYING' AND updated_at <= $3)
+           )
+         RETURNING id, tenant_id, invoice_id, track_id, payment_url, amount, status, gateway, gateway_ref, card_number, paid_at, created_at, updated_at`,
+        [tenantId, trackId, staleCutoff],
+      );
+
+      const first = Array.isArray(rows?.[0]) ? rows[0][0] : rows?.[0];
+      return this.hydrateReturnedLink(first);
+    });
+  }
+
+  /**
+   * Atomically claims a verified-but-unsettled (`PAID_UNSETTLED`, or stale `SETTLING`)
+   * payment link so a retry callback can complete invoice settlement without re-verifying at Zibal.
+   */
+  async claimUnsettledPaymentLink(
+    tenantId: string,
+    trackId: string,
+    staleTimeoutMs = 2 * 60 * 1000,
+  ): Promise<InvoicePaymentLinkEntity | null> {
+    const staleCutoff = new Date(Date.now() - staleTimeoutMs);
+    return this.tenantScope.run(tenantId, async (manager) => {
+      const mgr = manager ?? this.linkRepo.manager;
+      const rows = await mgr.query(
+        `UPDATE invoice_payment_links
+         SET status = 'SETTLING', updated_at = NOW()
+         WHERE tenant_id = $1
+           AND track_id = $2
+           AND (
+             status = 'PAID_UNSETTLED'
+             OR (status = 'SETTLING' AND updated_at <= $3)
+           )
+         RETURNING id, tenant_id, invoice_id, track_id, payment_url, amount, status, gateway, gateway_ref, card_number, paid_at, created_at, updated_at`,
+        [tenantId, trackId, staleCutoff],
+      );
+
+      const first = Array.isArray(rows?.[0]) ? rows[0][0] : rows?.[0];
+      return this.hydrateReturnedLink(first);
+    });
+  }
+
+  private hydrateReturnedLink(row: Record<string, any> | undefined): InvoicePaymentLinkEntity | null {
+    if (!row) {
+      return null;
+    }
+    const entity = new InvoicePaymentLinkEntity();
+    entity.id = row.id;
+    entity.tenantId = row.tenant_id;
+    entity.invoiceId = row.invoice_id;
+    entity.trackId = row.track_id;
+    entity.paymentUrl = row.payment_url;
+    entity.amount = BigInt(row.amount);
+    entity.status = row.status;
+    entity.gateway = row.gateway;
+    entity.gatewayRef = row.gateway_ref ?? null;
+    entity.cardNumber = row.card_number ?? null;
+    entity.paidAt = row.paid_at ? new Date(row.paid_at) : null;
+    entity.createdAt = new Date(row.created_at);
+    entity.updatedAt = new Date(row.updated_at);
+    return entity;
+  }
+
+  async markPaymentLinkPaidUnsettled(
+    tenantId: string,
+    id: string,
+    data: { gatewayRef: string; cardNumber: string | null; paidAt: Date },
+  ): Promise<boolean> {
     return this.tenantScope.run(tenantId, async (manager) => {
       const repo = manager ? manager.getRepository(InvoicePaymentLinkEntity) : this.linkRepo;
       const res = await repo
         .createQueryBuilder()
         .update(InvoicePaymentLinkEntity)
-        .set({ status: 'VERIFYING' })
-        .where('tenant_id = :tenantId AND track_id = :trackId AND status IN (:...allowed)', {
-          tenantId,
-          trackId,
-          allowed: ['PENDING', 'UNVERIFIED', 'FAILED'],
+        .set({
+          status: 'PAID_UNSETTLED',
+          gatewayRef: data.gatewayRef,
+          cardNumber: data.cardNumber,
+          paidAt: data.paidAt,
         })
-        .returning([
-          'id',
-          'tenant_id',
-          'invoice_id',
-          'track_id',
-          'payment_url',
-          'amount',
-          'status',
-          'gateway',
-          'gateway_ref',
-          'card_number',
-          'paid_at',
-          'created_at',
-          'updated_at',
-        ])
+        .where('id = :id AND tenant_id = :tenantId AND status IN (:...fromStatuses)', {
+          id,
+          tenantId,
+          fromStatuses: ['VERIFYING', 'SETTLING'],
+        })
         .execute();
+      return (res.affected ?? 0) === 1;
+    });
+  }
 
-      const row = res.raw?.[0];
-      if (!row) {
-        return null;
-      }
-      const entity = new InvoicePaymentLinkEntity();
-      entity.id = row.id;
-      entity.tenantId = row.tenant_id;
-      entity.invoiceId = row.invoice_id;
-      entity.trackId = row.track_id;
-      entity.paymentUrl = row.payment_url;
-      entity.amount = BigInt(row.amount);
-      entity.status = row.status;
-      entity.gateway = row.gateway;
-      entity.gatewayRef = row.gateway_ref ?? null;
-      entity.cardNumber = row.card_number ?? null;
-      entity.paidAt = row.paid_at ? new Date(row.paid_at) : null;
-      entity.createdAt = new Date(row.created_at);
-      entity.updatedAt = new Date(row.updated_at);
-      return entity;
+  async markPaymentLinkReconciliationRequired(
+    tenantId: string,
+    id: string,
+    data: { gatewayRef: string; cardNumber: string | null; paidAt: Date },
+  ): Promise<boolean> {
+    return this.tenantScope.run(tenantId, async (manager) => {
+      const repo = manager ? manager.getRepository(InvoicePaymentLinkEntity) : this.linkRepo;
+      const res = await repo
+        .createQueryBuilder()
+        .update(InvoicePaymentLinkEntity)
+        .set({
+          status: 'RECONCILIATION_REQUIRED',
+          gatewayRef: data.gatewayRef,
+          cardNumber: data.cardNumber,
+          paidAt: data.paidAt,
+        })
+        .where('id = :id AND tenant_id = :tenantId AND status IN (:...fromStatuses)', {
+          id,
+          tenantId,
+          fromStatuses: ['VERIFYING', 'PAID_UNSETTLED', 'SETTLING'],
+        })
+        .execute();
+      return (res.affected ?? 0) === 1;
     });
   }
 
@@ -149,10 +225,10 @@ export class InvoicePaymentLinkRepository {
           cardNumber: data.cardNumber,
           paidAt: data.paidAt,
         })
-        .where('id = :id AND tenant_id = :tenantId AND status = :verifying', {
+        .where('id = :id AND tenant_id = :tenantId AND status IN (:...fromStatuses)', {
           id,
           tenantId,
-          verifying: 'VERIFYING',
+          fromStatuses: ['VERIFYING', 'PAID_UNSETTLED', 'SETTLING'],
         })
         .execute();
       return (res.affected ?? 0) === 1;
@@ -162,7 +238,7 @@ export class InvoicePaymentLinkRepository {
   async markPaymentLinkStatus(
     tenantId: string,
     id: string,
-    status: 'FAILED' | 'UNVERIFIED',
+    status: 'FAILED' | 'UNVERIFIED' | 'PAID_UNSETTLED',
   ): Promise<void> {
     await this.tenantScope.run(tenantId, async (manager) => {
       const repo = manager ? manager.getRepository(InvoicePaymentLinkEntity) : this.linkRepo;
@@ -170,10 +246,10 @@ export class InvoicePaymentLinkRepository {
         .createQueryBuilder()
         .update(InvoicePaymentLinkEntity)
         .set({ status })
-        .where('id = :id AND tenant_id = :tenantId AND status = :verifying', {
+        .where('id = :id AND tenant_id = :tenantId AND status IN (:...fromStatuses)', {
           id,
           tenantId,
-          verifying: 'VERIFYING',
+          fromStatuses: ['VERIFYING', 'SETTLING', 'PAID_UNSETTLED'],
         })
         .execute();
     });

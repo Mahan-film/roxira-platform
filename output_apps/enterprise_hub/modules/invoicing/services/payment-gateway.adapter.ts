@@ -41,6 +41,10 @@ export class PaymentGatewayAdapter {
     process.env.ZIBAL_VERIFY_URL || 'https://gateway.zibal.ir/v1/verify';
   private readonly startUrl =
     process.env.ZIBAL_START_URL || 'https://gateway.zibal.ir/start/';
+  private readonly requestTimeoutMs = (() => {
+    const raw = Number(process.env.PAYMENT_GATEWAY_TIMEOUT_MS || 10000);
+    return Number.isFinite(raw) && raw > 0 ? raw : 10000;
+  })();
 
   /**
    * Requests a payment trackId and checkout URL from Zibal.
@@ -62,6 +66,7 @@ export class PaymentGatewayAdapter {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(this.requestTimeoutMs),
       });
 
       if (!response.ok) {
@@ -113,6 +118,7 @@ export class PaymentGatewayAdapter {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(this.requestTimeoutMs),
       });
 
       if (!response.ok) {

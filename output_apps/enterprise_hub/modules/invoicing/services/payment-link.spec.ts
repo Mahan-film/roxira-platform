@@ -101,6 +101,9 @@ describe('Payment Link Crypto & Unit Logic (T90)', () => {
           storedLinks.get(trackId) ?? null,
         ),
         findPaymentLinkByGatewayRef: jest.fn().mockResolvedValue(null),
+        findPaymentLinksByInvoiceId: jest.fn(async (_t: string, invoiceId: string) =>
+          Array.from(storedLinks.values()).filter((l) => l.invoiceId === invoiceId),
+        ),
         lookupTenantByTrackId: jest.fn().mockResolvedValue({
           tenantId: T1,
           invoiceId: 'inv-1',
@@ -114,9 +117,41 @@ describe('Payment Link Crypto & Unit Logic (T90)', () => {
           link.status = 'VERIFYING';
           return { ...link };
         }),
+        claimUnsettledPaymentLink: jest.fn(async (_t: string, trackId: string) => {
+          const link = storedLinks.get(trackId);
+          if (!link || link.status !== 'PAID_UNSETTLED') {
+            return null;
+          }
+          link.status = 'SETTLING';
+          return { ...link };
+        }),
+        markPaymentLinkPaidUnsettled: jest.fn(async (_t: string, id: string, data: any) => {
+          for (const link of storedLinks.values()) {
+            if (link.id === id && ['VERIFYING', 'SETTLING'].includes(link.status)) {
+              link.status = 'PAID_UNSETTLED';
+              link.gatewayRef = data.gatewayRef;
+              link.cardNumber = data.cardNumber;
+              link.paidAt = data.paidAt;
+              return true;
+            }
+          }
+          return false;
+        }),
+        markPaymentLinkReconciliationRequired: jest.fn(async (_t: string, id: string, data: any) => {
+          for (const link of storedLinks.values()) {
+            if (link.id === id && ['VERIFYING', 'PAID_UNSETTLED', 'SETTLING'].includes(link.status)) {
+              link.status = 'RECONCILIATION_REQUIRED';
+              link.gatewayRef = data.gatewayRef;
+              link.cardNumber = data.cardNumber;
+              link.paidAt = data.paidAt;
+              return true;
+            }
+          }
+          return false;
+        }),
         markPaymentLinkPaid: jest.fn(async (_t: string, id: string, data: any) => {
           for (const link of storedLinks.values()) {
-            if (link.id === id && link.status === 'VERIFYING') {
+            if (link.id === id && ['VERIFYING', 'PAID_UNSETTLED', 'SETTLING'].includes(link.status)) {
               link.status = 'PAID';
               link.gatewayRef = data.gatewayRef;
               link.cardNumber = data.cardNumber;
@@ -128,7 +163,7 @@ describe('Payment Link Crypto & Unit Logic (T90)', () => {
         }),
         markPaymentLinkStatus: jest.fn(async (_t: string, id: string, status: string) => {
           for (const link of storedLinks.values()) {
-            if (link.id === id && link.status === 'VERIFYING') {
+            if (link.id === id && ['VERIFYING', 'SETTLING', 'PAID_UNSETTLED'].includes(link.status)) {
               link.status = status;
             }
           }
@@ -470,6 +505,133 @@ describe('Payment Link Crypto & Unit Logic (T90)', () => {
       expect(res.paid).toBe(true);
       expect(res.message).toContain('قبلاً ثبت شده است');
       expect(invoicingService.pay).not.toHaveBeenCalled();
+    });
+
+    it('refuses creating a second payment link when a PENDING or PAID link already exists', async () => {
+      invoicingRepo.findById.mockResolvedValue({
+        id: 'inv-1',
+        direction: InvoiceDirection.SALE,
+        status: InvoiceStatus.ISSUED,
+        finalPayable: 500000,
+      });
+      storedLinks.set('trk-existing', {
+        id: 'link-existing',
+        tenantId: T1,
+        invoiceId: 'inv-1',
+        trackId: 'trk-existing',
+        status: 'PENDING',
+      });
+
+      await expect(service.createPaymentLink(T1, 'inv-1')).rejects.toThrow(ConflictException);
+    });
+
+    it('flags RECONCILIATION_REQUIRED and returns failure if invoice is already PAID at settlement time', async () => {
+      const link = {
+        id: 'link-dup-pay',
+        tenantId: T1,
+        invoiceId: 'inv-1',
+        trackId: 'trk-dup-pay',
+        amount: 50000000n,
+        status: 'PENDING',
+        gateway: 'zibal',
+      };
+      storedLinks.set('trk-dup-pay', link);
+
+      const encrypted = sealMerchantId('zibal_test_merchant', T1);
+      paymentRepo.findConfig.mockResolvedValue({
+        tenantId: T1,
+        gateway: 'zibal',
+        encryptedMerchantId: encrypted,
+        isActive: true,
+      });
+      jest.spyOn(gatewayAdapter, 'verifyPayment').mockResolvedValue({
+        success: true,
+        paid: true,
+        amountRials: 500000n,
+        refNumber: 'REF-OVERPAY',
+      });
+      invoicingRepo.findById.mockResolvedValue({
+        id: 'inv-1',
+        status: InvoiceStatus.PAID,
+      });
+
+      const res = await service.handleCallback({ trackId: 'trk-dup-pay' });
+      expect(res.success).toBe(false);
+      expect(res.paid).toBe(false);
+      expect(link.status).toBe('RECONCILIATION_REQUIRED');
+      expect((link as any).gatewayRef).toBe('REF-OVERPAY');
+      expect(invoicingService.pay).not.toHaveBeenCalled();
+    });
+
+    it('preserves PAID_UNSETTLED when pay() fails and completes settlement on retry without re-verifying', async () => {
+      const link = {
+        id: 'link-retry',
+        tenantId: T1,
+        invoiceId: 'inv-1',
+        trackId: 'trk-retry',
+        amount: 50000000n,
+        status: 'PENDING',
+        gateway: 'zibal',
+      };
+      storedLinks.set('trk-retry', link);
+
+      const encrypted = sealMerchantId('zibal_test_merchant', T1);
+      paymentRepo.findConfig.mockResolvedValue({
+        tenantId: T1,
+        gateway: 'zibal',
+        encryptedMerchantId: encrypted,
+        isActive: true,
+      });
+      const verifySpy = jest.spyOn(gatewayAdapter, 'verifyPayment').mockResolvedValue({
+        success: true,
+        paid: true,
+        amountRials: 500000n,
+        refNumber: 'REF-RETRY-1',
+      });
+      invoicingRepo.findById.mockResolvedValue({
+        id: 'inv-1',
+        status: InvoiceStatus.ISSUED,
+      });
+      invoicingService.pay.mockRejectedValueOnce(new Error('transient db outage'));
+
+      await expect(service.handleCallback({ trackId: 'trk-retry' })).rejects.toThrow(
+        'transient db outage',
+      );
+      expect(link.status).toBe('PAID_UNSETTLED');
+      expect((link as any).gatewayRef).toBe('REF-RETRY-1');
+
+      invoicingService.pay.mockResolvedValueOnce({ id: 'inv-1', status: InvoiceStatus.PAID });
+      const retryRes = await service.handleCallback({ trackId: 'trk-retry' });
+      expect(retryRes.success).toBe(true);
+      expect(retryRes.paid).toBe(true);
+      expect(link.status).toBe('PAID');
+      expect(verifySpy).toHaveBeenCalledTimes(1);
+      expect(invoicingService.pay).toHaveBeenCalledTimes(2);
+    });
+
+    it('passes AbortSignal timeout when calling Zibal endpoints', async () => {
+      const fetchMock = jest
+        .spyOn(global, 'fetch' as any)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ result: 100, trackId: '999999' }),
+        } as any);
+      try {
+        const res = await gatewayAdapter.requestPayment({
+          merchantId: 'm1',
+          amountRials: 10000n,
+          orderId: 'o1',
+          description: 'desc',
+          callbackUrl: 'https://app.example.test/cb',
+        });
+        expect(res.success).toBe(true);
+        expect(fetchMock).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({ signal: expect.any(AbortSignal) }),
+        );
+      } finally {
+        fetchMock.mockRestore();
+      }
     });
   });
 });
