@@ -221,16 +221,34 @@ function getCurrencyScale(currency?: Currency | string): number {
   return 2;
 }
 
+export class InvalidAmountError extends Error {}
+
+/**
+ * Exact minor units of a decimal number or string at `scale` decimals. The text is split on '.',
+ * padded when shorter than `scale`, and rounded half up when longer. No float arithmetic is used.
+ * Null, undefined and '' are 0. Anything that is not a plain decimal throws InvalidAmountError.
+ */
 export function toMinorUnits(value: number | string | null | undefined, scale: number): bigint {
   if (value === null || value === undefined || value === '') return 0n;
-  try {
-    return parseScaled(value, scale);
-  } catch {
-    const num = typeof value === 'number' ? value : Number(value);
-    if (!Number.isFinite(num)) return 0n;
-    const factor = 10 ** scale;
-    return BigInt(Math.round((num + Number.EPSILON) * factor));
+  let text: string;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || Math.abs(value) >= 1e21) {
+      throw new InvalidAmountError(`Invalid amount: ${value}`);
+    }
+    text = value.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits: 20 });
+  } else {
+    text = toLatinDigits(value).trim();
   }
+  const match = /^(-?)(\d{1,18})(?:\.(\d+))?$/.exec(text);
+  if (!match) {
+    throw new InvalidAmountError(`Invalid amount: "${String(value)}"`);
+  }
+  const [, sign, integer, fraction = ''] = match;
+  let units = BigInt(integer + fraction.slice(0, scale).padEnd(scale, '0'));
+  if (fraction.length > scale && fraction[scale] >= '5') {
+    units += 1n;
+  }
+  return sign === '-' ? -units : units;
 }
 
 /**
@@ -242,6 +260,23 @@ export function runMoadianPreFlightValidation(
   options?: MoadianPreFlightOptions,
 ): MoadianPreFlightResult {
   const errors: MoadianPreFlightError[] = [];
+  const invalidAmountFields = new Set<string>();
+  /** Exact minor units, or null (with one AMOUNT_INVALID error per field) when the input is not a decimal. */
+  const amount = (value: number | string | null | undefined, sc: number, field: string): bigint | null => {
+    try {
+      return toMinorUnits(value, sc);
+    } catch {
+      if (!invalidAmountFields.has(field)) {
+        invalidAmountFields.add(field);
+        errors.push({
+          field,
+          message: `مقدار «${String(value)}» برای ${field} عدد معتبر نیست.`,
+          code: 'AMOUNT_INVALID',
+        });
+      }
+      return null;
+    }
+  };
 
   // 1. Seller national ID / economic code validation
   const rawSellerId = invoice.sellerInfo?.nationalId ?? '';
@@ -475,10 +510,24 @@ export function runMoadianPreFlightValidation(
 
     // Line math consistency using exact integer minor units
     // Same math as InvoicingService (shared helper): gross is never rounded per line.
-    const discountUnits = toMinorUnits(item.discount ?? 0, scale);
+    const discountUnits = amount(item.discount ?? 0, scale, `${fieldPrefix}.discount`);
+    const quantityUnits = amount(item.quantity ?? 0, LINE_QUANTITY_DECIMALS, `${fieldPrefix}.quantity`);
+    const unitPriceUnits = amount(item.unitPrice ?? 0, scale + LINE_PRICE_EXTRA_DECIMALS, `${fieldPrefix}.unitPrice`);
+    const actualTaxUnits = item.tax !== undefined ? amount(item.tax, scale, `${fieldPrefix}.tax`) : null;
+    const actualTotalUnits = item.total !== undefined ? amount(item.total, scale, `${fieldPrefix}.total`) : null;
+    if (
+      discountUnits === null ||
+      quantityUnits === null ||
+      unitPriceUnits === null ||
+      (item.tax !== undefined && actualTaxUnits === null) ||
+      (item.total !== undefined && actualTotalUnits === null)
+    ) {
+      // The amounts are not decimals: AMOUNT_INVALID is reported; math cannot be compared.
+      return;
+    }
     const math = computeLineMath({
-      quantity: toMinorUnits(item.quantity ?? 0, LINE_QUANTITY_DECIMALS),
-      unitPrice: toMinorUnits(item.unitPrice ?? 0, scale + LINE_PRICE_EXTRA_DECIMALS),
+      quantity: quantityUnits,
+      unitPrice: unitPriceUnits,
       discount: discountUnits,
       vatRate: numberToScaled(vatRate, LINE_RATE_DECIMALS),
     });
@@ -487,35 +536,32 @@ export function runMoadianPreFlightValidation(
     const expectedLineTotalUnits = math.total;
 
     calculatedTotalDiscountUnits += discountUnits;
-    calculatedTotalTaxUnits += item.tax !== undefined ? toMinorUnits(item.tax, scale) : expectedTaxUnits;
-    calculatedFinalPayableUnits += item.total !== undefined ? toMinorUnits(item.total, scale) : expectedLineTotalUnits;
+    calculatedTotalTaxUnits += actualTaxUnits ?? expectedTaxUnits;
+    calculatedFinalPayableUnits += actualTotalUnits ?? expectedLineTotalUnits;
 
-    if (item.tax !== undefined) {
-      const actualTaxUnits = toMinorUnits(item.tax, scale);
-      if (actualTaxUnits !== expectedTaxUnits) {
-        errors.push({
-          field: `${fieldPrefix}.tax`,
-          message: `سطر ${index + 1}: مبلغ مالیات (${item.tax}) با حاصل‌ضرب نرخ در خالص سطر همخوانی ندارد.`,
-          code: 'ITEM_TAX_MATH_MISMATCH',
-        });
-      }
+    if (actualTaxUnits !== null && actualTaxUnits !== expectedTaxUnits) {
+      errors.push({
+        field: `${fieldPrefix}.tax`,
+        message: `سطر ${index + 1}: مبلغ مالیات (${item.tax}) با حاصل‌ضرب نرخ در خالص سطر همخوانی ندارد.`,
+        code: 'ITEM_TAX_MATH_MISMATCH',
+      });
     }
 
-    if (item.total !== undefined) {
-      const actualTotalUnits = toMinorUnits(item.total, scale);
-      if (actualTotalUnits !== expectedLineTotalUnits) {
-        errors.push({
-          field: `${fieldPrefix}.total`,
-          message: `سطر ${index + 1}: جمع سطر (${item.total}) با مجموع خالص و مالیات برابر نیست.`,
-          code: 'ITEM_TOTAL_MATH_MISMATCH',
-        });
-      }
+    if (actualTotalUnits !== null && actualTotalUnits !== expectedLineTotalUnits) {
+      errors.push({
+        field: `${fieldPrefix}.total`,
+        message: `سطر ${index + 1}: جمع سطر (${item.total}) با مجموع خالص و مالیات برابر نیست.`,
+        code: 'ITEM_TOTAL_MATH_MISMATCH',
+      });
     }
   });
 
   // 5. Header totals consistency using exact minor units
   const calculatedTotalAmountUnits = sumGrossMinor(lineMaths);
-  if (invoice.totalAmount !== undefined && toMinorUnits(invoice.totalAmount, scale) !== calculatedTotalAmountUnits) {
+  // With an unparseable line amount the sums are incomplete; AMOUNT_INVALID is already reported.
+  const headerComparable = lineMaths.length === items.length;
+  const totalAmountUnits = invoice.totalAmount !== undefined ? amount(invoice.totalAmount, scale, 'totalAmount') : null;
+  if (totalAmountUnits !== null && headerComparable && totalAmountUnits !== calculatedTotalAmountUnits) {
     errors.push({
       field: 'totalAmount',
       message: `مجموع ناخالص صورتحساب (${invoice.totalAmount}) با مجموع سطرهای اقلام مطابقت ندارد.`,
@@ -523,7 +569,8 @@ export function runMoadianPreFlightValidation(
     });
   }
 
-  if (invoice.totalDiscount !== undefined && toMinorUnits(invoice.totalDiscount, scale) !== calculatedTotalDiscountUnits) {
+  const totalDiscountUnits = invoice.totalDiscount !== undefined ? amount(invoice.totalDiscount, scale, 'totalDiscount') : null;
+  if (totalDiscountUnits !== null && headerComparable && totalDiscountUnits !== calculatedTotalDiscountUnits) {
     errors.push({
       field: 'totalDiscount',
       message: `مجموع تخفیف‌های صورتحساب (${invoice.totalDiscount}) با مجموع سطرهای اقلام مطابقت ندارد.`,
@@ -531,7 +578,8 @@ export function runMoadianPreFlightValidation(
     });
   }
 
-  if (invoice.totalTax !== undefined && toMinorUnits(invoice.totalTax, scale) !== calculatedTotalTaxUnits) {
+  const totalTaxUnits = invoice.totalTax !== undefined ? amount(invoice.totalTax, scale, 'totalTax') : null;
+  if (totalTaxUnits !== null && headerComparable && totalTaxUnits !== calculatedTotalTaxUnits) {
     errors.push({
       field: 'totalTax',
       message: `مجموع مالیات صورتحساب (${invoice.totalTax}) با مجموع مالیات سطرها مطابقت ندارد.`,
@@ -539,10 +587,8 @@ export function runMoadianPreFlightValidation(
     });
   }
 
-  if (
-    invoice.finalPayable !== undefined &&
-    toMinorUnits(invoice.finalPayable, scale) !== calculatedFinalPayableUnits
-  ) {
+  const finalPayableUnits = invoice.finalPayable !== undefined ? amount(invoice.finalPayable, scale, 'finalPayable') : null;
+  if (finalPayableUnits !== null && headerComparable && finalPayableUnits !== calculatedFinalPayableUnits) {
     errors.push({
       field: 'finalPayable',
       message: `مبلغ نهایی قابل پرداخت (${invoice.finalPayable}) با مجموع خالص و مالیات اقلام برابر نیست.`,

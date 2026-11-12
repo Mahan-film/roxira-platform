@@ -36,10 +36,7 @@ import {
   preflightMoadianInvoice,
   submitToMoadian,
 } from "@/lib/api/moadian-seasonal-client";
-import {
-  runMoadianPreFlightValidation,
-  type MoadianPreFlightError,
-} from "@/lib/moadian-preflight";
+import type { MoadianPreFlightError } from "@/lib/moadian-preflight";
 import { formatMoneyRial, formatNumber } from "@/lib/fa-format";
 import { nextDeadlineView, type NextDeadlineInput } from "@/lib/tax-deadline";
 import { InvoiceStatus, type InvoiceResponseDto } from "@/types/invoicing";
@@ -188,12 +185,9 @@ function MoadianCard() {
       if (selectedRef.current === id) {
         setPreFlightErrors(pre.errors);
       }
-    } catch {
-      const inv = invoices.find((i) => i.id === id);
-      if (inv && selectedRef.current === id) {
-        const pre = runMoadianPreFlightValidation(inv, { defaultSstid: status?.defaultSstid });
-        setPreFlightErrors(pre.errors);
-      }
+    } catch (err) {
+      // No local re-validation: the server result is the only source of truth.
+      if (selectedRef.current === id) setError(loadErrorMessage(err));
     }
     try {
       const existing = await getMoadianSubmission(id);
