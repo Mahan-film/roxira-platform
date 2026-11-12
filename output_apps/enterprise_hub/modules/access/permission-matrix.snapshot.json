@@ -105,14 +105,14 @@
     "legacy_member": false
   },
   "DELETE /enterprise-hub/integrations/receipt-bot/link (ReceiptBotController.unlink)": {
-    "policy": "accounting:read",
+    "policy": "accounting:post",
     "owner": true,
     "admin": true,
     "accountant": true,
     "sales": false,
     "cheque_reviewer": false,
     "hr": false,
-    "read_only": true,
+    "read_only": false,
     "legacy_member": false
   },
   "DELETE /enterprise-hub/inventory/openings/:id (OpeningBalanceController.remove)": {
@@ -3934,14 +3934,14 @@
     "legacy_member": false
   },
   "POST /enterprise-hub/integrations/receipt-bot/link-code (ReceiptBotController.generateCode)": {
-    "policy": "accounting:read",
+    "policy": "accounting:post",
     "owner": true,
     "admin": true,
     "accountant": true,
     "sales": false,
     "cheque_reviewer": false,
     "hr": false,
-    "read_only": true,
+    "read_only": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/documents/adjustments (StockDocumentsController.createAdjustment)": {
@@ -4854,14 +4854,14 @@
     "legacy_member": false
   },
   "PUT /enterprise-hub/integrations/receipt-bot/preferences (ReceiptBotController.updatePreferences)": {
-    "policy": "accounting:read",
+    "policy": "accounting:post",
     "owner": true,
     "admin": true,
     "accountant": true,
     "sales": false,
     "cheque_reviewer": false,
     "hr": false,
-    "read_only": true,
+    "read_only": false,
     "legacy_member": false
   },
   "PUT /enterprise-hub/inventory/openings/:id/lines (OpeningBalanceController.replaceLines)": {

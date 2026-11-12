@@ -59,7 +59,7 @@ export class CreateReceiptBotIntegration1789900003000 implements MigrationInterf
       RETURNS TABLE (tenant_id uuid, user_id uuid, default_kind varchar, telegram_username varchar)
       LANGUAGE plpgsql
       SECURITY DEFINER
-      SET search_path = public
+      SET search_path = pg_catalog, public
       AS $$
       #variable_conflict use_column
       BEGIN
@@ -80,7 +80,7 @@ export class CreateReceiptBotIntegration1789900003000 implements MigrationInterf
       RETURNS TABLE (tenant_id uuid, user_id uuid, default_kind varchar)
       LANGUAGE plpgsql
       SECURITY DEFINER
-      SET search_path = public
+      SET search_path = pg_catalog, public
       AS $$
       #variable_conflict use_column
       DECLARE
@@ -119,12 +119,53 @@ export class CreateReceiptBotIntegration1789900003000 implements MigrationInterf
       $$;
     `);
 
+    // Webhook idempotency: one row per (bot, update_id). Resolved BEFORE the tenant is known, so
+    // (LESSONS 7) it carries no tenant column and no tenant policy; it holds no customer data.
+    // RLS is enabled (not forced) with no policy, so the app role can only reach it through the
+    // SECURITY DEFINER claim function below.
+    await q.query(`
+      CREATE TABLE IF NOT EXISTS "receipt_bot_processed_updates" (
+        "bot_id" varchar(64) NOT NULL,
+        "update_id" bigint NOT NULL,
+        "created_at" timestamptz NOT NULL DEFAULT now(),
+        CONSTRAINT "PK_receipt_bot_processed_updates" PRIMARY KEY ("bot_id", "update_id")
+      )
+    `);
+    await q.query(`ALTER TABLE "receipt_bot_processed_updates" ENABLE ROW LEVEL SECURITY`);
+
+    await q.query(`
+      CREATE OR REPLACE FUNCTION receipt_bot_claim_update(p_bot_id text, p_update_id bigint)
+      RETURNS boolean
+      LANGUAGE plpgsql
+      SECURITY DEFINER
+      SET search_path = pg_catalog, public
+      AS $$
+      DECLARE
+        v_rows integer;
+      BEGIN
+        DELETE FROM receipt_bot_processed_updates WHERE created_at < now() - interval '7 days';
+        INSERT INTO receipt_bot_processed_updates (bot_id, update_id)
+        VALUES (p_bot_id, p_update_id)
+        ON CONFLICT DO NOTHING;
+        GET DIAGNOSTICS v_rows = ROW_COUNT;
+        RETURN v_rows = 1;
+      END;
+      $$;
+    `);
+
+    await q.query(`
+      REVOKE ALL ON FUNCTION receipt_bot_lookup_link(text) FROM PUBLIC;
+      REVOKE ALL ON FUNCTION receipt_bot_consume_code(text, text, text) FROM PUBLIC;
+      REVOKE ALL ON FUNCTION receipt_bot_claim_update(text, bigint) FROM PUBLIC;
+    `);
+
     await q.query(`
       DO $$
       BEGIN
         IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'roxira_app') THEN
           GRANT EXECUTE ON FUNCTION receipt_bot_lookup_link(text) TO roxira_app;
           GRANT EXECUTE ON FUNCTION receipt_bot_consume_code(text, text, text) TO roxira_app;
+          GRANT EXECUTE ON FUNCTION receipt_bot_claim_update(text, bigint) TO roxira_app;
         END IF;
       END
       $$;
@@ -132,6 +173,8 @@ export class CreateReceiptBotIntegration1789900003000 implements MigrationInterf
   }
 
   public async down(q: QueryRunner): Promise<void> {
+    await q.query(`DROP FUNCTION IF EXISTS receipt_bot_claim_update(text, bigint)`);
+    await q.query(`DROP TABLE IF EXISTS "receipt_bot_processed_updates"`);
     await q.query(`DROP FUNCTION IF EXISTS receipt_bot_consume_code(text, text, text)`);
     await q.query(`DROP FUNCTION IF EXISTS receipt_bot_consume_code(varchar, varchar, varchar)`);
     await q.query(`DROP FUNCTION IF EXISTS receipt_bot_lookup_link(text)`);

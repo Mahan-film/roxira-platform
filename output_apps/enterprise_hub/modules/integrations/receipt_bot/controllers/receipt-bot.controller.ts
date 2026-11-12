@@ -41,7 +41,7 @@ export class ReceiptBotController {
     };
   }
 
-  @RequireAction(AccessAction.READ)
+  @RequireAction(AccessAction.POST)
   @Post('link-code')
   @ApiOperation({ summary: 'ایجاد کد یکبار مصرف ۶ رقمی برای اتصال بات به حساب کاربر' })
   @ApiResponse({ status: HttpStatus.OK, type: GenerateLinkCodeResponseDto })
@@ -59,7 +59,7 @@ export class ReceiptBotController {
     return this.service.getStatus(tenantId, userId);
   }
 
-  @RequireAction(AccessAction.READ)
+  @RequireAction(AccessAction.POST)
   @Delete('link')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'قطع اتصال ربات پیام‌رسان از حساب کاربری' })
@@ -68,7 +68,7 @@ export class ReceiptBotController {
     await this.service.unlink(tenantId, userId);
   }
 
-  @RequireAction(AccessAction.READ)
+  @RequireAction(AccessAction.POST)
   @Put('preferences')
   @ApiOperation({ summary: 'تغییر نوع پیش‌فرض پیش‌نویس (تنخواه‌گردان یا خرید)' })
   @ApiResponse({ status: HttpStatus.OK, type: ReceiptBotStatusResponseDto })

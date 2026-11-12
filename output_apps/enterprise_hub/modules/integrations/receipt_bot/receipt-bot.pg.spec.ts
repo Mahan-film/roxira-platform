@@ -66,7 +66,8 @@ describePg('ReceiptBot RLS isolation (NOSUPERUSER NOBYPASSRLS)', () => {
        GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "${ROLE_NAME}";
        GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO "${ROLE_NAME}";
        GRANT EXECUTE ON FUNCTION receipt_bot_lookup_link(text) TO "${ROLE_NAME}";
-       GRANT EXECUTE ON FUNCTION receipt_bot_consume_code(text, text, text) TO "${ROLE_NAME}";`,
+       GRANT EXECUTE ON FUNCTION receipt_bot_consume_code(text, text, text) TO "${ROLE_NAME}";
+       GRANT EXECUTE ON FUNCTION receipt_bot_claim_update(text, bigint) TO "${ROLE_NAME}";`,
     );
 
     appDs = await new DataSource(dsOptions(db, ROLE_NAME, ROLE_PW)).initialize();
@@ -166,5 +167,16 @@ describePg('ReceiptBot RLS isolation (NOSUPERUSER NOBYPASSRLS)', () => {
     const t1Unlinked = await repository.unlink(T1, U1);
     expect(t1Unlinked).toBe(true);
     expect(await repository.findLinkByTenantUser(T1, U1)).toBeNull();
+  });
+
+  it('receipt_bot_claim_update is idempotent per (bot, update_id) and not callable by PUBLIC', async () => {
+    const first = await repository.claimUpdate('bot1', 424242);
+    const retry = await repository.claimUpdate('bot1', 424242);
+    const otherBot = await repository.claimUpdate('bot2', 424242);
+    expect([first, retry, otherBot]).toEqual([true, false, true]);
+    const pub = await ownerDs.query(
+      `SELECT has_function_privilege('public', 'receipt_bot_lookup_link(text)', 'EXECUTE') AS p`,
+    );
+    expect(pub[0].p).toBe(false);
   });
 });

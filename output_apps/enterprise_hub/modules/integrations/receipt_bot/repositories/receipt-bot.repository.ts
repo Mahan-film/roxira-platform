@@ -131,4 +131,16 @@ export class ReceiptBotRepository {
       telegramUsername: telegramUsername ?? null,
     };
   }
+
+  /**
+   * Idempotency guard for webhook deliveries. Returns true the first time an (bot, update_id)
+   * pair is seen and false for every retry. Pre-tenant, via a SECURITY DEFINER function.
+   */
+  async claimUpdate(botId: string, updateId: number): Promise<boolean> {
+    const raw = await this.codesRepo.query(
+      `SELECT receipt_bot_claim_update($1, $2) AS claimed`,
+      [botId, String(updateId)],
+    );
+    return raw?.[0]?.claimed === true;
+  }
 }

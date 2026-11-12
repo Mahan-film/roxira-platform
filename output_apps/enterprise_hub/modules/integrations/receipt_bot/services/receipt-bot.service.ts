@@ -60,6 +60,13 @@ export class ReceiptBotService {
     return token?.trim() ? token.trim() : null;
   }
 
+  /** Public numeric bot id (the part of the token before ':'); never the secret part. */
+  private botId(): string {
+    const token = this.botToken();
+    const id = token ? token.split(':')[0] : '';
+    return /^\d{1,20}$/.test(id) ? id : 'default';
+  }
+
   private botApiBase(): string {
     const raw =
       this.config.get<string>('RECEIPT_BOT_API') ??
@@ -132,6 +139,12 @@ export class ReceiptBotService {
   async handleTelegramUpdate(update: TelegramUpdateDto): Promise<{ status: string; message?: string }> {
     const msg = update.message;
     if (!msg) return { status: 'ignored' };
+
+    // A retried delivery of the same update must not be processed twice (duplicate captures).
+    const firstDelivery = await this.repository.claimUpdate(this.botId(), update.update_id);
+    if (!firstDelivery) {
+      return { status: 'duplicate' };
+    }
 
     const chatId = msg.chat.id;
     const telegramUserId = String(msg.from?.id ?? chatId);
@@ -318,7 +331,7 @@ export class ReceiptBotService {
       this.logger.error(`Failed to process capture: ${(err as Error).message}`);
       await this.sendTelegramMessage(
         chatId,
-        `❌ پردازش رسید با خطا مواجه شد: ${(err as Error).message}`,
+        '❌ پردازش رسید با خطا مواجه شد. لطفاً کمی بعد دوباره تلاش کنید یا رسید را از پنل رکسایرا بارگذاری فرمایید.',
       );
       return { status: 'capture_failed' };
     }

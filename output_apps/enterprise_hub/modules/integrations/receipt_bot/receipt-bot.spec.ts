@@ -30,6 +30,7 @@ describe('ReceiptBotService & RateLimiter Unit Tests', () => {
         createdAt: new Date(),
       })),
       consumeCode: jest.fn(),
+      claimUpdate: jest.fn().mockResolvedValue(true),
       lookupLinkByTelegramId: jest.fn(),
       findLinkByTenantUser: jest.fn(),
       unlink: jest.fn(),
@@ -47,7 +48,7 @@ describe('ReceiptBotService & RateLimiter Unit Tests', () => {
 
     mockConfig = {
       get: jest.fn((key: string) => {
-        if (key === 'RECEIPT_BOT_TOKEN') return 'test-bot-token';
+        if (key === 'RECEIPT_BOT_TOKEN') return '123456:test-bot-token';
         if (key === 'RECEIPT_BOT_API') return 'https://api.telegram.org';
         if (key === 'RECEIPT_BOT_USERNAME') return 'roxira_receipt_bot';
         return undefined;
@@ -391,6 +392,53 @@ describe('ReceiptBotService & RateLimiter Unit Tests', () => {
       const blocked = await send(5);
       expect(blocked.status).toBe('rate_limited');
       expect(mockRepo.consumeCode).toHaveBeenCalledTimes(5);
+    });
+
+    it('ignores a retried delivery of the same update_id (no second capture)', async () => {
+      (mockRepo.claimUpdate as jest.Mock).mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+      (mockRepo.lookupLinkByTelegramId as jest.Mock).mockResolvedValue({
+        tenantId,
+        userId,
+        defaultKind: 'petty_cash',
+        telegramUsername: null,
+      });
+      const update = {
+        update_id: 777001,
+        message: {
+          message_id: 40,
+          date: Math.floor(Date.now() / 1000),
+          chat: { id: 321, type: 'private' as const },
+          from: { id: 321, first_name: 'D' },
+          photo: [{ file_id: 'p', file_unique_id: 'u', width: 10, height: 10 }],
+        },
+      };
+      expect((await service.handleTelegramUpdate(update)).status).toBe('captured');
+      expect((await service.handleTelegramUpdate(update)).status).toBe('duplicate');
+      expect(mockCaptureService.create).toHaveBeenCalledTimes(1);
+      expect(mockRepo.claimUpdate).toHaveBeenCalledWith('123456', 777001);
+    });
+
+    it('never echoes raw error text to the chat when capture fails', async () => {
+      (mockRepo.lookupLinkByTelegramId as jest.Mock).mockResolvedValue({
+        tenantId,
+        userId,
+        defaultKind: 'purchase',
+        telegramUsername: null,
+      });
+      (mockCaptureService.create as jest.Mock).mockRejectedValue(new Error('SECRET-INTERNAL-DETAIL db host x'));
+      const outcome = await service.handleTelegramUpdate({
+        update_id: 50,
+        message: {
+          message_id: 50,
+          date: Math.floor(Date.now() / 1000),
+          chat: { id: 654, type: 'private' },
+          from: { id: 654, first_name: 'E' },
+          photo: [{ file_id: 'p', file_unique_id: 'u', width: 10, height: 10 }],
+        },
+      });
+      expect(outcome.status).toBe('capture_failed');
+      expect(sentMessages[0].text).toContain('پردازش رسید با خطا مواجه شد');
+      expect(sentMessages[0].text).not.toContain('SECRET-INTERNAL-DETAIL');
     });
   });
 });
