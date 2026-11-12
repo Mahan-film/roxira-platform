@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsDefined,
   IsIn,
   IsInt,
   IsNumber,
@@ -132,6 +133,7 @@ export class TelegramMessageDto {
   @Type(() => TelegramUserDto)
   from?: TelegramUserDto;
 
+  @IsDefined()
   @ValidateNested()
   @Type(() => TelegramChatDto)
   chat: TelegramChatDto;
