@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -16,29 +16,42 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/app/app-ui";
+import { useAccess } from "@/components/app/access-provider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ApiClientError } from "@/lib/api/http-client";
 import { createPosSale } from "@/lib/api/invoicing-client";
 import { listWarehouses } from "@/lib/api/inventory-client";
+import { getMyTenant } from "@/lib/api/tenants-client";
 import { formatMoneyRial } from "@/lib/fa-format";
+import {
+  bigintToSafeJsonNumber,
+  computePosCartTotals,
+  normaliseNumericInput,
+  parsePosQuantity,
+  parsePosUnitPrice,
+  splitPosPayment,
+  toFaDigits,
+} from "@/lib/pos-money";
 import { printPosReceipt } from "@/lib/print/open-pos-receipt-window";
 import {
   clearSyncedSales,
   getQueuedSales,
   queueOfflineSale,
   removeQueuedSale,
+  retryQueuedSale,
   type QueuedPosSale,
 } from "@/lib/pos-offline-db";
 import { syncOfflineSalesQueue } from "@/lib/pos-sync-manager";
 import type { Warehouse } from "@/types/inventory";
 import {
   PAYMENT_METHOD_LABELS,
-  VAT_RATE,
   type CreatePosSaleDto,
+  type InvoiceResponseDto,
   type PaymentMethod,
-  type PosSaleResponse,
+  type PosConflict,
 } from "@/types/invoicing";
 
 interface PosLineState {
@@ -49,9 +62,50 @@ interface PosLineState {
   unitPrice: string;
 }
 
+const CONFLICT_BADGE_LABELS: Record<PosConflict["code"], string> = {
+  OUT_OF_STOCK: "کسری موجودی",
+  ITEM_NOT_FOUND: "کالا یافت نشد",
+  VALIDATION_FAILED: "خطای اعتبارسنجی",
+  CONFLICT: "تداخل شناسه",
+  UNKNOWN: "مغایرت / خطا",
+};
+
+function isOfflineOrTransientError(err: unknown): boolean {
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    return true;
+  }
+  if (err instanceof ApiClientError) {
+    return err.statusCode >= 500 || err.statusCode === 408 || err.statusCode === 429;
+  }
+  return true;
+}
+
+const subscribeOnlineStatus = (onStoreChange: () => void) => {
+  if (typeof window === "undefined") return () => undefined;
+  window.addEventListener("online", onStoreChange);
+  window.addEventListener("offline", onStoreChange);
+  return () => {
+    window.removeEventListener("online", onStoreChange);
+    window.removeEventListener("offline", onStoreChange);
+  };
+};
+
+const getOnlineSnapshot = () => (typeof navigator !== "undefined" ? navigator.onLine : true);
+const getOnlineServerSnapshot = () => true;
+
 export default function PosCounterPage() {
+  const { org, loading: accessLoading, can } = useAccess();
+  const tenantId = org?.tenantId ?? "";
+  const canRead = can("invoicing", "read");
+  const canCreate = can("invoicing", "create");
+
   const nextUid = useRef(2);
-  const [isOnline, setIsOnline] = useState<boolean>(true);
+  const isOnline = useSyncExternalStore(
+    subscribeOnlineStatus,
+    getOnlineSnapshot,
+    getOnlineServerSnapshot,
+  );
+  const [vatRate, setVatRate] = useState<number>(10);
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
@@ -64,20 +118,65 @@ export default function PosCounterPage() {
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [notice, setNotice] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
-  const [queuedSales, setQueuedSales] = useState<QueuedPosSale[]>([]);
+  const [queuedSalesState, setQueuedSalesState] = useState<{ tenantId: string; items: QueuedPosSale[] }>({
+    tenantId: "",
+    items: [],
+  });
+  const [lastInvoice, setLastInvoice] = useState<InvoiceResponseDto | null>(null);
+  const queuedSales = tenantId && canRead && queuedSalesState.tenantId === tenantId ? queuedSalesState.items : [];
 
-  // Monitor network online/offline transitions
+  const refreshQueue = useCallback(async (activeTenantId = tenantId) => {
+    if (!activeTenantId) return;
+    const list = await getQueuedSales(activeTenantId);
+    setQueuedSalesState({ tenantId: activeTenantId, items: list });
+  }, [tenantId]);
+
+  const handleSync = useCallback(async (targetClientUuid?: string) => {
+    if (!tenantId || !canCreate) return;
+    setSyncing(true);
+    try {
+      if (targetClientUuid) {
+        await retryQueuedSale(targetClientUuid, tenantId);
+      }
+      const res = await syncOfflineSalesQueue(tenantId);
+      await refreshQueue(tenantId);
+      const updated = await getQueuedSales(tenantId);
+      const latestSynced = updated.find((item) => item.status === "synced" && item.invoice);
+      if (latestSynced?.invoice) {
+        setLastInvoice((prev) => prev ?? latestSynced.invoice!);
+      }
+
+      if (res.errors && res.errors.length > 0 && res.syncedCount === 0 && res.conflictCount === 0) {
+        setNotice({ type: "error", message: res.errors.join(" | ") });
+      } else if (res.conflictCount > 0) {
+        setNotice({
+          type: "error",
+          message:
+            res.syncedCount > 0
+              ? `${res.syncedCount} فروش همگام‌سازی شد و ${res.conflictCount} مورد با مغایرت مواجه شد. جدول مغایرت‌ها را بررسی کنید.`
+              : `${res.conflictCount} فروش هنگام همگام‌سازی با خطا یا مغایرت مواجه شد. جدول مغایرت‌ها را بررسی فرمایید.`,
+        });
+      } else if (res.syncedCount > 0) {
+        setNotice({
+          type: "success",
+          message: `${res.syncedCount} فروش آفلاین با موفقیت در سرور همگام‌سازی شد.`,
+        });
+      }
+    } finally {
+      setSyncing(false);
+    }
+  }, [tenantId, canCreate, refreshQueue]);
+
+  // Trigger sync and status notices on online/offline browser transitions
   useEffect(() => {
-    setIsOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
-
     const handleOnline = () => {
-      setIsOnline(true);
-      setNotice({ type: "info", message: "اتصال به اینترنت برقرار شد. در حال همگام‌سازی فروش‌های صف..." });
-      void handleSync();
+      if (tenantId && canCreate) {
+        setNotice({ type: "info", message: "اتصال به اینترنت برقرار شد. در حال همگام‌سازی فروش‌های صف..." });
+        void handleSync();
+      }
     };
 
     const handleOffline = () => {
-      setIsOnline(false);
       setNotice({ type: "info", message: "ارتباط با اینترنت قطع شد؛ سیستم به حالت فروش آفلاین تغییر وضعیت داد." });
     };
 
@@ -87,23 +186,32 @@ export default function PosCounterPage() {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, []);
+  }, [tenantId, canCreate, handleSync]);
 
-  // Load warehouses and offline queue on mount
+  // Load warehouses, tenant VAT rate, and tenant-scoped offline queue on mount / org change
   useEffect(() => {
+    if (!tenantId || !canRead) return;
+
     const controller = new AbortController();
     listWarehouses(controller.signal)
       .then((list) => setWarehouses(list.filter((w) => w.isActive)))
       .catch(() => undefined);
 
-    void refreshQueue();
-    return () => controller.abort();
-  }, []);
+    getMyTenant(controller.signal)
+      .then((tenant) => {
+        if (typeof tenant.defaultVatRate === "number" && Number.isFinite(tenant.defaultVatRate)) {
+          setVatRate(tenant.defaultVatRate);
+        }
+      })
+      .catch(() => undefined);
 
-  async function refreshQueue() {
-    const list = await getQueuedSales();
-    setQueuedSales(list);
-  }
+    void getQueuedSales(tenantId).then((items) => {
+      if (!controller.signal.aborted) {
+        setQueuedSalesState({ tenantId, items });
+      }
+    });
+    return () => controller.abort();
+  }, [tenantId, canRead]);
 
   function updateLine(uid: number, patch: Partial<PosLineState>) {
     setLines((prev) => prev.map((l) => (l.uid === uid ? { ...l, ...patch } : l)));
@@ -121,11 +229,14 @@ export default function PosCounterPage() {
     setLines((prev) => prev.filter((l) => l.uid !== uid));
   }
 
-  const validLines = lines.filter(
-    (l) => (l.code.trim() || l.description.trim()) && Number(l.quantity) > 0 && Number(l.unitPrice) > 0,
-  );
-  const netTotal = validLines.reduce((sum, l) => sum + Number(l.quantity) * Number(l.unitPrice), 0);
-  const estimatedPayable = Math.round(netTotal * (1 + VAT_RATE));
+  const validLines = lines.filter((l) => {
+    if (!l.code.trim() && !l.description.trim()) return false;
+    const qty = parsePosQuantity(l.quantity);
+    const price = parsePosUnitPrice(l.unitPrice);
+    return qty !== null && price !== null;
+  });
+  const cartTotals = computePosCartTotals(validLines, vatRate);
+  const estimatedPayableNumber = bigintToSafeJsonNumber(cartTotals.payableTotal);
 
   function resetForm() {
     setPhone("");
@@ -135,73 +246,70 @@ export default function PosCounterPage() {
     setMethod("CASH");
   }
 
-  async function handleSync() {
-    setSyncing(true);
-    try {
-      const res = await syncOfflineSalesQueue();
-      await refreshQueue();
-      if (res.syncedCount > 0) {
-        setNotice({
-          type: "success",
-          message: `${res.syncedCount} فروش آفلاین با موفقیت در سرور همگام‌سازی شد.`,
-        });
-      }
-      if (res.conflictCount > 0) {
-        setNotice({
-          type: "error",
-          message: `${res.conflictCount} فروش به‌دلیل کسری موجودی کالا در انبار با مغایرت مواجه شد. لطفاً جدول مغایرت‌ها را بررسی فرمایید.`,
-        });
-      }
-    } finally {
-      setSyncing(false);
-    }
-  }
-
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (!canCreate || !tenantId) {
+      setNotice({ type: "error", message: "شما مجوز ثبت فروش در پایانه را ندارید." });
+      return;
+    }
     if (validLines.length === 0) {
-      setNotice({ type: "error", message: "حداقل یک سطر با کد یا شرح، تعداد و قیمت وارد کنید." });
+      setNotice({ type: "error", message: "حداقل یک سطر با کد یا شرح، تعداد و قیمت معتبر وارد کنید." });
       return;
     }
 
-    const card = Number(cardAmount) || 0;
-    if (card < 0 || card > estimatedPayable) {
-      setNotice({ type: "error", message: "مبلغ پرداختی کارتخوان نامعتبر است." });
+    const payments = splitPosPayment(cartTotals.payableTotal, cardAmount, method);
+    if (!payments) {
+      setNotice({ type: "error", message: "مبلغ پرداختی کارتخوان نامعتبر یا بیشتر از مبلغ کل است." });
       return;
     }
 
-    const payments =
-      card > 0 && card < estimatedPayable
-        ? [
-            { method: "CARD" as PaymentMethod, amount: card },
-            { method, amount: estimatedPayable - card },
-          ]
-        : [{ method: card > 0 ? ("CARD" as PaymentMethod) : method, amount: estimatedPayable }];
+    const dtoLines = validLines
+      .map((l) => {
+        const qty = parsePosQuantity(l.quantity);
+        const unitPrice = parsePosUnitPrice(l.unitPrice);
+        if (qty === null || unitPrice === null) return null;
+        return {
+          code: l.code.trim() || undefined,
+          description: l.description.trim() || undefined,
+          quantity: qty,
+          unitPrice,
+        };
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+
+    if (dtoLines.length === 0) {
+      setNotice({ type: "error", message: "حداقل یک سطر فروش معتبر وارد کنید." });
+      return;
+    }
+
+    const trimmedName = name.trim();
+    if (trimmedName.length > 120) {
+      setNotice({ type: "error", message: "نام مشتری نمی‌تواند بیش از ۱۲۰ کاراکتر باشد." });
+      return;
+    }
+
+    const normalizedWh = warehouseId.trim() ? normaliseNumericInput(warehouseId) : "";
+    const parsedWh = normalizedWh ? Number.parseInt(normalizedWh, 10) : undefined;
 
     const clientUuid = `pos-${crypto.randomUUID()}`;
     const salePayload: CreatePosSaleDto = {
       idempotencyKey: clientUuid,
       customer:
-        phone.trim() || name.trim()
-          ? { phone: phone.trim() || undefined, name: name.trim() || undefined }
+        phone.trim() || trimmedName
+          ? { phone: phone.trim() || undefined, name: trimmedName || undefined }
           : undefined,
-      lines: validLines.map((l) => ({
-        code: l.code.trim() || undefined,
-        description: l.description.trim() || undefined,
-        quantity: Number(l.quantity),
-        unitPrice: Number(l.unitPrice),
-      })),
+      lines: dtoLines,
       payments,
-      warehouseId: warehouseId ? Number(warehouseId) : undefined,
+      warehouseId: parsedWh && parsedWh > 0 ? parsedWh : undefined,
     };
 
     setBusy(true);
     setNotice(null);
 
-    // If offline or if connection fails, queue in IndexedDB immediately
+    // Queue offline immediately when navigator reports offline
     if (!isOnline) {
-      await queueOfflineSale(salePayload);
-      await refreshQueue();
+      await queueOfflineSale(salePayload, tenantId);
+      await refreshQueue(tenantId);
       setNotice({
         type: "info",
         message: `فروش با موفقیت در صف آفلاین ذخیره شد (شناسه: ${clientUuid.slice(0, 12)}). به محض اتصال به اینترنت همگام‌سازی خواهد شد.`,
@@ -213,20 +321,29 @@ export default function PosCounterPage() {
 
     try {
       const result = await createPosSale(salePayload);
+      setLastInvoice(result.invoice);
       setNotice({
         type: "success",
         message: `فروش با شماره ${result.invoice.taxInvoiceNumber} با موفقیت ثبت شد.`,
       });
       resetForm();
-    } catch {
-      // Network drop during live submission -> fall back safely to offline queue
-      await queueOfflineSale(salePayload);
-      await refreshQueue();
-      setNotice({
-        type: "info",
-        message: `ارتباط با سرور برقرار نشد؛ فروش در صف آفلاین ذخیره شد و به محض اتصال مجدد ثبت خواهد شد.`,
-      });
-      resetForm();
+    } catch (err: unknown) {
+      if (isOfflineOrTransientError(err)) {
+        // Network drop / 5xx during live submission -> fall back safely to offline queue
+        await queueOfflineSale(salePayload, tenantId);
+        await refreshQueue(tenantId);
+        setNotice({
+          type: "info",
+          message: "ارتباط با سرور برقرار نشد؛ فروش در صف آفلاین ذخیره شد و به محض اتصال مجدد ثبت خواهد شد.",
+        });
+        resetForm();
+      } else {
+        // 4xx validation or permission error -> show directly without queueing a permanently failing sale
+        setNotice({
+          type: "error",
+          message: err instanceof Error ? err.message : "خطا در ثبت فروش؛ ورودی‌ها را بررسی کنید.",
+        });
+      }
     } finally {
       setBusy(false);
     }
@@ -235,11 +352,25 @@ export default function PosCounterPage() {
   const pendingCount = queuedSales.filter((s) => s.status === "pending" || s.status === "syncing").length;
   const conflictSales = queuedSales.filter((s) => s.status === "conflict");
 
+  if (!accessLoading && (!canRead || !canCreate)) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="پایانه فروشگاهی و صندوق (POS)"
+          description="فروش سریع پشت صندوق"
+        />
+        <Card className="p-6 text-sm text-rose-600">
+          دسترسی شما به پایانه فروشگاهی مجاز نیست (نیاز به مجوز ایجاد فاکتور دارید).
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="پایانه فروشگاهی و صندوق (POS)"
-        subtitle="فروش سریع پشت صندوق با قابلیت کارکرد کامل در زمان قطع اینترنت، ثبت در صف محلی و همگام‌سازی خودکار"
+        description="فروش سریع پشت صندوق با قابلیت کارکرد کامل در زمان قطع اینترنت، ثبت در صف محلی و همگام‌سازی خودکار"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <div
@@ -312,7 +443,7 @@ export default function PosCounterPage() {
                     size="sm"
                     className="h-7 text-xs"
                     disabled={!isOnline || syncing}
-                    onClick={() => void handleSync()}
+                    onClick={() => void handleSync(item.clientUuid)}
                   >
                     تلاش مجدد
                   </Button>
@@ -321,8 +452,8 @@ export default function PosCounterPage() {
                     size="sm"
                     className="h-7 text-xs text-rose-600"
                     onClick={async () => {
-                      await removeQueuedSale(item.clientUuid);
-                      await refreshQueue();
+                      await removeQueuedSale(item.clientUuid, tenantId);
+                      await refreshQueue(tenantId);
                     }}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -342,7 +473,9 @@ export default function PosCounterPage() {
             <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
               <div className="flex items-center justify-between border-b pb-3">
                 <h2 className="text-base font-semibold">ثبت فروش پایانه</h2>
-                <span className="text-xs text-muted-foreground">مالیات بر ارزش افزوده ۱۰٪ به‌صورت خودکار محاسبه می‌شود</span>
+                <span className="text-xs text-muted-foreground">
+                  مالیات بر ارزش افزوده {toFaDigits(vatRate)}٪ به‌صورت خودکار محاسبه می‌شود
+                </span>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-3">
@@ -352,6 +485,7 @@ export default function PosCounterPage() {
                     id="pos-phone"
                     dir="ltr"
                     inputMode="tel"
+                    maxLength={32}
                     placeholder="0912..."
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
@@ -361,6 +495,7 @@ export default function PosCounterPage() {
                   <Label htmlFor="pos-name">نام مشتری (اختیاری)</Label>
                   <Input
                     id="pos-name"
+                    maxLength={120}
                     placeholder="مشتری گذری"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -471,10 +606,10 @@ export default function PosCounterPage() {
               <div className="flex items-center justify-between pt-4 border-t">
                 <div className="text-sm">
                   <span className="text-muted-foreground">مبلغ کل برآوردی (با مالیات): </span>
-                  <span className="font-semibold">{formatMoneyRial(estimatedPayable)}</span>
+                  <span className="font-semibold">{formatMoneyRial(estimatedPayableNumber)}</span>
                 </div>
 
-                <Button type="submit" disabled={busy || validLines.length === 0}>
+                <Button type="submit" disabled={busy || validLines.length === 0 || !canCreate}>
                   <ShoppingBag className="h-4 w-4" />
                   {isOnline ? "ثبت فروش آنلاین" : "ثبت در صف آفلاین"}
                 </Button>
@@ -483,8 +618,66 @@ export default function PosCounterPage() {
           </Card>
         </div>
 
-        {/* Queue & Activity Sidebar */}
+        {/* Queue, Live 80mm Receipt Preview & Activity Sidebar */}
         <div className="space-y-4">
+          <Card className="p-4">
+            <div className="flex items-center justify-between pb-3 border-b">
+              <h3 className="text-sm font-semibold">پیش‌نمایش فیش ۸۰ میلی‌متری</h3>
+              {lastInvoice && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => printPosReceipt(lastInvoice)}
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                  چاپ فیش حرارتی
+                </Button>
+              )}
+            </div>
+
+            {lastInvoice ? (
+              <div className="mt-3 space-y-2 rounded-md border bg-muted/20 p-3 text-xs font-mono">
+                <div className="flex justify-between font-semibold">
+                  <span>شماره فیش:</span>
+                  <span>{lastInvoice.taxInvoiceNumber}</span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>مشتری:</span>
+                  <span>{lastInvoice.buyerInfo?.name || "مشتری گذری"}</span>
+                </div>
+                <div className="border-t pt-2 space-y-1">
+                  {lastInvoice.items.map((it, idx) => (
+                    <div key={`${it.description}-${idx}`} className="flex justify-between">
+                      <span className="truncate max-w-[160px]">{it.description} × {toFaDigits(it.quantity)}</span>
+                      <span>{formatMoneyRial(it.total)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="border-t pt-2 flex justify-between font-bold">
+                  <span>قابل پرداخت:</span>
+                  <span>{formatMoneyRial(lastInvoice.finalPayable)}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-3 space-y-1.5 text-xs text-muted-foreground">
+                <div className="flex justify-between">
+                  <span>جمع خالص سبد:</span>
+                  <span>{formatMoneyRial(bigintToSafeJsonNumber(cartTotals.netTotal))}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>مالیات ({toFaDigits(vatRate)}٪):</span>
+                  <span>{formatMoneyRial(bigintToSafeJsonNumber(cartTotals.vatTotal))}</span>
+                </div>
+                <div className="flex justify-between font-semibold text-foreground border-t pt-1.5">
+                  <span>مبلغ نهایی:</span>
+                  <span>{formatMoneyRial(estimatedPayableNumber)}</span>
+                </div>
+              </div>
+            )}
+          </Card>
+
           <Card className="p-4">
             <div className="flex items-center justify-between pb-3 border-b">
               <h3 className="text-sm font-semibold">صف فروش‌های محلی</h3>
@@ -494,8 +687,8 @@ export default function PosCounterPage() {
                   size="sm"
                   className="h-7 text-xs"
                   onClick={async () => {
-                    await clearSyncedSales();
-                    await refreshQueue();
+                    await clearSyncedSales(tenantId);
+                    await refreshQueue(tenantId);
                   }}
                 >
                   پاکسازی ارسال‌شده‌ها
@@ -508,14 +701,14 @@ export default function PosCounterPage() {
                 <p className="py-6 text-center text-muted-foreground">صف فروش‌های آفلاین خالی است.</p>
               ) : (
                 queuedSales.map((item) => (
-                  <div key={item.clientUuid} className="py-2.5 flex items-center justify-between">
+                  <div key={item.clientUuid} className="py-2.5 flex items-center justify-between gap-2">
                     <div>
                       <p className="font-mono text-xs">{item.clientUuid.slice(0, 16)}</p>
                       <span className="text-muted-foreground">
                         {item.sale.lines.length} قلم کالا • {item.createdAt.slice(11, 19)}
                       </span>
                     </div>
-                    <div>
+                    <div className="flex items-center gap-1.5">
                       {item.status === "pending" && (
                         <span className="rounded bg-amber-500/10 px-2 py-0.5 text-amber-600 font-medium">در صف</span>
                       )}
@@ -523,10 +716,29 @@ export default function PosCounterPage() {
                         <span className="rounded bg-sky-500/10 px-2 py-0.5 text-sky-600 font-medium">ارسال...</span>
                       )}
                       {item.status === "synced" && (
-                        <span className="rounded bg-emerald-500/10 px-2 py-0.5 text-emerald-600 font-medium">ارسال شد</span>
+                        <>
+                          <span className="rounded bg-emerald-500/10 px-2 py-0.5 text-emerald-600 font-medium">ارسال شد</span>
+                          {item.invoice && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-1.5"
+                              title="چاپ فیش"
+                              onClick={() => {
+                                setLastInvoice(item.invoice!);
+                                printPosReceipt(item.invoice!);
+                              }}
+                            >
+                              <Printer className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </>
                       )}
                       {item.status === "conflict" && (
-                        <span className="rounded bg-rose-500/10 px-2 py-0.5 text-rose-600 font-medium">مغایرت انبار</span>
+                        <span className="rounded bg-rose-500/10 px-2 py-0.5 text-rose-600 font-medium">
+                          {CONFLICT_BADGE_LABELS[item.conflictCode ?? "UNKNOWN"]}
+                        </span>
                       )}
                     </div>
                   </div>

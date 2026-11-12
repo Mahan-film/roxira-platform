@@ -1,11 +1,17 @@
-import type { CreatePosSaleDto, InvoiceResponseDto } from "../types/invoicing.ts";
+import type {
+  CreatePosSaleDto,
+  InvoiceResponseDto,
+  PosConflict,
+} from "../types/invoicing.ts";
 
 export type QueuedSaleStatus = "pending" | "syncing" | "synced" | "conflict";
 
 export interface QueuedPosSale {
   clientUuid: string;
+  tenantId: string;
   sale: CreatePosSaleDto;
   status: QueuedSaleStatus;
+  conflictCode?: PosConflict["code"];
   createdAt: string;
   syncedAt?: string;
   error?: string;
@@ -14,10 +20,18 @@ export interface QueuedPosSale {
 
 const DB_NAME = "roxira_pos_offline_v1";
 const STORE_NAME = "sales_queue";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 // In-memory fallback for SSR or environments where indexedDB is not available
 const inMemoryStore = new Map<string, QueuedPosSale>();
+
+function assertTenantId(tenantId: string): string {
+  const normalized = tenantId?.trim();
+  if (!normalized) {
+    throw new Error("شناسه سازمان (tenantId) برای صف فروش آفلاین الزامی است.");
+  }
+  return normalized;
+}
 
 function hasIndexedDb(): boolean {
   return typeof window !== "undefined" && typeof window.indexedDB !== "undefined";
@@ -32,11 +46,22 @@ function openDb(): Promise<IDBDatabase> {
     const request = window.indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onupgradeneeded = (event) => {
-      const db = (event.target as IDBOpenDBRequest).result;
+      const target = event.target as IDBOpenDBRequest;
+      const db = target.result;
+      let store: IDBObjectStore;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
-        const store = db.createObjectStore(STORE_NAME, { keyPath: "clientUuid" });
+        store = db.createObjectStore(STORE_NAME, { keyPath: "clientUuid" });
+      } else {
+        store = target.transaction!.objectStore(STORE_NAME);
+      }
+      if (!store.indexNames.contains("status")) {
         store.createIndex("status", "status", { unique: false });
+      }
+      if (!store.indexNames.contains("createdAt")) {
         store.createIndex("createdAt", "createdAt", { unique: false });
+      }
+      if (!store.indexNames.contains("tenantId")) {
+        store.createIndex("tenantId", "tenantId", { unique: false });
       }
     };
 
@@ -46,11 +71,16 @@ function openDb(): Promise<IDBDatabase> {
 }
 
 /**
- * Adds or updates a counter sale in the local offline IndexedDB queue.
+ * Adds or updates a tenant-scoped counter sale in the local offline IndexedDB queue.
  */
-export async function queueOfflineSale(sale: CreatePosSaleDto): Promise<QueuedPosSale> {
+export async function queueOfflineSale(
+  sale: CreatePosSaleDto,
+  tenantId: string,
+): Promise<QueuedPosSale> {
+  const scopedTenant = assertTenantId(tenantId);
   const queued: QueuedPosSale = {
     clientUuid: sale.idempotencyKey,
+    tenantId: scopedTenant,
     sale,
     status: "pending",
     createdAt: new Date().toISOString(),
@@ -72,13 +102,15 @@ export async function queueOfflineSale(sale: CreatePosSaleDto): Promise<QueuedPo
 }
 
 /**
- * Returns all queued counter sales (pending, syncing, conflict, and synced).
+ * Returns all queued counter sales scoped strictly to the given tenantId.
  */
-export async function getQueuedSales(): Promise<QueuedPosSale[]> {
+export async function getQueuedSales(tenantId: string): Promise<QueuedPosSale[]> {
+  const scopedTenant = assertTenantId(tenantId);
+
   if (!hasIndexedDb()) {
-    return Array.from(inMemoryStore.values()).sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    );
+    return Array.from(inMemoryStore.values())
+      .filter((item) => item.tenantId === scopedTenant)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
   const db = await openDb();
@@ -87,7 +119,9 @@ export async function getQueuedSales(): Promise<QueuedPosSale[]> {
     const store = tx.objectStore(STORE_NAME);
     const req = store.getAll();
     req.onsuccess = () => {
-      const list = (req.result as QueuedPosSale[]) || [];
+      const list = ((req.result as QueuedPosSale[]) || []).filter(
+        (item) => item.tenantId === scopedTenant,
+      );
       list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       resolve(list);
     };
@@ -96,24 +130,27 @@ export async function getQueuedSales(): Promise<QueuedPosSale[]> {
 }
 
 /**
- * Returns all pending and conflicted counter sales that require synchronization.
+ * Returns all pending (and crash-interrupted syncing) counter sales for this tenant.
  */
-export async function getPendingSales(): Promise<QueuedPosSale[]> {
-  const all = await getQueuedSales();
+export async function getPendingSales(tenantId: string): Promise<QueuedPosSale[]> {
+  const all = await getQueuedSales(tenantId);
   return all.filter((s) => s.status === "pending" || s.status === "syncing");
 }
 
 /**
- * Updates a queued sale status, error details, or attached created invoice.
+ * Updates a queued sale status, error details, or attached created invoice (tenant-guarded).
  */
 export async function updateQueuedSale(
   clientUuid: string,
   patch: Partial<QueuedPosSale>,
+  tenantId: string,
 ): Promise<void> {
+  const scopedTenant = assertTenantId(tenantId);
+
   if (!hasIndexedDb()) {
     const existing = inMemoryStore.get(clientUuid);
-    if (existing) {
-      inMemoryStore.set(clientUuid, { ...existing, ...patch });
+    if (existing && existing.tenantId === scopedTenant) {
+      inMemoryStore.set(clientUuid, { ...existing, ...patch, tenantId: scopedTenant });
     }
     return;
   }
@@ -126,10 +163,10 @@ export async function updateQueuedSale(
 
     getReq.onsuccess = () => {
       const current = getReq.result as QueuedPosSale | undefined;
-      if (!current) {
+      if (!current || current.tenantId !== scopedTenant) {
         return resolve();
       }
-      const updated = { ...current, ...patch };
+      const updated = { ...current, ...patch, tenantId: scopedTenant };
       const putReq = store.put(updated);
       putReq.onsuccess = () => resolve();
       putReq.onerror = () => reject(putReq.error);
@@ -139,11 +176,27 @@ export async function updateQueuedSale(
 }
 
 /**
- * Removes a specific sale from the queue (e.g. manually discarded or resolved).
+ * Re-queues a previously conflicted sale back to pending so a retry actually sends it.
  */
-export async function removeQueuedSale(clientUuid: string): Promise<void> {
+export async function retryQueuedSale(clientUuid: string, tenantId: string): Promise<void> {
+  await updateQueuedSale(
+    clientUuid,
+    { status: "pending", error: undefined, conflictCode: undefined },
+    tenantId,
+  );
+}
+
+/**
+ * Removes a specific sale from the queue for this tenant (tenant-guarded).
+ */
+export async function removeQueuedSale(clientUuid: string, tenantId: string): Promise<void> {
+  const scopedTenant = assertTenantId(tenantId);
+
   if (!hasIndexedDb()) {
-    inMemoryStore.delete(clientUuid);
+    const existing = inMemoryStore.get(clientUuid);
+    if (existing && existing.tenantId === scopedTenant) {
+      inMemoryStore.delete(clientUuid);
+    }
     return;
   }
 
@@ -151,19 +204,45 @@ export async function removeQueuedSale(clientUuid: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readwrite");
     const store = tx.objectStore(STORE_NAME);
-    const req = store.delete(clientUuid);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
+    const getReq = store.get(clientUuid);
+    getReq.onsuccess = () => {
+      const current = getReq.result as QueuedPosSale | undefined;
+      if (!current || current.tenantId !== scopedTenant) {
+        return resolve();
+      }
+      const req = store.delete(clientUuid);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    };
+    getReq.onerror = () => reject(getReq.error);
   });
 }
 
 /**
- * Clears all successfully synced sales from local queue.
+ * Clears all successfully synced sales from this tenant's local queue.
  */
-export async function clearSyncedSales(): Promise<void> {
-  const all = await getQueuedSales();
+export async function clearSyncedSales(tenantId: string): Promise<void> {
+  const all = await getQueuedSales(tenantId);
   const syncedUuids = all.filter((s) => s.status === "synced").map((s) => s.clientUuid);
   for (const uuid of syncedUuids) {
-    await removeQueuedSale(uuid);
+    await removeQueuedSale(uuid, tenantId);
   }
+}
+
+/**
+ * Clears every queued offline sale across all tenants (called on explicit logout).
+ */
+export async function clearAllOfflineSales(): Promise<void> {
+  inMemoryStore.clear();
+  if (!hasIndexedDb()) {
+    return;
+  }
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.clear();
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
 }

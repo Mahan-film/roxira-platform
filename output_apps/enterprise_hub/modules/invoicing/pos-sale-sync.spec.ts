@@ -1,5 +1,14 @@
 import 'reflect-metadata';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { AccessGuard } from '../access/access.guard';
+import { AccessStub } from '../../test/support/access-stub';
 import { PosSaleService } from './services/pos-sale.service';
 import { PosSalesController } from './controllers/pos-sales.controller';
 import { CreatePosSaleDto, SyncPosSalesDto } from './dto/pos-sale.dto';
@@ -205,5 +214,103 @@ describe('Offline Counter Sales Sync & Conflict Detection (#782 / T93)', () => {
     expect(res.totalProcessed).toBe(1);
     expect(res.synced).toHaveLength(1);
     expect(res.synced[0].clientUuid).toBe('pos-uuid-ctrl');
+  });
+
+  it('reports only out-of-stock SKUs in missingItems when a multi-line sale has valid + OOS lines', async () => {
+    const mixedSale: CreatePosSaleDto = {
+      idempotencyKey: 'pos-uuid-mixed-oos',
+      lines: [
+        { code: 'SKU-VALID', quantity: 1, unitPrice: 1000000 },
+        { code: 'SKU-OUT-OF-STOCK', quantity: 3, unitPrice: 500000 },
+      ],
+      payments: [{ method: 'CASH', amount: 2500000 }],
+    };
+
+    const res = await posSaleService.syncSales(TENANT_ID, { sales: [mixedSale] });
+
+    expect(res.conflicts).toHaveLength(1);
+    expect(res.conflicts[0].code).toBe('OUT_OF_STOCK');
+    expect(res.conflicts[0].missingItems).toEqual(['SKU-OUT-OF-STOCK']);
+  });
+
+  it('isolates an invalid DTO item as VALIDATION_FAILED without rejecting valid items in the batch', async () => {
+    mockInvoicing.create.mockResolvedValue({
+      id: 'inv-valid-after-bad',
+      taxInvoiceNumber: 'TI-OK-2',
+      status: InvoiceStatus.PAID,
+    });
+
+    const badSale = {
+      idempotencyKey: 'pos-uuid-bad-dto',
+      customer: { name: 'آ'.repeat(121) }, // exceeds @MaxLength(120)
+      lines: [{ code: 'SKU-VALID', quantity: 1, unitPrice: 1000000 }],
+      payments: [{ method: 'CASH', amount: 1000000 }],
+    } as CreatePosSaleDto;
+
+    const validSale = makeSaleDto('pos-uuid-valid-2');
+
+    const res = await posSaleService.syncSales(TENANT_ID, { sales: [badSale, validSale] });
+
+    expect(res.totalProcessed).toBe(2);
+    expect(res.synced).toHaveLength(1);
+    expect(res.synced[0].clientUuid).toBe('pos-uuid-valid-2');
+    expect(res.conflicts).toHaveLength(1);
+    expect(res.conflicts[0].clientUuid).toBe('pos-uuid-bad-dto');
+    expect(res.conflicts[0].code).toBe('VALIDATION_FAILED');
+    expect(res.conflicts[0].missingItems).toBeUndefined();
+  });
+
+  it('marks key-reuse ConflictException as CONFLICT without misreporting missingItems', async () => {
+    const conflictSale = makeSaleDto('pos-uuid-key-conflict');
+    mockInvoicingRepo.findByIdempotencyKey.mockResolvedValue({
+      id: 'inv-existing',
+      requestHash: 'different-hash',
+      customerId: null,
+    });
+
+    const res = await posSaleService.syncSales(TENANT_ID, { sales: [conflictSale] });
+
+    expect(res.conflicts).toHaveLength(1);
+    expect(res.conflicts[0].code).toBe('CONFLICT');
+    expect(res.conflicts[0].missingItems).toBeUndefined();
+  });
+
+  it('rethrows transient 5xx / DB / 403 errors instead of turning them into permanent conflicts', async () => {
+    mockInvoicing.create.mockRejectedValueOnce(
+      new InternalServerErrorException('Database connection lost'),
+    );
+
+    await expect(
+      posSaleService.syncSales(TENANT_ID, { sales: [makeSaleDto('pos-uuid-db-down')] }),
+    ).rejects.toThrow(InternalServerErrorException);
+
+    mockInvoicing.create.mockRejectedValueOnce(new ForbiddenException('Forbidden'));
+
+    await expect(
+      posSaleService.syncSales(TENANT_ID, { sales: [makeSaleDto('pos-uuid-403')] }),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('enforces AccessGuard invoicing:create permission on PosSalesController.sync (403 read_only, allow sales)', async () => {
+    const accessStub = new AccessStub();
+    accessStub.grant('u-readonly', TENANT_ID, 'read_only');
+    accessStub.grant('u-sales', TENANT_ID, 'sales');
+
+    const guard = new AccessGuard(new Reflector(), accessStub as any);
+    const makeCtx = (sub: string) =>
+      ({
+        getHandler: () => PosSalesController.prototype.sync,
+        getClass: () => PosSalesController,
+        switchToHttp: () => ({
+          getRequest: () => ({
+            method: 'POST',
+            url: '/enterprise-hub/invoicing/pos-sales/sync',
+            user: { sub, tenantId: TENANT_ID },
+          }),
+        }),
+      }) as any;
+
+    await expect(guard.canActivate(makeCtx('u-readonly'))).rejects.toThrow(ForbiddenException);
+    await expect(guard.canActivate(makeCtx('u-sales'))).resolves.toBe(true);
   });
 });

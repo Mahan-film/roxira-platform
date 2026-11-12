@@ -11,6 +11,7 @@ import {
   canRefresh,
   isSessionAlive,
 } from "@/lib/api/session-logic";
+import { clearAllOfflineSales } from "@/lib/pos-offline-db";
 
 export const SESSION_STORAGE_KEY = "roxira.auth.session";
 const AUTH_ENDPOINT = `${API_PROXY_BASE_PATH}/${AUTH_RESOURCE_PATH}`;
@@ -94,6 +95,7 @@ export function removeSession(): void {
   } catch {
     // no-op
   }
+  void clearAllOfflineSales().catch(() => undefined);
 }
 
 interface RefreshResponse {

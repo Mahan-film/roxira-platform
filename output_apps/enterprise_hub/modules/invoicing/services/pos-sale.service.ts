@@ -1,9 +1,12 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
+import { validate, type ValidationError } from 'class-validator';
 import { createHash } from 'crypto';
 import { CustomerIdentityService } from '../../crm/services/customer-identity.service';
 import { Currency } from '../../currency/enums/currency.enum';
@@ -336,28 +339,83 @@ export class PosSaleService {
     const synced: PosSyncedItemDto[] = [];
     const conflicts: PosConflictDto[] = [];
 
-    for (const sale of dto.sales) {
-      const clientUuid = sale.idempotencyKey;
+    for (const rawSale of dto.sales) {
+      const clientUuid =
+        typeof (rawSale as { idempotencyKey?: unknown })?.idempotencyKey === 'string' &&
+        (rawSale as { idempotencyKey: string }).idempotencyKey.trim()
+          ? (rawSale as { idempotencyKey: string }).idempotencyKey
+          : 'unknown';
+
+      const saleDto = plainToInstance(CreatePosSaleDto, rawSale, {
+        enableImplicitConversion: true,
+      });
+      const validationErrors = await validate(saleDto, {
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      });
+      if (validationErrors.length > 0) {
+        conflicts.push({
+          clientUuid,
+          code: 'VALIDATION_FAILED',
+          error: this.formatValidationErrors(validationErrors),
+        });
+        continue;
+      }
+
       try {
-        const result = await this.createSale(tenantId, sale);
+        const result = await this.createSale(tenantId, saleDto);
         synced.push({
           clientUuid,
           invoice: result.invoice,
           replayed: result.replayed,
         });
-      } catch (error: any) {
-        const message = error?.message || 'خطا در ثبت فروش';
+      } catch (error: unknown) {
+        const status =
+          error instanceof HttpException
+            ? error.getStatus()
+            : typeof (error as { status?: unknown })?.status === 'number'
+              ? (error as { status: number }).status
+              : undefined;
+        const isBusinessRejection =
+          error instanceof BadRequestException ||
+          error instanceof NotFoundException ||
+          error instanceof ConflictException ||
+          status === 400 ||
+          status === 404 ||
+          status === 409;
+
+        // Transient DB/network errors (5xx) and auth errors (401/403) must fail the batch
+        // so the client keeps pending sales in its queue rather than marking permanent conflicts.
+        if (!isBusinessRejection) {
+          throw error;
+        }
+
+        const message =
+          error instanceof Error && error.message ? error.message : 'خطا در ثبت فروش';
+        const isNotFound = error instanceof NotFoundException || status === 404;
         const isOutOfStock =
-          message.includes('موجودی') ||
-          message.includes('کافی نیست') ||
-          (error?.status === 400 && message.includes('موجودی'));
-        const isNotFound = error instanceof NotFoundException || error?.status === 404;
+          !isNotFound &&
+          (message.includes('موجودی') || message.includes('کافی نیست'));
+        const isIdempotencyConflict = error instanceof ConflictException || status === 409;
+
+        const code: PosConflictDto['code'] = isOutOfStock
+          ? 'OUT_OF_STOCK'
+          : isNotFound
+            ? 'ITEM_NOT_FOUND'
+            : isIdempotencyConflict
+              ? 'CONFLICT'
+              : 'VALIDATION_FAILED';
+
+        const missingItems =
+          isOutOfStock || isNotFound
+            ? this.extractFailingSkus(message, saleDto)
+            : undefined;
 
         conflicts.push({
           clientUuid,
-          code: isOutOfStock ? 'OUT_OF_STOCK' : isNotFound ? 'ITEM_NOT_FOUND' : 'CONFLICT',
+          code,
           error: message,
-          missingItems: sale.lines.map((l) => l.code).filter(Boolean) as string[],
+          ...(missingItems && missingItems.length > 0 ? { missingItems } : {}),
         });
       }
     }
@@ -367,5 +425,34 @@ export class PosSaleService {
       conflicts,
       totalProcessed: dto.sales.length,
     };
+  }
+
+  private extractFailingSkus(message: string, sale: CreatePosSaleDto): string[] {
+    const stockMatch = message.match(/موجودی کالای\s+(\S+)\s+کافی نیست/);
+    if (stockMatch?.[1]) {
+      return [stockMatch[1]];
+    }
+    const missingMatch = message.match(/کد یا بارکد\s+(\S+)\s+یافت نشد/);
+    if (missingMatch?.[1]) {
+      return [missingMatch[1]];
+    }
+    const allCodes = (sale.lines ?? [])
+      .map((l) => l.code?.trim())
+      .filter((c): c is string => Boolean(c));
+    return Array.from(new Set(allCodes));
+  }
+
+  private formatValidationErrors(errors: ValidationError[]): string {
+    const messages: string[] = [];
+    const visit = (err: ValidationError): void => {
+      if (err.constraints) {
+        messages.push(...Object.values(err.constraints));
+      }
+      if (err.children) {
+        err.children.forEach(visit);
+      }
+    };
+    errors.forEach(visit);
+    return messages.length > 0 ? messages.join(' | ') : 'داده‌های فروش نامعتبر است.';
   }
 }

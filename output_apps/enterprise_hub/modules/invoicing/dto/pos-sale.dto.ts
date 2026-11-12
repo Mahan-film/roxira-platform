@@ -8,6 +8,7 @@ import {
   IsIn,
   IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsPositive,
   IsString,
@@ -211,8 +212,7 @@ export class SyncPosSalesDto {
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(500)
-  @ValidateNested({ each: true })
-  @Type(() => CreatePosSaleDto)
+  @IsObject({ each: true })
   sales: CreatePosSaleDto[];
 }
 
