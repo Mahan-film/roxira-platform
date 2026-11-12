@@ -1,10 +1,23 @@
 import 'reflect-metadata';
-import { BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ExecutionContext,
+  ForbiddenException,
+  ValidationPipe,
+} from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { Test } from '@nestjs/testing';
+import request from 'supertest';
 import { EntityManager } from 'typeorm';
+import { AccessGuard } from '../access/access.guard';
+import { AccessService } from '../access/services/access.service';
+import { LoginWindowService } from '../access/services/login-window.service';
 import { TenantScope } from '../access/services/tenant-scope';
-import { AccountLevel } from '../accounting/enums/accounting.enum';
-import { AuthenticatedRequest } from '../auth/guards/jwt-auth.guard';
+import { AccountLevel, AccountType } from '../accounting/enums/accounting.enum';
+import { AuthenticatedRequest, JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AccessStub } from '../../test/support/access-stub';
 import { ImportDryRunController } from './controllers/import-dry-run.controller';
+import { MAX_DRY_RUN_ARRAY_ITEMS } from './dto/import-dry-run.dto';
 import { SepidarMappingAdapter } from './migration/bak/sepidar-mapping.adapter';
 import { ImportDryRunService } from './services/import-dry-run.service';
 import {
@@ -32,6 +45,7 @@ function createMockTenantScope(initial?: Partial<MockDbState>): {
   scope: TenantScope;
   state: MockDbState;
   wasRolledBack: () => boolean;
+  getLastTxState: () => MockDbState | null;
 } {
   const committed: MockDbState = {
     accounts: [...(initial?.accounts ?? [])],
@@ -43,6 +57,7 @@ function createMockTenantScope(initial?: Partial<MockDbState>): {
     chequeEvents: [...(initial?.chequeEvents ?? [])],
   };
   let rolledBack = false;
+  let lastTxState: MockDbState | null = null;
 
   const scope = {
     run: async <T>(_tenantId: string, fn: (em: EntityManager) => Promise<T>): Promise<T> => {
@@ -55,6 +70,7 @@ function createMockTenantScope(initial?: Partial<MockDbState>): {
         cheques: committed.cheques.map((r) => ({ ...r })),
         chequeEvents: committed.chequeEvents.map((r) => ({ ...r })),
       };
+      lastTxState = txState;
       let nextId = 1000;
 
       const storeFor = (entity: unknown): Array<Record<string, unknown>> => {
@@ -79,29 +95,50 @@ function createMockTenantScope(initial?: Partial<MockDbState>): {
         }
       };
 
-      const matchesWhere = (row: Record<string, unknown>, where: Record<string, unknown>): boolean =>
-        Object.entries(where).every(([k, v]) => {
+      const matchesClause = (row: Record<string, unknown>, clause: Record<string, unknown>): boolean =>
+        Object.entries(clause).every(([k, v]) => {
           if (v && typeof v === 'object' && '_type' in (v as Record<string, unknown>)) {
-            if ((v as { _type: string })._type === 'isNull') {
+            const op = v as { _type: string; _value?: unknown };
+            if (op._type === 'isNull') {
               return row[k] === null || row[k] === undefined;
+            }
+            if (op._type === 'in') {
+              return Array.isArray(op._value) && op._value.includes(row[k]);
             }
           }
           return row[k] === v;
         });
+
+      const matchesWhere = (
+        row: Record<string, unknown>,
+        where: Record<string, unknown> | Array<Record<string, unknown>>,
+      ): boolean =>
+        Array.isArray(where)
+          ? where.some((clause) => matchesClause(row, clause))
+          : matchesClause(row, where);
+
+      type MockWhere = Record<string, unknown> | Array<Record<string, unknown>>;
 
       const em = {
         query: jest.fn().mockResolvedValue([]),
         getRepository: (entity: unknown) => {
           const rows = storeFor(entity);
           return {
-            find: async (opts?: { where?: Record<string, unknown> }) =>
+            find: async (opts?: { where?: MockWhere }) =>
               opts?.where ? rows.filter((r) => matchesWhere(r, opts.where!)) : [...rows],
-            findOne: async (opts?: { where?: Record<string, unknown> }) =>
+            findOne: async (opts?: { where?: MockWhere }) =>
               opts?.where ? (rows.find((r) => matchesWhere(r, opts.where!)) ?? null) : null,
-            count: async (opts?: { where?: Record<string, unknown> }) =>
+            count: async (opts?: { where?: MockWhere }) =>
               opts?.where ? rows.filter((r) => matchesWhere(r, opts.where!)).length : rows.length,
             create: (obj: Record<string, unknown>) => ({ ...obj }),
-            save: async (obj: Record<string, unknown>) => {
+            save: async (obj: Record<string, unknown> | Array<Record<string, unknown>>) => {
+              if (Array.isArray(obj)) {
+                return obj.map((item) => {
+                  const saved = { id: ++nextId, ...item };
+                  rows.push(saved);
+                  return saved;
+                });
+              }
               const saved = { id: ++nextId, ...obj };
               rows.push(saved);
               return saved;
@@ -121,7 +158,7 @@ function createMockTenantScope(initial?: Partial<MockDbState>): {
     },
   } as unknown as TenantScope;
 
-  return { scope, state: committed, wasRolledBack: () => rolledBack };
+  return { scope, state: committed, wasRolledBack: () => rolledBack, getLastTxState: () => lastTxState };
 }
 
 describe('ImportDryRunService & ImportDryRunController (T100)', () => {
@@ -201,7 +238,7 @@ describe('ImportDryRunService & ImportDryRunController (T100)', () => {
     try {
       await expect(
         service.dryRunSepidar(TENANT_ID, { useSynthetic: true }),
-      ).rejects.toThrow('disabled in production');
+      ).rejects.toThrow('disabled');
     } finally {
       process.env.NODE_ENV = prevEnv;
     }
@@ -299,7 +336,7 @@ describe('ImportDryRunService & ImportDryRunController (T100)', () => {
     expect(report.openCheques.invalidErrors).toHaveLength(1);
   });
 
-  it('extracts tenantId strictly from verified JWT in ImportDryRunController', async () => {
+  it('forwards req.user.tenantId from request context in ImportDryRunController', async () => {
     const mockService = {
       dryRunSepidar: jest.fn().mockResolvedValue({ source: 'sepidar', dryRun: true, rolledBack: true }),
       dryRunHoloo: jest.fn().mockResolvedValue({ source: 'holoo', dryRun: true, rolledBack: true }),
@@ -313,5 +350,168 @@ describe('ImportDryRunService & ImportDryRunController (T100)', () => {
 
     expect(mockService.dryRunSepidar).toHaveBeenCalledWith(TENANT_ID, { useSynthetic: true });
     expect(mockService.dryRunHoloo).toHaveBeenCalledWith(TENANT_ID, { useSynthetic: true });
+  });
+
+  it('allows explicit AccountType override instead of hardcoded prefix inference', async () => {
+    const { scope, state, wasRolledBack, getLastTxState } = createMockTenantScope();
+    const service = new ImportDryRunService(new SepidarMappingAdapter(), scope);
+
+    const report = await service.dryRunSepidar(TENANT_ID, {
+      useSynthetic: false,
+      accounts: [
+        {
+          AccountID: 1,
+          Code: '1101',
+          Title: 'Custom Liability',
+          Level: 3,
+          AccountType: AccountType.LIABILITY,
+        },
+      ],
+    });
+
+    expect(report.counts.accounts.wouldInsert).toBe(1);
+    expect(getLastTxState()?.accounts.find((a) => a.code === '1101')?.accountType).toBe(
+      AccountType.LIABILITY,
+    );
+    expect(state.accounts).toHaveLength(0);
+    expect(wasRolledBack()).toBe(true);
+  });
+
+  it('rejects synthetic fixtures when NODE_ENV is staging and ALLOW_SYNTHETIC_IMPORT_DRY_RUN is unset', async () => {
+    const prevNodeEnv = process.env.NODE_ENV;
+    const prevAllow = process.env.ALLOW_SYNTHETIC_IMPORT_DRY_RUN;
+    process.env.NODE_ENV = 'staging';
+    delete process.env.ALLOW_SYNTHETIC_IMPORT_DRY_RUN;
+    try {
+      const { scope } = createMockTenantScope();
+      const service = new ImportDryRunService(new SepidarMappingAdapter(), scope);
+      await expect(service.dryRunSepidar(TENANT_ID, { useSynthetic: true })).rejects.toThrow(
+        BadRequestException,
+      );
+    } finally {
+      process.env.NODE_ENV = prevNodeEnv;
+      if (prevAllow !== undefined) {
+        process.env.ALLOW_SYNTHETIC_IMPORT_DRY_RUN = prevAllow;
+      } else {
+        delete process.env.ALLOW_SYNTHETIC_IMPORT_DRY_RUN;
+      }
+    }
+  });
+
+  it('enforces AccessGuard module permission on ImportDryRunController handlers', async () => {
+    const stub = new AccessStub();
+    stub.grant('viewer-u', TENANT_ID, 'viewer');
+    stub.grant('accountant-u', TENANT_ID, 'accountant');
+
+    const guard = new AccessGuard(
+      new Reflector(),
+      stub as unknown as AccessService,
+      { assertAllowed: jest.fn().mockResolvedValue(undefined) } as unknown as LoginWindowService,
+    );
+
+    const buildCtx = (userId: string) =>
+      ({
+        getHandler: () => ImportDryRunController.prototype.dryRunSepidar,
+        getClass: () => ImportDryRunController,
+        switchToHttp: () => ({
+          getRequest: () => ({
+            method: 'POST',
+            user: { sub: userId, tenantId: TENANT_ID, sid: 's1', role: 'user' },
+          }),
+        }),
+      }) as unknown as ExecutionContext;
+
+    await expect(guard.canActivate(buildCtx('viewer-u'))).rejects.toThrow(ForbiddenException);
+    await expect(guard.canActivate(buildCtx('accountant-u'))).resolves.toBe(true);
+  });
+
+  describe('HTTP ValidationPipe enforcement', () => {
+    it('rejects string booleans, invalid calendar dates, unknown keys, and arrays exceeding MAX_DRY_RUN_ARRAY_ITEMS', async () => {
+      const mockService = {
+        dryRunSepidar: jest.fn().mockResolvedValue({ source: 'sepidar', dryRun: true, rolledBack: true }),
+        dryRunHoloo: jest.fn().mockResolvedValue({ source: 'holoo', dryRun: true, rolledBack: true }),
+      };
+
+      const moduleRef = await Test.createTestingModule({
+        controllers: [ImportDryRunController],
+        providers: [{ provide: ImportDryRunService, useValue: mockService }],
+      })
+        .overrideGuard(JwtAuthGuard)
+        .useValue({
+          canActivate: (ctx: ExecutionContext) => {
+            const req = ctx.switchToHttp().getRequest();
+            req.user = { sub: 'u1', tenantId: TENANT_ID };
+            return true;
+          },
+        })
+        .compile();
+
+      const app = moduleRef.createNestApplication();
+      app.useGlobalPipes(
+        new ValidationPipe({
+          whitelist: true,
+          forbidNonWhitelisted: true,
+          transform: true,
+          transformOptions: { enableImplicitConversion: true },
+        }),
+      );
+      await app.init();
+
+      try {
+        await request(app.getHttpServer())
+          .post('/enterprise-hub/data-import/dry-run/sepidar')
+          .send({ useSynthetic: 'false' })
+          .expect(400);
+
+        await request(app.getHttpServer())
+          .post('/enterprise-hub/data-import/dry-run/holoo')
+          .send({
+            parties: [{ PartyId: 1, Code: 'P1', Name: 'Test', IsCustomer: 'false' }],
+          })
+          .expect(400);
+
+        await request(app.getHttpServer())
+          .post('/enterprise-hub/data-import/dry-run/sepidar')
+          .send({ openingDate: '2026-02-31' })
+          .expect(400);
+
+        await request(app.getHttpServer())
+          .post('/enterprise-hub/data-import/dry-run/sepidar')
+          .send({ unexpectedField: true })
+          .expect(400);
+
+        const oversizedAccounts = Array.from({ length: MAX_DRY_RUN_ARRAY_ITEMS + 1 }, (_, i) => ({
+          AccountID: i + 1,
+          Code: String(1100 + i),
+          Title: `Acc ${i}`,
+          Level: 3,
+        }));
+        await request(app.getHttpServer())
+          .post('/enterprise-hub/data-import/dry-run/sepidar')
+          .send({ accounts: oversizedAccounts })
+          .expect(400);
+
+        await request(app.getHttpServer())
+          .post('/enterprise-hub/data-import/dry-run/sepidar')
+          .send({
+            useSynthetic: false,
+            openingDate: '2026-03-21',
+            accounts: [
+              {
+                AccountID: 1,
+                Code: '1101',
+                Title: 'Cash',
+                Level: 3,
+                IsFloatingDetail: false,
+              },
+            ],
+          })
+          .expect(200);
+
+        expect(mockService.dryRunSepidar).toHaveBeenCalledTimes(1);
+      } finally {
+        await app.close();
+      }
+    });
   });
 });

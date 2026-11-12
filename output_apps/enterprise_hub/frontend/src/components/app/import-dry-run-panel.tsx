@@ -223,7 +223,7 @@ export function ImportDryRunPanel() {
 
         <div className="flex flex-col gap-2">
           <label htmlFor="dry-run-json-input" className="text-xs font-medium text-muted-foreground">
-            محتوای JSON خروجی استخراج‌شده از {sourceDisplayLabel(source)}:
+            محتوای JSON ساختاریافتهٔ انتقال از {sourceDisplayLabel(source)} (حداکثر ۲۰۰ ردیف در هر بخش برای هر دسته؛ فیلدهای اضافه مجاز نیست):
           </label>
           <textarea
             id="dry-run-json-input"

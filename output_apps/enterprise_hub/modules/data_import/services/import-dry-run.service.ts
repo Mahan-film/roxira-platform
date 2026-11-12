@@ -55,6 +55,11 @@ export type ImportDryRunSource = 'sepidar' | 'holoo';
 
 export type SepidarDryRunAccountInput = Omit<SepidarRawAccount, 'ParentAccountID'> & {
   ParentAccountID?: number | null;
+  AccountType?: AccountType;
+};
+
+export type HolooDryRunAccountInput = HolooDryRunRawAccount & {
+  AccountType?: AccountType;
 };
 
 export type DryRunChequeInput = Omit<
@@ -92,7 +97,7 @@ export interface HolooDryRunInput {
   useSynthetic?: boolean;
   openingDate?: string;
   customerGroup?: CustomerGroup;
-  accounts?: HolooDryRunRawAccount[];
+  accounts?: HolooDryRunAccountInput[];
   parties?: HolooDryRunRawParty[];
   items?: HolooDryRunRawItem[];
   openingVoucher?: Array<Omit<HolooDryRunRawVoucherItem, 'Debit' | 'Credit'> & {
@@ -205,6 +210,7 @@ interface NormalizedAccount {
   level: number;
   parentCode: string | null;
   isFloatingDetail: boolean;
+  accountType?: AccountType;
 }
 
 interface NormalizedParty {
@@ -408,8 +414,16 @@ export class ImportDryRunService {
   }
 
   private assertSyntheticAllowed(isSynthetic: boolean): void {
-    if (isSynthetic && process.env.NODE_ENV === 'production') {
-      throw new BadRequestException('Synthetic fixture dry-run is disabled in production.');
+    if (!isSynthetic) return;
+    const env = (process.env.NODE_ENV ?? '').toLowerCase();
+    const explicitlyAllowed =
+      env === 'test' ||
+      env === 'development' ||
+      process.env.ALLOW_SYNTHETIC_IMPORT_DRY_RUN === '1';
+    if (env === 'production' || !explicitlyAllowed) {
+      throw new BadRequestException(
+        'Synthetic fixture dry-run is disabled outside development/test environments.',
+      );
     }
   }
 
@@ -507,16 +521,23 @@ export class ImportDryRunService {
 
   private mapSepidarAccounts(rawAccounts: SepidarDryRunAccountInput[]): NormalizedAccount[] {
     try {
-      const normalizedRaw: SepidarRawAccount[] = rawAccounts.map((a) => ({
-        ...a,
-        ParentAccountID: a.ParentAccountID ?? null,
-      }));
+      const accountTypeByCode = new Map<string, AccountType>();
+      const normalizedRaw: SepidarRawAccount[] = rawAccounts.map((a) => {
+        if (a.AccountType) {
+          accountTypeByCode.set(a.Code.trim(), a.AccountType);
+        }
+        return {
+          ...a,
+          ParentAccountID: a.ParentAccountID ?? null,
+        };
+      });
       return this.sepidarMappingAdapter.mapAccounts(normalizedRaw).map((a) => ({
         code: a.code,
         name: a.name,
         level: a.level,
         parentCode: a.parentCode,
         isFloatingDetail: a.isFloatingDetail,
+        accountType: accountTypeByCode.get(a.code),
       }));
     } catch (err) {
       throw new BadRequestException(err instanceof Error ? err.message : 'Invalid Sepidar accounts');
@@ -538,8 +559,8 @@ export class ImportDryRunService {
     }
   }
 
-  private mapHolooAccounts(rawAccounts: HolooDryRunRawAccount[]): NormalizedAccount[] {
-    const byCode = new Map<string, HolooDryRunRawAccount>();
+  private mapHolooAccounts(rawAccounts: HolooDryRunAccountInput[]): NormalizedAccount[] {
+    const byCode = new Map<string, HolooDryRunAccountInput>();
     for (const raw of rawAccounts) {
       const code = raw.Code.trim();
       if (!code) throw new BadRequestException('Holoo account code cannot be empty');
@@ -575,6 +596,7 @@ export class ImportDryRunService {
         level: raw.Level,
         parentCode,
         isFloatingDetail: Boolean(raw.IsFloatingDetail),
+        accountType: raw.AccountType,
       };
     });
 
@@ -924,35 +946,52 @@ export class ImportDryRunService {
     accounts: NormalizedAccount[],
     em: EntityManager,
   ): Promise<{ inserted: number; skipped: number }> {
+    if (accounts.length === 0) {
+      return { inserted: 0, skipped: 0 };
+    }
     const repo = em.getRepository(ChartOfAccountEntity);
-    let inserted = 0;
+    const sorted = [...accounts].sort((a, b) => a.level - b.level);
+    const existingRows = await repo.find({
+      where: { tenantId, code: In(sorted.map((a) => a.code)) },
+    });
+    const existingCodes = new Set(existingRows.map((row) => row.code));
+
+    const toInsert: ChartOfAccountEntity[] = [];
     let skipped = 0;
 
-    const sorted = [...accounts].sort((a, b) => a.level - b.level);
     for (const acc of sorted) {
-      const existing = await repo.findOne({ where: { tenantId, code: acc.code } });
-      if (existing) {
+      if (existingCodes.has(acc.code)) {
         skipped++;
         continue;
       }
+      existingCodes.add(acc.code);
 
-      const entity = repo.create({
-        tenantId,
-        code: acc.code,
-        name: acc.name,
-        accountType: this.inferAccountType(acc.code),
-        currency: 'IRR',
-        balance: '0',
-        level: this.toAccountLevel(acc.level),
-        parentCode: acc.parentCode,
-      });
-      await repo.save(entity);
-      inserted++;
+      toInsert.push(
+        repo.create({
+          tenantId,
+          code: acc.code,
+          name: acc.name,
+          accountType: acc.accountType ?? this.inferAccountType(acc.code),
+          currency: 'IRR',
+          balance: '0',
+          level: this.toAccountLevel(acc.level),
+          parentCode: acc.parentCode,
+        }),
+      );
     }
 
-    return { inserted, skipped };
+    if (toInsert.length > 0) {
+      await repo.save(toInsert);
+    }
+
+    return { inserted: toInsert.length, skipped };
   }
 
+  /**
+   * Falls back to Iranian standard chart-of-accounts group prefixes (`iran-chart-template.ts` GROUPS:
+   * 1=ASSET, 2=LIABILITY, 3=EQUITY, 4=REVENUE, 5=EXPENSE; 6=EXPENSE/COGS, 7=OTHER REVENUE, 8=OTHER EXPENSE, 9=MEMO/EQUITY)
+   * only when the caller omits explicit `AccountType` on the source account row.
+   */
   private inferAccountType(code: string): AccountType {
     switch (code.charAt(0)) {
       case '1':
@@ -999,8 +1038,19 @@ export class ImportDryRunService {
     existingSkipped: number;
     duplicates: ImportDryRunDuplicateParty[];
   }> {
+    if (parties.length === 0) {
+      return { inserted: 0, existingSkipped: 0, duplicates: [] };
+    }
     const repo = em.getRepository(PartyEntity);
-    const existingAll = await repo.find({ where: { tenantId } });
+    const codes = Array.from(new Set(parties.map((p) => p.code)));
+    const nationalIds = Array.from(
+      new Set(parties.map((p) => p.nationalId).filter((n): n is string => Boolean(n))),
+    );
+    const whereClauses: Array<Record<string, unknown>> = [{ tenantId, code: In(codes) }];
+    if (nationalIds.length > 0) {
+      whereClauses.push({ tenantId, nationalId: In(nationalIds) });
+    }
+    const existingAll = await repo.find({ where: whereClauses as never });
     const dbByCode = new Map(existingAll.map((p) => [p.code, p]));
     const dbByNationalId = new Map<string, PartyEntity>();
     for (const p of existingAll) {
@@ -1010,7 +1060,7 @@ export class ImportDryRunService {
     const batchSeenCodes = new Set<string>();
     const batchSeenNationalIds = new Map<string, string>();
     const duplicates: ImportDryRunDuplicateParty[] = [];
-    let inserted = 0;
+    const toInsert: PartyEntity[] = [];
     let existingSkipped = 0;
 
     for (const p of parties) {
@@ -1071,22 +1121,26 @@ export class ImportDryRunService {
       if (p.role === 'supplier') roleEnum = PartyRole.SUPPLIER;
       else if (p.role === 'both') roleEnum = PartyRole.BOTH;
 
-      const entity = repo.create({
-        tenantId,
-        code: p.code,
-        name: p.name,
-        role: roleEnum,
-        customerGroup,
-        nationalId: p.nationalId,
-        economicCode: p.economicCode,
-        phone: p.phone,
-        active: true,
-      });
-      await repo.save(entity);
-      inserted++;
+      toInsert.push(
+        repo.create({
+          tenantId,
+          code: p.code,
+          name: p.name,
+          role: roleEnum,
+          customerGroup,
+          nationalId: p.nationalId,
+          economicCode: p.economicCode,
+          phone: p.phone,
+          active: true,
+        }),
+      );
     }
 
-    return { inserted, existingSkipped, duplicates };
+    if (toInsert.length > 0) {
+      await repo.save(toInsert);
+    }
+
+    return { inserted: toInsert.length, existingSkipped, duplicates };
   }
 
   private async persistItemsInTx(
@@ -1094,41 +1148,55 @@ export class ImportDryRunService {
     items: NormalizedItem[],
     em: EntityManager,
   ): Promise<{ inserted: number; skipped: number }> {
+    if (items.length === 0) {
+      return { inserted: 0, skipped: 0 };
+    }
     const repo = em.getRepository(StockItemEntity);
-    let inserted = 0;
+    const existingRows = await repo.find({
+      where: { tenantId, sku: In(items.map((i) => i.sku)) },
+    });
+    const existingSkus = new Set(existingRows.map((row) => row.sku));
+    const toInsert: StockItemEntity[] = [];
     let skipped = 0;
 
     for (const item of items) {
-      const existing = await repo.findOne({ where: { tenantId, sku: item.sku } });
-      if (existing) {
+      if (existingSkus.has(item.sku)) {
         skipped++;
         continue;
       }
+      existingSkus.add(item.sku);
 
-      if (
-        item.unitRatio !== null &&
-        item.unitRatio !== undefined &&
-        !/^\d+(\.\d{1,4})?$/.test(item.unitRatio)
-      ) {
-        throw new BadRequestException(`Invalid unitRatio "${item.unitRatio}" for item ${item.sku}`);
+      let parsedRatio: number | null = null;
+      if (item.unitRatio !== null && item.unitRatio !== undefined) {
+        if (!/^\d+(\.\d{1,4})?$/.test(item.unitRatio)) {
+          throw new BadRequestException(`Invalid unitRatio "${item.unitRatio}" for item ${item.sku}`);
+        }
+        parsedRatio = Number(item.unitRatio);
+        if (!Number.isFinite(parsedRatio)) {
+          throw new BadRequestException(`Invalid unitRatio "${item.unitRatio}" for item ${item.sku}`);
+        }
       }
 
-      const entity = repo.create({
-        tenantId,
-        sku: item.sku,
-        name: item.name,
-        barcode: item.barcode || item.sku,
-        quantity: 0,
-        minQuantity: 0,
-        primaryUnit: item.primaryUnit,
-        secondaryUnit: item.secondaryUnit,
-        unitRatio: (item.unitRatio ?? null) as unknown as number | null,
-      });
-      await repo.save(entity);
-      inserted++;
+      toInsert.push(
+        repo.create({
+          tenantId,
+          sku: item.sku,
+          name: item.name,
+          barcode: item.barcode || item.sku,
+          quantity: 0,
+          minQuantity: 0,
+          primaryUnit: item.primaryUnit,
+          secondaryUnit: item.secondaryUnit,
+          unitRatio: parsedRatio,
+        }),
+      );
     }
 
-    return { inserted, skipped };
+    if (toInsert.length > 0) {
+      await repo.save(toInsert);
+    }
+
+    return { inserted: toInsert.length, skipped };
   }
 
   private async analyzeAndPersistOpeningVoucherInTx(
@@ -1353,7 +1421,6 @@ export class ImportDryRunService {
   }> {
     const repo = em.getRepository(ChequeEntity);
     const eventRepo = em.getRepository(ChequeEventEntity);
-    let inserted = 0;
     let skipped = 0;
 
     let totalAmountMinor = 0n;
@@ -1363,6 +1430,23 @@ export class ImportDryRunService {
     let issuedAmountMinor = 0n;
     let endorsedCount = 0;
     let endorsedAmountMinor = 0n;
+
+    const sayadList = Array.from(
+      new Set(cheques.map((c) => c.sayadNumber).filter((s): s is string => Boolean(s))),
+    );
+    const chequeNumbers = Array.from(new Set(cheques.map((c) => c.chequeNumber)));
+    const whereClauses: Array<Record<string, unknown>> = [];
+    if (sayadList.length > 0) whereClauses.push({ tenantId, sayadNumber: In(sayadList) });
+    if (chequeNumbers.length > 0) whereClauses.push({ tenantId, chequeNumber: In(chequeNumbers) });
+    const existingRows = whereClauses.length > 0 ? await repo.find({ where: whereClauses as never }) : [];
+
+    const existingSayadSet = new Set(
+      existingRows.map((r) => r.sayadNumber).filter((s): s is string => Boolean(s)),
+    );
+    const existingNumBankSet = new Set(
+      existingRows.map((r) => `${r.chequeNumber}::${r.bankName ?? ''}`),
+    );
+    const toInsert: ChequeEntity[] = [];
 
     for (const c of cheques) {
       totalAmountMinor += c.amountMinor;
@@ -1378,59 +1462,59 @@ export class ImportDryRunService {
         issuedAmountMinor += c.amountMinor;
       }
 
-      let existing: ChequeEntity | null = null;
-      if (c.sayadNumber) {
-        existing = await repo.findOne({ where: { tenantId, sayadNumber: c.sayadNumber } });
-      }
-      if (!existing) {
-        existing = await repo.findOne({
-          where: {
-            tenantId,
-            chequeNumber: c.chequeNumber,
-            bankName: c.bankName ? c.bankName : IsNull(),
-          },
-        });
-      }
-      if (existing) {
+      const key = `${c.chequeNumber}::${c.bankName ?? ''}`;
+      if ((c.sayadNumber && existingSayadSet.has(c.sayadNumber)) || existingNumBankSet.has(key)) {
         skipped++;
         continue;
       }
+      if (c.sayadNumber) existingSayadSet.add(c.sayadNumber);
+      existingNumBankSet.add(key);
 
-      const entity = repo.create({
-        tenantId,
-        direction: c.direction,
-        sayadNumber: c.sayadNumber,
-        sayadVerified: false,
-        sayadVerifiedBy: null,
-        sayadVerifiedAt: null,
-        sayadRegistrationStatus: SayadRegistrationStatus.UNKNOWN,
-        chequeNumber: c.chequeNumber,
-        bankName: c.bankName,
-        amount: minorToDecimal(c.amountMinor),
-        issueDate: c.issueDate,
-        dueDate: c.dueDate,
-        partyName: c.partyName,
-        partyCode: c.partyCode,
-        receiverNationalId: c.receiverNationalId,
-        spentToName: c.spentToName,
-        spentToCode: c.spentToCode,
-        spentToNationalId: c.spentToNationalId,
-        status: c.status,
-        description: c.description ?? `چک باز آزمایشی ${source === 'sepidar' ? 'سپیدار' : 'هلو'}`,
-      });
-      const saved = await repo.save(entity);
-      const event = eventRepo.create({
-        tenantId,
-        chequeId: saved.id,
-        fromStatus: null,
-        toStatus: saved.status,
-        eventDate: saved.issueDate,
-        journalEntryId: null,
-        amount: null,
-        note: `اجرای آزمایشی چک باز ${source === 'sepidar' ? 'سپیدار' : 'هلو'}`,
-      });
-      await eventRepo.save(event);
-      inserted++;
+      toInsert.push(
+        repo.create({
+          tenantId,
+          direction: c.direction,
+          sayadNumber: c.sayadNumber,
+          sayadVerified: false,
+          sayadVerifiedBy: null,
+          sayadVerifiedAt: null,
+          sayadRegistrationStatus: SayadRegistrationStatus.UNKNOWN,
+          chequeNumber: c.chequeNumber,
+          bankName: c.bankName,
+          amount: minorToDecimal(c.amountMinor),
+          issueDate: c.issueDate,
+          dueDate: c.dueDate,
+          partyName: c.partyName,
+          partyCode: c.partyCode,
+          receiverNationalId: c.receiverNationalId,
+          spentToName: c.spentToName,
+          spentToCode: c.spentToCode,
+          spentToNationalId: c.spentToNationalId,
+          status: c.status,
+          description: c.description ?? `چک باز آزمایشی ${source === 'sepidar' ? 'سپیدار' : 'هلو'}`,
+        }),
+      );
+    }
+
+    let inserted = 0;
+    if (toInsert.length > 0) {
+      const savedCheques = await repo.save(toInsert);
+      const events = savedCheques.map((saved) =>
+        eventRepo.create({
+          tenantId,
+          chequeId: saved.id,
+          fromStatus: null,
+          toStatus: saved.status,
+          eventDate: saved.issueDate,
+          journalEntryId: null,
+          amount: null,
+          note: `اجرای آزمایشی چک باز ${source === 'sepidar' ? 'سپیدار' : 'هلو'}`,
+        }),
+      );
+      if (events.length > 0) {
+        await eventRepo.save(events);
+      }
+      inserted = savedCheques.length;
     }
 
     return {

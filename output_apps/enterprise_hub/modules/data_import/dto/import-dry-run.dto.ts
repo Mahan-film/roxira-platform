@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsEnum,
@@ -13,12 +14,41 @@ import {
   Max,
   MaxLength,
   Min,
+  Validate,
   ValidateNested,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
 } from 'class-validator';
+import { AccountType } from '../../accounting/enums/accounting.enum';
 import { CustomerGroup } from '../../parties/enums/customer-group.enum';
+
+/** Maximum rows allowed per entity array in one dry-run batch (keeps payloads within the 100 KB JSON limit). */
+export const MAX_DRY_RUN_ARRAY_ITEMS = 200;
 
 const toTrimmedString = ({ value }: { value: unknown }): unknown =>
   value === null || value === undefined ? value : String(value).trim();
+
+/** Prevents `enableImplicitConversion: true` from coercing string `"false"` into boolean `true`. */
+const keepRawBoolean = ({ obj, key }: { obj?: Record<string, unknown>; key: string }): unknown =>
+  obj ? obj[key] : undefined;
+
+@ValidatorConstraint({ name: 'isoCalendarDate', async: false })
+export class IsoCalendarDateConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown): boolean {
+    if (typeof value !== 'string') return false;
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+    if (!match) return false;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const dt = new Date(Date.UTC(year, month - 1, day));
+    return dt.getUTCFullYear() === year && dt.getUTCMonth() + 1 === month && dt.getUTCDate() === day;
+  }
+
+  defaultMessage(): string {
+    return 'Date must be a valid YYYY-MM-DD calendar date';
+  }
+}
 
 const DECIMAL_RIAL_PATTERN = /^\d+(\.\d{1,2})?$/;
 
@@ -52,8 +82,14 @@ export class SepidarDryRunAccountDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @Transform(keepRawBoolean)
   @IsBoolean()
   IsFloatingDetail?: boolean;
+
+  @ApiPropertyOptional({ enum: AccountType, description: 'نوع حساب در چارت مبدأ (در صورت نبود، بر اساس کد استاندارد استنتاج می‌شود)' })
+  @IsOptional()
+  @IsEnum(AccountType)
+  AccountType?: AccountType;
 }
 
 export class SepidarDryRunPartyDto {
@@ -74,10 +110,12 @@ export class SepidarDryRunPartyDto {
   Title: string;
 
   @ApiProperty()
+  @Transform(keepRawBoolean)
   @IsBoolean()
   IsCustomer: boolean;
 
   @ApiProperty()
+  @Transform(keepRawBoolean)
   @IsBoolean()
   IsVendor: boolean;
 
@@ -226,11 +264,13 @@ export class DryRunChequeDto {
   @ApiProperty()
   @IsString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'IssueDate must be YYYY-MM-DD' })
+  @Validate(IsoCalendarDateConstraint)
   IssueDate: string;
 
   @ApiProperty()
   @IsString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'DueDate must be YYYY-MM-DD' })
+  @Validate(IsoCalendarDateConstraint)
   DueDate: string;
 
   @ApiProperty()
@@ -300,12 +340,14 @@ export class SepidarDryRunDto {
     default: false,
   })
   @IsOptional()
+  @Transform(keepRawBoolean)
   @IsBoolean()
   useSynthetic?: boolean;
 
   @ApiPropertyOptional({ description: 'تاریخ سند افتتاحیه (YYYY-MM-DD)' })
   @IsOptional()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'openingDate must be YYYY-MM-DD' })
+  @Validate(IsoCalendarDateConstraint)
   openingDate?: string;
 
   @ApiPropertyOptional({ enum: CustomerGroup })
@@ -313,37 +355,42 @@ export class SepidarDryRunDto {
   @IsEnum(CustomerGroup)
   customerGroup?: CustomerGroup;
 
-  @ApiPropertyOptional({ type: [SepidarDryRunAccountDto] })
+  @ApiPropertyOptional({ type: [SepidarDryRunAccountDto], maxItems: MAX_DRY_RUN_ARRAY_ITEMS })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(MAX_DRY_RUN_ARRAY_ITEMS)
   @ValidateNested({ each: true })
   @Type(() => SepidarDryRunAccountDto)
   accounts?: SepidarDryRunAccountDto[];
 
-  @ApiPropertyOptional({ type: [SepidarDryRunPartyDto] })
+  @ApiPropertyOptional({ type: [SepidarDryRunPartyDto], maxItems: MAX_DRY_RUN_ARRAY_ITEMS })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(MAX_DRY_RUN_ARRAY_ITEMS)
   @ValidateNested({ each: true })
   @Type(() => SepidarDryRunPartyDto)
   parties?: SepidarDryRunPartyDto[];
 
-  @ApiPropertyOptional({ type: [SepidarDryRunItemDto] })
+  @ApiPropertyOptional({ type: [SepidarDryRunItemDto], maxItems: MAX_DRY_RUN_ARRAY_ITEMS })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(MAX_DRY_RUN_ARRAY_ITEMS)
   @ValidateNested({ each: true })
   @Type(() => SepidarDryRunItemDto)
   items?: SepidarDryRunItemDto[];
 
-  @ApiPropertyOptional({ type: [SepidarDryRunVoucherItemDto] })
+  @ApiPropertyOptional({ type: [SepidarDryRunVoucherItemDto], maxItems: MAX_DRY_RUN_ARRAY_ITEMS })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(MAX_DRY_RUN_ARRAY_ITEMS)
   @ValidateNested({ each: true })
   @Type(() => SepidarDryRunVoucherItemDto)
   openingVoucher?: SepidarDryRunVoucherItemDto[];
 
-  @ApiPropertyOptional({ type: [DryRunChequeDto] })
+  @ApiPropertyOptional({ type: [DryRunChequeDto], maxItems: MAX_DRY_RUN_ARRAY_ITEMS })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(MAX_DRY_RUN_ARRAY_ITEMS)
   @ValidateNested({ each: true })
   @Type(() => DryRunChequeDto)
   cheques?: DryRunChequeDto[];
@@ -380,8 +427,14 @@ export class HolooDryRunAccountDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @Transform(keepRawBoolean)
   @IsBoolean()
   IsFloatingDetail?: boolean;
+
+  @ApiPropertyOptional({ enum: AccountType, description: 'نوع حساب در چارت مبدأ (در صورت نبود، بر اساس کد استاندارد استنتاج می‌شود)' })
+  @IsOptional()
+  @IsEnum(AccountType)
+  AccountType?: AccountType;
 }
 
 export class HolooDryRunPartyDto {
@@ -402,10 +455,12 @@ export class HolooDryRunPartyDto {
   Name: string;
 
   @ApiProperty()
+  @Transform(keepRawBoolean)
   @IsBoolean()
   IsCustomer: boolean;
 
   @ApiProperty()
+  @Transform(keepRawBoolean)
   @IsBoolean()
   IsSupplier: boolean;
 
@@ -530,12 +585,14 @@ export class HolooDryRunDto {
     default: false,
   })
   @IsOptional()
+  @Transform(keepRawBoolean)
   @IsBoolean()
   useSynthetic?: boolean;
 
   @ApiPropertyOptional({ description: 'تاریخ سند افتتاحیه (YYYY-MM-DD)' })
   @IsOptional()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'openingDate must be YYYY-MM-DD' })
+  @Validate(IsoCalendarDateConstraint)
   openingDate?: string;
 
   @ApiPropertyOptional({ enum: CustomerGroup })
@@ -543,37 +600,42 @@ export class HolooDryRunDto {
   @IsEnum(CustomerGroup)
   customerGroup?: CustomerGroup;
 
-  @ApiPropertyOptional({ type: [HolooDryRunAccountDto] })
+  @ApiPropertyOptional({ type: [HolooDryRunAccountDto], maxItems: MAX_DRY_RUN_ARRAY_ITEMS })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(MAX_DRY_RUN_ARRAY_ITEMS)
   @ValidateNested({ each: true })
   @Type(() => HolooDryRunAccountDto)
   accounts?: HolooDryRunAccountDto[];
 
-  @ApiPropertyOptional({ type: [HolooDryRunPartyDto] })
+  @ApiPropertyOptional({ type: [HolooDryRunPartyDto], maxItems: MAX_DRY_RUN_ARRAY_ITEMS })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(MAX_DRY_RUN_ARRAY_ITEMS)
   @ValidateNested({ each: true })
   @Type(() => HolooDryRunPartyDto)
   parties?: HolooDryRunPartyDto[];
 
-  @ApiPropertyOptional({ type: [HolooDryRunItemDto] })
+  @ApiPropertyOptional({ type: [HolooDryRunItemDto], maxItems: MAX_DRY_RUN_ARRAY_ITEMS })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(MAX_DRY_RUN_ARRAY_ITEMS)
   @ValidateNested({ each: true })
   @Type(() => HolooDryRunItemDto)
   items?: HolooDryRunItemDto[];
 
-  @ApiPropertyOptional({ type: [HolooDryRunVoucherItemDto] })
+  @ApiPropertyOptional({ type: [HolooDryRunVoucherItemDto], maxItems: MAX_DRY_RUN_ARRAY_ITEMS })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(MAX_DRY_RUN_ARRAY_ITEMS)
   @ValidateNested({ each: true })
   @Type(() => HolooDryRunVoucherItemDto)
   openingVoucher?: HolooDryRunVoucherItemDto[];
 
-  @ApiPropertyOptional({ type: [DryRunChequeDto] })
+  @ApiPropertyOptional({ type: [DryRunChequeDto], maxItems: MAX_DRY_RUN_ARRAY_ITEMS })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(MAX_DRY_RUN_ARRAY_ITEMS)
   @ValidateNested({ each: true })
   @Type(() => DryRunChequeDto)
   cheques?: DryRunChequeDto[];
