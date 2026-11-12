@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import * as crypto from 'crypto';
-import { MoneyFormatError, parseMinor, toMinor } from '../../../accounting/money';
+import { MoneyFormatError, parseMinor } from '../../../accounting/money';
 import {
   HolooRawAccount,
   HolooRawItem,
@@ -38,6 +38,7 @@ export interface MappedItemRecord {
 }
 
 export interface MappedOpeningLine {
+  sanadId: number;
   accountCode: string;
   floatingDetailCode: string | null;
   debitMinor: bigint;
@@ -89,15 +90,18 @@ export class HolooMappingAdapter {
       }
     }
     if (typeof value === 'number') {
-      if (!Number.isFinite(value) || Number.isNaN(value)) {
+      if (!Number.isFinite(value)) {
         throw new Error(`Invalid non-finite number on line ${lineId} ${fieldName}: ${value}`);
       }
       if (value < 0) {
         throw new Error(`Negative amount on line ${lineId} ${fieldName}: ${value}`);
       }
+      if (value > Number.MAX_SAFE_INTEGER / 100) {
+        throw new Error(
+          `Invalid amount on line ${lineId} ${fieldName}: Amount is too large for a JSON number; send it as a decimal string.`,
+        );
+      }
       try {
-        // Validate JS safe range with toMinor, then parse exact string with parseMinor so >2 decimals are rejected, never rounded
-        toMinor(value);
         return parseMinor(value.toString());
       } catch (err) {
         if (err instanceof MoneyFormatError) {
@@ -273,16 +277,24 @@ export class HolooMappingAdapter {
     });
   }
 
+  private static compareCodeUnits(a: string, b: string): number {
+    return a < b ? -1 : a > b ? 1 : 0;
+  }
+
+  private static compareBigInt(a: bigint, b: bigint): number {
+    return a < b ? -1 : a > b ? 1 : 0;
+  }
+
   /**
    * Maps Holoo opening balance voucher lines into balanced double-entry lines.
-   * Enforces zero variance by default (`requireBalanced = true`), rejects simultaneous debit+credit,
-   * and validates postable accounts + floating-detail codes when chart/detail sets are provided.
+   * Fails closed if `validAccounts` is missing/empty; enforces postable accounts (level >= 3,
+   * non-floating, non-parent), valid floating-detail codes, zero variance by default
+   * (`requireBalanced = true`), and rejects simultaneous debit+credit.
    */
   mapOpeningBalance(
     rawVoucherItems: HolooRawVoucherItem[],
-    options?: {
-      validAccountCodes?: Set<string>;
-      validAccounts?: MappedChartAccount[];
+    options: {
+      validAccounts: MappedChartAccount[];
       validFloatingDetailCodes?: Set<string>;
       requireBalanced?: boolean;
     },
@@ -293,40 +305,42 @@ export class HolooMappingAdapter {
     varianceMinor: bigint;
     isBalanced: boolean;
   } {
+    if (!options?.validAccounts || options.validAccounts.length === 0) {
+      throw new Error(
+        'Opening balance mapping requires a non-empty validAccounts chart to enforce postable account validation',
+      );
+    }
+
     let totalDebit = 0n;
     let totalCredit = 0n;
 
-    const accountMap = options?.validAccounts
-      ? new Map(options.validAccounts.map((a) => [a.code, a]))
-      : null;
-    const parentAccountCodes = options?.validAccounts
-      ? new Set(
-          options.validAccounts
-            .filter((a) => !a.isFloatingDetail && a.parentCode !== null)
-            .map((a) => a.parentCode as string),
-        )
-      : null;
+    const accountMap = new Map(options.validAccounts.map((a) => [a.code, a]));
+    const parentAccountCodes = new Set(
+      options.validAccounts
+        .filter((a) => !a.isFloatingDetail && a.parentCode !== null)
+        .map((a) => a.parentCode as string),
+    );
+    const allowedFloatingDetailCodes = new Set<string>([
+      ...options.validAccounts.filter((a) => a.isFloatingDetail).map((a) => a.code),
+      ...(options.validFloatingDetailCodes ?? []),
+    ]);
 
     const lines: MappedOpeningLine[] = rawVoucherItems.map((item, idx) => {
       const lineNo = item.SanadId || idx + 1;
       const accountCode = item.AccountCode.trim();
 
-      if (accountMap) {
-        const account = accountMap.get(accountCode);
-        if (!account) {
-          throw new Error(`Opening balance line ${lineNo} references unknown account code: ${accountCode}`);
-        }
-        if (account.isFloatingDetail || account.level < 3 || parentAccountCodes?.has(accountCode)) {
-          throw new Error(
-            `Opening balance line ${lineNo} references non-postable account code: ${accountCode} (level ${account.level})`,
-          );
-        }
-      } else if (options?.validAccountCodes && !options.validAccountCodes.has(accountCode)) {
+      const account = accountMap.get(accountCode);
+      if (!account) {
         throw new Error(`Opening balance line ${lineNo} references unknown account code: ${accountCode}`);
+      }
+      if (account.isFloatingDetail || account.level < 3 || parentAccountCodes.has(accountCode)) {
+        throw new Error(
+          `Opening balance line ${lineNo} references non-postable account code: ${accountCode} (level ${account.level})`,
+        );
       }
 
       const floatingDetailCode = item.FloatingDetailCode ? item.FloatingDetailCode.trim() : null;
-      if (floatingDetailCode && options?.validFloatingDetailCodes && !options.validFloatingDetailCodes.has(floatingDetailCode)) {
+      if (floatingDetailCode && !allowedFloatingDetailCodes.has(floatingDetailCode)) {
         throw new Error(
           `Opening balance line ${lineNo} references unknown floating detail code: ${floatingDetailCode}`,
         );
@@ -343,6 +357,7 @@ export class HolooMappingAdapter {
       totalCredit += creditMinor;
 
       return {
+        sanadId: item.SanadId,
         accountCode,
         floatingDetailCode,
         debitMinor,
@@ -353,7 +368,7 @@ export class HolooMappingAdapter {
 
     const varianceMinor = totalDebit - totalCredit;
     const isBalanced = varianceMinor === 0n;
-    const requireBalanced = options?.requireBalanced ?? true;
+    const requireBalanced = options.requireBalanced ?? true;
 
     if (requireBalanced && !isBalanced) {
       throw new Error(`Holoo opening balance is unbalanced: variance = ${varianceMinor} minor units`);
@@ -391,7 +406,7 @@ export class HolooMappingAdapter {
 
     const canonicalPayload = JSON.stringify({
       accounts: [...accounts]
-        .sort((a, b) => a.code.localeCompare(b.code))
+        .sort((a, b) => HolooMappingAdapter.compareCodeUnits(a.code, b.code))
         .map((a) => ({
           code: a.code,
           isFloatingDetail: a.isFloatingDetail,
@@ -401,7 +416,7 @@ export class HolooMappingAdapter {
         })),
       balanced: opening.isBalanced,
       items: [...items]
-        .sort((a, b) => a.sku.localeCompare(b.sku))
+        .sort((a, b) => HolooMappingAdapter.compareCodeUnits(a.sku, b.sku))
         .map((i) => ({
           barcode: i.barcode,
           primaryUnit: i.primaryUnit,
@@ -410,18 +425,23 @@ export class HolooMappingAdapter {
         })),
       openingLines: [...opening.lines]
         .sort((a, b) =>
-          a.accountCode !== b.accountCode
-            ? a.accountCode.localeCompare(b.accountCode)
-            : (a.floatingDetailCode ?? '').localeCompare(b.floatingDetailCode ?? ''),
+          HolooMappingAdapter.compareCodeUnits(a.accountCode, b.accountCode) ||
+          HolooMappingAdapter.compareCodeUnits(a.floatingDetailCode ?? '', b.floatingDetailCode ?? '') ||
+          HolooMappingAdapter.compareBigInt(a.debitMinor, b.debitMinor) ||
+          HolooMappingAdapter.compareBigInt(a.creditMinor, b.creditMinor) ||
+          (a.sanadId < b.sanadId ? -1 : a.sanadId > b.sanadId ? 1 : 0) ||
+          HolooMappingAdapter.compareCodeUnits(a.description, b.description),
         )
         .map((l) => ({
           accountCode: l.accountCode,
           creditMinor: l.creditMinor.toString(),
           debitMinor: l.debitMinor.toString(),
+          description: l.description,
           floatingDetailCode: l.floatingDetailCode,
+          sanadId: l.sanadId,
         })),
       parties: [...parties]
-        .sort((a, b) => a.code.localeCompare(b.code))
+        .sort((a, b) => HolooMappingAdapter.compareCodeUnits(a.code, b.code))
         .map((p) => ({
           code: p.code,
           nationalId: p.nationalId,

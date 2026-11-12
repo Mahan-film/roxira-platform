@@ -39,7 +39,9 @@ export interface HolooRawVoucherItem {
   SanadId: number;
   AccountCode: string; // Moein or Kol code
   FloatingDetailCode?: string | null; // Tafsili or Party code
+  /** Amount in Iranian Rials (not Toman); scaled by HolooMappingAdapter to MONEY_SCALE=2 minor units. */
   Debit: number | string | bigint;
+  /** Amount in Iranian Rials (not Toman); scaled by HolooMappingAdapter to MONEY_SCALE=2 minor units. */
   Credit: number | string | bigint;
   Description?: string | null;
 }

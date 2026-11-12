@@ -175,7 +175,14 @@ describe('Holoo In-Memory Migration Mapper (T89 / #776)', () => {
 
   describe('Opening Balance Voucher Invariants & Ledger Minor Units', () => {
     it('maps balanced synthetic opening balance voucher in MONEY_SCALE=2 minor units (×100)', () => {
-      const result = adapter.mapOpeningBalance(SYNTHETIC_HOLOO_OPENING_VOUCHER);
+      const accounts = adapter.mapAccounts(SYNTHETIC_HOLOO_ACCOUNTS);
+      const parties = adapter.mapParties(SYNTHETIC_HOLOO_PARTIES);
+      const validFloatingDetailCodes = new Set(parties.map((p) => p.code));
+
+      const result = adapter.mapOpeningBalance(SYNTHETIC_HOLOO_OPENING_VOUCHER, {
+        validAccounts: accounts,
+        validFloatingDetailCodes,
+      });
 
       expect(result.lines).toHaveLength(5);
       // 30M + 70M + 50M = 150,000,000 Rials => 15,000,000,000 minor units (MONEY_SCALE = 2)
@@ -186,7 +193,20 @@ describe('Holoo In-Memory Migration Mapper (T89 / #776)', () => {
       expect(result.isBalanced).toBe(true);
     });
 
+    it('fails closed when validAccounts is missing or empty', () => {
+      expect(() =>
+        adapter.mapOpeningBalance(SYNTHETIC_HOLOO_OPENING_VOUCHER, { validAccounts: [] }),
+      ).toThrow('requires a non-empty validAccounts chart');
+
+      expect(() =>
+        (adapter.mapOpeningBalance as unknown as (lines: HolooRawVoucherItem[]) => unknown)(
+          SYNTHETIC_HOLOO_OPENING_VOUCHER,
+        ),
+      ).toThrow('requires a non-empty validAccounts chart');
+    });
+
     it('rejects lines with simultaneous positive Debit and Credit', () => {
+      const accounts = adapter.mapAccounts(SYNTHETIC_HOLOO_ACCOUNTS);
       const invalidLine: HolooRawVoucherItem[] = [
         {
           SanadId: 1,
@@ -196,38 +216,52 @@ describe('Holoo In-Memory Migration Mapper (T89 / #776)', () => {
         },
       ];
 
-      expect(() => adapter.mapOpeningBalance(invalidLine)).toThrow(
-        'cannot have both Debit and Credit greater than zero',
-      );
+      expect(() =>
+        adapter.mapOpeningBalance(invalidLine, { validAccounts: accounts }),
+      ).toThrow('cannot have both Debit and Credit greater than zero');
     });
 
     it('rejects negative, NaN, non-finite, and >2-decimal fractional amounts without rounding', () => {
+      const accounts = adapter.mapAccounts(SYNTHETIC_HOLOO_ACCOUNTS);
+
       expect(() =>
-        adapter.mapOpeningBalance([{ SanadId: 1, AccountCode: '1010', Debit: -100, Credit: 0 }]),
+        adapter.mapOpeningBalance(
+          [{ SanadId: 1, AccountCode: '1010', Debit: -100, Credit: 0 }],
+          { validAccounts: accounts },
+        ),
       ).toThrow('Negative amount');
 
       expect(() =>
-        adapter.mapOpeningBalance([{ SanadId: 1, AccountCode: '1010', Debit: NaN, Credit: 0 }]),
+        adapter.mapOpeningBalance(
+          [{ SanadId: 1, AccountCode: '1010', Debit: NaN, Credit: 0 }],
+          { validAccounts: accounts },
+        ),
       ).toThrow('Invalid non-finite number');
 
       expect(() =>
-        adapter.mapOpeningBalance([{ SanadId: 1, AccountCode: '1010', Debit: Infinity, Credit: 0 }]),
+        adapter.mapOpeningBalance(
+          [{ SanadId: 1, AccountCode: '1010', Debit: Infinity, Credit: 0 }],
+          { validAccounts: accounts },
+        ),
       ).toThrow('Invalid non-finite number');
 
       expect(() =>
-        adapter.mapOpeningBalance([{ SanadId: 1, AccountCode: '1010', Debit: 100.125, Credit: 0 }]),
+        adapter.mapOpeningBalance(
+          [{ SanadId: 1, AccountCode: '1010', Debit: 100.125, Credit: 0 }],
+          { validAccounts: accounts },
+        ),
       ).toThrow('Invalid amount');
 
       expect(() =>
-        adapter.mapOpeningBalance([{ SanadId: 1, AccountCode: '1010', Debit: '100.125', Credit: 0 }]),
+        adapter.mapOpeningBalance(
+          [{ SanadId: 1, AccountCode: '1010', Debit: '100.125', Credit: 0 }],
+          { validAccounts: accounts },
+        ),
       ).toThrow('Invalid amount');
     });
 
     it('rejects non-postable accounts (Group/Kol/parent Moein) and unknown floating detail codes', () => {
       const accounts = adapter.mapAccounts(SYNTHETIC_HOLOO_ACCOUNTS);
-      const validFloatingDetailCodes = new Set(
-        accounts.filter((a) => a.isFloatingDetail).map((a) => a.code),
-      );
 
       // Group level 1 ('1') is non-postable
       expect(() =>
@@ -251,28 +285,32 @@ describe('Holoo In-Memory Migration Mapper (T89 / #776)', () => {
         ),
       ).toThrow('non-postable account code: 1020');
 
-      // Unknown floating detail code
+      // Unknown floating detail code rejected even without passing validFloatingDetailCodes
       expect(() =>
         adapter.mapOpeningBalance(
           [
             { SanadId: 1, AccountCode: '1010', FloatingDetailCode: 'UNKNOWN-FD', Debit: 1000, Credit: 0 },
             { SanadId: 2, AccountCode: '3010', Debit: 0, Credit: 1000 },
           ],
-          { validAccounts: accounts, validFloatingDetailCodes },
+          { validAccounts: accounts },
         ),
       ).toThrow('unknown floating detail code: UNKNOWN-FD');
     });
 
     it('enforces zero variance by default unless requireBalanced is explicitly false', () => {
+      const accounts = adapter.mapAccounts(SYNTHETIC_HOLOO_ACCOUNTS);
       const unbalanced: HolooRawVoucherItem[] = [
         { SanadId: 1, AccountCode: '1010', Debit: 1000, Credit: 0 },
       ];
 
-      expect(() => adapter.mapOpeningBalance(unbalanced)).toThrow(
-        'Holoo opening balance is unbalanced',
-      );
+      expect(() =>
+        adapter.mapOpeningBalance(unbalanced, { validAccounts: accounts }),
+      ).toThrow('Holoo opening balance is unbalanced');
 
-      const preview = adapter.mapOpeningBalance(unbalanced, { requireBalanced: false });
+      const preview = adapter.mapOpeningBalance(unbalanced, {
+        validAccounts: accounts,
+        requireBalanced: false,
+      });
       expect(preview.isBalanced).toBe(false);
       expect(preview.varianceMinor).toBe(100000n);
     });
@@ -310,6 +348,37 @@ describe('Holoo In-Memory Migration Mapper (T89 / #776)', () => {
       expect(cert1.openingLinesCount).toBe(5);
       expect(cert1.checksum).toHaveLength(64);
       expect(cert1.checksum).toBe(cert2.checksum);
+    });
+
+    it('produces identical SHA-256 checksum when two opening lines share accountCode and floatingDetailCode across reversed input order', () => {
+      const accounts = adapter.mapAccounts(SYNTHETIC_HOLOO_ACCOUNTS);
+      const parties = adapter.mapParties(SYNTHETIC_HOLOO_PARTIES);
+      const items = adapter.mapItems(SYNTHETIC_HOLOO_ITEMS);
+
+      const multiLineVoucher: HolooRawVoucherItem[] = [
+        { SanadId: 10, AccountCode: '102001', FloatingDetailCode: 'F-101', Debit: 10_000_000, Credit: 0, Description: 'ردیف اول بانک' },
+        { SanadId: 11, AccountCode: '102001', FloatingDetailCode: 'F-101', Debit: 25_000_000, Credit: 0, Description: 'ردیف دوم بانک' },
+        { SanadId: 12, AccountCode: '102001', FloatingDetailCode: 'F-101', Debit: 25_000_000, Credit: 0, Description: 'ردیف سوم با مبلغ برابر' },
+        { SanadId: 13, AccountCode: '3010', Debit: 0, Credit: 60_000_000, Description: 'طرف سرمایه' },
+      ];
+
+      const certForward = adapter.generateReconciliationCertificate(
+        accounts,
+        parties,
+        items,
+        multiLineVoucher,
+      );
+      const certReversed = adapter.generateReconciliationCertificate(
+        accounts,
+        parties,
+        items,
+        [...multiLineVoucher].reverse(),
+      );
+
+      expect(certForward.openingLinesCount).toBe(4);
+      expect(certForward.totalDebitMinor).toBe(6000000000n);
+      expect(certForward.totalCreditMinor).toBe(6000000000n);
+      expect(certForward.checksum).toBe(certReversed.checksum);
     });
   });
 });
