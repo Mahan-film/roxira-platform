@@ -36,6 +36,3 @@ These are real mistakes found in review. Each line is a rule. Reviewers add a li
 23. Before reporting a PR as done, read its latest `Cross-family review` comment. A `Verdict: blocker` for the current head means the task is not done.
 24. Copy UI text, field names and error codes from the real source file before you write a spec (WAVE 4 #681 asserted four labels and a 400 that do not exist; #644 read `total_amount` where capture drafts store `total`).
 25. A permissive default (`roleKey = 'owner'`, a missing setting treated as allowed) is a security bug. Fail closed (#675).
-26. Pre-tenant webhook entrypoints (Telegram/Bale) execute without app.tenant_id context and require narrow SECURITY DEFINER lookup and code consumption functions with explicit grants to roxira_app role before entering TenantScope.
-27. Cost masking interceptors must run by default across all authenticated routes with an explicit exempt list, use case-insensitive regex pattern matching with negative lookahead to protect dimension keys (e.g. costCenter), and enforce WeakSet cycle guards on object traversal to prevent stack overflows on bidirectional relationships.
-28. FX revaluation ledger reconciliation must never skip zero-balance accounts, ensuring accounts with 0 Rial ledger balances cannot be manipulated to recognize arbitrary foreign exchange gains or losses.

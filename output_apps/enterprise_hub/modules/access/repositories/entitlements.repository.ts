@@ -11,10 +11,13 @@ export class EntitlementsRepository {
 
   async list(tenantId: string): Promise<EntitlementEntity[]> {
     try {
-      const rows = await this.repo.query(
-        `SELECT * FROM public.lookup_tenant_entitlements($1)`,
-        [tenantId],
-      );
+      const rows = await this.repo.manager.transaction(async (m) => {
+        await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [tenantId]);
+        return m.query(
+          `SELECT * FROM public.lookup_tenant_entitlements($1)`,
+          [tenantId],
+        );
+      });
       if (rows) {
         return rows.map((r: any) =>
           this.repo.create({

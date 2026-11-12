@@ -67,6 +67,14 @@ export class InquiriesRepository {
         ],
       );
       if (!rows || rows.length === 0) {
+        if (options.skip > 0) {
+          const firstPage = await this.inquiries.query(
+            `SELECT total_count FROM public.list_enterprise_inquiries($1, $2, 1, 0)`,
+            [options.status ?? null, options.search ?? null],
+          );
+          const total = firstPage && firstPage.length > 0 ? Number(firstPage[0].total_count ?? 0) : 0;
+          return [[], total];
+        }
         return [[], 0];
       }
       const total = Number(rows[0].total_count ?? 0);

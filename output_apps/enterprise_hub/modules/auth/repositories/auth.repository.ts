@@ -54,7 +54,7 @@ export class AuthRepository {
       }
       return null;
     } catch (err) {
-      this.logger.error(`lookup_user_by_username error for ${username}: ${err}`);
+      this.logger.error(`lookup_user_by_username error: ${err}`);
       throw err;
     }
   }
@@ -87,7 +87,7 @@ export class AuthRepository {
       }
       return null;
     } catch (err) {
-      this.logger.error(`lookup_user_by_login_email error for ${loginEmail}: ${err}`);
+      this.logger.error(`lookup_user_by_login_email error: ${err}`);
       throw err;
     }
   }
@@ -99,10 +99,13 @@ export class AuthRepository {
     try {
       let rows: any[] = [];
       if ('id' in where) {
-        rows = await this.repository.query(
-          `SELECT * FROM public.lookup_user_by_id_with_password($1)`,
-          [where.id],
-        );
+        rows = await this.repository.manager.transaction(async (m) => {
+          await m.query(`SELECT set_config('app.user_id', $1, true)`, [where.id]);
+          return m.query(
+            `SELECT * FROM public.lookup_user_by_id_with_password($1)`,
+            [where.id],
+          );
+        });
       } else if ('username' in where) {
         rows = await this.repository.query(
           `SELECT * FROM public.lookup_user_by_username($1)`,
@@ -171,7 +174,7 @@ export class AuthRepository {
       }
       return null;
     } catch (err) {
-      this.logger.error(`lookup_user_by_phone error for ${phone}: ${err}`);
+      this.logger.error(`lookup_user_by_phone error: ${err}`);
       throw err;
     }
   }

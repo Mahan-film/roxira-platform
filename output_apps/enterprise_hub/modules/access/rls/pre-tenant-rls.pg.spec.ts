@@ -49,7 +49,7 @@ const describePg = HOST ? describe : describe.skip;
 const OWNER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
 const OWNER_PW = process.env.ROXIRA_TEST_PG_PASSWORD;
 const PORT = Number(process.env.ROXIRA_TEST_PG_PORT ?? 5432);
-const APP_PW = 'pre-tenant-rls-app-test-only';
+const APP_PW = process.env.ROXIRA_TEST_APP_PASSWORD ?? `pre_tenant_app_pw_${process.pid}`;
 const T1 = '11111111-1111-4111-8111-111111111111';
 const T2 = '22222222-2222-4222-8222-222222222222';
 
@@ -88,32 +88,18 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
   beforeAll(async () => {
     admin = await new DataSource({ ...options('postgres'), entities: [], migrations: [] }).initialize();
     await admin.query(`CREATE DATABASE "${db}"`);
-    await admin.query(`DROP ROLE IF EXISTS ${role}`);
-    await admin.query(`CREATE ROLE ${role} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${APP_PW}'`);
-    // Ensure standard roxira_app role exists during migration so explicit per-function grants are applied
-    await admin.query(`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'roxira_app') THEN
-          CREATE ROLE roxira_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${APP_PW}';
-        ELSE
-          ALTER ROLE roxira_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${APP_PW}';
-        END IF;
-      END
-      $$;
-    `);
+    await admin.query(`DROP ROLE IF EXISTS "${role}"`);
+    await admin.query(`CREATE ROLE "${role}" LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${APP_PW}'`);
     owner = await new DataSource(options(db)).initialize();
     await owner.runMigrations();
 
-    // Standard app role grants matching scripts/ops/db_app_role.sh and scripts/ci/create_app_role.sh
-    for (const r of [role, 'roxira_app']) {
-      await owner.query(`GRANT CONNECT ON DATABASE "${db}" TO ${r}`);
-      await owner.query(`GRANT USAGE ON SCHEMA public TO ${r}`);
-      await owner.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${r}`);
-      await owner.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${r}`);
-    }
+    await owner.query(`GRANT CONNECT ON DATABASE "${db}" TO "${role}"`);
+    await owner.query(`GRANT USAGE ON SCHEMA public TO "${role}"`);
+    await owner.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "${role}"`);
+    await owner.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO "${role}"`);
+    await owner.query(`GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO "${role}"`);
 
-    app = await new DataSource({ ...options(db, 'roxira_app', APP_PW), extra: { max: 8 } }).initialize();
+    app = await new DataSource({ ...options(db, role, APP_PW), extra: { max: 8 } }).initialize();
     scope = new TenantScope(app);
 
     authRepo = new AuthRepository(app.getRepository(UserEntity));
@@ -141,7 +127,7 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     await owner?.destroy().catch(() => undefined);
     if (admin) {
       await admin.query(`DROP DATABASE IF EXISTS "${db}"`).catch(() => undefined);
-      await admin.query(`DROP ROLE IF EXISTS ${role}`).catch(() => undefined);
+      await admin.query(`DROP ROLE IF EXISTS "${role}"`).catch(() => undefined);
       await admin.destroy().catch(() => undefined);
     }
   });
@@ -458,18 +444,19 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
 
   it('denies EXECUTE to an unprivileged role without grants', async () => {
     const unprivilegedRole = `rx_unprivileged_${process.pid}`;
-    await owner.query(`DROP ROLE IF EXISTS ${unprivilegedRole}`);
-    await owner.query(`CREATE ROLE ${unprivilegedRole} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'unprivileged_pw'`);
-    await owner.query(`GRANT CONNECT ON DATABASE "${db}" TO ${unprivilegedRole}`);
+    const unprivilegedPw = process.env.ROXIRA_TEST_APP_PASSWORD ?? `unprivileged_pw_${process.pid}`;
+    await owner.query(`DROP ROLE IF EXISTS "${unprivilegedRole}"`);
+    await owner.query(`CREATE ROLE "${unprivilegedRole}" LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${unprivilegedPw}'`);
+    await owner.query(`GRANT CONNECT ON DATABASE "${db}" TO "${unprivilegedRole}"`);
 
-    const unprivilegedDs = await new DataSource({ ...options(db, unprivilegedRole, 'unprivileged_pw') }).initialize();
+    const unprivilegedDs = await new DataSource({ ...options(db, unprivilegedRole, unprivilegedPw) }).initialize();
     try {
       await expect(
         unprivilegedDs.query(`SELECT * FROM public.lookup_user_by_phone('09121111111')`),
       ).rejects.toThrow(/permission denied/);
     } finally {
       await unprivilegedDs.destroy().catch(() => undefined);
-      await owner.query(`DROP ROLE IF EXISTS ${unprivilegedRole}`).catch(() => undefined);
+      await owner.query(`DROP ROLE IF EXISTS "${unprivilegedRole}"`).catch(() => undefined);
     }
   });
 

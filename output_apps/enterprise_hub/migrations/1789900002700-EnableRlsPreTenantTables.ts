@@ -13,9 +13,9 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  *   7. contact_messages
  *   8. enterprise_inquiries
  *
- * Completes 100% FORCE RLS coverage across all tables containing a tenant_id column
- * on the platform while safeguarding pre-auth login, token rotation, invite redemption,
- * and anonymous public form submissions.
+ * Enables FORCE RLS on the 8 pre-tenant and auth tables while safeguarding
+ * pre-auth login, token rotation, invite redemption, and anonymous public form submissions
+ * (the remaining 29 tables are tracked in RLS_PENDING_ALLOWLIST for per-module rollouts).
  */
 export const PRE_TENANT_RLS_TABLES = [
   'users',
@@ -201,7 +201,7 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
       DECLARE
         v_current_user uuid := nullif(current_setting('app.user_id', true), '')::uuid;
       BEGIN
-        IF v_current_user IS NOT NULL AND v_current_user <> p_user_id THEN
+        IF v_current_user IS NULL OR v_current_user <> p_user_id THEN
           RAISE EXCEPTION 'caller user context does not match target user';
         END IF;
         RETURN QUERY
@@ -267,12 +267,24 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
       DECLARE
         v_affected integer;
         v_current_user uuid := nullif(current_setting('app.user_id', true), '')::uuid;
+        v_token_user uuid;
       BEGIN
+        SELECT user_id INTO v_token_user
+        FROM public.auth_refresh_tokens
+        WHERE id = p_id;
+
+        IF NOT FOUND THEN
+          RETURN false;
+        END IF;
+
+        IF v_current_user IS NOT NULL AND v_current_user <> v_token_user THEN
+          RAISE EXCEPTION 'caller user context does not match token owner';
+        END IF;
+
         UPDATE public.auth_refresh_tokens
         SET revoked_at = CURRENT_TIMESTAMP
         WHERE id = p_id
-          AND revoked_at IS NULL
-          AND (v_current_user IS NULL OR user_id = v_current_user);
+          AND revoked_at IS NULL;
         GET DIAGNOSTICS v_affected = ROW_COUNT;
         RETURN v_affected > 0;
       END;
@@ -286,12 +298,25 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
       AS $$
       DECLARE
         v_current_user uuid := nullif(current_setting('app.user_id', true), '')::uuid;
+        v_family_user uuid;
       BEGIN
+        SELECT user_id INTO v_family_user
+        FROM public.auth_refresh_tokens
+        WHERE family_id = p_family_id
+        LIMIT 1;
+
+        IF NOT FOUND THEN
+          RETURN;
+        END IF;
+
+        IF v_current_user IS NOT NULL AND v_current_user <> v_family_user THEN
+          RAISE EXCEPTION 'caller user context does not match token owner';
+        END IF;
+
         UPDATE public.auth_refresh_tokens
         SET revoked_at = CURRENT_TIMESTAMP
         WHERE family_id = p_family_id
-          AND revoked_at IS NULL
-          AND (v_current_user IS NULL OR user_id = v_current_user);
+          AND revoked_at IS NULL;
       END;
       $$;
 
@@ -386,18 +411,35 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
         v_affected integer;
         v_current_user uuid := nullif(current_setting('app.user_id', true), '')::uuid;
         v_current_tenant uuid := nullif(current_setting('app.tenant_id', true), '')::uuid;
+        v_invitation_tenant uuid;
       BEGIN
+        SELECT tenant_id INTO v_invitation_tenant
+        FROM public.tenant_invitations
+        WHERE id = p_id
+          AND accepted_at IS NULL
+          AND revoked_at IS NULL
+          AND expires_at > CURRENT_TIMESTAMP;
+
+        IF NOT FOUND THEN
+          RETURN false;
+        END IF;
+
+        IF p_tenant_id IS NOT NULL AND v_invitation_tenant <> p_tenant_id THEN
+          RETURN false;
+        END IF;
+
+        IF v_current_tenant IS NOT NULL AND v_current_tenant <> v_invitation_tenant THEN
+          RAISE EXCEPTION 'caller tenant context does not match target tenant';
+        END IF;
+
         IF v_current_user IS NOT NULL AND v_current_user <> p_user_id THEN
           RAISE EXCEPTION 'caller user context does not match target user';
         END IF;
-        IF v_current_tenant IS NOT NULL AND p_tenant_id IS NOT NULL AND v_current_tenant <> p_tenant_id THEN
-          RAISE EXCEPTION 'caller tenant context does not match target tenant';
-        END IF;
+
         UPDATE public.tenant_invitations
         SET accepted_at = CURRENT_TIMESTAMP,
             accepted_by = p_user_id
         WHERE id = p_id
-          AND (p_tenant_id IS NULL OR tenant_id = p_tenant_id)
           AND accepted_at IS NULL
           AND revoked_at IS NULL
           AND expires_at > CURRENT_TIMESTAMP;
@@ -509,7 +551,13 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
       SECURITY DEFINER
       SET search_path = public, pg_temp
       AS $$
+      DECLARE
+        v_escaped_search text;
       BEGIN
+        IF p_search IS NOT NULL THEN
+          v_escaped_search := '%' || replace(replace(replace(p_search, '\', '\\'), '%', '\%'), '_', '\_') || '%';
+        END IF;
+
         RETURN QUERY
         WITH filtered AS (
           SELECT
@@ -518,10 +566,10 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
           WHERE (p_status IS NULL OR e.status = p_status)
             AND (
               p_search IS NULL
-              OR e.name ILIKE ('%' || p_search || '%')
-              OR e.company ILIKE ('%' || p_search || '%')
-              OR e.email ILIKE ('%' || p_search || '%')
-              OR e.phone ILIKE ('%' || p_search || '%')
+              OR e.name ILIKE v_escaped_search ESCAPE '\'
+              OR e.company ILIKE v_escaped_search ESCAPE '\'
+              OR e.email ILIKE v_escaped_search ESCAPE '\'
+              OR e.phone ILIKE v_escaped_search ESCAPE '\'
             )
         ),
         counted AS (
@@ -771,6 +819,8 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
     }
 
     // 3. Drop lookup and submission functions
+    // Note: down() deliberately preserves the function owner and the roxira_app role/grants
+    // to prevent breaking shared cluster state or permissions on other pre-existing or co-existing functions.
     await q.query(`
       DROP FUNCTION IF EXISTS public.lookup_user_by_phone(text);
       DROP FUNCTION IF EXISTS public.lookup_user_by_username(text);
