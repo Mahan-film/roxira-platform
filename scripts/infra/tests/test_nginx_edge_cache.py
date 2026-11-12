@@ -44,9 +44,9 @@ def test_snippet_has_cache_policy():
     assert "proxy_cache laws_cache;" in SNIPPET
     assert "proxy_cache_lock on;" in SNIPPET
     assert "proxy_cache_use_stale updating error timeout;" in SNIPPET
-    assert "http_500" not in SNIPPET
     assert "proxy_cache_valid 200 3600s;" in SNIPPET
-    assert "301" not in SNIPPET and "302" not in SNIPPET
+    assert "proxy_cache_valid 500" not in SNIPPET
+    assert "proxy_cache_valid 301" not in SNIPPET and "proxy_cache_valid 302" not in SNIPPET
     assert "proxy_cache_bypass $laws_cookie_bypass $http_authorization;" in SNIPPET
     assert "proxy_no_cache $laws_cookie_bypass $http_authorization $upstream_http_set_cookie;" in SNIPPET
     assert "add_header X-Cache-Status $upstream_cache_status always;" in SNIPPET
@@ -55,6 +55,36 @@ def test_snippet_has_cache_policy():
     assert "inactive=2h" in CONF
     assert "$laws_cookie_bypass" in CONF
     assert "default 1;" in CONF
+
+
+def test_cookie_bypass_map_quoting_and_behavior():
+    # Verify the map directive exists, fails closed (default 1), and quotes the regex
+    # so semicolons in character classes/lookaheads do not tokenize as premature statement ends.
+    map_match = re.search(r'map\s+\$http_cookie\s+\$laws_cookie_bypass\s*\{([^}]+)\}', CONF, re.S)
+    assert map_match, "map $http_cookie $laws_cookie_bypass block must exist in nginx.conf"
+    body = map_match.group(1)
+    assert re.search(r'default\s+1;', body)
+    assert re.search(r'""\s+0;', body)
+
+    # Must be enclosed in double quotes
+    quoted_match = re.search(r'"~([^\"]+)"\s+0;', body)
+    assert quoted_match, "regex entry in map $laws_cookie_bypass must be enclosed in double quotes"
+
+    pattern_raw = quoted_match.group(1)
+    if pattern_raw.startswith("*"):
+        pattern_raw = pattern_raw[1:]  # strip case-insensitivity marker
+    rx = re.compile(pattern_raw, re.IGNORECASE)
+
+    # Permitted public cookies: match regex -> bypass = 0
+    assert rx.match("__cf_bm=token123")
+    assert rx.match("_ga=GA1.2.12345; _gid=GA1.2.67890")
+    assert rx.match("cf_clearance=cf123; umami=uuid456")
+    assert rx.match("") is None  # handled by "" 0; rule
+
+    # Private / session / auth cookies: do not match -> fallback to default 1 (fail-closed bypass)
+    assert not rx.match("session_id=s123")
+    assert not rx.match("token=Bearer123; __cf_bm=token123")
+    assert not rx.match("roxira_auth=jwt.token.here")
 
 
 def test_cached_locations_exist_per_frontend_server():
