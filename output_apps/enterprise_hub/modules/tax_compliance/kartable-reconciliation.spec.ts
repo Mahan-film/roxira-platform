@@ -326,7 +326,12 @@ describe('KartableReconciliation (parser, matching, quarterly VAT, AccessGuard)'
     stub.grant('u-ro', 'tenant-sec', 'read_only');
     stub.grant('u-acc', 'tenant-sec', 'accountant');
 
-    const guard = new AccessGuard(new Reflector(), stub as unknown as AccessService);
+    const mockLoginWindow = { assertAllowed: jest.fn().mockResolvedValue(undefined) } as never;
+    const guard = new AccessGuard(
+      new Reflector(),
+      stub as unknown as AccessService,
+      mockLoginWindow,
+    );
 
     await expect(
       guard.canActivate(
