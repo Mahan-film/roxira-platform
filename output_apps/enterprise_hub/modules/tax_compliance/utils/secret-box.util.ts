@@ -50,3 +50,27 @@ export function openSecret(sealed: string, masterKey: Buffer, tenantId: string):
     'utf8',
   );
 }
+
+export function isSealedSecret(value: string): boolean {
+  return value.startsWith(`${VERSION}.`);
+}
+
+/**
+ * Unseals a stored private key (`v1.<iv>.<tag>.<ciphertext>`).
+ * When `allowLegacyPlaintextPem` is true, pre-existing unencrypted PEM rows remain readable
+ * while newly generated keys are always sealed via `sealSecret`.
+ */
+export function openStoredPrivateKey(
+  stored: string,
+  masterKey: Buffer,
+  tenantId: string,
+  allowLegacyPlaintextPem = false,
+): string {
+  if (isSealedSecret(stored)) {
+    return openSecret(stored, masterKey, tenantId);
+  }
+  if (allowLegacyPlaintextPem && stored.trimStart().startsWith('-----BEGIN ')) {
+    return stored;
+  }
+  throw new Error('Unsupported or unsealed private key format');
+}

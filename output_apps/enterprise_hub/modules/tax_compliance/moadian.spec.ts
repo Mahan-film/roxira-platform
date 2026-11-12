@@ -1068,7 +1068,7 @@ describe('Moadian — tenant isolation', () => {
     await expect(controller.listSubmissions(owner)).resolves.toEqual([]);
   });
 
-  it('putCredential supports useActiveSigningKey and rejects when active key is absent or mismatched', async () => {
+  it('putCredential supports useActiveSigningKey (sealed & legacy) and rejects when active key is absent, wrong tenant, or mismatched', async () => {
     const { service } = buildMoadian({ activeSigningKeyPem: tenantKeys.privateKeyPem });
     const saved = await service.putCredential(TENANT_A, {
       memoryId: 'a1b2c3',
@@ -1079,6 +1079,35 @@ describe('Moadian — tenant isolation', () => {
     });
     expect(saved.memoryId).toBe('A1B2C3');
     expect(saved.settlementMethod).toBe(MoadianSettlementMethod.CREDIT);
+
+    const sealedForTenantA = sealSecret(
+      tenantKeys.privateKeyPem,
+      parseMasterKey(masterKeyB64),
+      TENANT_A,
+    );
+    const sealedCtx = buildMoadian({ activeSigningKeyPem: sealedForTenantA });
+    const savedFromSealed = await sealedCtx.service.putCredential(TENANT_A, {
+      memoryId: 'a1b2c3',
+      economicCode: '10101010101',
+      certificatePem: tenantKeys.certificatePem,
+      useActiveSigningKey: true,
+    });
+    expect(savedFromSealed.memoryId).toBe('A1B2C3');
+
+    const sealedForTenantB = sealSecret(
+      tenantKeys.privateKeyPem,
+      parseMasterKey(masterKeyB64),
+      TENANT_B,
+    );
+    const crossTenantCtx = buildMoadian({ activeSigningKeyPem: sealedForTenantB });
+    await expect(
+      crossTenantCtx.service.putCredential(TENANT_A, {
+        memoryId: 'a1b2c3',
+        economicCode: '10101010101',
+        certificatePem: tenantKeys.certificatePem,
+        useActiveSigningKey: true,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
 
     const noKey = buildMoadian({ activeSigningKeyPem: null });
     await expect(

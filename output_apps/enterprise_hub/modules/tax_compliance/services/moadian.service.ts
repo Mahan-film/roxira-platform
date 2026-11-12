@@ -56,7 +56,12 @@ import {
 } from '../utils/moadian-payload.transformer';
 import { SubmitMoadianInvoiceDto } from '../dto/submit-moadian-invoice.dto';
 import { MoadianMappingError, mapInvoiceToMoadianPacket } from '../utils/moadian-packet.mapper';
-import { openSecret, parseMasterKey, sealSecret } from '../utils/secret-box.util';
+import {
+  openSecret,
+  openStoredPrivateKey,
+  parseMasterKey,
+  sealSecret,
+} from '../utils/secret-box.util';
 import { MoadianApiClient, MoadianApiError, MoadianAuthContext } from './moadian-api.client';
 
 /** payload کارهای صف `moadian` — فقط شناسه‌ها؛ هیچ کلید یا بسته‌ای در Redis نمی‌رود. */
@@ -160,7 +165,19 @@ export class MoadianService implements OnModuleInit {
           'کلید فعال امضای مالیاتی برای این سازمان یافت نشد؛ ابتدا زوج‌کلید تولید کنید یا کلید خصوصی را وارد نمایید.',
         );
       }
-      privateKeyPem = activeKey.privateKeyPem;
+      const key = this.masterKey();
+      try {
+        privateKeyPem = openStoredPrivateKey(
+          activeKey.privateKeyPem,
+          key,
+          tenantId,
+          true,
+        );
+      } catch {
+        throw new BadRequestException(
+          'کلید خصوصی فعال سازمان قابل رمزگشایی نیست.',
+        );
+      }
     }
     if (!privateKeyPem) {
       throw new BadRequestException('کلید خصوصی (PEM) یا گزینه استفاده از کلید فعال الزامی است.');

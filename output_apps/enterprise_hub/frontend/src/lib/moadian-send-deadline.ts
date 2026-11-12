@@ -1,18 +1,25 @@
 /**
- * محاسبه و هشدار مهلت ارسال صورتحساب‌ها به سامانه مؤدیان (بر پایه آستانه روز تقویمی قابل تنظیم).
+ * محاسبه و هشدار مهلت ارسال صورتحساب‌ها به سامانه مؤدیان (بر پایه آستانه روز تقویمی واردشده توسط کاربر).
  *
- * مهلت پیش‌فرض ۷ روز تقویمی تنظیم شده و کاربر می‌تواند آستانه هشدار را تغییر دهد؛
- * وضعیت روزهای کاری/تعطیل رسمی بسته به بخشنامه‌های سازمان امور مالیاتی متفاوت است.
+ * بدون آستانه تنظیم‌شده توسط کاربر، برچسب «منقضی شده» یا پیش‌فرض قانونی اعمال نمی‌شود؛
+ * مهلت‌ها و روزهای کاری/تعطیل رسمی تابع آخرین بخشنامه‌های سازمان امور مالیاتی است.
  */
 
-export const MOADIAN_DEFAULT_DEADLINE_DAYS = 7;
+export const MOADIAN_MAX_DEADLINE_DAYS = 365;
+const TEHRAN_TIME_ZONE = 'Asia/Tehran';
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
-export type MoadianDeadlineUrgency = 'NORMAL' | 'WARNING' | 'CRITICAL' | 'EXPIRED';
+export type MoadianDeadlineUrgency =
+  | 'UNCONFIGURED'
+  | 'NORMAL'
+  | 'WARNING'
+  | 'CRITICAL'
+  | 'EXPIRED';
 
 export interface MoadianInvoiceDeadlineView {
   elapsedDays: number;
-  remainingDays: number;
-  deadlineDays: number;
+  remainingDays: number | null;
+  deadlineDays: number | null;
   urgency: MoadianDeadlineUrgency;
   isExpired: boolean;
   isUrgent: boolean;
@@ -31,24 +38,62 @@ export interface UnsentInvoiceInput {
   direction?: string;
 }
 
+function toTehranDayUtcMs(date: Date): number | null {
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TEHRAN_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const year = Number(parts.find((p) => p.type === 'year')?.value);
+  const month = Number(parts.find((p) => p.type === 'month')?.value);
+  const day = Number(parts.find((p) => p.type === 'day')?.value);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return null;
+  }
+  return Date.UTC(year, month - 1, day);
+}
+
+function normalizeDeadlineDays(deadlineDays?: number | null): number | null {
+  if (deadlineDays === null || deadlineDays === undefined) return null;
+  if (!Number.isFinite(deadlineDays)) return null;
+  const floored = Math.floor(deadlineDays);
+  if (floored <= 0) return null;
+  return Math.min(MOADIAN_MAX_DEADLINE_DAYS, floored);
+}
+
 /**
- * محاسبه وضعیت مهلت ارسال یک صورتحساب.
+ * محاسبه وضعیت مهلت ارسال یک صورتحساب در تقویم ایران (`Asia/Tehran`).
  */
 export function calculateMoadianDeadline(
   issueDateStr: string,
-  deadlineDays: number = MOADIAN_DEFAULT_DEADLINE_DAYS,
+  deadlineDays?: number | null,
   referenceDate: Date = new Date(),
 ): MoadianInvoiceDeadlineView {
-  const safeDeadlineDays = Number.isFinite(deadlineDays) && deadlineDays > 0 ? deadlineDays : MOADIAN_DEFAULT_DEADLINE_DAYS;
-  const issue = new Date(issueDateStr);
-  const now = new Date(referenceDate);
+  const safeDeadlineDays = normalizeDeadlineDays(deadlineDays);
+  const issueMidnight = toTehranDayUtcMs(new Date(issueDateStr));
+  const nowMidnight = toTehranDayUtcMs(new Date(referenceDate));
 
-  // صفر کردن ساعت برای محاسبه دقیق بر حسب روز
-  const issueMidnight = new Date(issue.getFullYear(), issue.getMonth(), issue.getDate()).getTime();
-  const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const elapsedDays =
+    issueMidnight !== null && nowMidnight !== null
+      ? Math.max(0, Math.round((nowMidnight - issueMidnight) / MS_PER_DAY))
+      : 0;
 
-  const diffMs = nowMidnight - issueMidnight;
-  const elapsedDays = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+  if (safeDeadlineDays === null) {
+    return {
+      elapsedDays,
+      remainingDays: null,
+      deadlineDays: null,
+      urgency: 'UNCONFIGURED',
+      isExpired: false,
+      isUrgent: false,
+      statusLabel: 'آستانه تنظیم نشده',
+      badgeVariant: 'outline',
+      description: `از تاریخ صدور ${elapsedDays} روز سپری شده است. برای پایش هشدارها آستانه را وارد کنید.`,
+    };
+  }
+
   const remainingDays = safeDeadlineDays - elapsedDays;
 
   let urgency: MoadianDeadlineUrgency;
@@ -96,7 +141,7 @@ export function calculateMoadianDeadline(
  */
 export function sortUnsentInvoicesByUrgency<T extends UnsentInvoiceInput>(
   invoices: T[],
-  deadlineDays: number = MOADIAN_DEFAULT_DEADLINE_DAYS,
+  deadlineDays?: number | null,
   referenceDate: Date = new Date(),
 ): Array<{ invoice: T; deadline: MoadianInvoiceDeadlineView }> {
   const ranked = invoices.map((inv) => ({
@@ -109,11 +154,15 @@ export function sortUnsentInvoicesByUrgency<T extends UnsentInvoiceInput>(
     CRITICAL: 1,
     WARNING: 2,
     NORMAL: 3,
+    UNCONFIGURED: 4,
   };
 
   return ranked.sort((a, b) => {
     const diffUrgency = urgencyOrder[a.deadline.urgency] - urgencyOrder[b.deadline.urgency];
     if (diffUrgency !== 0) return diffUrgency;
-    return a.deadline.remainingDays - b.deadline.remainingDays;
+    if (a.deadline.remainingDays !== null && b.deadline.remainingDays !== null) {
+      return a.deadline.remainingDays - b.deadline.remainingDays;
+    }
+    return b.deadline.elapsedDays - a.deadline.elapsedDays;
   });
 }

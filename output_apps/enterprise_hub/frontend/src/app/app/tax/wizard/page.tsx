@@ -61,7 +61,7 @@ import {
 } from "@/lib/api/tax-compliance-client";
 import { formatJalaliDate, formatMoneyRial } from "@/lib/fa-format";
 import {
-  MOADIAN_DEFAULT_DEADLINE_DAYS,
+  MOADIAN_MAX_DEADLINE_DAYS,
   sortUnsentInvoicesByUrgency,
   type UnsentInvoiceInput,
 } from "@/lib/moadian-send-deadline";
@@ -97,10 +97,10 @@ export default function MoadianWizardPage() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // مرحله ۲: کلید و CSR
-  const [cn, setCn] = useState("Roxira Enterprise");
-  const [org, setOrg] = useState("شرکت نمونه");
-  const [ou, setOu] = useState("مالی و مالیاتی");
-  const [econNumber, setEconNumber] = useState("14001234567");
+  const [cn, setCn] = useState("");
+  const [org, setOrg] = useState("");
+  const [ou, setOu] = useState("");
+  const [econNumber, setEconNumber] = useState("");
   const [modulusLength, setModulusLength] = useState<2048 | 4096>(2048);
   const [generatedKey, setGeneratedKey] = useState<SigningKeyResponseDto | null>(null);
   const [generatedCsr, setGeneratedCsr] = useState<string | null>(null);
@@ -118,14 +118,15 @@ export default function MoadianWizardPage() {
 
   // مرحله ۴: تست ارسال
   const [unsentInvoices, setUnsentInvoices] = useState<InvoiceResponseDto[]>([]);
+  const [unsentLoadError, setUnsentLoadError] = useState<string | null>(null);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState("");
   const [submittingInvoice, setSubmittingInvoice] = useState(false);
   const [submissionResult, setSubmissionResult] = useState<MoadianSubmissionResponse | null>(null);
   const [pollingStatus, setPollingStatus] = useState(false);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // بخش پایش مهلت ارسال (آستانه قابل تنظیم)
-  const [deadlineDays, setDeadlineDays] = useState(MOADIAN_DEFAULT_DEADLINE_DAYS);
+  // بخش پایش مهلت ارسال (آستانه دلخواه واردشده توسط کاربر؛ بدون پیش‌فرض قانونی)
+  const [deadlineDays, setDeadlineDays] = useState<number | null>(null);
 
   const fetchStatusAndCreds = useCallback(async () => {
     setLoading(true);
@@ -161,10 +162,11 @@ export default function MoadianWizardPage() {
   }, []);
 
   const loadUnsentInvoices = useCallback(async () => {
+    setUnsentLoadError(null);
     try {
       const [res, submissions] = await Promise.all([
         listInvoices({ status: InvoiceStatus.ISSUED, limit: 50 }),
-        listMoadianSubmissions().catch(() => [] as MoadianSubmissionResponse[]),
+        listMoadianSubmissions(),
       ]);
       const completedOrInFlight = new Set(
         submissions
@@ -179,9 +181,14 @@ export default function MoadianWizardPage() {
         setSelectedInvoiceId((prev) =>
           prev && pendingSales.some((inv) => inv.id === prev) ? prev : pendingSales[0].id,
         );
+      } else {
+        setSelectedInvoiceId("");
       }
-    } catch {
-      // در صورت خطا در لیست صورتحساب‌ها، جریان اصلی ویزارد مختل نمی‌شود
+    } catch (err) {
+      // Fail closed: بدون تأیید سوابق ارسال سامانه مودیان، فهرست ارسال‌نشده نمایش داده نمی‌شود تا از ارسال تکراری جلوگیری گردد
+      setUnsentInvoices([]);
+      setSelectedInvoiceId("");
+      setUnsentLoadError(loadErrorMessage(err));
     }
   }, []);
 
@@ -204,8 +211,13 @@ export default function MoadianWizardPage() {
     setError(null);
     setSuccessMsg(null);
     try {
+      const commonName = cn.trim();
+      if (!commonName) {
+        throw new Error("نام عمومی (Common Name) برای تولید فایل CSR الزامی است.");
+      }
+
       const subject = {
-        commonName: cn.trim() || "Roxira Enterprise",
+        commonName,
         organization: org.trim() || undefined,
         organizationalUnit: ou.trim() || undefined,
         country: "IR",
@@ -433,9 +445,19 @@ export default function MoadianWizardPage() {
 
           <Card className="border-border">
             <CardHeader className="pb-2">
-              <CardDescription>پایش مهلت ارسال ({deadlineDays} روز تقویمی)</CardDescription>
+              <CardDescription>
+                {deadlineDays !== null
+                  ? `پایش مهلت ارسال (آستانه ${deadlineDays} روز تقویمی)`
+                  : "پایش مهلت ارسال (آستانه تنظیم نشده)"}
+              </CardDescription>
               <CardTitle className="text-lg flex items-center gap-2">
-                {expiredCount > 0 ? (
+                {unsentLoadError ? (
+                  <Badge variant="destructive">خطا در استعلام ارسال‌ها</Badge>
+                ) : deadlineDays === null ? (
+                  <Badge variant="secondary">
+                    {unsentInvoices.length} فاکتور در انتظار بررسی
+                  </Badge>
+                ) : expiredCount > 0 ? (
                   <Badge variant="destructive">
                     {expiredCount} فاکتور منقضی‌شده
                   </Badge>
@@ -449,7 +471,7 @@ export default function MoadianWizardPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="text-xs text-muted-foreground">
-              بر اساس آستانه تقویمی قابل تنظیم از تاریخ صدور (مهلت روز کاری تابع آخرین بخشنامه‌های سازمان امور مالیاتی است).
+              بر اساس آستانه تقویمی واردشده توسط کاربر از تاریخ صدور (قوانین و مهلت‌های قانونی را از بخشنامه‌های سازمان امور مالیاتی پیگیری کنید).
             </CardContent>
           </Card>
         </div>
@@ -942,10 +964,29 @@ export default function MoadianWizardPage() {
                 <div className="rounded-lg border bg-muted/20 p-4 space-y-3">
                   <div className="font-semibold text-foreground flex items-center justify-between">
                     <span>انتخاب فاکتور صادرشده جهت تست ارسال:</span>
-                    <Badge variant="secondary">{unsentInvoices.length} فاکتور صادرشده موجود</Badge>
+                    <Badge variant="secondary">
+                      {unsentLoadError
+                        ? "وضعیت نامشخص"
+                        : `${unsentInvoices.length} فاکتور صادرشده موجود`}
+                    </Badge>
                   </div>
 
-                  {unsentInvoices.length === 0 ? (
+                  {unsentLoadError ? (
+                    <Alert variant="destructive">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertTitle>خطا در دریافت سوابق ارسال مودیان</AlertTitle>
+                      <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+                        <span>{unsentLoadError}</span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void loadUnsentInvoices()}
+                        >
+                          تلاش مجدد
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
+                  ) : unsentInvoices.length === 0 ? (
                     <p className="text-muted-foreground text-xs">
                       هیچ صورتحساب صادرشده‌ای یافت نشد. لطفاً ابتدا از منوی صورتحساب‌ها یک فاکتور تستی ثبت و صادر فرمایید.
                     </p>
@@ -1174,19 +1215,47 @@ export default function MoadianWizardPage() {
                   id="deadline-days"
                   type="number"
                   min={1}
-                  max={30}
-                  className="w-16 h-8 text-center text-xs"
-                  value={deadlineDays}
-                  onChange={(e) => setDeadlineDays(Number(e.target.value) || MOADIAN_DEFAULT_DEADLINE_DAYS)}
+                  max={MOADIAN_MAX_DEADLINE_DAYS}
+                  placeholder="تنظیم نشده"
+                  className="w-24 h-8 text-center text-xs"
+                  value={deadlineDays ?? ""}
+                  onChange={(e) => {
+                    const raw = e.target.value.trim();
+                    if (!raw) {
+                      setDeadlineDays(null);
+                      return;
+                    }
+                    const parsed = Math.floor(Number(raw));
+                    setDeadlineDays(
+                      Number.isFinite(parsed) && parsed >= 1
+                        ? Math.min(MOADIAN_MAX_DEADLINE_DAYS, parsed)
+                        : null,
+                    );
+                  }}
                 />
               </div>
             </div>
             <CardDescription>
-              پایش صورتحساب‌های فروش صادرشده و ارسال‌نشده بر اساس آستانه تقویمی قابل تنظیم (پیش‌فرض ۷ روز تقویمی؛ قوانین کاری و میزان جرایم را از آخرین بخشنامه‌های سازمان امور مالیاتی پیگیری کنید).
+              پایش صورتحساب‌های فروش صادرشده و ارسال‌نشده بر اساس آستانه تقویمی واردشده توسط کاربر؛ مقدار پیش‌فرضی اعمال نمی‌شود و قوانین کاری و میزان جرایم را از آخرین بخشنامه‌های سازمان امور مالیاتی پیگیری کنید.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {rankedUnsent.length === 0 ? (
+            {unsentLoadError ? (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>خطا در دریافت سوابق ارسال</AlertTitle>
+                <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+                  <span>{unsentLoadError}</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void loadUnsentInvoices()}
+                  >
+                    تلاش مجدد
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            ) : rankedUnsent.length === 0 ? (
               <p className="text-center py-6 text-sm text-muted-foreground">
                 همهٔ صورتحساب‌های صادرشده در وضعیت ارسال‌شده قرار دارند یا صورتحساب معوقی یافت نشد.
               </p>
@@ -1220,7 +1289,9 @@ export default function MoadianWizardPage() {
                           {formatMoneyRial(invoice.total)}
                         </TableCell>
                         <TableCell className="text-center text-xs">
-                          {deadline.elapsedDays} روز از {deadline.deadlineDays} روز
+                          {deadline.deadlineDays !== null
+                            ? `${deadline.elapsedDays} روز از ${deadline.deadlineDays} روز`
+                            : `${deadline.elapsedDays} روز سپری‌شده`}
                         </TableCell>
                         <TableCell className="text-center">
                           <Badge variant={deadline.badgeVariant} className="text-xs">
