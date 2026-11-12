@@ -18,7 +18,7 @@ import { TelegramUpdateDto } from '../dto/receipt-bot.dto';
 import { ReceiptBotService } from '../services/receipt-bot.service';
 
 /**
- * Telegram/Bale send many fields we do not model (is_bot, language_code, entities, ...), and the
+ * Telegram sends many fields we do not model (is_bot, language_code, entities, ...), and the
  * global pipe in main.ts uses forbidNonWhitelisted, which would 400 every real update. The body
  * parameter is typed `unknown` (metatype Object), so the global pipe skips it; this route-level
  * pipe validates against TelegramUpdateDto, strips unknown fields and does not reject them.
@@ -45,7 +45,7 @@ export class ReceiptBotWebhookController {
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
   @ApiBody({ type: TelegramUpdateDto })
-  @ApiOperation({ summary: 'وب‌هوک دریافت رویدادها و تصاویر از ربات تلگرام یا بله' })
+  @ApiOperation({ summary: 'وب‌هوک دریافت رویدادها و تصاویر از ربات تلگرام' })
   async handleWebhook(
     @Body(TELEGRAM_UPDATE_PIPE) rawUpdate: unknown,
     @Headers('x-telegram-bot-api-secret-token') secretHeader?: string,

@@ -1,15 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bot, CheckCircle2, Copy, ExternalLink, RefreshCw, Send, Trash2 } from "lucide-react";
+import { Bot, CheckCircle2, Copy, ExternalLink, Lock, RefreshCw, Send, Trash2 } from "lucide-react";
 
+import { useAccess } from "@/components/app/access-provider";
 import { ErrorNotice, LoadingLine, PageHeader, loadErrorMessage } from "@/components/app/app-ui";
 import { EnterpriseRouteGuard } from "@/components/auth/enterprise-route-guard";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
 import {
   generateReceiptBotCode,
   getReceiptBotStatus,
@@ -19,6 +19,8 @@ import {
 import type { GenerateLinkCodeResponse, ReceiptBotStatusResponse } from "@/types/receipt-bot";
 
 export default function ReceiptBotSettingsPage() {
+  const { can } = useAccess();
+  const canManage = can("accounting", "post");
   const [status, setStatus] = useState<ReceiptBotStatusResponse | null>(null);
   const [linkCode, setLinkCode] = useState<GenerateLinkCodeResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,7 +42,20 @@ export default function ReceiptBotSettingsPage() {
   }
 
   useEffect(() => {
-    loadStatus();
+    let active = true;
+    (async () => {
+      try {
+        const data = await getReceiptBotStatus();
+        if (active) setStatus(data);
+      } catch (err) {
+        if (active) setError(loadErrorMessage(err));
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, []);
 
   async function handleGenerateCode() {
@@ -95,11 +110,21 @@ export default function ReceiptBotSettingsPage() {
     <EnterpriseRouteGuard>
       <div className="flex flex-col gap-6 p-6 max-w-4xl mx-auto">
         <PageHeader
-          title="بات دریافت رسید و فاکتور (تلگرام / بله)"
-          description="ارسال مستقیم عکس رسیدها و فاکتورهای هزینه‌ای از پیام‌رسان به رکسایرا جهت ایجاد پیش‌نویس خودکار"
+          title="بات دریافت رسید و فاکتور (تلگرام)"
+          description="ارسال مستقیم عکس رسیدها و فاکتورهای هزینه‌ای از ربات تلگرام به رکسایرا جهت ایجاد پیش‌نویس خودکار"
         />
 
-        {error && <ErrorNotice error={error} />}
+        {!canManage && (
+          <Alert>
+            <Lock className="size-4" />
+            <AlertTitle>دسترسی فقط‌خواندنی</AlertTitle>
+            <AlertDescription>
+              برای اتصال یا قطع ارتباط با ربات تلگرام و تغییر تنظیمات پیش‌فرض، دسترسی ثبت اسناد حسابداری لازم است.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {error && <ErrorNotice title="خطا در عملیات ربات" message={error} />}
         {loading && <LoadingLine show />}
 
         {status && (
@@ -121,7 +146,7 @@ export default function ReceiptBotSettingsPage() {
                   )}
                 </div>
                 <CardDescription>
-                  اتصال حساب کاربری شما به ربات تلگرام یا بله رکسایرا
+                  اتصال حساب کاربری شما به ربات تلگرام رکسایرا
                 </CardDescription>
               </CardHeader>
 
@@ -145,7 +170,7 @@ export default function ReceiptBotSettingsPage() {
                 ) : (
                   <div className="flex flex-col gap-4">
                     <p className="text-sm text-muted-foreground">
-                      برای شروع دریافت خودکار رسیدها، با کلیک روی دکمهٔ زیر یک کد اتصال یکبار مصرف بسازید و آن را در ربات تلگرام یا بله ارسال کنید.
+                      برای شروع دریافت خودکار رسیدها، با کلیک روی دکمهٔ زیر یک کد اتصال یکبار مصرف بسازید و آن را در ربات تلگرام ارسال کنید.
                     </p>
 
                     {linkCode ? (
@@ -178,19 +203,19 @@ export default function ReceiptBotSettingsPage() {
                           </div>
                         )}
                       </div>
-                    ) : (
+                    ) : canManage ? (
                       <div>
                         <Button onClick={handleGenerateCode} disabled={busy}>
                           <RefreshCw className={`size-4 mr-2 ${busy ? "animate-spin" : ""}`} />
                           ایجاد کد اتصال جدید
                         </Button>
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 )}
               </CardContent>
 
-              {status.linked && (
+              {status.linked && canManage && (
                 <CardFooter className="border-t pt-4 flex justify-between">
                   <Button variant="destructive" size="sm" onClick={handleUnlink} disabled={busy}>
                     <Trash2 className="size-4 mr-2" />
@@ -206,7 +231,7 @@ export default function ReceiptBotSettingsPage() {
                 <CardHeader>
                   <CardTitle className="text-base">نوع پیش‌فرض پیش‌نویس</CardTitle>
                   <CardDescription>
-                    مشخص کنید رسیدهایی که از ربات ارسال می‌شوند به‌طور پیش‌فرض در کدام دسته‌بندی قرار گیرند:
+                    همهٔ رسیدهای ارسالی از تلگرام به‌عنوان پیش‌نویس «فاکتور خرید» در بخش ثبت خودکار ذخیره می‌شوند؛ در اینجا می‌توانید برچسب پیش‌فرض راهنمای دسته‌بندی را مشخص کنید:
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -222,11 +247,11 @@ export default function ReceiptBotSettingsPage() {
                         value="petty_cash"
                         checked={status.defaultKind === "petty_cash"}
                         onChange={() => handlePreferenceChange("petty_cash")}
-                        disabled={busy}
+                        disabled={busy || !canManage}
                         className="size-4 text-primary accent-primary"
                       />
                       <div className="text-sm">
-                        <strong className="font-semibold text-foreground">تنخواه‌گردان (Petty Cash)</strong> — برای هزینه‌های جاری، فاکتورهای کوچک و بنزین/پیک
+                        <strong className="font-semibold text-foreground">برچسب «تنخواه‌گردان» روی پیش‌نویس خرید</strong> — افزودن برچسب تنخواه‌گردان برای هزینه‌های جاری (به‌صورت پیش‌نویس خرید ذخیره می‌شود)
                       </div>
                     </label>
                     <label
@@ -240,7 +265,7 @@ export default function ReceiptBotSettingsPage() {
                         value="purchase"
                         checked={status.defaultKind === "purchase"}
                         onChange={() => handlePreferenceChange("purchase")}
-                        disabled={busy}
+                        disabled={busy || !canManage}
                         className="size-4 text-primary accent-primary"
                       />
                       <div className="text-sm">

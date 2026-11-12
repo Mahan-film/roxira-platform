@@ -1,15 +1,16 @@
 /**
- * Tenant RLS isolation spec for Receipt Bot (Telegram/Bale) Integration (T87 / WAVE 8).
+ * Tenant RLS isolation spec for Telegram Receipt Bot Integration (T87 / WAVE 8).
  * Exercises ReceiptBotRepository under a NOSUPERUSER NOBYPASSRLS role with TenantScope
  * and proves:
  *  1. FORCE ROW LEVEL SECURITY on `receipt_bot_link_codes` and `receipt_bot_user_links`.
  *  2. Tenant isolation: Tenant 1 link codes and user links cannot be read or modified by Tenant 2.
- *  3. SECURITY DEFINER pre-tenant lookup functions (receipt_bot_lookup_link, receipt_bot_consume_code)
- *     execute successfully under the non-superuser app role without exposing other tenants.
+ *  3. SECURITY DEFINER pre-tenant functions refuse cross-tenant link hijack, enforce idempotency,
+ *     and revoke PUBLIC EXECUTE.
  */
 import 'reflect-metadata';
 import * as path from 'path';
 import { DataSource } from 'typeorm';
+import { APP_PASSWORD } from '../../../test/support/test-pg';
 import { TenantScope } from '../../access/services/tenant-scope';
 import { ReceiptBotLinkCodeEntity } from './entities/receipt-bot-link-code.entity';
 import { ReceiptBotUserLinkEntity } from './entities/receipt-bot-user-link.entity';
@@ -21,7 +22,7 @@ const OWNER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
 const OWNER_PW = process.env.ROXIRA_TEST_PG_PASSWORD;
 const PORT = Number(process.env.ROXIRA_TEST_PG_PORT ?? 5432);
 const ROLE_NAME = `rx_receipt_bot_${process.pid}`;
-const ROLE_PW = 'receipt-bot-rls-test';
+const ROLE_PW = APP_PASSWORD;
 
 const T1 = '11111111-1111-4111-8111-111111111111';
 const T2 = '22222222-2222-4222-8222-222222222222';
@@ -77,7 +78,7 @@ describePg('ReceiptBot RLS isolation (NOSUPERUSER NOBYPASSRLS)', () => {
       appDs.getRepository(ReceiptBotUserLinkEntity),
       scope,
     );
-  });
+  }, 60_000);
 
   afterAll(async () => {
     await appDs?.destroy();
@@ -87,7 +88,7 @@ describePg('ReceiptBot RLS isolation (NOSUPERUSER NOBYPASSRLS)', () => {
       await adminDs.query(`DROP ROLE IF EXISTS "${ROLE_NAME}"`);
       await adminDs.destroy();
     }
-  });
+  }, 30_000);
 
   it('enforces FORCE ROW LEVEL SECURITY on receipt bot tables', async () => {
     const rows = await ownerDs.query(`
@@ -119,18 +120,23 @@ describePg('ReceiptBot RLS isolation (NOSUPERUSER NOBYPASSRLS)', () => {
     expect(t2Code).toBeNull();
   });
 
-  it('consumes link code via SECURITY DEFINER function under non-superuser role', async () => {
+  it('consumes link code via SECURITY DEFINER function under non-superuser role and refuses cross-tenant hijack', async () => {
     // Consume code for Telegram user 987654321
     const consumed = await repository.consumeCode('123456', '987654321', 'telegram_tester');
-    expect(consumed).not.toBeNull();
-    expect(consumed?.tenantId).toBe(T1);
-    expect(consumed?.userId).toBe(U1);
+    expect(consumed.status).toBe('linked');
+    expect(consumed.link?.tenantId).toBe(T1);
+    expect(consumed.link?.userId).toBe(U1);
 
     // Code is now marked used and cannot be consumed again
     const secondTry = await repository.consumeCode('123456', '987654321', 'telegram_tester');
-    expect(secondTry).toBeNull();
+    expect(secondTry).toEqual({ status: 'invalid', link: null });
 
-    // Pre-tenant lookup resolves the linked user without knowing tenantId upfront
+    // A code generated in Tenant 2 must NOT silently steal an existing Tenant 1 Telegram link
+    await repository.createLinkCode(T2, U2, '654321', new Date(Date.now() + 600_000));
+    const hijackTry = await repository.consumeCode('654321', '987654321', 'telegram_tester');
+    expect(hijackTry).toEqual({ status: 'already_linked_other_tenant', link: null });
+
+    // Pre-tenant lookup resolves the original Tenant 1 linked user intact
     const lookup = await repository.lookupLinkByTelegramId('987654321');
     expect(lookup).not.toBeNull();
     expect(lookup?.tenantId).toBe(T1);
@@ -169,14 +175,17 @@ describePg('ReceiptBot RLS isolation (NOSUPERUSER NOBYPASSRLS)', () => {
     expect(await repository.findLinkByTenantUser(T1, U1)).toBeNull();
   });
 
-  it('receipt_bot_claim_update is idempotent per (bot, update_id) and not callable by PUBLIC', async () => {
+  it('receipt_bot_claim_update is idempotent per (bot, update_id) and all SECURITY DEFINER functions revoke PUBLIC EXECUTE', async () => {
     const first = await repository.claimUpdate('bot1', 424242);
     const retry = await repository.claimUpdate('bot1', 424242);
     const otherBot = await repository.claimUpdate('bot2', 424242);
     expect([first, retry, otherBot]).toEqual([true, false, true]);
     const pub = await ownerDs.query(
-      `SELECT has_function_privilege('public', 'receipt_bot_lookup_link(text)', 'EXECUTE') AS p`,
+      `SELECT
+         has_function_privilege('public', 'receipt_bot_lookup_link(text)', 'EXECUTE') AS lookup_p,
+         has_function_privilege('public', 'receipt_bot_consume_code(text, text, text)', 'EXECUTE') AS consume_p,
+         has_function_privilege('public', 'receipt_bot_claim_update(text, bigint)', 'EXECUTE') AS claim_p`,
     );
-    expect(pub[0].p).toBe(false);
+    expect(pub[0]).toEqual({ lookup_p: false, consume_p: false, claim_p: false });
   });
 });

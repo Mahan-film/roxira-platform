@@ -259,7 +259,7 @@ export const MENU_GROUPS: MenuGroup[] = [
         label: "بات دریافت رسید",
         icon: "Bot",
         module: "accounting",
-        keywords: ["telegram", "bale", "bot", "تلگرام", "بله", "رسید", "بات"],
+        keywords: ["telegram", "bot", "تلگرام", "رسید", "بات"],
       },
       {
         href: "/app/settings/audit",

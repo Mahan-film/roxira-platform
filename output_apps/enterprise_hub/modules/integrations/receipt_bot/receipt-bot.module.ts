@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AccessModule } from '../../access/access.module';
 import { TenantScope } from '../../access/services/tenant-scope';
 import { InvoiceCaptureModule } from '../../invoice_capture/invoice-capture.module';
 import { ReceiptBotController } from './controllers/receipt-bot.controller';
@@ -11,13 +12,14 @@ import { ReceiptBotService } from './services/receipt-bot.service';
 import { ReceiptBotRateLimiter } from './utils/receipt-bot-rate-limiter';
 
 /**
- * Receipt Bot (Telegram/Bale) integration (Task T87 / WAVE 8):
- * Allows users to link Telegram/Bale to their account with a one-time code and
+ * Telegram Receipt Bot integration (Task T87 / WAVE 8):
+ * Allows users to link Telegram to their account with a one-time code and
  * ingest photo receipts directly into `modules/invoice_capture` as drafts.
  */
 @Module({
   imports: [
     TypeOrmModule.forFeature([ReceiptBotLinkCodeEntity, ReceiptBotUserLinkEntity]),
+    AccessModule,
     InvoiceCaptureModule,
   ],
   controllers: [ReceiptBotController, ReceiptBotWebhookController],

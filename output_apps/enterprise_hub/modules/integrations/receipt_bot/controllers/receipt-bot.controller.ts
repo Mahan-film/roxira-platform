@@ -22,7 +22,7 @@ import {
 } from '../dto/receipt-bot.dto';
 import { ReceiptBotService } from '../services/receipt-bot.service';
 
-@ApiTags('Integrations - بات دریافت رسید تلگرام/بله')
+@ApiTags('Integrations - بات دریافت رسید تلگرام')
 @ApiBearerAuth()
 @ModuleAccess(AccessModule.ACCOUNTING)
 @Controller('enterprise-hub/integrations/receipt-bot')

@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomInt } from 'crypto';
+import { AccessAction, AccessModule, permissionOf } from '../../../access/catalogue';
+import { AccessService } from '../../../access/services/access.service';
 import { CaptureService, UploadedCaptureFile } from '../../../invoice_capture/services/capture.service';
 import {
   GenerateLinkCodeResponseDto,
@@ -17,9 +19,9 @@ import { ReceiptBotRepository } from '../repositories/receipt-bot.repository';
 import { ReceiptBotRateLimiter } from '../utils/receipt-bot-rate-limiter';
 
 /**
- * Capture documents only support the `purchase` / `sales` kinds. The link's `defaultKind`
- * (`purchase` | `petty_cash`) is mapped here: both are expense-side documents, so both map to
- * `purchase`; the petty-cash distinction is carried in the user text/label sent to extraction.
+ * Capture documents only support `purchase` / `sales` kinds. The link's `defaultKind`
+ * (`purchase` | `petty_cash`) maps both expense-side options to `purchase`, while carrying
+ * the user's `تنخواه‌گردان` tag in the extraction prompt text and confirmation message.
  */
 export function captureKindFor(defaultKind: 'petty_cash' | 'purchase'): 'purchase' | 'sales' {
   switch (defaultKind) {
@@ -37,18 +39,25 @@ export class ReceiptBotService {
   private readonly logger = new Logger(ReceiptBotService.name);
   private fetchFn: FetchFunction = globalThis.fetch;
   /**
-   * Failed link-code attempts. A 6-digit code is brute-forceable, so failures are capped per chat
-   * and, as a backstop, globally for the whole process.
+   * Failed link-code attempts scoped per chat and per sender so one abusive user cannot lock out
+   * legitimate users in other chats.
    */
   private readonly failedCodeByChat = new ReceiptBotRateLimiter(15 * 60_000, 5);
-  private readonly failedCodeGlobal = new ReceiptBotRateLimiter(10 * 60_000, 100);
 
   constructor(
     private readonly repository: ReceiptBotRepository,
     private readonly captureService: CaptureService,
     private readonly rateLimiter: ReceiptBotRateLimiter,
     private readonly config: ConfigService,
+    private readonly accessService: AccessService,
   ) {}
+
+  private isAssistantEnabled(): boolean {
+    const raw = String(
+      this.config.get<string>('ASSISTANT_ENABLED') ?? process.env.ASSISTANT_ENABLED ?? '',
+    );
+    return ['1', 'true', 'yes', 'on'].includes(raw.trim().toLowerCase());
+  }
 
   /** Allow overriding fetch for testing */
   setFetch(fn: FetchFunction): void {
@@ -203,7 +212,6 @@ export class ReceiptBotService {
       const blocked = [
         this.failedCodeByChat.isBlocked(chatKey),
         this.failedCodeByChat.isBlocked(userKey),
-        this.failedCodeGlobal.isBlocked('global'),
       ].find((r) => !r.allowed);
       if (blocked) {
         await this.sendTelegramMessage(
@@ -212,8 +220,8 @@ export class ReceiptBotService {
         );
         return { status: 'rate_limited' };
       }
-      const linked = await this.repository.consumeCode(code, telegramUserId, telegramUsername);
-      if (linked) {
+      const outcome = await this.repository.consumeCode(code, telegramUserId, telegramUsername);
+      if (outcome.status === 'linked') {
         await this.sendTelegramMessage(
           chatId,
           '🎉 حساب کاربری شما با موفقیت به سازمان در سامانه رکسایرا متصل شد!\n\n' +
@@ -221,9 +229,15 @@ export class ReceiptBotService {
         );
         return { status: 'linked', message: 'User linked successfully' };
       }
+      if (outcome.status === 'already_linked_other_tenant') {
+        await this.sendTelegramMessage(
+          chatId,
+          '⚠️ این حساب تلگرام هم‌اکنون به سازمان دیگری متصل است. لطفاً ابتدا از پنل سازمان قبلی اتصال ربات را قطع کرده و سپس کد را دوباره ارسال فرمایید.',
+        );
+        return { status: 'already_linked_other_tenant' };
+      }
       this.failedCodeByChat.record(chatKey);
       this.failedCodeByChat.record(userKey);
-      this.failedCodeGlobal.record('global');
       await this.sendTelegramMessage(
         chatId,
         '❌ کد وارد شده نامعتبر است یا منقضی شده است.\nلطفاً از پنل رکسایرا در بخش «تنظیمات > بات دریافت رسید» کد جدیدی دریافت فرمایید.',
@@ -256,14 +270,12 @@ export class ReceiptBotService {
     telegramUserId: string,
     msg: NonNullable<TelegramUpdateDto['message']>,
   ): Promise<{ status: string; message?: string }> {
-    // Rate limit check
-    const rateCheck = this.rateLimiter.isAllowed(telegramUserId);
-    if (!rateCheck.allowed) {
+    if (!this.isAssistantEnabled()) {
       await this.sendTelegramMessage(
         chatId,
-        `⚠️ شما به سقف ارسال رسید در دقیقه رسیده‌اید. لطفاً ${rateCheck.retryAfterSeconds} ثانیه دیگر تلاش فرمایید.`,
+        '⚠️ دستیار هوشمند و ثبت خودکار رسید در حال حاضر روی سرور غیرفعال است.',
       );
-      return { status: 'rate_limited' };
+      return { status: 'assistant_disabled' };
     }
 
     // Lookup user link
@@ -274,6 +286,20 @@ export class ReceiptBotService {
         '⚠️ حساب تلگرام شما هنوز به هیچ سازمانی در رکسایرا متصل نشده است.\nلطفاً ابتدا از پنل رکسایرا کد اتصال یکبار مصرف دریافت کنید و به این ربات بفرستید.',
       );
       return { status: 'not_linked' };
+    }
+
+    // Verify active tenant membership, module entitlement, and accounting:create permission
+    const accessCtx = await this.accessService.resolve(link.userId, link.tenantId);
+    if (
+      !accessCtx ||
+      !accessCtx.entitledModules.has(AccessModule.ACCOUNTING) ||
+      !accessCtx.permissions.has(permissionOf(AccessModule.ACCOUNTING, AccessAction.CREATE))
+    ) {
+      await this.sendTelegramMessage(
+        chatId,
+        '⛔️ دسترسی شما در این سازمان برای ثبت پیش‌نویس رسید فعال نیست یا عضویت شما تغییر کرده است.',
+      );
+      return { status: 'unauthorized' };
     }
 
     // Pick file ID
@@ -311,8 +337,13 @@ export class ReceiptBotService {
     };
 
     try {
-      const kindLabel = link.defaultKind === 'petty_cash' ? 'تنخواه‌گردان' : 'فاکتور خرید';
-      const userText = msg.caption ? `${msg.caption} [${kindLabel}]` : `[${kindLabel}]`;
+      const kindSummary =
+        link.defaultKind === 'petty_cash'
+          ? 'فاکتور خرید (برچسب: تنخواه‌گردان)'
+          : 'فاکتور خرید';
+      const tagToken =
+        link.defaultKind === 'petty_cash' ? '[برچسب: تنخواه‌گردان]' : '[فاکتور خرید]';
+      const userText = msg.caption ? `${msg.caption} ${tagToken}` : tagToken;
 
       const doc = await this.captureService.create(link.tenantId, link.userId, uploadedFile, {
         kind: captureKindFor(link.defaultKind),
@@ -322,7 +353,7 @@ export class ReceiptBotService {
       await this.sendTelegramMessage(
         chatId,
         `✅ رسید شما با موفقیت دریافت شد و پیش‌نویس آن در رکسایرا ثبت گردید.\n\n` +
-          `• نوع سند: ${kindLabel}\n` +
+          `• نوع پیش‌نویس در سامانه: ${kindSummary}\n` +
           `• شناسه پیگیری: ${doc.id}\n\n` +
           `لطفاً برای بررسی و تأیید نهایی سند، به بخش «ثبت خودکار فاکتور» در پنل رکسایرا مراجعه فرمایید.`,
       );

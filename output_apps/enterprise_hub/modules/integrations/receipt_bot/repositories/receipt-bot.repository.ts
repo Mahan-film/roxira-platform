@@ -12,6 +12,11 @@ export interface TelegramLinkedUser {
   telegramUsername?: string | null;
 }
 
+export type ConsumeCodeResult =
+  | { status: 'linked'; link: TelegramLinkedUser }
+  | { status: 'already_linked_other_tenant'; link: null }
+  | { status: 'invalid'; link: null };
+
 @Injectable()
 export class ReceiptBotRepository {
   constructor(
@@ -110,25 +115,35 @@ export class ReceiptBotRepository {
   }
 
   /**
-   * Consumes a link code and binds the Telegram user.
-   * Atomically marks the code as used and updates the link using SECURITY DEFINER function.
+   * Consumes a link code and binds the Telegram user inside the issuing tenant.
+   * Atomically marks the code as used and updates the link using SECURITY DEFINER function,
+   * refusing to hijack a Telegram account that is already linked to a different tenant.
    */
   async consumeCode(
     code: string,
     telegramUserId: string,
     telegramUsername?: string,
-  ): Promise<TelegramLinkedUser | null> {
+  ): Promise<ConsumeCodeResult> {
     const raw = await this.codesRepo.query(
-      `SELECT tenant_id, user_id, default_kind FROM receipt_bot_consume_code($1, $2, $3)`,
+      `SELECT tenant_id, user_id, default_kind, status FROM receipt_bot_consume_code($1, $2, $3)`,
       [code.trim(), String(telegramUserId), telegramUsername ?? null],
     );
-    if (!raw || raw.length === 0) return null;
+    if (!raw || raw.length === 0) return { status: 'invalid', link: null };
     const row = raw[0];
+    if (row.status === 'already_linked_other_tenant') {
+      return { status: 'already_linked_other_tenant', link: null };
+    }
+    if (row.status !== 'linked' || !row.tenant_id || !row.user_id) {
+      return { status: 'invalid', link: null };
+    }
     return {
-      tenantId: row.tenant_id,
-      userId: row.user_id,
-      defaultKind: row.default_kind as 'petty_cash' | 'purchase',
-      telegramUsername: telegramUsername ?? null,
+      status: 'linked',
+      link: {
+        tenantId: row.tenant_id,
+        userId: row.user_id,
+        defaultKind: row.default_kind as 'petty_cash' | 'purchase',
+        telegramUsername: telegramUsername ?? null,
+      },
     };
   }
 

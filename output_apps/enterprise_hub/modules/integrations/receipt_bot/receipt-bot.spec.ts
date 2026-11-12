@@ -1,4 +1,6 @@
 import { ConfigService } from '@nestjs/config';
+import { AccessModule } from '../../access/catalogue';
+import { AccessService } from '../../access/services/access.service';
 import { ReceiptBotService, captureKindFor } from './services/receipt-bot.service';
 import { ReceiptBotRepository, TelegramLinkedUser } from './repositories/receipt-bot.repository';
 import { ReceiptBotRateLimiter } from './utils/receipt-bot-rate-limiter';
@@ -9,6 +11,7 @@ describe('ReceiptBotService & RateLimiter Unit Tests', () => {
   let mockRepo: Partial<ReceiptBotRepository>;
   let mockCaptureService: Partial<CaptureService>;
   let mockConfig: Partial<ConfigService>;
+  let mockAccessService: { resolve: jest.Mock };
   let rateLimiter: ReceiptBotRateLimiter;
 
   const tenantId = '00000000-0000-0000-0000-000000000001';
@@ -25,8 +28,6 @@ describe('ReceiptBotService & RateLimiter Unit Tests', () => {
         code,
         expiresAt,
         usedAt: null,
-        consumedByChatId: null,
-        consumedByPlatform: null,
         createdAt: new Date(),
       })),
       consumeCode: jest.fn(),
@@ -51,7 +52,26 @@ describe('ReceiptBotService & RateLimiter Unit Tests', () => {
         if (key === 'RECEIPT_BOT_TOKEN') return '123456:test-bot-token';
         if (key === 'RECEIPT_BOT_API') return 'https://api.telegram.org';
         if (key === 'RECEIPT_BOT_USERNAME') return 'roxira_receipt_bot';
+        if (key === 'ASSISTANT_ENABLED') return 'true';
         return undefined;
+      }),
+    };
+
+    mockAccessService = {
+      resolve: jest.fn().mockResolvedValue({
+        userId,
+        tenantId,
+        membershipId: 'm-1',
+        roleKey: 'accountant',
+        customRoleId: null,
+        permissions: new Set(['accounting:read', 'accounting:create', 'accounting:post']),
+        entitledModules: new Set([AccessModule.ACCOUNTING]),
+        branchId: null,
+        branchScoped: false,
+        require2fa: false,
+        scope: { type: 'org', ids: [] },
+        amountLimits: {},
+        fieldVisibility: {},
       }),
     };
 
@@ -60,6 +80,7 @@ describe('ReceiptBotService & RateLimiter Unit Tests', () => {
       mockCaptureService as CaptureService,
       rateLimiter,
       mockConfig as ConfigService,
+      mockAccessService as unknown as AccessService,
     );
   });
 
@@ -212,10 +233,13 @@ describe('ReceiptBotService & RateLimiter Unit Tests', () => {
 
     it('handles /start with 6-digit link code successfully', async () => {
       (mockRepo.consumeCode as jest.Mock).mockResolvedValue({
-        tenantId,
-        userId,
-        defaultKind: 'petty_cash',
-        telegramUsername: 'reza_kh',
+        status: 'linked',
+        link: {
+          tenantId,
+          userId,
+          defaultKind: 'petty_cash',
+          telegramUsername: 'reza_kh',
+        },
       });
 
       const outcome = await service.handleTelegramUpdate({
@@ -240,7 +264,7 @@ describe('ReceiptBotService & RateLimiter Unit Tests', () => {
     });
 
     it('handles /start with invalid or expired link code', async () => {
-      (mockRepo.consumeCode as jest.Mock).mockResolvedValue(null);
+      (mockRepo.consumeCode as jest.Mock).mockResolvedValue({ status: 'invalid', link: null });
 
       const outcome = await service.handleTelegramUpdate({
         update_id: 3,
@@ -314,10 +338,11 @@ describe('ReceiptBotService & RateLimiter Unit Tests', () => {
         }),
         expect.objectContaining({
           kind: 'purchase', // capture only knows purchase|sales; see captureKindFor()
-          text: 'رسید بنزین اسنپ [تنخواه‌گردان]',
+          text: 'رسید بنزین اسنپ [برچسب: تنخواه‌گردان]',
         }),
       );
       expect(sentMessages[0].text).toContain('رسید شما با موفقیت دریافت شد');
+      expect(sentMessages[0].text).toContain('فاکتور خرید (برچسب: تنخواه‌گردان)');
       expect(sentMessages[0].text).toContain('doc-12345678');
     });
 
@@ -371,15 +396,15 @@ describe('ReceiptBotService & RateLimiter Unit Tests', () => {
       expect(sentMessages[0].text).toContain('فاکتور خرید');
     });
 
-    it('blocks a chat after 5 failed link-code attempts and does not consume further codes', async () => {
-      (mockRepo.consumeCode as jest.Mock).mockResolvedValue(null);
-      const send = (n: number) =>
+    it('blocks a chat after 5 failed link-code attempts without locking out unrelated chats', async () => {
+      (mockRepo.consumeCode as jest.Mock).mockResolvedValue({ status: 'invalid', link: null });
+      const send = (chatId: number, n: number) =>
         service.handleTelegramUpdate({
           update_id: 100 + n,
           message: {
             message_id: 100 + n,
             date: Math.floor(Date.now() / 1000),
-            chat: { id: 4242, type: 'private' },
+            chat: { id: chatId, type: 'private' },
             // vary from.id to prove the per-chat key holds even when from.id is spoofed
             from: { id: 9000 + n, first_name: 'X' },
             text: String(100000 + n),
@@ -387,11 +412,28 @@ describe('ReceiptBotService & RateLimiter Unit Tests', () => {
         });
 
       for (let i = 0; i < 5; i++) {
-        expect((await send(i)).status).toBe('invalid_code');
+        expect((await send(4242, i)).status).toBe('invalid_code');
       }
-      const blocked = await send(5);
+      const blocked = await send(4242, 5);
       expect(blocked.status).toBe('rate_limited');
       expect(mockRepo.consumeCode).toHaveBeenCalledTimes(5);
+
+      // A separate legitimate chat must not be locked out by chat 4242's failures
+      (mockRepo.consumeCode as jest.Mock).mockResolvedValueOnce({
+        status: 'linked',
+        link: { tenantId, userId, defaultKind: 'purchase', telegramUsername: 'legit' },
+      });
+      const otherChat = await service.handleTelegramUpdate({
+        update_id: 199,
+        message: {
+          message_id: 199,
+          date: Math.floor(Date.now() / 1000),
+          chat: { id: 7373, type: 'private' },
+          from: { id: 7373, first_name: 'Legit' },
+          text: '654321',
+        },
+      });
+      expect(otherChat.status).toBe('linked');
     });
 
     it('ignores a retried delivery of the same update_id (no second capture)', async () => {
@@ -439,6 +481,125 @@ describe('ReceiptBotService & RateLimiter Unit Tests', () => {
       expect(outcome.status).toBe('capture_failed');
       expect(sentMessages[0].text).toContain('پردازش رسید با خطا مواجه شد');
       expect(sentMessages[0].text).not.toContain('SECRET-INTERNAL-DETAIL');
+    });
+
+    it('rejects photo ingest when user membership was removed or lacks accounting:create permission', async () => {
+      (mockRepo.lookupLinkByTelegramId as jest.Mock).mockResolvedValue({
+        tenantId,
+        userId,
+        defaultKind: 'purchase',
+        telegramUsername: null,
+      });
+
+      const photoUpdate = (updateId: number) => ({
+        update_id: updateId,
+        message: {
+          message_id: updateId,
+          date: Math.floor(Date.now() / 1000),
+          chat: { id: 991, type: 'private' as const },
+          from: { id: 991, first_name: 'F' },
+          photo: [{ file_id: 'p', file_unique_id: 'u', width: 10, height: 10 }],
+        },
+      });
+
+      // Removed / inactive member
+      mockAccessService.resolve.mockResolvedValueOnce(null);
+      expect((await service.handleTelegramUpdate(photoUpdate(60))).status).toBe('unauthorized');
+
+      // Demoted role (read_only lacks accounting:create)
+      mockAccessService.resolve.mockResolvedValueOnce({
+        userId,
+        tenantId,
+        membershipId: 'm-1',
+        roleKey: 'read_only',
+        customRoleId: null,
+        permissions: new Set(['accounting:read']),
+        entitledModules: new Set([AccessModule.ACCOUNTING]),
+        branchId: null,
+        branchScoped: false,
+        require2fa: false,
+        scope: { type: 'org', ids: [] },
+        amountLimits: {},
+        fieldVisibility: {},
+      });
+      expect((await service.handleTelegramUpdate(photoUpdate(61))).status).toBe('unauthorized');
+      expect(mockCaptureService.create).not.toHaveBeenCalled();
+    });
+
+    it('enforces the ASSISTANT_ENABLED kill switch on bot photo ingest', async () => {
+      (mockConfig.get as jest.Mock).mockImplementation((key: string) => {
+        if (key === 'RECEIPT_BOT_TOKEN') return '123456:test-bot-token';
+        if (key === 'ASSISTANT_ENABLED') return 'false';
+        return undefined;
+      });
+
+      const outcome = await service.handleTelegramUpdate({
+        update_id: 62,
+        message: {
+          message_id: 62,
+          date: Math.floor(Date.now() / 1000),
+          chat: { id: 992, type: 'private' },
+          from: { id: 992, first_name: 'G' },
+          photo: [{ file_id: 'p', file_unique_id: 'u', width: 10, height: 10 }],
+        },
+      });
+
+      expect(outcome.status).toBe('assistant_disabled');
+      expect(mockCaptureService.create).not.toHaveBeenCalled();
+      expect(sentMessages[0].text).toContain('غیرفعال است');
+    });
+
+    it('consumes a single rate-limit token per photo and rejects cross-tenant hijack code status', async () => {
+      (mockRepo.lookupLinkByTelegramId as jest.Mock).mockResolvedValue({
+        tenantId,
+        userId,
+        defaultKind: 'purchase',
+        telegramUsername: null,
+      });
+
+      // 10 consecutive photos succeed (proves single token consumed per update), 11th is rate-limited
+      for (let i = 0; i < 10; i++) {
+        const res = await service.handleTelegramUpdate({
+          update_id: 500 + i,
+          message: {
+            message_id: 500 + i,
+            date: Math.floor(Date.now() / 1000),
+            chat: { id: 993, type: 'private' },
+            from: { id: 993, first_name: 'H' },
+            photo: [{ file_id: 'p', file_unique_id: 'u', width: 10, height: 10 }],
+          },
+        });
+        expect(res.status).toBe('captured');
+      }
+      const eleventh = await service.handleTelegramUpdate({
+        update_id: 510,
+        message: {
+          message_id: 510,
+          date: Math.floor(Date.now() / 1000),
+          chat: { id: 993, type: 'private' },
+          from: { id: 993, first_name: 'H' },
+          photo: [{ file_id: 'p', file_unique_id: 'u', width: 10, height: 10 }],
+        },
+      });
+      expect(eleventh.status).toBe('rate_limited');
+
+      // Cross-tenant hijack returns conflict message instead of silently unbinding
+      (mockRepo.consumeCode as jest.Mock).mockResolvedValueOnce({
+        status: 'already_linked_other_tenant',
+        link: null,
+      });
+      const conflict = await service.handleTelegramUpdate({
+        update_id: 511,
+        message: {
+          message_id: 511,
+          date: Math.floor(Date.now() / 1000),
+          chat: { id: 994, type: 'private' },
+          from: { id: 994, first_name: 'I' },
+          text: '/start 654321',
+        },
+      });
+      expect(conflict.status).toBe('already_linked_other_tenant');
+      expect(sentMessages.at(-1)?.text).toContain('سازمان دیگری متصل است');
     });
   });
 });

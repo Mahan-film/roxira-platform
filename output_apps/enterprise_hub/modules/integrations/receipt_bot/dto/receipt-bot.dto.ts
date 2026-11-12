@@ -20,10 +20,10 @@ export class GenerateLinkCodeResponseDto {
   @ApiProperty({ description: 'زمان انقضای کد (۱۰ دقیقه)' })
   expiresAt: Date;
 
-  @ApiProperty({ description: 'نام کاربری ربات تلگرام/بله', nullable: true })
+  @ApiProperty({ description: 'نام کاربری ربات تلگرام', nullable: true })
   botUsername: string | null;
 
-  @ApiProperty({ description: 'لینک مستقیم شروع اتصال در پیام‌رسان', nullable: true })
+  @ApiProperty({ description: 'لینک مستقیم شروع اتصال در تلگرام', nullable: true })
   deepLink: string | null;
 }
 
@@ -34,7 +34,7 @@ export class ReceiptBotStatusResponseDto {
   @ApiProperty({ description: 'نام کاربری تلگرام متصل‌شده', nullable: true })
   telegramUsername: string | null;
 
-  @ApiProperty({ description: 'نوع پیش‌فرض پیش‌نویس (تنخواه‌گردان یا خرید)', example: 'petty_cash' })
+  @ApiProperty({ description: 'برچسب یا نوع پیش‌فرض پیش‌نویس (تنخواه‌گردان یا خرید)', example: 'petty_cash' })
   defaultKind: 'petty_cash' | 'purchase';
 
   @ApiProperty({ description: 'آیا توکن ربات در سرور تنظیم شده است؟' })
@@ -46,13 +46,13 @@ export class ReceiptBotStatusResponseDto {
 
 export class UpdateReceiptBotPreferencesDto {
   @ApiProperty({
-    description: 'نوع سند پیش‌فرض برای رسیدهای دریافتی از ربات',
+    description: 'حالت پیش‌فرض برچسب/نوع پیش‌نویس خرید برای رسیدهای دریافتی از ربات',
     enum: ['petty_cash', 'purchase'],
     example: 'petty_cash',
   })
   @IsString()
   @IsIn(['petty_cash', 'purchase'], {
-    message: 'نوع پیش‌فرض باید یا petty_cash (تنخواه‌گردان) یا purchase (فاکتور خرید) باشد.',
+    message: 'نوع پیش‌فرض باید یا petty_cash (برچسب تنخواه‌گردان) یا purchase (فاکتور خرید) باشد.',
   })
   defaultKind: 'petty_cash' | 'purchase';
 }
