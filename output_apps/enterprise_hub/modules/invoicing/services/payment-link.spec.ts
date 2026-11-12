@@ -13,6 +13,10 @@ describe('Payment Link Crypto & Unit Logic (T90)', () => {
   const T1 = '11111111-1111-4111-8111-111111111111';
   const T2 = '22222222-2222-4222-8222-222222222222';
 
+  beforeAll(() => {
+    process.env.PAYMENT_GATEWAY_ENCRYPTION_KEY = 'test_payment_gateway_encryption_key_32b!';
+  });
+
   describe('Merchant Credential Encryption & Masking', () => {
     it('seals and opens merchant ID with tenant AAD binding', () => {
       const plain = 'zibal_merchant_secret_12345';
@@ -53,7 +57,7 @@ describe('Payment Link Crypto & Unit Logic (T90)', () => {
         updatePaymentLink: jest.fn(),
         findPaymentLinkByTrackId: jest.fn(),
         findPaymentLinkByGatewayRef: jest.fn(),
-        lookupTenantByTrackId: jest.fn(),
+        lookupTenantByTrackId: jest.fn().mockResolvedValue({ tenantId: T1, invoiceId: 'inv-1', status: 'PENDING' }),
       };
       invoicingRepo = {
         findById: jest.fn(),
@@ -161,6 +165,7 @@ describe('Payment Link Crypto & Unit Logic (T90)', () => {
         tenantId: T1,
         invoiceId: 'inv-1',
         trackId: 'trk-1001',
+        amount: 50000000n,
         status: 'PENDING',
         gateway: 'zibal',
       };
@@ -208,6 +213,7 @@ describe('Payment Link Crypto & Unit Logic (T90)', () => {
         tenantId: T1,
         invoiceId: 'inv-1',
         trackId: 'trk-1002',
+        amount: 50000000n,
         status: 'PENDING',
         gateway: 'zibal',
       };

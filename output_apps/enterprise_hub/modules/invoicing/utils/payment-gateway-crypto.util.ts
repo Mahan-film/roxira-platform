@@ -6,9 +6,11 @@ function getMasterKey(): Buffer {
   const envKey =
     process.env.PAYMENT_GATEWAY_ENCRYPTION_KEY ||
     process.env.MOADIAN_KEY_ENCRYPTION_KEY ||
-    process.env.APP_SECRET ||
-    'roxira-default-payment-gateway-secret-32b!';
-  return createHash('sha256').update(envKey).digest();
+    process.env.APP_SECRET;
+  if (!envKey || envKey.trim().length === 0) {
+    throw new Error('PAYMENT_GATEWAY_ENCRYPTION_KEY is not configured (fail closed)');
+  }
+  return createHash('sha256').update(envKey.trim()).digest();
 }
 
 /**

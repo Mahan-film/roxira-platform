@@ -81,9 +81,10 @@ export class InvoicePaymentLinkController {
     @Body() dto: CreatePaymentLinkDto,
   ): Promise<PaymentLinkResponseDto> {
     const tenantId = this.tenantIdOf(req);
+    const configuredBaseUrl = process.env.PAYMENT_GATEWAY_CALLBACK_BASE_URL || process.env.APP_BASE_URL;
     const host = req.get ? req.get('host') : undefined;
     const protocol = req.protocol || 'http';
-    const baseUrl = host ? `${protocol}://${host}` : undefined;
+    const baseUrl = configuredBaseUrl || (host ? `${protocol}://${host}` : undefined);
     return this.paymentLinkService.createPaymentLink(tenantId, invoiceId, dto, baseUrl);
   }
 

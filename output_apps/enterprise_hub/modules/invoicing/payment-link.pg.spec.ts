@@ -59,15 +59,16 @@ describePg('Invoice Online Payment Links on PostgreSQL (NOSUPERUSER NOBYPASSRLS)
   let scope: TenantScope;
 
   beforeAll(async () => {
+    process.env.PAYMENT_GATEWAY_ENCRYPTION_KEY = 'test_payment_gateway_encryption_key_32b!';
     admin = await new DataSource({ ...options('postgres'), entities: [], migrations: [] }).initialize();
     await admin.query(`CREATE DATABASE "${db}"`);
+    const appRole = process.env.ROXIRA_TEST_APP_ROLE || 'roxira_app';
+    const appPw = process.env.ROXIRA_TEST_APP_PASSWORD || APP_PW;
     await admin.query(`
       DO $$
       BEGIN
-        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'roxira_app') THEN
-          CREATE ROLE roxira_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${APP_PW}';
-        ELSE
-          ALTER ROLE roxira_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${APP_PW}';
+        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '${appRole}') THEN
+          CREATE ROLE ${appRole} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${appPw}';
         END IF;
       END
       $$;
@@ -76,13 +77,13 @@ describePg('Invoice Online Payment Links on PostgreSQL (NOSUPERUSER NOBYPASSRLS)
     owner = await new DataSource(options(db)).initialize();
     await owner.runMigrations();
 
-    await owner.query(`GRANT CONNECT ON DATABASE "${db}" TO roxira_app`);
-    await owner.query(`GRANT USAGE ON SCHEMA public TO roxira_app`);
-    await owner.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO roxira_app`);
-    await owner.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO roxira_app`);
-    await owner.query(`GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO roxira_app`);
+    await owner.query(`GRANT CONNECT ON DATABASE "${db}" TO ${appRole}`);
+    await owner.query(`GRANT USAGE ON SCHEMA public TO ${appRole}`);
+    await owner.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${appRole}`);
+    await owner.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${appRole}`);
+    await owner.query(`GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ${appRole}`);
 
-    app = await new DataSource({ ...options(db, 'roxira_app', APP_PW), extra: { max: 6 } }).initialize();
+    app = await new DataSource({ ...options(db, appRole, appPw), extra: { max: 6 } }).initialize();
     scope = new TenantScope(app);
 
     paymentRepo = new InvoicePaymentLinkRepository(
