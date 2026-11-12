@@ -256,6 +256,74 @@ describePg('Invoice Online Payment Links on PostgreSQL (NOSUPERUSER NOBYPASSRLS)
     expect(duplicateTrackRes.paid).toBe(true);
     expect(duplicateTrackRes.message).toContain('قبلاً تایید');
     expect(verifySpy).not.toHaveBeenCalled();
+
+    // Issuing a second payment link for the same invoice fails closed
+    await expect(service.createPaymentLink(T1, invoice.id)).rejects.toThrow();
+  });
+
+  it('reclaims stale VERIFYING link and settles PAID_UNSETTLED links on callback retry in PG', async () => {
+    const invoice = await invoicingRepo.create(T1, {
+      direction: InvoiceDirection.SALE,
+      status: InvoiceStatus.ISSUED,
+      taxInvoiceNumber: 'TAX-PAY-9003',
+      finalPayable: 1500000,
+      totalAmount: 1500000,
+      totalDiscount: 0,
+      totalTax: 0,
+      currency: Currency.IRR,
+      sellerInfo: { name: 'فروشنده' } as any,
+      buyerInfo: { name: 'خریدار' } as any,
+      items: [],
+      issuedAt: new Date('2026-09-10T12:00:00Z'),
+    });
+
+    jest.spyOn(gatewayAdapter, 'requestPayment').mockResolvedValueOnce({
+      success: true,
+      trackId: 'zibal_track_stale_retry',
+      paymentUrl: 'https://gateway.zibal.ir/start/zibal_track_stale_retry',
+    });
+    await service.createPaymentLink(T1, invoice.id);
+
+    // Block issuing a duplicate link while PENDING
+    await expect(service.createPaymentLink(T1, invoice.id)).rejects.toThrow();
+
+    // Simulate a crashed worker leaving row stuck in VERIFYING for > 2 minutes
+    await testDb.rawQuery(
+      `UPDATE invoice_payment_links SET status = 'VERIFYING', updated_at = NOW() - INTERVAL '5 minutes' WHERE track_id = $1`,
+      ['zibal_track_stale_retry'],
+    );
+
+    jest.spyOn(gatewayAdapter, 'verifyPayment').mockResolvedValueOnce({
+      success: true,
+      paid: true,
+      amountRials: 1500000n,
+      refNumber: 'SHAPARAK-REF-9003',
+      paidAt: new Date('2026-09-10T12:10:00Z'),
+    });
+
+    // Simulate transient settlement failure after Zibal verified payment
+    const paySpy = jest
+      .spyOn(invoicingService, 'pay')
+      .mockRejectedValueOnce(new Error('temporary settlement error'));
+
+    await expect(service.handleCallback({ trackId: 'zibal_track_stale_retry' })).rejects.toThrow(
+      'temporary settlement error',
+    );
+    paySpy.mockRestore();
+
+    const midLink = await paymentRepo.findPaymentLinkByTrackId(T1, 'zibal_track_stale_retry');
+    expect(midLink?.status).toBe('PAID_UNSETTLED');
+    expect(midLink?.gatewayRef).toBe('SHAPARAK-REF-9003');
+
+    // Retry completes settlement without re-calling Zibal
+    const retryRes = await service.handleCallback({ trackId: 'zibal_track_stale_retry' });
+    expect(retryRes.success).toBe(true);
+    expect(retryRes.paid).toBe(true);
+
+    const finalLink = await paymentRepo.findPaymentLinkByTrackId(T1, 'zibal_track_stale_retry');
+    expect(finalLink?.status).toBe('PAID');
+    const settledInv = await invoicingRepo.findById(T1, invoice.id);
+    expect(settledInv?.status).toBe(InvoiceStatus.PAID);
   });
 
   it('fails closed in DB when gateway verify returns missing or mismatched amount', async () => {

@@ -126,6 +126,18 @@ export class InvoicePaymentLinkService {
       throw new ConflictException('لینک پرداخت فقط برای صورتحساب‌های در وضعیت صادرشده (ISSUED) قابل ایجاد است.');
     }
 
+    const existingLinks = await this.paymentRepo.findPaymentLinksByInvoiceId(tenantId, invoiceId);
+    const blockingLink = existingLinks.find((l) =>
+      ['PENDING', 'VERIFYING', 'PAID_UNSETTLED', 'SETTLING', 'PAID', 'RECONCILIATION_REQUIRED'].includes(
+        l.status,
+      ),
+    );
+    if (blockingLink) {
+      throw new ConflictException(
+        'برای این صورتحساب پیش‌تر لینک پرداخت فعال یا تاییدشده ثبت شده است.',
+      );
+    }
+
     const amountMinor = toMinor(invoice.finalPayable);
     if (amountMinor <= 0n) {
       throw new BadRequestException('مبلغ قابل پرداخت فاکتور باید بزرگتر از صفر باشد.');
@@ -214,6 +226,23 @@ export class InvoicePaymentLinkService {
           message: 'این پرداخت قبلاً تایید و ثبت شده است.',
         };
       }
+      if (existing.status === 'RECONCILIATION_REQUIRED') {
+        return {
+          success: false,
+          paid: false,
+          message: 'پرداخت در درگاه تأیید شده اما صورتحساب قابل تسویه نبود و نیازمند مغایرت‌گیری مالی است.',
+        };
+      }
+      if (existing.status === 'PAID_UNSETTLED' || existing.status === 'SETTLING') {
+        const unsettled = await this.paymentRepo.claimUnsettledPaymentLink(tenantId, params.trackId);
+        if (unsettled) {
+          return this.settleVerifiedLink(tenantId, unsettled, {
+            gatewayRef: unsettled.gatewayRef || params.trackId,
+            cardNumber: unsettled.cardNumber ?? null,
+            paidAt: unsettled.paidAt ?? new Date(),
+          });
+        }
+      }
       return {
         success: false,
         paid: false,
@@ -221,6 +250,7 @@ export class InvoicePaymentLinkService {
       };
     }
 
+    let gatewayVerified = false;
     try {
       const gatewayConfig = await this.paymentRepo.findConfig(tenantId, claimed.gateway);
       if (!gatewayConfig || !gatewayConfig.isActive) {
@@ -269,7 +299,11 @@ export class InvoicePaymentLinkService {
 
       const refNumber = verifyResult.refNumber || params.trackId;
       const existingRef = await this.paymentRepo.findPaymentLinkByGatewayRef(tenantId, refNumber);
-      if (existingRef && existingRef.status === 'PAID' && existingRef.id !== claimed.id) {
+      if (
+        existingRef &&
+        ['PAID', 'PAID_UNSETTLED', 'SETTLING', 'RECONCILIATION_REQUIRED'].includes(existingRef.status) &&
+        existingRef.id !== claimed.id
+      ) {
         await this.paymentRepo.markPaymentLinkStatus(tenantId, claimed.id, 'FAILED');
         return {
           success: true,
@@ -278,31 +312,30 @@ export class InvoicePaymentLinkService {
         };
       }
 
-      const markedPaid = await this.paymentRepo.markPaymentLinkPaid(tenantId, claimed.id, {
+      const gatewayData = {
         gatewayRef: refNumber,
         cardNumber: verifyResult.cardNumber ?? null,
         paidAt: verifyResult.paidAt ?? new Date(),
-      });
+      };
 
-      if (!markedPaid) {
+      // Durable intermediate state: Zibal has verified & accepted payment, but invoice is not settled yet.
+      // Never mark PAID before invoicingService.pay succeeds.
+      const markedUnsettled = await this.paymentRepo.markPaymentLinkPaidUnsettled(
+        tenantId,
+        claimed.id,
+        gatewayData,
+      );
+
+      if (!markedUnsettled) {
         return {
           success: true,
           paid: true,
           message: 'این پرداخت قبلاً تایید و ثبت شده است.',
         };
       }
+      gatewayVerified = true;
 
-      // Mark invoice as PAID and post receipt voucher through posting rules (no hand-built lines)
-      const invoice = await this.invoicingRepo.findById(tenantId, claimed.invoiceId);
-      if (invoice && invoice.status === InvoiceStatus.ISSUED) {
-        await this.invoicingService.pay(tenantId, claimed.invoiceId);
-      }
-
-      return {
-        success: true,
-        paid: true,
-        message: 'پرداخت با موفقیت تأیید شد و سند دریافت ثبت گردید.',
-      };
+      return await this.settleVerifiedLink(tenantId, claimed, gatewayData);
     } catch (err: unknown) {
       const code = (err as { code?: string; driverError?: { code?: string } })?.code ??
         (err as { driverError?: { code?: string } })?.driverError?.code;
@@ -314,7 +347,49 @@ export class InvoicePaymentLinkService {
           message: 'تراکنش با این شماره مرجع بانکی قبلاً ثبت شده است.',
         };
       }
-      await this.paymentRepo.markPaymentLinkStatus(tenantId, claimed.id, 'UNVERIFIED').catch(() => undefined);
+      if (!gatewayVerified) {
+        await this.paymentRepo.markPaymentLinkStatus(tenantId, claimed.id, 'UNVERIFIED').catch(() => undefined);
+      }
+      throw err;
+    }
+  }
+
+  private async settleVerifiedLink(
+    tenantId: string,
+    link: { id: string; invoiceId: string; trackId: string },
+    gatewayData: { gatewayRef: string; cardNumber: string | null; paidAt: Date },
+  ): Promise<PaymentCallbackResultDto> {
+    if (!link.invoiceId) {
+      throw new InternalServerErrorException('Missing invoiceId on claimed payment link');
+    }
+    try {
+      const invoice = await this.invoicingRepo.findById(tenantId, link.invoiceId);
+      if (!invoice || invoice.status !== InvoiceStatus.ISSUED) {
+        await this.paymentRepo.markPaymentLinkReconciliationRequired(tenantId, link.id, gatewayData);
+        this.logger.error(
+          `Gateway payment verified (trackId=${link.trackId}, ref=${gatewayData.gatewayRef}) ` +
+            `but invoice ${link.invoiceId} status is ${invoice?.status ?? 'MISSING'}; flagged RECONCILIATION_REQUIRED`,
+        );
+        return {
+          success: false,
+          paid: false,
+          message:
+            'پرداخت در درگاه تأیید شد اما صورتحساب پیش‌تر پرداخت یا ابطال شده است و نیازمند مغایرت‌گیری مالی است.',
+        };
+      }
+
+      await this.invoicingService.pay(tenantId, link.invoiceId);
+      await this.paymentRepo.markPaymentLinkPaid(tenantId, link.id, gatewayData);
+
+      return {
+        success: true,
+        paid: true,
+        message: 'پرداخت با موفقیت تأیید شد و سند دریافت ثبت گردید.',
+      };
+    } catch (err: unknown) {
+      await this.paymentRepo
+        .markPaymentLinkStatus(tenantId, link.id, 'PAID_UNSETTLED')
+        .catch(() => undefined);
       throw err;
     }
   }
