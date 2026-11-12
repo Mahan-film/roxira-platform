@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
+import { CurrencyModule } from '../../currency/currency.module';
 import { InvoicingModule } from '../../invoicing/invoicing.module';
 import { WooCommerceConfigController } from './controllers/woocommerce-config.controller';
 import { WooCommerceWebhookController } from './controllers/woocommerce-webhook.controller';
@@ -15,6 +16,7 @@ import { WooCommerceSyncService } from './services/woocommerce-sync.service';
       WooCommerceConfigEntity,
       WooCommerceSyncLogEntity,
     ]),
+    CurrencyModule,
     InvoicingModule,
   ],
   controllers: [

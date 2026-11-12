@@ -6,9 +6,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
-import { fromMinor, toMinor } from '../../../accounting/money';
+import { minorToDecimal, toMinor } from '../../../accounting/money';
 import { BASE_CURRENCY } from '../../../currency/constants/currency.constants';
 import { Currency } from '../../../currency/enums/currency.enum';
+import { CurrencyService } from '../../../currency/services/currency.service';
 import { InvoiceItem, InvoicePartyInfo } from '../../../invoicing/entities/invoice.entity';
 import { InvoiceJurisdiction } from '../../../invoicing/enums/invoice-jurisdiction.enum';
 import { InvoiceDirection } from '../../../invoicing/enums/invoice-kind.enum';
@@ -34,11 +35,17 @@ import {
 } from '../utils/woocommerce-crypto.util';
 
 const SUPPORTED_ORDER_CURRENCIES = new Set<string>(Object.values(Currency));
+const TOMAN_TO_RIAL = 10;
+const RATIO_SCALE = 1_000_000;
 
 function isMaskedSecretInput(value?: string): boolean {
   if (!value) return true;
   const trimmed = value.trim();
-  return trimmed.length === 0 || trimmed === '****' || trimmed.includes('...');
+  return (
+    trimmed.length === 0 ||
+    trimmed === '****' ||
+    /^(ck_|cs_)?\.\.\.[^\s]{4}$/.test(trimmed)
+  );
 }
 
 @Injectable()
@@ -48,6 +55,7 @@ export class WooCommerceSyncService {
   constructor(
     private readonly wooRepo: WooCommerceRepository,
     private readonly invoicingRepo: InvoicingRepository,
+    private readonly currencyService: CurrencyService,
   ) {}
 
   async getConfig(tenantId: string): Promise<WooCommerceConfigResponseDto> {
@@ -78,6 +86,11 @@ export class WooCommerceSyncService {
     if (!dto.storeUrl?.trim()) {
       throw new BadRequestException('storeUrl is required');
     }
+    try {
+      assertSafeStoreUrl(dto.storeUrl);
+    } catch (err: any) {
+      throw new BadRequestException(err?.message || 'Invalid WooCommerce storeUrl');
+    }
     const existing = await this.wooRepo.findConfig(tenantId);
 
     if (!existing && (!dto.consumerKey?.trim() || !dto.consumerSecret?.trim())) {
@@ -95,12 +108,14 @@ export class WooCommerceSyncService {
       : existing!.consumerSecretEncrypted;
 
     let webhookSecretEncrypted: string;
+    let generatedWebhookSecret: string | undefined;
     if (!isMaskedSecretInput(dto.webhookSecret)) {
       webhookSecretEncrypted = sealSecret(dto.webhookSecret!.trim(), tenantId);
     } else if (existing?.webhookSecret) {
       webhookSecretEncrypted = existing.webhookSecret;
     } else {
-      webhookSecretEncrypted = sealSecret(randomBytes(24).toString('hex'), tenantId);
+      generatedWebhookSecret = randomBytes(24).toString('hex');
+      webhookSecretEncrypted = sealSecret(generatedWebhookSecret, tenantId);
     }
 
     const saved = await this.wooRepo.saveConfig(tenantId, {
@@ -131,6 +146,7 @@ export class WooCommerceSyncService {
       autoSyncStock: saved.autoSyncStock,
       lastSyncAt: saved.lastSyncAt,
       updatedAt: saved.updatedAt,
+      ...(generatedWebhookSecret ? { generatedWebhookSecret } : {}),
     };
   }
 
@@ -155,12 +171,41 @@ export class WooCommerceSyncService {
       };
     }
 
-    // Validate currency before entering lock/transaction
-    const rawCurrency = (order.currency || 'IRR').trim().toUpperCase();
-    if (!SUPPORTED_ORDER_CURRENCIES.has(rawCurrency)) {
-      throw new BadRequestException(`Unsupported WooCommerce order currency: ${rawCurrency}`);
+    // Validate currency explicitly (fail closed when missing or unsupported)
+    const rawCurrency = order.currency?.trim().toUpperCase() || '';
+    if (!rawCurrency || !SUPPORTED_ORDER_CURRENCIES.has(rawCurrency)) {
+      throw new BadRequestException(
+        rawCurrency
+          ? `Unsupported WooCommerce order currency: ${rawCurrency}`
+          : 'WooCommerce order currency is required',
+      );
     }
     const orderCurrency = rawCurrency as Currency;
+    const exchangeRate = this.currencyService.getRate(orderCurrency, BASE_CURRENCY);
+    if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
+      throw new BadRequestException(`Missing valid exchange rate for currency ${orderCurrency}`);
+    }
+    const fxRate =
+      orderCurrency === Currency.IRR
+        ? 1
+        : orderCurrency === Currency.IRT
+          ? TOMAN_TO_RIAL
+          : this.currencyService.getRate(orderCurrency, Currency.IRR);
+    if (!Number.isFinite(fxRate) || fxRate <= 0) {
+      throw new BadRequestException(`Missing valid IRR FX rate for currency ${orderCurrency}`);
+    }
+
+    const fromUnitsScaled = BigInt(Math.round(this.currencyService.unitsPerUsd(orderCurrency) * RATIO_SCALE));
+    const toUnitsScaled = BigInt(Math.round(this.currencyService.unitsPerUsd(BASE_CURRENCY) * RATIO_SCALE));
+    if (fromUnitsScaled <= 0n || toUnitsScaled <= 0n) {
+      throw new BadRequestException(`Invalid FX units for currency ${orderCurrency}`);
+    }
+    const convertMinorToBase = (minor: bigint): bigint => {
+      const neg = minor < 0n;
+      const abs = neg ? -minor : minor;
+      const converted = (abs * toUnitsScaled + fromUnitsScaled / 2n) / fromUnitsScaled;
+      return neg ? -converted : converted;
+    };
 
     try {
       const outcome = await this.wooRepo.withOrderLock(tenantId, externalId, async (manager) => {
@@ -245,11 +290,11 @@ export class WooCommerceSyncService {
                 ? line.name || `کالای ووکامرس #${line.product_id}`
                 : `${line.name || `کالای ووکامرس #${line.product_id}`} (×${rawQty})`,
             quantity: qty,
-            unitPrice: fromMinor(unitPriceMinor) as number,
-            discount: fromMinor(lineDiscountMinor) as number,
+            unitPrice: minorToDecimal(unitPriceMinor) as unknown as number,
+            discount: minorToDecimal(lineDiscountMinor) as unknown as number,
             vatRate,
-            tax: fromMinor(lineTaxMinor) as number,
-            total: fromMinor(lineTotalMinor + lineTaxMinor) as number,
+            tax: minorToDecimal(lineTaxMinor) as unknown as number,
+            total: minorToDecimal(lineTotalMinor + lineTaxMinor) as unknown as number,
           };
         });
 
@@ -257,6 +302,9 @@ export class WooCommerceSyncService {
           orderDiscountMinor > 0n ? orderDiscountMinor : sumLineDiscountsMinor;
         // Net merchandise/shipping before tax and before discount so totalAmount - totalDiscount + totalTax === finalPayable
         const totalAmountMinor = orderTotalMinor - totalTaxMinor + totalDiscountMinor;
+        const baseTotalAmountMinor = convertMinorToBase(totalAmountMinor);
+        const baseTotalTaxMinor = convertMinorToBase(totalTaxMinor);
+        const baseFinalPayableMinor = convertMinorToBase(orderTotalMinor);
         const jurisdiction =
           orderCurrency === Currency.IRR || orderCurrency === Currency.IRT
             ? InvoiceJurisdiction.IR
@@ -273,21 +321,22 @@ export class WooCommerceSyncService {
             status: InvoiceStatus.DRAFT,
             currency: orderCurrency,
             jurisdiction,
-            exchangeRate: 1,
-            fxRate: 1,
+            exchangeRate,
+            fxRate,
+            amountFx: minorToDecimal(orderTotalMinor) as unknown as number,
             baseCurrency: BASE_CURRENCY,
-            baseTotalAmount: 0,
-            baseTotalTax: 0,
-            baseFinalPayable: 0,
+            baseTotalAmount: minorToDecimal(baseTotalAmountMinor) as unknown as number,
+            baseTotalTax: minorToDecimal(baseTotalTaxMinor) as unknown as number,
+            baseFinalPayable: minorToDecimal(baseFinalPayableMinor) as unknown as number,
             einvoiceType: 1,
             subject: 1,
             sellerInfo,
             buyerInfo,
             items,
-            totalAmount: fromMinor(totalAmountMinor) as number,
-            totalDiscount: fromMinor(totalDiscountMinor) as number,
-            totalTax: fromMinor(totalTaxMinor) as number,
-            finalPayable: fromMinor(orderTotalMinor) as number,
+            totalAmount: minorToDecimal(totalAmountMinor) as unknown as number,
+            totalDiscount: minorToDecimal(totalDiscountMinor) as unknown as number,
+            totalTax: minorToDecimal(totalTaxMinor) as unknown as number,
+            finalPayable: minorToDecimal(orderTotalMinor) as unknown as number,
           },
           manager,
         );
@@ -305,7 +354,6 @@ export class WooCommerceSyncService {
               total: order.total,
               currency: orderCurrency,
               itemCount: items.length,
-              buyer: buyerName,
             },
           },
           manager,
@@ -380,7 +428,7 @@ export class WooCommerceSyncService {
       manage_stock: true,
     };
     if (priceMinor !== undefined) {
-      payload.regular_price = String(fromMinor(priceMinor));
+      payload.regular_price = minorToDecimal(priceMinor);
     }
 
     try {
@@ -389,6 +437,7 @@ export class WooCommerceSyncService {
         {
           method: 'GET',
           headers: { Authorization: authHeader },
+          signal: AbortSignal.timeout(10_000),
         },
       );
       if (!lookupRes.ok) {
@@ -406,6 +455,7 @@ export class WooCommerceSyncService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(10_000),
       });
       if (!updateRes.ok) {
         throw new BadGatewayException(`WooCommerce stock update failed with ${updateRes.status}`);

@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Post,
   Put,
   Query,
   Req,
@@ -9,9 +10,11 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AccessAction, AccessModule } from '../../../access/catalogue';
 import { ModuleAccess, RequireAction } from '../../../access/decorators';
+import { toMinor } from '../../../accounting/money';
 import { AuthenticatedRequest } from '../../../auth/guards/jwt-auth.guard';
 import { requireTenantId } from '../../../tenants/tenant-context';
 import {
+  PushWooCommerceStockDto,
   UpdateWooCommerceConfigDto,
   WooCommerceConfigResponseDto,
 } from '../dto/woocommerce-config.dto';
@@ -55,5 +58,17 @@ export class WooCommerceConfigController {
   ) {
     const tenantId = requireTenantId(req);
     return this.syncService.listSyncLogs(tenantId, query);
+  }
+
+  @Post('stock-push')
+  @RequireAction(AccessAction.APPROVE)
+  @ApiOperation({ summary: 'ارسال دستی/درخواستی موجودی و قیمت کالا به فروشگاه ووکامرس' })
+  async pushStock(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: PushWooCommerceStockDto,
+  ) {
+    const tenantId = requireTenantId(req);
+    const priceMinor = dto.price ? toMinor(dto.price) : undefined;
+    return this.syncService.pushStockUpdate(tenantId, dto.sku, dto.quantity, priceMinor);
   }
 }

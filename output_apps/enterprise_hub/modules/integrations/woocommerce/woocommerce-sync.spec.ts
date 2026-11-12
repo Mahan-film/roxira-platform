@@ -1,7 +1,9 @@
 import { BadRequestException, INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
+import { BASE_CURRENCY, DEFAULT_RATES_PER_USD } from '../../currency/constants/currency.constants';
 import { Currency } from '../../currency/enums/currency.enum';
+import { CurrencyService } from '../../currency/services/currency.service';
 import { InvoiceJurisdiction } from '../../invoicing/enums/invoice-jurisdiction.enum';
 import { WooCommerceWebhookController } from './controllers/woocommerce-webhook.controller';
 import {
@@ -44,9 +46,13 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
       expect(maskApiKey('')).toBe('');
     });
 
-    it('rejects private/loopback URLs in assertSafeStoreUrl', () => {
+    it('rejects private/loopback URLs (including bracketed IPv6 and http) in assertSafeStoreUrl', () => {
       expect(() => assertSafeStoreUrl('http://127.0.0.1/wp')).toThrow();
       expect(() => assertSafeStoreUrl('http://169.254.169.254/latest')).toThrow();
+      expect(() => assertSafeStoreUrl('http://shop.example.com/store')).toThrow();
+      expect(() => assertSafeStoreUrl('https://[::1]/wp')).toThrow();
+      expect(() => assertSafeStoreUrl('https://[fd00::1]/wp')).toThrow();
+      expect(() => assertSafeStoreUrl('https://[fe80::1]/wp')).toThrow();
       expect(() => assertSafeStoreUrl('ftp://shop.example.com')).toThrow();
       expect(assertSafeStoreUrl('https://shop.example.com/store').origin).toBe(
         'https://shop.example.com',
@@ -90,7 +96,43 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
       mockInvoicingRepo = {
         create: jest.fn().mockResolvedValue({ id: 'inv-uuid-101' }),
       };
-      service = new WooCommerceSyncService(mockWooRepo, mockInvoicingRepo);
+      const currencyService = new CurrencyService({ get: () => '' } as any);
+      service = new WooCommerceSyncService(mockWooRepo, mockInvoicingRepo, currencyService);
+    });
+
+    it('returns generatedWebhookSecret once on initial blank secret and saves real secrets containing dots', async () => {
+      const autoSaved = await service.saveConfig(tenantId, {
+        storeUrl: 'https://shop.example.com',
+        consumerKey: 'ck_real_key_1234',
+        consumerSecret: 'cs_real_secret_5678',
+      });
+      expect(autoSaved.generatedWebhookSecret).toMatch(/^[0-9a-f]{48}$/);
+      expect(autoSaved.webhookSecret).toBe(`...${autoSaved.generatedWebhookSecret!.slice(-4)}`);
+
+      const stored = mockWooRepo.saveConfig.mock.calls[0][1];
+      mockWooRepo.findConfig.mockResolvedValue({
+        tenantId,
+        ...stored,
+        lastSyncAt: null,
+        updatedAt: new Date(),
+      });
+
+      const fetched = await service.getConfig(tenantId);
+      expect(fetched.generatedWebhookSecret).toBeUndefined();
+
+      const customUpdated = await service.saveConfig(tenantId, {
+        storeUrl: 'https://shop.example.com',
+        webhookSecret: 'sec...custom_with_dots_999',
+      });
+      expect(customUpdated.generatedWebhookSecret).toBeUndefined();
+      const updatedStored = mockWooRepo.saveConfig.mock.calls[1][1];
+      mockWooRepo.findConfig.mockResolvedValue({
+        tenantId,
+        ...updatedStored,
+        lastSyncAt: null,
+        updatedAt: new Date(),
+      });
+      expect(await service.getWebhookSecret(tenantId)).toBe('sec...custom_with_dots_999');
     });
 
     it('preserves existing encrypted keys and webhook secret on partial re-save', async () => {
@@ -124,7 +166,7 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
       expect(secondSave.webhookSecret).toBe(stored.webhookSecret);
     });
 
-    it('imports USD/IRT orders cleanly with money.ts passthrough and tax breakdown', async () => {
+    it('imports USD/EUR orders cleanly with money.ts decimal strings and real FX rates/base totals', async () => {
       const result = await service.importOrder(tenantId, {
         id: 202,
         number: '202',
@@ -153,20 +195,34 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
         expect.objectContaining({
           currency: Currency.USD,
           jurisdiction: InvoiceJurisdiction.INTL,
-          totalAmount: 105,
-          totalDiscount: 5,
-          totalTax: 10,
-          finalPayable: 110,
+          exchangeRate: 1,
+          fxRate: DEFAULT_RATES_PER_USD[Currency.IRR],
+          baseCurrency: BASE_CURRENCY,
+          baseTotalAmount: '105.00',
+          baseTotalTax: '10.00',
+          baseFinalPayable: '110.00',
+          totalAmount: '105.00',
+          totalDiscount: '5.00',
+          totalTax: '10.00',
+          finalPayable: '110.00',
         }),
         undefined,
       );
     });
 
-    it('rejects unsupported currencies instead of coercing to IRR', async () => {
+    it('rejects missing or unsupported currencies instead of coercing to IRR', async () => {
       await expect(
         service.importOrder(tenantId, {
           id: 203,
           currency: 'XYZ',
+          total: '100',
+          line_items: [],
+        } as any),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.importOrder(tenantId, {
+          id: 204,
           total: '100',
           line_items: [],
         } as any),

@@ -1,9 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsOptional, IsString, IsUrl, MaxLength } from 'class-validator';
+import { IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, IsUrl, MaxLength } from 'class-validator';
 
 export class UpdateWooCommerceConfigDto {
-  @ApiProperty({ description: 'URL فروشگاه ووکامرس', example: 'https://shop.example.com' })
-  @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
+  @ApiProperty({ description: 'URL فروشگاه ووکامرس (HTTPS)', example: 'https://shop.example.com' })
+  @IsUrl({ protocols: ['https'], require_protocol: true })
   @MaxLength(500)
   storeUrl: string;
 
@@ -63,4 +63,25 @@ export class WooCommerceConfigResponseDto {
 
   @ApiProperty({ description: 'تاریخ آخرین ویرایش' })
   updatedAt: Date;
+
+  @ApiPropertyOptional({ description: 'کلید وب‌هوک تولیدشده به‌صورت یک‌بارمصرف در اولین ذخیره' })
+  generatedWebhookSecret?: string;
+}
+
+export class PushWooCommerceStockDto {
+  @ApiProperty({ description: 'کد کالا (SKU) در ووکامرس و روکسیرا' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(128)
+  sku: string;
+
+  @ApiProperty({ description: 'موجودی جدید قابل فروش' })
+  @IsInt()
+  quantity: number;
+
+  @ApiPropertyOptional({ description: 'قیمت فروش جدید به فرمت رشته اعشاری (اختیاری)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  price?: string;
 }

@@ -20,10 +20,10 @@ export function assertSafeStoreUrl(rawUrl: string): URL {
   } catch {
     throw new Error('Invalid WooCommerce storeUrl');
   }
-  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-    throw new Error('WooCommerce storeUrl must use http or https');
+  if (parsed.protocol !== 'https:') {
+    throw new Error('WooCommerce storeUrl must use https');
   }
-  const host = parsed.hostname.toLowerCase();
+  const host = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase();
   if (
     host === 'localhost' ||
     host === '127.0.0.1' ||
@@ -34,7 +34,10 @@ export function assertSafeStoreUrl(rawUrl: string): URL {
     /^10\./.test(host) ||
     /^192\.168\./.test(host) ||
     /^169\.254\./.test(host) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+    /^(fc|fd)[0-9a-f]{0,2}:/.test(host) ||
+    /^fe[89ab][0-9a-f]:/.test(host) ||
+    /^::ffff:(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)
   ) {
     throw new Error('WooCommerce storeUrl cannot point to a private or loopback address');
   }

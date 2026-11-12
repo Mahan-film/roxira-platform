@@ -8,6 +8,7 @@ export interface WooCommerceConfig {
   autoSyncStock: boolean;
   lastSyncAt: string | null;
   updatedAt: string;
+  generatedWebhookSecret?: string;
 }
 
 export interface UpdateWooCommerceConfigInput {
@@ -26,7 +27,7 @@ export interface WooCommerceSyncLog {
   status: 'success' | 'failed' | 'skipped';
   externalId: string;
   internalId: string | null;
-  payloadSummary: Record<string, any>;
+  payloadSummary: Record<string, unknown>;
   errorMessage: string | null;
   createdAt: string;
 }
