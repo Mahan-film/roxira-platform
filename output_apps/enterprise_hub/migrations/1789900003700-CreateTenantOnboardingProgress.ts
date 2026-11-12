@@ -2,7 +2,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
 
 /**
- * Migration 1789900002900: per-tenant progress of the new-company setup wizard (T96).
+ * Migration 1789900003700: per-tenant progress of the new-company setup wizard (T96).
  *
  * One row per organisation (the primary key IS the tenant id). `steps` maps a step key to
  * 'done' | 'skipped'; a missing key is pending. The company economic code and national id the
@@ -14,8 +14,8 @@ import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
  * BEFORE FORCE RLS is enabled: the table owner is subject to FORCE RLS, so it could not insert
  * rows for other tenants afterwards.
  */
-export class CreateTenantOnboardingProgress1789900002900 implements MigrationInterface {
-  name = 'CreateTenantOnboardingProgress1789900002900';
+export class CreateTenantOnboardingProgress1789900003700 implements MigrationInterface {
+  name = 'CreateTenantOnboardingProgress1789900003700';
 
   public async up(q: QueryRunner): Promise<void> {
     await q.query(`
