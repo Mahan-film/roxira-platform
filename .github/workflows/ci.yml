@@ -533,9 +533,11 @@ jobs:
             sleep 2
           done
           echo "::error::frontend did not start"; tail -40 "$RUNNER_TEMP/frontend.log"; exit 1
-      - name: Mint a throwaway tenant session
+      - name: Mint throwaway tenant sessions
         working-directory: output_apps/enterprise_hub
-        run: NODE_PATH="$PWD/node_modules" node ../../scripts/ci/mint_e2e_session.js "$RUNNER_TEMP/session.m1.json"
+        run: |
+          NODE_PATH="$PWD/node_modules" node ../../scripts/ci/mint_e2e_session.js "$RUNNER_TEMP/session.m1.json"
+          NODE_PATH="$PWD/node_modules" node ../../scripts/ci/mint_e2e_session.js "$RUNNER_TEMP/session.m1-accountant.json"
       - name: Install Playwright (chromium)
         working-directory: e2e
         run: |
@@ -546,8 +548,9 @@ jobs:
         env:
           E2E_BASE_URL: http://127.0.0.1:3001
           APP_E2E_SESSION_FILE_M1: ${{ runner.temp }}/session.m1.json
+          APP_E2E_SESSION_FILE_ACCOUNTANT: ${{ runner.temp }}/session.m1-accountant.json
           CI: "true"
-        run: npx playwright test m1-shop-month --project=chromium --reporter=list,html
+        run: npx playwright test m1-shop-month m1-accountant-day --project=chromium --reporter=list,html
       - name: Upload report and service logs
         if: always()
         continue-on-error: true
