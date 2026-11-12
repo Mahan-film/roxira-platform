@@ -122,10 +122,12 @@ export class InvoicePaymentLinkService {
     }
 
     const merchantId = openMerchantId(gatewayConfig.encryptedMerchantId, tenantId);
-    // 100 minor units = 1 Rial
-    const amountRials = amountMinor >= 100n ? amountMinor / 100n : amountMinor;
+    if (amountMinor % 100n !== 0n) {
+      throw new BadRequestException('مبلغ قابل پرداخت فاکتور باید مضرب صحیح ریال باشد.');
+    }
+    const amountRials = amountMinor / 100n;
 
-    const callbackUrl = `${baseUrl}/enterprise-hub/invoicing/payment-links/callback?tenantId=${tenantId}&invoiceId=${invoiceId}`;
+    const callbackUrl = `${baseUrl}/enterprise-hub/invoicing/payment-links/callback?invoiceId=${invoiceId}`;
     const description =
       dto?.description || `پرداخت آنلاین فاکتور فروش شماره ${invoice.taxInvoiceNumber || invoice.id}`;
 
@@ -172,17 +174,15 @@ export class InvoicePaymentLinkService {
       throw new BadRequestException('شناسه تراکنش (trackId) الزامی است.');
     }
 
-    let tenantId = params.tenantId;
-    if (!tenantId) {
-      const lookup = await this.paymentRepo.lookupTenantByTrackId(params.trackId);
-      if (!lookup) {
-        throw new NotFoundException('تراکنش پرداخت با این شناسه یافت نشد.');
-      }
-      tenantId = lookup.tenantId;
+    // Always resolve tenant through secure trackId lookup, never trust client-supplied tenantId alone
+    const lookup = await this.paymentRepo.lookupTenantByTrackId(params.trackId);
+    if (!lookup) {
+      throw new NotFoundException('تراکنش پرداخت با این شناسه یافت نشد.');
     }
+    const tenantId = lookup.tenantId;
 
     return this.tenantScope.run(tenantId, async () => {
-      const link = await this.paymentRepo.findPaymentLinkByTrackId(tenantId!, params.trackId);
+      const link = await this.paymentRepo.findPaymentLinkByTrackId(tenantId, params.trackId);
       if (!link) {
         throw new NotFoundException('شناسه پرداخت یافت نشد.');
       }
@@ -198,12 +198,12 @@ export class InvoicePaymentLinkService {
         };
       }
 
-      const gatewayConfig = await this.paymentRepo.findConfig(tenantId!, link.gateway);
+      const gatewayConfig = await this.paymentRepo.findConfig(tenantId, link.gateway);
       if (!gatewayConfig || !gatewayConfig.isActive) {
         throw new BadRequestException('پیکربندی درگاه پرداخت معتبر یافت نشد.');
       }
 
-      const merchantId = openMerchantId(gatewayConfig.encryptedMerchantId, tenantId!);
+      const merchantId = openMerchantId(gatewayConfig.encryptedMerchantId, tenantId);
       const verifyResult = await this.gatewayAdapter.verifyPayment({
         merchantId,
         trackId: params.trackId,
@@ -212,8 +212,16 @@ export class InvoicePaymentLinkService {
       if (verifyResult.paid) {
         const refNumber = verifyResult.refNumber || params.trackId;
 
+        // Verify gateway amount matches expected amount
+        if (verifyResult.amountRials !== undefined && verifyResult.amountRials !== null) {
+          const expectedRials = link.amount / 100n;
+          if (BigInt(verifyResult.amountRials) !== expectedRials) {
+            throw new BadRequestException('مبلغ پرداخت‌شده با مبلغ فاکتور تطابق ندارد.');
+          }
+        }
+
         // Idempotency check on gateway ref: ensure no duplicate posting across parallel runs
-        const existingRef = await this.paymentRepo.findPaymentLinkByGatewayRef(tenantId!, refNumber);
+        const existingRef = await this.paymentRepo.findPaymentLinkByGatewayRef(tenantId, refNumber);
         if (existingRef && existingRef.status === 'PAID' && existingRef.id !== link.id) {
           return {
             success: true,
@@ -228,12 +236,12 @@ export class InvoicePaymentLinkService {
         link.gatewayRef = refNumber;
         link.cardNumber = verifyResult.cardNumber ?? null;
         link.paidAt = verifyResult.paidAt ?? new Date();
-        await this.paymentRepo.updatePaymentLink(tenantId!, link);
+        await this.paymentRepo.updatePaymentLink(tenantId, link);
 
         // Mark invoice as PAID and post receipt voucher through posting rules (no hand-built lines)
-        const invoice = await this.invoicingRepo.findById(tenantId!, link.invoiceId);
-        if (invoice && invoice.status !== InvoiceStatus.PAID) {
-          await this.invoicingService.pay(tenantId!, link.invoiceId);
+        const invoice = await this.invoicingRepo.findById(tenantId, link.invoiceId);
+        if (invoice && invoice.status === InvoiceStatus.ISSUED) {
+          await this.invoicingService.pay(tenantId, link.invoiceId);
         }
 
         return {
