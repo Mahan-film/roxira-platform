@@ -89,7 +89,7 @@ export class MoadianService implements OnModuleInit {
     private readonly client: MoadianApiClient,
     private readonly config: ConfigService,
     @InjectQueue(MOADIAN_QUEUE) private readonly queue: Queue<MoadianJobData>,
-    @Optional() private readonly taxComplianceRepository?: TaxComplianceRepository,
+    private readonly taxComplianceRepository: TaxComplianceRepository,
   ) {}
 
   /** ثبت جاب دوره‌ای همگام‌سازی وضعیت صورتحساب‌های معوق با سامانه مودیان. */

@@ -123,7 +123,15 @@ export default function MoadianWizardPage() {
   const [submittingInvoice, setSubmittingInvoice] = useState(false);
   const [submissionResult, setSubmissionResult] = useState<MoadianSubmissionResponse | null>(null);
   const [pollingStatus, setPollingStatus] = useState(false);
+  const [confirmProductionSubmit, setConfirmProductionSubmit] = useState(false);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const targetIdRef = useRef<string | null>(null);
+  const isMountedRef = useRef<boolean>(true);
+
+  const isSandbox =
+    !!credential?.baseUrl &&
+    (credential.baseUrl.toLowerCase().includes("sandbox") ||
+      credential.baseUrl.toLowerCase().includes("test"));
 
   // بخش پایش مهلت ارسال (آستانه دلخواه واردشده توسط کاربر؛ بدون پیش‌فرض قانونی)
   const [deadlineDays, setDeadlineDays] = useState<number | null>(null);
@@ -164,16 +172,25 @@ export default function MoadianWizardPage() {
   const loadUnsentInvoices = useCallback(async () => {
     setUnsentLoadError(null);
     try {
-      const [res, submissions] = await Promise.all([
-        listInvoices({ status: InvoiceStatus.ISSUED, limit: 50 }),
-        listMoadianSubmissions(),
-      ]);
+      const submissions = await listMoadianSubmissions();
       const completedOrInFlight = new Set(
         submissions
           .filter((s) => s.status === "QUEUED" || s.status === "SENT" || s.status === "SUCCESS")
           .map((s) => s.invoiceId),
       );
-      const pendingSales = res.data.filter(
+
+      let allIssuedInvoices: InvoiceResponseDto[] = [];
+      let page = 1;
+      const limit = 100;
+      let total = 0;
+      do {
+        const res = await listInvoices({ status: InvoiceStatus.ISSUED, page, limit });
+        allIssuedInvoices = allIssuedInvoices.concat(res.data);
+        total = res.total ?? allIssuedInvoices.length;
+        page++;
+      } while (allIssuedInvoices.length < total && page <= 20);
+
+      const pendingSales = allIssuedInvoices.filter(
         (inv) => inv.direction === InvoiceDirection.SALE && !completedOrInFlight.has(inv.id),
       );
       setUnsentInvoices(pendingSales);
@@ -200,7 +217,9 @@ export default function MoadianWizardPage() {
   }, [fetchStatusAndCreds, loadUnsentInvoices]);
 
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
+      isMountedRef.current = false;
       if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     };
   }, []);
@@ -273,6 +292,7 @@ export default function MoadianWizardPage() {
       });
 
       setCredential(updated);
+      setPrivKeyPemInput(""); // Clear private key from React memory after successful save
       setSuccessMsg("اطلاعات اتصال به سامانه مودیان با موفقیت ذخیره و اعتبارسنجی شد.");
       await fetchStatusAndCreds();
     } catch (err) {
@@ -286,6 +306,7 @@ export default function MoadianWizardPage() {
   const handleTestSubmit = async () => {
     if (!selectedInvoiceId) return;
     const targetId = selectedInvoiceId;
+    targetIdRef.current = targetId;
     if (pollTimerRef.current) {
       clearTimeout(pollTimerRef.current);
       pollTimerRef.current = null;
@@ -295,6 +316,7 @@ export default function MoadianWizardPage() {
     setSuccessMsg(null);
     try {
       const sub = await submitToMoadian(targetId);
+      if (!isMountedRef.current || targetIdRef.current !== targetId) return;
       setSubmissionResult(sub);
       setSuccessMsg("صورتحساب در صف ارسال سامانه مودیان قرار گرفت.");
 
@@ -303,9 +325,11 @@ export default function MoadianWizardPage() {
       let attempts = 0;
       const poll = () => {
         pollTimerRef.current = setTimeout(async () => {
+          if (!isMountedRef.current || targetIdRef.current !== targetId) return;
           try {
             attempts++;
             const current = await getMoadianSubmission(targetId);
+            if (!isMountedRef.current || targetIdRef.current !== targetId) return;
             setSubmissionResult(current);
             if (
               current.status === "SUCCESS" ||
@@ -322,16 +346,22 @@ export default function MoadianWizardPage() {
               poll();
             }
           } catch {
-            setPollingStatus(false);
-            pollTimerRef.current = null;
+            if (isMountedRef.current) {
+              setPollingStatus(false);
+              pollTimerRef.current = null;
+            }
           }
         }, 3000);
       };
       poll();
     } catch (err) {
-      setError(loadErrorMessage(err));
+      if (isMountedRef.current) {
+        setError(loadErrorMessage(err));
+      }
     } finally {
-      setSubmittingInvoice(false);
+      if (isMountedRef.current) {
+        setSubmittingInvoice(false);
+      }
     }
   };
 
@@ -945,7 +975,7 @@ export default function MoadianWizardPage() {
             </Card>
           )}
 
-          {/* گام ۴: تست ارسال در محیط آزمایشی */}
+          {/* گام ۴: آزمون ارسال صورتحساب و استعلام برخط */}
           {currentStep === 4 && (
             <Card>
               <CardHeader>
@@ -954,16 +984,44 @@ export default function MoadianWizardPage() {
                     <Send className="h-5 w-5 text-primary" />
                     <CardTitle>گام ۴: آزمون ارسال صورتحساب و استعلام برخط</CardTitle>
                   </div>
-                  <Badge variant="outline">POST /moadian/invoices/:id/submit</Badge>
+                  <Badge variant={isSandbox ? "outline" : "secondary"}>
+                    {isSandbox ? "محیط آزمایشی (سندباکس)" : "محیط عملیاتی (Production)"}
+                  </Badge>
                 </div>
                 <CardDescription>
-                  ارسال یک صورتحساب تستی به سامانه مودیان جهت اطمینان از صحت الگوریتم محاسبه TaxID، امضای JWS و تأیید ساختار بسته در سرور مالیاتی.
+                  {isSandbox
+                    ? "ارسال یک صورتحساب تستی به محیط سندباکس سامانه مودیان جهت اطمینان از صحت الگوریتم محاسبه TaxID، امضای JWS و تأیید ساختار بسته در سرور مالیاتی."
+                    : "ارسال رسمی صورتحساب به درگاه عملیاتی سامانه امور مالیاتی کشور با امضای دیجیتال معتبر."}
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-5 text-sm">
+                {/* هشدار محیط عملیاتی */}
+                {!isSandbox && credential?.baseUrl && (
+                  <Alert className="border-amber-500/50 bg-amber-500/10 text-amber-900 dark:text-amber-200">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    <AlertTitle>هشدار محیط عملیاتی (Production)</AlertTitle>
+                    <AlertDescription className="text-xs space-y-2">
+                      <p>
+                        آدرس سامانه بر روی محیط رسمی سازمان امور مالیاتی (
+                        <code dir="ltr" className="font-mono font-bold">{credential.baseUrl}</code>
+                        ) تنظیم شده است. با ارسال، صورتحساب انتخابی به عنوان یک سند مالی رسمی و قطعی در کارپوشه مؤدی ثبت خواهد شد.
+                      </p>
+                      <label className="flex items-center gap-2 cursor-pointer font-medium pt-1">
+                        <input
+                          type="checkbox"
+                          checked={confirmProductionSubmit}
+                          onChange={(e) => setConfirmProductionSubmit(e.target.checked)}
+                          className="rounded border-input text-primary focus:ring-primary h-4 w-4"
+                        />
+                        <span>تأیید می‌کنم که این یک ارسال رسمی به محیط عملیاتی است.</span>
+                      </label>
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 <div className="rounded-lg border bg-muted/20 p-4 space-y-3">
                   <div className="font-semibold text-foreground flex items-center justify-between">
-                    <span>انتخاب فاکتور صادرشده جهت تست ارسال:</span>
+                    <span>انتخاب فاکتور صادرشده جهت ارسال:</span>
                     <Badge variant="secondary">
                       {unsentLoadError
                         ? "وضعیت نامشخص"
@@ -988,7 +1046,7 @@ export default function MoadianWizardPage() {
                     </Alert>
                   ) : unsentInvoices.length === 0 ? (
                     <p className="text-muted-foreground text-xs">
-                      هیچ صورتحساب صادرشده‌ای یافت نشد. لطفاً ابتدا از منوی صورتحساب‌ها یک فاکتور تستی ثبت و صادر فرمایید.
+                      هیچ صورتحساب صادرشده‌ای یافت نشد. لطفاً ابتدا از منوی صورتحساب‌ها یک فاکتور ثبت و صادر فرمایید.
                     </p>
                   ) : (
                     <div className="flex flex-wrap items-center gap-3">
@@ -1010,18 +1068,27 @@ export default function MoadianWizardPage() {
 
                       <Button
                         onClick={handleTestSubmit}
-                        disabled={submittingInvoice || !selectedInvoiceId || !credential}
+                        disabled={
+                          submittingInvoice ||
+                          !selectedInvoiceId ||
+                          !credential ||
+                          (!isSandbox && !confirmProductionSubmit)
+                        }
                         className="gap-2"
                       >
                         <Send className="h-4 w-4" />
-                        {submittingInvoice ? "در حال ارسال به صف…" : "ارسال تست به مودیان"}
+                        {submittingInvoice
+                          ? "در حال ارسال به صف…"
+                          : isSandbox
+                          ? "ارسال تست به مودیان (سندباکس)"
+                          : "ارسال رسمی به سامانه مودیان"}
                       </Button>
                     </div>
                   )}
 
                   {!credential && (
                     <p className="text-xs text-destructive font-medium">
-                      توجه: برای ارسال تست، ابتدا باید اطلاعات اتصال در مرحله ۳ ثبت شده باشد.
+                      توجه: برای ارسال، ابتدا باید اطلاعات اتصال در مرحله ۳ ثبت شده باشد.
                     </p>
                   )}
                 </div>

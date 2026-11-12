@@ -617,15 +617,17 @@ function buildMoadian(
   const client = new MoadianApiClient(config, fakeMoadianServer(state));
   const repository = new InMemoryMoadianRepository();
   const taxComplianceRepository =
-    options.activeSigningKeyPem !== undefined
-      ? ({
+    (options.activeSigningKeyPem !== undefined
+      ? {
           findActiveKeyWithPrivate: jest.fn(async () =>
             options.activeSigningKeyPem
               ? { keyFingerprint: 'fp-active', privateKeyPem: options.activeSigningKeyPem }
               : null,
           ),
-        } as unknown as import('./repositories/tax-compliance.repository').TaxComplianceRepository)
-      : undefined;
+        }
+      : {
+          findActiveKeyWithPrivate: jest.fn(async () => null),
+        }) as unknown as import('./repositories/tax-compliance.repository').TaxComplianceRepository;
   const jobs: Array<{ name: string; data: unknown; opts: Record<string, unknown> }> = [];
   const queue = {
     add: jest.fn(async (name: string, data: unknown, opts: Record<string, unknown>) => {
