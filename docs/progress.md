@@ -81,3 +81,9 @@ Do not edit past entries — add a new one instead.
 - What changed: moved stray `.env` backup off the srv1 tree (deploys had refused since 11-01); #975 (hardcoded Kavenegar key removed), #976 (`iam.sh`), #977/#979/#980 (Antigravity A17/A20/A21, reviewed), #978 (34 stale files archived, wrong instructions fixed, team workflow doc).
 - Why: owner and collaborator share the repo and the Mac; agents kept reading stale "100% ready" files; the owner wants the repo public so `mahansudo` can join without a paid seat.
 - Follow-up: public-repo migration (STATE.md 2026-11-03, needs a permission mode that allows repo rename/create and srv1 writes); confirm the deploy of `main` passed; six unfinished local branches (bulk-import-streaming, format-logical-menus, issue-958/959/960) need issues or PRs.
+
+## 2026-11-12 — hub (Opus 5.5) — waves 9-12, review desk on Haiku/DeepSeek, Claude agents fixed blockers
+- What changed: #230 reached 29/29 (#737). Merged #786 (artifact upload no longer fails CI), #710, #765, #772, #740, #767, #777, Dependabot and legal relay batches; #736 #741 #761 #773 #785 queued. Sonnet agents fixed review blockers on #728 #736 #740 #763 #773 #781 #785 and built T94 (#791) and T96 (#792). Review desk now: Haiku CI triage, DeepSeek for routine reviews, Sonnet only to confirm critical PRs. Waves 9-12 posted on #592; deep research on electronic books, Moadian sandbox, payment gateways and trusted tax companies folded into the specs.
+- Why: review/fix was the bottleneck; Claude quota ran out mid-day, so Gemini lanes own all building and fixing again.
+- Follow-up: docs/HANDOFF_2026-11-12.md "Open for the next hub"; make the M1 gate blocking; #663 nginx -t.
+
