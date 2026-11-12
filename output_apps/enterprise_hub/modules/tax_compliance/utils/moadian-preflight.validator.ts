@@ -1,6 +1,5 @@
 import { InvoiceResponseDto } from '../../invoicing/dto/invoice-response.dto';
 import { Currency } from '../../currency/enums/currency.enum';
-import { parseScaled } from '../../accounting/money';
 import {
   computeLineMath,
   LINE_PRICE_EXTRA_DECIMALS,
