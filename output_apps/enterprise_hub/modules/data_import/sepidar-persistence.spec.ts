@@ -1,6 +1,8 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import 'reflect-metadata';
+import { BadRequestException, ConflictException, ValidationPipe } from '@nestjs/common';
 import { EntityManager, FindOperator } from 'typeorm';
 import { TenantScope } from '../access/services/tenant-scope';
+import { AccountType } from '../accounting/enums/accounting.enum';
 import { ChartOfAccountEntity } from '../accounting/entities/chart-of-account.entity';
 import { JournalEntryEntity } from '../accounting/entities/journal-entry.entity';
 import { JournalEntryLineEntity } from '../accounting/entities/journal-entry-line.entity';
@@ -8,6 +10,7 @@ import { minorToDecimal, parseMinor } from '../accounting/money';
 import { ChequeEventEntity } from '../cheques/entities/cheque-event.entity';
 import { ChequeEntity } from '../cheques/entities/cheque.entity';
 import { ChequesRepository } from '../cheques/repositories/cheques.repository';
+import { MAX_SEPIDAR_ARRAY_ITEMS, PersistSepidarDto } from './dto/sepidar-persist.dto';
 import { ImportMappingMemoryEntity } from './entities/import-mapping-memory.entity';
 import { PartyEntity } from '../parties/entities/party.entity';
 import { StockItemEntity } from '../inventory/entities/stock-item.entity';
@@ -21,6 +24,11 @@ import { SYNTHETIC_SEPIDAR_CHEQUES } from './__fixtures__/synthetic-sepidar-p2.f
 import { SepidarChequesFifoAdapter } from './migration/bak/sepidar-cheques-fifo.adapter';
 import { SepidarMappingAdapter } from './migration/bak/sepidar-mapping.adapter';
 import { SepidarPersistenceService } from './services/sepidar-persistence.service';
+
+const SYNTHETIC_FLOAT_TYPE_MAP: Record<string, AccountType> = {
+  'F-001': AccountType.EXPENSE,
+  'F-002': AccountType.EXPENSE,
+};
 
 function matchOperator(val: unknown, cond: unknown): boolean {
   if (cond && typeof cond === 'object' && '@instanceof' in (cond as Record<string, unknown>)) {
@@ -330,6 +338,7 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
       await expect(
         service.persistSepidarData(tenantId, {
           accounts: SYNTHETIC_SEPIDAR_ACCOUNTS,
+          accountTypeMap: SYNTHETIC_FLOAT_TYPE_MAP,
           openingVoucher: [
             { VoucherItemID: 1, AccountCode: '1010', Debit: 1000, Credit: 0 },
             { VoucherItemID: 2, AccountCode: '3010', Debit: 0, Credit: 1000 },
@@ -353,6 +362,7 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
         service.persistSepidarData(tenantId, {
           useSynthetic: false,
           accounts: SYNTHETIC_SEPIDAR_ACCOUNTS,
+          accountTypeMap: SYNTHETIC_FLOAT_TYPE_MAP,
           parties: SYNTHETIC_SEPIDAR_PARTIES,
           items: SYNTHETIC_SEPIDAR_ITEMS,
           openingVoucher: unbalancedVoucher,
@@ -370,6 +380,7 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
       await expect(
         service.persistSepidarData(tenantId, {
           accounts: SYNTHETIC_SEPIDAR_ACCOUNTS,
+          accountTypeMap: SYNTHETIC_FLOAT_TYPE_MAP,
           openingVoucher: [
             { VoucherItemID: 1, AccountCode: '999999', Debit: 1000, Credit: 0 },
             { VoucherItemID: 2, AccountCode: '3010', Debit: 0, Credit: 1000 },
@@ -429,6 +440,7 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
       await expect(
         service.persistSepidarData(tenantId, {
           accounts: SYNTHETIC_SEPIDAR_ACCOUNTS,
+          accountTypeMap: SYNTHETIC_FLOAT_TYPE_MAP,
           openingVoucher: [
             { VoucherItemID: 1, AccountCode: '1010', Debit: 1000.5, Credit: 0 },
             { VoucherItemID: 2, AccountCode: '3010', Debit: 0, Credit: 1000.5 },
@@ -455,6 +467,193 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
           accounts: [{ AccountID: 1, Code: '1010', Title: 'نام تغییریافته', Level: 1, ParentAccountID: null }],
         }),
       ).rejects.toThrow(ConflictException);
+    });
+
+    it('rejects openingDate drift (with & without Idempotency-Key) and attribute drift on party/item/cheque skips', async () => {
+      await service.persistSepidarData(
+        tenantId,
+        {
+          accounts: SYNTHETIC_SEPIDAR_ACCOUNTS,
+          accountTypeMap: SYNTHETIC_FLOAT_TYPE_MAP,
+          parties: [
+            {
+              PartyID: 1,
+              Code: 'P-DRIFT-1',
+              Title: 'مشتری تست',
+              IsCustomer: true,
+              IsVendor: false,
+              Phone: '02111112222',
+              EconomicCode: '411111111111',
+            },
+          ],
+          items: [
+            {
+              ItemID: 1,
+              Code: 'SKU-DRIFT-1',
+              Title: 'کالای تست',
+              Barcode: 'BAR-1',
+              UnitTitle: 'عدد',
+              SecondaryUnitTitle: 'کارتن',
+              UnitConversionRate: '12',
+            },
+          ],
+          openingDate: '2026-03-21',
+          openingVoucher: [
+            { VoucherItemID: 1, AccountCode: '1010', Debit: 1000, Credit: 0 },
+            { VoucherItemID: 2, AccountCode: '3010', Debit: 0, Credit: 1000 },
+          ],
+          cheques: [
+            {
+              ...SYNTHETIC_SEPIDAR_CHEQUES[0],
+              ChequeId: 901,
+              ChequeNumber: 'CHQ-DRIFT-1',
+              SayadNumber: '1111222233334444',
+              PartyName: 'فروشگاه نخست',
+              PartyCode: 'P-DRIFT-1',
+            },
+          ],
+        },
+        'drift-key-1',
+      );
+
+      // 1. openingDate change with same Idempotency-Key -> 409
+      await expect(
+        service.persistSepidarData(
+          tenantId,
+          {
+            accounts: SYNTHETIC_SEPIDAR_ACCOUNTS,
+            accountTypeMap: SYNTHETIC_FLOAT_TYPE_MAP,
+            openingDate: '2026-04-01',
+            openingVoucher: [
+              { VoucherItemID: 1, AccountCode: '1010', Debit: 1000, Credit: 0 },
+              { VoucherItemID: 2, AccountCode: '3010', Debit: 0, Credit: 1000 },
+            ],
+          },
+          'drift-key-1',
+        ),
+      ).rejects.toThrow(ConflictException);
+
+      // 2. openingDate change WITHOUT Idempotency-Key -> 409
+      await expect(
+        service.persistSepidarData(tenantId, {
+          accounts: SYNTHETIC_SEPIDAR_ACCOUNTS,
+          accountTypeMap: SYNTHETIC_FLOAT_TYPE_MAP,
+          openingDate: '2026-04-01',
+          openingVoucher: [
+            { VoucherItemID: 1, AccountCode: '1010', Debit: 1000, Credit: 0 },
+            { VoucherItemID: 2, AccountCode: '3010', Debit: 0, Credit: 1000 },
+          ],
+        }),
+      ).rejects.toThrow(ConflictException);
+
+      // 3. Party phone drift on skip (without Idempotency-Key) -> 409
+      await expect(
+        service.persistSepidarData(tenantId, {
+          parties: [
+            {
+              PartyID: 1,
+              Code: 'P-DRIFT-1',
+              Title: 'مشتری تست',
+              IsCustomer: true,
+              IsVendor: false,
+              Phone: '02199998888',
+              EconomicCode: '411111111111',
+            },
+          ],
+        }),
+      ).rejects.toThrow(ConflictException);
+
+      // 4. Item unitRatio drift on skip (without Idempotency-Key) -> 409
+      await expect(
+        service.persistSepidarData(tenantId, {
+          items: [
+            {
+              ItemID: 1,
+              Code: 'SKU-DRIFT-1',
+              Title: 'کالای تست',
+              Barcode: 'BAR-1',
+              UnitTitle: 'عدد',
+              SecondaryUnitTitle: 'کارتن',
+              UnitConversionRate: '24',
+            },
+          ],
+        }),
+      ).rejects.toThrow(ConflictException);
+
+      // 5. Cheque partyName drift on skip (without Idempotency-Key) -> 409
+      await expect(
+        service.persistSepidarData(tenantId, {
+          cheques: [
+            {
+              ...SYNTHETIC_SEPIDAR_CHEQUES[0],
+              ChequeId: 901,
+              ChequeNumber: 'CHQ-DRIFT-1',
+              SayadNumber: '1111222233334444',
+              PartyName: 'نام متفاوت',
+              PartyCode: 'P-DRIFT-1',
+            },
+          ],
+        }),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('supports explicit AccountType override, rejects unknown prefix without AccountType, and validates DTO bounds/dates/booleans', async () => {
+      await expect(
+        service.persistSepidarData(tenantId, {
+          accounts: [
+            { AccountID: 1, Code: 'X100', Title: 'Unknown Prefix', Level: 1, ParentAccountID: null },
+          ],
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      await service.persistSepidarData(tenantId, {
+        accounts: [
+          {
+            AccountID: 1,
+            Code: 'X100',
+            Title: 'Explicit Liability',
+            Level: 1,
+            ParentAccountID: null,
+            AccountType: AccountType.LIABILITY,
+          },
+        ],
+      });
+      expect(accountsStore[0].accountType).toBe(AccountType.LIABILITY);
+
+      const pipe = new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+        transformOptions: { enableImplicitConversion: true },
+      });
+
+      await expect(
+        pipe.transform(
+          { useSynthetic: 'false' },
+          { type: 'body', metatype: PersistSepidarDto },
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        pipe.transform(
+          { openingDate: '2026-13-45', useSynthetic: false },
+          { type: 'body', metatype: PersistSepidarDto },
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      const oversized = Array.from({ length: MAX_SEPIDAR_ARRAY_ITEMS + 1 }, (_, i) => ({
+        AccountID: i + 1,
+        Code: String(1100 + i),
+        Title: `Acc ${i}`,
+        Level: 3,
+        ParentAccountID: null,
+      }));
+      await expect(
+        pipe.transform(
+          { accounts: oversized },
+          { type: 'body', metatype: PersistSepidarDto },
+        ),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });

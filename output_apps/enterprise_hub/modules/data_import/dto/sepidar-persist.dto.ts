@@ -1,9 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
-  IsDateString,
   IsEnum,
   IsIn,
   IsInt,
@@ -15,9 +15,61 @@ import {
   Max,
   MaxLength,
   Min,
+  Validate,
   ValidateNested,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
 } from 'class-validator';
+import { AccountType } from '../../accounting/enums/accounting.enum';
 import { CustomerGroup } from '../../parties/enums/customer-group.enum';
+
+export const MAX_SEPIDAR_ARRAY_ITEMS = 200;
+
+/** Preserves raw JSON boolean so enableImplicitConversion does not turn "false" into true. */
+const keepRawBoolean = ({
+  obj,
+  key,
+}: {
+  obj?: Record<string, unknown>;
+  key: string;
+}): unknown => (obj ? obj[key] : undefined);
+
+@ValidatorConstraint({ name: 'sepidarIsoCalendarDate', async: false })
+class IsoCalendarDateConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown): boolean {
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return false;
+    }
+    const [y, m, d] = value.split('-').map((part) => Number(part));
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    return (
+      dt.getUTCFullYear() === y &&
+      dt.getUTCMonth() === m - 1 &&
+      dt.getUTCDate() === d
+    );
+  }
+
+  defaultMessage(): string {
+    return 'Date must be a valid Gregorian calendar date in YYYY-MM-DD format';
+  }
+}
+
+@ValidatorConstraint({ name: 'sepidarAccountTypeMap', async: false })
+class AccountTypeMapConstraint implements ValidatorConstraintInterface {
+  private readonly validValues = new Set<string>(Object.values(AccountType));
+
+  validate(value: unknown): boolean {
+    if (value === undefined) return true;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    return Object.values(value as Record<string, unknown>).every(
+      (v) => typeof v === 'string' && this.validValues.has(v),
+    );
+  }
+
+  defaultMessage(): string {
+    return 'accountTypeMap must map account codes to valid AccountType enum values';
+  }
+}
 
 export class SepidarAccountDto {
   @ApiProperty()
@@ -49,8 +101,17 @@ export class SepidarAccountDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @Transform(keepRawBoolean)
   @IsBoolean()
   IsFloatingDetail?: boolean;
+
+  @ApiPropertyOptional({
+    enum: AccountType,
+    description: 'نوع صریح حساب؛ در صورت نبود از گروه حساب استاندارد ایران استنتاج می‌شود',
+  })
+  @IsOptional()
+  @IsEnum(AccountType)
+  AccountType?: AccountType;
 }
 
 export class SepidarPartyDto {
@@ -71,10 +132,12 @@ export class SepidarPartyDto {
   Title: string;
 
   @ApiProperty()
+  @Transform(keepRawBoolean)
   @IsBoolean()
   IsCustomer: boolean;
 
   @ApiProperty()
+  @Transform(keepRawBoolean)
   @IsBoolean()
   IsVendor: boolean;
 
@@ -225,11 +288,13 @@ export class SepidarChequeDto {
   @ApiProperty()
   @IsString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'IssueDate must be YYYY-MM-DD' })
+  @Validate(IsoCalendarDateConstraint)
   IssueDate: string;
 
   @ApiProperty()
   @IsString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'DueDate must be YYYY-MM-DD' })
+  @Validate(IsoCalendarDateConstraint)
   DueDate: string;
 
   @ApiProperty()
@@ -299,12 +364,15 @@ export class PersistSepidarDto {
     default: false,
   })
   @IsOptional()
+  @Transform(keepRawBoolean)
   @IsBoolean()
   useSynthetic?: boolean;
 
   @ApiPropertyOptional({ description: 'تاریخ سند افتتاحیه سپیدار (ISO YYYY-MM-DD)' })
   @IsOptional()
-  @IsDateString()
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'openingDate must be YYYY-MM-DD' })
+  @Validate(IsoCalendarDateConstraint)
   openingDate?: string;
 
   @ApiPropertyOptional({ description: 'گروه پیش‌فرض طرف‌حساب‌های واردشده', enum: CustomerGroup })
@@ -312,37 +380,49 @@ export class PersistSepidarDto {
   @IsEnum(CustomerGroup)
   customerGroup?: CustomerGroup;
 
-  @ApiPropertyOptional({ description: 'فهرست خام حساب‌های سپیدار', type: [SepidarAccountDto] })
+  @ApiPropertyOptional({
+    description: 'نگاشت صریح کد حساب به نوع حساب (برای کدهای غیراستاندارد یا بازنویسی پیش‌فرض)',
+  })
+  @IsOptional()
+  @Validate(AccountTypeMapConstraint)
+  accountTypeMap?: Record<string, AccountType>;
+
+  @ApiPropertyOptional({ description: 'فهرست خام حساب‌های سپیدار', type: [SepidarAccountDto], maxItems: MAX_SEPIDAR_ARRAY_ITEMS })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(MAX_SEPIDAR_ARRAY_ITEMS)
   @ValidateNested({ each: true })
   @Type(() => SepidarAccountDto)
   accounts?: SepidarAccountDto[];
 
-  @ApiPropertyOptional({ description: 'فهرست خام طرف‌حساب‌های سپیدار', type: [SepidarPartyDto] })
+  @ApiPropertyOptional({ description: 'فهرست خام طرف‌حساب‌های سپیدار', type: [SepidarPartyDto], maxItems: MAX_SEPIDAR_ARRAY_ITEMS })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(MAX_SEPIDAR_ARRAY_ITEMS)
   @ValidateNested({ each: true })
   @Type(() => SepidarPartyDto)
   parties?: SepidarPartyDto[];
 
-  @ApiPropertyOptional({ description: 'فهرست خام کالاهای سپیدار', type: [SepidarItemDto] })
+  @ApiPropertyOptional({ description: 'فهرست خام کالاهای سپیدار', type: [SepidarItemDto], maxItems: MAX_SEPIDAR_ARRAY_ITEMS })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(MAX_SEPIDAR_ARRAY_ITEMS)
   @ValidateNested({ each: true })
   @Type(() => SepidarItemDto)
   items?: SepidarItemDto[];
 
-  @ApiPropertyOptional({ description: 'فهرست خام سطرهای سند افتتاحیه سپیدار', type: [SepidarVoucherItemDto] })
+  @ApiPropertyOptional({ description: 'فهرست خام سطرهای سند افتتاحیه سپیدار', type: [SepidarVoucherItemDto], maxItems: MAX_SEPIDAR_ARRAY_ITEMS })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(MAX_SEPIDAR_ARRAY_ITEMS)
   @ValidateNested({ each: true })
   @Type(() => SepidarVoucherItemDto)
   openingVoucher?: SepidarVoucherItemDto[];
 
-  @ApiPropertyOptional({ description: 'فهرست خام چک‌های سپیدار', type: [SepidarChequeDto] })
+  @ApiPropertyOptional({ description: 'فهرست خام چک‌های سپیدار', type: [SepidarChequeDto], maxItems: MAX_SEPIDAR_ARRAY_ITEMS })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(MAX_SEPIDAR_ARRAY_ITEMS)
   @ValidateNested({ each: true })
   @Type(() => SepidarChequeDto)
   cheques?: SepidarChequeDto[];
