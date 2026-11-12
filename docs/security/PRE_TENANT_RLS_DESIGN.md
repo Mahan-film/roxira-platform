@@ -22,7 +22,7 @@ Applying `TENANT_MATCH` to these 8 tables without a dedicated design immediately
 1. **Login Failure**: A user submitting a phone number (`09...`), username, or login email has not yet chosen or authenticated into a tenant. With `TENANT_MATCH`, queries execute with `app.tenant_id = NULL`, returning 0 rows.
 2. **Refresh Failure**: Refresh token rotation passes only an opaque `token_hash`. The server cannot know which tenant the session belongs to until after the token record is retrieved.
 3. **Invitation Acceptance Failure**: An invite link (`/invite?token=...`) is accessed by an unauthenticated or newly registering user. The tenant ID is embedded in the invitation record itself.
-4. **Public Form Failure**: Public web visitors submitting `contact_messages` or `enterprise_inquiries` do not belong to a tenant (`tenant_id` is NULL).
+4. **Public Form Failure**: Public web visitors submitting `enterprise_inquiries` do not belong to a tenant (`tenant_id` is NULL), whereas CRM `contact_messages` records correspondence under an active tenant (`tenant_id` must match `app.tenant_id`).
 
 This document establishes the official security architecture and RLS policy model for all 8 pre-tenant tables, pairing **granular PostgreSQL RLS policies** with **`SECURITY DEFINER` lookup functions** owned by `postgres`.
 
@@ -55,7 +55,7 @@ This document establishes the official security architecture and RLS policy mode
 | 4 | `tenant_invitations` | `id`, `tenant_id`, `token_hash`, `email`, `role_key`, `accepted_at` | Invite preview & acceptance by token hash | Admin listing pending invites (`listPending`) |
 | 5 | `tenant_module_entitlements` | `tenant_id`, `module`, `enabled`, `updated_at` | Platform bootstrap / system licensing check | Tenant entitlement query |
 | 6 | `tenant_module_requests` | `id`, `tenant_id`, `module`, `requested_by`, `status` | None (always tenant-scoped) | Requesting a new module, checking request status |
-| 7 | `contact_messages` | `id`, `tenant_id`, `sender_name`, `sender_phone`, `message`, `lead_id` | Public contact form submission | CRM team viewing inquiries / leads |
+| 7 | `contact_messages` | `id`, `tenant_id`, `sender_name`, `sender_phone`, `message`, `lead_id` | CRM contact message insert under active tenant | CRM team viewing inquiries / leads |
 | 8 | `enterprise_inquiries` | `id`, `tenant_id`, `name`, `phone`, `email`, `company`, `status` | Public enterprise onboarding inquiry | Backoffice / sales triage |
 
 ---
@@ -571,7 +571,7 @@ Every **by-id** or **by-tenant** `SECURITY DEFINER` function (`lookup_user_by_id
 
 ## 6. Migration Rollout & Reversibility
 
-1. **Migration Script**: `output_apps/enterprise_hub/migrations/1789900003800-EnableRlsPreTenantTables.ts`
+1. **Migration Script**: `output_apps/enterprise_hub/migrations/1789900004100-EnableRlsPreTenantTables.ts`
 2. **`up()`**:
    - Creates atomic `SECURITY DEFINER` lookup and mutation functions owned by a superuser (`postgres` / `enterprise_admin` / migration runner).
    - Revokes execute from `PUBLIC` and grants execute permissions to `roxira_app`.

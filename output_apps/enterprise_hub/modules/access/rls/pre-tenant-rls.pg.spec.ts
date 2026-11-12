@@ -21,9 +21,9 @@ import 'reflect-metadata';
 import * as path from 'path';
 import { DataSource } from 'typeorm';
 import {
-  EnableRlsPreTenantTables1789900003800,
+  EnableRlsPreTenantTables1789900004100,
   PRE_TENANT_RLS_TABLES,
-} from '../../../migrations/1789900003800-EnableRlsPreTenantTables';
+} from '../../../migrations/1789900004100-EnableRlsPreTenantTables';
 import { AuthRepository } from '../../auth/repositories/auth.repository';
 import { RefreshTokenRepository } from '../../auth/repositories/refresh-token.repository';
 import { SessionCheckRepository } from '../repositories/session-check.repository';
@@ -403,7 +403,7 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     expect(openRequests.some((r) => r.id === req.id)).toBe(true);
   });
 
-  it('allows public anonymous submissions for contact_messages and enterprise_inquiries', async () => {
+  it('allows public anonymous submissions for enterprise_inquiries and tenant-scoped contact_messages', async () => {
     const nonAdminId = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
     const adminId = 'dddddddd-1111-4111-8111-dddddddddddd';
     await owner.query(`
@@ -506,7 +506,7 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
         tenantId: T1,
         name: 'Spoofed Prospect',
       }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/different tenant/);
 
     // 4. Tenant 2 cannot see Tenant 1 contact messages
     await scope.run(T2, async (manager) => {
@@ -611,7 +611,7 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
   });
 
   it('reversibility: migration down() and up() work cleanly', async () => {
-    const migration = new EnableRlsPreTenantTables1789900003800();
+    const migration = new EnableRlsPreTenantTables1789900004100();
     const qr = owner.createQueryRunner();
 
     try {

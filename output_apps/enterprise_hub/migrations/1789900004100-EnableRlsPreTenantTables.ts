@@ -14,7 +14,8 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  *   8. enterprise_inquiries
  *
  * Enables FORCE RLS on the 8 pre-tenant and auth tables while safeguarding
- * pre-auth login, token rotation, invite redemption, and anonymous public form submissions
+ * pre-auth login, token rotation, invite redemption, anonymous enterprise inquiry submissions,
+ * and tenant-scoped contact message creation
  * (the remaining 29 tables are tracked in RLS_PENDING_ALLOWLIST for per-module rollouts).
  */
 export const PRE_TENANT_RLS_TABLES = [
@@ -28,8 +29,8 @@ export const PRE_TENANT_RLS_TABLES = [
   'enterprise_inquiries',
 ] as const;
 
-export class EnableRlsPreTenantTables1789900003800 implements MigrationInterface {
-  name = 'EnableRlsPreTenantTables1789900003800';
+export class EnableRlsPreTenantTables1789900004100 implements MigrationInterface {
+  name = 'EnableRlsPreTenantTables1789900004100';
 
   public async up(q: QueryRunner): Promise<void> {
     // -------------------------------------------------------------------------
