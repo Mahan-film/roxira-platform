@@ -338,6 +338,7 @@ export class MoadianService implements OnModuleInit {
 
     const fields: Partial<MoadianSubmissionEntity> = {
       invoiceId,
+      ins: subject,
       uid: randomUUID(),
       taxId: packet.header.taxid,
       serial: String(serial),
