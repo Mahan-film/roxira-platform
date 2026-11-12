@@ -446,6 +446,11 @@ class InMemoryMoadianRepository {
   async findSubmissionByInvoice(tenantId: string, invoiceId: string) {
     return this.submissions.find((s) => s.tenantId === tenantId && s.invoiceId === invoiceId) ?? null;
   }
+  async listSubmissions(tenantId: string) {
+    return this.submissions
+      .filter((s) => s.tenantId === tenantId)
+      .sort((a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime());
+  }
   async findSubmissionById(tenantId: string, id: string) {
     return this.submissions.find((s) => s.tenantId === tenantId && s.id === id) ?? null;
   }
@@ -587,7 +592,13 @@ function fakeMoadianServer(state: FakeServerState): FetchLike {
   };
 }
 
-function buildMoadian(options: { enabled?: boolean; invoices?: InvoiceResponseDto[] } = {}) {
+function buildMoadian(
+  options: {
+    enabled?: boolean;
+    invoices?: InvoiceResponseDto[];
+    activeSigningKeyPem?: string | null;
+  } = {},
+) {
   const env: Record<string, string> = {
     [MOADIAN_ENV.ENABLED]: options.enabled === false ? 'false' : 'true',
     [MOADIAN_ENV.KEY_ENCRYPTION_KEY]: masterKeyB64,
@@ -605,6 +616,16 @@ function buildMoadian(options: { enabled?: boolean; invoices?: InvoiceResponseDt
   };
   const client = new MoadianApiClient(config, fakeMoadianServer(state));
   const repository = new InMemoryMoadianRepository();
+  const taxComplianceRepository =
+    options.activeSigningKeyPem !== undefined
+      ? ({
+          findActiveKeyWithPrivate: jest.fn(async () =>
+            options.activeSigningKeyPem
+              ? { keyFingerprint: 'fp-active', privateKeyPem: options.activeSigningKeyPem }
+              : null,
+          ),
+        } as unknown as import('./repositories/tax-compliance.repository').TaxComplianceRepository)
+      : undefined;
   const jobs: Array<{ name: string; data: unknown; opts: Record<string, unknown> }> = [];
   const queue = {
     add: jest.fn(async (name: string, data: unknown, opts: Record<string, unknown>) => {
@@ -625,8 +646,9 @@ function buildMoadian(options: { enabled?: boolean; invoices?: InvoiceResponseDt
     client,
     config,
     queue,
+    taxComplianceRepository,
   );
-  return { service, repository, state, jobs, env };
+  return { service, repository, state, jobs, env, taxComplianceRepository };
 }
 
 const credentialDto = () => ({
@@ -988,6 +1010,7 @@ describe('Moadian — tenant isolation', () => {
       createQueryBuilder: jest.fn(),
     };
     const submissions = {
+      find: jest.fn(async () => []),
       findOne: jest.fn(async () => null),
       create: jest.fn((v) => v),
       save: jest.fn(async (v) => v),
@@ -1004,6 +1027,11 @@ describe('Moadian — tenant isolation', () => {
     await repo.findSubmissionByInvoice(TENANT_A, INVOICE_A);
     expect(submissions.findOne).toHaveBeenLastCalledWith({
       where: { tenantId: TENANT_A, invoiceId: INVOICE_A },
+    });
+    await repo.listSubmissions(TENANT_A);
+    expect(submissions.find).toHaveBeenLastCalledWith({
+      where: { tenantId: TENANT_A },
+      order: { updatedAt: 'DESC' },
     });
     await repo.findSubmissionById(TENANT_A, 'sub-1');
     expect(submissions.findOne).toHaveBeenLastCalledWith({ where: { tenantId: TENANT_A, id: 'sub-1' } });
@@ -1036,6 +1064,41 @@ describe('Moadian — tenant isolation', () => {
     await expect(controller.getCredential(owner)).resolves.toMatchObject({ memoryId: 'A1B2C3' });
     const otherOwner = requestWith({ tenantId: TENANT_B, role: UserRole.USER, tenantRole: TenantRole.OWNER });
     await expect(controller.getCredential(otherOwner)).rejects.toBeInstanceOf(NotFoundException);
+
+    await expect(controller.listSubmissions(owner)).resolves.toEqual([]);
+  });
+
+  it('putCredential supports useActiveSigningKey and rejects when active key is absent or mismatched', async () => {
+    const { service } = buildMoadian({ activeSigningKeyPem: tenantKeys.privateKeyPem });
+    const saved = await service.putCredential(TENANT_A, {
+      memoryId: 'a1b2c3',
+      economicCode: '10101010101',
+      certificatePem: tenantKeys.certificatePem,
+      useActiveSigningKey: true,
+      settlementMethod: MoadianSettlementMethod.CREDIT,
+    });
+    expect(saved.memoryId).toBe('A1B2C3');
+    expect(saved.settlementMethod).toBe(MoadianSettlementMethod.CREDIT);
+
+    const noKey = buildMoadian({ activeSigningKeyPem: null });
+    await expect(
+      noKey.service.putCredential(TENANT_A, {
+        memoryId: 'a1b2c3',
+        economicCode: '10101010101',
+        certificatePem: tenantKeys.certificatePem,
+        useActiveSigningKey: true,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    const wrongKey = buildMoadian({ activeSigningKeyPem: testKeys('other.example').privateKeyPem });
+    await expect(
+      wrongKey.service.putCredential(TENANT_A, {
+        memoryId: 'a1b2c3',
+        economicCode: '10101010101',
+        certificatePem: tenantKeys.certificatePem,
+        useActiveSigningKey: true,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });
 

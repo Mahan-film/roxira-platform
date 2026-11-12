@@ -122,6 +122,12 @@ export class MoadianRepository {
     );
   }
 
+  async listSubmissions(tenantId: string): Promise<MoadianSubmissionEntity[]> {
+    return this.withSubmissions(tenantId, (repo) =>
+      repo.find({ where: { tenantId }, order: { updatedAt: 'DESC' } }),
+    );
+  }
+
   async findSubmissionById(
     tenantId: string,
     id: string,

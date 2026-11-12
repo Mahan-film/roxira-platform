@@ -42,6 +42,11 @@ export function submitToMoadian(invoiceId: string, signal?: AbortSignal) {
   );
 }
 
+/** GET moadian/submissions — list submission statuses for current tenant. */
+export function listMoadianSubmissions(signal?: AbortSignal) {
+  return apiRequest<MoadianSubmissionResponse[]>(`${BASE}/moadian/submissions`, { signal });
+}
+
 /** GET moadian/invoices/:id/status — 404 means never submitted. */
 export function getMoadianSubmission(invoiceId: string, signal?: AbortSignal) {
   return apiRequest<MoadianSubmissionResponse>(

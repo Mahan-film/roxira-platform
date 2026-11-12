@@ -1,8 +1,8 @@
 /**
- * محاسبه و هشدار مهلت قانونی ارسال صورتحساب‌ها به سامانه مؤدیان (T95 / ماده ۱ قانون پایانه‌های فروشگاهی).
+ * محاسبه و هشدار مهلت ارسال صورتحساب‌ها به سامانه مؤدیان (بر پایه آستانه روز تقویمی قابل تنظیم).
  *
- * طبق مقررات سازمان امور مالیاتی، مؤدیان موظفند حداکثر ظرف مهلت قانونی مشخص‌شده
- * (پیش‌فرض ۷ روز کاری/تقویمی) صورتحساب‌های الکترونیکی خود را به سامانه ارسال نمایند.
+ * مهلت پیش‌فرض ۷ روز تقویمی تنظیم شده و کاربر می‌تواند آستانه هشدار را تغییر دهد؛
+ * وضعیت روزهای کاری/تعطیل رسمی بسته به بخشنامه‌های سازمان امور مالیاتی متفاوت است.
  */
 
 export const MOADIAN_DEFAULT_DEADLINE_DAYS = 7;
@@ -23,9 +23,9 @@ export interface MoadianInvoiceDeadlineView {
 
 export interface UnsentInvoiceInput {
   id: string;
-  invoiceNumber: string;
+  invoiceNumber?: string;
   issueDate: string;
-  total?: number | string | bigint;
+  total?: number | string;
   buyerName?: string | null;
   status?: string;
   direction?: string;
@@ -60,22 +60,22 @@ export function calculateMoadianDeadline(
     urgency = 'EXPIRED';
     statusLabel = 'منقضی شده';
     badgeVariant = 'destructive';
-    description = `مهلت قانونی ارسال ${Math.abs(remainingDays)} روز پیش به پایان رسیده است (مشمول جریمه ماده ۲۲).`;
+    description = `آستانه ${safeDeadlineDays} روز تقویمی ارسال ${Math.abs(remainingDays)} روز پیش به پایان رسیده است.`;
   } else if (remainingDays === 0) {
     urgency = 'CRITICAL';
     statusLabel = 'روز آخر مهلت';
     badgeVariant = 'destructive';
-    description = 'امروز آخرین روز مهلت قانونی ارسال به سامانه مؤدیان است.';
+    description = 'امروز آخرین روز مهلت تنظیم‌شده برای ارسال به سامانه مؤدیان است.';
   } else if (remainingDays <= 2) {
     urgency = 'WARNING';
     statusLabel = `${remainingDays} روز باقی‌مانده`;
     badgeVariant = 'outline';
-    description = `تنها ${remainingDays} روز تا پایان مهلت ارسال به سامانه مؤدیان باقی است.`;
+    description = `تنها ${remainingDays} روز تا پایان مهلت تنظیم‌شده برای ارسال به سامانه مؤدیان باقی است.`;
   } else {
     urgency = 'NORMAL';
     statusLabel = `${remainingDays} روز باقی‌مانده`;
     badgeVariant = 'secondary';
-    description = `مهلت قانونی (${safeDeadlineDays} روزه) برقرار است.`;
+    description = `مهلت ارسال (${safeDeadlineDays} روز تقویمی) برقرار است.`;
   }
 
   return {

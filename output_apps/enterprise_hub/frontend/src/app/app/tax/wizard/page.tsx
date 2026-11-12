@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  AlertCircle,
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
@@ -12,7 +11,6 @@ import {
   Copy,
   Download,
   ExternalLink,
-  HelpCircle,
   Key,
   RefreshCw,
   Send,
@@ -22,14 +20,13 @@ import {
 
 import {
   ErrorNotice,
-  LoadingLine,
   PageHeader,
   loadErrorMessage,
 } from "@/components/app/app-ui";
 import { EnterpriseRouteGuard } from "@/components/auth/enterprise-route-guard";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -54,22 +51,27 @@ import {
   getMoadianCredential,
   getMoadianStatus,
   getMoadianSubmission,
+  listMoadianSubmissions,
   putMoadianCredential,
   submitToMoadian,
 } from "@/lib/api/moadian-seasonal-client";
 import {
-  generateCertificateRequest,
   generateKeyPair,
+  getActiveSigningKey,
 } from "@/lib/api/tax-compliance-client";
 import { formatJalaliDate, formatMoneyRial } from "@/lib/fa-format";
 import {
-  calculateMoadianDeadline,
   MOADIAN_DEFAULT_DEADLINE_DAYS,
   sortUnsentInvoicesByUrgency,
   type UnsentInvoiceInput,
 } from "@/lib/moadian-send-deadline";
-import { InvoiceStatus, type InvoiceResponseDto } from "@/types/invoicing";
 import {
+  InvoiceDirection,
+  InvoiceStatus,
+  type InvoiceResponseDto,
+} from "@/types/invoicing";
+import {
+  MOADIAN_SETTLEMENT_LABELS,
   MOADIAN_STATUS_LABELS,
   type MoadianCredentialResponseDto,
   type MoadianSettlementMethod,
@@ -109,8 +111,9 @@ export default function MoadianWizardPage() {
   const [economicCodeInput, setEconomicCodeInput] = useState("");
   const [certPemInput, setCertPemInput] = useState("");
   const [privKeyPemInput, setPrivKeyPemInput] = useState("");
+  const [useActiveSigningKey, setUseActiveSigningKey] = useState(false);
   const [defaultSstidInput, setDefaultSstidInput] = useState("");
-  const [settlementMethodInput, setSettlementMethodInput] = useState<MoadianSettlementMethod>("CASH");
+  const [settlementMethodInput, setSettlementMethodInput] = useState<MoadianSettlementMethod>(1);
   const [savingCred, setSavingCred] = useState(false);
 
   // مرحله ۴: تست ارسال
@@ -121,24 +124,34 @@ export default function MoadianWizardPage() {
   const [pollingStatus, setPollingStatus] = useState(false);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // بخش پایش مهلت قانونی (ماده ۱ و ۲۲)
+  // بخش پایش مهلت ارسال (آستانه قابل تنظیم)
   const [deadlineDays, setDeadlineDays] = useState(MOADIAN_DEFAULT_DEADLINE_DAYS);
 
   const fetchStatusAndCreds = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [st, cr] = await Promise.all([
+      const [st, cr, activeKey] = await Promise.all([
         getMoadianStatus().catch(() => null),
         getMoadianCredential().catch(() => null),
+        getActiveSigningKey().catch(() => null),
       ]);
       setStatus(st);
       setCredential(cr);
+      if (activeKey) {
+        setGeneratedKey((prev) => prev ?? activeKey);
+        if (activeKey.certificateRequestPem) {
+          setGeneratedCsr((prev) => prev ?? activeKey.certificateRequestPem);
+        }
+        setUseActiveSigningKey(true);
+      }
       if (cr) {
         setMemoryIdInput(cr.memoryId || "");
         setEconomicCodeInput(cr.economicCode || "");
         if (cr.defaultSstid) setDefaultSstidInput(cr.defaultSstid);
-        if (cr.settlementMethod) setSettlementMethodInput(cr.settlementMethod);
+        if (cr.settlementMethod) {
+          setSettlementMethodInput(Number(cr.settlementMethod) as MoadianSettlementMethod);
+        }
       }
     } catch (err) {
       setError(loadErrorMessage(err));
@@ -149,23 +162,41 @@ export default function MoadianWizardPage() {
 
   const loadUnsentInvoices = useCallback(async () => {
     try {
-      const res = await listInvoices({ status: InvoiceStatus.ISSUED, limit: 50 });
-      setUnsentInvoices(res.data);
-      if (res.data.length > 0 && !selectedInvoiceId) {
-        setSelectedInvoiceId(res.data[0].id);
+      const [res, submissions] = await Promise.all([
+        listInvoices({ status: InvoiceStatus.ISSUED, limit: 50 }),
+        listMoadianSubmissions().catch(() => [] as MoadianSubmissionResponse[]),
+      ]);
+      const completedOrInFlight = new Set(
+        submissions
+          .filter((s) => s.status === "QUEUED" || s.status === "SENT" || s.status === "SUCCESS")
+          .map((s) => s.invoiceId),
+      );
+      const pendingSales = res.data.filter(
+        (inv) => inv.direction === InvoiceDirection.SALE && !completedOrInFlight.has(inv.id),
+      );
+      setUnsentInvoices(pendingSales);
+      if (pendingSales.length > 0) {
+        setSelectedInvoiceId((prev) =>
+          prev && pendingSales.some((inv) => inv.id === prev) ? prev : pendingSales[0].id,
+        );
       }
     } catch {
       // در صورت خطا در لیست صورتحساب‌ها، جریان اصلی ویزارد مختل نمی‌شود
     }
-  }, [selectedInvoiceId]);
+  }, []);
 
   useEffect(() => {
-    void fetchStatusAndCreds();
-    void loadUnsentInvoices();
+    void Promise.resolve().then(() => {
+      void fetchStatusAndCreds();
+      void loadUnsentInvoices();
+    });
+  }, [fetchStatusAndCreds, loadUnsentInvoices]);
+
+  useEffect(() => {
     return () => {
       if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     };
-  }, [fetchStatusAndCreds, loadUnsentInvoices]);
+  }, []);
 
   // تولید زوج‌کلید و CSR
   const handleGenerateKeyAndCsr = async () => {
@@ -187,10 +218,8 @@ export default function MoadianWizardPage() {
       });
 
       setGeneratedKey(keyRes);
-
-      // تولید مستقیم CSR
-      const csrRes = await generateCertificateRequest({ subject });
-      setGeneratedCsr(csrRes.certificateRequestPem);
+      setGeneratedCsr(keyRes.certificateRequestPem ?? null);
+      setUseActiveSigningKey(true);
       setSuccessMsg("زوج‌کلید مالیاتی و فایل CSR با موفقیت تولید شدند.");
     } catch (err) {
       setError(loadErrorMessage(err));
@@ -216,15 +245,17 @@ export default function MoadianWizardPage() {
       if (!certPemInput.includes("-----BEGIN CERTIFICATE-----")) {
         throw new Error("گواهی باید دارای قالب معتبر PEM (شامل -----BEGIN CERTIFICATE-----) باشد.");
       }
-      if (!privKeyPemInput.includes("PRIVATE KEY-----")) {
-        throw new Error("کلید خصوصی باید دارای قالب معتبر PEM باشد.");
+      const trimmedKey = privKeyPemInput.trim();
+      if (!useActiveSigningKey && !trimmedKey.includes("PRIVATE KEY-----")) {
+        throw new Error("کلید خصوصی باید دارای قالب معتبر PEM باشد یا گزینه کلید فعال سرور را انتخاب کنید.");
       }
 
       const updated = await putMoadianCredential({
         memoryId: memId,
         economicCode: econ,
         certificatePem: certPemInput.trim(),
-        privateKeyPem: privKeyPemInput.trim(),
+        useActiveSigningKey: useActiveSigningKey && !trimmedKey ? true : undefined,
+        privateKeyPem: trimmedKey || undefined,
         defaultSstid: defaultSstidInput.trim() || undefined,
         settlementMethod: settlementMethodInput,
       });
@@ -242,11 +273,16 @@ export default function MoadianWizardPage() {
   // ارسال تست فاکتور به مودیان
   const handleTestSubmit = async () => {
     if (!selectedInvoiceId) return;
+    const targetId = selectedInvoiceId;
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
     setSubmittingInvoice(true);
     setError(null);
     setSuccessMsg(null);
     try {
-      const sub = await submitToMoadian(selectedInvoiceId);
+      const sub = await submitToMoadian(targetId);
       setSubmissionResult(sub);
       setSuccessMsg("صورتحساب در صف ارسال سامانه مودیان قرار گرفت.");
 
@@ -257,7 +293,7 @@ export default function MoadianWizardPage() {
         pollTimerRef.current = setTimeout(async () => {
           try {
             attempts++;
-            const current = await getMoadianSubmission(selectedInvoiceId);
+            const current = await getMoadianSubmission(targetId);
             setSubmissionResult(current);
             if (
               current.status === "SUCCESS" ||
@@ -266,11 +302,16 @@ export default function MoadianWizardPage() {
               attempts >= 10
             ) {
               setPollingStatus(false);
+              pollTimerRef.current = null;
+              if (current.status === "SUCCESS") {
+                void loadUnsentInvoices();
+              }
             } else {
               poll();
             }
           } catch {
             setPollingStatus(false);
+            pollTimerRef.current = null;
           }
         }, 3000);
       };
@@ -324,20 +365,21 @@ export default function MoadianWizardPage() {
   const expiredCount = rankedUnsent.filter((r) => r.deadline.isExpired).length;
 
   return (
-    <EnterpriseRouteGuard module="tax">
+    <EnterpriseRouteGuard requireAdmin>
       <div className="flex flex-col gap-6 p-4 sm:p-6" dir="rtl">
         {/* هدر صفحه */}
         <PageHeader
           title="ویزارد راه‌اندازی سامانه مؤدیان"
-          description="راهنمای جامع و گام‌به‌گام راه‌اندازی، اتصال آزمایشی، بارگذاری گواهی‌ها، تست ارسال و مدیریت مهلت‌های قانونی (ماده ۱ و ماده ۲۲)."
+          description="راهنمای جامع و گام‌به‌گام راه‌اندازی، اتصال آزمایشی، بارگذاری گواهی‌ها، تست ارسال و پایش مهلت ارسال صورتحساب‌ها."
           icon={<Sparkles className="h-6 w-6 text-primary" />}
           actions={
             <div className="flex items-center gap-2">
-              <Link href="/app/tax">
-                <Button variant="outline" size="sm" className="gap-1">
-                  <ArrowRight className="h-4 w-4" />
-                  بازگشت به پنل مالیات
-                </Button>
+              <Link
+                href="/app/tax"
+                className={buttonVariants({ variant: "outline", size: "sm", className: "gap-1" })}
+              >
+                <ArrowRight className="h-4 w-4" />
+                بازگشت به پنل مالیات
               </Link>
               <Button
                 variant="ghost"
@@ -384,14 +426,14 @@ export default function MoadianWizardPage() {
             </CardHeader>
             <CardContent className="text-xs text-muted-foreground">
               {credential
-                ? `شماره اقتصادی: ${credential.economicCode} | روش تسویه: ${credential.settlementMethod}`
+                ? `شماره اقتصادی: ${credential.economicCode} | روش تسویه: ${MOADIAN_SETTLEMENT_LABELS[Number(credential.settlementMethod) as MoadianSettlementMethod] ?? credential.settlementMethod}`
                 : "برای ارسال معتبر فاکتورها، تکمیل مرحله ۳ الزامی است."}
             </CardContent>
           </Card>
 
           <Card className="border-border">
             <CardHeader className="pb-2">
-              <CardDescription>پایش مهلت ارسال (۷ روزه)</CardDescription>
+              <CardDescription>پایش مهلت ارسال ({deadlineDays} روز تقویمی)</CardDescription>
               <CardTitle className="text-lg flex items-center gap-2">
                 {expiredCount > 0 ? (
                   <Badge variant="destructive">
@@ -407,7 +449,7 @@ export default function MoadianWizardPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="text-xs text-muted-foreground">
-              ماده ۱ آیین‌نامه اجرایی: مهلت مجاز ارسال از تاریخ صدور ۷ روز کاری است.
+              بر اساس آستانه تقویمی قابل تنظیم از تاریخ صدور (مهلت روز کاری تابع آخرین بخشنامه‌های سازمان امور مالیاتی است).
             </CardContent>
           </Card>
         </div>
@@ -796,11 +838,14 @@ export default function MoadianWizardPage() {
                     <select
                       id="settlement-select"
                       className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                      value={settlementMethodInput}
-                      onChange={(e) => setSettlementMethodInput(e.target.value as MoadianSettlementMethod)}
+                      value={String(settlementMethodInput)}
+                      onChange={(e) =>
+                        setSettlementMethodInput(Number(e.target.value) as MoadianSettlementMethod)
+                      }
                     >
-                      <option value="CASH">نقدی (CASH)</option>
-                      <option value="CREDIT">نسیه (CREDIT)</option>
+                      <option value="1">{MOADIAN_SETTLEMENT_LABELS[1]}</option>
+                      <option value="2">{MOADIAN_SETTLEMENT_LABELS[2]}</option>
+                      <option value="3">{MOADIAN_SETTLEMENT_LABELS[3]}</option>
                     </select>
                   </div>
                 </div>
@@ -818,17 +863,41 @@ export default function MoadianWizardPage() {
                   <p className="text-xs text-muted-foreground">گواهی تست صادرشده در سندباکس یا گواهی میانی مرکز ریشه صمت/جیکا.</p>
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="priv-key-input">کلید خصوصی متناظر (Private Key PEM)</Label>
-                  <Textarea
-                    id="priv-key-input"
-                    dir="ltr"
-                    className="font-mono text-xs h-28"
-                    placeholder="-----BEGIN RSA PRIVATE KEY----- ... -----END RSA PRIVATE KEY-----"
-                    value={privKeyPemInput}
-                    onChange={(e) => setPrivKeyPemInput(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">کلید خصوصی ورودی مستقیماً با AES-256-GCM رمزنگاری شده و هرگز در پاسخ‌های سرور نمایش داده نمی‌شود.</p>
+                <div className="space-y-3 rounded-lg border bg-muted/30 p-3.5">
+                  <div className="flex items-start gap-2.5">
+                    <input
+                      id="use-active-key-checkbox"
+                      type="checkbox"
+                      className="mt-1 h-4 w-4 rounded border-input"
+                      checked={useActiveSigningKey}
+                      onChange={(e) => setUseActiveSigningKey(e.target.checked)}
+                    />
+                    <div className="space-y-1 text-xs">
+                      <Label htmlFor="use-active-key-checkbox" className="text-sm font-medium cursor-pointer">
+                        استفاده خودکار از کلید فعال ذخیره‌شده سازمان (تولیدشده در گام ۲)
+                      </Label>
+                      <p className="text-muted-foreground">
+                        {generatedKey
+                          ? `کلید فعال با اثرانگشت ${generatedKey.keyFingerprint.slice(0, 16)}… در سرور موجود است و نیازی به ورود دستی کلید خصوصی نیست.`
+                          : "اگر زوج‌کلید را در گام ۲ تولید کرده‌اید، با فعال‌سازی این گزینه کلید خصوصی مستقیماً روی سرور متصل می‌شود."}
+                      </p>
+                    </div>
+                  </div>
+
+                  {!useActiveSigningKey && (
+                    <div className="space-y-1.5 pt-1">
+                      <Label htmlFor="priv-key-input">کلید خصوصی متناظر (Private Key PEM)</Label>
+                      <Textarea
+                        id="priv-key-input"
+                        dir="ltr"
+                        className="font-mono text-xs h-28 bg-background"
+                        placeholder="-----BEGIN RSA PRIVATE KEY----- ... -----END RSA PRIVATE KEY-----"
+                        value={privKeyPemInput}
+                        onChange={(e) => setPrivKeyPemInput(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">کلید خصوصی ورودی مستقیماً با AES-256-GCM رمزنگاری شده و هرگز در پاسخ‌های سرور نمایش داده نمی‌شود.</p>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -1068,21 +1137,19 @@ export default function MoadianWizardPage() {
                     <div className="rounded-md border p-3 space-y-1">
                       <div className="font-semibold text-foreground flex items-center gap-1">
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                        ۴. رعایت مهلت ۷ روزه ارسال
+                        ۴. رعایت مهلت ارسال صورتحساب‌ها
                       </div>
                       <p className="text-muted-foreground">
-                        صورتحساب‌های فروش حداکثر ظرف مهلت قانونی ۷ روزه به سامانه ارسال شوند تا مشمول جرائم ماده ۲۲ نشوند.
+                        صورتحساب‌های فروش را ظرف مهلت قانونی مقرر در آخرین بخشنامه‌های سازمان امور مالیاتی به سامانه ارسال نمایید.
                       </p>
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 border-t pt-4">
-                  <Link href="/app/tax">
-                    <Button className="gap-2">
-                      اتمام و بازگشت به داشبورد مالیات
-                      <ArrowLeft className="h-4 w-4" />
-                    </Button>
+                  <Link href="/app/tax" className={buttonVariants({ className: "gap-2" })}>
+                    اتمام و بازگشت به داشبورد مالیات
+                    <ArrowLeft className="h-4 w-4" />
                   </Link>
                   <Button variant="outline" onClick={() => setCurrentStep(3)}>
                     ویرایش تنظیمات اتصال در رکسایرا
@@ -1093,16 +1160,16 @@ export default function MoadianWizardPage() {
           )}
         </div>
 
-        {/* بخش ویژه: پایش و هشدار مهلت قانونی ارسال صورتحساب‌ها (ماده ۱ و ۲۲) */}
+        {/* بخش ویژه: پایش و هشدار مهلت ارسال صورتحساب‌ها */}
         <Card className="border-border shadow-sm">
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Clock className="h-5 w-5 text-amber-600" />
-                <CardTitle>پایش و هشدار مهلت قانونی ارسال صورتحساب‌ها (ماده ۱ و ماده ۲۲)</CardTitle>
+                <CardTitle>پایش و هشدار مهلت ارسال صورتحساب‌های فروش</CardTitle>
               </div>
               <div className="flex items-center gap-2">
-                <Label htmlFor="deadline-days" className="text-xs">مهلت قانونی (روز):</Label>
+                <Label htmlFor="deadline-days" className="text-xs">آستانه هشدار (روز تقویمی):</Label>
                 <Input
                   id="deadline-days"
                   type="number"
@@ -1115,7 +1182,7 @@ export default function MoadianWizardPage() {
               </div>
             </div>
             <CardDescription>
-              طبق ماده ۱ قانون پایانه‌های فروشگاهی و سامانه مؤدیان، مؤدیان موظفند ظرف مهلت قانونی (پیش‌فرض ۷ روز کاری) صورتحساب‌ها را ارسال نمایند. تاخیر مشمول جریمه ماده ۲۲ (۱۰٪ مبلغ فروش یا ۲۰ میلیون ریال) می‌گردد.
+              پایش صورتحساب‌های فروش صادرشده و ارسال‌نشده بر اساس آستانه تقویمی قابل تنظیم (پیش‌فرض ۷ روز تقویمی؛ قوانین کاری و میزان جرایم را از آخرین بخشنامه‌های سازمان امور مالیاتی پیگیری کنید).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -1165,13 +1232,13 @@ export default function MoadianWizardPage() {
                             size="sm"
                             variant={deadline.isExpired ? "destructive" : "outline"}
                             className="h-7 text-xs gap-1"
-                            onClick={async () => {
+                            onClick={() => {
                               setSelectedInvoiceId(invoice.id);
                               setCurrentStep(4);
                             }}
                           >
                             <Send className="h-3 w-3" />
-                            ارسال مستقیم
+                            انتخاب برای ارسال
                           </Button>
                         </TableCell>
                       </TableRow>

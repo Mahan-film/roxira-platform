@@ -92,6 +92,16 @@ export class MoadianController {
     return this.moadianService.submitInvoice(this.tenantIdOf(request), invoiceId, body ?? {});
   }
 
+  @RequireAction(AccessAction.READ)
+  @Get('submissions')
+  @ApiOperation({ summary: 'فهرست وضعیت ارسال صورتحساب‌های سازمان به سامانه مودیان' })
+  @ApiResponse({ status: HttpStatus.OK, type: [MoadianSubmissionResponseDto] })
+  async listSubmissions(
+    @Req() request: AuthenticatedRequest,
+  ): Promise<MoadianSubmissionResponseDto[]> {
+    return this.moadianService.listSubmissions(this.tenantIdOf(request));
+  }
+
   @Get('invoices/:invoiceId/status')
   @ApiOperation({ summary: 'وضعیت ارسال صورتحساب به سامانه مودیان' })
   @ApiResponse({ status: HttpStatus.OK, type: MoadianSubmissionResponseDto })

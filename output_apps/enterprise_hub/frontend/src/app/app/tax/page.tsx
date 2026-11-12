@@ -13,7 +13,7 @@ import {
 import { EnterpriseRouteGuard } from "@/components/auth/enterprise-route-guard";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -225,11 +225,12 @@ function MoadianCard() {
           <span className="flex items-center gap-2">
             <Send className="size-4" /> اتصال به سامانه مودیان
           </span>
-          <Link href="/app/tax/wizard">
-            <Button variant="outline" size="sm" className="gap-1.5 text-xs">
-              <Sparkles className="h-3.5 w-3.5 text-primary" />
-              ویزارد راه‌اندازی مودیان
-            </Button>
+          <Link
+            href="/app/tax/wizard"
+            className={buttonVariants({ variant: "outline", size: "sm", className: "gap-1.5 text-xs" })}
+          >
+            <Sparkles className="h-3.5 w-3.5 text-primary" />
+            ویزارد راه‌اندازی مودیان
           </Link>
         </CardTitle>
       </CardHeader>
@@ -245,7 +246,7 @@ function MoadianCard() {
             </AlertDescription>
           </Alert>
         )}
-        {status && !configured && (
+        {status && enabled && !configured && (
           <Alert>
             <AlertTitle>اطلاعات اتصال ثبت نشده است</AlertTitle>
             <AlertDescription className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-1">
@@ -253,11 +254,16 @@ function MoadianCard() {
                 شناسه حافظه مالیاتی، گواهی و کلید خصوصی این سازمان هنوز ثبت نشده
                 است (PUT moadian/credentials).
               </span>
-              <Link href="/app/tax/wizard">
-                <Button size="sm" variant="outline" className="gap-1 text-xs whitespace-nowrap">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  شروع ویزارد راه‌اندازی
-                </Button>
+              <Link
+                href="/app/tax/wizard"
+                className={buttonVariants({
+                  variant: "outline",
+                  size: "sm",
+                  className: "gap-1 text-xs whitespace-nowrap",
+                })}
+              >
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                شروع ویزارد راه‌اندازی
               </Link>
             </AlertDescription>
           </Alert>

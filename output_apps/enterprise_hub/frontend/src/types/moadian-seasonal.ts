@@ -8,13 +8,24 @@ export interface MoadianStatusResponse {
   configured: boolean;
 }
 
-export type MoadianSettlementMethod = "CASH" | "CREDIT";
+/**
+ * منطبق بر `MoadianSettlementMethod` در `modules/tax_compliance/enums/moadian.enum.ts`:
+ * 1 = نقدی، 2 = نسیه، 3 = نقدی/نسیه
+ */
+export type MoadianSettlementMethod = 1 | 2 | 3;
+
+export const MOADIAN_SETTLEMENT_LABELS: Record<MoadianSettlementMethod, string> = {
+  1: "نقدی (۱)",
+  2: "نسیه (۲)",
+  3: "نقدی و نسیه (۳)",
+};
 
 export interface PutMoadianCredentialDto {
   memoryId: string;
   economicCode: string;
   certificatePem: string;
-  privateKeyPem: string;
+  privateKeyPem?: string;
+  useActiveSigningKey?: boolean;
   defaultSstid?: string;
   defaultMeasurementUnit?: string;
   settlementMethod?: MoadianSettlementMethod;
