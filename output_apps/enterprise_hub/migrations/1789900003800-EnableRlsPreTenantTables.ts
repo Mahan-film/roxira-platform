@@ -666,7 +666,7 @@ export class EnableRlsPreTenantTables1789900003800 implements MigrationInterface
         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'roxira_app') THEN
           BEGIN
             CREATE ROLE roxira_app NOLOGIN;
-          EXCEPTION WHEN OTHERS THEN
+          EXCEPTION WHEN duplicate_object THEN
             NULL;
           END;
         END IF;
@@ -675,9 +675,7 @@ export class EnableRlsPreTenantTables1789900003800 implements MigrationInterface
             EXECUTE format('ALTER FUNCTION public.%s OWNER TO %I', fn, v_owner);
           END IF;
           EXECUTE format('REVOKE ALL ON FUNCTION public.%s FROM PUBLIC', fn);
-          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'roxira_app') THEN
-            EXECUTE format('GRANT EXECUTE ON FUNCTION public.%s TO roxira_app', fn);
-          END IF;
+          EXECUTE format('GRANT EXECUTE ON FUNCTION public.%s TO roxira_app', fn);
         END LOOP;
       END $$;
     `);

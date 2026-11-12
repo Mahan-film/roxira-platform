@@ -292,10 +292,13 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
       ON CONFLICT DO NOTHING
     `, [T2, userId]);
 
-    // Unbound user switcher list must fail closed
-    await expect(membershipsRepo.listForUser(userId)).rejects.toThrow(
+    // Unbound or mismatched caller user context on switcher list must fail closed
+    await expect(membershipsRepo.listForUser(userId, '')).rejects.toThrow(
       /caller user context does not match target user/,
     );
+    await expect(
+      membershipsRepo.listForUser(userId, '00000000-0000-0000-0000-000000000000'),
+    ).rejects.toThrow(/caller user context does not match target user/);
 
     // Authenticated user switcher list with bound caller context
     const memberships = await membershipsRepo.listForUser(userId, userId);

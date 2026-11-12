@@ -136,8 +136,7 @@ AS $$
          tenant_id, tenant_role, "isActive" AS is_active,
          "lastLoginAt" AS last_login_at, "createdAt" AS created_at, "updatedAt" AS updated_at
   FROM public.users
-  WHERE lower(username) = lower(p_username)
-  ORDER BY id ASC
+  WHERE username = p_username
   LIMIT 1;
 $$;
 
@@ -170,12 +169,11 @@ AS $$
          tenant_id, tenant_role, "isActive" AS is_active,
          "lastLoginAt" AS last_login_at, "createdAt" AS created_at, "updatedAt" AS updated_at
   FROM public.users
-  WHERE lower(login_email) = lower(p_email)
-  ORDER BY id ASC
+  WHERE login_email = p_email
   LIMIT 1;
 $$;
 
--- 3. User lookup by ID (with optional password hash) with caller context check
+-- 3. User lookup by ID (plus lookup_user_by_id_with_password) with fail-closed caller context check
 CREATE OR REPLACE FUNCTION public.lookup_user_by_id(p_user_id uuid)
 RETURNS TABLE (
   id uuid,
@@ -200,9 +198,29 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_current_user uuid := nullif(current_setting('app.user_id', true), '')::uuid;
+  v_current_tenant uuid := nullif(current_setting('app.tenant_id', true), '')::uuid;
 BEGIN
-  IF v_current_user IS NOT NULL AND v_current_user <> p_user_id THEN
-    RAISE EXCEPTION 'caller user context does not match target user';
+  IF v_current_user IS NOT NULL THEN
+    IF v_current_user <> p_user_id THEN
+      RAISE EXCEPTION 'caller user context does not match target user';
+    END IF;
+  ELSIF v_current_tenant IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM public.users u
+      WHERE u.id = p_user_id
+        AND (
+          u.tenant_id = v_current_tenant
+          OR u.managed_by_tenant_id = v_current_tenant
+          OR EXISTS (
+            SELECT 1 FROM public.tenant_memberships m
+            WHERE m.user_id = u.id AND m.tenant_id = v_current_tenant
+          )
+        )
+    ) THEN
+      RAISE EXCEPTION 'caller tenant context is not authorized for target user';
+    END IF;
+  ELSE
+    RAISE EXCEPTION 'caller user or tenant context required';
   END IF;
   RETURN QUERY
   SELECT u.id, u.phone, u.username, u.managed_by_tenant_id, u.login_email,
@@ -305,10 +323,11 @@ AS $$
   WHERE token_hash = p_token_hash
     AND accepted_at IS NULL
     AND revoked_at IS NULL
-    AND expires_at > CURRENT_TIMESTAMP
   LIMIT 1;
 $$;
 ```
+
+*(Note: `expires_at` is returned to the service layer so expired tokens raise `410 Gone` via `GoneException` rather than `404`.)*
 
 ### 4.2 Table RLS Policies Specification
 
@@ -316,13 +335,13 @@ All policies operate purely on database session parameters (`app.tenant_id` and 
 
 ```sql
 -- =========================================================================
--- 1. users
+-- 1. users (membership visibility is SELECT-only)
 -- =========================================================================
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.users FORCE ROW LEVEL SECURITY;
 
-CREATE POLICY "users_tenant_and_self" ON "users"
-FOR ALL
+CREATE POLICY "users_tenant_select" ON "users"
+FOR SELECT
 USING (
   (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND (
     "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
@@ -333,8 +352,38 @@ USING (
     )
   ))
   OR (nullif(current_setting('app.user_id', true), '') IS NOT NULL AND "id" = nullif(current_setting('app.user_id', true), '')::uuid)
+);
+
+CREATE POLICY "users_tenant_and_self_insert" ON "users"
+FOR INSERT
+WITH CHECK (
+  (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND (
+    "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
+    OR "managed_by_tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
+  ))
+  OR (nullif(current_setting('app.user_id', true), '') IS NOT NULL AND "id" = nullif(current_setting('app.user_id', true), '')::uuid)
+);
+
+CREATE POLICY "users_tenant_and_self_update" ON "users"
+FOR UPDATE
+USING (
+  (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND (
+    "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
+    OR "managed_by_tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
+  ))
+  OR (nullif(current_setting('app.user_id', true), '') IS NOT NULL AND "id" = nullif(current_setting('app.user_id', true), '')::uuid)
 )
 WITH CHECK (
+  (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND (
+    "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
+    OR "managed_by_tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
+  ))
+  OR (nullif(current_setting('app.user_id', true), '') IS NOT NULL AND "id" = nullif(current_setting('app.user_id', true), '')::uuid)
+);
+
+CREATE POLICY "users_tenant_and_self_delete" ON "users"
+FOR DELETE
+USING (
   (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND (
     "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
     OR "managed_by_tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
@@ -360,18 +409,36 @@ WITH CHECK (
 );
 
 -- =========================================================================
--- 3. tenant_memberships
+-- 3. tenant_memberships (user SELECT own memberships; writes require app.tenant_id)
 -- =========================================================================
 ALTER TABLE public.tenant_memberships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tenant_memberships FORCE ROW LEVEL SECURITY;
 
-CREATE POLICY "tenant_memberships_tenant_and_user" ON "tenant_memberships"
-FOR ALL
+CREATE POLICY "tenant_memberships_select" ON "tenant_memberships"
+FOR SELECT
 USING (
   (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid)
   OR (nullif(current_setting('app.user_id', true), '') IS NOT NULL AND "user_id" = nullif(current_setting('app.user_id', true), '')::uuid)
+);
+
+CREATE POLICY "tenant_memberships_insert" ON "tenant_memberships"
+FOR INSERT
+WITH CHECK (
+  nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
+);
+
+CREATE POLICY "tenant_memberships_update" ON "tenant_memberships"
+FOR UPDATE
+USING (
+  nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
 )
 WITH CHECK (
+  nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
+);
+
+CREATE POLICY "tenant_memberships_delete" ON "tenant_memberships"
+FOR DELETE
+USING (
   nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
 );
 
@@ -477,14 +544,15 @@ USING (
 
 ### 4.3 Definer Context Guards & Access Boundaries
 
-During the initial pre-authentication phase (before user/tenant identity is known), only four truly anonymous/pre-auth lookup functions operate without session settings:
-- `lookup_user_by_phone(p_phone)` (intended pre-auth OTP lookup by phone number), `lookup_user_by_username(p_username)` (exact match), and `lookup_user_by_login_email(p_email)` (exact match);
+During the initial pre-authentication / maintenance / anonymous-intake phase, eight narrow `SECURITY DEFINER` functions operate without a session user or tenant setting:
+- `lookup_user_by_phone(p_phone)` (pre-auth OTP/login lookup by exact phone number), `lookup_user_by_username(p_username)` (exact match), and `lookup_user_by_login_email(p_email)` (exact match);
 - `lookup_refresh_token_by_hash(p_token_hash)` (opaque SHA-256 token lookup);
 - `lookup_invitation_by_token_hash(p_token_hash)` (opaque SHA-256 invite lookup);
 - `is_refresh_token_family_active(p_family_id, p_user_id)`, `delete_expired_refresh_tokens(p_before)`, and anonymous `submit_enterprise_inquiry(..., NULL)`.
 
 Every **by-id** or **by-tenant** `SECURITY DEFINER` function (`lookup_user_by_id`, `lookup_user_by_id_with_password`, `lookup_user_memberships`, `lookup_tenant_entitlements`, `revoke_refresh_token_if_active`, `revoke_refresh_token_family`, `mark_invitation_accepted`) **fails closed** when `app.user_id` / `app.tenant_id` is unset (`NULL`) or does not match the target row/caller:
-- Repositories bind verified caller context (`app.user_id` and/or `app.tenant_id`) inside explicit transactions before invoking these functions; unbound calls raise an exception in PostgreSQL.
+- Repositories bind caller context (`app.user_id` and/or `app.tenant_id`) inside explicit transactions before invoking these functions; unbound calls raise an exception in PostgreSQL (`MembershipsRepository.listForUser` requires `callerUserId: string`).
+- **Accepted write-path trade-off**: auth-lifecycle write paths where no HTTP request principal exists yet or where the service has already validated ownership via password/token-hash/invite-token (`AuthRepository.updatePassword`/`save`, `RefreshTokenRepository.create`, `EntitlementsRepository.getSubscription`/`getOverrides`, `InvitationsService.acceptInvitation`) bind `app.user_id` / `app.tenant_id` from the validated service argument. Consequently, the DB RLS check ensures no unbound SQL runs without context, while cross-user/cross-tenant authorization on authenticated HTTP routes relies on controllers passing `req.user.sub` / `req.user.tenantId`.
 - Cross-tenant platform-operator functions (`list_open_module_requests`, `list_enterprise_inquiries`) require BOTH NestJS `@Roles(UserRole.ADMIN)` AND a DB-side operator check (`app.user_id` must reference an active `users` row with `role = 'ADMIN'`). Accepted cross-tenant exposure is strictly limited to active global `ADMIN` operators.
 - `users` membership visibility (`tenant_memberships`) is `FOR SELECT` only; `INSERT`/`UPDATE`/`DELETE` policies on `users` require matching `tenant_id`, `managed_by_tenant_id`, or self (`id = app.user_id`), and `tenant_memberships` mutations require `app.tenant_id`.
 
