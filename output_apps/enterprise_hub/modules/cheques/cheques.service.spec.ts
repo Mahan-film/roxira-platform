@@ -784,3 +784,90 @@ describe('ChequesService party codes on receivable/payable lines (CHK-01)', () =
     for (const entry of t.entries) expect(partyLines(entry)).toEqual([]);
   });
 });
+
+describe('ChequesService Ras-giri and Discounting (T72)', () => {
+  it('calculates rasgiri and discounting from DTO inputs', async () => {
+    const t = build();
+    const ras = t.service.calculateRasgiri({
+      items: [
+        { amount: '50000000', dueDate: '2026-11-20' },
+        { amount: '50000000', dueDate: '2026-11-30' },
+      ],
+      baseDate: '2026-11-10',
+    });
+    expect(ras.totalCount).toBe(2);
+    expect(ras.totalAmount).toBe('100000000');
+    expect(ras.weightedAverageDays).toBe(15);
+    expect(ras.weightedMaturityDate).toBe('2026-11-25');
+
+    const disc = t.service.calculateDiscount({
+      items: [
+        { amount: '50000000', dueDate: '2026-11-20' },
+        { amount: '50000000', dueDate: '2026-11-30' },
+      ],
+      annualRatePercent: 24,
+      baseDate: '2026-11-10',
+    });
+    expect(disc.annualRatePercent).toBe(24);
+    expect(disc.totalAmount).toBe('100000000');
+    expect(BigInt(disc.totalDiscountAmount) > 0n).toBe(true);
+    expect(BigInt(disc.netPresentValue) < 100000000n).toBe(true);
+  });
+
+  it('calculates rasgiri and discounting for selected tenant cheques', async () => {
+    const t = build();
+    const c1 = await t.service.create(A, received({ sayadNumber: undefined, amount: 200, dueDate: '2026-11-20' }) as never);
+    const c2 = await t.service.create(A, received({ sayadNumber: undefined, amount: 200, dueDate: '2026-11-30' }) as never);
+
+    const ras = await t.service.calculateSelectionRasgiri(A, [c1.id, c2.id], '2026-11-10');
+    expect(ras.totalCount).toBe(2);
+    expect(ras.weightedAverageDays).toBe(15);
+
+    const disc = await t.service.calculateSelectionDiscount(A, [c1.id, c2.id], 24, '2026-11-10');
+    expect(disc.totalAmount).toBe('400');
+    expect(disc.items).toHaveLength(2);
+  });
+
+  it('rejects cleared cheques with remainingAmount 0 and uses remainingAmount on partial cheques', async () => {
+    const t = build();
+    const cleared = await t.service.create(A, received({ sayadNumber: undefined, amount: 500, dueDate: '2026-11-20' }) as never);
+    await t.service.transition(A, cleared.id, { status: ChequeStatus.CLEARED });
+
+    await expect(
+      t.service.calculateSelectionRasgiri(A, [cleared.id], '2026-11-10'),
+    ).rejects.toThrow('تسویه یا بسته شده');
+    await expect(
+      t.service.calculateSelectionDiscount(A, [cleared.id], 24, '2026-11-10'),
+    ).rejects.toThrow('تسویه یا بسته شده');
+
+    const partial = await t.service.create(A, received({ sayadNumber: undefined, amount: 500, dueDate: '2026-11-20' }) as never);
+    await t.service.partialPayment(A, partial.id, { amount: 200 });
+    const rasPartial = await t.service.calculateSelectionRasgiri(A, [partial.id], '2026-11-10');
+    expect(rasPartial.totalAmount).toBe('300');
+  });
+
+  it('rejects spent cheques and dedupes duplicate chequeIds in loadCalculatorItems', async () => {
+    const t = build();
+    const spent = await t.service.create(A, received({ sayadNumber: undefined, amount: 500, dueDate: '2026-11-20' }) as never);
+    await t.service.transition(A, spent.id, { status: ChequeStatus.SPENT, spentToName: 'شخص ثالث' });
+    await expect(
+      t.service.calculateSelectionRasgiri(A, [spent.id], '2026-11-10'),
+    ).rejects.toThrow('تسویه یا بسته شده');
+
+    const open = await t.service.create(A, received({ sayadNumber: undefined, amount: 500, dueDate: '2026-11-20' }) as never);
+    const deduped = await t.service.calculateSelectionRasgiri(A, [open.id, open.id], '2026-11-10');
+    expect(deduped.totalCount).toBe(1);
+    expect(deduped.totalAmount).toBe('500');
+  });
+
+  it('denies cross-tenant cheque selection with NotFoundException', async () => {
+    const t = build();
+    const otherTenantCheque = await t.service.create(B, received({ sayadNumber: undefined, amount: 500, dueDate: '2026-11-20' }) as never);
+    await expect(
+      t.service.calculateSelectionRasgiri(A, [otherTenantCheque.id], '2026-11-10'),
+    ).rejects.toThrow('چک یافت نشد');
+    await expect(
+      t.service.calculateSelectionDiscount(A, [otherTenantCheque.id], 24, '2026-11-10'),
+    ).rejects.toThrow('چک یافت نشد');
+  });
+});

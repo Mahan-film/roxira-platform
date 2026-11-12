@@ -35,12 +35,20 @@ import {
   VerifySayadDto,
 } from '../dto/cheque.dto';
 import {
+  CalculateDiscountDto,
+  CalculateRasgiriDto,
+  CalculateSelectionDiscountDto,
+  CalculateSelectionRasgiriDto,
+  CalculateSingleDiscountDto,
+} from '../dto/cheque-calculator.dto';
+import {
   ChequeMaturityReportView,
   QueryChequeMaturityDto,
 } from '../dto/cheque-maturity-report.dto';
 import { ChequeMaturityReportService } from '../services/cheque-maturity-report.service';
 import { ChequeReconService } from '../services/cheque-recon.service';
 import { ChequesService } from '../services/cheques.service';
+import type { DiscountResult, RasgiriResult } from '../utils/cheque-calculator.util';
 
 /**
  * Cheque register. Routing and validation only; the tenant comes solely from the
@@ -123,6 +131,65 @@ export class ChequesController {
   @ApiResponse({ status: HttpStatus.OK, type: ChequeReconApplyResponseDto })
   reconApply(@Req() request: AuthenticatedRequest, @Body() dto: ChequeReconApplyDto): Promise<ChequeReconApplyResponseDto> {
     return this.reconService.applyUnambiguous(this.tenantIdOf(request), dto);
+  }
+
+  @RequireAction(AccessAction.READ)
+  @Post('calculator/rasgiri')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'محاسبه راس‌گیری چک‌ها (میانگین وزنی سررسید)' })
+  calculateRasgiri(@Body() dto: CalculateRasgiriDto): RasgiriResult {
+    return this.chequesService.calculateRasgiri(dto);
+  }
+
+  @RequireAction(AccessAction.READ)
+  @Post('calculator/discount')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'محاسبه تنزیل پرتفوی چک‌ها' })
+  calculateDiscount(@Body() dto: CalculateDiscountDto): DiscountResult {
+    return this.chequesService.calculateDiscount(dto);
+  }
+
+  @RequireAction(AccessAction.READ)
+  @Post('calculator/single-discount')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'محاسبه تنزیل یک فقره چک' })
+  calculateSingleDiscount(@Body() dto: CalculateSingleDiscountDto): {
+    discountAmount: string;
+    netPresentValue: string;
+    effectivePeriodRatePercent: number;
+  } {
+    return this.chequesService.calculateSingleDiscount(dto);
+  }
+
+  @RequireAction(AccessAction.READ)
+  @Post('calculator/selection-rasgiri')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'محاسبه راس‌گیری برای چک‌های انتخاب‌شدهٔ مستأجر' })
+  calculateSelectionRasgiri(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: CalculateSelectionRasgiriDto,
+  ): Promise<RasgiriResult> {
+    return this.chequesService.calculateSelectionRasgiri(
+      this.tenantIdOf(request),
+      dto.chequeIds,
+      dto.baseDate,
+    );
+  }
+
+  @RequireAction(AccessAction.READ)
+  @Post('calculator/selection-discount')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'محاسبه تنزیل برای چک‌های انتخاب‌شدهٔ مستأجر' })
+  calculateSelectionDiscount(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: CalculateSelectionDiscountDto,
+  ): Promise<DiscountResult> {
+    return this.chequesService.calculateSelectionDiscount(
+      this.tenantIdOf(request),
+      dto.chequeIds,
+      dto.annualRatePercent,
+      dto.baseDate,
+    );
   }
 
   @Post()
