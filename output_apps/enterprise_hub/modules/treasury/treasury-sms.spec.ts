@@ -287,6 +287,33 @@ describe('TreasurySmsService & Controller (T92)', () => {
         }),
       ).rejects.toThrow(BadRequestException);
     });
+
+    it('derives correct Asia/Tehran calendar date when SMS is stamped 00:30 (UTC previous day)', async () => {
+      // 1403/08/22 00:30 Tehran time (+03:30) is 2024-11-11T21:00:00.000Z in UTC.
+      // Must post on 2024-11-12 (Tehran calendar day), not 2024-11-11.
+      const MIDNIGHT_SMS = `بانک ملی ایران
+واریز: ۲,۵۰۰,۰۰۰ ریال
+حساب: ...۴۳۲۱
+مانده: ۱۰,۰۰۰,۰۰۰ ریال
+۱۴۰۳/۰۸/۲۲-۰۰:۳۰`;
+      const draft = await service.captureSms(TENANT, USER, MIDNIGHT_SMS);
+      expect(draft.dateTime?.toISOString()).toBe('2024-11-11T21:00:00.000Z');
+
+      await service.confirmDraft(TENANT, USER, draft.id, {
+        partyCode: 'CUST-01',
+        partyName: 'مشتری الف',
+        bankAccountId: 5,
+      });
+
+      expect(mockTreasuryService.createDocument).toHaveBeenCalledWith(
+        TENANT,
+        expect.objectContaining({
+          kind: TreasuryDocKind.RECEIPT,
+          docDate: '2024-11-12',
+        }),
+        { tx: true },
+      );
+    });
   });
 
   describe('rejectDraft', () => {

@@ -230,3 +230,17 @@ export function parseBankSms(rawText: string): BankSmsParsedResult {
     rawText,
   };
 }
+
+/**
+ * Converts a Date, ISO string, or timestamp into YYYY-MM-DD calendar date in Asia/Tehran timezone.
+ * Asia/Tehran is permanently UTC+03:30 (Iran abolished DST in 1401 / 2022).
+ */
+export function toTehranDateString(d: Date | string | number | null | undefined): string {
+  if (!d) return '';
+  const dt = typeof d === 'string' || typeof d === 'number' ? new Date(d) : d;
+  if (Number.isNaN(dt.getTime())) {
+    return '';
+  }
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tehran' }).format(dt);
+}
+

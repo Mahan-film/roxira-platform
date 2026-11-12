@@ -1,4 +1,4 @@
-import { isBankSms, parseBankSms } from './bank-sms.parser';
+import { isBankSms, parseBankSms, toTehranDateString } from './bank-sms.parser';
 import { SYNTHETIC_BANK_SMS_FIXTURES } from './__fixtures__/synthetic-bank-sms.fixtures';
 import { BankCode } from '../../banking/enums/banking.enum';
 import { TreasuryDocKind } from '../enums/treasury.enum';
@@ -149,6 +149,19 @@ describe('Bank SMS Parser (T92)', () => {
       const parsed = parseBankSms(text);
       // 1403/08/22 = 2024-11-12; 14:30 IRST (+03:30) = 11:00:00Z UTC
       expect(parsed.dateTime).toBe('2024-11-12T11:00:00.000Z');
+      expect(toTehranDateString(parsed.dateTime)).toBe('2024-11-12');
+    });
+
+    it('derives correct Tehran date from 00:30 midnight SMS across UTC day boundary', () => {
+      const text = `بانک ملی ایران
+واریز: ۲,۵۰۰,۰۰۰ ریال
+حساب: ...۴۳۲۱
+۱۴۰۳/۰۸/۲۲-۰۰:۳۰`;
+      const parsed = parseBankSms(text);
+      // 1403/08/22 00:30 IRST (+03:30) = 2024-11-11T21:00:00.000Z UTC (previous UTC day)
+      expect(parsed.dateTime).toBe('2024-11-11T21:00:00.000Z');
+      // Must yield Tehran calendar date 2024-11-12, not 2024-11-11
+      expect(toTehranDateString(parsed.dateTime)).toBe('2024-11-12');
     });
   });
 });

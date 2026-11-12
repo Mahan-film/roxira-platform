@@ -19,7 +19,7 @@ const OWNER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
 const OWNER_PW = process.env.ROXIRA_TEST_PG_PASSWORD;
 const PORT = Number(process.env.ROXIRA_TEST_PG_PORT ?? 5432);
 const ROLE_NAME = `rx_treasury_sms_${process.pid}`;
-const ROLE_PW = APP_PASSWORD;
+const ROLE_PW = `pw_${process.pid}_${Math.random().toString(36).slice(2)}`;
 
 const T1 = '11111111-1111-4111-8111-111111111111';
 const T2 = '22222222-2222-4222-8222-222222222222';

@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { TreasuryService } from './treasury.service';
 import { TreasurySmsRepository } from '../repositories/treasury-sms.repository';
-import { normaliseSms, parseBankSms } from '../sms/bank-sms.parser';
+import { normaliseSms, parseBankSms, toTehranDateString } from '../sms/bank-sms.parser';
 import { BankSmsParsedResult } from '../sms/bank-sms.types';
 import {
   TreasurySmsDraftEntity,
@@ -125,7 +125,7 @@ export class TreasurySmsService {
 
     const docDate =
       dto.docDate ??
-      (draft.dateTime ? draft.dateTime.toISOString().slice(0, 10) : null);
+      (draft.dateTime ? toTehranDateString(draft.dateTime) : null);
     if (!docDate) {
       throw new BadRequestException('تاریخ تراکنش در پیامک یافت نشد؛ لطفاً تاریخ سند را ارسال کنید.');
     }
