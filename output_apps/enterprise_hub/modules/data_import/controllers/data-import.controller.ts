@@ -2,12 +2,12 @@ import { AccessAction, AccessModule, permissionOf } from '../../access/catalogue
 import { AccessRequest, requireAccess } from '../../access/access-context';
 import { ModuleAccess, RequireAction } from '../../access/decorators';
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
   HttpCode,
   HttpStatus,
-  Optional,
   Param,
   ParseUUIDPipe,
   ParseIntPipe,
@@ -16,7 +16,6 @@ import {
   Put,
   Query,
   Req,
-  ServiceUnavailableException,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -102,7 +101,7 @@ export class DataImportController {
     private readonly entityImportService: EntityImportService,
     private readonly packageImportService: PackageImportService,
     private readonly chunkedUpload: ChunkedUploadService,
-    @Optional() private readonly sepidarPersistenceService?: SepidarPersistenceService,
+    private readonly sepidarPersistenceService: SepidarPersistenceService,
   ) {}
 
   @Post('sepidar/persist')
@@ -113,12 +112,16 @@ export class DataImportController {
     @Req() request: AuthenticatedRequest,
     @Body() dto: PersistSepidarDto,
   ) {
-    if (!this.sepidarPersistenceService) {
-      throw new ServiceUnavailableException('Sepidar persistence service is not configured');
+    const idempotencyKey =
+      (request.headers['idempotency-key'] as string | undefined)?.trim() ||
+      (request.headers['x-idempotency-key'] as string | undefined)?.trim();
+    if (idempotencyKey && idempotencyKey.length > 128) {
+      throw new BadRequestException('Idempotency-Key must be at most 128 characters.');
     }
     return this.sepidarPersistenceService.persistSepidarData(
       this.tenantIdOf(request),
       dto,
+      idempotencyKey,
     );
   }
 

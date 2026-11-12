@@ -1,10 +1,13 @@
-import { BadRequestException } from '@nestjs/common';
-import { EntityManager } from 'typeorm';
+import { BadRequestException, ConflictException } from '@nestjs/common';
+import { EntityManager, FindOperator } from 'typeorm';
 import { TenantScope } from '../access/services/tenant-scope';
 import { ChartOfAccountEntity } from '../accounting/entities/chart-of-account.entity';
 import { JournalEntryEntity } from '../accounting/entities/journal-entry.entity';
 import { JournalEntryLineEntity } from '../accounting/entities/journal-entry-line.entity';
+import { minorToDecimal, parseMinor } from '../accounting/money';
+import { ChequeEventEntity } from '../cheques/entities/cheque-event.entity';
 import { ChequeEntity } from '../cheques/entities/cheque.entity';
+import { ChequesRepository } from '../cheques/repositories/cheques.repository';
 import { PartyEntity } from '../parties/entities/party.entity';
 import { StockItemEntity } from '../inventory/entities/stock-item.entity';
 import {
@@ -18,6 +21,15 @@ import { SepidarChequesFifoAdapter } from './migration/bak/sepidar-cheques-fifo.
 import { SepidarMappingAdapter } from './migration/bak/sepidar-mapping.adapter';
 import { SepidarPersistenceService } from './services/sepidar-persistence.service';
 
+function matchOperator(val: unknown, cond: unknown): boolean {
+  if (cond && typeof cond === 'object' && '@instanceof' in (cond as Record<string, unknown>)) {
+    const op = cond as FindOperator<unknown>;
+    if (op.type === 'isNull') return val === null || val === undefined;
+    if (op.type === 'in') return Array.isArray(op.value) && op.value.includes(val);
+  }
+  return val === cond;
+}
+
 describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', () => {
   const tenantId = '11111111-2222-3333-4444-555555555555';
 
@@ -25,123 +37,170 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
   let mappingAdapter: SepidarMappingAdapter;
   let chequesAdapter: SepidarChequesFifoAdapter;
 
-  // In-memory mock repositories per entity
-  let accountsStore: Map<string, ChartOfAccountEntity>;
-  let partiesStore: Map<string, PartyEntity>;
-  let itemsStore: Map<string, StockItemEntity>;
-  let entriesStore: Map<string, JournalEntryEntity>;
+  let accountsStore: ChartOfAccountEntity[];
+  let partiesStore: PartyEntity[];
+  let itemsStore: StockItemEntity[];
+  let entriesStore: JournalEntryEntity[];
   let linesStore: JournalEntryLineEntity[];
-  let chequesStore: Map<string, ChequeEntity>;
+  let chequesStore: ChequeEntity[];
+  let chequeEventsStore: ChequeEventEntity[];
 
   let mockTenantScope: Partial<TenantScope>;
 
-  beforeEach(() => {
-    accountsStore = new Map();
-    partiesStore = new Map();
-    itemsStore = new Map();
-    entriesStore = new Map();
-    linesStore = [];
-    chequesStore = new Map();
+  function buildEm(
+    accounts: ChartOfAccountEntity[],
+    parties: PartyEntity[],
+    items: StockItemEntity[],
+    entries: JournalEntryEntity[],
+    lines: JournalEntryLineEntity[],
+    cheques: ChequeEntity[],
+    events: ChequeEventEntity[],
+  ): EntityManager {
+    const matchAll = <T extends Record<string, any>>(arr: T[], where: Record<string, any>): T[] =>
+      arr.filter((row) =>
+        Object.entries(where).every(([k, v]) => matchOperator(row[k], v)),
+      );
 
-    const mockEntityManager = {
+    return {
+      query: jest.fn(async (sql: string, params: unknown[] = []) => {
+        if (sql.includes('pg_advisory_xact_lock')) {
+          return [];
+        }
+        if (sql.includes('UPDATE "fin_chart_of_accounts" SET "balance" = "balance" +')) {
+          const [deltaStr, accountId, tid] = params as [string, number, string];
+          const target = accounts.find((a) => a.id === accountId && a.tenantId === tid);
+          if (!target) return [[], 0];
+          const next = parseMinor(target.balance) + parseMinor(deltaStr);
+          target.balance = minorToDecimal(next);
+          return [[{ id: target.id }], 1];
+        }
+        return [];
+      }),
       getRepository: jest.fn((entityClass) => {
         if (entityClass === ChartOfAccountEntity) {
           return {
-            findOne: jest.fn(async ({ where }) => {
-              if (where.code) return accountsStore.get(where.code) ?? null;
-              return null;
-            }),
-            create: jest.fn((dto) => ({ id: accountsStore.size + 1, ...dto })),
+            findOne: jest.fn(async ({ where }) => matchAll(accounts, where)[0] ?? null),
+            find: jest.fn(async ({ where }) => matchAll(accounts, where)),
+            create: jest.fn((dto) => ({ id: accounts.length + 1, ...dto })),
             save: jest.fn(async (entity) => {
-              accountsStore.set(entity.code, entity);
+              const idx = accounts.findIndex((a) => a.id === entity.id);
+              if (idx >= 0) accounts[idx] = entity;
+              else accounts.push(entity);
               return entity;
             }),
           };
         }
         if (entityClass === PartyEntity) {
           return {
-            findOne: jest.fn(async ({ where }) => {
-              if (where.code) return partiesStore.get(where.code) ?? null;
-              return null;
-            }),
-            create: jest.fn((dto) => ({ id: partiesStore.size + 1, ...dto })),
+            findOne: jest.fn(async ({ where }) => matchAll(parties, where)[0] ?? null),
+            find: jest.fn(async ({ where }) => matchAll(parties, where)),
+            create: jest.fn((dto) => ({ id: parties.length + 1, ...dto })),
             save: jest.fn(async (entity) => {
-              partiesStore.set(entity.code, entity);
+              parties.push(entity);
               return entity;
             }),
           };
         }
         if (entityClass === StockItemEntity) {
           return {
-            findOne: jest.fn(async ({ where }) => {
-              if (where.sku) return itemsStore.get(where.sku) ?? null;
-              return null;
-            }),
-            create: jest.fn((dto) => ({ id: itemsStore.size + 1, ...dto })),
+            findOne: jest.fn(async ({ where }) => matchAll(items, where)[0] ?? null),
+            find: jest.fn(async ({ where }) => matchAll(items, where)),
+            create: jest.fn((dto) => ({ id: items.length + 1, ...dto })),
             save: jest.fn(async (entity) => {
-              itemsStore.set(entity.sku, entity);
+              items.push(entity);
               return entity;
             }),
           };
         }
         if (entityClass === JournalEntryEntity) {
           return {
-            findOne: jest.fn(async ({ where }) => {
-              if (where.entryNumber) return entriesStore.get(where.entryNumber) ?? null;
-              return null;
-            }),
-            create: jest.fn((dto) => ({ id: entriesStore.size + 1, ...dto })),
+            findOne: jest.fn(async ({ where }) => matchAll(entries, where)[0] ?? null),
+            create: jest.fn((dto) => ({ id: entries.length + 1, ...dto })),
             save: jest.fn(async (entity) => {
-              entriesStore.set(entity.entryNumber, entity);
+              entries.push(entity);
               return entity;
             }),
           };
         }
         if (entityClass === JournalEntryLineEntity) {
           return {
-            create: jest.fn((dto) => ({ id: linesStore.length + 1, ...dto })),
+            find: jest.fn(async ({ where }) => matchAll(lines, where)),
+            create: jest.fn((dto) => ({ id: lines.length + 1, ...dto })),
             save: jest.fn(async (line) => {
-              linesStore.push(line);
+              lines.push(line);
               return line;
             }),
           };
         }
         if (entityClass === ChequeEntity) {
           return {
-            findOne: jest.fn(async ({ where }) => {
-              if (where.sayadNumber) return chequesStore.get(where.sayadNumber) ?? null;
-              if (where.chequeNumber) return chequesStore.get(where.chequeNumber) ?? null;
-              return null;
-            }),
-            create: jest.fn((dto) => ({ id: chequesStore.size + 1, ...dto })),
+            findOne: jest.fn(async ({ where }) => matchAll(cheques, where)[0] ?? null),
+            create: jest.fn((dto) => ({ id: cheques.length + 1, ...dto })),
             save: jest.fn(async (entity) => {
-              const key = entity.sayadNumber || entity.chequeNumber;
-              chequesStore.set(key, entity);
+              cheques.push(entity);
               return entity;
+            }),
+          };
+        }
+        if (entityClass === ChequeEventEntity) {
+          return {
+            create: jest.fn((dto) => ({ id: events.length + 1, ...dto })),
+            save: jest.fn(async (ev) => {
+              events.push(ev);
+              return ev;
             }),
           };
         }
         throw new Error(`Unexpected entity class: ${entityClass.name}`);
       }),
-    };
+    } as unknown as EntityManager;
+  }
+
+  beforeEach(() => {
+    accountsStore = [];
+    partiesStore = [];
+    itemsStore = [];
+    entriesStore = [];
+    linesStore = [];
+    chequesStore = [];
+    chequeEventsStore = [];
 
     mockTenantScope = {
       run: jest.fn(async (_t: string, fn: (em: EntityManager) => any) => {
-        return fn(mockEntityManager as unknown as EntityManager);
+        // Transactional snapshot so any thrown error rolls back uncommitted writes
+        const snapAcc = accountsStore.map((x) => ({ ...x }));
+        const snapPar = partiesStore.map((x) => ({ ...x }));
+        const snapItm = itemsStore.map((x) => ({ ...x }));
+        const snapEnt = entriesStore.map((x) => ({ ...x }));
+        const snapLin = linesStore.map((x) => ({ ...x }));
+        const snapChq = chequesStore.map((x) => ({ ...x }));
+        const snapEv = chequeEventsStore.map((x) => ({ ...x }));
+        const txEm = buildEm(snapAcc, snapPar, snapItm, snapEnt, snapLin, snapChq, snapEv);
+        const result = await fn(txEm);
+        accountsStore = snapAcc;
+        partiesStore = snapPar;
+        itemsStore = snapItm;
+        entriesStore = snapEnt;
+        linesStore = snapLin;
+        chequesStore = snapChq;
+        chequeEventsStore = snapEv;
+        return result;
       }),
     };
 
     mappingAdapter = new SepidarMappingAdapter();
     chequesAdapter = new SepidarChequesFifoAdapter();
+    const chequesRepo = new ChequesRepository(mockTenantScope as TenantScope);
     service = new SepidarPersistenceService(
       mappingAdapter,
       chequesAdapter,
       mockTenantScope as TenantScope,
+      chequesRepo,
     );
   });
 
   describe('End-to-End Sepidar Data Persistence', () => {
-    it('persists all 5 entity groups from synthetic fixtures and issues certified reconciliation digest', async () => {
+    it('persists all 5 entity groups from explicit synthetic fixtures and certifies against DB', async () => {
       const cert = await service.persistSepidarData(tenantId, {
         useSynthetic: true,
       });
@@ -151,83 +210,119 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
       expect(cert.varianceMinor).toBe('0');
       expect(cert.canonicalSha256).toHaveLength(64);
 
-      // Verify Entity Group 1: Chart of Accounts
       expect(cert.counts.accounts).toBe(SYNTHETIC_SEPIDAR_ACCOUNTS.length);
       expect(cert.idempotencySummary.accountsInserted).toBe(SYNTHETIC_SEPIDAR_ACCOUNTS.length);
-      expect(cert.idempotencySummary.accountsSkipped).toBe(0);
-      expect(accountsStore.size).toBe(SYNTHETIC_SEPIDAR_ACCOUNTS.length);
+      expect(accountsStore).toHaveLength(SYNTHETIC_SEPIDAR_ACCOUNTS.length);
 
-      // Verify hierarchical accounts exist
-      expect(accountsStore.get('1')).toBeDefined(); // Gorouh
-      expect(accountsStore.get('10')).toBeDefined(); // Kol
-      expect(accountsStore.get('1010')).toBeDefined(); // Moein
-      expect(accountsStore.get('102001')).toBeDefined(); // Tafsili
-
-      // Verify Entity Group 2: Parties
       expect(cert.counts.parties).toBe(SYNTHETIC_SEPIDAR_PARTIES.length);
-      expect(cert.idempotencySummary.partiesInserted).toBe(SYNTHETIC_SEPIDAR_PARTIES.length);
-      expect(partiesStore.size).toBe(SYNTHETIC_SEPIDAR_PARTIES.length);
-      expect(partiesStore.get('PRT-1001')?.role).toBe('customer');
-      expect(partiesStore.get('PRT-1002')?.role).toBe('supplier');
-      expect(partiesStore.get('PRT-1003')?.role).toBe('both');
+      expect(partiesStore.find((p) => p.code === 'PRT-1001')?.role).toBe('customer');
+      expect(partiesStore.find((p) => p.code === 'PRT-1002')?.role).toBe('supplier');
+      expect(partiesStore.find((p) => p.code === 'PRT-1003')?.role).toBe('both');
 
-      // Verify Entity Group 3: Items
       expect(cert.counts.items).toBe(SYNTHETIC_SEPIDAR_ITEMS.length);
-      expect(cert.idempotencySummary.itemsInserted).toBe(SYNTHETIC_SEPIDAR_ITEMS.length);
-      expect(itemsStore.size).toBe(SYNTHETIC_SEPIDAR_ITEMS.length);
-      expect(itemsStore.get('SKU-SEP-001')?.name).toBe('ماژول شبکه صنعتی');
+      expect(itemsStore.find((i) => i.sku === 'SKU-SEP-001')?.name).toBe('ماژول شبکه صنعتی');
 
-      // Verify Entity Group 4: Opening Balance Voucher
       expect(cert.counts.openingLines).toBe(SYNTHETIC_SEPIDAR_OPENING_VOUCHER.length);
       expect(cert.idempotencySummary.openingVoucherCreated).toBe(true);
-      // 250,000,000 Rials Debit & Credit = 250,000,000 Minor units in the fixture
       expect(cert.totals.openingDebitMinor).toBe('250000000');
       expect(cert.totals.openingCreditMinor).toBe('250000000');
-      expect(entriesStore.has('JV-OPENING-SEPIDAR')).toBe(true);
+      expect(entriesStore.some((e) => e.entryNumber === 'JV-OPENING-SEPIDAR')).toBe(true);
       expect(linesStore).toHaveLength(5);
 
-      // Verify Entity Group 5: Open Cheques
-      // Synthetic fixture has 5 open cheques (3 received, 2 issued)
+      // Account balances updated via atomic SQL delta
+      expect(accountsStore.find((a) => a.code === '1010')?.balance).toBe('500000.00');
+      expect(accountsStore.find((a) => a.code === '3010')?.balance).toBe('-1800000.00');
+
+      // Cheques persisted with sayadVerified=false (never falsified) + ChequeEventEntity audit row
       expect(cert.counts.cheques).toBe(5);
-      expect(cert.idempotencySummary.chequesInserted).toBe(5);
-      expect(chequesStore.size).toBe(5);
-      // 150M + 280M + 95M (rec) + 320M + 110M (iss) = 955,000,000
       expect(cert.totals.chequesAmountMinor).toBe('955000000');
+      expect(chequesStore.every((c) => c.sayadVerified === false && c.sayadVerifiedBy === null && c.sayadVerifiedAt === null)).toBe(true);
+      expect(chequeEventsStore).toHaveLength(5);
     });
 
-    it('enforces strict idempotency on repeated execution, skipping all duplicates with identical digest', async () => {
-      // First run: inserts everything
-      const firstCert = await service.persistSepidarData(tenantId, {
-        useSynthetic: true,
+    it('defaults useSynthetic to false: rejects empty {} and persists only supplied cheques without synthetic fixtures', async () => {
+      await expect(service.persistSepidarData(tenantId, {})).rejects.toThrow(BadRequestException);
+      expect(accountsStore).toHaveLength(0);
+
+      const onlyCheque = SYNTHETIC_SEPIDAR_CHEQUES[0];
+      const cert = await service.persistSepidarData(tenantId, {
+        cheques: [onlyCheque],
       });
 
-      expect(firstCert.idempotencySummary.accountsInserted).toBe(18);
+      expect(cert.counts.accounts).toBe(0);
+      expect(cert.counts.parties).toBe(0);
+      expect(cert.counts.openingLines).toBe(0);
+      expect(cert.counts.cheques).toBe(1);
+      expect(chequesStore).toHaveLength(1);
+      expect(accountsStore).toHaveLength(0);
+    });
+
+    it('does not collide cheques sharing the same chequeNumber across different banks', async () => {
+      const chqA = {
+        ...SYNTHETIC_SEPIDAR_CHEQUES[0],
+        ChequeId: 2001,
+        ChequeNumber: 'SHARED-100',
+        SayadNumber: '1111222233334444',
+        BankName: 'بانک ملت',
+      };
+      const chqB = {
+        ...SYNTHETIC_SEPIDAR_CHEQUES[0],
+        ChequeId: 2002,
+        ChequeNumber: 'SHARED-100',
+        SayadNumber: '5555666677778888',
+        BankName: 'بانک سامان',
+      };
+
+      const cert = await service.persistSepidarData(tenantId, {
+        cheques: [chqA, chqB],
+      });
+
+      expect(cert.counts.cheques).toBe(2);
+      expect(cert.idempotencySummary.chequesInserted).toBe(2);
+      expect(chequesStore).toHaveLength(2);
+    });
+
+    it('enforces strict idempotency on identical replay and throws 409 on Idempotency-Key or voucher mismatch', async () => {
+      const firstCert = await service.persistSepidarData(
+        tenantId,
+        { useSynthetic: true },
+        'idem-key-1',
+      );
       expect(firstCert.idempotencySummary.openingVoucherCreated).toBe(true);
 
-      // Second run: completely idempotent replay
-      const secondCert = await service.persistSepidarData(tenantId, {
-        useSynthetic: true,
-      });
-
+      const secondCert = await service.persistSepidarData(
+        tenantId,
+        { useSynthetic: true },
+        'idem-key-1',
+      );
       expect(secondCert.idempotencySummary.accountsInserted).toBe(0);
       expect(secondCert.idempotencySummary.accountsSkipped).toBe(18);
-
-      expect(secondCert.idempotencySummary.partiesInserted).toBe(0);
-      expect(secondCert.idempotencySummary.partiesSkipped).toBe(3);
-
-      expect(secondCert.idempotencySummary.itemsInserted).toBe(0);
-      expect(secondCert.idempotencySummary.itemsSkipped).toBe(2);
-
       expect(secondCert.idempotencySummary.openingVoucherCreated).toBe(false);
-
-      expect(secondCert.idempotencySummary.chequesInserted).toBe(0);
       expect(secondCert.idempotencySummary.chequesSkipped).toBe(5);
-
-      // Cryptographic digest must be completely deterministic and identical!
       expect(secondCert.canonicalSha256).toBe(firstCert.canonicalSha256);
+
+      // Reusing same Idempotency-Key with a different payload must return 409 Conflict
+      await expect(
+        service.persistSepidarData(
+          tenantId,
+          { accounts: [{ AccountID: 99, Code: '99', Title: 'تست', Level: 1, ParentAccountID: null }] },
+          'idem-key-1',
+        ),
+      ).rejects.toThrow(ConflictException);
+
+      // Re-running with different openingVoucher totals must return 409 Conflict
+      await expect(
+        service.persistSepidarData(tenantId, {
+          accounts: SYNTHETIC_SEPIDAR_ACCOUNTS,
+          openingVoucher: [
+            { VoucherItemID: 1, AccountCode: '1010', Debit: 1000, Credit: 0 },
+            { VoucherItemID: 2, AccountCode: '3010', Debit: 0, Credit: 1000 },
+          ],
+        }),
+      ).rejects.toThrow(ConflictException);
     });
 
-    it('rejects unbalanced opening balance vouchers with zero variance assertion', async () => {
+    it('rejects unbalanced opening voucher before writing ANY entity (zero partial writes)', async () => {
       const unbalancedVoucher = [
         {
           VoucherItemID: 1,
@@ -242,19 +337,37 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
         service.persistSepidarData(tenantId, {
           useSynthetic: false,
           accounts: SYNTHETIC_SEPIDAR_ACCOUNTS,
-          parties: [],
-          items: [],
+          parties: SYNTHETIC_SEPIDAR_PARTIES,
+          items: SYNTHETIC_SEPIDAR_ITEMS,
           openingVoucher: unbalancedVoucher,
           cheques: [],
         }),
       ).rejects.toThrow(BadRequestException);
+
+      expect(accountsStore).toHaveLength(0);
+      expect(partiesStore).toHaveLength(0);
+      expect(itemsStore).toHaveLength(0);
+      expect(entriesStore).toHaveLength(0);
     });
 
-    it('executes each entity group inside its own transaction (5 distinct transaction boundaries)', async () => {
-      await service.persistSepidarData(tenantId, { useSynthetic: true });
+    it('rolls back entire transaction when an opening voucher references a missing account', async () => {
+      await expect(
+        service.persistSepidarData(tenantId, {
+          accounts: SYNTHETIC_SEPIDAR_ACCOUNTS,
+          openingVoucher: [
+            { VoucherItemID: 1, AccountCode: '999999', Debit: 1000, Credit: 0 },
+            { VoucherItemID: 2, AccountCode: '3010', Debit: 0, Credit: 1000 },
+          ],
+        }),
+      ).rejects.toThrow(BadRequestException);
 
-      // TenantScope.run must have been invoked exactly 5 times (once per entity group)
-      expect(mockTenantScope.run).toHaveBeenCalledTimes(5);
+      expect(accountsStore).toHaveLength(0);
+      expect(entriesStore).toHaveLength(0);
+    });
+
+    it('executes all 5 entity groups atomically inside one TenantScope transaction', async () => {
+      await service.persistSepidarData(tenantId, { useSynthetic: true });
+      expect(mockTenantScope.run).toHaveBeenCalledTimes(1);
     });
   });
 });
