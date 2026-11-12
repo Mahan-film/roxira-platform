@@ -9,6 +9,7 @@ import { JournalEntryLineEntity } from '../accounting/entities/journal-entry-lin
 import { minorToDecimal, parseMinor } from '../accounting/money';
 import { ChequeEventEntity } from '../cheques/entities/cheque-event.entity';
 import { ChequeEntity } from '../cheques/entities/cheque.entity';
+import { ChequeStatus } from '../cheques/enums/cheque.enum';
 import { ChequesRepository } from '../cheques/repositories/cheques.repository';
 import { MAX_SEPIDAR_ARRAY_ITEMS, PersistSepidarDto } from './dto/sepidar-persist.dto';
 import { ImportMappingMemoryEntity } from './entities/import-mapping-memory.entity';
@@ -20,7 +21,10 @@ import {
   SYNTHETIC_SEPIDAR_OPENING_VOUCHER,
   SYNTHETIC_SEPIDAR_PARTIES,
 } from './__fixtures__/synthetic-sepidar.fixture';
-import { SYNTHETIC_SEPIDAR_CHEQUES } from './__fixtures__/synthetic-sepidar-p2.fixture';
+import {
+  SYNTHETIC_SEPIDAR_CHEQUES,
+  SepidarRawCheque,
+} from './__fixtures__/synthetic-sepidar-p2.fixture';
 import { SepidarChequesFifoAdapter } from './migration/bak/sepidar-cheques-fifo.adapter';
 import { SepidarMappingAdapter } from './migration/bak/sepidar-mapping.adapter';
 import { SepidarPersistenceService } from './services/sepidar-persistence.service';
@@ -148,8 +152,17 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
             findOne: jest.fn(async ({ where }) => matchAll(cheques, where)[0] ?? null),
             create: jest.fn((dto) => ({ id: cheques.length + 1, ...dto })),
             save: jest.fn(async (entity) => {
-              cheques.push(entity);
+              const idx = cheques.findIndex((c) => c.id === entity.id && c.tenantId === entity.tenantId);
+              if (idx >= 0) cheques[idx] = entity;
+              else cheques.push(entity);
               return entity;
+            }),
+            update: jest.fn(async (criteria, patch) => {
+              const target = cheques.find(
+                (c) => c.id === criteria.id && c.tenantId === criteria.tenantId,
+              );
+              if (target) Object.assign(target, patch);
+              return { affected: target ? 1 : 0 };
             }),
           };
         }
@@ -167,7 +180,11 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
             findOne: jest.fn(async ({ where }) => matchAll(idem, where)[0] ?? null),
             create: jest.fn((dto) => ({ ...dto })),
             save: jest.fn(async (entity) => {
-              idem.push(entity);
+              const idx = idem.findIndex(
+                (i) => i.signature === entity.signature && i.tenantId === entity.tenantId,
+              );
+              if (idx >= 0) idem[idx] = entity;
+              else idem.push(entity);
               return entity;
             }),
           };
@@ -329,7 +346,18 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
       await expect(
         service.persistSepidarData(
           tenantId,
-          { accounts: [{ AccountID: 99, Code: '99', Title: 'تست', Level: 1, ParentAccountID: null }] },
+          {
+            accounts: [
+              {
+                AccountID: 99,
+                Code: '99',
+                Title: 'تست',
+                Level: 1,
+                ParentAccountID: null,
+                AccountType: AccountType.EQUITY,
+              },
+            ],
+          },
           'idem-key-1',
         ),
       ).rejects.toThrow(ConflictException);
@@ -654,6 +682,103 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
           { type: 'body', metatype: PersistSepidarDto },
         ),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('replays successfully with the same Idempotency-Key and payload after legitimate DB edits (party phone, cheque status)', async () => {
+      const firstCert = await service.persistSepidarData(
+        tenantId,
+        { useSynthetic: true },
+        'idem-key-legit-replay',
+      );
+      expect(firstCert.balanced).toBe(true);
+      expect(partiesStore.length).toBeGreaterThan(0);
+      expect(chequesStore.length).toBeGreaterThan(0);
+
+      // Legitimate DB edits occur in business operations after import:
+      // A party phone is updated, and a cheque status moves from REGISTERED to DEPOSITED
+      partiesStore[0].phone = '09998887766';
+      chequesStore[0].status = ChequeStatus.DEPOSITED;
+
+      // Replaying with the same key and payload must succeed per LESSON 18
+      const replayCert = await service.persistSepidarData(
+        tenantId,
+        { useSynthetic: true },
+        'idem-key-legit-replay',
+      );
+      expect(replayCert.balanced).toBe(true);
+      expect(replayCert.idempotencySummary.partiesSkipped).toBe(firstCert.counts.parties);
+      expect(replayCert.idempotencySummary.chequesSkipped).toBe(firstCert.counts.cheques);
+    });
+
+    it('filters closed-state cheques before mapCheques and persists only open cheques without alignment errors', async () => {
+      const rawCheques: SepidarRawCheque[] = [
+        {
+          ChequeId: 101,
+          ChequeNumber: 'CHQ-OPEN-1',
+          Direction: 'received',
+          Amount: 10_000_000,
+          IssueDate: '2026-03-20',
+          DueDate: '2026-04-20',
+          PartyName: 'شرکت آریا',
+          PartyCode: 'P-101',
+          BankName: 'بانک ملت',
+          SayadNumber: '1234567890123456',
+          State: 'in_hand',
+        },
+        {
+          ChequeId: 102,
+          ChequeNumber: 'CHQ-CLOSED-1',
+          Direction: 'received',
+          Amount: 20_000_000,
+          IssueDate: '2026-03-20',
+          DueDate: '2026-04-20',
+          PartyName: 'شرکت آریا',
+          PartyCode: 'P-101',
+          BankName: 'بانک ملت',
+          SayadNumber: '1234567890123457',
+          State: 'cleared', // closed state
+        },
+      ];
+
+      const cert = await service.persistSepidarData(tenantId, {
+        cheques: rawCheques,
+      });
+
+      expect(cert.counts.cheques).toBe(1);
+      expect(cert.idempotencySummary.chequesInserted).toBe(1);
+      expect(chequesStore).toHaveLength(1);
+      expect(chequesStore[0].chequeNumber).toBe('CHQ-OPEN-1');
+    });
+
+    it('enforces attribute parity on cheque description drift when re-run without idempotency key', async () => {
+      const singleCheque: SepidarRawCheque = {
+        ChequeId: 201,
+        ChequeNumber: 'CHQ-DESC-1',
+        Direction: 'received',
+        Amount: 5_000_000,
+        IssueDate: '2026-03-20',
+        DueDate: '2026-04-20',
+        PartyName: 'شرکت پارس',
+        PartyCode: 'P-201',
+        BankName: 'بانک صادرات',
+        SayadNumber: '9988776655443322',
+        State: 'in_hand',
+      };
+
+      await service.persistSepidarData(tenantId, {
+        cheques: [singleCheque],
+      });
+      expect(chequesStore).toHaveLength(1);
+
+      // Mutate description in DB
+      chequesStore[0].description = 'شرح دستی متفاوت';
+
+      // Re-running without idempotency key detects attribute drift and throws ConflictException
+      await expect(
+        service.persistSepidarData(tenantId, {
+          cheques: [singleCheque],
+        }),
+      ).rejects.toThrow(ConflictException);
     });
   });
 });
