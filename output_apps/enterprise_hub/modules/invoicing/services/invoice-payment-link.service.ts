@@ -127,11 +127,17 @@ export class InvoicePaymentLinkService {
     }
 
     const existingLinks = await this.paymentRepo.findPaymentLinksByInvoiceId(tenantId, invoiceId);
-    const blockingLink = existingLinks.find((l) =>
-      ['PENDING', 'VERIFYING', 'PAID_UNSETTLED', 'SETTLING', 'PAID', 'RECONCILIATION_REQUIRED'].includes(
+    const PENDING_EXPIRY_MS = 20 * 60 * 1000;
+    const now = Date.now();
+    const blockingLink = existingLinks.find((l) => {
+      if (l.status === 'PENDING') {
+        const linkAge = l.createdAt ? now - new Date(l.createdAt).getTime() : 0;
+        return linkAge < PENDING_EXPIRY_MS;
+      }
+      return ['VERIFYING', 'PAID_UNSETTLED', 'SETTLING', 'PAID', 'RECONCILIATION_REQUIRED'].includes(
         l.status,
-      ),
-    );
+      );
+    });
     if (blockingLink) {
       throw new ConflictException(
         'برای این صورتحساب پیش‌تر لینک پرداخت فعال یا تاییدشده ثبت شده است.',
@@ -240,7 +246,7 @@ export class InvoicePaymentLinkService {
             gatewayRef: unsettled.gatewayRef || params.trackId,
             cardNumber: unsettled.cardNumber ?? null,
             paidAt: unsettled.paidAt ?? new Date(),
-          });
+          }, true);
         }
       }
       return {
@@ -289,11 +295,21 @@ export class InvoicePaymentLinkService {
         verifyResult.amountRials === null ||
         BigInt(verifyResult.amountRials) !== expectedRials
       ) {
-        await this.paymentRepo.markPaymentLinkStatus(tenantId, claimed.id, 'FAILED');
+        const mismatchRef = verifyResult.refNumber || params.trackId;
+        const mismatchData = {
+          gatewayRef: mismatchRef,
+          cardNumber: verifyResult.cardNumber ?? null,
+          paidAt: verifyResult.paidAt ?? new Date(),
+        };
+        await this.paymentRepo.markPaymentLinkReconciliationRequired(tenantId, claimed.id, mismatchData);
+        this.logger.error(
+          `Gateway payment amount mismatch: expected ${expectedRials} Rials, got ${verifyResult.amountRials} Rials ` +
+            `(trackId=${claimed.trackId}, ref=${mismatchRef}); flagged RECONCILIATION_REQUIRED`,
+        );
         return {
           success: false,
           paid: false,
-          message: 'مبلغ پرداخت‌شده نامعتبر است یا با مبلغ فاکتور تطابق ندارد.',
+          message: 'مبلغ پرداخت‌شده با مبلغ فاکتور تطابق ندارد و نیازمند مغایرت‌گیری مالی است.',
         };
       }
 
@@ -358,23 +374,62 @@ export class InvoicePaymentLinkService {
     tenantId: string,
     link: { id: string; invoiceId: string; trackId: string },
     gatewayData: { gatewayRef: string; cardNumber: string | null; paidAt: Date },
+    isRecovery = false,
   ): Promise<PaymentCallbackResultDto> {
     if (!link.invoiceId) {
       throw new InternalServerErrorException('Missing invoiceId on claimed payment link');
     }
     try {
       const invoice = await this.invoicingRepo.findById(tenantId, link.invoiceId);
-      if (!invoice || invoice.status !== InvoiceStatus.ISSUED) {
+      if (!invoice) {
         await this.paymentRepo.markPaymentLinkReconciliationRequired(tenantId, link.id, gatewayData);
         this.logger.error(
           `Gateway payment verified (trackId=${link.trackId}, ref=${gatewayData.gatewayRef}) ` +
-            `but invoice ${link.invoiceId} status is ${invoice?.status ?? 'MISSING'}; flagged RECONCILIATION_REQUIRED`,
+            `but invoice ${link.invoiceId} is missing; flagged RECONCILIATION_REQUIRED`,
         );
         return {
           success: false,
           paid: false,
           message:
-            'پرداخت در درگاه تأیید شد اما صورتحساب پیش‌تر پرداخت یا ابطال شده است و نیازمند مغایرت‌گیری مالی است.',
+            'پرداخت در درگاه تأیید شد اما صورتحساب یافت نشد و نیازمند مغایرت‌گیری مالی است.',
+        };
+      }
+
+      if (invoice.status === InvoiceStatus.PAID) {
+        if (isRecovery) {
+          // Invoice was already paid on a prior settle attempt before markPaymentLinkPaid threw.
+          // Complete the recovery: mark the link PAID and return success.
+          await this.paymentRepo.markPaymentLinkPaid(tenantId, link.id, gatewayData);
+          return {
+            success: true,
+            paid: true,
+            message: 'پرداخت با موفقیت تأیید شد و صورتحساب تسویه شده است.',
+          };
+        }
+        await this.paymentRepo.markPaymentLinkReconciliationRequired(tenantId, link.id, gatewayData);
+        this.logger.error(
+          `Gateway payment verified (trackId=${link.trackId}, ref=${gatewayData.gatewayRef}) ` +
+            `but invoice ${link.invoiceId} was already PAID; flagged RECONCILIATION_REQUIRED`,
+        );
+        return {
+          success: false,
+          paid: false,
+          message:
+            'پرداخت در درگاه تأیید شد اما صورتحساب پیش‌تر پرداخت شده است و نیازمند مغایرت‌گیری مالی است.',
+        };
+      }
+
+      if (invoice.status !== InvoiceStatus.ISSUED) {
+        await this.paymentRepo.markPaymentLinkReconciliationRequired(tenantId, link.id, gatewayData);
+        this.logger.error(
+          `Gateway payment verified (trackId=${link.trackId}, ref=${gatewayData.gatewayRef}) ` +
+            `but invoice ${link.invoiceId} status is ${invoice.status}; flagged RECONCILIATION_REQUIRED`,
+        );
+        return {
+          success: false,
+          paid: false,
+          message:
+            'پرداخت در درگاه تأیید شد اما وضعیت صورتحساب قابل تسویه نیست و نیازمند مغایرت‌گیری مالی است.',
         };
       }
 

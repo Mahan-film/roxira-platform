@@ -6,6 +6,7 @@
  * - Confirms server-side payment verification, fail-closed amount validation, atomic concurrency locking, and automated receipt voucher posting via posting rules.
  */
 import 'reflect-metadata';
+import * as crypto from 'crypto';
 import { Queue } from 'bullmq';
 import { AccountingRepository } from '../accounting/repositories/accounting.repository';
 import { AccountingService } from '../accounting/services/accounting.service';
@@ -50,7 +51,7 @@ describePg('Invoice Online Payment Links on PostgreSQL (NOSUPERUSER NOBYPASSRLS)
 
   beforeAll(async () => {
     process.env.PAYMENT_GATEWAY_ENCRYPTION_KEY =
-      process.env.PAYMENT_GATEWAY_ENCRYPTION_KEY || 'test_payment_gateway_encryption_key_32b!';
+      process.env.PAYMENT_GATEWAY_ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
     process.env.PAYMENT_GATEWAY_CALLBACK_BASE_URL = 'https://app.example.test';
 
     testDb = await createTestDatabase('pay_link');
