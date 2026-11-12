@@ -132,6 +132,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         keywords: ["voucher", "journal", "سند", "دفتر روزنامه"],
       },
       {
+        href: "/app/accounting/review",
+        label: "مرور حساب‌ها",
+        icon: "ListTree",
+        module: "accounting",
+        keywords: ["review", "drilldown", "مرور", "تراز", "معین", "تفصیلی", "دفتر کل"],
+      },
+      {
         href: "/app/accounting/chart",
         label: "درخت حساب‌ها",
         icon: "BookOpenCheck",

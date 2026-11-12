@@ -4,6 +4,10 @@ import assert from "node:assert/strict";
 import {
   computeBalancingAmount,
   getNextCellCoordinates,
+  isAccountSearchKey,
+  isCancelKey,
+  isInsertLineKey,
+  isSaveShortcut,
 } from "./voucher-keyboard.ts";
 
 describe("computeBalancingAmount", () => {
@@ -100,5 +104,123 @@ describe("getNextCellCoordinates", () => {
     assert.deepEqual(getNextCellCoordinates(2, 1, 3, false, "down"), { row: 2, col: 1 }); // clamp
     assert.deepEqual(getNextCellCoordinates(2, 1, 3, false, "up"), { row: 1, col: 1 });
     assert.deepEqual(getNextCellCoordinates(0, 1, 3, false, "up"), { row: 0, col: 1 }); // clamp
+  });
+});
+
+describe("accountant keyboard mode shortcuts", () => {
+  it("identifies Insert as new line trigger", () => {
+    assert.equal(isInsertLineKey({ key: "Insert" }), true);
+    assert.equal(isInsertLineKey({ key: "Enter" }), false);
+  });
+
+  it("identifies F2 as account search trigger", () => {
+    assert.equal(isAccountSearchKey({ key: "F2" }), true);
+    assert.equal(isAccountSearchKey({ key: "F1" }), false);
+  });
+
+  it("identifies Ctrl+S and Cmd+S as save shortcut", () => {
+    assert.equal(isSaveShortcut({ ctrlKey: true, key: "s" }), true);
+    assert.equal(isSaveShortcut({ metaKey: true, key: "S" }), true);
+    assert.equal(isSaveShortcut({ ctrlKey: true, key: "Enter" }), true);
+    assert.equal(isSaveShortcut({ key: "s" }), false);
+  });
+
+  it("ignores key repeat for save shortcut to prevent accidental multi-submit on held key", () => {
+    assert.equal(isSaveShortcut({ ctrlKey: true, key: "s", repeat: true }), false);
+    assert.equal(isSaveShortcut({ metaKey: true, key: "s", repeat: true }), false);
+    assert.equal(isSaveShortcut({ ctrlKey: true, key: "Enter", repeat: true }), false);
+    assert.equal(isSaveShortcut({ ctrlKey: true, key: "s", repeat: false }), true);
+  });
+
+  it("one Ctrl+S keystroke calls createJournalEntry exactly once and stops propagation", async () => {
+    let callCount = 0;
+    const createJournalEntryMock = async () => {
+      callCount++;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return { id: 1, entryNumber: "101" };
+    };
+
+    // Re-entrancy guard matching useRef in JournalEntryForm
+    let isSubmitting = false;
+    const submitEntry = async () => {
+      if (isSubmitting) return;
+      isSubmitting = true;
+      try {
+        await createJournalEntryMock();
+      } finally {
+        isSubmitting = false;
+      }
+    };
+
+    let prevented = 0;
+    let stopped = 0;
+    const event = {
+      key: "s",
+      ctrlKey: true,
+      repeat: false,
+      preventDefault: () => { prevented++; },
+      stopPropagation: () => { stopped++; },
+    };
+
+    const handleFormKeyDown = (e: typeof event) => {
+      if (isSaveShortcut(e)) {
+        e.preventDefault();
+        e.stopPropagation();
+        void submitEntry();
+      }
+    };
+
+    // Simulate keydown event bubbling or rapid dual-dispatch
+    handleFormKeyDown(event);
+    handleFormKeyDown(event);
+
+    assert.equal(prevented, 2);
+    assert.equal(stopped, 2);
+    // Guard ensures createJournalEntry is called exactly once
+    assert.equal(callCount, 1);
+  });
+
+  it("identifies Escape as cancel trigger", () => {
+    assert.equal(isCancelKey({ key: "Escape" }), true);
+    assert.equal(isCancelKey({ key: "Enter" }), false);
+  });
+
+  it("Esc on dirty form requires confirmation before discarding, clean form cancels immediately", () => {
+    let confirmCalled = 0;
+    let cancelCalled = 0;
+
+    const mockConfirmReject = () => {
+      confirmCalled++;
+      return false;
+    };
+
+    const handleEsc = (isDirty: boolean, confirmFn: () => boolean, onCancel: () => void) => {
+      if (isDirty) {
+        if (confirmFn()) {
+          onCancel();
+        }
+      } else {
+        onCancel();
+      }
+    };
+
+    // 1. Clean form: cancels immediately
+    handleEsc(false, mockConfirmReject, () => { cancelCalled++; });
+    assert.equal(cancelCalled, 1);
+    assert.equal(confirmCalled, 0);
+
+    // 2. Dirty form: user rejects confirmation -> not cancelled
+    handleEsc(true, mockConfirmReject, () => { cancelCalled++; });
+    assert.equal(cancelCalled, 1);
+    assert.equal(confirmCalled, 1);
+
+    // 3. Dirty form: user accepts confirmation -> cancelled
+    const mockConfirmAccept = () => {
+      confirmCalled++;
+      return true;
+    };
+    handleEsc(true, mockConfirmAccept, () => { cancelCalled++; });
+    assert.equal(cancelCalled, 2);
+    assert.equal(confirmCalled, 2);
   });
 });

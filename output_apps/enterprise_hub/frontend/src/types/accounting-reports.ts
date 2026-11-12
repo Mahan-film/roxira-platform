@@ -54,6 +54,7 @@ export interface LedgerReport {
   period: ReportPeriod;
   accountCode: string;
   accountName: string;
+  partyCode?: string | null;
   opening: Money;
   totalDebit: Money;
   totalCredit: Money;
@@ -62,6 +63,7 @@ export interface LedgerReport {
   lines: Array<{
     journalEntryId: number;
     entryNumber: string;
+    permanentNumber?: string | null;
     date: string;
     accountCode: string;
     accountName: string;

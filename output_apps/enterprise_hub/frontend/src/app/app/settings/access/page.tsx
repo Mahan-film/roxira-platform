@@ -41,6 +41,12 @@ export default function AccessSettingsPage() {
   const [entitlements, setEntitlements] = useState<EntitlementView[]>([]);
 
   useEffect(() => {
+    if (accessLoading) return;
+    if (!can("members", "read")) {
+      setLoading(false);
+      return;
+    }
+
     const controller = new AbortController();
     const signal = controller.signal;
 
@@ -69,7 +75,7 @@ export default function AccessSettingsPage() {
       });
 
     return () => controller.abort();
-  }, []);
+  }, [accessLoading, can]);
 
   // Access check: requires members:read
   if (!accessLoading && !can("members", "read")) {

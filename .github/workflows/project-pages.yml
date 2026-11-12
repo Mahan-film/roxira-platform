@@ -76,7 +76,7 @@ jobs:
         run: python3 -m src.factory_pipeline.template_check "projects/$SLUG"
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: projects/${{ env.SLUG }}/out
 
@@ -94,4 +94,4 @@ jobs:
     steps:
       - name: Deploy
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

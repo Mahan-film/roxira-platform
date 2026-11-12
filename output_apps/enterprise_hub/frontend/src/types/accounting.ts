@@ -60,6 +60,7 @@ export interface JournalEntryLine {
   currency: Currency;
   debit: number;
   credit: number;
+  partyCode?: string | null;
   description: string | null;
 }
 

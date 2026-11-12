@@ -149,6 +149,11 @@ describePg('Financial reports on PostgreSQL', () => {
     const kol = await reports.trialBalance(COMPANY, { ...query(), level: 'KOL' as never });
     expect(kol.rows.map((r) => r.code)).toEqual(['10', '11', '20', '21', '30', '40', '50', '51', '52']);
     expect(kol.balanced).toBe(true);
+
+    const subtree = await reports.trialBalance(COMPANY, { ...query(), accountCode: '10' });
+    expect(subtree.rows.length).toBeGreaterThan(0);
+    expect(subtree.rows.every((r) => r.code.startsWith('10'))).toBe(true);
+    await expect(reports.trialBalance(COMPANY, { ...query(), accountCode: 'NON_EXISTENT_9999' })).rejects.toThrow();
   });
 
   it('gives general and subsidiary ledgers that agree with the trial balance', async () => {
