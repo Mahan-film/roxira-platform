@@ -10,6 +10,7 @@ import {
   type InvoiceResponseDto,
 } from "../../types/invoicing.ts";
 
+import { safeLogoUrl } from "./safe-url.ts";
 import type { PrintColumnConfig } from "../../types/print-template.ts";
 
 /** The Moadian e-invoice types; any other value (there is no "none" member) is not an e-invoice. */
@@ -40,7 +41,7 @@ export function mapInvoiceToSalesInvoiceA4Data(
 ): Record<string, unknown> {
   const foreign = isForeignInvoice(invoice);
   const isEinvoice = MOADIAN_TYPES.includes(invoice.einvoiceType);
-  const logo = options?.showLogo === false ? "" : (options?.logoUrl ?? "");
+  const logo = options?.showLogo === false ? "" : safeLogoUrl(options?.logoUrl);
 
   return {
     docTitle: options?.docTitle || "فاکتور فروش",

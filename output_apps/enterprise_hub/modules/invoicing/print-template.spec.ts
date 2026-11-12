@@ -270,12 +270,38 @@ describe('PrintTemplateService & Repository', () => {
     });
 
     it('encodes real EAN-13 vector SVG with 30 bars and guard patterns', () => {
-      const res = generateBarcodeSvg('6260000000011');
+      const res = generateBarcodeSvg('6260000000019'); // valid check digit
       expect(res.symbology).toBe('EAN-13');
+      expect(res.encodedText).toBe('6260000000019');
       expect(res.svg).toContain('<svg class="barcode-svg"');
       expect(res.svg).toContain('<rect x="7"'); // EAN quiet zone
       const matches = res.svg.match(/<rect /g);
       expect(matches).toHaveLength(30);
+    });
+
+    it('does not rewrite a wrong EAN-13 check digit: falls back to Code128 with the stored value', () => {
+      const res = generateBarcodeSvg('6260000000011'); // check digit should be 9
+      expect(res.symbology).toBe('Code128');
+      expect(res.encodedText).toBe('6260000000011');
+    });
+
+    it('HTML-escapes tenant-supplied title, sku and barcode text in the label sheet', () => {
+      const html = service.renderBarcodeLabelSheetHtml({
+        columns: 4,
+        items: [
+          {
+            sku: '"onerror=alert(1) x="',
+            barcode: '<script>alert(2)</script>',
+            title: '<script>alert(3)</script><img src=x onerror=alert(4)>',
+            price: '1000',
+            count: 1,
+          },
+        ],
+      } as never);
+      expect(html).not.toContain('<script>');
+      expect(html).not.toContain('<img src=x');
+      expect(html).not.toContain('"onerror=');
+      expect(html).toContain('&lt;script&gt;');
     });
   });
 });

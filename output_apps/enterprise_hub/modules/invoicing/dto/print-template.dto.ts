@@ -134,7 +134,7 @@ export class CreatePrintTemplateDto {
   @IsOptional()
   @IsString()
   @MaxLength(512)
-  @Matches(/^(https:\/\/[a-zA-Z0-9_.-]+(:[0-9]+)?(\/[-a-zA-Z0-9@:%._+~#=/?&]*)?|data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+|\/[-a-zA-Z0-9_.~#/?&=]+)$/, {
+  @Matches(/^(https:\/\/[a-zA-Z0-9_.-]+(:[0-9]+)?(\/[-a-zA-Z0-9@:%._+~#=/?&]*)?|data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+|\/(?!\/)[-a-zA-Z0-9_.~#/?&=]*)$/, {
     message: 'آدرس لوگو باید یک URL معتبر امن (https بدون کاراکترهای خاص) یا داده تصویری شطرنجی (بدون SVG) باشد',
   })
   logoUrl?: string;
@@ -182,7 +182,7 @@ export class UpdatePrintTemplateDto {
   @IsOptional()
   @IsString()
   @MaxLength(512)
-  @Matches(/^(https:\/\/[a-zA-Z0-9_.-]+(:[0-9]+)?(\/[-a-zA-Z0-9@:%._+~#=/?&]*)?|data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+|\/[-a-zA-Z0-9_.~#/?&=]+)$/, {
+  @Matches(/^(https:\/\/[a-zA-Z0-9_.-]+(:[0-9]+)?(\/[-a-zA-Z0-9@:%._+~#=/?&]*)?|data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+|\/(?!\/)[-a-zA-Z0-9_.~#/?&=]*)$/, {
     message: 'آدرس لوگو باید یک URL معتبر امن (https بدون کاراکترهای خاص) یا داده تصویری شطرنجی (بدون SVG) باشد',
   })
   logoUrl?: string;

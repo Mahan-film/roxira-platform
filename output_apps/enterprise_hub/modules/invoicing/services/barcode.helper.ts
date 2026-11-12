@@ -39,6 +39,14 @@ export function isEan13(value: string): boolean {
   return /^\d{13}$/.test(clean);
 }
 
+export function hasValidEan13Check(value: string): boolean {
+  const clean = value
+    .trim()
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776))
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632));
+  return /^\d{13}$/.test(clean) && Number(clean[12]) === computeEan13CheckDigit(clean.slice(0, 12));
+}
+
 /**
  * Normalises input to safe, collision-free ASCII characters for Code128.
  * Persian/Arabic digits are converted to ASCII digits; non-ASCII characters
@@ -170,7 +178,9 @@ export function generateBarcodeSvg(
   height = 24,
 ): { svg: string; symbology: 'EAN-13' | 'Code128'; encodedText: string } {
   const clean = value.trim();
-  if (isEan13(clean)) {
+  // A 13-digit value with a wrong check digit is NOT rewritten: it falls back to
+  // Code128 so the bars always encode exactly the stored value.
+  if (isEan13(clean) && hasValidEan13Check(clean)) {
     const res = encodeEan13Svg(clean, height);
     return {
       svg: res.svg,
