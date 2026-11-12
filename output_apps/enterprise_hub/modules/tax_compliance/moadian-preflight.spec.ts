@@ -87,7 +87,7 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
     });
   });
 
-  describe('VAT Rate Matching Fiscal Year (10% for 1404-1405)', () => {
+  describe('VAT Rate Matching Expected Statutory Rate', () => {
     it('extracts Jalali year correctly', () => {
       // 2025-11-10 is in Jalali year 1404
       expect(getJalaliYear('2025-11-10T00:00:00Z')).toBe(1404);
@@ -95,7 +95,7 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
       expect(getJalaliYear('2026-11-10T00:00:00Z')).toBe(1405);
     });
 
-    it('accepts 10% (0.10) for year 1404 and 1405', () => {
+    it('accepts rate equal to provided expectedVatRate (0.10)', () => {
       const res1404 = validateVatRateForYear(0.1, 0.1);
       expect(res1404.valid).toBe(true);
       expect(res1404.expected).toBe(0.1);
@@ -576,5 +576,18 @@ describe('toMinorUnits (exact decimal parsing, no float)', () => {
       'totalAmount',
     ]);
     expect(errors.some((e) => /MATH_MISMATCH|HEADER_/.test(e.code))).toBe(false);
+  });
+
+  it('reports AMOUNT_INVALID on corrupt non-numeric vatRate without throwing RangeError', () => {
+    const invoice = {
+      currency: Currency.IRR,
+      issuedAt: new Date('2026-11-10T12:00:00.000Z'),
+      sellerInfo: { name: 's', nationalId: '10380284790' },
+      buyerInfo: { name: 'b' },
+      totalAmount: 1000,
+      items: [{ description: 'x', quantity: 1, unitPrice: 1000, discount: 0, vatRate: 'bad-rate', taxCode: '2330001234567' }],
+    } as unknown as InvoiceResponseDto;
+    const errors = runMoadianPreFlightValidation(invoice, { expectedVatRate: 0.1 }).errors;
+    expect(errors.filter((e) => e.code === 'AMOUNT_INVALID').map((e) => e.field)).toContain('items[0].vatRate');
   });
 });

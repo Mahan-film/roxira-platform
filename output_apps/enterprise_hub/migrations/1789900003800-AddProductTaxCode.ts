@@ -1,10 +1,10 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
- * Migration 1789900002900: Add tax_code (13-digit SSTID) to erp_stock_items (#728 / T71).
+ * Migration 1789900003800: Add tax_code (13-digit SSTID) to erp_stock_items (#728 / T71).
  */
-export class AddProductTaxCode1789900002900 implements MigrationInterface {
-  name = 'AddProductTaxCode1789900002900';
+export class AddProductTaxCode1789900003800 implements MigrationInterface {
+  name = 'AddProductTaxCode1789900003800';
 
   public async up(q: QueryRunner): Promise<void> {
     await q.query(

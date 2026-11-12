@@ -7,6 +7,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  IsUUID,
   Length,
   Max,
   Min,
@@ -71,4 +72,10 @@ export class SubmitMoadianInvoiceDto {
   @ValidateNested()
   @Type(() => MoadianExtrasDto)
   extras?: MoadianExtrasDto;
+}
+
+/** Route parameter DTO for Moadian invoice endpoints. */
+export class MoadianInvoiceIdParamDto {
+  @IsUUID('4', { message: 'شناسه صورتحساب باید UUID معتبر باشد.' })
+  invoiceId!: string;
 }
