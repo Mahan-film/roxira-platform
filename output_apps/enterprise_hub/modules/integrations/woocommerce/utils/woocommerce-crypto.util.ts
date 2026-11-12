@@ -6,8 +6,14 @@ function getMasterKey(customKey?: Buffer): Buffer {
   if (customKey && customKey.length === 32) {
     return customKey;
   }
-  const envKey = process.env.WOOCOMMERCE_KEY_ENCRYPTION_KEY || process.env.MOADIAN_KEY_ENCRYPTION_KEY || process.env.APP_SECRET || 'roxira-default-integration-secret-32b!';
-  return createHash('sha256').update(envKey).digest();
+  const envKey =
+    process.env.WOOCOMMERCE_KEY_ENCRYPTION_KEY ||
+    process.env.MOADIAN_KEY_ENCRYPTION_KEY ||
+    process.env.APP_SECRET;
+  if (!envKey || envKey.trim().length === 0) {
+    throw new Error('WOOCOMMERCE_KEY_ENCRYPTION_KEY is not configured (fail closed)');
+  }
+  return createHash('sha256').update(envKey.trim()).digest();
 }
 
 export function sealSecret(plaintext: string, tenantId: string, customKey?: Buffer): string {

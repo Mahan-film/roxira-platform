@@ -20,7 +20,7 @@ import {
 import { WooCommerceRepository } from './repositories/woocommerce.repository';
 import { WooCommerceSyncService } from './services/woocommerce-sync.service';
 import { computeHmacSignature, verifyHmacSignature } from './utils/woocommerce-crypto.util';
-import { CreateWooCommerceIntegration1789900002800 } from '../../../migrations/1789900002800-CreateWooCommerceIntegration';
+import { CreateWooCommerceIntegration1789900003000 } from '../../../migrations/1789900003000-CreateWooCommerceIntegration';
 
 const HOST = process.env.ROXIRA_TEST_PG_HOST;
 const describePg = HOST ? describe : describe.skip;
@@ -56,20 +56,22 @@ describePg('WooCommerce Integration on PostgreSQL (NOSUPERUSER NOBYPASSRLS) (T85
   let scope: TenantScope;
 
   beforeAll(async () => {
+    process.env.WOOCOMMERCE_KEY_ENCRYPTION_KEY = 'test_woocommerce_encryption_key_32b!';
     admin = await new DataSource({ ...options('postgres'), entities: [], migrations: [] }).initialize();
     await admin.query(`CREATE DATABASE "${db}"`);
-    await admin.query(`DROP ROLE IF EXISTS roxira_app`);
-    await admin.query(`CREATE ROLE roxira_app LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${APP_PW}'`);
+    const appRole = process.env.ROXIRA_TEST_APP_ROLE || 'roxira_app';
+    const appPw = process.env.ROXIRA_TEST_APP_PASSWORD || APP_PW;
+    await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${appRole}') THEN CREATE ROLE ${appRole} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${appPw}'; END IF; END $$;`);
 
     owner = await new DataSource(options(db)).initialize();
     await owner.runMigrations();
 
-    await owner.query(`GRANT CONNECT ON DATABASE "${db}" TO roxira_app`);
-    await owner.query(`GRANT USAGE ON SCHEMA public TO roxira_app`);
-    await owner.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO roxira_app`);
-    await owner.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO roxira_app`);
+    await owner.query(`GRANT CONNECT ON DATABASE "${db}" TO ${appRole}`);
+    await owner.query(`GRANT USAGE ON SCHEMA public TO ${appRole}`);
+    await owner.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${appRole}`);
+    await owner.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${appRole}`);
 
-    app = await new DataSource({ ...options(db, 'roxira_app', APP_PW), extra: { max: 4 } }).initialize();
+    app = await new DataSource({ ...options(db, appRole, appPw), extra: { max: 4 } }).initialize();
     scope = new TenantScope(app);
     wooRepo = new WooCommerceRepository(
       app.getRepository(WooCommerceConfigEntity),
