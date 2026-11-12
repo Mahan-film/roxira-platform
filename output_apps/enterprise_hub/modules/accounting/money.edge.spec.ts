@@ -1,4 +1,11 @@
-import { MoneyFormatError, fromDb, sumMinor, toMinor } from './money';
+import {
+  MoneyFormatError,
+  fromDb,
+  minorToMillionRials,
+  rialsToMillionRials,
+  sumMinor,
+  toMinor,
+} from './money';
 
 describe('money.ts edge cases', () => {
   describe('toMinor', () => {
@@ -69,6 +76,32 @@ describe('money.ts edge cases', () => {
     it('treats null and undefined as zero', () => {
       expect(fromDb(null)).toEqual(0n);
       expect(fromDb(undefined)).toEqual(0n);
+    });
+  });
+
+  describe('minorToMillionRials and rialsToMillionRials', () => {
+    it('minorToMillionRials converts exact minor units without floats', () => {
+      expect(minorToMillionRials(0n)).toBe('0');
+      // 1 Rial = 100 minor units -> 0.000001 million rials
+      expect(minorToMillionRials(100n)).toBe('0.000001');
+      // 1,000,000 Rials = 100,000,000 minor units -> 1 million rials
+      expect(minorToMillionRials(100_000_000n)).toBe('1');
+      // 2,500,000 Rials = 250,000,000 minor units -> 2.5 million rials
+      expect(minorToMillionRials(250_000_000n)).toBe('2.5');
+      // 50,000,000 Rials = 5,000,000,000 minor units -> 50 million rials
+      expect(minorToMillionRials(5_000_000_000n)).toBe('50');
+      // Negative
+      expect(minorToMillionRials(-100_000_000n)).toBe('-1');
+      expect(minorToMillionRials(-250_000_000n)).toBe('-2.5');
+    });
+
+    it('rialsToMillionRials converts whole rials without floats', () => {
+      expect(rialsToMillionRials(0n)).toBe('0');
+      expect(rialsToMillionRials(1n)).toBe('0.000001');
+      expect(rialsToMillionRials(1_000_000n)).toBe('1');
+      expect(rialsToMillionRials(2_500_000n)).toBe('2.5');
+      expect(rialsToMillionRials(50_000_000n)).toBe('50');
+      expect(rialsToMillionRials(-1_000_000n)).toBe('-1');
     });
   });
 });

@@ -131,3 +131,53 @@ export function scaledToDecimal(scaled: bigint, scale: number): string {
   const text = scaled.toString().padStart(scale + 1, '0');
   return `${text.slice(0, -scale)}.${text.slice(-scale)}`;
 }
+
+/**
+ * Exact half-up BigInt rounding from minor units (`scale 2`: 100 minor = 1 Rial)
+ * to whole units of size `unitMinor` (e.g. `100n` for whole Rials, `100_000_000n` for million Rials).
+ */
+export function roundMinorHalfUp(minor: bigint, unitMinor: bigint): bigint {
+  if (unitMinor <= 0n) {
+    throw new MoneyFormatError(`Invalid rounding unit: ${unitMinor}`);
+  }
+  const negative = minor < 0n;
+  const abs = negative ? -minor : minor;
+  const rounded = (abs + unitMinor / 2n) / unitMinor;
+  return negative ? -rounded : rounded;
+}
+
+/**
+ * Exact million-rials representation of minor units (bigint, scale 2: 100 minor units = 1 Rial).
+ * 1 Million Rials = 1,000,000 Rials = 100,000,000 minor units.
+ * Never uses float arithmetic.
+ */
+export function minorToMillionRials(minor: bigint): string {
+  const negative = minor < 0n;
+  const abs = negative ? -minor : minor;
+  const MILLION_MINOR_FACTOR = 100_000_000n;
+  const integer = abs / MILLION_MINOR_FACTOR;
+  const remainder = abs % MILLION_MINOR_FACTOR;
+  if (remainder === 0n) {
+    return `${negative ? '-' : ''}${integer}`;
+  }
+  const fraction = remainder.toString().padStart(8, '0').replace(/0+$/, '');
+  return `${negative ? '-' : ''}${integer}.${fraction}`;
+}
+
+/**
+ * Exact million-rials representation of whole rials (bigint).
+ * 1 Million Rials = 1,000,000 Rials.
+ */
+export function rialsToMillionRials(rials: bigint): string {
+  const negative = rials < 0n;
+  const abs = negative ? -rials : rials;
+  const MILLION_RIALS_FACTOR = 1_000_000n;
+  const integer = abs / MILLION_RIALS_FACTOR;
+  const remainder = abs % MILLION_RIALS_FACTOR;
+  if (remainder === 0n) {
+    return `${negative ? '-' : ''}${integer}`;
+  }
+  const fraction = remainder.toString().padStart(6, '0').replace(/0+$/, '');
+  return `${negative ? '-' : ''}${integer}.${fraction}`;
+}
+
