@@ -9,6 +9,7 @@ import {
   validateVatRateForYear,
   validateItemTaxCode,
   runMoadianPreFlightValidation,
+  toMinorUnits,
   getJalaliYear,
 } from './utils/moadian-preflight.validator';
 
@@ -531,5 +532,49 @@ describe('Moadian server error hints (0301 / 0202 / 0012)', () => {
     const errs = runMoadianPreFlightValidation(base, { now, invoiceType: 1 }).errors;
     expect(errs.find((e) => e.code === 'BUYER_ID_REQUIRED_TYPE1')?.message).toContain('0012');
     expect(runMoadianPreFlightValidation(base, { now, invoiceType: 2 }).errors.map((e) => e.code)).not.toContain('BUYER_ID_REQUIRED_TYPE1');
+  });
+});
+
+describe('toMinorUnits (exact decimal parsing, no float)', () => {
+  it('parses decimals exactly', () => {
+    expect(toMinorUnits('0.1', 2)).toBe(10n);
+    expect(toMinorUnits('29', 0)).toBe(29n);
+    expect(toMinorUnits(29, 2)).toBe(2900n);
+    expect(toMinorUnits('1234.5', 2)).toBe(123450n);
+    expect(toMinorUnits(0.1, 2)).toBe(10n);
+    expect(toMinorUnits(1e-7, 8)).toBe(10n);
+    expect(toMinorUnits('۱۲.۵', 1)).toBe(125n);
+    expect(toMinorUnits(null, 2)).toBe(0n);
+    expect(toMinorUnits('', 2)).toBe(0n);
+  });
+
+  it('rounds half up at the scale, with no float error', () => {
+    expect(toMinorUnits('1234.5678', 2)).toBe(123457n);
+    expect(toMinorUnits('1234.5649', 2)).toBe(123456n);
+    expect(toMinorUnits('1.005', 2)).toBe(101n); // float math gives 100
+    expect(toMinorUnits('9007199254740993.5', 0)).toBe(9007199254740994n); // above 2^53
+  });
+
+  it('rejects non-numeric input', () => {
+    for (const bad of ['abc', '1,5', '1e5', '--1', '1.2.3', ' ', '12abc', NaN, Infinity]) {
+      expect(() => toMinorUnits(bad as never, 2)).toThrow();
+    }
+  });
+
+  it('reports AMOUNT_INVALID instead of guessing', () => {
+    const invoice = {
+      currency: Currency.IRR,
+      issuedAt: new Date('2026-11-10T12:00:00.000Z'),
+      sellerInfo: { name: 's', nationalId: '10380284790' },
+      buyerInfo: { name: 'b' },
+      totalAmount: 'abc',
+      items: [{ description: 'x', quantity: 1, unitPrice: '12x', discount: 0, vatRate: 0.1, taxCode: '2330001234567' }],
+    } as unknown as InvoiceResponseDto;
+    const errors = runMoadianPreFlightValidation(invoice, { expectedVatRate: 0.1 }).errors;
+    expect(errors.filter((e) => e.code === 'AMOUNT_INVALID').map((e) => e.field).sort()).toEqual([
+      'items[0].unitPrice',
+      'totalAmount',
+    ]);
+    expect(errors.some((e) => /MATH_MISMATCH|HEADER_/.test(e.code))).toBe(false);
   });
 });
