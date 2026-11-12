@@ -158,7 +158,7 @@ export function ChequeCalculator({ direction: initialDirection = "received" }: C
           ? await calculateSelectionDiscountApi({
               chequeIds: Array.from(selectedIds),
               annualRatePercent: rateNumber,
-              baseDate,
+              baseDate: baseDate || undefined,
             })
           : await calculateDiscountApi({
               items: result.items.map((item) => ({
@@ -169,7 +169,7 @@ export function ChequeCalculator({ direction: initialDirection = "received" }: C
                 description: item.description,
               })),
               annualRatePercent: rateNumber,
-              baseDate,
+              baseDate: baseDate || undefined,
             });
       if (areCalculatorResultsEqual(result, serverRes)) {
         setServerVerifyMessage(

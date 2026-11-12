@@ -859,4 +859,15 @@ describe('ChequesService Ras-giri and Discounting (T72)', () => {
     expect(deduped.totalCount).toBe(1);
     expect(deduped.totalAmount).toBe('500');
   });
+
+  it('denies cross-tenant cheque selection with NotFoundException', async () => {
+    const t = build();
+    const otherTenantCheque = await t.service.create(B, received({ sayadNumber: undefined, amount: 500, dueDate: '2026-11-20' }) as never);
+    await expect(
+      t.service.calculateSelectionRasgiri(A, [otherTenantCheque.id], '2026-11-10'),
+    ).rejects.toThrow('چک یافت نشد');
+    await expect(
+      t.service.calculateSelectionDiscount(A, [otherTenantCheque.id], 24, '2026-11-10'),
+    ).rejects.toThrow('چک یافت نشد');
+  });
 });

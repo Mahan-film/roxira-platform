@@ -94,11 +94,14 @@ function isValidYmd(year: number, month: number, day: number): boolean {
   );
 }
 
-/** Converts Date or string to YYYY-MM-DD (using Asia/Tehran calendar day for Date instants). */
+/** Converts Date or string to YYYY-MM-DD (using Asia/Tehran calendar day for Date / TZ-aware instants). */
 export function normalizeDateToYmd(dateInput: Date | string): string {
   if (typeof dateInput === 'string') {
     const trimmed = toAsciiDigits(dateInput.trim());
-    const datePrefix = /^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/.exec(trimmed);
+    // Plain date or timestamp without explicit timezone offset preserves its calendar YYYY-MM-DD.
+    // TZ-qualified ISO strings (Z or ±HH:MM) fall through to tehranIsoDate so they match Date inputs.
+    const hasExplicitTz = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(trimmed);
+    const datePrefix = !hasExplicitTz ? /^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/.exec(trimmed) : null;
     if (datePrefix) {
       const y = Number(datePrefix[1]);
       const m = Number(datePrefix[2]);

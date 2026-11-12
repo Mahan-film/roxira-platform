@@ -14,6 +14,7 @@ import {
   Matches,
   Max,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 
@@ -33,9 +34,17 @@ const normalizeAmountInput = ({ value }: { value: unknown }) => {
 
 const POSITIVE_AMOUNT_PATTERN = /^(?!0+(?:\.0+)?$)\d{1,16}(?:\.\d{1,2})?$/;
 
+const normalizeOptionalTrim = ({ value }: { value: unknown }) =>
+  typeof value === 'string' && value.trim() === '' ? undefined : value;
+
 export class ChequeCalculationItemDto {
   @ApiPropertyOptional({ description: 'شناسه اختیاری چک در پایگاه داده یا شماره ردیف', example: 101 })
+  @Transform(normalizeOptionalTrim)
   @IsOptional()
+  @ValidateIf((_o, v) => v !== undefined && v !== null && typeof v !== 'number')
+  @IsString({ message: 'شناسه چک باید عدد صحیح یا رشته باشد.' })
+  @ValidateIf((_o, v) => v !== undefined && v !== null && typeof v !== 'string')
+  @IsInt({ message: 'شناسه چک باید عدد صحیح یا رشته باشد.' })
   id?: string | number;
 
   @ApiProperty({ description: 'مبلغ چک (ریال، حداکثر ۲ رقم اعشار)', example: '50000000' })
@@ -71,6 +80,7 @@ export class CalculateRasgiriDto {
   })
   @IsArray({ message: 'فهرست چک‌ها باید آرایه باشد.' })
   @ArrayMinSize(1, { message: 'حداقل یک فقره چک برای محاسبه راس‌گیری الزامی است.' })
+  @ArrayMaxSize(200, { message: 'حداکثر ۲۰۰ فقره چک در هر درخواست مجاز است.' })
   @ValidateNested({ each: true })
   @Type(() => ChequeCalculationItemDto)
   items: ChequeCalculationItemDto[];
@@ -79,6 +89,7 @@ export class CalculateRasgiriDto {
     description: 'تاریخ مبنا (پیش‌فرض: امروز به وقت تهران YYYY-MM-DD)',
     example: '2026-11-11',
   })
+  @Transform(normalizeOptionalTrim)
   @IsOptional()
   @IsDateString({}, { message: 'فرمت تاریخ مبنا نامعتبر است.' })
   baseDate?: string;
@@ -91,6 +102,7 @@ export class CalculateDiscountDto {
   })
   @IsArray({ message: 'فهرست چک‌ها باید آرایه باشد.' })
   @ArrayMinSize(1, { message: 'حداقل یک فقره چک برای محاسبه تنزیل الزامی است.' })
+  @ArrayMaxSize(200, { message: 'حداکثر ۲۰۰ فقره چک در هر درخواست مجاز است.' })
   @ValidateNested({ each: true })
   @Type(() => ChequeCalculationItemDto)
   items: ChequeCalculationItemDto[];
@@ -108,6 +120,7 @@ export class CalculateDiscountDto {
     description: 'تاریخ مبنا (پیش‌فرض: امروز به وقت تهران YYYY-MM-DD)',
     example: '2026-11-11',
   })
+  @Transform(normalizeOptionalTrim)
   @IsOptional()
   @IsDateString({}, { message: 'فرمت تاریخ مبنا نامعتبر است.' })
   baseDate?: string;
@@ -147,6 +160,7 @@ export class CalculateSelectionRasgiriDto {
   chequeIds: number[];
 
   @ApiPropertyOptional({ description: 'تاریخ مبنا (YYYY-MM-DD)', example: '2026-11-11' })
+  @Transform(normalizeOptionalTrim)
   @IsOptional()
   @IsDateString({}, { message: 'فرمت تاریخ مبنا نامعتبر است.' })
   baseDate?: string;

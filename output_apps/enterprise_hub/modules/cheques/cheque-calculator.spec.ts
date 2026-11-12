@@ -272,7 +272,8 @@ describe('Cheque Ras-giri & Discounting Calculator (T72)', () => {
       access.grant('u1', 't1', SystemRole.CHEQUE_REVIEWER);
       access.grant('u2', 't1', SystemRole.HR);
       access.grant('u3', 't1', SystemRole.SALES);
-      const guard = new AccessGuard(new Reflector(), access as never);
+      const loginWindow = { assertAllowed: jest.fn().mockResolvedValue(undefined) };
+      const guard = new AccessGuard(new Reflector(), access as never, loginWindow as never);
       const makeCtx = (userId: string, role: SystemRole, handler: Function) =>
         ({
           getClass: () => ChequesController,

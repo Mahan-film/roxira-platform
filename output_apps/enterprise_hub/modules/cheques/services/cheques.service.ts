@@ -614,7 +614,15 @@ export class ChequesService {
       uniqueIds.map(async (id) => {
         const cheque = await this.get(tenantId, id);
         const remaining = cheque.remainingAmount ?? cheque.amount;
-        const remainingMinor = toMinor(remaining);
+        let remainingMinor: bigint;
+        try {
+          remainingMinor = toMinor(remaining);
+        } catch (err) {
+          if (err instanceof MoneyFormatError) {
+            throw new BadRequestException(err.message);
+          }
+          throw err;
+        }
         if (!OPEN_STATUSES.includes(cheque.status) || remainingMinor <= 0n) {
           throw new BadRequestException(
             `چک شماره ${cheque.chequeNumber} تسویه یا بسته شده و مانده قابل محاسبه ندارد.`,
