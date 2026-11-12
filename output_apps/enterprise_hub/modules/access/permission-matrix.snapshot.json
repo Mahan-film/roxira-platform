@@ -2399,6 +2399,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "GET /org/members/:userId/login-schedule (OrgController.getLoginSchedule)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "GET /org/module-catalogue (OrgController.moduleCatalogue)": {
     "policy": "anyMember",
     "owner": true,
@@ -4885,6 +4896,17 @@
   },
   "PUT /enterprise-hub/treasury/settings (TreasuryController.setSettings)": {
     "policy": "banking:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PUT /org/members/:userId/login-schedule (OrgController.setLoginSchedule)": {
+    "policy": "members:admin",
     "owner": true,
     "admin": true,
     "accountant": false,

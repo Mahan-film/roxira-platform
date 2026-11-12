@@ -128,6 +128,11 @@ function classify(r: Route): {
 
 const TENANT = 'tenant-1';
 
+const dummyLoginWindow = {
+  assertAllowed: jest.fn(async () => undefined),
+  checkLoginWindow: jest.fn(() => ({ allowed: true })),
+} as any;
+
 async function allowed(
   r: Route,
   setup: (stub: AccessStub) => void,
@@ -135,7 +140,7 @@ async function allowed(
 ): Promise<boolean> {
   const stub = new AccessStub();
   setup(stub);
-  const guard = new AccessGuard(reflector, stub as never);
+  const guard = new AccessGuard(reflector, stub as never, dummyLoginWindow);
   const request = { method: r.method, originalUrl: r.url, url: r.url, user: { ...user } };
   const context = {
     getHandler: () => r.handler,
@@ -346,7 +351,7 @@ describe('permission matrix (every controller)', () => {
       const stub = new AccessStub();
       stub.grant('u1', TENANT, 'owner');
       stub.dead.add('s1');
-      const guard = new AccessGuard(reflector, stub as never);
+      const guard = new AccessGuard(reflector, stub as never, dummyLoginWindow);
       const ctx = {
         getHandler: () => r.handler,
         getClass: () => r.controller,
