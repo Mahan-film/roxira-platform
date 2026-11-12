@@ -138,6 +138,15 @@ export class TaxTransmissionService {
     });
   }
 
+  private wasEverSent(submission: MoadianSubmissionEntity): boolean {
+    return (
+      submission.status === MoadianSubmissionStatus.SENT ||
+      submission.status === MoadianSubmissionStatus.SUCCESS ||
+      submission.sentAt != null ||
+      submission.referenceNumber != null
+    );
+  }
+
   /** Worker entry (MoadianProcessor, job `moadian.tx`). */
   async process(data: TransmissionJobData, isFinalAttempt = false): Promise<TransmissionOutcome> {
     if (!this.isEnabled()) {
@@ -162,13 +171,15 @@ export class TaxTransmissionService {
       return 'done';
     }
     const ctx: TransmissionContext = { tenantId, profile };
-    const adapter = this.adapters.forMode(profile.mode);
 
     let phase: 'inquiry' | 'send' = 'inquiry';
     try {
+      const adapter = this.adapters.forMode(profile.mode);
       // Never send blind once an attempt may have reached the server (UNKNOWN, a crashed attempt, SENT).
       const mayHaveArrived =
-        submission.status !== MoadianSubmissionStatus.QUEUED || (submission.attemptCount ?? 0) > 0;
+        submission.status !== MoadianSubmissionStatus.QUEUED ||
+        (submission.attemptCount ?? 0) > 0 ||
+        this.wasEverSent(submission);
       if (mayHaveArrived) {
         const outcome = await this.reconcile(ctx, adapter, submission, data);
         if (outcome !== 'resend') return outcome;
@@ -176,7 +187,7 @@ export class TaxTransmissionService {
       phase = 'send';
       return await this.send(ctx, adapter, submission, data);
     } catch (error) {
-      return this.handleTransportError(tenantId, submission, error, isFinalAttempt, phase);
+      return this.handleTransportError(tenantId, submission, data, error, isFinalAttempt, phase);
     }
   }
 
@@ -194,7 +205,13 @@ export class TaxTransmissionService {
     const pollCount = (submission.pollCount ?? 0) + 1;
 
     if (status === MoadianInquiryStatus.SUCCESS) {
-      await this.repository.confirm(tenantId, submission, row?.warnings ?? [], pollCount);
+      await this.repository.confirm(
+        tenantId,
+        submission,
+        row?.warnings ?? [],
+        pollCount,
+        row?.referenceNumber ?? null,
+      );
       return 'done';
     }
     if (status === MoadianInquiryStatus.FAILED) {
@@ -207,7 +224,7 @@ export class TaxTransmissionService {
       });
       return 'done';
     }
-    if (status === MoadianInquiryStatus.PENDING || submission.status === MoadianSubmissionStatus.SENT) {
+    if (status === MoadianInquiryStatus.PENDING || this.wasEverSent(submission)) {
       // Known to the authority, or already accepted by us: keep polling, never resend.
       const maxPolls = this.numberSetting(MOADIAN_ENV.MAX_POLLS, MOADIAN_DEFAULT_MAX_POLLS);
       await this.repository.update(tenantId, submission.id, {
@@ -229,20 +246,29 @@ export class TaxTransmissionService {
     return 'retry';
   }
 
-  /** Sends the stored packet with the stored uid/taxid. */
+  /** Sends the stored packet with the stored uid/taxid after winning an atomic DB claim. */
   private async send(
     ctx: TransmissionContext,
     adapter: ReturnType<TaxTransmissionAdapterFactory['forMode']>,
     submission: MoadianSubmissionEntity,
     data: TransmissionJobData,
   ): Promise<TransmissionOutcome> {
+    if (this.wasEverSent(submission)) return 'done';
     const { tenantId } = ctx;
-    await this.repository.markAttempt(tenantId, submission.id);
+    const claimed = await this.repository.claimForSend(
+      tenantId,
+      submission.id,
+      submission.attemptCount ?? 0,
+    );
+    if (!claimed) {
+      this.logger.warn(`Submission ${submission.id} already claimed or transitioned; skipping send.`);
+      return 'done';
+    }
     const [result] = await adapter.submitBatch(ctx, [
-      { uid: submission.uid, taxId: submission.taxId, packet: submission.packet },
+      { uid: claimed.uid, taxId: claimed.taxId, packet: claimed.packet },
     ]);
     if (result?.error) throw result.error;
-    await this.repository.update(tenantId, submission.id, {
+    await this.repository.update(tenantId, claimed.id, {
       status: MoadianSubmissionStatus.SENT,
       referenceNumber: result?.referenceNumber ?? null,
       sentAt: new Date(),
@@ -255,27 +281,48 @@ export class TaxTransmissionService {
   private async handleTransportError(
     tenantId: string,
     submission: MoadianSubmissionEntity,
+    data: TransmissionJobData,
     error: unknown,
     isFinalAttempt: boolean,
     phase: 'inquiry' | 'send',
   ): Promise<TransmissionOutcome> {
     const api = error instanceof MoadianApiError ? error : null;
-    if (phase === 'send' && api && !api.retryable && api.httpStatus !== null) {
-      // A definite 4xx answer to the packet itself: the authority looked at it and refused it.
-      // (A 4xx on an inquiry says nothing about the packet and falls through below.)
+    const everSent = this.wasEverSent(submission);
+    const isOperational4xx =
+      api !== null &&
+      api.httpStatus !== null &&
+      (api.httpStatus === 401 || api.httpStatus === 403 || api.httpStatus === 404);
+
+    if (
+      phase === 'send' &&
+      api &&
+      !api.retryable &&
+      !isOperational4xx &&
+      api.httpStatus !== null &&
+      !everSent
+    ) {
+      // A definite 4xx answer (e.g. 400/422) to the packet itself: the authority refused it.
+      // 401/403/404 are operational/auth/endpoint errors and stay retryable below.
       await this.repository.update(tenantId, submission.id, {
         status: MoadianSubmissionStatus.FAILED,
         errors: api.errors.length ? api.errors : [{ code: String(api.httpStatus), message: api.message }],
       });
       return 'done';
     }
-    if (api && api.retryable) {
-      // Timeout / 5xx / 429 / network: we do not know whether it arrived. UNKNOWN, never FAILED.
+    if (api && (api.retryable || isOperational4xx)) {
+      // Timeout / 5xx / 429 / network / 401/403/404: never FAILED, and never downgrade SENT to UNKNOWN.
       await this.repository.update(tenantId, submission.id, {
-        status: MoadianSubmissionStatus.UNKNOWN,
-        errors: [{ code: 'TRANSPORT', message: api.message }],
+        status: everSent ? MoadianSubmissionStatus.SENT : MoadianSubmissionStatus.UNKNOWN,
+        errors: [{ code: isOperational4xx ? String(api.httpStatus) : 'TRANSPORT', message: api.message }],
       });
-      if (isFinalAttempt) return 'retry';
+      if (isFinalAttempt) {
+        const maxPolls = this.numberSetting(MOADIAN_ENV.MAX_POLLS, MOADIAN_DEFAULT_MAX_POLLS);
+        const nextPoll = (submission.pollCount ?? 0) + 1;
+        if (nextPoll <= maxPolls) {
+          await this.schedulePoll(data, nextPoll);
+        }
+        return 'retry';
+      }
       throw error;
     }
     // Configuration or unexpected error before anything was proven sent: keep the state, surface it.

@@ -302,7 +302,8 @@ export class MoadianService implements OnModuleInit {
     }
     if (
       existing?.status === MoadianSubmissionStatus.QUEUED ||
-      existing?.status === MoadianSubmissionStatus.SENT
+      existing?.status === MoadianSubmissionStatus.SENT ||
+      existing?.status === MoadianSubmissionStatus.UNKNOWN
     ) {
       return this.toSubmissionResponse(existing);
     }

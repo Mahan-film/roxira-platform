@@ -13,6 +13,7 @@ import { FakeTspAdapter } from '../testing/fake-tsp.adapter';
 import { DirectAdapter } from '../transmission/direct.adapter';
 import { TaxTransmissionAdapterFactory } from '../transmission/tax-transmission-adapter.factory';
 import { TaxChainBlockedError } from '../utils/tax-reference-chain';
+import { MoadianApiError } from './moadian-api.client';
 import { TaxTransmissionService } from './tax-transmission.service';
 
 const T = '11111111-1111-4111-8111-111111111111';
@@ -58,12 +59,36 @@ function makeRepo(initial: MoadianSubmissionEntity) {
       Object.assign(row, patch);
       return { ...row };
     }),
-    markAttempt: jest.fn(async () => {
+    claimForSend: jest.fn(async (_t: string, _id: string, expectedAttemptCount: number) => {
+      const allowedStatus = row.status === St.QUEUED || row.status === St.UNKNOWN;
+      if (
+        !allowedStatus ||
+        row.attemptCount !== expectedAttemptCount ||
+        row.sentAt != null ||
+        row.referenceNumber != null
+      ) {
+        return null;
+      }
       row.attemptCount += 1;
+      return { ...row };
     }),
-    confirm: jest.fn(async () => {
-      row.status = St.SUCCESS;
-    }),
+    confirm: jest.fn(
+      async (
+        _t: string,
+        _sub: MoadianSubmissionEntity,
+        warnings: MoadianSubmissionEntity['warnings'],
+        pollCount: number,
+        referenceNumber: string | null = null,
+      ) => {
+        row.status = St.SUCCESS;
+        row.warnings = warnings;
+        row.pollCount = pollCount;
+        if (row.referenceNumber == null && referenceNumber != null) {
+          row.referenceNumber = referenceNumber;
+        }
+        if (row.sentAt == null) row.sentAt = new Date();
+      },
+    ),
     enqueue: jest.fn(),
   };
   return repo;
@@ -111,6 +136,35 @@ describe('TaxTransmissionService send path', () => {
     expect(fake.submitted).toHaveLength(1); // never sent a second time
     expect(repo.confirm).toHaveBeenCalledTimes(1);
     expect(repo.row.status).toBe(St.SUCCESS);
+    expect(repo.row.referenceNumber).toBe(`REF-${repo.row.uid.slice(0, 8)}`);
+    expect(repo.row.sentAt).toBeInstanceOf(Date);
+  });
+
+  it('429 and network errors on send move row to UNKNOWN (never FAILED)', async () => {
+    for (const err of [
+      new MoadianApiError('HTTP 429', 429, true),
+      new MoadianApiError('Moadian request failed: ECONNRESET', null, true),
+    ]) {
+      const { service, fake, repo } = setup();
+      jest.spyOn(fake, 'submitBatch').mockResolvedValueOnce([
+        { uid: repo.row.uid, referenceNumber: null, error: err },
+      ]);
+      await expect(service.process(data)).rejects.toThrow(err.message);
+      expect(repo.row.status).toBe(St.UNKNOWN);
+      expect(repo.row.status).not.toBe(St.FAILED);
+    }
+  });
+
+  it('401, 403, 404 operational errors on send stay retryable (UNKNOWN), while 400 is terminal FAILED', async () => {
+    for (const code of [401, 403, 404]) {
+      const { service, fake, repo } = setup();
+      jest.spyOn(fake, 'submitBatch').mockResolvedValueOnce([
+        { uid: repo.row.uid, referenceNumber: null, error: new MoadianApiError(`HTTP ${code}`, code, false) },
+      ]);
+      await expect(service.process(data)).rejects.toThrow(`HTTP ${code}`);
+      expect(repo.row.status).toBe(St.UNKNOWN);
+      expect(repo.row.errors).toEqual([{ code: String(code), message: `HTTP ${code}` }]);
+    }
   });
 
   it('5xx -> UNKNOWN; NOT_FOUND on inquiry -> resend with the SAME uid and taxid', async () => {
@@ -172,11 +226,64 @@ describe('TaxTransmissionService send path', () => {
     expect(repo.confirm).toHaveBeenCalled();
   });
 
-  it('an inquiry error leaves the row UNKNOWN, never FAILED', async () => {
+  it('a retryable MoadianApiError during inquiry keeps UNKNOWN as UNKNOWN and never downgrades SENT', async () => {
+    const unknownSetup = setup(makeSubmission({ status: St.UNKNOWN }));
+    jest
+      .spyOn(unknownSetup.fake, 'inquireByUid')
+      .mockRejectedValueOnce(new MoadianApiError('HTTP 503', 503, true));
+    await expect(unknownSetup.service.process(data)).rejects.toThrow('HTTP 503');
+    expect(unknownSetup.repo.row.status).toBe(St.UNKNOWN);
+
+    const sentSetup = setup(makeSubmission({ status: St.SENT, referenceNumber: 'R1', sentAt: new Date() }));
+    jest
+      .spyOn(sentSetup.fake, 'inquireByUid')
+      .mockRejectedValueOnce(new MoadianApiError('timeout', null, true))
+      .mockRejectedValueOnce(new MoadianApiError('HTTP 429', 429, true));
+    await expect(sentSetup.service.process(data)).rejects.toThrow('timeout');
+    expect(sentSetup.repo.row.status).toBe(St.SENT);
+    await expect(sentSetup.service.process(data)).rejects.toThrow('HTTP 429');
+    expect(sentSetup.repo.row.status).toBe(St.SENT);
+    // Even if a later inquiry says NOT_FOUND, an already-SENT row is never resent.
+    sentSetup.fake.server.clear();
+    await expect(sentSetup.service.process(data)).resolves.toBe('poll');
+    expect(sentSetup.fake.submitted).toHaveLength(0);
+    expect(sentSetup.repo.row.status).toBe(St.SENT);
+  });
+
+  it('non-MoadianApiError preserves status and records CLIENT error', async () => {
     const { service, fake, repo } = setup(makeSubmission({ status: St.UNKNOWN }));
-    jest.spyOn(fake, 'inquireByUid').mockRejectedValue(Object.assign(new Error('x'), {}));
+    jest.spyOn(fake, 'inquireByUid').mockRejectedValue(new Error('x'));
     await expect(service.process(data)).rejects.toThrow('x');
     expect(repo.row.status).toBe(St.UNKNOWN);
+    expect(repo.row.errors).toEqual([{ code: 'CLIENT', message: 'x' }]);
+  });
+
+  it('atomic claim: two concurrent workers on the same row result in only one submitBatch call', async () => {
+    const { service, fake, repo } = setup(makeSubmission({ status: St.QUEUED, attemptCount: 0 }));
+    const [r1, r2] = await Promise.all([service.process(data), service.process(data)]);
+    expect([r1, r2].sort()).toEqual(['done', 'poll']);
+    expect(fake.submitted).toHaveLength(1);
+    expect(repo.row.attemptCount).toBe(1);
+  });
+
+  it('adapters.forMode() failure is caught inside try and records CLIENT error', async () => {
+    const { service, repo, profiles } = setup();
+    (profiles.findById as jest.Mock).mockResolvedValueOnce({
+      ...profile,
+      mode: 'unknown_mode' as TaxTransmissionMode,
+    });
+    await expect(service.process(data)).rejects.toThrow(/No tax transmission adapter/);
+    expect(repo.row.errors).toEqual([
+      expect.objectContaining({ code: 'CLIENT', message: expect.stringContaining('No tax transmission adapter') }),
+    ]);
+  });
+
+  it('final retryable attempt schedules a follow-up poll so the row does not strand', async () => {
+    const { service, fake, repo, queue } = setup();
+    fake.script = [{ kind: 'timeout' }];
+    await expect(service.process(data, true)).resolves.toBe('retry');
+    expect(repo.row.status).toBe(St.UNKNOWN);
+    expect(queue.add).toHaveBeenCalledWith(MOADIAN_TX_JOB, data, expect.any(Object));
   });
 
   it('does nothing for final states', async () => {

@@ -157,12 +157,34 @@ export class TaxTransmissionRepository {
     });
   }
 
-  /** Records that a network send is about to start (before the call, so a crash is visible as an attempt). */
-  markAttempt(tenantId: string, id: string): Promise<void> {
+  /**
+   * Atomically claims a QUEUED/UNKNOWN row for a network send using compare-and-set on
+   * (status, attempt_count). Only the winner receives the updated row and may call submitBatch.
+   */
+  claimForSend(
+    tenantId: string,
+    id: string,
+    expectedAttemptCount: number,
+  ): Promise<MoadianSubmissionEntity | null> {
     return this.scope.run(tenantId, async (m) => {
-      await m
-        .getRepository(MoadianSubmissionEntity)
-        .increment({ id, tenantId }, 'attemptCount', 1);
+      const repo = m.getRepository(MoadianSubmissionEntity);
+      const result = await repo
+        .createQueryBuilder()
+        .update(MoadianSubmissionEntity)
+        .set({ attemptCount: () => 'attempt_count + 1' })
+        .where('id = :id', { id })
+        .andWhere('tenant_id = :tenantId', { tenantId })
+        .andWhere('status IN (:...allowed)', {
+          allowed: [MoadianSubmissionStatus.QUEUED, MoadianSubmissionStatus.UNKNOWN],
+        })
+        .andWhere('attempt_count = :expectedAttemptCount', { expectedAttemptCount })
+        .andWhere('sent_at IS NULL')
+        .andWhere('reference_number IS NULL')
+        .returning('id')
+        .execute();
+      const row = (result.raw as Array<{ id: string }>)[0];
+      if (!row) return null;
+      return repo.findOne({ where: { tenantId, id } });
     });
   }
 
@@ -175,12 +197,22 @@ export class TaxTransmissionRepository {
     submission: MoadianSubmissionEntity,
     warnings: MoadianSubmissionEntity['warnings'],
     pollCount: number,
+    referenceNumber: string | null = null,
   ): Promise<void> {
     return this.scope.run(tenantId, async (m) => {
       const repo = m.getRepository(MoadianSubmissionEntity);
+      const resolvedReference = submission.referenceNumber ?? referenceNumber ?? null;
       await repo.update(
         { id: submission.id, tenantId },
-        { status: MoadianSubmissionStatus.SUCCESS, errors: [], warnings, pollCount, lastPolledAt: new Date() },
+        {
+          status: MoadianSubmissionStatus.SUCCESS,
+          errors: [],
+          warnings,
+          pollCount,
+          lastPolledAt: new Date(),
+          ...(resolvedReference !== null ? { referenceNumber: resolvedReference } : {}),
+          ...(submission.sentAt == null ? { sentAt: new Date() } : {}),
+        },
       );
       const advances =
         submission.ins === MoadianInvoiceSubject.CORRECTIVE || submission.ins === MoadianInvoiceSubject.RETURN;

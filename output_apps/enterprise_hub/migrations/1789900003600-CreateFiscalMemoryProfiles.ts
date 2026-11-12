@@ -26,6 +26,7 @@ export class CreateFiscalMemoryProfiles1789900003600 implements MigrationInterfa
         "created_at" TIMESTAMP NOT NULL DEFAULT now(),
         "updated_at" TIMESTAMP NOT NULL DEFAULT now(),
         CONSTRAINT "PK_fiscal_memory_profiles_id" PRIMARY KEY ("id"),
+        CONSTRAINT "UQ_fiscal_memory_profiles_tenant_id_id" UNIQUE ("tenant_id", "id"),
         CONSTRAINT "CHK_fiscal_memory_profiles_memory_id" CHECK ("memory_id" ~ '^[A-Z0-9]{6}$'),
         CONSTRAINT "CHK_fiscal_memory_profiles_mode" CHECK ("mode" IN ('direct','tsp_taxpayer_key','tsp_tsp_key')),
         CONSTRAINT "CHK_fiscal_memory_profiles_env" CHECK ("environment" IN ('sandbox','production')),
@@ -55,11 +56,30 @@ export class CreateFiscalMemoryProfiles1789900003600 implements MigrationInterfa
     await q.query(
       `CREATE INDEX IF NOT EXISTS "IDX_moadian_submissions_tenant_root" ON "moadian_submissions" ("tenant_id", "root_invoice_id")`,
     );
+    await q.query(`
+      ALTER TABLE "moadian_submissions"
+        ADD CONSTRAINT "FK_moadian_submissions_tenant_profile"
+        FOREIGN KEY ("tenant_id", "profile_id")
+        REFERENCES "fiscal_memory_profiles" ("tenant_id", "id")
+        ON DELETE RESTRICT
+    `);
   }
 
   public async down(q: QueryRunner): Promise<void> {
+    await q.query(
+      `ALTER TABLE "moadian_submissions" DROP CONSTRAINT IF EXISTS "FK_moadian_submissions_tenant_profile"`,
+    );
     await q.query(`DROP INDEX IF EXISTS "public"."IDX_moadian_submissions_tenant_root"`);
     await q.query(`DROP INDEX IF EXISTS "public"."IDX_moadian_submissions_tenant_invoice_ins"`);
+    // If a chain added multiple ins rows for the same (tenant_id, invoice_id), keep the lowest ins row
+    // so restoring the pre-migration unique (tenant_id, invoice_id) index succeeds.
+    await q.query(`
+      DELETE FROM "moadian_submissions" a
+      USING "moadian_submissions" b
+      WHERE a."tenant_id" = b."tenant_id"
+        AND a."invoice_id" = b."invoice_id"
+        AND (a."ins" > b."ins" OR (a."ins" = b."ins" AND a."ctid" > b."ctid"))
+    `);
     await q.query(
       `CREATE UNIQUE INDEX IF NOT EXISTS "IDX_moadian_submissions_tenant_invoice" ON "moadian_submissions" ("tenant_id", "invoice_id")`,
     );

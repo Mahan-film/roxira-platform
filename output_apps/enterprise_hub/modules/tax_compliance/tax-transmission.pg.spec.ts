@@ -46,6 +46,8 @@ describePg('Tax transmission core on PostgreSQL (NOSUPERUSER, FORCE RLS)', () =>
   let app: DataSource;
   let profiles: FiscalMemoryProfileRepository;
   let outbox: TaxTransmissionRepository;
+  let profileT1Id: string;
+  let profileT2Id: string;
   let serialSeen = 0;
 
   const enqueue = (
@@ -53,7 +55,7 @@ describePg('Tax transmission core on PostgreSQL (NOSUPERUSER, FORCE RLS)', () =>
     invoiceId: string,
     ins: S,
     rootInvoiceId?: string,
-    profileId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    profileId = tenantId === T1 ? profileT1Id : profileT2Id,
   ) =>
     outbox.enqueue(
       tenantId,
@@ -98,6 +100,8 @@ describePg('Tax transmission core on PostgreSQL (NOSUPERUSER, FORCE RLS)', () =>
     const scope = new TenantScope(app);
     profiles = new FiscalMemoryProfileRepository(scope);
     outbox = new TaxTransmissionRepository(scope);
+    profileT1Id = (await profiles.create(T1, { memoryId: 'DEF456', mode: M.DIRECT, environment: E.SANDBOX })).id;
+    profileT2Id = (await profiles.create(T2, { memoryId: 'XYZ789', mode: M.DIRECT, environment: E.SANDBOX })).id;
   }, 240_000);
 
   afterAll(async () => {
@@ -116,8 +120,8 @@ describePg('Tax transmission core on PostgreSQL (NOSUPERUSER, FORCE RLS)', () =>
 
     const a = await profiles.create(T1, { memoryId: 'abc123', mode: M.DIRECT, environment: E.SANDBOX });
     await profiles.create(T1, { memoryId: 'ABC123', mode: M.TSP_TSP_KEY, environment: E.PRODUCTION, tspProvider: 'fake' });
-    expect((await profiles.list(T1)).map((p) => p.memoryId)).toEqual(['ABC123', 'ABC123']);
-    expect(await profiles.list(T2)).toEqual([]);
+    expect((await profiles.list(T1)).map((p) => p.memoryId).sort()).toEqual(['ABC123', 'ABC123', 'DEF456']);
+    expect((await profiles.list(T2)).map((p) => p.memoryId)).toEqual(['XYZ789']);
     expect(await profiles.findById(T2, a.id)).toBeNull();
     // A scoped update from another tenant touches nothing.
     await profiles.setActive(T2, a.id, false);
@@ -192,11 +196,15 @@ describePg('Tax transmission core on PostgreSQL (NOSUPERUSER, FORCE RLS)', () =>
       TaxChainBlockedError,
     );
 
-    await outbox.confirm(T1, (await outbox.findById(T1, main.id))!, [], 1);
+    expect((await outbox.findByInvoice(T1, root, S.MAIN))?.id).toBe(main.id);
+    await outbox.confirm(T1, (await outbox.findById(T1, main.id))!, [], 1, 'REF-MAIN-001');
+    const confirmedMain = await outbox.findById(T1, main.id);
+    expect(confirmedMain?.referenceNumber).toBe('REF-MAIN-001');
+    expect(confirmedMain?.sentAt).toBeInstanceOf(Date);
     const a1 = (await enqueue(T1, 'bbbbbbbb-0000-4000-8000-0000000000a1', S.CORRECTIVE, root)).submission;
     expect(a1.referenceTaxId).toBe(main.taxId);
     expect(a1.rootInvoiceId).toBe(root);
-    expect(a1.profileId).toBe('cccccccc-cccc-4ccc-8ccc-cccccccccccc');
+    expect(a1.profileId).toBe(profileT1Id);
 
     // a1 pending -> a return is blocked
     await expect(enqueue(T1, 'bbbbbbbb-0000-4000-8000-0000000000b1', S.RETURN, root)).rejects.toBeInstanceOf(
@@ -224,5 +232,39 @@ describePg('Tax transmission core on PostgreSQL (NOSUPERUSER, FORCE RLS)', () =>
     await expect(
       enqueue(T2, 'bbbbbbbb-0000-4000-8000-0000000000e1', S.CORRECTIVE, 'bbbbbbbb-0000-4000-8000-000000000001'),
     ).rejects.toBeInstanceOf(TaxChainBlockedError);
+  });
+
+  it('atomic claimForSend: concurrent claims allow only one winner and refuse SENT/SUCCESS rows', async () => {
+    const { submission } = await enqueue(T1, 'dddddddd-0000-4000-8000-000000000001', S.MAIN);
+    const [c1, c2] = await Promise.all([
+      outbox.claimForSend(T1, submission.id, 0),
+      outbox.claimForSend(T1, submission.id, 0),
+    ]);
+    const winners = [c1, c2].filter((x) => x !== null);
+    expect(winners).toHaveLength(1);
+    expect(winners[0]!.attemptCount).toBe(1);
+
+    await outbox.update(T1, submission.id, { status: St.SENT, sentAt: new Date() });
+    expect(await outbox.claimForSend(T1, submission.id, 1)).toBeNull();
+  });
+
+  it('FK_moadian_submissions_tenant_profile rejects cross-tenant profile references', async () => {
+    await expect(
+      enqueue(T1, 'eeeeeeee-0000-4000-8000-000000000001', S.MAIN, undefined, profileT2Id),
+    ).rejects.toThrow(/FK_moadian_submissions_tenant_profile|foreign key/i);
+  });
+
+  it('migration down() is reversible even with multiple ins rows per invoice', async () => {
+    const sharedInv = 'ffffffff-0000-4000-8000-000000000001';
+    const rootRow = (await enqueue(T1, sharedInv, S.MAIN)).submission;
+    await outbox.confirm(T1, rootRow, [], 1, 'REF-REV-1');
+    await enqueue(T1, sharedInv, S.CORRECTIVE, sharedInv);
+
+    await owner.undoLastMigration();
+    await owner.runMigrations();
+    const [fk] = await owner.query(
+      `SELECT 1 AS ok FROM pg_constraint WHERE conname = 'FK_moadian_submissions_tenant_profile'`,
+    );
+    expect(fk?.ok).toBe(1);
   });
 });

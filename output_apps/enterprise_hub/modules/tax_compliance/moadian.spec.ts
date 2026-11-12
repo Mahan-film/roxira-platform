@@ -769,6 +769,19 @@ describe('MoadianService — send and poll', () => {
     await expect(service.submitInvoice(TENANT_A, INVOICE_A)).rejects.toBeInstanceOf(ConflictException);
   });
 
+  it('submitInvoice keeps UNKNOWN submission idempotent without regenerating uid/taxId', async () => {
+    const { service, repository } = buildMoadian();
+    await service.putCredential(TENANT_A, credentialDto());
+    const first = await service.submitInvoice(TENANT_A, INVOICE_A);
+    repository.submissions[0].status = MoadianSubmissionStatus.UNKNOWN;
+
+    const again = await service.submitInvoice(TENANT_A, INVOICE_A);
+    expect(again.id).toBe(first.id);
+    expect(again.uid).toBe(first.uid);
+    expect(again.taxId).toBe(first.taxId);
+    expect(again.status).toBe(MoadianSubmissionStatus.UNKNOWN);
+  });
+
   it('records FAILED with Moadian errors and allows a resubmission with a new serial', async () => {
     const { service, state, jobs } = buildMoadian();
     await service.putCredential(TENANT_A, credentialDto());

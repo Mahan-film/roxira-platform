@@ -32,12 +32,9 @@ cannot describe several memory ids. Profiles hold no secret.
    packet, generates the uid, inserts status `QUEUED` (the queued marker for the invoice is this row). uid, taxid,
    serial and packet are never updated later. Queue publish happens after commit.
 2. Idempotency key is (tenant, invoice, ins) (unique index). A repeat returns the existing row.
-3. Before the network call the worker bumps `attempt_count`. A row that is not a clean first attempt (status
-   `UNKNOWN`, `SENT`, or `QUEUED` with attempts) is first reconciled with inquiry-by-uid:
-   SUCCESS -> confirm; FAILED -> FAILED; PENDING -> `SENT`, poll later; NOT_FOUND on `QUEUED`/`UNKNOWN` -> resend the
-   SAME uid and taxid; other answers -> stay `UNKNOWN`.
-4. Timeout, network error, 5xx, 429 -> `UNKNOWN`, never `FAILED`, never a new uid/taxid. Only a 4xx answer to the
-   send itself is `FAILED`. A failing inquiry never changes the state to `FAILED`.
+3. Before the network call the worker takes an atomic compare-and-set claim (`claimForSend` on `(status IN ('QUEUED','UNKNOWN'), attempt_count)`). Only the winner calls `submitBatch`. A row that is not a clean first attempt (status `UNKNOWN`, `SENT`, or `QUEUED` with attempts) is first reconciled with inquiry-by-uid:
+   SUCCESS -> confirm (preserving `referenceNumber` and `sentAt`); FAILED -> FAILED; PENDING or already `SENT` -> `SENT`, poll later; NOT_FOUND on `QUEUED`/`UNKNOWN` (never `SENT`) -> resend the SAME uid and taxid; other answers -> stay `UNKNOWN`.
+4. Timeout, network error, 5xx, 429, and operational 401/403/404 -> `UNKNOWN` (or keep `SENT` if already `SENT`), never `FAILED`, never a new uid/taxid. Only a definite packet-rejection 4xx answer on send (e.g. 400/422) is `FAILED`. A failing inquiry never downgrades `SENT` or marks `FAILED`.
 
 ## Reference chain
 
