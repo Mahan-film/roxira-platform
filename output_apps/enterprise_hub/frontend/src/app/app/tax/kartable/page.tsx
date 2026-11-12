@@ -57,7 +57,7 @@ export default function KartableReconciliationPage() {
   const { can, loading: accessLoading } = useAccess();
   const canReconcile = can("tax", "create");
 
-  const [year, setYear] = useState<number>(1405);
+  const [yearInput, setYearInput] = useState<string>("1405");
   const [quarter, setQuarter] = useState<number>(1);
   const [salesFile, setSalesFile] = useState<File | null>(null);
   const [purchasesFile, setPurchasesFile] = useState<File | null>(null);
@@ -73,6 +73,11 @@ export default function KartableReconciliationPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!canReconcile || busy) return;
+    const parsedYear = Number(yearInput.trim());
+    if (!Number.isInteger(parsedYear) || parsedYear < 1300 || parsedYear > 1600) {
+      setError("لطفاً سال شمسی معتبر (عدد صحیح بین ۱۳۰۰ تا ۱۶۰۰) وارد کنید.");
+      return;
+    }
     if (!salesFile && !purchasesFile) {
       setError("حداقل یکی از فایل‌های کارپوشه فروش یا خرید (CSV یا XLSX) را انتخاب کنید.");
       return;
@@ -82,7 +87,7 @@ export default function KartableReconciliationPage() {
     setError(null);
     try {
       const res = await reconcileKartable({
-        year,
+        year: parsedYear,
         quarter,
         salesFile,
         purchasesFile,
@@ -135,8 +140,8 @@ export default function KartableReconciliationPage() {
                     type="number"
                     min={1300}
                     max={1600}
-                    value={year}
-                    onChange={(e) => setYear(Number(e.target.value) || 1405)}
+                    value={yearInput}
+                    onChange={(e) => setYearInput(e.target.value)}
                   />
                 </label>
 
@@ -326,6 +331,12 @@ export default function KartableReconciliationPage() {
                       <div className="col-span-2 text-amber-600">
                         ردیف‌های خارج از فصل انتخاب‌شده (صرف‌نظر شد):{" "}
                         {formatNumber(sec.data.outOfPeriodSkippedCount)}
+                      </div>
+                    )}
+                    {sec.data.undatedSkippedCount > 0 && (
+                      <div className="col-span-2 text-amber-600">
+                        ردیف‌های بدون تاریخ معتبر در کارپوشه (در جمع محاسبه نشد):{" "}
+                        {formatNumber(sec.data.undatedSkippedCount)}
                       </div>
                     )}
                   </CardContent>

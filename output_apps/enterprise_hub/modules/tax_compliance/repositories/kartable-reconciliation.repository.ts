@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { Brackets, In } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
 import { InvoiceEntity } from '../../invoicing/entities/invoice.entity';
@@ -56,7 +56,14 @@ export class KartableReconciliationRepository {
         .orderBy('invoice.issuedAt', 'ASC')
         .addOrderBy('invoice.createdAt', 'ASC')
         .addOrderBy('invoice.taxInvoiceNumber', 'ASC')
+        .take(5001)
         .getMany();
+
+      if (invoices.length > 5000) {
+        throw new BadRequestException(
+          'تعداد فاکتورهای ثبت‌شده در این فصل بیش از ۵۰۰۰ مورد است؛ لطفاً دوره را محدودتر کنید.',
+        );
+      }
 
       if (invoices.length === 0) {
         return [];

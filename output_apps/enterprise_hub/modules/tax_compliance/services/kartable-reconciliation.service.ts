@@ -161,6 +161,7 @@ export class KartableReconciliationService {
           formatId: null,
           kartableRowCount: 0,
           outOfPeriodSkippedCount: 0,
+          undatedSkippedCount: 0,
           ourInvoiceCount: dbInvoices.length,
           matchedCount: 0,
           amountDifferenceCount: 0,
@@ -186,12 +187,14 @@ export class KartableReconciliationService {
     const parsed = await parseKartableExportFile(file.buffer, file.originalname);
     const inPeriodRows: ParsedKartableRow[] = [];
     let outOfPeriodSkippedCount = 0;
+    let undatedSkippedCount = 0;
 
     for (const row of parsed.rows) {
-      if (
-        row.jalaliPeriod &&
-        (row.jalaliPeriod.year !== year || row.jalaliPeriod.quarter !== quarter)
-      ) {
+      if (!row.jalaliPeriod) {
+        undatedSkippedCount += 1;
+        continue;
+      }
+      if (row.jalaliPeriod.year !== year || row.jalaliPeriod.quarter !== quarter) {
         outOfPeriodSkippedCount += 1;
         continue;
       }
@@ -301,11 +304,14 @@ export class KartableReconciliationService {
       const vatDiffMinor = k.vatMinor - db.vatMinor;
       const totalDiffMinor = k.totalMinor - db.receivableMinor;
       const hasDiff = vatDiffMinor !== 0n || totalDiffMinor !== 0n;
-      const bucket = hasDiff ? 'amount_difference' : 'matched';
+      const bucket = hasDiff || matchBy === 'amount' ? 'amount_difference' : 'matched';
       if (bucket === 'matched') matchedCount += 1;
       else amountDifferenceCount += 1;
 
       const noteParts: string[] = [];
+      if (matchBy === 'amount' && !hasDiff) {
+        noteParts.push('تطبیق صرفاً بر اساس مبلغ کل (بدون شناسه یا شماره فاکتور یکسان — نیاز به بررسی)');
+      }
       if (totalDiffMinor !== 0n) noteParts.push('اختلاف مبلغ کل');
       if (vatDiffMinor !== 0n) noteParts.push('اختلاف مالیات ارزش افزوده');
       if (db.taxId && k.taxId && normalizeTaxId(db.taxId) !== normalizeTaxId(k.taxId)) {
@@ -394,6 +400,7 @@ export class KartableReconciliationService {
         formatId: parsed.formatId,
         kartableRowCount: inPeriodRows.length,
         outOfPeriodSkippedCount,
+        undatedSkippedCount,
         ourInvoiceCount: dbInvoices.length,
         matchedCount,
         amountDifferenceCount,

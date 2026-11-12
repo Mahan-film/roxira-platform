@@ -99,6 +99,7 @@ const HEADER_ALIASES: Record<FieldKey, string[]> = {
     'nationalid',
   ],
   netAmount: [
+    'مبلغمشمولمالیات',
     'مبلغپسازتخفیف',
     'مبغپسازتخفیف',
     'مبلغقبلازمالیات',
@@ -115,11 +116,11 @@ const HEADER_ALIASES: Record<FieldKey, string[]> = {
   vatAmount: [
     'جمعمالیاتبرارزشافزوده',
     'مالیاتبرارزشافزوده',
+    'مالیاتارزشافزوده',
     'مبلغارزشافزوده',
     'مبغارزشافزوده',
     'مبلغفیشمالیات',
     'مبلغمالیات',
-    'مالیات',
     'ارزشافزوده',
     'tvam',
     'vat',
@@ -136,7 +137,6 @@ const HEADER_ALIASES: Record<FieldKey, string[]> = {
     'tbill',
     'totalamount',
     'finalpayable',
-    'total',
   ],
 };
 
@@ -153,13 +153,6 @@ function buildColumnMap(columnNames: string[]): Partial<Record<FieldKey, string>
     const exactIndex = normalized.findIndex((col) => aliasSet.has(col));
     if (exactIndex !== -1) {
       result[field] = columnNames[exactIndex];
-      continue;
-    }
-    const partialIndex = normalized.findIndex((col) =>
-      aliases.some((alias) => col.includes(normalizeHeaderKey(alias))),
-    );
-    if (partialIndex !== -1) {
-      result[field] = columnNames[partialIndex];
     }
   }
   return result;
@@ -226,6 +219,15 @@ function parseIssueDate(raw: unknown): {
   isoDate: string | null;
   jalaliPeriod: { year: number; quarter: number } | null;
 } {
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw > 20000 && raw < 80000) {
+    // Excel date serial (days since 1899-12-30 UTC with 1900 leap-year offset)
+    const utcMs = Math.round((raw - 25569) * 86_400_000);
+    const serialDate = new Date(utcMs);
+    if (!Number.isNaN(serialDate.getTime())) {
+      const isoDate = serialDate.toISOString().slice(0, 10);
+      return { isoDate, jalaliPeriod: tehranJalaliYearQuarter(serialDate) };
+    }
+  }
   const text = stringifyCell(raw).trim();
   if (!text) return { isoDate: null, jalaliPeriod: null };
   const isoDate = parseJalaliDate(text);
@@ -273,18 +275,25 @@ export async function parseKartableExportFile(
     const columnNames = table.columns.map((c) => c.name);
     const colMap = buildColumnMap(columnNames);
 
-    if (
-      colMap.taxId === undefined &&
-      colMap.invoiceNumber === undefined &&
-      colMap.totalAmount === undefined &&
-      colMap.netAmount === undefined
-    ) {
+    if (colMap.vatAmount === undefined) {
       throw new BadRequestException(
-        'ستون‌های ضروری کارپوشه (شماره مالیاتی/صورتحساب یا مبالغ) در فایل تشخیص داده نشد.',
+        'ستون «مالیات بر ارزش افزوده» در فایل کارپوشه یافت نشد؛ بدون ستون مالیات امکان تطبیق دقیق وجود ندارد.',
+      );
+    }
+
+    if (colMap.totalAmount === undefined && colMap.netAmount === undefined) {
+      throw new BadRequestException(
+        'ستون مبلغ (مبلغ مشمول مالیات یا جمع کل صورتحساب) در فایل کارپوشه یافت نشد.',
       );
     }
 
     const limit = rowLimit();
+    if (table.rowCount > limit) {
+      throw new BadRequestException(
+        `تعداد سطرهای فایل (${table.rowCount}) از سقف مجاز (${limit}) بیشتر است؛ فایل را به دوره‌های کوچک‌تر تقسیم کنید.`,
+      );
+    }
+
     const rows: ParsedKartableRow[] = [];
     let offset = 0;
 

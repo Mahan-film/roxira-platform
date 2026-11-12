@@ -176,9 +176,10 @@ describe('KartableReconciliation (parser, matching, quarterly VAT, AccessGuard)'
       formatId: 'csv',
       kartableRowCount: 4,
       outOfPeriodSkippedCount: 1,
+      undatedSkippedCount: 0,
       ourInvoiceCount: 4,
-      matchedCount: 2, // S1 (taxId) + S3 (amount)
-      amountDifferenceCount: 1, // S2 (invoiceNumber, VAT diff)
+      matchedCount: 1, // S1 (taxId) only; amount-only S3 moves to amount_difference
+      amountDifferenceCount: 2, // S2 (invoiceNumber, VAT diff) + S3 (amount-only heuristic)
       missingInOurSystemCount: 1, // TAX-SYNTH-ONLY-KART
       missingInKartableCount: 1, // S4
       ourTaxableBase: 18_000_000,
@@ -235,14 +236,61 @@ describe('KartableReconciliation (parser, matching, quarterly VAT, AccessGuard)'
     expect(s2Row?.vatDiff).toBe(-50_000);
     expect(s2Row?.totalDiff).toBe(-50_000);
     expect(s3Row?.matchBy).toBe('amount');
-    expect(s3Row?.bucket).toBe('matched');
+    expect(s3Row?.bucket).toBe('amount_difference');
+  });
+
+  it('excludes undated / invalid-date rows from kartable VAT totals and counts them in undatedSkippedCount', async () => {
+    const csvWithUndated = Buffer.from(
+      [
+        'شماره منحصر به فرد مالیاتی,شماره صورتحساب,تاریخ صدور,مبلغ مشمول مالیات,مالیات بر ارزش افزوده,مجموع مبلغ صورتحساب',
+        'TAX-Q1-VALID,INV-1,1405/01/15,1000000,100000,1100000',
+        'TAX-NO-DATE,INV-2,,5000000,500000,5500000',
+        'TAX-BAD-DATE,INV-3,not-a-date,2000000,200000,2200000',
+      ].join('\n'),
+      'utf8',
+    );
+    const repo = { loadQuarterInvoices: jest.fn(async () => []) } as unknown as KartableReconciliationRepository;
+    const service = new KartableReconciliationService(repo);
+    const res = await service.reconcile('t-undated', 1405, 1, {
+      salesFile: { buffer: csvWithUndated, originalname: 'undated.csv' },
+    });
+
+    expect(res.sales.kartableRowCount).toBe(1);
+    expect(res.sales.undatedSkippedCount).toBe(2);
+    expect(res.sales.kartableVatTotal).toBe(100_000);
+    expect(res.quarterlyVat.kartable.salesVat).toBe(100_000);
+  });
+
+  it('rejects files missing an exact VAT header (no substring fallback onto مبلغ مشمول مالیات) and rejects oversize files', async () => {
+    const noVatCsv = Buffer.from(
+      'شماره صورتحساب,تاریخ صدور,مبلغ مشمول مالیات,مجموع مبلغ صورتحساب\nINV-1,1405/01/15,1000000,1100000\n',
+      'utf8',
+    );
+    await expect(parseKartableExportFile(noVatCsv, 'no-vat.csv')).rejects.toThrow(BadRequestException);
+
+    const prevLimit = process.env.IMPORT_MAX_ROWS;
+    process.env.IMPORT_MAX_ROWS = '1';
+    try {
+      const oversizeCsv = Buffer.from(
+        'شماره صورتحساب,تاریخ صدور,مبلغ مشمول مالیات,مالیات بر ارزش افزوده,مجموع مبلغ صورتحساب\n' +
+          'INV-1,1405/01/15,1000000,100000,1100000\n' +
+          'INV-2,1405/01/16,1000000,100000,1100000\n',
+        'utf8',
+      );
+      await expect(parseKartableExportFile(oversizeCsv, 'oversize.csv')).rejects.toThrow(
+        BadRequestException,
+      );
+    } finally {
+      if (prevLimit === undefined) delete process.env.IMPORT_MAX_ROWS;
+      else process.env.IMPORT_MAX_ROWS = prevLimit;
+    }
   });
 
   it('preserves exact decimal string precision for huge BigInt rial totals (> 2^51 minor units)', async () => {
     const csvHuge = Buffer.from(
       [
-        'taxId,invoiceNumber,netAmount,vatAmount,totalAmount',
-        'HUGE-TAX-1,INV-HUGE-1,900000000000000,90000000000000,990000000000000',
+        'taxId,invoiceNumber,issueDate,netAmount,vatAmount,totalAmount',
+        'HUGE-TAX-1,INV-HUGE-1,1405/01/15,900000000000000,90000000000000,990000000000000',
       ].join('\n'),
       'utf8',
     );
@@ -311,7 +359,7 @@ describe('KartableReconciliation (parser, matching, quarterly VAT, AccessGuard)'
     };
     await ctrl.reconcile(
       { user: { sub: 'u-acc', tenantId: 'tenant-sec' } } as never,
-      { year: 1405, quarter: 1 },
+      { year: '1405' as unknown as number, quarter: '1' as unknown as number },
       { salesFile: [salesFile] },
     );
 
@@ -319,5 +367,13 @@ describe('KartableReconciliation (parser, matching, quarterly VAT, AccessGuard)'
       salesFile,
       purchasesFile: undefined,
     });
+
+    await expect(
+      ctrl.reconcile(
+        { user: { sub: 'u-acc', tenantId: 'tenant-sec' } } as never,
+        { year: 'not-a-year' as unknown as number, quarter: '1' as unknown as number },
+        { salesFile: [salesFile] },
+      ),
+    ).rejects.toThrow(BadRequestException);
   });
 });

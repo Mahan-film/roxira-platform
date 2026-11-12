@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   HttpCode,
@@ -60,7 +61,15 @@ export class KartableReconciliationController {
     @UploadedFiles() files?: KartableUploadedFilesMap,
   ): Promise<KartableReconciliationResponseDto> {
     const tenantId = requireTenantId(request);
-    return this.service.reconcile(tenantId, body.year, body.quarter, {
+    const year = Number(body.year);
+    const quarter = Number(body.quarter);
+    if (!Number.isInteger(year) || year < 1300 || year > 1600) {
+      throw new BadRequestException('سال باید عدد صحیح بین ۱۳۰۰ تا ۱۶۰۰ باشد.');
+    }
+    if (!Number.isInteger(quarter) || quarter < 1 || quarter > 4) {
+      throw new BadRequestException('فصل باید عدد صحیح بین ۱ تا ۴ باشد.');
+    }
+    return this.service.reconcile(tenantId, year, quarter, {
       salesFile: files?.salesFile?.[0],
       purchasesFile: files?.purchasesFile?.[0],
     });

@@ -41,6 +41,7 @@ export interface KartableSectionSummary {
   formatId: string | null;
   kartableRowCount: number;
   outOfPeriodSkippedCount: number;
+  undatedSkippedCount: number;
   ourInvoiceCount: number;
   matchedCount: number;
   amountDifferenceCount: number;

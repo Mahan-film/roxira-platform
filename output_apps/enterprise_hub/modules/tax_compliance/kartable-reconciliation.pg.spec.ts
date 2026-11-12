@@ -5,6 +5,7 @@
  *   - Quarter date filtering excludes invoices outside the requested Jalali quarter.
  */
 import 'reflect-metadata';
+import { randomBytes } from 'crypto';
 import * as path from 'path';
 import { DataSource } from 'typeorm';
 import { TenantScope } from '../access/services/tenant-scope';
@@ -16,8 +17,8 @@ const describePg = HOST ? describe : describe.skip;
 const OWNER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
 const OWNER_PW = process.env.ROXIRA_TEST_PG_PASSWORD;
 const PORT = Number(process.env.ROXIRA_TEST_PG_PORT ?? 5432);
-const ADMIN_DB = process.env.ROXIRA_TEST_PG_ADMIN_DB ?? (OWNER === 'mac' ? 'template1' : 'postgres');
-const APP_PW = 'kartable-pg-test-only';
+const ADMIN_DB = process.env.ROXIRA_TEST_PG_ADMIN_DB ?? 'postgres';
+const APP_PW = process.env.ROXIRA_TEST_PG_APP_PASSWORD ?? randomBytes(16).toString('hex');
 
 const TENANT_A = '11111111-1111-4111-8111-111111111111';
 const TENANT_B = '22222222-2222-4222-8222-222222222222';
@@ -96,9 +97,9 @@ describePg('KartableReconciliation on real PostgreSQL (NOSUPERUSER, NOBYPASSRLS)
   it('matches Tenant A Q1 data cleanly, excludes Q2 invoices, and blocks Tenant B leakage', async () => {
     const csvForA = Buffer.from(
       [
-        'taxId,invoiceNumber,netAmount,vatAmount,totalAmount',
-        'TAXID_TENANT_A_0000001,INV-A-Q1,10000000,1000000,11000000',
-        'TAXID_TENANT_B_0000001,INV-B-Q1,7000000,700000,7700000',
+        'taxId,invoiceNumber,issueDate,netAmount,vatAmount,totalAmount',
+        'TAXID_TENANT_A_0000001,INV-A-Q1,1405/01/21,10000000,1000000,11000000',
+        'TAXID_TENANT_B_0000001,INV-B-Q1,1405/01/26,7000000,700000,7700000',
       ].join('\n'),
       'utf8',
     );
@@ -118,7 +119,7 @@ describePg('KartableReconciliation on real PostgreSQL (NOSUPERUSER, NOBYPASSRLS)
 
     // Tenant B sees ONLY Tenant B's Q1 sale
     const csvForB = Buffer.from(
-      'taxId,invoiceNumber,netAmount,vatAmount,totalAmount\nTAXID_TENANT_B_0000001,INV-B-Q1,7000000,700000,7700000\n',
+      'taxId,invoiceNumber,issueDate,netAmount,vatAmount,totalAmount\nTAXID_TENANT_B_0000001,INV-B-Q1,1405/01/26,7000000,700000,7700000\n',
       'utf8',
     );
     const resB = await service.reconcile(TENANT_B, 1405, 1, {
@@ -127,5 +128,12 @@ describePg('KartableReconciliation on real PostgreSQL (NOSUPERUSER, NOBYPASSRLS)
     expect(resB.sales.ourInvoiceCount).toBe(1);
     expect(resB.sales.matchedCount).toBe(1);
     expect(resB.quarterlyVat.our.purchasesVat).toBe(0);
+  });
+
+  it('enforces PostgreSQL FORCE RLS directly for the unprivileged NOBYPASSRLS role without tenant context', async () => {
+    const bareInvoices = await appDs.query(`SELECT id FROM "invoices"`);
+    const bareSubmissions = await appDs.query(`SELECT id FROM "moadian_submissions"`);
+    expect(bareInvoices).toEqual([]);
+    expect(bareSubmissions).toEqual([]);
   });
 });
