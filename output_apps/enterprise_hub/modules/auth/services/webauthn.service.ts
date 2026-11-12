@@ -444,7 +444,7 @@ export class WebAuthnService {
     if (typeof dto.backedUp === 'boolean') credential.backedUp = dto.backedUp;
     await this.passkeyRepository.save(credential);
 
-    const user = await this.authRepository.findById(credential.userId);
+    const user = await this.authRepository.findById(credential.userId, { callerUserId: credential.userId });
     if (!user) {
       throw new UnauthorizedException('کاربر مربوط به این Passkey یافت نشد.');
     }

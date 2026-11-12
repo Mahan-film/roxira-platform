@@ -475,15 +475,18 @@ USING (
 );
 ```
 
-### 4.3 Definer Context Guards & Pre-Authentication Trade-Off
+### 4.3 Definer Context Guards & Access Boundaries
 
-During the initial pre-authentication phase (e.g. resolving a phone number, checking credentials, or validating an opaque refresh token), neither `app.user_id` nor `app.tenant_id` is yet bound in PostgreSQL session settings. Single-record lookup functions (`lookup_user_by_id`, `lookup_user_by_id_with_password`, `lookup_user_memberships`, `lookup_tenant_entitlements`, etc.) operate without caller context during this unauthenticated phase as an accepted trade-off.
+During the initial pre-authentication phase (before user/tenant identity is known), only four truly anonymous/pre-auth lookup functions operate without session settings:
+- `lookup_user_by_phone(p_phone)` (intended pre-auth OTP lookup by phone number), `lookup_user_by_username(p_username)` (exact match), and `lookup_user_by_login_email(p_email)` (exact match);
+- `lookup_refresh_token_by_hash(p_token_hash)` (opaque SHA-256 token lookup);
+- `lookup_invitation_by_token_hash(p_token_hash)` (opaque SHA-256 invite lookup);
+- `is_refresh_token_family_active(p_family_id, p_user_id)`, `delete_expired_refresh_tokens(p_before)`, and anonymous `submit_enterprise_inquiry(..., NULL)`.
 
-Once an authenticated user or tenant session is active and session settings (`app.user_id`, `app.tenant_id`) are set, the definer functions enforce strict mismatch guards:
-- `v_current_user IS NOT NULL AND v_current_user <> p_user_id` raises `'caller user context does not match target user'`
-- `v_current_tenant IS NOT NULL AND v_current_tenant <> p_tenant_id` raises `'caller tenant context does not match target tenant'`
-- `revoke_refresh_token_if_active` and `revoke_refresh_token_family` verify token ownership against `v_current_user`.
-Furthermore, platform-wide administrative functions (`list_open_module_requests`, `list_enterprise_inquiries`) are guarded at the application layer by `@Roles(UserRole.ADMIN)` decorators.
+Every **by-id** or **by-tenant** `SECURITY DEFINER` function (`lookup_user_by_id`, `lookup_user_by_id_with_password`, `lookup_user_memberships`, `lookup_tenant_entitlements`, `revoke_refresh_token_if_active`, `revoke_refresh_token_family`, `mark_invitation_accepted`) **fails closed** when `app.user_id` / `app.tenant_id` is unset (`NULL`) or does not match the target row/caller:
+- Repositories bind verified caller context (`app.user_id` and/or `app.tenant_id`) inside explicit transactions before invoking these functions; unbound calls raise an exception in PostgreSQL.
+- Cross-tenant platform-operator functions (`list_open_module_requests`, `list_enterprise_inquiries`) require BOTH NestJS `@Roles(UserRole.ADMIN)` AND a DB-side operator check (`app.user_id` must reference an active `users` row with `role = 'ADMIN'`). Accepted cross-tenant exposure is strictly limited to active global `ADMIN` operators.
+- `users` membership visibility (`tenant_memberships`) is `FOR SELECT` only; `INSERT`/`UPDATE`/`DELETE` policies on `users` require matching `tenant_id`, `managed_by_tenant_id`, or self (`id = app.user_id`), and `tenant_memberships` mutations require `app.tenant_id`.
 
 ---
 
@@ -491,24 +494,24 @@ Furthermore, platform-wide administrative functions (`list_open_module_requests`
 
 | Actor / Session Context | `users` | `auth_refresh_tokens` | `tenant_memberships` | `tenant_invitations` | `contact_messages` | `enterprise_inquiries` |
 |---|---|---|---|---|---|---|
-| **Unauthenticated Visitor** | 0 rows direct; function lookup by phone/email only | 0 rows direct; token rotation lookup only | 0 rows direct; membership list by user id only | 0 rows direct; invite lookup by token hash only | `INSERT` allowed; 0 rows read | `INSERT` allowed; 0 rows read |
-| **Tenant A Session** (`app.tenant_id = A`) | Only Tenant A members & managed staff | Only Tenant A refresh tokens | Only Tenant A memberships | Only Tenant A invitations | Only Tenant A contact messages | Only Tenant A inquiries |
-| **Tenant B Session** (`app.tenant_id = B`) | Isolated from Tenant A | Isolated from Tenant A | Isolated from Tenant A | Isolated from Tenant A | Isolated from Tenant A | Isolated from Tenant A |
-| **User Profile Context** (`app.user_id = U`) | User U can read/update own profile | User U can read/revoke own sessions | User U can read own memberships | Blocked | Blocked | Blocked |
+| **Unauthenticated Visitor** | 0 rows direct; phone/username/email login lookup only | 0 rows direct; opaque hash lookup only | 0 rows direct; `lookup_user_memberships` fails closed without `app.user_id` | 0 rows direct; invite lookup by token hash only | `INSERT` requires `app.tenant_id`; 0 rows read | `INSERT` (`tenant_id IS NULL`); 0 rows read without `ADMIN` `app.user_id` |
+| **Tenant A Session** (`app.tenant_id = A`) | Select Tenant A members & managed staff; write/delete own home/managed users only | Only Tenant A refresh tokens | Select & write Tenant A memberships | Only Tenant A invitations | Only Tenant A contact messages | Only Tenant A inquiries |
+| **Tenant B Session** (`app.tenant_id = B`) | Isolated from Tenant A (cannot mutate/delete Tenant A home users) | Isolated from Tenant A | Isolated from Tenant A | Isolated from Tenant A | Isolated from Tenant A | Isolated from Tenant A |
+| **User Profile Context** (`app.user_id = U`) | User U can read/update own profile | User U can read/revoke own sessions | User U can SELECT own memberships (writes require `app.tenant_id`) | Blocked without `app.tenant_id` | Blocked | `list_enterprise_inquiries` only if U is active `ADMIN` |
 
 ---
 
 ## 6. Migration Rollout & Reversibility
 
-1. **Migration Script**: `output_apps/enterprise_hub/migrations/1789900002700-EnableRlsPreTenantTables.ts`
+1. **Migration Script**: `output_apps/enterprise_hub/migrations/1789900003800-EnableRlsPreTenantTables.ts`
 2. **`up()`**:
-   - Creates atomic `SECURITY DEFINER` lookup and mutation functions owned by `postgres`.
+   - Creates atomic `SECURITY DEFINER` lookup and mutation functions owned by a superuser (`postgres` / `enterprise_admin` / migration runner).
    - Revokes execute from `PUBLIC` and grants execute permissions to `roxira_app`.
    - Enables and forces RLS on all 8 tables.
    - Applies the granular policies.
 3. **`down()`**:
-   - Drops all 8 table policies.
+   - Drops all table policies created by `up()`.
    - Disables and un-forces RLS on all 8 tables.
-   - Drops the functions.
+   - Drops the 17 functions (note: `down()` deliberately preserves the `roxira_app` role and grants so shared cluster state is intact).
 4. **Audit Allow-List Removal**:
    - `RLS_PENDING_ALLOWLIST` in `tenant-rls-all-tables.pg.spec.ts` is cleared of these 8 tables. All 8 pre-tenant tables are now covered under PostgreSQL FORCE ROW LEVEL SECURITY, leaving only the remaining module tables in `RLS_PENDING_ALLOWLIST`.

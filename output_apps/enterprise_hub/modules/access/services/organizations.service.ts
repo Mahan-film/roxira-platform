@@ -27,19 +27,19 @@ export class OrganizationsService {
   ) {}
 
   listMine(userId: string): Promise<MembershipWithTenant[]> {
-    return this.memberships.listForUser(userId);
+    return this.memberships.listForUser(userId, userId);
   }
 
   /** A person who signed up alone creates an organisation later; they become its owner. */
   async create(userId: string, name: string, request?: Req): Promise<{ tenantId: string }> {
-    const owned = (await this.memberships.listForUser(userId)).filter((m) => m.roleKey === SystemRole.OWNER);
+    const owned = (await this.memberships.listForUser(userId, userId)).filter((m) => m.roleKey === SystemRole.OWNER);
     if (owned.length >= MAX_OWNED_ORGANIZATIONS) {
       throw new ConflictException('You have reached the limit of organisations you can own.');
     }
     const tenant = await this.tenantsService.create(name);
     await this.memberships.create({ tenantId: tenant.id, userId, roleKey: SystemRole.OWNER, status: 'ACTIVE' });
     await this.entitlements.grantDefaults(tenant.id);
-    const user = await this.users.findById(userId);
+    const user = await this.users.findById(userId, { callerUserId: userId });
     if (user && !user.tenantId) {
       user.tenantId = tenant.id;
       user.tenantRole = 'OWNER' as never;

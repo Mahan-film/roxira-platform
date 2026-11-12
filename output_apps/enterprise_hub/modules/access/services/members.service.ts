@@ -159,7 +159,7 @@ export class MembersService {
   async resetManagedPassword(actor: AccessContext, membershipId: string, password: string, request?: Parameters<AuditService['record']>[0]['request']): Promise<void> {
     const target = await this.memberships.findById(actor.tenantId, membershipId);
     if (!target) throw new NotFoundException('Member not found.');
-    const user = await this.users.findById(target.userId);
+    const user = await this.users.findById(target.userId, { callerTenantId: actor.tenantId });
     if (!user || user.managedByTenantId !== actor.tenantId) {
       throw denied('FORBIDDEN_ACTION', 'This person manages their own password.');
     }

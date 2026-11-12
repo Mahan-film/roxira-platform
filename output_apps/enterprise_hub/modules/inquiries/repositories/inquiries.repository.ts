@@ -55,44 +55,56 @@ export class InquiriesRepository {
     search?: string;
     skip: number;
     take: number;
+    operatorUserId?: string;
   }): Promise<[EnterpriseInquiryEntity[], number]> {
     try {
-      const rows = await this.inquiries.query(
-        `SELECT * FROM public.list_enterprise_inquiries($1, $2, $3, $4)`,
-        [
-          options.status ?? null,
-          options.search ?? null,
-          options.take ?? 50,
-          options.skip ?? 0,
-        ],
-      );
-      if (!rows || rows.length === 0) {
-        if (options.skip > 0) {
-          const firstPage = await this.inquiries.query(
-            `SELECT total_count FROM public.list_enterprise_inquiries($1, $2, 1, 0)`,
-            [options.status ?? null, options.search ?? null],
-          );
-          const total = firstPage && firstPage.length > 0 ? Number(firstPage[0].total_count ?? 0) : 0;
-          return [[], total];
+      const queryFn = options.operatorUserId
+        ? <T>(fn: (executor: { query: Repository<EnterpriseInquiryEntity>['query'] }) => Promise<T>) =>
+            this.inquiries.manager.transaction(async (m) => {
+              await m.query(`SELECT set_config('app.user_id', $1, true)`, [options.operatorUserId]);
+              return fn(m);
+            })
+        : <T>(fn: (executor: { query: Repository<EnterpriseInquiryEntity>['query'] }) => Promise<T>) =>
+            fn(this.inquiries);
+
+      return await queryFn(async (exec) => {
+        const rows = await exec.query(
+          `SELECT * FROM public.list_enterprise_inquiries($1, $2, $3, $4)`,
+          [
+            options.status ?? null,
+            options.search ?? null,
+            options.take ?? 50,
+            options.skip ?? 0,
+          ],
+        );
+        if (!rows || rows.length === 0) {
+          if (options.skip > 0) {
+            const firstPage = await exec.query(
+              `SELECT total_count FROM public.list_enterprise_inquiries($1, $2, 1, 0)`,
+              [options.status ?? null, options.search ?? null],
+            );
+            const total = firstPage && firstPage.length > 0 ? Number(firstPage[0].total_count ?? 0) : 0;
+            return [[], total];
+          }
+          return [[], 0];
         }
-        return [[], 0];
-      }
-      const total = Number(rows[0].total_count ?? 0);
-      const entities = rows.map((r: any) =>
-        this.inquiries.create({
-          id: Number(r.id),
-          name: r.name,
-          company: r.company,
-          phone: r.phone,
-          email: r.email,
-          message: r.message,
-          source: r.source,
-          tenantId: r.tenant_id,
-          status: r.status,
-          createdAt: new Date(r.created_at),
-        }),
-      );
-      return [entities, total];
+        const total = Number(rows[0].total_count ?? 0);
+        const entities = rows.map((r: any) =>
+          this.inquiries.create({
+            id: Number(r.id),
+            name: r.name,
+            company: r.company,
+            phone: r.phone,
+            email: r.email,
+            message: r.message,
+            source: r.source,
+            tenantId: r.tenant_id,
+            status: r.status,
+            createdAt: new Date(r.created_at),
+          }),
+        );
+        return [entities, total];
+      });
     } catch (err) {
       this.logger.error(`list_enterprise_inquiries error: ${err}`);
       throw err;

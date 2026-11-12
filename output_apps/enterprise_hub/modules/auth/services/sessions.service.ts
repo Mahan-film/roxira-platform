@@ -66,7 +66,7 @@ export class SessionsService {
 
   /** Organisations the user belongs to (active memberships of active tenants). */
   listOrganizations(userId: string) {
-    return this.memberships.listForUser(userId);
+    return this.memberships.listForUser(userId, userId);
   }
 
   /** Verify membership server-side, then re-point this session; the caller signs a new access token. */
@@ -74,7 +74,7 @@ export class SessionsService {
     const m = await this.memberships.findByTenantUser(tenantId, userId);
     if (!m || m.status !== 'ACTIVE') throw new ForbiddenException('You are not a member of that organisation.');
     if (sid) await this.tokens.setSessionTenant(userId, sid, tenantId);
-    const user = await this.users.findById(userId);
+    const user = await this.users.findById(userId, { callerUserId: userId });
     if (user) {
       user.tenantId = tenantId;
       user.tenantRole = m.roleKey === 'owner' ? ('OWNER' as never) : ('MEMBER' as never);

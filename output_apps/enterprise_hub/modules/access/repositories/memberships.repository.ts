@@ -47,7 +47,7 @@ export class MembershipsRepository {
     return this.save(this.repo.create(data));
   }
 
-  save(entity: MembershipEntity): Promise<MembershipEntity> {
+  async save(entity: MembershipEntity): Promise<MembershipEntity> {
     if (!entity.tenantId) {
       throw new Error('Cannot save membership without tenantId');
     }
@@ -116,13 +116,21 @@ export class MembershipsRepository {
     });
   }
 
-  /** All organisations a user belongs to (for the switcher). Scoped by user, not by tenant. */
-  async listForUser(userId: string): Promise<MembershipWithTenant[]> {
+  /** All organisations a user belongs to (for the switcher). Scoped by caller user context. */
+  async listForUser(userId: string, callerUserId?: string): Promise<MembershipWithTenant[]> {
     try {
-      const rows = await this.repo.query(
-        `SELECT * FROM public.lookup_user_memberships($1)`,
-        [userId],
-      );
+      const rows = callerUserId
+        ? await this.repo.manager.transaction(async (m) => {
+            await m.query(`SELECT set_config('app.user_id', $1, true)`, [callerUserId]);
+            return m.query(
+              `SELECT * FROM public.lookup_user_memberships($1)`,
+              [userId],
+            );
+          })
+        : await this.repo.query(
+            `SELECT * FROM public.lookup_user_memberships($1)`,
+            [userId],
+          );
       if (rows) {
         return rows.map((r: any) => ({
           membershipId: r.membership_id,

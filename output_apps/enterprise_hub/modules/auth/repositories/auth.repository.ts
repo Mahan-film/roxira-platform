@@ -95,17 +95,25 @@ export class AuthRepository {
   /** Load a user together with `passwordHash` (a `select: false` column). */
   async findWithPasswordHash(
     where: { id: string } | { username: string } | { loginEmail: string },
+    callerUserId?: string,
   ): Promise<UserEntity | null> {
     try {
       let rows: any[] = [];
       if ('id' in where) {
-        rows = await this.repository.manager.transaction(async (m) => {
-          await m.query(`SELECT set_config('app.user_id', $1, true)`, [where.id]);
-          return m.query(
+        if (callerUserId) {
+          rows = await this.repository.manager.transaction(async (m) => {
+            await m.query(`SELECT set_config('app.user_id', $1, true)`, [callerUserId]);
+            return m.query(
+              `SELECT * FROM public.lookup_user_by_id_with_password($1)`,
+              [where.id],
+            );
+          });
+        } else {
+          rows = await this.repository.query(
             `SELECT * FROM public.lookup_user_by_id_with_password($1)`,
             [where.id],
           );
-        });
+        }
       } else if ('username' in where) {
         rows = await this.repository.query(
           `SELECT * FROM public.lookup_user_by_username($1)`,
@@ -179,12 +187,28 @@ export class AuthRepository {
     }
   }
 
-  async findById(id: string): Promise<UserEntity | null> {
+  async findById(
+    id: string,
+    caller?: { callerUserId?: string; callerTenantId?: string },
+  ): Promise<UserEntity | null> {
     try {
-      const rows = await this.repository.query(
-        `SELECT * FROM public.lookup_user_by_id($1)`,
-        [id],
-      );
+      let rows: any[];
+      if (caller?.callerUserId) {
+        rows = await this.repository.manager.transaction(async (m) => {
+          await m.query(`SELECT set_config('app.user_id', $1, true)`, [caller.callerUserId]);
+          return m.query(`SELECT * FROM public.lookup_user_by_id($1)`, [id]);
+        });
+      } else if (caller?.callerTenantId) {
+        rows = await this.repository.manager.transaction(async (m) => {
+          await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [caller.callerTenantId]);
+          return m.query(`SELECT * FROM public.lookup_user_by_id($1)`, [id]);
+        });
+      } else {
+        rows = await this.repository.query(
+          `SELECT * FROM public.lookup_user_by_id($1)`,
+          [id],
+        );
+      }
       if (rows && rows.length > 0) {
         const r = rows[0];
         return this.repository.create({

@@ -65,12 +65,20 @@ export class RefreshTokenRepository {
    * Revoke one token only if it is still active. Returns true when this call
    * did the revoking, so two parallel refreshes cannot both rotate the token.
    */
-  async revokeIfActive(id: string): Promise<boolean> {
+  async revokeIfActive(id: string, ownerUserId?: string): Promise<boolean> {
     try {
-      const rows = await this.repository.query(
-        `SELECT public.revoke_refresh_token_if_active($1) AS revoked`,
-        [id],
-      );
+      const rows = ownerUserId
+        ? await this.repository.manager.transaction(async (m) => {
+            await m.query(`SELECT set_config('app.user_id', $1, true)`, [ownerUserId]);
+            return m.query(
+              `SELECT public.revoke_refresh_token_if_active($1) AS revoked`,
+              [id],
+            );
+          })
+        : await this.repository.query(
+            `SELECT public.revoke_refresh_token_if_active($1) AS revoked`,
+            [id],
+          );
       if (rows && rows.length > 0) {
         return Boolean(rows[0].revoked);
       }
@@ -81,12 +89,22 @@ export class RefreshTokenRepository {
     }
   }
 
-  async revokeFamily(familyId: string): Promise<void> {
+  async revokeFamily(familyId: string, ownerUserId?: string): Promise<void> {
     try {
-      await this.repository.query(
-        `SELECT public.revoke_refresh_token_family($1)`,
-        [familyId],
-      );
+      if (ownerUserId) {
+        await this.repository.manager.transaction(async (m) => {
+          await m.query(`SELECT set_config('app.user_id', $1, true)`, [ownerUserId]);
+          await m.query(
+            `SELECT public.revoke_refresh_token_family($1)`,
+            [familyId],
+          );
+        });
+      } else {
+        await this.repository.query(
+          `SELECT public.revoke_refresh_token_family($1)`,
+          [familyId],
+        );
+      }
     } catch (err) {
       this.logger.error(`revoke_refresh_token_family error: ${err}`);
       throw err;

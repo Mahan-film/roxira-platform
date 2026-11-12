@@ -28,8 +28,8 @@ export const PRE_TENANT_RLS_TABLES = [
   'enterprise_inquiries',
 ] as const;
 
-export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface {
-  name = 'EnableRlsPreTenantTables1789900002700';
+export class EnableRlsPreTenantTables1789900003800 implements MigrationInterface {
+  name = 'EnableRlsPreTenantTables1789900003800';
 
   public async up(q: QueryRunner): Promise<void> {
     // -------------------------------------------------------------------------
@@ -96,8 +96,7 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
                tenant_id, tenant_role, "isActive" AS is_active,
                "lastLoginAt" AS last_login_at, "createdAt" AS created_at, "updatedAt" AS updated_at
         FROM public.users
-        WHERE lower(username) = lower(p_username)
-        ORDER BY id ASC
+        WHERE username = p_username
         LIMIT 1;
       $$;
 
@@ -130,8 +129,7 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
                tenant_id, tenant_role, "isActive" AS is_active,
                "lastLoginAt" AS last_login_at, "createdAt" AS created_at, "updatedAt" AS updated_at
         FROM public.users
-        WHERE lower(login_email) = lower(p_email)
-        ORDER BY id ASC
+        WHERE login_email = p_email
         LIMIT 1;
       $$;
 
@@ -159,9 +157,29 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
       AS $$
       DECLARE
         v_current_user uuid := nullif(current_setting('app.user_id', true), '')::uuid;
+        v_current_tenant uuid := nullif(current_setting('app.tenant_id', true), '')::uuid;
       BEGIN
-        IF v_current_user IS NOT NULL AND v_current_user <> p_user_id THEN
-          RAISE EXCEPTION 'caller user context does not match target user';
+        IF v_current_user IS NOT NULL THEN
+          IF v_current_user <> p_user_id THEN
+            RAISE EXCEPTION 'caller user context does not match target user';
+          END IF;
+        ELSIF v_current_tenant IS NOT NULL THEN
+          IF NOT EXISTS (
+            SELECT 1 FROM public.users u
+            WHERE u.id = p_user_id
+              AND (
+                u.tenant_id = v_current_tenant
+                OR u.managed_by_tenant_id = v_current_tenant
+                OR EXISTS (
+                  SELECT 1 FROM public.tenant_memberships m
+                  WHERE m.user_id = u.id AND m.tenant_id = v_current_tenant
+                )
+              )
+          ) THEN
+            RAISE EXCEPTION 'caller tenant context is not authorized for target user';
+          END IF;
+        ELSE
+          RAISE EXCEPTION 'caller user or tenant context required';
         END IF;
         RETURN QUERY
         SELECT u.id, u.phone, u.username, u.managed_by_tenant_id, u.login_email,
@@ -277,7 +295,7 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
           RETURN false;
         END IF;
 
-        IF v_current_user IS NOT NULL AND v_current_user <> v_token_user THEN
+        IF v_current_user IS NULL OR v_current_user <> v_token_user THEN
           RAISE EXCEPTION 'caller user context does not match token owner';
         END IF;
 
@@ -309,7 +327,7 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
           RETURN;
         END IF;
 
-        IF v_current_user IS NOT NULL AND v_current_user <> v_family_user THEN
+        IF v_current_user IS NULL OR v_current_user <> v_family_user THEN
           RAISE EXCEPTION 'caller user context does not match token owner';
         END IF;
 
@@ -353,7 +371,7 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
         v_current_user uuid := nullif(current_setting('app.user_id', true), '')::uuid;
         v_current_tenant uuid := nullif(current_setting('app.tenant_id', true), '')::uuid;
       BEGIN
-        IF v_current_user IS NOT NULL AND v_current_user <> p_user_id THEN
+        IF v_current_user IS NULL OR v_current_user <> p_user_id THEN
           RAISE EXCEPTION 'caller user context does not match target user';
         END IF;
         RETURN QUERY
@@ -397,7 +415,6 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
         WHERE token_hash = p_token_hash
           AND accepted_at IS NULL
           AND revoked_at IS NULL
-          AND expires_at > CURRENT_TIMESTAMP
         LIMIT 1;
       $$;
 
@@ -424,15 +441,15 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
           RETURN false;
         END IF;
 
-        IF p_tenant_id IS NOT NULL AND v_invitation_tenant <> p_tenant_id THEN
+        IF p_tenant_id IS NULL OR v_invitation_tenant <> p_tenant_id THEN
           RETURN false;
         END IF;
 
-        IF v_current_tenant IS NOT NULL AND v_current_tenant <> v_invitation_tenant THEN
+        IF v_current_tenant IS NULL OR v_current_tenant <> v_invitation_tenant THEN
           RAISE EXCEPTION 'caller tenant context does not match target tenant';
         END IF;
 
-        IF v_current_user IS NOT NULL AND v_current_user <> p_user_id THEN
+        IF v_current_user IS NULL OR v_current_user <> p_user_id THEN
           RAISE EXCEPTION 'caller user context does not match target user';
         END IF;
 
@@ -463,7 +480,7 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
       DECLARE
         v_current_tenant uuid := nullif(current_setting('app.tenant_id', true), '')::uuid;
       BEGIN
-        IF v_current_tenant IS NOT NULL AND v_current_tenant <> p_tenant_id THEN
+        IF v_current_tenant IS NULL OR v_current_tenant <> p_tenant_id THEN
           RAISE EXCEPTION 'caller tenant context does not match target tenant';
         END IF;
         RETURN QUERY
@@ -482,15 +499,28 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
         requested_by uuid,
         created_at timestamp
       )
-      LANGUAGE sql
+      LANGUAGE plpgsql
       SECURITY DEFINER
       SET search_path = public, pg_temp
       AS $$
-        SELECT id, tenant_id, module, status, requested_by, created_at
-        FROM public.tenant_module_requests
-        WHERE status = 'OPEN'
-        ORDER BY created_at ASC
+      DECLARE
+        v_current_user uuid := nullif(current_setting('app.user_id', true), '')::uuid;
+      BEGIN
+        IF v_current_user IS NULL OR NOT EXISTS (
+          SELECT 1 FROM public.users u
+          WHERE u.id = v_current_user
+            AND u.role::text = 'ADMIN'
+            AND u."isActive" = true
+        ) THEN
+          RAISE EXCEPTION 'operator role required';
+        END IF;
+        RETURN QUERY
+        SELECT r.id, r.tenant_id, r.module, r.status, r.requested_by, r.created_at
+        FROM public.tenant_module_requests r
+        WHERE r.status = 'OPEN'
+        ORDER BY r.created_at ASC
         LIMIT 500;
+      END;
       $$;
 
       CREATE OR REPLACE FUNCTION public.submit_enterprise_inquiry(
@@ -528,6 +558,9 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
       END;
       $$;
 
+    `);
+
+    await q.query(String.raw`
       CREATE OR REPLACE FUNCTION public.list_enterprise_inquiries(
         p_status text DEFAULT NULL,
         p_search text DEFAULT NULL,
@@ -552,8 +585,18 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
       SET search_path = public, pg_temp
       AS $$
       DECLARE
+        v_current_user uuid := nullif(current_setting('app.user_id', true), '')::uuid;
         v_escaped_search text;
       BEGIN
+        IF v_current_user IS NULL OR NOT EXISTS (
+          SELECT 1 FROM public.users u
+          WHERE u.id = v_current_user
+            AND u.role::text = 'ADMIN'
+            AND u."isActive" = true
+        ) THEN
+          RAISE EXCEPTION 'operator role required';
+        END IF;
+
         IF p_search IS NOT NULL THEN
           v_escaped_search := '%' || replace(replace(replace(p_search, '\', '\\'), '%', '\%'), '_', '\_') || '%';
         END IF;
@@ -651,10 +694,16 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
     // 3. Granular Row-Level Policies
     // -------------------------------------------------------------------------
     // 3.1 users
+    // Membership-based visibility is SELECT-only so a tenant cannot UPDATE/DELETE a user whose
+    // home tenant_id / managed_by_tenant_id belongs to another organisation.
     await q.query(`DROP POLICY IF EXISTS "users_tenant_and_self" ON "users"`);
+    await q.query(`DROP POLICY IF EXISTS "users_tenant_select" ON "users"`);
+    await q.query(`DROP POLICY IF EXISTS "users_tenant_and_self_insert" ON "users"`);
+    await q.query(`DROP POLICY IF EXISTS "users_tenant_and_self_update" ON "users"`);
+    await q.query(`DROP POLICY IF EXISTS "users_tenant_and_self_delete" ON "users"`);
     await q.query(`
-      CREATE POLICY "users_tenant_and_self" ON "users"
-      FOR ALL
+      CREATE POLICY "users_tenant_select" ON "users"
+      FOR SELECT
       USING (
         (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND (
           "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
@@ -665,8 +714,38 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
           )
         ))
         OR (nullif(current_setting('app.user_id', true), '') IS NOT NULL AND "id" = nullif(current_setting('app.user_id', true), '')::uuid)
+      );
+
+      CREATE POLICY "users_tenant_and_self_insert" ON "users"
+      FOR INSERT
+      WITH CHECK (
+        (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND (
+          "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
+          OR "managed_by_tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
+        ))
+        OR (nullif(current_setting('app.user_id', true), '') IS NOT NULL AND "id" = nullif(current_setting('app.user_id', true), '')::uuid)
+      );
+
+      CREATE POLICY "users_tenant_and_self_update" ON "users"
+      FOR UPDATE
+      USING (
+        (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND (
+          "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
+          OR "managed_by_tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
+        ))
+        OR (nullif(current_setting('app.user_id', true), '') IS NOT NULL AND "id" = nullif(current_setting('app.user_id', true), '')::uuid)
       )
       WITH CHECK (
+        (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND (
+          "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
+          OR "managed_by_tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
+        ))
+        OR (nullif(current_setting('app.user_id', true), '') IS NOT NULL AND "id" = nullif(current_setting('app.user_id', true), '')::uuid)
+      );
+
+      CREATE POLICY "users_tenant_and_self_delete" ON "users"
+      FOR DELETE
+      USING (
         (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND (
           "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
           OR "managed_by_tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
@@ -691,15 +770,38 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
     `);
 
     // 3.3 tenant_memberships
+    // Users may SELECT their own memberships; writes/deletes require matching tenant context.
     await q.query(`DROP POLICY IF EXISTS "tenant_memberships_tenant_and_user" ON "tenant_memberships"`);
+    await q.query(`DROP POLICY IF EXISTS "tenant_memberships_select" ON "tenant_memberships"`);
+    await q.query(`DROP POLICY IF EXISTS "tenant_memberships_insert" ON "tenant_memberships"`);
+    await q.query(`DROP POLICY IF EXISTS "tenant_memberships_update" ON "tenant_memberships"`);
+    await q.query(`DROP POLICY IF EXISTS "tenant_memberships_delete" ON "tenant_memberships"`);
     await q.query(`
-      CREATE POLICY "tenant_memberships_tenant_and_user" ON "tenant_memberships"
-      FOR ALL
+      CREATE POLICY "tenant_memberships_select" ON "tenant_memberships"
+      FOR SELECT
       USING (
         (nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid)
         OR (nullif(current_setting('app.user_id', true), '') IS NOT NULL AND "user_id" = nullif(current_setting('app.user_id', true), '')::uuid)
+      );
+
+      CREATE POLICY "tenant_memberships_insert" ON "tenant_memberships"
+      FOR INSERT
+      WITH CHECK (
+        nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
+      );
+
+      CREATE POLICY "tenant_memberships_update" ON "tenant_memberships"
+      FOR UPDATE
+      USING (
+        nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
       )
       WITH CHECK (
+        nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
+      );
+
+      CREATE POLICY "tenant_memberships_delete" ON "tenant_memberships"
+      FOR DELETE
+      USING (
         nullif(current_setting('app.tenant_id', true), '') IS NOT NULL AND "tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid
       );
     `);
@@ -800,8 +902,16 @@ export class EnableRlsPreTenantTables1789900002700 implements MigrationInterface
   public async down(q: QueryRunner): Promise<void> {
     // 1. Drop policies
     await q.query(`DROP POLICY IF EXISTS "users_tenant_and_self" ON "users"`);
+    await q.query(`DROP POLICY IF EXISTS "users_tenant_select" ON "users"`);
+    await q.query(`DROP POLICY IF EXISTS "users_tenant_and_self_insert" ON "users"`);
+    await q.query(`DROP POLICY IF EXISTS "users_tenant_and_self_update" ON "users"`);
+    await q.query(`DROP POLICY IF EXISTS "users_tenant_and_self_delete" ON "users"`);
     await q.query(`DROP POLICY IF EXISTS "auth_refresh_tokens_tenant_and_user" ON "auth_refresh_tokens"`);
     await q.query(`DROP POLICY IF EXISTS "tenant_memberships_tenant_and_user" ON "tenant_memberships"`);
+    await q.query(`DROP POLICY IF EXISTS "tenant_memberships_select" ON "tenant_memberships"`);
+    await q.query(`DROP POLICY IF EXISTS "tenant_memberships_insert" ON "tenant_memberships"`);
+    await q.query(`DROP POLICY IF EXISTS "tenant_memberships_update" ON "tenant_memberships"`);
+    await q.query(`DROP POLICY IF EXISTS "tenant_memberships_delete" ON "tenant_memberships"`);
     await q.query(`DROP POLICY IF EXISTS "tenant_invitations_tenant" ON "tenant_invitations"`);
     await q.query(`DROP POLICY IF EXISTS "tenant_module_entitlements_tenant" ON "tenant_module_entitlements"`);
     await q.query(`DROP POLICY IF EXISTS "tenant_module_requests_tenant" ON "tenant_module_requests"`);

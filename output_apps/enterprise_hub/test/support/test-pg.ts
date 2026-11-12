@@ -98,7 +98,6 @@ export async function createTestDatabase(
   await owner.query(`GRANT USAGE ON SCHEMA public TO ${APP_USER}`);
   await owner.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${APP_USER}`);
   await owner.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${APP_USER}`);
-  await owner.query(`GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ${APP_USER}`);
 
   // 3. App connection as roxira_app (NOSUPERUSER NOBYPASSRLS)
   const app = await new DataSource({

@@ -33,9 +33,14 @@ export class ModuleRequestsRepository {
     });
   }
 
-  async listOpen(): Promise<ModuleRequestEntity[]> {
+  async listOpen(operatorUserId?: string): Promise<ModuleRequestEntity[]> {
     try {
-      const rows = await this.repo.query(`SELECT * FROM public.list_open_module_requests()`);
+      const rows = operatorUserId
+        ? await this.repo.manager.transaction(async (m) => {
+            await m.query(`SELECT set_config('app.user_id', $1, true)`, [operatorUserId]);
+            return m.query(`SELECT * FROM public.list_open_module_requests()`);
+          })
+        : await this.repo.query(`SELECT * FROM public.list_open_module_requests()`);
       if (rows) {
         return rows.map((r: any) =>
           this.repo.create({

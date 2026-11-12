@@ -21,9 +21,9 @@ import 'reflect-metadata';
 import * as path from 'path';
 import { DataSource } from 'typeorm';
 import {
-  EnableRlsPreTenantTables1789900002700,
+  EnableRlsPreTenantTables1789900003800,
   PRE_TENANT_RLS_TABLES,
-} from '../../../migrations/1789900002700-EnableRlsPreTenantTables';
+} from '../../../migrations/1789900003800-EnableRlsPreTenantTables';
 import { AuthRepository } from '../../auth/repositories/auth.repository';
 import { RefreshTokenRepository } from '../../auth/repositories/refresh-token.repository';
 import { SessionCheckRepository } from '../repositories/session-check.repository';
@@ -97,7 +97,8 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     await owner.query(`GRANT USAGE ON SCHEMA public TO "${role}"`);
     await owner.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "${role}"`);
     await owner.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO "${role}"`);
-    await owner.query(`GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO "${role}"`);
+    // Inherit only the explicit per-function EXECUTE grants conferred by the migration to roxira_app
+    await owner.query(`GRANT roxira_app TO "${role}"`);
 
     app = await new DataSource({ ...options(db, role, APP_PW), extra: { max: 8 } }).initialize();
     scope = new TenantScope(app);
@@ -178,10 +179,16 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     const notEmail = await authRepo.findByLoginEmail('user_one');
     expect(notEmail).toBeNull();
 
-    const byId = await authRepo.findById(user1Id);
+    const byId = await authRepo.findById(user1Id, { callerUserId: user1Id });
     expect(byId).not.toBeNull();
     expect(byId?.phone).toBe('09121111111');
     expect(byId?.managedByTenantId).toBe(T1);
+
+    const byTenantId = await authRepo.findById(user1Id, { callerTenantId: T1 });
+    expect(byTenantId?.id).toBe(user1Id);
+
+    // Unbound by-id lookup must fail closed
+    await expect(authRepo.findById(user1Id)).rejects.toThrow(/caller user or tenant context required/);
   });
 
   it('allows user creation, updates, and password reset under FORCE RLS', async () => {
@@ -196,8 +203,11 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     // 2. Update password
     await authRepo.updatePassword(newUser.id, 'hashed_password_123');
 
-    // 3. Look up user with password hash
-    const userWithPw = await authRepo.findWithPasswordHash({ id: newUser.id });
+    // 3. Look up user with password hash (bound vs unbound)
+    await expect(authRepo.findWithPasswordHash({ id: newUser.id })).rejects.toThrow(
+      /caller user context does not match target user/,
+    );
+    const userWithPw = await authRepo.findWithPasswordHash({ id: newUser.id }, newUser.id);
     expect(userWithPw?.passwordHash).toBe('hashed_password_123');
   });
 
@@ -233,12 +243,20 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     const isWrongFamilyActive = await sessionCheckRepo.isFamilyActive('00000000-0000-4000-8000-000000000000', userId);
     expect(isWrongFamilyActive).toBe(false);
 
-    // 3. Revoke single token atomically
-    const revoked = await refreshRepo.revokeIfActive(createdToken.id);
+    // 3. Unbound token/family revocation must fail closed
+    await expect(refreshRepo.revokeIfActive(createdToken.id)).rejects.toThrow(
+      /caller user context does not match token owner/,
+    );
+    await expect(refreshRepo.revokeFamily(familyId)).rejects.toThrow(
+      /caller user context does not match token owner/,
+    );
+
+    // 3b. Revoke single token atomically with owner userId
+    const revoked = await refreshRepo.revokeIfActive(createdToken.id, userId);
     expect(revoked).toBe(true);
 
-    // 4. Revoke whole family
-    await refreshRepo.revokeFamily(familyId);
+    // 4. Revoke whole family with owner userId
+    await refreshRepo.revokeFamily(familyId, userId);
 
     // Verify session liveness reflects revocation
     const isRevokedActive = await sessionCheckRepo.isFamilyActive(familyId, userId);
@@ -274,12 +292,28 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
       ON CONFLICT DO NOTHING
     `, [T2, userId]);
 
-    // Unauthenticated user switcher list
-    const memberships = await membershipsRepo.listForUser(userId);
+    // Unbound user switcher list must fail closed
+    await expect(membershipsRepo.listForUser(userId)).rejects.toThrow(
+      /caller user context does not match target user/,
+    );
+
+    // Authenticated user switcher list with bound caller context
+    const memberships = await membershipsRepo.listForUser(userId, userId);
     expect(memberships.length).toBeGreaterThanOrEqual(2);
     const tenantIds = memberships.map((m) => m.tenantId);
     expect(tenantIds).toContain(T1);
     expect(tenantIds).toContain(T2);
+
+    // Cross-tenant isolation inside TenantScope AND cross-tenant DELETE protection on users
+    await scope.run(T2, async (manager) => {
+      // T2 can SELECT userId via membership, but CANNOT DELETE userId (home tenant is T1)
+      const visible = await manager.getRepository(UserEntity).findOne({ where: { id: userId } });
+      expect(visible).not.toBeNull();
+      const delRes = await manager.getRepository(UserEntity).delete({ id: userId });
+      expect(delRes.affected ?? 0).toBe(0);
+    });
+    const stillExists = await owner.getRepository(UserEntity).findOne({ where: { id: userId } });
+    expect(stillExists).not.toBeNull();
 
     // Cross-tenant isolation inside TenantScope
     await scope.run(T1, async (manager) => {
@@ -312,8 +346,16 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     expect(invite?.email).toBe('invited@example.com');
     expect(invite?.tenantId).toBe(T1);
 
-    // Accept invite
-    const accepted = await invitationsRepo.markAccepted(inv.id, inviterId, T1);
+    // Unbound invitation acceptance must fail closed
+    await expect(invitationsRepo.markAccepted(inv.id, inviterId, T1)).rejects.toThrow(
+      /caller tenant context does not match target tenant/,
+    );
+
+    // Accept invite with bound caller context
+    const accepted = await invitationsRepo.markAccepted(inv.id, inviterId, T1, {
+      callerUserId: inviterId,
+      callerTenantId: T1,
+    });
     expect(accepted).toBe(true);
 
     // Cross-tenant list isolation
@@ -325,6 +367,12 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
 
   it('allows module entitlements and requests under FORCE RLS', async () => {
     const userId = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
+    const adminId = 'dddddddd-1111-4111-8111-dddddddddddd';
+    await owner.query(`
+      INSERT INTO users (id, phone, username, login_email, role, "isActive")
+      VALUES ($1, '09120000099', 'platform_admin', 'admin@example.com', 'ADMIN', true)
+      ON CONFLICT DO NOTHING
+    `, [adminId]);
 
     // 1. Entitlements upsert and list
     await entitlementsRepo.set(T1, 'accounting', true, null);
@@ -343,12 +391,24 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     const t1Requests = await moduleRequestsRepo.listForTenant(T1);
     expect(t1Requests.some((r) => r.id === req.id)).toBe(true);
 
-    // Open requests operator view
-    const openRequests = await moduleRequestsRepo.listOpen();
+    // Unbound or non-admin call to listOpen must fail closed
+    await expect(moduleRequestsRepo.listOpen()).rejects.toThrow(/operator role required/);
+    await expect(moduleRequestsRepo.listOpen(userId)).rejects.toThrow(/operator role required/);
+
+    // Open requests operator view succeeds only for active ADMIN
+    const openRequests = await moduleRequestsRepo.listOpen(adminId);
     expect(openRequests.some((r) => r.id === req.id)).toBe(true);
   });
 
   it('allows public anonymous submissions for contact_messages and enterprise_inquiries', async () => {
+    const nonAdminId = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
+    const adminId = 'dddddddd-1111-4111-8111-dddddddddddd';
+    await owner.query(`
+      INSERT INTO users (id, phone, username, login_email, role, "isActive")
+      VALUES ($1, '09120000099', 'platform_admin', 'admin@example.com', 'ADMIN', true)
+      ON CONFLICT DO NOTHING
+    `, [adminId]);
+
     // 1. Submit contact message via CrmRepository
     const savedMsg = await crmRepo.createContactMessage(T1, {
       senderName: 'Visitor One',
@@ -368,10 +428,49 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     });
     expect(savedInquiry.id).toBeDefined();
 
-    // Verify findAndCount works under non-superuser roxira_app role via definer function
-    const [inquiriesList, inqCount] = await inquiriesRepo.findAndCount({ skip: 0, take: 10 });
-    expect(inqCount).toBeGreaterThanOrEqual(1);
+    await inquiriesRepo.create({
+      tenantId: null,
+      name: 'Special 100% Corp_Test',
+      phone: '02177777777',
+      email: 'special@example.com',
+      message: 'Wildcard escape test',
+    });
+
+    // Unbound or non-admin inquiry list must fail closed
+    await expect(inquiriesRepo.findAndCount({ skip: 0, take: 10 })).rejects.toThrow(
+      /operator role required/,
+    );
+    await expect(
+      inquiriesRepo.findAndCount({ skip: 0, take: 10, operatorUserId: nonAdminId }),
+    ).rejects.toThrow(/operator role required/);
+
+    // Verify findAndCount works for ADMIN operator under non-superuser roxira_app role
+    const [inquiriesList, inqCount] = await inquiriesRepo.findAndCount({
+      skip: 0,
+      take: 10,
+      operatorUserId: adminId,
+    });
+    expect(inqCount).toBeGreaterThanOrEqual(2);
     expect(inquiriesList.some((i) => i.name === 'Corporate Prospect')).toBe(true);
+
+    // Search wildcard characters % and _ must be treated as literals, not match everything
+    const [percentMatches] = await inquiriesRepo.findAndCount({
+      search: '%',
+      skip: 0,
+      take: 10,
+      operatorUserId: adminId,
+    });
+    expect(percentMatches.some((i) => i.name === 'Special 100% Corp_Test')).toBe(true);
+    expect(percentMatches.some((i) => i.name === 'Corporate Prospect')).toBe(false);
+
+    const [underscoreMatches] = await inquiriesRepo.findAndCount({
+      search: '_',
+      skip: 0,
+      take: 10,
+      operatorUserId: adminId,
+    });
+    expect(underscoreMatches.some((i) => i.name === 'Special 100% Corp_Test')).toBe(true);
+    expect(underscoreMatches.some((i) => i.name === 'Corporate Prospect')).toBe(false);
 
     // Verify CRM contact history and counts under non-superuser roxira_app role
     const lead = await crmRepo.createLead(T1, {
@@ -460,41 +559,56 @@ describePg('Pre-Tenant Tables FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSRLS) 
     }
   });
 
-  it('enforces definer context guards when caller session settings are bound', async () => {
+  it('enforces definer context guards for both unset and mismatched caller contexts', async () => {
     const userA = '00000000-0000-4000-8000-0000000000a1';
     const userB = '00000000-0000-4000-8000-0000000000b1';
 
-    // When app.user_id is set to userA, looking up userB by id or password raises an exception
-    await app.query(`SELECT set_config('app.user_id', $1, false)`, [userA]);
-    try {
-      await expect(
-        app.query(`SELECT * FROM public.lookup_user_by_id($1::uuid)`, [userB]),
-      ).rejects.toThrow(/caller user context does not match target user/);
+    // Unset context fails closed for by-id and entitlement lookups
+    await expect(app.query(`SELECT * FROM public.lookup_user_by_id($1::uuid)`, [userB])).rejects.toThrow(
+      /caller user or tenant context required/,
+    );
+    await expect(
+      app.query(`SELECT * FROM public.lookup_user_by_id_with_password($1::uuid)`, [userB]),
+    ).rejects.toThrow(/caller user context does not match target user/);
+    await expect(app.query(`SELECT * FROM public.lookup_user_memberships($1::uuid)`, [userB])).rejects.toThrow(
+      /caller user context does not match target user/,
+    );
+    await expect(app.query(`SELECT * FROM public.lookup_tenant_entitlements($1::uuid)`, [T2])).rejects.toThrow(
+      /caller tenant context does not match target tenant/,
+    );
 
-      await expect(
-        app.query(`SELECT * FROM public.lookup_user_by_id_with_password($1::uuid)`, [userB]),
-      ).rejects.toThrow(/caller user context does not match target user/);
+    // Mismatched transaction-local context fails closed inside separate transactions (safe on pool)
+    await expect(
+      app.manager.transaction(async (m) => {
+        await m.query(`SELECT set_config('app.user_id', $1, true)`, [userA]);
+        await m.query(`SELECT * FROM public.lookup_user_by_id($1::uuid)`, [userB]);
+      }),
+    ).rejects.toThrow(/caller user context does not match target user/);
 
-      await expect(
-        app.query(`SELECT * FROM public.lookup_user_memberships($1::uuid)`, [userB]),
-      ).rejects.toThrow(/caller user context does not match target user/);
-    } finally {
-      await app.query(`SELECT set_config('app.user_id', '', false)`);
-    }
+    await expect(
+      app.manager.transaction(async (m) => {
+        await m.query(`SELECT set_config('app.user_id', $1, true)`, [userA]);
+        await m.query(`SELECT * FROM public.lookup_user_by_id_with_password($1::uuid)`, [userB]);
+      }),
+    ).rejects.toThrow(/caller user context does not match target user/);
 
-    // When app.tenant_id is set to T1, looking up T2 entitlements raises an exception
-    await app.query(`SELECT set_config('app.tenant_id', $1, false)`, [T1]);
-    try {
-      await expect(
-        app.query(`SELECT * FROM public.lookup_tenant_entitlements($1::uuid)`, [T2]),
-      ).rejects.toThrow(/caller tenant context does not match target tenant/);
-    } finally {
-      await app.query(`SELECT set_config('app.tenant_id', '', false)`);
-    }
+    await expect(
+      app.manager.transaction(async (m) => {
+        await m.query(`SELECT set_config('app.user_id', $1, true)`, [userA]);
+        await m.query(`SELECT * FROM public.lookup_user_memberships($1::uuid)`, [userB]);
+      }),
+    ).rejects.toThrow(/caller user context does not match target user/);
+
+    await expect(
+      app.manager.transaction(async (m) => {
+        await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [T1]);
+        await m.query(`SELECT * FROM public.lookup_tenant_entitlements($1::uuid)`, [T2]);
+      }),
+    ).rejects.toThrow(/caller tenant context does not match target tenant/);
   });
 
   it('reversibility: migration down() and up() work cleanly', async () => {
-    const migration = new EnableRlsPreTenantTables1789900002700();
+    const migration = new EnableRlsPreTenantTables1789900003800();
     const qr = owner.createQueryRunner();
 
     try {

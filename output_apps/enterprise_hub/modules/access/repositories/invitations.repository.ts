@@ -75,12 +75,26 @@ export class InvitationsRepository {
   }
 
   /** Mark accepted only if still open, so one link cannot be redeemed twice. */
-  async markAccepted(id: string, userId: string, tenantId?: string): Promise<boolean> {
+  async markAccepted(
+    id: string,
+    userId: string,
+    tenantId?: string,
+    caller?: { callerUserId?: string; callerTenantId?: string },
+  ): Promise<boolean> {
     try {
-      const rows = await this.repo.query(
-        `SELECT public.mark_invitation_accepted($1, $2, $3) AS accepted`,
-        [id, userId, tenantId ?? null],
-      );
+      const rows = caller?.callerUserId && caller?.callerTenantId
+        ? await this.repo.manager.transaction(async (m) => {
+            await m.query(`SELECT set_config('app.user_id', $1, true)`, [caller.callerUserId]);
+            await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [caller.callerTenantId]);
+            return m.query(
+              `SELECT public.mark_invitation_accepted($1, $2, $3) AS accepted`,
+              [id, userId, tenantId ?? null],
+            );
+          })
+        : await this.repo.query(
+            `SELECT public.mark_invitation_accepted($1, $2, $3) AS accepted`,
+            [id, userId, tenantId ?? null],
+          );
       if (rows && rows.length > 0) {
         return Boolean(rows[0].accepted);
       }
