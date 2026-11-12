@@ -14,6 +14,7 @@ import {
 } from '../entities/treasury-sms-draft.entity';
 import {
   ConfirmTreasurySmsDraftDto,
+  ParsedBankSmsResponseDto,
   QueryTreasurySmsDraftsDto,
 } from '../dto/treasury-sms.dto';
 import {
@@ -42,6 +43,24 @@ export class TreasurySmsService {
     } catch (err) {
       throw new BadRequestException((err as Error).message);
     }
+  }
+
+  /** Parse preview for the API: decimal strings only (the parser's bigint minor units are not JSON-safe). */
+  previewSms(text: string): ParsedBankSmsResponseDto {
+    const r = this.parseSms(text);
+    return {
+      bank: r.bank,
+      bankNameFa: r.bankNameFa,
+      direction: r.direction,
+      docKind: r.docKind,
+      amount: r.amountDecimal,
+      balance: r.balanceDecimal,
+      dateTime: r.dateTime,
+      cardTail: r.cardTail,
+      accountTail: r.accountTail,
+      reference: r.reference,
+      rawText: r.rawText,
+    };
   }
 
   isRecognisedSms(text: string): boolean {

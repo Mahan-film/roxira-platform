@@ -36,7 +36,27 @@ import {
   parseBankSms,
   rejectTreasurySmsDraft,
 } from "@/lib/api/treasury-client";
-import type { TreasurySmsDraft } from "@/types/treasury";
+import { listBankAccounts } from "@/lib/api/banking-client";
+import type { BankAccount } from "@/types/banking";
+import type { ParsedBankSms, TreasurySmsDraft } from "@/types/treasury";
+
+const PERSIAN_DIGITS = "۰۱۲۳۴۵۶۷۸۹";
+const ARABIC_DIGITS = "٠١٢٣٤٥٦٧٨٩";
+
+function digitsOnly(value: string): string {
+  return value
+    .replace(/[۰-۹]/g, (d) => String(PERSIAN_DIGITS.indexOf(d)))
+    .replace(/[٠-٩]/g, (d) => String(ARABIC_DIGITS.indexOf(d)))
+    .replace(/\D/g, "");
+}
+
+/** The bank account whose number ends with the SMS account tail (only when exactly one matches). */
+function matchAccountByTail(accounts: BankAccount[], tail?: string | null): number | undefined {
+  const t = tail ? digitsOnly(tail) : "";
+  if (!t) return undefined;
+  const hits = accounts.filter((a) => digitsOnly(a.accountNumber).endsWith(t));
+  return hits.length === 1 ? hits[0].id : undefined;
+}
 
 export default function TreasurySmsPage() {
   const [drafts, setDrafts] = useState<TreasurySmsDraft[]>([]);
@@ -46,12 +66,14 @@ export default function TreasurySmsPage() {
   // Form input
   const [smsText, setSmsText] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [parsePreview, setParsePreview] = useState<any>(null);
+  const [parsePreview, setParsePreview] = useState<ParsedBankSms | null>(null);
 
   // Confirm modal state
   const [confirmDraftItem, setConfirmDraftItem] = useState<TreasurySmsDraft | null>(null);
   const [partyCode, setPartyCode] = useState("");
   const [partyName, setPartyName] = useState("");
+  const [bankAccountId, setBankAccountId] = useState("");
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [confirming, setConfirming] = useState(false);
 
   const fetchDrafts = async () => {
@@ -69,6 +91,9 @@ export default function TreasurySmsPage() {
 
   useEffect(() => {
     void fetchDrafts();
+    listBankAccounts()
+      .then(setBankAccounts)
+      .catch((err) => setError((err as Error).message));
   }, []);
 
   const handlePreview = async () => {
@@ -100,17 +125,19 @@ export default function TreasurySmsPage() {
 
   const handleConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!confirmDraftItem || !partyCode.trim() || !partyName.trim()) return;
+    if (!confirmDraftItem || !partyCode.trim() || !partyName.trim() || !bankAccountId) return;
     setConfirming(true);
     setError(null);
     try {
       await confirmTreasurySmsDraft(confirmDraftItem.id, {
         partyCode: partyCode.trim(),
         partyName: partyName.trim(),
+        bankAccountId: Number(bankAccountId),
       });
       setConfirmDraftItem(null);
       setPartyCode("");
       setPartyName("");
+      setBankAccountId("");
       await fetchDrafts();
     } catch (err) {
       setError(`خطای تأیید سند: ${(err as Error).message}`);
@@ -212,13 +239,13 @@ export default function TreasurySmsPage() {
                   <div>
                     <span className="text-muted-foreground">مبلغ: </span>
                     <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                      {formatMoneyRial(parsePreview.amountDecimal)}
+                      {formatMoneyRial(parsePreview.amount)}
                     </span>
                   </div>
-                  {parsePreview.balanceDecimal && (
+                  {parsePreview.balance && (
                     <div>
                       <span className="text-muted-foreground">مانده: </span>
-                      <span>{formatMoneyRial(parsePreview.balanceDecimal)}</span>
+                      <span>{formatMoneyRial(parsePreview.balance)}</span>
                     </div>
                   )}
                   {parsePreview.accountTail && (
@@ -317,6 +344,8 @@ export default function TreasurySmsPage() {
                                   setConfirmDraftItem(d);
                                   setPartyCode("");
                                   setPartyName("");
+                                  const match = matchAccountByTail(bankAccounts, d.accountTail);
+                                  setBankAccountId(match ? String(match) : "");
                                 }}
                               >
                                 تأیید و صدور سند
@@ -391,6 +420,24 @@ export default function TreasurySmsPage() {
                     />
                   </div>
 
+                  <div>
+                    <Label htmlFor="bankAccountId">حساب بانکی *</Label>
+                    <select
+                      id="bankAccountId"
+                      className="mt-1 w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                      value={bankAccountId}
+                      onChange={(e) => setBankAccountId(e.target.value)}
+                      required
+                    >
+                      <option value="">انتخاب حساب بانکی...</option>
+                      {bankAccounts.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name} ({b.accountNumber})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
                   <div className="flex justify-end gap-2 pt-2">
                     <Button
                       type="button"
@@ -400,7 +447,7 @@ export default function TreasurySmsPage() {
                     >
                       انصراف
                     </Button>
-                    <Button type="submit" disabled={confirming || !partyCode || !partyName}>
+                    <Button type="submit" disabled={confirming || !partyCode || !partyName || !bankAccountId}>
                       {confirming ? "در حال صدور..." : "تأیید و صدور سند"}
                     </Button>
                   </div>

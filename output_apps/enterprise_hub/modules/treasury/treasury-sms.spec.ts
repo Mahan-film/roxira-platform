@@ -1,4 +1,8 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import 'reflect-metadata';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import { ConfirmTreasurySmsDraftDto } from './dto/treasury-sms.dto';
 import { TreasurySmsService } from './services/treasury-sms.service';
 import { TreasurySmsRepository } from './repositories/treasury-sms.repository';
 import { TreasuryService } from './services/treasury.service';
@@ -214,19 +218,21 @@ describe('TreasurySmsService & Controller (T92)', () => {
       await service.confirmDraft(TENANT, USER, draft.id, {
         partyCode: 'CUST-01',
         partyName: 'مشتری الف',
+        bankAccountId: 5,
       });
 
       await expect(
         service.confirmDraft(TENANT, USER, draft.id, {
           partyCode: 'CUST-01',
           partyName: 'مشتری الف',
+          bankAccountId: 5,
         }),
       ).rejects.toThrow(ConflictException);
     });
 
     it('posts only once when two confirms race past the status read', async () => {
       const draft = await service.captureSms(TENANT, USER, MELLI_SMS);
-      const body = { partyCode: 'CUST-01', partyName: 'مشتری الف' };
+      const body = { partyCode: 'CUST-01', partyName: 'مشتری الف', bankAccountId: 5 };
 
       const results = await Promise.allSettled([
         service.confirmDraft(TENANT, USER, draft.id, body),
@@ -244,7 +250,7 @@ describe('TreasurySmsService & Controller (T92)', () => {
       (mockRepo.claimDraftForConfirm as jest.Mock).mockResolvedValueOnce(false);
 
       await expect(
-        service.confirmDraft(TENANT, USER, draft.id, { partyCode: 'C', partyName: 'x' }),
+        service.confirmDraft(TENANT, USER, draft.id, { partyCode: 'C', partyName: 'x', bankAccountId: 5 }),
       ).rejects.toThrow(ConflictException);
       expect(mockTreasuryService.createDocument).not.toHaveBeenCalled();
     });
@@ -257,6 +263,7 @@ describe('TreasurySmsService & Controller (T92)', () => {
         service.confirmDraft(TENANT, USER, draft.id, {
           partyCode: 'CUST-01',
           partyName: 'مشتری الف',
+          bankAccountId: 5,
         }),
       ).rejects.toThrow(BadRequestException);
     });
@@ -274,6 +281,7 @@ describe('TreasurySmsService & Controller (T92)', () => {
       await service.confirmDraft(TENANT, USER, draft.id, {
         partyCode: 'CUST-01',
         partyName: 'مشتری الف',
+        bankAccountId: 5,
       });
 
       await expect(service.rejectDraft(TENANT, draft.id)).rejects.toThrow(ConflictException);
@@ -287,11 +295,84 @@ describe('TreasurySmsService & Controller (T92)', () => {
       expect(draftsDb).toHaveLength(0);
     });
 
+    it('controller.parse response survives JSON.stringify with decimal-string amounts', () => {
+      const res = controller.parse({ text: MELLI_SMS });
+      const json = JSON.parse(JSON.stringify(res));
+      expect(json.amount).toBe('2500000.00');
+      expect(json.balance).toBe('10000000.00');
+      expect(json.accountTail).toBe('4321');
+      expect(json).not.toHaveProperty('amountMinor');
+      expect(json).not.toHaveProperty('balanceMinor');
+    });
+
     it('controller.capture saves draft and returns it', async () => {
       const req = authRequest();
       const res = await controller.capture(req, { text: MELLI_SMS });
       expect(res.id).toBeDefined();
       expect(draftsDb).toHaveLength(1);
+    });
+  });
+
+  describe('confirm through the real TreasuryService (bank-ledger lookup not mocked)', () => {
+    const buildReal = () => {
+      const manager = { tx: true };
+      const created: any[] = [];
+      const repository: any = {
+        runInTransaction: jest.fn(async (_t: string, fn: any, outer?: unknown) => fn(outer ?? manager)),
+        getTolerance: jest.fn(async () => '0.00'),
+        lockTargets: jest.fn(async () => undefined),
+        allocatedByTarget: jest.fn(async () => new Map()),
+        nextNumber: jest.fn(async () => 7),
+        createDocument: jest.fn(async (_t: string, input: any) => {
+          const d = { id: 41, status: 'posted', journalEntryId: null, ...input };
+          created.push(d);
+          return d;
+        }),
+        addLines: jest.fn(async () => undefined),
+        addAllocations: jest.fn(async () => undefined),
+        updateDocument: jest.fn(async () => undefined),
+        findDocument: jest.fn(async () => ({
+          id: 41, kind: 'receipt', status: 'posted', docNumber: 'RC-000007', partyName: 'x', partyCode: 'C1',
+          partyType: 'customer', docDate: '2026-11-04', total: '2500000.00', writeoffTotal: '0.00',
+          advanceRemaining: '0.00', description: null, journalEntryId: 9,
+        })),
+        listLines: jest.fn(async () => []),
+        listAllocationsOfDocument: jest.fn(async () => []),
+      };
+      const posting = { postDocument: jest.fn(async () => 9) };
+      const banking = { listAccounts: jest.fn(async () => [{ id: 3, ledgerAccountCode: '1012' }]) };
+      const real = new TreasuryService(repository, posting as never, banking as never, {} as never, {} as never);
+      return { real, posting, banking };
+    };
+
+    it('posts the bank line to the chosen account ledger code', async () => {
+      const { real, posting, banking } = buildReal();
+      const smsService = new TreasurySmsService(mockRepo, real);
+      const draft = await smsService.captureSms(TENANT, USER, MELLI_SMS);
+
+      await smsService.confirmDraft(TENANT, USER, draft.id, { partyCode: 'C1', partyName: 'x', bankAccountId: 3 });
+
+      expect(banking.listAccounts).toHaveBeenCalledWith(TENANT);
+      expect((posting.postDocument as jest.Mock).mock.calls[0][2].funds).toEqual([
+        { accountCode: '1012', amount: expect.anything() },
+      ]);
+      expect((posting.postDocument as jest.Mock).mock.calls[0][3]).toEqual({ tx: true });
+    });
+
+    it('fails with a 400 when the bank account does not exist', async () => {
+      const { real } = buildReal();
+      const smsService = new TreasurySmsService(mockRepo, real);
+      const draft = await smsService.captureSms(TENANT, USER, MELLI_SMS);
+
+      await expect(
+        smsService.confirmDraft(TENANT, USER, draft.id, { partyCode: 'C1', partyName: 'x', bankAccountId: 999 }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('DTO validation rejects a confirm body without bankAccountId', async () => {
+      const dto = plainToInstance(ConfirmTreasurySmsDraftDto, { partyCode: 'C1', partyName: 'x' });
+      const errors = await validate(dto);
+      expect(errors.some((e) => e.property === 'bankAccountId')).toBe(true);
     });
   });
 });

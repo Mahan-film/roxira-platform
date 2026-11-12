@@ -20,11 +20,11 @@ import {
   CaptureBankSmsDto,
   ConfirmTreasurySmsDraftDto,
   ParseBankSmsDto,
+  ParsedBankSmsResponseDto,
   QueryTreasurySmsDraftsDto,
   TreasurySmsDraftResponseDto,
 } from '../dto/treasury-sms.dto';
 import { TreasuryDocumentDetailResponseDto } from '../dto/treasury.dto';
-import { BankSmsParsedResult } from '../sms/bank-sms.types';
 import { TreasurySmsDraftEntity } from '../entities/treasury-sms-draft.entity';
 
 @ApiTags('Treasury SMS - دریافت و پرداخت از پیامک بانک')
@@ -37,9 +37,9 @@ export class TreasurySmsController {
   @HttpCode(HttpStatus.OK)
   @RequireAction(AccessAction.READ)
   @ApiOperation({ summary: 'پردازش و استخراج اطلاعات پیامک بانکی بدون ذخیره‌سازی' })
-  @ApiResponse({ status: HttpStatus.OK, description: 'نتیجه پردازش پیامک' })
-  parse(@Body() dto: ParseBankSmsDto): BankSmsParsedResult {
-    return this.smsService.parseSms(dto.text);
+  @ApiResponse({ status: HttpStatus.OK, type: ParsedBankSmsResponseDto })
+  parse(@Body() dto: ParseBankSmsDto): ParsedBankSmsResponseDto {
+    return this.smsService.previewSms(dto.text);
   }
 
   @Post('capture')

@@ -134,7 +134,7 @@ describePg('TreasurySmsDrafts RLS isolation (NOSUPERUSER NOBYPASSRLS)', () => {
     });
     const racing = new TreasurySmsService(repository, { createDocument } as unknown as TreasuryService);
     const draft = await racing.captureSms(T1, U1, SMS);
-    const body = { partyCode: 'C1', partyName: 'Customer' };
+    const body = { partyCode: 'C1', partyName: 'Customer', bankAccountId: 5 };
 
     const results = await Promise.allSettled([
       racing.confirmDraft(T1, U1, draft.id, body),

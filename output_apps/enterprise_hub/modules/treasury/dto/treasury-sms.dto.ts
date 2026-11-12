@@ -72,11 +72,10 @@ export class ConfirmTreasurySmsDraftDto {
   @IsISO8601({ strict: true })
   docDate?: string;
 
-  @ApiPropertyOptional({ description: 'شناسه حساب بانکی واریز یا برداشت' })
-  @IsOptional()
+  @ApiProperty({ description: 'شناسه حساب بانکی واریز یا برداشت' })
   @IsInt()
   @Min(1)
-  bankAccountId?: number;
+  bankAccountId: number;
 
   @ApiPropertyOptional({ type: [AllocationRowDto], description: 'تخصیص به فاکتورها' })
   @IsOptional()
@@ -91,6 +90,42 @@ export class ConfirmTreasurySmsDraftDto {
   @IsString()
   @MaxLength(512)
   description?: string;
+}
+
+/** JSON-safe parse preview: amounts are exact decimal strings, never bigint. */
+export class ParsedBankSmsResponseDto {
+  @ApiPropertyOptional({ enum: BankCode, nullable: true })
+  bank: BankCode | null;
+
+  @ApiProperty()
+  bankNameFa: string;
+
+  @ApiProperty({ enum: ['deposit', 'withdraw'] })
+  direction: BankSmsDirection;
+
+  @ApiProperty({ enum: TreasuryDocKind })
+  docKind: TreasuryDocKind;
+
+  @ApiProperty({ description: 'مبلغ به ریال (رشته اعشاری دقیق)' })
+  amount: string;
+
+  @ApiPropertyOptional({ description: 'مانده حساب به ریال' })
+  balance?: string;
+
+  @ApiPropertyOptional()
+  dateTime?: string;
+
+  @ApiPropertyOptional()
+  cardTail?: string;
+
+  @ApiPropertyOptional()
+  accountTail?: string;
+
+  @ApiPropertyOptional()
+  reference?: string;
+
+  @ApiProperty()
+  rawText: string;
 }
 
 export class TreasurySmsDraftResponseDto {

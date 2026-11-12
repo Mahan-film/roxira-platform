@@ -4,6 +4,7 @@ import type {
   ConfirmTreasurySmsDraftDto,
   CreateTreasuryDocumentDto,
   OpenInvoice,
+  ParsedBankSms,
   QueryTreasuryDocuments,
   TreasuryDocKind,
   TreasuryDocument,
@@ -16,8 +17,8 @@ const BASE = `${API_PROXY_BASE_PATH}/${TREASURY_RESOURCE_PATH}`;
 export async function parseBankSms(
   text: string,
   signal?: AbortSignal,
-): Promise<unknown> {
-  return apiRequest(`${BASE}/sms/parse`, {
+): Promise<ParsedBankSms> {
+  return apiRequest<ParsedBankSms>(`${BASE}/sms/parse`, {
     method: "POST",
     body: { text },
     signal,

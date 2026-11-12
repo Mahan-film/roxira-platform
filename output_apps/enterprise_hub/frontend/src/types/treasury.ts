@@ -153,11 +153,25 @@ export interface TreasurySmsDraft {
   createdAt: string;
 }
 
+export interface ParsedBankSms {
+  bank: string | null;
+  bankNameFa: string;
+  direction: 'deposit' | 'withdraw';
+  docKind: TreasuryDocKind;
+  amount: string;
+  balance?: string;
+  dateTime?: string;
+  cardTail?: string;
+  accountTail?: string;
+  reference?: string;
+  rawText: string;
+}
+
 export interface ConfirmTreasurySmsDraftDto {
   partyCode: string;
   partyName: string;
   partyType?: TreasuryPartyType;
   docDate?: string;
-  bankAccountId?: number;
+  bankAccountId: number;
   description?: string;
 }
