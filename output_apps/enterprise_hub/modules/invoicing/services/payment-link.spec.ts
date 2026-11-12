@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import { BadRequestException, ConflictException, InternalServerErrorException } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
 import { InvoiceDirection } from '../enums/invoice-kind.enum';
@@ -17,7 +18,8 @@ describe('Payment Link Crypto & Unit Logic (T90)', () => {
   const T2 = '22222222-2222-4222-8222-222222222222';
 
   beforeAll(() => {
-    process.env.PAYMENT_GATEWAY_ENCRYPTION_KEY = 'test_payment_gateway_encryption_key_32b!';
+    process.env.PAYMENT_GATEWAY_ENCRYPTION_KEY =
+      process.env.PAYMENT_GATEWAY_ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
     process.env.PAYMENT_GATEWAY_CALLBACK_BASE_URL = 'https://app.example.test';
   });
 
@@ -369,7 +371,7 @@ describe('Payment Link Crypto & Unit Logic (T90)', () => {
       });
       const resMissing = await service.handleCallback({ trackId: 'trk-missing-amt' });
       expect(resMissing.paid).toBe(false);
-      expect(linkMissing.status).toBe('FAILED');
+      expect(linkMissing.status).toBe('RECONCILIATION_REQUIRED');
       expect(invoicingService.pay).not.toHaveBeenCalled();
 
       verifySpy.mockResolvedValueOnce({
@@ -380,7 +382,7 @@ describe('Payment Link Crypto & Unit Logic (T90)', () => {
       });
       const resMismatch = await service.handleCallback({ trackId: 'trk-mismatch-amt' });
       expect(resMismatch.paid).toBe(false);
-      expect(linkMismatch.status).toBe('FAILED');
+      expect(linkMismatch.status).toBe('RECONCILIATION_REQUIRED');
       expect(invoicingService.pay).not.toHaveBeenCalled();
     });
 
@@ -607,6 +609,60 @@ describe('Payment Link Crypto & Unit Logic (T90)', () => {
       expect(link.status).toBe('PAID');
       expect(verifySpy).toHaveBeenCalledTimes(1);
       expect(invoicingService.pay).toHaveBeenCalledTimes(2);
+    });
+
+    it('recovers when pay() persists PAID but markPaymentLinkPaid threw: marks PAID on retry without re-paying', async () => {
+      const link = {
+        id: 'link-settle-crash',
+        tenantId: T1,
+        invoiceId: 'inv-paid-recovery',
+        trackId: 'trk-settle-crash',
+        amount: 30000000n,
+        status: 'PENDING',
+        gateway: 'zibal',
+      };
+      storedLinks.set('trk-settle-crash', link);
+
+      const encrypted = sealMerchantId('zibal_test_merchant', T1);
+      paymentRepo.findConfig.mockResolvedValue({
+        tenantId: T1,
+        gateway: 'zibal',
+        encryptedMerchantId: encrypted,
+        isActive: true,
+      });
+      jest.spyOn(gatewayAdapter, 'verifyPayment').mockResolvedValue({
+        success: true,
+        paid: true,
+        amountRials: 300000n,
+        refNumber: 'REF-CRASH-1',
+      });
+
+      invoicingRepo.findById.mockResolvedValueOnce({
+        id: 'inv-paid-recovery',
+        status: InvoiceStatus.ISSUED,
+      });
+      invoicingService.pay.mockResolvedValueOnce({ id: 'inv-paid-recovery', status: InvoiceStatus.PAID });
+      // Simulate transient DB failure when persisting link PAID status
+      paymentRepo.markPaymentLinkPaid.mockRejectedValueOnce(new Error('transient write failure on link'));
+
+      await expect(service.handleCallback({ trackId: 'trk-settle-crash' })).rejects.toThrow(
+        'transient write failure on link',
+      );
+      // Link remained in PAID_UNSETTLED
+      expect(link.status).toBe('PAID_UNSETTLED');
+
+      // Next retry attempt: invoice is now PAID in DB
+      invoicingRepo.findById.mockResolvedValueOnce({
+        id: 'inv-paid-recovery',
+        status: InvoiceStatus.PAID,
+      });
+
+      const retryRes = await service.handleCallback({ trackId: 'trk-settle-crash' });
+      expect(retryRes.success).toBe(true);
+      expect(retryRes.paid).toBe(true);
+      expect(link.status).toBe('PAID');
+      // invoicingService.pay was NOT called again because invoice was already settled
+      expect(invoicingService.pay).toHaveBeenCalledTimes(1);
     });
 
     it('passes AbortSignal timeout when calling Zibal endpoints', async () => {
