@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, Copy, ExternalLink, Loader2, RefreshCw, ShoppingCart, XCircle } from "lucide-react";
+import { CheckCircle2, Copy, Loader2, RefreshCw, ShoppingCart } from "lucide-react";
 import { PageHeader } from "@/components/app/app-ui";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,8 @@ export default function WooCommerceSettingsPage() {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [revealedWebhookSecret, setRevealedWebhookSecret] = useState<string | null>(null);
+  const [copiedSecret, setCopiedSecret] = useState(false);
 
   // Form State
   const [storeUrl, setStoreUrl] = useState("");
@@ -47,15 +49,42 @@ export default function WooCommerceSettingsPage() {
       }
       const logRes = await getWooCommerceLogs({ limit: 20 }).catch(() => ({ items: [], total: 0 }));
       setLogs(logRes.items);
-    } catch (err: any) {
-      setError(err?.message || "خطا در بارگذاری اطلاعات");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "خطا در بارگذاری اطلاعات");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    let active = true;
+    (async () => {
+      try {
+        const cfg = await getWooCommerceConfig().catch(() => null);
+        if (active && cfg) {
+          setConfig(cfg);
+          setStoreUrl(cfg.storeUrl || "");
+          setWebhookSecret("");
+          setAutoSyncOrders(cfg.autoSyncOrders);
+          setAutoSyncStock(cfg.autoSyncStock);
+        }
+        const logRes = await getWooCommerceLogs({ limit: 20 }).catch(() => ({ items: [], total: 0 }));
+        if (active) {
+          setLogs(logRes.items);
+        }
+      } catch (err: unknown) {
+        if (active) {
+          setError(err instanceof Error ? err.message : "خطا در بارگذاری اطلاعات");
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleSave = async (e: React.FormEvent) => {
@@ -73,13 +102,18 @@ export default function WooCommerceSettingsPage() {
         autoSyncStock,
       });
       setConfig(updated);
-      setSuccess("تنظیمات اتصال با موفقیت ذخیره شد.");
+      setRevealedWebhookSecret(updated.generatedWebhookSecret ?? null);
+      setSuccess(
+        updated.generatedWebhookSecret
+          ? "تنظیمات ذخیره شد. کلید وب‌هوک زیر را همین الان کپی کنید؛ پس از ترک صفحه دیگر قابل مشاهده نخواهد بود."
+          : "تنظیمات اتصال با موفقیت ذخیره شد.",
+      );
       setConsumerKey("");
       setConsumerSecret("");
       setWebhookSecret("");
       loadData();
-    } catch (err: any) {
-      setError(err?.message || "خطا در ذخیره تنظیمات");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "خطا در ذخیره تنظیمات");
     } finally {
       setSaving(false);
     }
@@ -90,6 +124,13 @@ export default function WooCommerceSettingsPage() {
     navigator.clipboard.writeText(fullUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const copyGeneratedSecret = () => {
+    if (!revealedWebhookSecret) return;
+    navigator.clipboard.writeText(revealedWebhookSecret);
+    setCopiedSecret(true);
+    setTimeout(() => setCopiedSecret(false), 2000);
   };
 
   return (
@@ -108,6 +149,24 @@ export default function WooCommerceSettingsPage() {
       {success && (
         <Alert>
           <AlertDescription className="text-emerald-700 dark:text-emerald-400">{success}</AlertDescription>
+        </Alert>
+      )}
+
+      {revealedWebhookSecret && (
+        <Alert className="border-amber-500/50 bg-amber-50/60 dark:bg-amber-950/20">
+          <AlertDescription className="space-y-2">
+            <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+              کلید مخفی وب‌هوک تولیدشده (نمایش یک‌باره برای ثبت در ووکامرس):
+            </p>
+            <div className="flex items-center gap-2 rounded border bg-background p-2 text-xs">
+              <code className="font-mono flex-1 select-all break-all" dir="ltr">
+                {revealedWebhookSecret}
+              </code>
+              <Button type="button" variant="ghost" size="sm" onClick={copyGeneratedSecret} className="h-8 px-2">
+                {copiedSecret ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+          </AlertDescription>
         </Alert>
       )}
 

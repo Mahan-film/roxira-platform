@@ -21,6 +21,10 @@ export enum WooCommerceSyncStatus {
 @Entity({ name: 'woocommerce_sync_logs' })
 @Index('IDX_woocommerce_sync_logs_tenant_created', ['tenantId', 'createdAt'])
 @Index('IDX_woocommerce_sync_logs_tenant_ext', ['tenantId', 'direction', 'externalId'])
+@Index('UQ_wc_sync_logs_tenant_success', ['tenantId', 'direction', 'externalId'], {
+  unique: true,
+  where: `"status" = 'success'`,
+})
 export class WooCommerceSyncLogEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;

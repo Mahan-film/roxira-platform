@@ -6,6 +6,7 @@
  * - Confirms secret preservation on partial re-save and concurrent order import idempotency under advisory lock + unique partial index.
  */
 import 'reflect-metadata';
+import { CurrencyService } from '../../currency/services/currency.service';
 import { InvoiceEntity } from '../../invoicing/entities/invoice.entity';
 import { InvoicingRepository } from '../../invoicing/repositories/invoicing.repository';
 import { CreateWooCommerceIntegration1789900003400 } from '../../../migrations/1789900003400-CreateWooCommerceIntegration';
@@ -49,7 +50,8 @@ describePg('WooCommerce Integration on PostgreSQL (NOSUPERUSER NOBYPASSRLS) (T85
       testDb.app,
       testDb.scope,
     );
-    syncService = new WooCommerceSyncService(wooRepo, invoicingRepo);
+    const currencyService = new CurrencyService({ get: () => '' } as any);
+    syncService = new WooCommerceSyncService(wooRepo, invoicingRepo, currencyService);
 
     for (const tid of [T1, T2]) {
       await testDb
@@ -148,6 +150,12 @@ describePg('WooCommerce Integration on PostgreSQL (NOSUPERUSER NOBYPASSRLS) (T85
     const orderLogs = logs.items.filter((l) => l.externalId === '55001');
     expect(orderLogs).toHaveLength(1);
     expect(orderLogs[0].status).toBe(WooCommerceSyncStatus.SUCCESS);
+
+    const savedInvoice = await invoicingRepo.findById(T1, resA.invoiceId!);
+    expect(savedInvoice).not.toBeNull();
+    expect(Number(savedInvoice!.exchangeRate)).toBeCloseTo(1 / 920000, 6);
+    expect(Number(savedInvoice!.fxRate)).toBe(1);
+    expect(Number(savedInvoice!.baseFinalPayable)).toBeCloseTo(1.3, 2);
   });
 
   it('validates webhook HMAC signatures against decrypted webhook secret', async () => {
