@@ -14,8 +14,8 @@ import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
  * BEFORE FORCE RLS is enabled: the table owner is subject to FORCE RLS, so it could not insert
  * rows for other tenants afterwards.
  */
-export class CreateTenantOnboardingProgress1789900003700 implements MigrationInterface {
-  name = 'CreateTenantOnboardingProgress1789900003700';
+export class CreateTenantOnboardingProgress1789900004200 implements MigrationInterface {
+  name = 'CreateTenantOnboardingProgress1789900004200';
 
   public async up(q: QueryRunner): Promise<void> {
     await q.query(`

@@ -22,11 +22,11 @@ const OWNER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
 const OWNER_PW = process.env.ROXIRA_TEST_PG_PASSWORD;
 const PORT = Number(process.env.ROXIRA_TEST_PG_PORT ?? 5432);
 const ROLE_NAME = `rx_onboarding_${process.pid}`;
-const ROLE_PW = 'onboarding-rls-test';
+const ROLE_PW = process.env.ROXIRA_TEST_APP_PW ?? `onb_${Math.random().toString(36).slice(2)}`;
 
 const T1 = '11111111-1111-4111-8111-111111111111';
 const T2 = '22222222-2222-4222-8222-222222222222';
-const T_OLD = '33333333-3333-4333-8333-333333333333';
+const T3 = '33333333-3333-4333-8333-333333333333';
 
 const dsOptions = (database: string, username = OWNER, password = OWNER_PW) => ({
   type: 'postgres' as const,
@@ -64,7 +64,7 @@ describePg('Onboarding progress (NOSUPERUSER NOBYPASSRLS)', () => {
        GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "${ROLE_NAME}";
        GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO "${ROLE_NAME}";`,
     );
-    for (const [id, name] of [[T1, 'یک'], [T2, 'دو']]) {
+    for (const [id, name] of [[T1, 'یک'], [T2, 'دو'], [T3, 'سه']]) {
       await ownerDs.query(`INSERT INTO tenants (id, name, slug) VALUES ($1, $2, $3)`, [id, `شرکت ${name}`, `onb-${id.slice(0, 4)}`]);
     }
 
@@ -113,16 +113,21 @@ describePg('Onboarding progress (NOSUPERUSER NOBYPASSRLS)', () => {
 
   it('without a tenant scope the app role sees no row and cannot insert one', async () => {
     expect(await appDs.query(`SELECT 1 FROM tenant_onboarding_progress`)).toHaveLength(0);
-    await expect(appDs.query(`INSERT INTO tenant_onboarding_progress (tenant_id) VALUES ($1)`, [T_OLD])).rejects.toThrow();
+    await expect(appDs.query(`INSERT INTO tenant_onboarding_progress (tenant_id) VALUES ($1)`, [T3])).rejects.toThrow();
   });
 
-  it('a scope for tenant 1 cannot write the row of tenant 2', async () => {
+  it('a scope for tenant 1 cannot write or read the row of tenant 2', async () => {
     await expect(
       appDs.transaction(async (m) => {
         await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [T1]);
-        await m.query(`INSERT INTO tenant_onboarding_progress (tenant_id) VALUES ($1)`, [T2]);
+        await m.query(`INSERT INTO tenant_onboarding_progress (tenant_id) VALUES ($1)`, [T3]);
       }),
     ).rejects.toThrow();
+    const seen = await appDs.transaction(async (m) => {
+      await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [T1]);
+      return m.query(`SELECT * FROM tenant_onboarding_progress WHERE tenant_id = $1`, [T2]);
+    });
+    expect(seen).toHaveLength(0);
     const updated = await appDs.transaction(async (m) => {
       await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [T1]);
       return m.query(`UPDATE tenant_onboarding_progress SET dismissed = true WHERE tenant_id = $1 RETURNING 1`, [T2]);
