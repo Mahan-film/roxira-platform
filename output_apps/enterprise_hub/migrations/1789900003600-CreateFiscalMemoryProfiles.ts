@@ -71,8 +71,50 @@ export class CreateFiscalMemoryProfiles1789900003600 implements MigrationInterfa
     );
     await q.query(`DROP INDEX IF EXISTS "public"."IDX_moadian_submissions_tenant_root"`);
     await q.query(`DROP INDEX IF EXISTS "public"."IDX_moadian_submissions_tenant_invoice_ins"`);
-    // If a chain added multiple ins rows for the same (tenant_id, invoice_id), keep the lowest ins row
-    // so restoring the pre-migration unique (tenant_id, invoice_id) index succeeds.
+
+    // Archive any multi-ins rows or reference chain data before restoring the single-submission index
+    // so accepted taxIds and audit history are never silently lost on rollback.
+    await q.query(`
+      CREATE TABLE IF NOT EXISTS "moadian_submissions_archive" (
+        "id" uuid PRIMARY KEY,
+        "tenant_id" uuid NOT NULL,
+        "invoice_id" uuid NOT NULL,
+        "ins" smallint,
+        "reference_tax_id" character varying(22),
+        "active_reference_tax_id" character varying(22),
+        "profile_id" uuid,
+        "archived_row" jsonb NOT NULL,
+        "archived_at" timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    await enableTenantRls(q, 'moadian_submissions_archive');
+    await q.query(`
+      INSERT INTO "moadian_submissions_archive"
+        ("id", "tenant_id", "invoice_id", "ins", "reference_tax_id", "active_reference_tax_id", "profile_id", "archived_row")
+      SELECT "id", "tenant_id", "invoice_id", "ins", "reference_tax_id", "active_reference_tax_id", "profile_id", to_jsonb(s)
+      FROM "moadian_submissions" s
+      WHERE s."ins" > 1 OR s."reference_tax_id" IS NOT NULL OR s."active_reference_tax_id" IS NOT NULL OR s."profile_id" IS NOT NULL
+      ON CONFLICT ("id") DO NOTHING
+    `);
+
+    // Archive fiscal memory profiles before dropping the table
+    await q.query(`
+      CREATE TABLE IF NOT EXISTS "fiscal_memory_profiles_archive" (
+        "id" uuid PRIMARY KEY,
+        "tenant_id" uuid NOT NULL,
+        "archived_row" jsonb NOT NULL,
+        "archived_at" timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    await enableTenantRls(q, 'fiscal_memory_profiles_archive');
+    await q.query(`
+      INSERT INTO "fiscal_memory_profiles_archive" ("id", "tenant_id", "archived_row")
+      SELECT "id", "tenant_id", to_jsonb(p)
+      FROM "fiscal_memory_profiles" p
+      ON CONFLICT ("id") DO NOTHING
+    `);
+
+    // After archiving safely, remove extra-ins rows so restoring the pre-migration unique index succeeds.
     await q.query(`
       DELETE FROM "moadian_submissions" a
       USING "moadian_submissions" b

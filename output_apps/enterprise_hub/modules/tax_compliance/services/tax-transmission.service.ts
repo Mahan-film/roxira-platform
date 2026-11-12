@@ -230,6 +230,7 @@ export class TaxTransmissionService {
       await this.repository.update(tenantId, submission.id, {
         status: MoadianSubmissionStatus.SENT,
         referenceNumber: row?.referenceNumber ?? submission.referenceNumber,
+        sentAt: submission.sentAt ?? new Date(),
         pollCount,
         lastPolledAt: new Date(),
         ...(pollCount >= maxPolls

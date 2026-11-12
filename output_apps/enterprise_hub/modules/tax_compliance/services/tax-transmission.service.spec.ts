@@ -292,6 +292,20 @@ describe('TaxTransmissionService send path', () => {
     expect(fake.submitted).toHaveLength(0);
     expect(fake.inquired).toHaveLength(0);
   });
+
+  it('poll exhaustion records POLL_LIMIT error on SENT row and returns done without flipping to FAILED', async () => {
+    const { service, fake, repo } = setup(
+      makeSubmission({ status: St.SENT, referenceNumber: 'REF-1', pollCount: 29 }),
+    );
+    fake.server.set(makeSubmission().uid, Inq.PENDING);
+    // submission.pollCount is 29, causing reconcile pollCount to become 30 >= maxPolls (default 30)
+    const outcome = await service.process(data);
+    expect(outcome).toBe('done');
+    expect(repo.row.status).toBe(St.SENT);
+    expect(repo.row.errors).toEqual([
+      { code: 'POLL_LIMIT', message: 'No final status after 30 inquiries.' },
+    ]);
+  });
 });
 
 describe('TaxTransmissionService.enqueue', () => {

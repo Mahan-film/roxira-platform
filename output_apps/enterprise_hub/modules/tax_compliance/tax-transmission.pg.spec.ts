@@ -19,7 +19,7 @@ const describePg = HOST ? describe : describe.skip;
 const OWNER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
 const OWNER_PW = process.env.ROXIRA_TEST_PG_PASSWORD;
 const PORT = Number(process.env.ROXIRA_TEST_PG_PORT ?? 5432);
-const APP_PW = 'tax-transmission-test-only';
+const APP_PW = `pw_${process.pid}_${Math.random().toString(36).slice(2)}`;
 
 const T1 = '11111111-1111-4111-8111-111111111111';
 const T2 = '22222222-2222-4222-8222-222222222222';
@@ -254,13 +254,28 @@ describePg('Tax transmission core on PostgreSQL (NOSUPERUSER, FORCE RLS)', () =>
     ).rejects.toThrow(/FK_moadian_submissions_tenant_profile|foreign key/i);
   });
 
-  it('migration down() is reversible even with multiple ins rows per invoice', async () => {
+  it('migration down() is reversible even with multiple ins rows per invoice, archiving them first', async () => {
     const sharedInv = 'ffffffff-0000-4000-8000-000000000001';
     const rootRow = (await enqueue(T1, sharedInv, S.MAIN)).submission;
     await outbox.confirm(T1, rootRow, [], 1, 'REF-REV-1');
     await enqueue(T1, sharedInv, S.CORRECTIVE, sharedInv);
 
     await owner.undoLastMigration();
+
+    // Verify extra-ins and reference-chain rows were archived into moadian_submissions_archive
+    const [archivedSub] = await owner.query(
+      `SELECT count(*)::int AS cnt FROM "moadian_submissions_archive" WHERE "invoice_id" = $1`,
+      [sharedInv],
+    );
+    expect(archivedSub?.cnt).toBeGreaterThanOrEqual(1);
+
+    // Verify profiles were archived into fiscal_memory_profiles_archive
+    const [archivedProf] = await owner.query(
+      `SELECT count(*)::int AS cnt FROM "fiscal_memory_profiles_archive" WHERE "tenant_id" = $1`,
+      [T1],
+    );
+    expect(archivedProf?.cnt).toBeGreaterThanOrEqual(1);
+
     await owner.runMigrations();
     const [fk] = await owner.query(
       `SELECT 1 AS ok FROM pg_constraint WHERE conname = 'FK_moadian_submissions_tenant_profile'`,
