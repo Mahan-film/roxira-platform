@@ -2,7 +2,7 @@
 
 Code: `output_apps/enterprise_hub/modules/tax_compliance/` (`transmission/`, `services/tax-transmission.service.ts`,
 `repositories/tax-transmission.repository.ts`, `repositories/fiscal-memory-profile.repository.ts`,
-`utils/tax-reference-chain.ts`). Migration `1789900002900-CreateFiscalMemoryProfiles`.
+`utils/tax-reference-chain.ts`). Migration `1789900003600-CreateFiscalMemoryProfiles`.
 
 Status: the service, queue job (`moadian.tx`) and tables exist and are tested, but no HTTP endpoint or UI calls
 `TaxTransmissionService.enqueue` yet. The older `MoadianService.submitInvoice` path still works unchanged (it only

@@ -10,8 +10,8 @@ import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
  *   (tenant, invoice, ins) so the idempotency key is the one the design names. Old rows keep
  *   ins = 1 and NULL chain columns; the code falls back to tax_id for them.
  */
-export class CreateFiscalMemoryProfiles1789900002900 implements MigrationInterface {
-  name = 'CreateFiscalMemoryProfiles1789900002900';
+export class CreateFiscalMemoryProfiles1789900003600 implements MigrationInterface {
+  name = 'CreateFiscalMemoryProfiles1789900003600';
 
   public async up(q: QueryRunner): Promise<void> {
     await q.query(`
