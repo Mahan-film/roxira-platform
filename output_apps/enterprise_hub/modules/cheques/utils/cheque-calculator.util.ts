@@ -1,11 +1,19 @@
+import { BadRequestException } from '@nestjs/common';
+import { MoneyFormatError, fromMinor, parseScaled, toMinor } from '../../accounting/money';
+import { tehranIsoDate } from '../../hr/services/jalali-period';
+
 /**
  * Cheque Ras-giri (راس‌گیری چک) and Discounting (تنزیل چک) Calculator Utility.
- * Uses BigInt for minor currency units (Rials) to avoid IEEE 754 precision loss.
+ * Uses `modules/accounting/money.ts` BigInt minor units to avoid IEEE 754 precision loss.
+ *
+ * Past-due cheques:
+ * - Weighted maturity (راس‌گیری) preserves negative day offsets relative to `baseDate`.
+ * - Discounting (تنزیل) clamps effective remaining days to `>= 0` (already-matured cheques accrue 0 discount).
  */
 
 export interface ChequeCalculationInput {
   id?: string | number;
-  amount: bigint | number | string;
+  amount: number | string;
   dueDate: Date | string;
   sayadNumber?: string;
   description?: string;
@@ -53,20 +61,59 @@ export interface DiscountResult {
   items: ChequeDiscountItemDetail[];
 }
 
-/** Converts Date or string to UTC YYYY-MM-DD */
+const HUNDRED_BIG = 100n;
+const RATE_SCALE = 4;
+const RATE_DENOMINATOR = 365n * 100n * 10000n; // 365 days * 100 percent * 10^4 rate scale
+
+function toAsciiDigits(value: string): string {
+  return value
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660));
+}
+
+function divRoundHalfUp(numerator: bigint, denominator: bigint): bigint {
+  if (denominator <= 0n) {
+    throw new BadRequestException('مخرج تقسیم باید مثبت باشد.');
+  }
+  const quotient = numerator / denominator;
+  const remainder = numerator % denominator;
+  if (numerator >= 0n) {
+    return remainder * 2n >= denominator ? quotient + 1n : quotient;
+  }
+  return remainder * 2n <= -denominator ? quotient - 1n : quotient;
+}
+
+function isValidYmd(year: number, month: number, day: number): boolean {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const probe = new Date(Date.UTC(year, month - 1, day));
+  return (
+    probe.getUTCFullYear() === year &&
+    probe.getUTCMonth() === month - 1 &&
+    probe.getUTCDate() === day
+  );
+}
+
+/** Converts Date or string to YYYY-MM-DD (using Asia/Tehran calendar day for Date instants). */
 export function normalizeDateToYmd(dateInput: Date | string): string {
   if (typeof dateInput === 'string') {
-    // If format like 2026-11-10T... or 2026-11-10
-    const m = dateInput.trim().slice(0, 10);
-    if (/^\d{4}-\d{2}-\d{2}$/.test(m)) {
-      return m;
+    const trimmed = toAsciiDigits(dateInput.trim());
+    const datePrefix = /^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/.exec(trimmed);
+    if (datePrefix) {
+      const y = Number(datePrefix[1]);
+      const m = Number(datePrefix[2]);
+      const d = Number(datePrefix[3]);
+      if (!isValidYmd(y, m, d)) {
+        throw new BadRequestException(`تاریخ نامعتبر است: ${dateInput}`);
+      }
+      return `${datePrefix[1]}-${datePrefix[2]}-${datePrefix[3]}`;
     }
   }
   const d = new Date(dateInput);
-  if (isNaN(d.getTime())) {
-    throw new Error(`تاریخ نامعتبر است: ${dateInput}`);
+  if (Number.isNaN(d.getTime())) {
+    throw new BadRequestException(`تاریخ نامعتبر است: ${dateInput}`);
   }
-  return d.toISOString().slice(0, 10);
+  return tehranIsoDate(d);
 }
 
 /** Formats Gregorian YYYY-MM-DD into Jalali YYYY/MM/DD */
@@ -99,17 +146,47 @@ export function addDaysToYmd(ymd: string, days: number): string {
   return target.toISOString().slice(0, 10);
 }
 
-/** Parses amount to BigInt minor units */
-export function toBigIntAmount(amount: bigint | number | string): bigint {
-  if (typeof amount === 'bigint') return amount;
-  const str = String(amount).trim().replace(/,/g, '');
-  if (!/^-?\d+$/.test(str)) {
-    // If it has decimals, parse integer part or round
-    const num = Math.round(Number(str));
-    if (isNaN(num)) throw new Error(`مبلغ نامعتبر است: ${amount}`);
-    return BigInt(num);
+/**
+ * Parses a Rial amount (number or decimal string, up to 2 decimals) into minor units via `money.ts`.
+ * Normalizes Persian/Arabic digits and thousand separators before delegating to `toMinor`.
+ */
+export function toCalculatorMinor(amount: number | string): bigint {
+  try {
+    if (typeof amount === 'number') {
+      return toMinor(amount);
+    }
+    const normalized = toAsciiDigits(String(amount)).trim().replace(/[,٬_\s]/g, '');
+    return toMinor(normalized);
+  } catch (err) {
+    if (err instanceof MoneyFormatError) {
+      throw new BadRequestException(`مبلغ نامعتبر است: ${amount}`);
+    }
+    throw err;
   }
-  return BigInt(str);
+}
+
+function formatMinorRial(minor: bigint): string {
+  return String(fromMinor(minor));
+}
+
+function parseRatePercentScaled(annualRatePercent: number | string): bigint {
+  if (typeof annualRatePercent === 'number') {
+    if (!Number.isFinite(annualRatePercent) || annualRatePercent < 0 || annualRatePercent > 100) {
+      throw new BadRequestException('نرخ تنزیل سالانه باید عددی بین ۰ تا ۱۰۰ باشد.');
+    }
+  }
+  try {
+    const scaled = parseScaled(annualRatePercent, RATE_SCALE);
+    if (scaled < 0n || scaled > 100n * 10000n) {
+      throw new BadRequestException('نرخ تنزیل سالانه باید عددی بین ۰ تا ۱۰۰ باشد.');
+    }
+    return scaled;
+  } catch (err) {
+    if (err instanceof MoneyFormatError) {
+      throw new BadRequestException(`نرخ تنزیل سالانه نامعتبر است: ${annualRatePercent}`);
+    }
+    throw err;
+  }
 }
 
 /**
@@ -122,61 +199,47 @@ export function calculateRasgiri(
   baseDateInput?: Date | string,
 ): RasgiriResult {
   if (!items || items.length === 0) {
-    throw new Error('حداقل یک فقره چک برای محاسبه راس‌گیری الزامی است.');
+    throw new BadRequestException('حداقل یک فقره چک برای محاسبه راس‌گیری الزامی است.');
   }
 
   const baseDate = baseDateInput
     ? normalizeDateToYmd(baseDateInput)
-    : new Date().toISOString().slice(0, 10);
+    : tehranIsoDate(new Date());
 
-  let totalAmount = 0n;
+  let totalAmountMinor = 0n;
   const processedItems = items.map((item) => {
-    const amt = toBigIntAmount(item.amount);
-    if (amt <= 0n) {
-      throw new Error(`مبلغ چک باید مثبت و بزرگ‌تر از صفر باشد: ${item.amount}`);
+    const amtMinor = toCalculatorMinor(item.amount);
+    if (amtMinor <= 0n) {
+      throw new BadRequestException(`مبلغ چک باید مثبت و بزرگ‌تر از صفر باشد: ${item.amount}`);
     }
     const dueYmd = normalizeDateToYmd(item.dueDate);
     const days = diffInDays(baseDate, dueYmd);
-    totalAmount += amt;
+    totalAmountMinor += amtMinor;
     return {
       item,
-      amt,
+      amtMinor,
       dueYmd,
       days,
     };
   });
 
-  if (totalAmount <= 0n) {
-    throw new Error('مجموع مبالغ چک‌ها باید بزرگ‌تر از صفر باشد.');
+  if (totalAmountMinor <= 0n) {
+    throw new BadRequestException('مجموع مبالغ چک‌ها باید بزرگ‌تر از صفر باشد.');
   }
 
-  // Calculate weighted days: sum(amt * days) / totalAmount
   let weightedProductSum = 0n;
   for (const pi of processedItems) {
-    weightedProductSum += pi.amt * BigInt(pi.days);
+    weightedProductSum += pi.amtMinor * BigInt(pi.days);
   }
 
-  // Integer division with half-up rounding
-  const quotient = weightedProductSum / totalAmount;
-  const remainder = weightedProductSum % totalAmount;
-  let avgDays = Number(quotient);
-  if (weightedProductSum >= 0n) {
-    if (remainder * 2n >= totalAmount) {
-      avgDays += 1;
-    }
-  } else {
-    if (remainder * 2n <= -totalAmount) {
-      avgDays -= 1;
-    }
-  }
-
+  const avgDays = Number(divRoundHalfUp(weightedProductSum, totalAmountMinor));
   const weightedMaturityDate = addDaysToYmd(baseDate, avgDays);
 
   const itemDetails: ChequeCalculationItemDetail[] = processedItems.map((pi) => {
-    const weightBasis = Number((pi.amt * 10000n) / totalAmount);
+    const weightBasis = Number((pi.amtMinor * 10000n) / totalAmountMinor);
     return {
       id: pi.item.id,
-      amount: pi.amt.toString(),
+      amount: formatMinorRial(pi.amtMinor),
       dueDate: pi.dueYmd,
       dueDateJalali: formatToJalali(pi.dueYmd),
       days: pi.days,
@@ -187,7 +250,7 @@ export function calculateRasgiri(
   });
 
   return {
-    totalAmount: totalAmount.toString(),
+    totalAmount: formatMinorRial(totalAmountMinor),
     totalCount: items.length,
     baseDate,
     baseDateJalali: formatToJalali(baseDate),
@@ -200,59 +263,61 @@ export function calculateRasgiri(
 
 /**
  * Calculates discounting for a single cheque amount.
- * Formula:
- * Discount Amount = round((Amount * RatePercent * Days) / (365 * 100))
+ * Formula (365-day year, rounded half-up to nearest Rial):
+ * Discount Amount = round((Amount * RatePercent * max(0, Days)) / (365 * 100))
  * Net Present Value = Amount - Discount Amount
  */
 export function calculateSingleDiscount(
-  amountInput: bigint | number | string,
+  amountInput: number | string,
   days: number,
   annualRatePercent: number,
-): { discountAmount: bigint; netPresentValue: bigint; effectivePeriodRatePercent: number } {
-  const amt = toBigIntAmount(amountInput);
-  if (amt <= 0n) {
-    throw new Error('مبلغ چک برای محاسبه تنزیل باید بزرگ‌تر از صفر باشد.');
+): {
+  discountAmount: string;
+  netPresentValue: string;
+  discountMinor: bigint;
+  netPresentValueMinor: bigint;
+  effectivePeriodRatePercent: number;
+} {
+  const amtMinor = toCalculatorMinor(amountInput);
+  if (amtMinor <= 0n) {
+    throw new BadRequestException('مبلغ چک برای محاسبه تنزیل باید بزرگ‌تر از صفر باشد.');
   }
-  if (annualRatePercent < 0) {
-    throw new Error('نرخ تنزیل سالانه نمی‌تواند منفی باشد.');
+  if (!Number.isFinite(days)) {
+    throw new BadRequestException('تعداد روز نامعتبر است.');
   }
+  const rateScaled = parseRatePercentScaled(annualRatePercent);
 
   // If days <= 0 (cheque already matured or past due), discount is 0
-  const effectiveDays = Math.max(0, days);
-  if (effectiveDays === 0 || annualRatePercent === 0) {
+  const effectiveDays = Math.max(0, Math.trunc(days));
+  if (effectiveDays === 0 || rateScaled === 0n) {
     return {
-      discountAmount: 0n,
-      netPresentValue: amt,
+      discountAmount: '0',
+      netPresentValue: formatMinorRial(amtMinor),
+      discountMinor: 0n,
+      netPresentValueMinor: amtMinor,
       effectivePeriodRatePercent: 0,
     };
   }
 
-  // To preserve precision with integer arithmetic:
-  // Rate has up to 4 decimal places (multiply by 10,000)
-  const rateScaled = BigInt(Math.round(annualRatePercent * 10000));
-  const numerator = amt * rateScaled * BigInt(effectiveDays);
-  const denominator = 365n * 1000000n; // 365 * 100 * 10,000
+  // amtMinor is Rials * 100. Dividing by (RATE_DENOMINATOR * 100n) rounds to whole Rials,
+  // then multiplying by 100n yields exact minor units aligned to whole Rials.
+  const numerator = amtMinor * rateScaled * BigInt(effectiveDays);
+  const rialDenominator = RATE_DENOMINATOR * HUNDRED_BIG;
+  let discountMinor = divRoundHalfUp(numerator, rialDenominator) * HUNDRED_BIG;
 
-  const quotient = numerator / denominator;
-  const remainder = numerator % denominator;
-  let discount = quotient;
-  if (remainder * 2n >= denominator) {
-    discount += 1n;
+  if (discountMinor > amtMinor) {
+    discountMinor = amtMinor;
   }
 
-  // Discount cannot exceed face value
-  if (discount > amt) {
-    discount = amt;
-  }
-
-  const npv = amt - discount;
-  const effectivePeriodRatePercent =
-    Math.round((Number(discount) / Number(amt)) * 10000) / 100;
+  const npvMinor = amtMinor - discountMinor;
+  const periodBasisPoints = divRoundHalfUp(discountMinor * 10000n, amtMinor);
 
   return {
-    discountAmount: discount,
-    netPresentValue: npv,
-    effectivePeriodRatePercent,
+    discountAmount: formatMinorRial(discountMinor),
+    netPresentValue: formatMinorRial(npvMinor),
+    discountMinor,
+    netPresentValueMinor: npvMinor,
+    effectivePeriodRatePercent: Number(periodBasisPoints) / 100,
   };
 }
 
@@ -265,42 +330,41 @@ export function calculateChequesDiscounting(
   baseDateInput?: Date | string,
 ): DiscountResult {
   if (!items || items.length === 0) {
-    throw new Error('حداقل یک فقره چک برای محاسبه تنزیل الزامی است.');
+    throw new BadRequestException('حداقل یک فقره چک برای محاسبه تنزیل الزامی است.');
   }
 
   const rasgiri = calculateRasgiri(items, baseDateInput);
   const baseDate = rasgiri.baseDate;
 
-  let totalAmount = 0n;
-  let totalDiscount = 0n;
+  let totalAmountMinor = 0n;
+  let totalDiscountMinor = 0n;
 
   const discountItems: ChequeDiscountItemDetail[] = items.map((item) => {
-    const amt = toBigIntAmount(item.amount);
+    const amtMinor = toCalculatorMinor(item.amount);
     const dueYmd = normalizeDateToYmd(item.dueDate);
     const days = Math.max(0, diffInDays(baseDate, dueYmd));
-    const { discountAmount, netPresentValue, effectivePeriodRatePercent } =
-      calculateSingleDiscount(amt, days, annualRatePercent);
+    const single = calculateSingleDiscount(item.amount, days, annualRatePercent);
 
-    totalAmount += amt;
-    totalDiscount += discountAmount;
+    totalAmountMinor += amtMinor;
+    totalDiscountMinor += single.discountMinor;
 
     return {
       id: item.id,
-      amount: amt.toString(),
+      amount: formatMinorRial(amtMinor),
       dueDate: dueYmd,
       days,
-      discountAmount: discountAmount.toString(),
-      netPresentValue: netPresentValue.toString(),
-      effectivePeriodRatePercent,
+      discountAmount: single.discountAmount,
+      netPresentValue: single.netPresentValue,
+      effectivePeriodRatePercent: single.effectivePeriodRatePercent,
     };
   });
 
-  const netPresentValue = totalAmount - totalDiscount;
+  const netPresentValueMinor = totalAmountMinor - totalDiscountMinor;
 
   return {
-    totalAmount: totalAmount.toString(),
-    totalDiscountAmount: totalDiscount.toString(),
-    netPresentValue: netPresentValue.toString(),
+    totalAmount: formatMinorRial(totalAmountMinor),
+    totalDiscountAmount: formatMinorRial(totalDiscountMinor),
+    netPresentValue: formatMinorRial(netPresentValueMinor),
     annualRatePercent,
     baseDate,
     weightedAverageDays: rasgiri.weightedAverageDays,

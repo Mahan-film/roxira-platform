@@ -1,11 +1,22 @@
 /**
  * Client-side Cheque Ras-giri (راس‌گیری) & Discounting (تنزیل) Calculator.
- * BigInt-safe Rial calculations with zero IEEE 754 precision loss.
+ * Uses BigInt minor units (via `toMinorUnits` in cheques-ui) and `formatMoneyRial`
+ * from `fa-format` to avoid IEEE 754 precision loss.
+ *
+ * Past-due cheques keep negative day offsets in Ras-giri and accrue zero discount (days clamped to >= 0).
  */
+import type { Cheque } from "@/types/cheques";
+import { toLatinDigits, toMinorUnits } from "./cheques-ui.ts";
+import { formatMoneyRial } from "./fa-format.ts";
+
+const ZERO = BigInt(0);
+const TWO = BigInt(2);
+const HUNDRED = BigInt(100);
+const RATE_DENOMINATOR = BigInt(365) * BigInt(100) * BigInt(10000) * HUNDRED;
 
 export interface ClientChequeItem {
   id?: string | number;
-  amount: bigint | number | string;
+  amount: number | string;
   dueDate: string;
   sayadNumber?: string;
   description?: string;
@@ -13,24 +24,30 @@ export interface ClientChequeItem {
 
 export interface ClientChequeDetail {
   id?: string | number;
-  amount: bigint;
+  amountDecimal: string;
   amountFormatted: string;
   dueDate: string;
   dueDateJalali: string;
   days: number;
   weightPercent: number;
-  discountAmount: bigint;
+  discountDecimal: string;
   discountFormatted: string;
-  netPresentValue: bigint;
+  netPresentValueDecimal: string;
   netPresentValueFormatted: string;
   effectivePeriodRatePercent: number;
   sayadNumber?: string;
   description?: string;
 }
 
+export interface ClientInvalidChequeItem {
+  id?: string | number;
+  reason: string;
+}
+
 export interface ClientRasgiriDiscountResult {
-  totalAmount: bigint;
+  totalAmountDecimal: string;
   totalAmountFormatted: string;
+  totalTomanFormatted: string;
   totalCount: number;
   baseDate: string;
   baseDateJalali: string;
@@ -38,28 +55,66 @@ export interface ClientRasgiriDiscountResult {
   weightedMaturityDate: string;
   weightedMaturityJalali: string;
   annualRatePercent: number;
-  totalDiscountAmount: bigint;
+  totalDiscountDecimal: string;
   totalDiscountFormatted: string;
-  netPresentValue: bigint;
+  totalDiscountTomanFormatted: string;
+  netPresentValueDecimal: string;
   netPresentValueFormatted: string;
+  netPresentValueTomanFormatted: string;
   items: ClientChequeDetail[];
+  invalidItems: ClientInvalidChequeItem[];
 }
 
-export function parseBigIntSafe(val: bigint | number | string): bigint {
-  if (typeof val === "bigint") return val;
-  const cleaned = String(val).replace(/[,_\s]/g, "");
-  if (!cleaned || isNaN(Number(cleaned))) return 0n;
-  const num = Math.round(Number(cleaned));
-  return BigInt(num);
+/** Today's Gregorian YYYY-MM-DD in Asia/Tehran calendar day (never UTC). */
+export function tehranTodayIso(now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Tehran",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const pick = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${pick("year")}-${pick("month")}-${pick("day")}`;
 }
 
-export function formatRials(val: bigint): string {
-  return val.toLocaleString("fa-IR") + " ریال";
+/** Converts minor units (hundredths of a Rial) to exact decimal string ("1000" or "1000.50"). */
+export function minorToRialString(minor: bigint): string {
+  const negative = minor < ZERO;
+  const abs = negative ? -minor : minor;
+  const integer = abs / HUNDRED;
+  const fraction = abs % HUNDRED;
+  const prefix = negative ? "-" : "";
+  if (fraction === ZERO) {
+    return `${prefix}${integer.toString()}`;
+  }
+  return `${prefix}${integer.toString()}.${fraction.toString().padStart(2, "0")}`;
 }
 
-export function formatTomans(val: bigint): string {
-  const toman = val / 10n;
-  return toman.toLocaleString("fa-IR") + " تومان";
+export function formatRialsFromMinor(minor: bigint): string {
+  return formatMoneyRial(minorToRialString(minor), "rial");
+}
+
+export function formatTomansFromMinor(minor: bigint): string {
+  return formatMoneyRial(minorToRialString(minor), "toman");
+}
+
+/** True only when a cheque is open (not cleared/returned) and has positive remaining amount. */
+export function isCalculatorEligibleCheque(
+  cheque: Pick<Cheque, "status" | "remainingAmount" | "amount">,
+): boolean {
+  if (cheque.status === "cleared" || cheque.status === "returned") {
+    return false;
+  }
+  const effective = cheque.remainingAmount ?? cheque.amount;
+  const minor = toMinorUnits(effective);
+  return minor !== null && minor > ZERO;
+}
+
+/** Remaining amount to use in calculations (never falls back from 0 to face amount). */
+export function effectiveChequeAmount(
+  cheque: Pick<Cheque, "remainingAmount" | "amount">,
+): number | string {
+  return cheque.remainingAmount ?? cheque.amount;
 }
 
 export function diffDays(fromYmd: string, toYmd: string): number {
@@ -78,8 +133,10 @@ export function addDaysYmd(ymd: string, days: number): string {
 
 export function formatJalaliFromYmd(ymd: string): string {
   try {
+    if (!/^\d{4}-\d{2}-\d{2}/.test(ymd)) return ymd;
     const parts = ymd.slice(0, 10).split("-").map(Number);
     const date = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2], 12, 0, 0));
+    if (Number.isNaN(date.getTime())) return ymd;
     const intlParts = new Intl.DateTimeFormat("en-US-u-ca-persian-nu-latn", {
       timeZone: "Asia/Tehran",
       year: "numeric",
@@ -93,94 +150,128 @@ export function formatJalaliFromYmd(ymd: string): string {
   }
 }
 
+function isValidYmdString(ymd: string): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+  if (!m) return false;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  const probe = new Date(Date.UTC(y, mo - 1, d));
+  return probe.getUTCFullYear() === y && probe.getUTCMonth() === mo - 1 && probe.getUTCDate() === d;
+}
+
+function divRoundHalfUp(numerator: bigint, denominator: bigint): bigint {
+  const quotient = numerator / denominator;
+  const remainder = numerator % denominator;
+  if (numerator >= ZERO) {
+    return remainder * TWO >= denominator ? quotient + BigInt(1) : quotient;
+  }
+  return remainder * TWO <= -denominator ? quotient - BigInt(1) : quotient;
+}
+
+/** Parses annual percentage rate (0..100, up to 4 decimals) to BigInt scaled by 10^4 without floats. */
+export function parseRateScaled(rateInput: number | string): bigint | null {
+  const raw = toLatinDigits(String(rateInput ?? "")).trim();
+  if (raw === "") return ZERO;
+  const match = /^(\d{1,3})(?:\.(\d{1,4}))?$/.exec(raw);
+  if (!match) return null;
+  const scaled = BigInt(match[1]) * BigInt(10000) + BigInt((match[2] ?? "").padEnd(4, "0"));
+  if (scaled < ZERO || scaled > BigInt(100) * BigInt(10000)) return null;
+  return scaled;
+}
+
 /**
- * Calculates Ras-giri and Discounting for a set of cheques.
+ * Calculates Ras-giri and Discounting for a set of cheques using BigInt minor units.
  */
 export function calculateClientRasgiriAndDiscount(
   items: ClientChequeItem[],
-  annualRatePercent: number = 0,
+  annualRateInput: number | string = 0,
   baseDateInput?: string,
 ): ClientRasgiriDiscountResult {
-  const baseDate = baseDateInput
-    ? baseDateInput.slice(0, 10)
-    : new Date().toISOString().slice(0, 10);
+  const baseDate =
+    baseDateInput && isValidYmdString(baseDateInput.slice(0, 10))
+      ? baseDateInput.slice(0, 10)
+      : tehranTodayIso();
 
-  let totalAmount = 0n;
-  let weightedProductSum = 0n;
+  const rateScaled = parseRateScaled(annualRateInput);
+  const validRateScaled = rateScaled ?? ZERO;
+  const annualRatePercent = Number(validRateScaled) / 10000;
 
-  const validItems = items
-    .map((item) => ({
-      item,
-      amt: parseBigIntSafe(item.amount),
-      dueDate: item.dueDate.slice(0, 10),
-      days: diffDays(baseDate, item.dueDate.slice(0, 10)),
-    }))
-    .filter((i) => i.amt > 0n);
+  let totalAmountMinor = ZERO;
+  let weightedProductSum = ZERO;
 
-  for (const vi of validItems) {
-    totalAmount += vi.amt;
-    weightedProductSum += vi.amt * BigInt(vi.days);
-  }
+  const validItems: Array<{
+    item: ClientChequeItem;
+    amtMinor: bigint;
+    dueDate: string;
+    days: number;
+  }> = [];
+  const invalidItems: ClientInvalidChequeItem[] = [];
 
-  let avgDays = 0;
-  if (totalAmount > 0n) {
-    const quotient = weightedProductSum / totalAmount;
-    const remainder = weightedProductSum % totalAmount;
-    avgDays = Number(quotient);
-    if (weightedProductSum >= 0n) {
-      if (remainder * 2n >= totalAmount) avgDays += 1;
-    } else {
-      if (remainder * 2n <= -totalAmount) avgDays -= 1;
+  for (const item of items) {
+    const amtMinor = toMinorUnits(item.amount);
+    const dueDate = item.dueDate.slice(0, 10);
+    if (amtMinor === null || amtMinor <= ZERO) {
+      invalidItems.push({ id: item.id, reason: "مبلغ چک باید عددی مثبت با حداکثر دو رقم اعشار باشد." });
+      continue;
     }
+    if (!isValidYmdString(dueDate)) {
+      invalidItems.push({ id: item.id, reason: "تاریخ سررسید نامعتبر است." });
+      continue;
+    }
+    const days = diffDays(baseDate, dueDate);
+    validItems.push({ item, amtMinor, dueDate, days });
+    totalAmountMinor += amtMinor;
+    weightedProductSum += amtMinor * BigInt(days);
   }
 
+  const avgDays =
+    totalAmountMinor > ZERO ? Number(divRoundHalfUp(weightedProductSum, totalAmountMinor)) : 0;
   const weightedMaturityDate = addDaysYmd(baseDate, avgDays);
 
-  let totalDiscount = 0n;
+  let totalDiscountMinor = ZERO;
   const processedItems: ClientChequeDetail[] = validItems.map((vi) => {
     const effectiveDays = Math.max(0, vi.days);
-    let discount = 0n;
+    let discountMinor = ZERO;
     let periodRatePercent = 0;
 
-    if (effectiveDays > 0 && annualRatePercent > 0) {
-      const rateScaled = BigInt(Math.round(annualRatePercent * 10000));
-      const num = vi.amt * rateScaled * BigInt(effectiveDays);
-      const den = 365n * 1000000n;
-      const q = num / den;
-      const r = num % den;
-      discount = q;
-      if (r * 2n >= den) discount += 1n;
-      if (discount > vi.amt) discount = vi.amt;
-      periodRatePercent = Math.round((Number(discount) / Number(vi.amt)) * 10000) / 100;
+    if (effectiveDays > 0 && validRateScaled > ZERO) {
+      const numerator = vi.amtMinor * validRateScaled * BigInt(effectiveDays);
+      discountMinor = divRoundHalfUp(numerator, RATE_DENOMINATOR) * HUNDRED;
+      if (discountMinor > vi.amtMinor) discountMinor = vi.amtMinor;
+      const periodBp = divRoundHalfUp(discountMinor * BigInt(10000), vi.amtMinor);
+      periodRatePercent = Number(periodBp) / 100;
     }
 
-    totalDiscount += discount;
-    const npv = vi.amt - discount;
-    const weightBasis = totalAmount > 0n ? Number((vi.amt * 10000n) / totalAmount) : 0;
+    totalDiscountMinor += discountMinor;
+    const npvMinor = vi.amtMinor - discountMinor;
+    const weightBasis =
+      totalAmountMinor > ZERO ? Number((vi.amtMinor * BigInt(10000)) / totalAmountMinor) : 0;
 
     return {
       id: vi.item.id,
-      amount: vi.amt,
-      amountFormatted: vi.amt.toLocaleString("fa-IR"),
+      amountDecimal: minorToRialString(vi.amtMinor),
+      amountFormatted: formatRialsFromMinor(vi.amtMinor),
       dueDate: vi.dueDate,
       dueDateJalali: formatJalaliFromYmd(vi.dueDate),
       days: vi.days,
       weightPercent: weightBasis / 100,
-      discountAmount: discount,
-      discountFormatted: discount.toLocaleString("fa-IR"),
-      netPresentValue: npv,
-      netPresentValueFormatted: npv.toLocaleString("fa-IR"),
+      discountDecimal: minorToRialString(discountMinor),
+      discountFormatted: formatRialsFromMinor(discountMinor),
+      netPresentValueDecimal: minorToRialString(npvMinor),
+      netPresentValueFormatted: formatRialsFromMinor(npvMinor),
       effectivePeriodRatePercent: periodRatePercent,
       sayadNumber: vi.item.sayadNumber,
       description: vi.item.description,
     };
   });
 
-  const netPresentValue = totalAmount - totalDiscount;
+  const netPresentValueMinor = totalAmountMinor - totalDiscountMinor;
 
   return {
-    totalAmount,
-    totalAmountFormatted: totalAmount.toLocaleString("fa-IR"),
+    totalAmountDecimal: minorToRialString(totalAmountMinor),
+    totalAmountFormatted: formatRialsFromMinor(totalAmountMinor),
+    totalTomanFormatted: formatTomansFromMinor(totalAmountMinor),
     totalCount: validItems.length,
     baseDate,
     baseDateJalali: formatJalaliFromYmd(baseDate),
@@ -188,10 +279,13 @@ export function calculateClientRasgiriAndDiscount(
     weightedMaturityDate,
     weightedMaturityJalali: formatJalaliFromYmd(weightedMaturityDate),
     annualRatePercent,
-    totalDiscountAmount: totalDiscount,
-    totalDiscountFormatted: totalDiscount.toLocaleString("fa-IR"),
-    netPresentValue,
-    netPresentValueFormatted: netPresentValue.toLocaleString("fa-IR"),
+    totalDiscountDecimal: minorToRialString(totalDiscountMinor),
+    totalDiscountFormatted: formatRialsFromMinor(totalDiscountMinor),
+    totalDiscountTomanFormatted: formatTomansFromMinor(totalDiscountMinor),
+    netPresentValueDecimal: minorToRialString(netPresentValueMinor),
+    netPresentValueFormatted: formatRialsFromMinor(netPresentValueMinor),
+    netPresentValueTomanFormatted: formatTomansFromMinor(netPresentValueMinor),
     items: processedItems,
+    invalidItems,
   };
 }

@@ -3421,6 +3421,61 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/cheques/calculator/discount (ChequesController.calculateDiscount)": {
+    "policy": "cheques:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": true,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/cheques/calculator/rasgiri (ChequesController.calculateRasgiri)": {
+    "policy": "cheques:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": true,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/cheques/calculator/selection-discount (ChequesController.calculateSelectionDiscount)": {
+    "policy": "cheques:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": true,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/cheques/calculator/selection-rasgiri (ChequesController.calculateSelectionRasgiri)": {
+    "policy": "cheques:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": true,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/cheques/calculator/single-discount (ChequesController.calculateSingleDiscount)": {
+    "policy": "cheques:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": true,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/cheques/reconciliation/apply (ChequesController.reconApply)": {
     "policy": "banking:post",
     "owner": true,

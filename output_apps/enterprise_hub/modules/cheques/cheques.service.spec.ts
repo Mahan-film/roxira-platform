@@ -827,4 +827,22 @@ describe('ChequesService Ras-giri and Discounting (T72)', () => {
     expect(disc.totalAmount).toBe('400');
     expect(disc.items).toHaveLength(2);
   });
+
+  it('rejects cleared cheques with remainingAmount 0 and uses remainingAmount on partial cheques', async () => {
+    const t = build();
+    const cleared = await t.service.create(A, received({ sayadNumber: undefined, amount: 500, dueDate: '2026-11-20' }) as never);
+    await t.service.transition(A, cleared.id, { status: ChequeStatus.CLEARED });
+
+    await expect(
+      t.service.calculateSelectionRasgiri(A, [cleared.id], '2026-11-10'),
+    ).rejects.toThrow('تسویه یا بسته شده');
+    await expect(
+      t.service.calculateSelectionDiscount(A, [cleared.id], 24, '2026-11-10'),
+    ).rejects.toThrow('تسویه یا بسته شده');
+
+    const partial = await t.service.create(A, received({ sayadNumber: undefined, amount: 500, dueDate: '2026-11-20' }) as never);
+    await t.service.partialPayment(A, partial.id, { amount: 200 });
+    const rasPartial = await t.service.calculateSelectionRasgiri(A, [partial.id], '2026-11-10');
+    expect(rasPartial.totalAmount).toBe('300');
+  });
 });

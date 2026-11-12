@@ -596,40 +596,54 @@ export class ChequesService {
   } {
     const res = calculateSingleDiscount(dto.amount, dto.days, dto.annualRatePercent);
     return {
-      discountAmount: res.discountAmount.toString(),
-      netPresentValue: res.netPresentValue.toString(),
+      discountAmount: res.discountAmount,
+      netPresentValue: res.netPresentValue,
       effectivePeriodRatePercent: res.effectivePeriodRatePercent,
     };
   }
 
-  /**
-   * Computes Ras-giri for a selection of existing cheques in the tenant.
-   */
-  async calculateSelectionRasgiri(
+  private async loadCalculatorItems(
     tenantId: string,
     chequeIds: number[],
-    baseDate?: string,
-  ): Promise<RasgiriResult> {
+  ): Promise<ChequeCalculationInput[]> {
     if (!chequeIds || chequeIds.length === 0) {
       throw new BadRequestException('حداقل یک فقره چک باید انتخاب شود.');
     }
-    const items: ChequeCalculationInput[] = await Promise.all(
+    return Promise.all(
       chequeIds.map(async (id) => {
         const cheque = await this.get(tenantId, id);
+        const remaining = cheque.remainingAmount ?? cheque.amount;
+        const remainingMinor = toMinor(remaining);
+        if (!OPEN_STATUSES.includes(cheque.status) || remainingMinor <= 0n) {
+          throw new BadRequestException(
+            `چک شماره ${cheque.chequeNumber} تسویه یا بسته شده و مانده قابل محاسبه ندارد.`,
+          );
+        }
         return {
           id: cheque.id,
-          amount: cheque.remainingAmount ?? cheque.amount,
+          amount: remaining,
           dueDate: cheque.dueDate,
           sayadNumber: cheque.sayadNumber ?? undefined,
           description: cheque.partyName ?? cheque.description ?? undefined,
         };
       }),
     );
+  }
+
+  /**
+   * Computes Ras-giri for a selection of existing open cheques in the tenant.
+   */
+  async calculateSelectionRasgiri(
+    tenantId: string,
+    chequeIds: number[],
+    baseDate?: string,
+  ): Promise<RasgiriResult> {
+    const items = await this.loadCalculatorItems(tenantId, chequeIds);
     return calculateRasgiri(items, baseDate);
   }
 
   /**
-   * Computes discounting for a selection of existing cheques in the tenant.
+   * Computes discounting for a selection of existing open cheques in the tenant.
    */
   async calculateSelectionDiscount(
     tenantId: string,
@@ -637,21 +651,7 @@ export class ChequesService {
     annualRatePercent: number,
     baseDate?: string,
   ): Promise<DiscountResult> {
-    if (!chequeIds || chequeIds.length === 0) {
-      throw new BadRequestException('حداقل یک فقره چک باید انتخاب شود.');
-    }
-    const items: ChequeCalculationInput[] = await Promise.all(
-      chequeIds.map(async (id) => {
-        const cheque = await this.get(tenantId, id);
-        return {
-          id: cheque.id,
-          amount: cheque.remainingAmount ?? cheque.amount,
-          dueDate: cheque.dueDate,
-          sayadNumber: cheque.sayadNumber ?? undefined,
-          description: cheque.partyName ?? cheque.description ?? undefined,
-        };
-      }),
-    );
+    const items = await this.loadCalculatorItems(tenantId, chequeIds);
     return calculateChequesDiscounting(items, annualRatePercent, baseDate);
   }
 }
