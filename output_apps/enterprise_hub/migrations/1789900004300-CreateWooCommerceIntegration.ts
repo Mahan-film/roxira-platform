@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateWooCommerceIntegration1789900003400 implements MigrationInterface {
-  name = 'CreateWooCommerceIntegration1789900003400';
+export class CreateWooCommerceIntegration1789900004300 implements MigrationInterface {
+  name = 'CreateWooCommerceIntegration1789900004300';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // 1. Create woocommerce_configs table
@@ -57,7 +57,7 @@ export class CreateWooCommerceIntegration1789900003400 implements MigrationInter
         ON "woocommerce_sync_logs" ("tenant_id", "direction", "external_id");
       CREATE UNIQUE INDEX IF NOT EXISTS "UQ_wc_sync_logs_tenant_success"
         ON "woocommerce_sync_logs" ("tenant_id", "direction", "external_id")
-        WHERE "status" = 'success';
+        WHERE "status" = 'success' AND "direction" = 'INBOUND_ORDER';
     `);
 
     await queryRunner.query(`

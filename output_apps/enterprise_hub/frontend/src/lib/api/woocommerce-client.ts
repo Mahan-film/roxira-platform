@@ -6,7 +6,7 @@ import type {
   WooCommerceSyncLog,
 } from '@/types/woocommerce';
 
-const WOO_BASE = `${API_PROXY_BASE_PATH}/api/integrations/woocommerce`;
+const WOO_BASE = `${API_PROXY_BASE_PATH}/enterprise-hub/integrations/woocommerce`;
 
 export async function getWooCommerceConfig(signal?: AbortSignal): Promise<WooCommerceConfig> {
   return apiRequest<WooCommerceConfig>(`${WOO_BASE}/config`, {
