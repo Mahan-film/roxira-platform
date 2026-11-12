@@ -1,4 +1,5 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
+import { SystemRole } from '../catalogue';
 import { SetLoginScheduleDto } from '../dto/login-schedule.dto';
 import { LoginTimeWindow, UserLoginScheduleEntity } from '../entities/user-login-schedule.entity';
 import { LoginSchedulesRepository } from '../repositories/login-schedules.repository';
@@ -28,6 +29,7 @@ export class LoginWindowService {
   ) {}
 
   /**
+   * Window ends are exclusive: 08:00-17:00 allows 16:59 and refuses 17:00.
    * Evaluates whether a user is allowed to log in, refresh tokens, or call APIs at the given date/time.
    * Fails closed: if schedule enforcement is enabled and no matching window is active, access is denied (Lesson 25).
    */
@@ -110,12 +112,12 @@ export class LoginWindowService {
         return (
           w.dayOfWeek === dayOfWeek &&
           currentMinute >= w.startMinute &&
-          currentMinute <= w.endMinute
+          currentMinute < w.endMinute
         );
       } else {
         // Overnight window that crosses midnight into the next day (e.g. 22:00 -> 06:00)
         const startsToday = w.dayOfWeek === dayOfWeek && currentMinute >= w.startMinute;
-        const endsToday = (w.dayOfWeek + 1) % 7 === dayOfWeek && currentMinute <= w.endMinute;
+        const endsToday = (w.dayOfWeek + 1) % 7 === dayOfWeek && currentMinute < w.endMinute;
         return startsToday || endsToday;
       }
     });
@@ -154,7 +156,7 @@ export class LoginWindowService {
     at: Date = new Date(),
     roleKey?: string,
   ): Promise<void> {
-    if (roleKey === 'owner') {
+    if (roleKey === SystemRole.OWNER) {
       return;
     }
     const schedule = await this.repository.findByTenantUser(tenantId, userId);

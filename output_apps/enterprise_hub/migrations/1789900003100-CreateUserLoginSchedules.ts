@@ -27,11 +27,6 @@ export class CreateUserLoginSchedules1789900003100 implements MigrationInterface
       )
     `);
 
-    await q.query(`
-      CREATE INDEX IF NOT EXISTS "IDX_user_login_schedules_tenant_user"
-        ON "user_login_schedules" ("tenant_id", "user_id")
-    `);
-
     await enableTenantRls(q, this.table);
   }
 

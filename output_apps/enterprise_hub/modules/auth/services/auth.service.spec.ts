@@ -1,3 +1,4 @@
+import { LoginWindowService } from '../../access/services/login-window.service';
 import 'reflect-metadata';
 import {
   ForbiddenException,
@@ -537,5 +538,47 @@ describe('AuthService OTP hardening (issue #366)', () => {
     await expect(
       (service as any).finishLogin(buildUser(), { tenantId: 'tenant-1' }, false),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  describe('owner break-glass on login and refresh', () => {
+    const closedWindow = () =>
+      new LoginWindowService({
+        findByTenantUser: jest.fn().mockResolvedValue({ enforceSchedule: true, timezone: 'UTC', windows: [] }),
+      } as never);
+
+    async function loginAs(roleKey: string) {
+      const { service, mocks } = createService();
+      (service as any).loginWindow = closedWindow();
+      (mocks.memberships.listForUser as jest.Mock).mockResolvedValue([
+        { tenantId: 'tenant-1', roleKey, status: 'ACTIVE' },
+      ]);
+      (mocks.memberships.findByTenantUser as jest.Mock).mockResolvedValue({
+        tenantId: 'tenant-1',
+        roleKey,
+        status: 'ACTIVE',
+      });
+      return { service, mocks };
+    }
+
+    it('finishLogin: a non-owner outside the window is refused', async () => {
+      const { service } = await loginAs('admin');
+      await expect(
+        (service as any).finishLogin(buildUser(), { tenantId: 'tenant-1' }, false),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('finishLogin: an owner outside the window passes the window check', async () => {
+      const { service } = await loginAs('owner');
+      await expect((service as any).assertLoginWindow('tenant-1', 'user-1')).resolves.toBeUndefined();
+    });
+
+    it('refreshSession: a non-owner is refused, an owner passes the window check', async () => {
+      const { service } = await loginAs('admin');
+      await expect((service as any).assertLoginWindow('tenant-1', 'user-1')).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      const owner = await loginAs('owner');
+      await expect((owner.service as any).assertLoginWindow('tenant-1', 'user-1')).resolves.toBeUndefined();
+    });
   });
 });

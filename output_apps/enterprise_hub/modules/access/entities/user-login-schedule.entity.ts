@@ -2,7 +2,6 @@ import {
   Column,
   CreateDateColumn,
   Entity,
-  Index,
   PrimaryGeneratedColumn,
   Unique,
   UpdateDateColumn,
@@ -23,11 +22,9 @@ export class UserLoginScheduleEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Index()
   @Column({ name: 'tenant_id', type: 'uuid' })
   tenantId: string;
 
-  @Index()
   @Column({ name: 'user_id', type: 'uuid' })
   userId: string;
 

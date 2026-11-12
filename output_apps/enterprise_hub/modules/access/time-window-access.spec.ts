@@ -84,6 +84,20 @@ describe('Access by Time Window (#230 / T76)', () => {
     expect(eveningRes.reason).toBe('ورود به سیستم و تمدید نشست خارج از ساعات مجاز کاری امکان‌پذیر نیست.');
   });
 
+  it('window end is exclusive in Asia/Tehran (08:00-17:00 allows 16:59, refuses 17:00, allows 08:00)', () => {
+    const schedule: UserLoginSchedule = {
+      timezone: 'Asia/Tehran',
+      enforceSchedule: true,
+      windows: [{ dayOfWeek: 6, startMinute: 480, endMinute: 1020 }],
+    };
+    // Tehran is UTC+3:30 (no DST since 2022): Saturday 2026-11-07
+    const at = (h: number, m: number) => new Date(Date.UTC(2026, 10, 7, h, m) - 210 * 60000);
+    expect(service.checkLoginWindow(schedule, at(7, 59)).allowed).toBe(false);
+    expect(service.checkLoginWindow(schedule, at(8, 0)).allowed).toBe(true);
+    expect(service.checkLoginWindow(schedule, at(16, 59)).allowed).toBe(true);
+    expect(service.checkLoginWindow(schedule, at(17, 0)).allowed).toBe(false);
+  });
+
   it('supports overnight windows that cross midnight', () => {
     const overnightSchedule: UserLoginSchedule = {
       userId: 'user-1',
@@ -197,7 +211,7 @@ describe('Access by Time Window (#230 / T76)', () => {
       });
 
       await expect(guard.canActivate(mockContext)).rejects.toThrow(ForbiddenException);
-      expect(mockLoginWindow.assertAllowed).toHaveBeenCalledWith('tenant-1', 'user-1');
+      expect(mockLoginWindow.assertAllowed).toHaveBeenCalledWith('tenant-1', 'user-1', undefined, 'member');
     });
   });
 
@@ -351,7 +365,7 @@ describe('Access by Time Window (#230 / T76)', () => {
       });
 
       await expect(guard.canActivate(mockContext)).rejects.toThrow(ForbiddenException);
-      expect(mockLoginWindowService.assertAllowed).toHaveBeenCalledWith('tenant-1', 'user-1');
+      expect(mockLoginWindowService.assertAllowed).toHaveBeenCalledWith('tenant-1', 'user-1', undefined, 'sales');
     });
 
     it('exempts organization OWNER from login schedule lockout (administrative break-glass recovery path)', async () => {
@@ -371,9 +385,11 @@ describe('Access by Time Window (#230 / T76)', () => {
           require2fa: false,
         }),
       };
-      const mockLoginWindowService = {
-        assertAllowed: jest.fn().mockRejectedValue(new ForbiddenException('Never called')),
-      };
+      // Real service with an enforced, always-closed schedule: only the owner role exemption lets this through.
+      const mockLoginWindowService = new LoginWindowService({
+        findByTenantUser: jest.fn().mockResolvedValue({ enforceSchedule: true, timezone: 'UTC', windows: [] }),
+      } as any);
+      const assertSpy = jest.spyOn(mockLoginWindowService, 'assertAllowed');
 
       const guard = new AccessGuard(
         reflector,
@@ -400,13 +416,14 @@ describe('Access by Time Window (#230 / T76)', () => {
 
       const allowed = await guard.canActivate(mockContext);
       expect(allowed).toBe(true);
-      expect(mockLoginWindowService.assertAllowed).not.toHaveBeenCalled();
+      expect(assertSpy).toHaveBeenCalledWith('tenant-1', 'user-owner', undefined, SystemRole.OWNER);
     });
 
     it('blocks request on @AuthOnly route when user is outside allowed login window', async () => {
       const reflector = new Reflector();
       const mockAccessService = {
         isSessionActive: jest.fn().mockResolvedValue(true),
+        resolve: jest.fn().mockResolvedValue({ roleKey: 'sales' }),
       };
       const mockLoginWindowService = {
         assertAllowed: jest.fn().mockRejectedValue(new ForbiddenException('ساعات کاری غیرمجاز')),
@@ -437,7 +454,35 @@ describe('Access by Time Window (#230 / T76)', () => {
       });
 
       await expect(guard.canActivate(mockContext)).rejects.toThrow(ForbiddenException);
-      expect(mockLoginWindowService.assertAllowed).toHaveBeenCalledWith('tenant-1', 'user-1');
+      expect(mockLoginWindowService.assertAllowed).toHaveBeenCalledWith('tenant-1', 'user-1', undefined, 'sales');
+    });
+
+    it('exempts an OWNER on @AuthOnly routes but still blocks a non-owner outside the window', async () => {
+      const closed = new LoginWindowService({
+        findByTenantUser: jest.fn().mockResolvedValue({ enforceSchedule: true, timezone: 'UTC', windows: [] }),
+      } as any);
+      const run = async (roleKey: string) => {
+        const reflector = new Reflector();
+        const guard = new AccessGuard(
+          reflector,
+          { isSessionActive: jest.fn().mockResolvedValue(true), resolve: jest.fn().mockResolvedValue({ roleKey }) } as any,
+          closed,
+        );
+        jest.spyOn(reflector, 'getAllAndOverride').mockImplementation((key: any) => {
+          const { AUTH_ONLY_KEY } = require('./decorators');
+          return key === AUTH_ONLY_KEY ? true : undefined;
+        });
+        const ctx = {
+          getHandler: () => () => {},
+          getClass: () => class P {},
+          switchToHttp: () => ({
+            getRequest: () => ({ method: 'GET', url: '/x', user: { sub: 'u1', tenantId: 't1', sid: 's1' } }),
+          }),
+        } as any;
+        return guard.canActivate(ctx);
+      };
+      await expect(run(SystemRole.OWNER)).resolves.toBe(true);
+      await expect(run('sales')).rejects.toThrow(ForbiddenException);
     });
   });
 });
