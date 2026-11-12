@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class ConfigurePaymentGatewayDto {
   @ApiProperty({
@@ -18,6 +18,7 @@ export class ConfigurePaymentGatewayDto {
   })
   @IsString()
   @IsOptional()
+  @IsIn(['zibal'])
   @MaxLength(32)
   gateway?: string = 'zibal';
 }

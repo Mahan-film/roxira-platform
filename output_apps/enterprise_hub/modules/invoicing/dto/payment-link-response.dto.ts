@@ -1,5 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class CreatePaymentLinkDto {
   @ApiPropertyOptional({
@@ -32,16 +33,33 @@ export class PaymentLinkResponseDto {
 }
 
 export class PaymentCallbackQueryDto {
+  @Transform(({ value }) => (value !== undefined && value !== null ? String(value).trim() : value))
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(128)
   trackId: string;
+
+  @IsOptional()
+  @Transform(({ value }) => (value !== undefined && value !== null ? String(value) : undefined))
+  @IsString()
+  @MaxLength(32)
   status?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => (value !== undefined && value !== null ? String(value) : undefined))
+  @IsString()
+  @MaxLength(32)
   success?: string;
-  tenantId?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => (value !== undefined && value !== null ? String(value) : undefined))
+  @IsString()
+  @MaxLength(128)
+  orderId?: string;
 }
 
 export class PaymentCallbackResultDto {
   success: boolean;
   paid: boolean;
-  invoiceId?: string;
-  refNumber?: string;
   message: string;
 }

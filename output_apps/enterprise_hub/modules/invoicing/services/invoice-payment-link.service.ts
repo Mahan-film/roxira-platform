@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  InternalServerErrorException,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
@@ -92,8 +93,22 @@ export class InvoicePaymentLinkService {
     tenantId: string,
     invoiceId: string,
     dto?: CreatePaymentLinkDto,
-    baseUrl = 'http://localhost:3000',
+    baseUrl?: string,
   ): Promise<PaymentLinkResponseDto> {
+    const effectiveBaseUrl = (
+      baseUrl ??
+      process.env.PAYMENT_GATEWAY_CALLBACK_BASE_URL ??
+      process.env.APP_BASE_URL ??
+      ''
+    )
+      .trim()
+      .replace(/\/+$/, '');
+    if (!effectiveBaseUrl) {
+      throw new InternalServerErrorException(
+        'آدرس پایه کال‌بک درگاه پرداخت (PAYMENT_GATEWAY_CALLBACK_BASE_URL) پیکربندی نشده است.',
+      );
+    }
+
     const invoice = await this.invoicingRepo.findById(tenantId, invoiceId);
     if (!invoice) {
       throw new NotFoundException(`صورتحساب با شناسه ${invoiceId} یافت نشد.`);
@@ -127,7 +142,7 @@ export class InvoicePaymentLinkService {
     }
     const amountRials = amountMinor / 100n;
 
-    const callbackUrl = `${baseUrl}/enterprise-hub/invoicing/payment-links/callback?invoiceId=${invoiceId}`;
+    const callbackUrl = `${effectiveBaseUrl}/enterprise-hub/invoicing/payment-links/callback`;
     const description =
       dto?.description || `پرداخت آنلاین فاکتور فروش شماره ${invoice.taxInvoiceNumber || invoice.id}`;
 
@@ -166,7 +181,7 @@ export class InvoicePaymentLinkService {
 
   /**
    * Processes the server-side callback verification from payment gateway.
-   * Strictly idempotent on both trackId and gateway_ref.
+   * Strictly idempotent on both trackId and gateway_ref via atomic claim.
    * On confirmation, marks invoice as PAID and automatically posts receipt voucher via posting rules.
    */
   async handleCallback(params: PaymentCallbackQueryDto): Promise<PaymentCallbackResultDto> {
@@ -174,32 +189,42 @@ export class InvoicePaymentLinkService {
       throw new BadRequestException('شناسه تراکنش (trackId) الزامی است.');
     }
 
-    // Always resolve tenant through secure trackId lookup, never trust client-supplied tenantId alone
+    // Always resolve tenant through secure trackId lookup, never trust client-supplied tenantId
     const lookup = await this.paymentRepo.lookupTenantByTrackId(params.trackId);
     if (!lookup) {
       throw new NotFoundException('تراکنش پرداخت با این شناسه یافت نشد.');
     }
     const tenantId = lookup.tenantId;
 
-    return this.tenantScope.run(tenantId, async () => {
-      const link = await this.paymentRepo.findPaymentLinkByTrackId(tenantId, params.trackId);
-      if (!link) {
+    // Atomically claim the link for verification (prevents concurrent GET + POST race)
+    const claimed = await this.paymentRepo.claimPaymentLinkForVerification(
+      tenantId,
+      params.trackId,
+    );
+
+    if (!claimed) {
+      const existing = await this.paymentRepo.findPaymentLinkByTrackId(tenantId, params.trackId);
+      if (!existing) {
         throw new NotFoundException('شناسه پرداخت یافت نشد.');
       }
-
-      // Idempotency: if payment link is already marked as PAID, return authoritative success
-      if (link.status === 'PAID') {
+      if (existing.status === 'PAID') {
         return {
           success: true,
           paid: true,
-          invoiceId: link.invoiceId,
-          refNumber: link.gatewayRef ?? undefined,
           message: 'این پرداخت قبلاً تایید و ثبت شده است.',
         };
       }
+      return {
+        success: false,
+        paid: false,
+        message: 'تراکنش هم‌اکنون در حال استعلام و تایید است.',
+      };
+    }
 
-      const gatewayConfig = await this.paymentRepo.findConfig(tenantId, link.gateway);
+    try {
+      const gatewayConfig = await this.paymentRepo.findConfig(tenantId, claimed.gateway);
       if (!gatewayConfig || !gatewayConfig.isActive) {
+        await this.paymentRepo.markPaymentLinkStatus(tenantId, claimed.id, 'UNVERIFIED');
         throw new BadRequestException('پیکربندی درگاه پرداخت معتبر یافت نشد.');
       }
 
@@ -209,58 +234,88 @@ export class InvoicePaymentLinkService {
         trackId: params.trackId,
       });
 
-      if (verifyResult.paid) {
-        const refNumber = verifyResult.refNumber || params.trackId;
-
-        // Verify gateway amount matches expected amount
-        if (verifyResult.amountRials !== undefined && verifyResult.amountRials !== null) {
-          const expectedRials = link.amount / 100n;
-          if (BigInt(verifyResult.amountRials) !== expectedRials) {
-            throw new BadRequestException('مبلغ پرداخت‌شده با مبلغ فاکتور تطابق ندارد.');
-          }
-        }
-
-        // Idempotency check on gateway ref: ensure no duplicate posting across parallel runs
-        const existingRef = await this.paymentRepo.findPaymentLinkByGatewayRef(tenantId, refNumber);
-        if (existingRef && existingRef.status === 'PAID' && existingRef.id !== link.id) {
-          return {
-            success: true,
-            paid: true,
-            invoiceId: existingRef.invoiceId,
-            refNumber,
-            message: 'تراکنش با این شماره مرجع بانکی قبلاً ثبت شده است.',
-          };
-        }
-
-        link.status = 'PAID';
-        link.gatewayRef = refNumber;
-        link.cardNumber = verifyResult.cardNumber ?? null;
-        link.paidAt = verifyResult.paidAt ?? new Date();
-        await this.paymentRepo.updatePaymentLink(tenantId, link);
-
-        // Mark invoice as PAID and post receipt voucher through posting rules (no hand-built lines)
-        const invoice = await this.invoicingRepo.findById(tenantId, link.invoiceId);
-        if (invoice && invoice.status === InvoiceStatus.ISSUED) {
-          await this.invoicingService.pay(tenantId, link.invoiceId);
-        }
-
+      if (!verifyResult.success) {
+        await this.paymentRepo.markPaymentLinkStatus(tenantId, claimed.id, 'UNVERIFIED');
         return {
-          success: true,
-          paid: true,
-          invoiceId: link.invoiceId,
-          refNumber,
-          message: 'پرداخت با موفقیت تأیید شد و سند دریافت ثبت گردید.',
+          success: false,
+          paid: false,
+          message: verifyResult.message || 'خطا در استعلام وضعیت تراکنش از درگاه پرداخت.',
         };
       }
 
-      link.status = 'FAILED';
-      await this.paymentRepo.updatePaymentLink(tenantId!, link);
+      if (!verifyResult.paid) {
+        await this.paymentRepo.markPaymentLinkStatus(tenantId, claimed.id, 'FAILED');
+        return {
+          success: false,
+          paid: false,
+          message: verifyResult.message || 'تراکنش توسط درگاه پرداخت تأیید نشد.',
+        };
+      }
+
+      // Fail closed: require verified gateway amount to be present and exact
+      const expectedRials = BigInt(claimed.amount) / 100n;
+      if (
+        verifyResult.amountRials === undefined ||
+        verifyResult.amountRials === null ||
+        BigInt(verifyResult.amountRials) !== expectedRials
+      ) {
+        await this.paymentRepo.markPaymentLinkStatus(tenantId, claimed.id, 'FAILED');
+        return {
+          success: false,
+          paid: false,
+          message: 'مبلغ پرداخت‌شده نامعتبر است یا با مبلغ فاکتور تطابق ندارد.',
+        };
+      }
+
+      const refNumber = verifyResult.refNumber || params.trackId;
+      const existingRef = await this.paymentRepo.findPaymentLinkByGatewayRef(tenantId, refNumber);
+      if (existingRef && existingRef.status === 'PAID' && existingRef.id !== claimed.id) {
+        await this.paymentRepo.markPaymentLinkStatus(tenantId, claimed.id, 'FAILED');
+        return {
+          success: true,
+          paid: true,
+          message: 'تراکنش با این شماره مرجع بانکی قبلاً ثبت شده است.',
+        };
+      }
+
+      const markedPaid = await this.paymentRepo.markPaymentLinkPaid(tenantId, claimed.id, {
+        gatewayRef: refNumber,
+        cardNumber: verifyResult.cardNumber ?? null,
+        paidAt: verifyResult.paidAt ?? new Date(),
+      });
+
+      if (!markedPaid) {
+        return {
+          success: true,
+          paid: true,
+          message: 'این پرداخت قبلاً تایید و ثبت شده است.',
+        };
+      }
+
+      // Mark invoice as PAID and post receipt voucher through posting rules (no hand-built lines)
+      const invoice = await this.invoicingRepo.findById(tenantId, claimed.invoiceId);
+      if (invoice && invoice.status === InvoiceStatus.ISSUED) {
+        await this.invoicingService.pay(tenantId, claimed.invoiceId);
+      }
+
       return {
-        success: false,
-        paid: false,
-        invoiceId: link.invoiceId,
-        message: verifyResult.message || 'تراکنش توسط درگاه پرداخت تأیید نشد.',
+        success: true,
+        paid: true,
+        message: 'پرداخت با موفقیت تأیید شد و سند دریافت ثبت گردید.',
       };
-    });
+    } catch (err: unknown) {
+      const code = (err as { code?: string; driverError?: { code?: string } })?.code ??
+        (err as { driverError?: { code?: string } })?.driverError?.code;
+      if (code === '23505') {
+        await this.paymentRepo.markPaymentLinkStatus(tenantId, claimed.id, 'FAILED').catch(() => undefined);
+        return {
+          success: true,
+          paid: true,
+          message: 'تراکنش با این شماره مرجع بانکی قبلاً ثبت شده است.',
+        };
+      }
+      await this.paymentRepo.markPaymentLinkStatus(tenantId, claimed.id, 'UNVERIFIED').catch(() => undefined);
+      throw err;
+    }
   }
 }
