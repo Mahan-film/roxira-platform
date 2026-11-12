@@ -404,6 +404,65 @@ export class InvoicingRepository {
       }));
     });
   }
+
+  /** وضعیت ارسال و خطاهای سامانه مودیان برای دسته‌ای از فاکتورها در همان مستأجر. */
+  async findMoadianSubmissionsForInvoices(
+    tenantId: string,
+    invoiceIds: string[],
+  ): Promise<
+    Map<
+      string,
+      {
+        status: string;
+        errorText: string | null;
+        taxId: string;
+      }
+    >
+  > {
+    if (invoiceIds.length === 0) {
+      return new Map();
+    }
+    const scope = this.getScope();
+    const queryRunner = (m: EntityManager) =>
+      m.query(
+        `SELECT invoice_id AS "invoiceId", status, errors, tax_id AS "taxId"
+           FROM moadian_submissions
+          WHERE tenant_id = $1 AND invoice_id = ANY($2)`,
+        [tenantId, invoiceIds],
+      );
+
+    const rows: Array<{
+      invoiceId: string;
+      status: string;
+      errors: any;
+      taxId: string;
+    }> = scope
+      ? await scope.run(tenantId, queryRunner)
+      : await this.dataSource.query(
+          `SELECT invoice_id AS "invoiceId", status, errors, tax_id AS "taxId"
+             FROM moadian_submissions
+            WHERE tenant_id = $1 AND invoice_id = ANY($2)`,
+          [tenantId, invoiceIds],
+        );
+
+    const map = new Map<
+      string,
+      { status: string; errorText: string | null; taxId: string }
+    >();
+    for (const r of rows) {
+      const errList = Array.isArray(r.errors) ? r.errors : [];
+      const errorText =
+        errList.length > 0
+          ? errList.map((e: any) => e.message || e.code).join(' | ')
+          : null;
+      map.set(r.invoiceId, {
+        status: r.status,
+        errorText,
+        taxId: r.taxId,
+      });
+    }
+    return map;
+  }
 }
 
 /** یک ردیف خلاصه صورتحساب‌ها (به تفکیک ارز و وضعیت). */

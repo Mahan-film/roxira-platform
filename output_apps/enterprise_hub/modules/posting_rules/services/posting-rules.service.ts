@@ -6,6 +6,7 @@ import { ALL_DOC_TYPES, DEFAULT_ROLE_ACCOUNTS, isPostingRole, POSTING_ROLES, Pos
 import { Amounts, buildProposal, requireTemplate, resolveRole, RoleAccounts, toJournalLines, VoucherProposal } from '../domain/posting-engine';
 import { PostingRuleError } from '../domain/posting-error';
 import { POSTING_TEMPLATES } from '../domain/posting-templates';
+import { PostingSourceEntity } from '../entities/posting-source.entity';
 import { PostingRulesRepository } from '../repositories/posting-rules.repository';
 
 export interface PostingRequest {
@@ -126,6 +127,17 @@ export class PostingRulesService {
     const number = request.entryNumber ?? `${request.sourceType}-${request.sourceId}`;
     if (number.length > 64) throw new PostingRuleError('INVALID_MAPPING', `شماره سند «${number.slice(0, 20)}…» از ۶۴ نویسه بلندتر است.`);
     return number;
+  }
+
+  /** Look up an existing posted source document without modifying state. */
+  async findSource(
+    tenantId: string,
+    sourceType: string,
+    sourceId: string,
+    docType: string,
+    manager?: EntityManager,
+  ): Promise<PostingSourceEntity | null> {
+    return this.repository.findSource(tenantId, sourceType, sourceId, docType, manager);
   }
 
   /**

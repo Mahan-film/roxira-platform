@@ -1075,8 +1075,21 @@ export class InvoicingService {
           take: limit,
         },
       );
+      const moadianMap = await this.invoicingRepository.findMoadianSubmissionsForInvoices(
+        tenantId,
+        entities.map((e) => e.id),
+      );
       return {
-        data: entities.map((entity) => this.toResponseDto(entity)),
+        data: entities.map((entity) => {
+          const dto = this.toResponseDto(entity);
+          const m = moadianMap.get(entity.id);
+          if (m) {
+            dto.moadianStatus = m.status;
+            dto.moadianErrorText = m.errorText;
+            dto.moadianTaxId = m.taxId;
+          }
+          return dto;
+        }),
         total,
         page,
         limit,
@@ -1107,8 +1120,22 @@ export class InvoicingService {
       },
     );
 
+    const moadianMap = await this.invoicingRepository.findMoadianSubmissionsForInvoices(
+      tenantId,
+      entities.map((e) => e.id),
+    );
+
     return {
-      data: entities.map((entity) => this.toResponseDto(entity)),
+      data: entities.map((entity) => {
+        const dto = this.toResponseDto(entity);
+        const m = moadianMap.get(entity.id);
+        if (m) {
+          dto.moadianStatus = m.status;
+          dto.moadianErrorText = m.errorText;
+          dto.moadianTaxId = m.taxId;
+        }
+        return dto;
+      }),
       total,
       page,
       limit,
@@ -1122,7 +1149,18 @@ export class InvoicingService {
       throw new NotFoundException(`صورتحساب با شناسه ${id} یافت نشد.`);
     }
 
-    return this.toResponseDto(entity);
+    const dto = this.toResponseDto(entity);
+    const moadianMap = await this.invoicingRepository.findMoadianSubmissionsForInvoices(
+      tenantId,
+      [id],
+    );
+    const m = moadianMap.get(id);
+    if (m) {
+      dto.moadianStatus = m.status;
+      dto.moadianErrorText = m.errorText;
+      dto.moadianTaxId = m.taxId;
+    }
+    return dto;
   }
 
   /**

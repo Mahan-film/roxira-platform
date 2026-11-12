@@ -104,6 +104,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "DELETE /enterprise-hub/integrations/receipt-bot/link (ReceiptBotController.unlink)": {
+    "policy": "accounting:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "DELETE /enterprise-hub/inventory/openings/:id (OpeningBalanceController.remove)": {
     "policy": "inventory:create",
     "owner": true,
@@ -1498,6 +1509,17 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/integrations/receipt-bot/status (ReceiptBotController.getStatus)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/inventory/documents/ (StockDocumentsController.list)": {
     "policy": "inventory:read",
     "owner": true,
@@ -2399,6 +2421,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "GET /org/members/:userId/login-schedule (OrgController.getLoginSchedule)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "GET /org/module-catalogue (OrgController.moduleCatalogue)": {
     "policy": "anyMember",
     "owner": true,
@@ -2684,6 +2717,9 @@
     "hr": false,
     "read_only": false,
     "legacy_member": false
+  },
+  "POST /api/integrations/receipt-bot/webhook (ReceiptBotWebhookController.handleWebhook)": {
+    "policy": "public"
   },
   "POST /approvals/delegations (ApprovalsController.createDelegation)": {
     "policy": "members:approve",
@@ -3567,6 +3603,17 @@
     "read_only": false,
     "legacy_member": true
   },
+  "POST /enterprise-hub/currency/revaluation (CurrencyController.revalueMonthEnd)": {
+    "policy": "accounting:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/damages/ (DamagesController.create)": {
     "policy": "damages:create",
     "owner": true,
@@ -3916,6 +3963,17 @@
     "sales": false,
     "cheque_reviewer": false,
     "hr": true,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/integrations/receipt-bot/link-code (ReceiptBotController.generateCode)": {
+    "policy": "accounting:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
     "read_only": false,
     "legacy_member": false
   },
@@ -4828,6 +4886,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "PUT /enterprise-hub/integrations/receipt-bot/preferences (ReceiptBotController.updatePreferences)": {
+    "policy": "accounting:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "PUT /enterprise-hub/inventory/openings/:id/lines (OpeningBalanceController.replaceLines)": {
     "policy": "inventory:create",
     "owner": true,
@@ -4907,6 +4976,17 @@
   },
   "PUT /enterprise-hub/treasury/settings (TreasuryController.setSettings)": {
     "policy": "banking:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PUT /org/members/:userId/login-schedule (OrgController.setLoginSchedule)": {
+    "policy": "members:admin",
     "owner": true,
     "admin": true,
     "accountant": false,

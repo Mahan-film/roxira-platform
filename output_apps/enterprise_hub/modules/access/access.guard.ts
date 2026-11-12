@@ -6,6 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { LoginWindowService } from './services/login-window.service';
 import { IS_PUBLIC_KEY } from '../auth/decorators/public.decorator';
 import { ROLES_KEY } from '../auth/decorators/roles.decorator';
 import { TenantRole } from '../tenants/enums/tenant-role.enum';
@@ -15,6 +16,7 @@ import {
   AccessAction,
   AccessModule,
   SensitiveField,
+  SystemRole,
   requiredFieldForHandler,
 } from './catalogue';
 import {
@@ -47,6 +49,7 @@ export class AccessGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly access: AccessService,
+    private readonly loginWindow: LoginWindowService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -67,6 +70,11 @@ export class AccessGuard implements CanActivate {
     }
 
     if (this.reflector.getAllAndOverride<boolean | undefined>(AUTH_ONLY_KEY, targets)) {
+      if (user.tenantId && user.sub) {
+        // Role comes from the verified membership (not the JWT claim) so the owner break-glass applies here too.
+        const authCtx = await this.access.resolve(user.sub, user.tenantId);
+        await this.loginWindow.assertAllowed(user.tenantId, user.sub, undefined, authCtx?.roleKey);
+      }
       return true;
     }
     // Platform-operator routes: RolesGuard already enforced the global role.
@@ -91,6 +99,8 @@ export class AccessGuard implements CanActivate {
     if (!ctx) {
       throw denied('NOT_A_MEMBER', 'You are not an active member of this organisation.');
     }
+
+    await this.loginWindow.assertAllowed(ctx.tenantId, ctx.userId, undefined, ctx.roleKey);
 
     if (module && !anyMember) {
       const handler = context.getHandler();

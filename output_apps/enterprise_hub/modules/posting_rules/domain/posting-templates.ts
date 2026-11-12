@@ -348,6 +348,23 @@ export const POSTING_TEMPLATES: readonly PostingTemplate[] = [
     ],
     defaults: { pos_clearing: '1015', bank_fee: '5210' },
   },
+  // #230 / T75: Month-end FX revaluation voucher for foreign-currency accounts
+  {
+    docType: 'currency.fx_revaluation',
+    title: 'سند تسعیر ارز پایان دوره',
+    amounts: ['gain', 'loss'],
+    lines: [
+      dr('monetary_asset', 'gain', 'تعدیل تسعیر ارز دارایی یا بدهی ارزی'),
+      cr('fx_gain', 'gain', 'سود تسعیر ارز'),
+      dr('fx_loss', 'loss', 'زیان تسعیر ارز'),
+      cr('monetary_asset', 'loss', 'تعدیل تسعیر ارز دارایی یا بدهی ارزی'),
+    ],
+    defaults: {
+      monetary_asset: '1012',
+      fx_gain: '4120',
+      fx_loss: '5210',
+    },
+  },
 ];
 
 const BY_TYPE = new Map(POSTING_TEMPLATES.map((t) => [t.docType, t]));

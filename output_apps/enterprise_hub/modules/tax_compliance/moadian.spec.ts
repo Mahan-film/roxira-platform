@@ -24,7 +24,9 @@ import {
   MOADIAN_POLL_JOB,
   MOADIAN_SANDBOX_BASE_URL,
   MOADIAN_SEND_JOB,
+  MOADIAN_SYNC_STATUS_JOB,
 } from './constants/moadian.constants';
+import { MoadianProcessor } from './processors/moadian.processor';
 import { MoadianController } from './controllers/moadian.controller';
 import { MoadianCredentialEntity } from './entities/moadian-credential.entity';
 import { MoadianSubmissionEntity } from './entities/moadian-submission.entity';
@@ -464,6 +466,24 @@ class InMemoryMoadianRepository {
     Object.assign(row, patch, { id, tenantId, updatedAt: new Date() });
     return row;
   }
+  async listTenantIds() {
+    return [...new Set([TENANT_A, ...this.submissions.map((s) => s.tenantId)])];
+  }
+  async findNonFinalSubmissions(tenantId: string) {
+    const nonFinal = [
+      MoadianSubmissionStatus.QUEUED,
+      MoadianSubmissionStatus.SENT,
+      MoadianSubmissionStatus.ERROR,
+    ];
+    return this.submissions.filter(
+      (s) => nonFinal.includes(s.status) && s.tenantId === tenantId,
+    );
+  }
+  async findSubmissions(tenantId: string, invoiceIds?: string[]) {
+    return this.submissions.filter(
+      (s) => s.tenantId === tenantId && (!invoiceIds || invoiceIds.includes(s.invoiceId)),
+    );
+  }
 }
 
 interface FakeServerState {
@@ -545,10 +565,13 @@ function fakeMoadianServer(state: FakeServerState): FetchLike {
       ]);
     }
     if (path.startsWith('/inquiry-by-reference-id')) {
-      expect(path).toContain('referenceIds=REF-1');
+      const ref = decodeURIComponent(path.split('referenceIds=')[1]?.split('&')[0] ?? '');
+      if (!ref) {
+        return json(400, { errors: [{ errorCode: 'MISSING_REF', detail: 'referenceIds required' }] });
+      }
       return json(200, [
         {
-          referenceNumber: 'REF-1',
+          referenceNumber: ref,
           uid: null,
           status: state.inquiryStatus,
           data: {
@@ -1032,5 +1055,302 @@ describe('CreateMoadianTables migration', () => {
     queries.length = 0;
     await new CreateMoadianTables1789310000000().down(runner as never);
     expect(queries.join('\n')).toContain('DROP TABLE IF EXISTS "moadian_credentials"');
+  });
+});
+
+describe('Moadian status sync (T82)', () => {
+  it('syncNonFinalSubmissions polls SENT submissions and transitions to SUCCESS', async () => {
+    const { service, repository, state } = buildMoadian();
+    await service.putCredential(TENANT_A, credentialDto());
+    state.inquiryStatus = 'SUCCESS';
+
+    const sub = await repository.createSubmission(TENANT_A, {
+      invoiceId: INVOICE_A,
+      uid: 'uid-test-1',
+      taxId: 'TAXID123',
+      serial: '1',
+      referenceNumber: 'REF-1',
+      status: MoadianSubmissionStatus.SENT,
+      errors: [],
+      warnings: [],
+      pollCount: 1,
+    });
+
+    const res = await service.syncNonFinalSubmissions(TENANT_A);
+    expect(res).toMatchObject({ checked: 1, updated: 1 });
+
+    const updated = await repository.findSubmissionById(TENANT_A, sub.id);
+    expect(updated?.status).toBe(MoadianSubmissionStatus.SUCCESS);
+    expect(updated?.errors).toEqual([]);
+    expect(updated?.warnings).toHaveLength(1);
+    expect(updated?.lastPolledAt).toBeInstanceOf(Date);
+  });
+
+  it('syncNonFinalSubmissions stores FAILED status and error list', async () => {
+    const { service, repository, state } = buildMoadian();
+    await service.putCredential(TENANT_A, credentialDto());
+    state.inquiryStatus = 'FAILED';
+
+    const sub = await repository.createSubmission(TENANT_A, {
+      invoiceId: INVOICE_A,
+      uid: 'uid-test-2',
+      taxId: 'TAXID123',
+      serial: '2',
+      referenceNumber: 'REF-1',
+      status: MoadianSubmissionStatus.SENT,
+      errors: [],
+      warnings: [],
+      pollCount: 0,
+    });
+
+    const res = await service.syncNonFinalSubmissions(TENANT_A);
+    expect(res).toMatchObject({ checked: 1, updated: 1 });
+
+    const updated = await repository.findSubmissionById(TENANT_A, sub.id);
+    expect(updated?.status).toBe(MoadianSubmissionStatus.FAILED);
+    expect(updated?.errors).toEqual([
+      expect.objectContaining({ code: '0100', message: 'bad sstid' }),
+    ]);
+  });
+
+  it('syncNonFinalSubmissions retries safe states (TIMEOUT) without marking FAILED', async () => {
+    const { service, repository, state } = buildMoadian();
+    await service.putCredential(TENANT_A, credentialDto());
+    state.inquiryStatus = 'TIMEOUT';
+
+    const sub = await repository.createSubmission(TENANT_A, {
+      invoiceId: INVOICE_A,
+      uid: 'uid-test-3',
+      taxId: 'TAXID123',
+      serial: '3',
+      referenceNumber: 'REF-1',
+      status: MoadianSubmissionStatus.SENT,
+      errors: [],
+      warnings: [],
+      pollCount: 1,
+    });
+
+    const res = await service.syncNonFinalSubmissions(TENANT_A);
+    expect(res).toMatchObject({ checked: 1, retried: 1 });
+
+    const updated = await repository.findSubmissionById(TENANT_A, sub.id);
+    expect(updated?.status).toBe(MoadianSubmissionStatus.SENT);
+    expect(updated?.pollCount).toBe(2);
+    expect(updated?.errors[0]?.code).toBe('TIMEOUT');
+  });
+
+  it('syncNonFinalSubmissions for QUEUED checks uid first and avoids double submit', async () => {
+    const { service, repository, state, jobs } = buildMoadian();
+    await service.putCredential(TENANT_A, credentialDto());
+    state.uidInquiryStatus = 'SUCCESS';
+
+    const sub = await repository.createSubmission(TENANT_A, {
+      invoiceId: INVOICE_A,
+      uid: 'uid-already-sent',
+      taxId: 'TAXID123',
+      serial: '4',
+      referenceNumber: null,
+      status: MoadianSubmissionStatus.QUEUED,
+      errors: [],
+      warnings: [],
+      pollCount: 0,
+    });
+
+    const res = await service.syncNonFinalSubmissions(TENANT_A);
+    expect(res).toMatchObject({ checked: 1, updated: 1 });
+
+    const updated = await repository.findSubmissionById(TENANT_A, sub.id);
+    expect(updated?.status).toBe(MoadianSubmissionStatus.SUCCESS);
+    expect(updated?.referenceNumber).toBe('REF-UID-1');
+    expect(jobs.filter((j) => j.name === MOADIAN_SEND_JOB)).toHaveLength(0);
+  });
+
+  it('syncNonFinalSubmissions enumerates tenants globally via listTenantIds when targetTenantId is omitted', async () => {
+    const { service, repository, state } = buildMoadian();
+    await service.putCredential(TENANT_A, credentialDto());
+    state.inquiryStatus = 'SUCCESS';
+
+    const sub = await repository.createSubmission(TENANT_A, {
+      invoiceId: INVOICE_A,
+      uid: 'uid-global-1',
+      taxId: 'TAXID123',
+      serial: '10',
+      referenceNumber: 'REF-1',
+      status: MoadianSubmissionStatus.SENT,
+      errors: [],
+      warnings: [],
+      pollCount: 0,
+    });
+
+    const res = await service.syncNonFinalSubmissions();
+    expect(res).toMatchObject({ checked: 1, updated: 1 });
+    const updated = await repository.findSubmissionById(TENANT_A, sub.id);
+    expect(updated?.status).toBe(MoadianSubmissionStatus.SUCCESS);
+  });
+
+  it('syncNonFinalSubmissions marks POLL_LIMIT when TIMEOUT reaches MAX_POLLS', async () => {
+    const { service, repository, state } = buildMoadian();
+    await service.putCredential(TENANT_A, credentialDto());
+    state.inquiryStatus = 'TIMEOUT';
+
+    const sub = await repository.createSubmission(TENANT_A, {
+      invoiceId: INVOICE_A,
+      uid: 'uid-timeout-max',
+      taxId: 'TAXID123',
+      serial: '11',
+      referenceNumber: 'REF-1',
+      status: MoadianSubmissionStatus.SENT,
+      errors: [],
+      warnings: [],
+      pollCount: 2, // +1 = 3 === MOADIAN_MAX_POLLS
+    });
+
+    const res = await service.syncNonFinalSubmissions(TENANT_A);
+    expect(res).toMatchObject({ checked: 1, retried: 0 });
+    const updated = await repository.findSubmissionById(TENANT_A, sub.id);
+    expect(updated?.pollCount).toBe(3);
+    expect(updated?.errors[0]?.code).toBe('POLL_LIMIT');
+  });
+
+  it('syncNonFinalSubmissions moves ERROR to QUEUED with a fresh jobId and executes processSend without double submit', async () => {
+    const { service, repository, state, jobs } = buildMoadian();
+    await service.putCredential(TENANT_A, credentialDto());
+    state.uidInquiryStatus = 'NOT_FOUND';
+
+    const sub = await repository.createSubmission(TENANT_A, {
+      invoiceId: INVOICE_A,
+      uid: 'uid-err-recover',
+      taxId: 'TAXID123',
+      serial: '12',
+      referenceNumber: null,
+      packet: { header: { requestTraceId: 'uid-err-recover' }, body: [] } as any,
+      status: MoadianSubmissionStatus.ERROR,
+      errors: [{ code: 'TRANSPORT', message: 'timeout' }],
+      warnings: [],
+      pollCount: 0,
+    });
+
+    const res = await service.syncNonFinalSubmissions(TENANT_A);
+    expect(res).toMatchObject({ checked: 1, retried: 1 });
+
+    const queued = await repository.findSubmissionById(TENANT_A, sub.id);
+    expect(queued?.status).toBe(MoadianSubmissionStatus.QUEUED);
+    expect(queued?.pollCount).toBe(1);
+
+    const retryJob = jobs.find((j) => j.name === MOADIAN_SEND_JOB);
+    expect(retryJob?.data).toEqual({
+      tenantId: TENANT_A,
+      submissionId: sub.id,
+      checkExistingFirst: true,
+    });
+    expect(retryJob?.opts?.jobId).toBe(`moadian-retry-${sub.id}-12-1`);
+
+    // Simulate the worker running: if Moadian already knows the uid before send executes, processSend must NOT call /invoice again.
+    state.uidInquiryStatus = 'PENDING';
+    const outcome = await service.processSend(retryJob!.data as any, false, 0);
+    expect(outcome).toBe('poll');
+    expect(state.received).toHaveLength(0);
+    const afterWorker = await repository.findSubmissionById(TENANT_A, sub.id);
+    expect(afterWorker?.status).toBe(MoadianSubmissionStatus.SENT);
+    expect(afterWorker?.referenceNumber).toBe('REF-UID-1');
+  });
+
+  it('does not treat transient uid inquiry HTTP failure as NOT_FOUND or re-enqueue send', async () => {
+    const { service, repository, state, jobs } = buildMoadian();
+    await service.putCredential(TENANT_A, credentialDto());
+    state.uidInquiryHttpStatus = 500;
+
+    const sub = await repository.createSubmission(TENANT_A, {
+      invoiceId: INVOICE_A,
+      uid: 'uid-transient-500',
+      taxId: 'TAXID123',
+      serial: '13',
+      referenceNumber: null,
+      status: MoadianSubmissionStatus.QUEUED,
+      errors: [],
+      warnings: [],
+      pollCount: 0,
+    });
+
+    const res = await service.syncNonFinalSubmissions(TENANT_A);
+    expect(res).toMatchObject({ checked: 1, updated: 0, retried: 0 });
+    expect(jobs.filter((j) => j.name === MOADIAN_SEND_JOB)).toHaveLength(0);
+    const stillQueued = await repository.findSubmissionById(TENANT_A, sub.id);
+    expect(stillQueued?.status).toBe(MoadianSubmissionStatus.QUEUED);
+  });
+
+  it('syncNonFinalSubmissions re-enqueues stalled QUEUED submissions safely', async () => {
+    const { service, repository, state, jobs } = buildMoadian();
+    await service.putCredential(TENANT_A, credentialDto());
+    state.uidInquiryStatus = 'NOT_FOUND';
+
+    const sub = await repository.createSubmission(TENANT_A, {
+      invoiceId: INVOICE_A,
+      uid: 'uid-stalled',
+      taxId: 'TAXID123',
+      serial: '5',
+      referenceNumber: null,
+      status: MoadianSubmissionStatus.QUEUED,
+      errors: [],
+      warnings: [],
+      pollCount: 0,
+    });
+
+    const res = await service.syncNonFinalSubmissions(TENANT_A);
+    expect(res).toMatchObject({ checked: 1, retried: 1 });
+
+    expect(jobs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: MOADIAN_SEND_JOB,
+          data: { tenantId: TENANT_A, submissionId: sub.id, checkExistingFirst: true },
+          opts: expect.objectContaining({ jobId: `moadian-retry-${sub.id}-5-1` }),
+        }),
+      ]),
+    );
+  });
+
+  it('syncNonFinalSubmissions is idempotent across multiple runs', async () => {
+    const { service, repository, state } = buildMoadian();
+    await service.putCredential(TENANT_A, credentialDto());
+    state.inquiryStatus = 'SUCCESS';
+
+    const sub = await repository.createSubmission(TENANT_A, {
+      invoiceId: INVOICE_A,
+      uid: 'uid-test-idem',
+      taxId: 'TAXID123',
+      serial: '6',
+      referenceNumber: 'REF-1',
+      status: MoadianSubmissionStatus.SENT,
+      errors: [],
+      warnings: [],
+      pollCount: 1,
+    });
+
+    const r1 = await service.syncNonFinalSubmissions(TENANT_A);
+    expect(r1).toMatchObject({ checked: 1, updated: 1 });
+
+    const r2 = await service.syncNonFinalSubmissions(TENANT_A);
+    expect(r2).toMatchObject({ checked: 0, updated: 0 });
+
+    const finalSub = await repository.findSubmissionById(TENANT_A, sub.id);
+    expect(finalSub?.status).toBe(MoadianSubmissionStatus.SUCCESS);
+  });
+
+  it('MoadianProcessor processes MOADIAN_SYNC_STATUS_JOB', async () => {
+    const { service } = buildMoadian();
+    const processor = new MoadianProcessor(service);
+    const syncSpy = jest
+      .spyOn(service, 'syncNonFinalSubmissions')
+      .mockResolvedValue({ checked: 0, updated: 0, retried: 0 });
+
+    const job = {
+      name: MOADIAN_SYNC_STATUS_JOB,
+      data: { tenantId: TENANT_A },
+    } as any;
+
+    const result = await processor.process(job);
+    expect(result).toEqual({ outcome: 'done' });
+    expect(syncSpy).toHaveBeenCalledWith(TENANT_A);
   });
 });

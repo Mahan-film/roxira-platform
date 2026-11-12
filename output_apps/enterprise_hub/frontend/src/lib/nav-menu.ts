@@ -262,6 +262,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         module: "members",
       },
       {
+        href: "/app/settings/integrations/receipt-bot",
+        label: "بات دریافت رسید",
+        icon: "Bot",
+        module: "accounting",
+        keywords: ["telegram", "bot", "تلگرام", "رسید", "بات"],
+      },
+      {
         href: "/app/settings/audit",
         label: "گزارش رخدادها",
         icon: "ClipboardList",

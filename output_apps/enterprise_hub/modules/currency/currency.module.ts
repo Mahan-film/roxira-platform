@@ -1,17 +1,19 @@
 import { Module } from '@nestjs/common';
+import { TenantScope } from '../access/services/tenant-scope';
 import { CurrencyController } from './controllers/currency.controller';
 import { CurrencyService } from './services/currency.service';
+import { FxRevaluationService } from './services/fx-revaluation.service';
 
 /**
  * ماژول لایه چندارزی (Multi-Currency Layer).
  *
  * سرویس CurrencyService به‌عنوان یک قابلیت مشترک به ماژول‌های Invoicing و
  * Accounting صادر می‌شود تا محاسبات فاکتور و دفتر کل چندارزی شوند.
- * هیچ import چرخه‌ای با سایر ماژول‌ها ندارد (Rule #1 — AGENTS.md).
+ * ثبت اسناد تسعیر ارز پایان دوره از طریق PostingRulesService به صورت تنبل و بدون وابستگی چرخه‌ای انجام می‌شود.
  */
 @Module({
   controllers: [CurrencyController],
-  providers: [CurrencyService],
-  exports: [CurrencyService],
+  providers: [CurrencyService, FxRevaluationService, TenantScope],
+  exports: [CurrencyService, FxRevaluationService],
 })
 export class CurrencyModule {}
