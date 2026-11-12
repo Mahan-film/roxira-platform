@@ -64,13 +64,12 @@ export class CostMaskingInterceptor implements NestInterceptor {
         const isPurchasing = isPurchasingPath(pathname);
         const isValuation = isValuationPath(unversioned);
 
-        // Fail-closed on non-object payloads (e.g. text/plain, raw CSV export streams, or Buffer)
-        // on purchasing routes to prevent leaking purchase unit prices through export endpoints (Lesson 25).
+        // Fail-closed on raw/file outputs (StreamableFile, Buffer, streams, string bodies such as CSV) on cost
+        // routes. undefined / null / numbers / booleans (void handlers, DELETE 204) pass through untouched.
         if (
           (isPurchasing || isValuation) &&
           (data instanceof StreamableFile ||
-            typeof data !== 'object' ||
-            data === null ||
+            typeof data === 'string' ||
             (typeof Buffer !== 'undefined' && Buffer.isBuffer(data)) ||
             typeof (data as any)?.pipe === 'function')
         ) {

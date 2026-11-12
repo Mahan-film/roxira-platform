@@ -28,6 +28,14 @@ export const VALUATION_VALUE_FIELD_REGEX =
   /^(?!.*cost_?cent[er]).*(value|valuation|amount|worth|fifo|weighted|average|running_?val|minor$)/i;
 
 /**
+ * Every monetary field of a purchase document (supplier invoice subtotal/total/vat, order and receipt
+ * totals, line values, landed-cost shares, tolerances). Applied ONLY on purchasing routes; identifier-like
+ * keys (ending in Id/Code/Number/Ref) are excluded by isCostField.
+ */
+export const PURCHASING_MONEY_FIELD_REGEX =
+  /^(?:.*(?:total|vat|tax|discount|share|gross|balance|amount|value|price|tolerance_?abs)|net.*|to_?(?:inventory|cogs))/i;
+
+/**
  * Detects routes whose responses are cost-derived money: everything under inventory (reports, cardex,
  * stock-balance, valuation, documents, openings, landed cost, purchasing), manufacturing / production /
  * COGS / landed-cost / valuation routes elsewhere, and the gross-profit / profitability reports.
@@ -88,6 +96,13 @@ export class CostMaskingService {
       return true;
     }
     if (isPurchasingRoute && PURCHASING_COST_FIELD_REGEX.test(key)) {
+      return true;
+    }
+    if (
+      isPurchasingRoute &&
+      PURCHASING_MONEY_FIELD_REGEX.test(key) &&
+      !/(Id|_id|Code|_code|Number|_number|Ref|_ref)$/.test(key)
+    ) {
       return true;
     }
     if (isValuationRoute && VALUATION_VALUE_FIELD_REGEX.test(key)) {

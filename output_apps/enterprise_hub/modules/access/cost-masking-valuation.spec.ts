@@ -97,4 +97,74 @@ describe('Cost masking on inventory valuation routes', () => {
       run('/enterprise-hub/inventory/reports/cardex?format=xlsx', SystemRole.SALES, new StreamableFile(Buffer.from('x'))),
     ).rejects.toThrow();
   });
+
+  it('passes void, null and primitive responses through (no 403 after a write)', async () => {
+    for (const url of ['/enterprise-hub/inventory/openings/1', '/enterprise-hub/inventory/purchasing/orders/1/close']) {
+      await expect(run(url, SystemRole.SALES, undefined)).resolves.toBeUndefined();
+      await expect(run(url, SystemRole.SALES, null)).resolves.toBeNull();
+      await expect(run(url, SystemRole.SALES, 5)).resolves.toBe(5);
+      await expect(run(url, SystemRole.SALES, true)).resolves.toBe(true);
+    }
+  });
+
+  it('still refuses raw string bodies and Buffers on cost routes', async () => {
+    await expect(run('/enterprise-hub/inventory/reports/cardex', SystemRole.SALES, 'a,b\n1,2')).rejects.toThrow();
+    await expect(run('/enterprise-hub/inventory/purchasing/invoices', SystemRole.SALES, Buffer.from('x'))).rejects.toThrow();
+  });
+
+  describe('purchase documents', () => {
+    const invoice = {
+      id: 'inv-1',
+      tenantId: 't1',
+      number: 'SI-1',
+      supplierCode: 'S1',
+      supplierRef: 'R1',
+      vat: '900',
+      subtotal: '10000',
+      total: '10900',
+      lines: [{ id: 'l1', sku: 'X', quantity: '5', unitPrice: '2000', orderValue: '10000', invoiceValue: '10000' }],
+    };
+    const order = { id: 'o1', number: 'PO-1', lines: [{ sku: 'X', quantity: '5', unitPrice: '2000', receivedQuantity: '5' }] };
+    const receipt = { id: 'r1', totalValue: '10000', lines: [{ sku: 'X', quantity: '5', unitCost: '2000', value: '10000' }] };
+    const landed = {
+      id: 'lc1',
+      amount: '500',
+      inventoryAmount: '400',
+      cogsAmount: '100',
+      allocations: [{ sku: 'X', quantity: '5', basisValue: '10', share: '500', toInventory: '400', toCogs: '100' }],
+    };
+
+    it('masks supplier invoice totals, vat, line values for SALES; owner sees real values', async () => {
+      const masked = await run('/enterprise-hub/inventory/purchasing/invoices/inv-1', SystemRole.SALES, invoice);
+      expect(masked.subtotal).toBeNull();
+      expect(masked.total).toBeNull();
+      expect(masked.vat).toBeNull();
+      expect(masked.lines[0].orderValue).toBeNull();
+      expect(masked.lines[0].invoiceValue).toBeNull();
+      expect(masked.lines[0].unitPrice).toBeNull();
+      expect(masked.lines[0].quantity).toBe('5');
+      expect(masked.number).toBe('SI-1');
+      expect(masked.supplierCode).toBe('S1');
+      expect(masked.tenantId).toBe('t1');
+      const real = await run('/enterprise-hub/inventory/purchasing/invoices/inv-1', SystemRole.OWNER, invoice);
+      expect(real.total).toBe('10900');
+    });
+
+    it('masks purchase order, goods receipt and landed-cost money', async () => {
+      const o = await run('/enterprise-hub/inventory/purchasing/orders/o1', SystemRole.SALES, order);
+      expect(o.lines[0].unitPrice).toBeNull();
+      expect(o.lines[0].receivedQuantity).toBe('5');
+      const r = await run('/enterprise-hub/inventory/purchasing/receipts/r1', SystemRole.SALES, receipt);
+      expect(r.totalValue).toBeNull();
+      expect(r.lines[0].value).toBeNull();
+      expect(r.lines[0].unitCost).toBeNull();
+      const l = await run('/enterprise-hub/inventory/purchasing/receipts/r1/landed-costs', SystemRole.SALES, landed);
+      expect(l.amount).toBeNull();
+      expect(l.cogsAmount).toBeNull();
+      expect(l.allocations[0].share).toBeNull();
+      expect(l.allocations[0].toInventory).toBeNull();
+      expect(l.allocations[0].toCogs).toBeNull();
+      expect(l.allocations[0].quantity).toBe('5');
+    });
+  });
 });
