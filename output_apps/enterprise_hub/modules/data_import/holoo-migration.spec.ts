@@ -66,22 +66,40 @@ describe('Holoo In-Memory Migration Mapper (T89 / #776)', () => {
       expect(() => adapter.mapAccounts(duplicate)).toThrow('Duplicate Holoo account code: 10');
     });
 
-    it('rejects accounts with invalid levels outside 1..4', () => {
+    it('rejects accounts with invalid or non-integer levels outside 1..4', () => {
       const invalidLevel: HolooRawAccount[] = [
         { AccountId: 1, Code: '10', Name: 'سطح نامعتبر', Level: 5, ParentCode: '1' },
       ];
-
       expect(() => adapter.mapAccounts(invalidLevel)).toThrow('Invalid account level 5');
+
+      const fractionalLevel: HolooRawAccount[] = [
+        { AccountId: 2, Code: '20', Name: 'سطح اعشاری', Level: 2.5, ParentCode: null },
+      ];
+      expect(() => adapter.mapAccounts(fractionalLevel)).toThrow('Invalid account level 2.5');
     });
 
-    it('validates parent hierarchy and rejects accounts referencing missing parent codes', () => {
+    it('validates parent hierarchy: rejects missing parents, level mismatches, and cycles', () => {
       const missingParent: HolooRawAccount[] = [
         { AccountId: 10, Code: '10', Name: 'کل بدون گروه', Level: 2, ParentCode: '99' },
       ];
-
       expect(() => adapter.mapAccounts(missingParent)).toThrow(
         'references missing parent code "99"',
       );
+
+      // Level mismatch: level 3 pointing directly to level 1
+      const skippedLevel: HolooRawAccount[] = [
+        { AccountId: 1, Code: '1', Name: 'گروه', Level: 1, ParentCode: null },
+        { AccountId: 2, Code: '1010', Name: 'معین پریده', Level: 3, ParentCode: '1' },
+      ];
+      expect(() => adapter.mapAccounts(skippedLevel)).toThrow(
+        'incompatible level 1 (expected level 2)',
+      );
+
+      // Cycle detection (self-reference)
+      const selfCycle: HolooRawAccount[] = [
+        { AccountId: 1, Code: '1', Name: 'خودارجاع', Level: 1, ParentCode: '1' },
+      ];
+      expect(() => adapter.mapAccounts(selfCycle)).toThrow('Circular parent reference');
     });
 
     it('generates deterministic SHA-256 fingerprints for mapped accounts', () => {
@@ -155,15 +173,15 @@ describe('Holoo In-Memory Migration Mapper (T89 / #776)', () => {
     });
   });
 
-  describe('Opening Balance Voucher Invariants & Balancing', () => {
-    it('maps balanced synthetic opening balance voucher with zero variance', () => {
+  describe('Opening Balance Voucher Invariants & Ledger Minor Units', () => {
+    it('maps balanced synthetic opening balance voucher in MONEY_SCALE=2 minor units (×100)', () => {
       const result = adapter.mapOpeningBalance(SYNTHETIC_HOLOO_OPENING_VOUCHER);
 
       expect(result.lines).toHaveLength(5);
-      // 30M + 70M + 50M = 150,000,000 IRR
-      expect(result.totalDebitMinor).toBe(150000000n);
-      // 40M + 110M = 150,000,000 IRR
-      expect(result.totalCreditMinor).toBe(150000000n);
+      // 30M + 70M + 50M = 150,000,000 Rials => 15,000,000,000 minor units (MONEY_SCALE = 2)
+      expect(result.totalDebitMinor).toBe(15000000000n);
+      expect(result.totalCreditMinor).toBe(15000000000n);
+      expect(result.lines[0].debitMinor).toBe(3000000000n);
       expect(result.varianceMinor).toBe(0n);
       expect(result.isBalanced).toBe(true);
     });
@@ -183,7 +201,7 @@ describe('Holoo In-Memory Migration Mapper (T89 / #776)', () => {
       );
     });
 
-    it('rejects negative, NaN, or non-finite amounts', () => {
+    it('rejects negative, NaN, non-finite, and >2-decimal fractional amounts without rounding', () => {
       expect(() =>
         adapter.mapOpeningBalance([{ SanadId: 1, AccountCode: '1010', Debit: -100, Credit: 0 }]),
       ).toThrow('Negative amount');
@@ -195,52 +213,103 @@ describe('Holoo In-Memory Migration Mapper (T89 / #776)', () => {
       expect(() =>
         adapter.mapOpeningBalance([{ SanadId: 1, AccountCode: '1010', Debit: Infinity, Credit: 0 }]),
       ).toThrow('Invalid non-finite number');
-    });
-
-    it('validates account codes against known chart of accounts', () => {
-      const validCodes = new Set(['1010', '1020']);
-      const unknownLine: HolooRawVoucherItem[] = [
-        { SanadId: 1, AccountCode: '9999', Debit: 1000, Credit: 0 },
-      ];
 
       expect(() =>
-        adapter.mapOpeningBalance(unknownLine, { validAccountCodes: validCodes }),
-      ).toThrow('references unknown account code: 9999');
+        adapter.mapOpeningBalance([{ SanadId: 1, AccountCode: '1010', Debit: 100.125, Credit: 0 }]),
+      ).toThrow('Invalid amount');
+
+      expect(() =>
+        adapter.mapOpeningBalance([{ SanadId: 1, AccountCode: '1010', Debit: '100.125', Credit: 0 }]),
+      ).toThrow('Invalid amount');
     });
 
-    it('rejects unbalanced opening voucher when requireBalanced is true', () => {
+    it('rejects non-postable accounts (Group/Kol/parent Moein) and unknown floating detail codes', () => {
+      const accounts = adapter.mapAccounts(SYNTHETIC_HOLOO_ACCOUNTS);
+      const validFloatingDetailCodes = new Set(
+        accounts.filter((a) => a.isFloatingDetail).map((a) => a.code),
+      );
+
+      // Group level 1 ('1') is non-postable
+      expect(() =>
+        adapter.mapOpeningBalance(
+          [
+            { SanadId: 1, AccountCode: '1', Debit: 1000, Credit: 0 },
+            { SanadId: 2, AccountCode: '3010', Debit: 0, Credit: 1000 },
+          ],
+          { validAccounts: accounts },
+        ),
+      ).toThrow('non-postable account code: 1');
+
+      // Moein with child Tafsili ('1020') is non-postable
+      expect(() =>
+        adapter.mapOpeningBalance(
+          [
+            { SanadId: 1, AccountCode: '1020', Debit: 1000, Credit: 0 },
+            { SanadId: 2, AccountCode: '3010', Debit: 0, Credit: 1000 },
+          ],
+          { validAccounts: accounts },
+        ),
+      ).toThrow('non-postable account code: 1020');
+
+      // Unknown floating detail code
+      expect(() =>
+        adapter.mapOpeningBalance(
+          [
+            { SanadId: 1, AccountCode: '1010', FloatingDetailCode: 'UNKNOWN-FD', Debit: 1000, Credit: 0 },
+            { SanadId: 2, AccountCode: '3010', Debit: 0, Credit: 1000 },
+          ],
+          { validAccounts: accounts, validFloatingDetailCodes },
+        ),
+      ).toThrow('unknown floating detail code: UNKNOWN-FD');
+    });
+
+    it('enforces zero variance by default unless requireBalanced is explicitly false', () => {
       const unbalanced: HolooRawVoucherItem[] = [
         { SanadId: 1, AccountCode: '1010', Debit: 1000, Credit: 0 },
       ];
 
-      expect(() =>
-        adapter.mapOpeningBalance(unbalanced, { requireBalanced: true }),
-      ).toThrow('Holoo opening balance is unbalanced');
+      expect(() => adapter.mapOpeningBalance(unbalanced)).toThrow(
+        'Holoo opening balance is unbalanced',
+      );
+
+      const preview = adapter.mapOpeningBalance(unbalanced, { requireBalanced: false });
+      expect(preview.isBalanced).toBe(false);
+      expect(preview.varianceMinor).toBe(100000n);
     });
   });
 
-  describe('Reconciliation Certificate & Digital SHA-256 Digest', () => {
-    it('produces certified reconciliation summary with deterministic SHA-256 digest', () => {
+  describe('Reconciliation Certificate & Deterministic SHA-256 Digest', () => {
+    it('produces identical deterministic SHA-256 checksum across different timestamps and input ordering', async () => {
       const accounts = adapter.mapAccounts(SYNTHETIC_HOLOO_ACCOUNTS);
       const parties = adapter.mapParties(SYNTHETIC_HOLOO_PARTIES);
       const items = adapter.mapItems(SYNTHETIC_HOLOO_ITEMS);
 
-      const cert = adapter.generateReconciliationCertificate(
+      const cert1 = adapter.generateReconciliationCertificate(
         accounts,
         parties,
         items,
         SYNTHETIC_HOLOO_OPENING_VOUCHER,
       );
 
-      expect(cert.balanced).toBe(true);
-      expect(cert.varianceMinor).toBe(0n);
-      expect(cert.totalDebitMinor).toBe(150000000n);
-      expect(cert.totalCreditMinor).toBe(150000000n);
-      expect(cert.totalAccounts).toBe(SYNTHETIC_HOLOO_ACCOUNTS.length);
-      expect(cert.totalParties).toBe(SYNTHETIC_HOLOO_PARTIES.length);
-      expect(cert.totalItems).toBe(SYNTHETIC_HOLOO_ITEMS.length);
-      expect(cert.openingLinesCount).toBe(5);
-      expect(cert.checksum).toHaveLength(64);
+      await new Promise((resolve) => setTimeout(resolve, 15));
+
+      const cert2 = adapter.generateReconciliationCertificate(
+        [...accounts].reverse(),
+        [...parties].reverse(),
+        [...items].reverse(),
+        [...SYNTHETIC_HOLOO_OPENING_VOUCHER].reverse(),
+      );
+
+      expect(cert1.balanced).toBe(true);
+      expect(cert1.varianceMinor).toBe(0n);
+      expect(cert1.totalDebitMinor).toBe(15000000000n);
+      expect(cert1.totalCreditMinor).toBe(15000000000n);
+      expect(cert1.totalAccounts).toBe(SYNTHETIC_HOLOO_ACCOUNTS.length);
+      expect(cert1.totalParties).toBe(SYNTHETIC_HOLOO_PARTIES.length);
+      expect(cert1.totalItems).toBe(SYNTHETIC_HOLOO_ITEMS.length);
+      expect(cert1.openingLinesCount).toBe(5);
+      expect(cert1.checksum).toHaveLength(64);
+      expect(cert1.checksum).toBe(cert2.checksum);
     });
   });
 });

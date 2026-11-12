@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import * as crypto from 'crypto';
+import { MoneyFormatError, parseMinor, toMinor } from '../../../accounting/money';
 import {
   HolooRawAccount,
   HolooRawItem,
@@ -71,10 +72,21 @@ export class HolooMappingAdapter {
     4: 'tafsili',
   };
 
+  /**
+   * Parses a Rial amount into ledger minor units (MONEY_SCALE = 2) via money.ts.
+   * Rejects negative, non-finite, oversized, or >2-decimal fractional values without rounding.
+   */
   private parseAmountMinor(value: number | string | bigint, fieldName: string, lineId: number): bigint {
     if (typeof value === 'bigint') {
       if (value < 0n) throw new Error(`Negative amount on line ${lineId} ${fieldName}: ${value}`);
-      return value;
+      try {
+        return parseMinor(value.toString());
+      } catch (err) {
+        if (err instanceof MoneyFormatError) {
+          throw new Error(`Invalid amount on line ${lineId} ${fieldName}: ${err.message}`);
+        }
+        throw err;
+      }
     }
     if (typeof value === 'number') {
       if (!Number.isFinite(value) || Number.isNaN(value)) {
@@ -83,14 +95,30 @@ export class HolooMappingAdapter {
       if (value < 0) {
         throw new Error(`Negative amount on line ${lineId} ${fieldName}: ${value}`);
       }
-      return BigInt(Math.round(value));
+      try {
+        // Validate JS safe range with toMinor, then parse exact string with parseMinor so >2 decimals are rejected, never rounded
+        toMinor(value);
+        return parseMinor(value.toString());
+      } catch (err) {
+        if (err instanceof MoneyFormatError) {
+          throw new Error(`Invalid amount on line ${lineId} ${fieldName}: ${err.message}`);
+        }
+        throw err;
+      }
     }
     if (typeof value === 'string') {
       const trimmed = value.trim();
-      if (!/^\d+$/.test(trimmed)) {
-        throw new Error(`Invalid integer string on line ${lineId} ${fieldName}: "${value}"`);
+      if (trimmed.startsWith('-')) {
+        throw new Error(`Negative amount on line ${lineId} ${fieldName}: ${value}`);
       }
-      return BigInt(trimmed);
+      try {
+        return parseMinor(trimmed);
+      } catch (err) {
+        if (err instanceof MoneyFormatError) {
+          throw new Error(`Invalid amount on line ${lineId} ${fieldName}: ${err.message}`);
+        }
+        throw err;
+      }
     }
     throw new Error(`Unsupported amount type on line ${lineId} ${fieldName}`);
   }
@@ -98,7 +126,8 @@ export class HolooMappingAdapter {
   /**
    * Maps Holoo's 3-level chart (Group, Kol, Moein) + floating detail accounts into
    * standard Roxira 4-tier chart structure.
-   * Enforces code uniqueness, validates hierarchical parents, and generates deterministic fingerprints.
+   * Enforces code uniqueness, integer levels 1..4, strict parent level progression,
+   * cycle freedom, and generates deterministic fingerprints.
    */
   mapAccounts(rawAccounts: HolooRawAccount[]): MappedChartAccount[] {
     const accountByCode = new Map<string, HolooRawAccount>();
@@ -106,6 +135,9 @@ export class HolooMappingAdapter {
 
     for (const raw of rawAccounts) {
       const code = raw.Code.trim();
+      if (!code) {
+        throw new Error('Holoo account code cannot be empty');
+      }
       if (seenCodes.has(code)) {
         throw new Error(`Duplicate Holoo account code: ${code}`);
       }
@@ -113,20 +145,29 @@ export class HolooMappingAdapter {
       accountByCode.set(code, raw);
     }
 
-    return rawAccounts.map((raw) => {
+    const mapped = rawAccounts.map((raw) => {
       const code = raw.Code.trim();
-
       const level = raw.Level;
-      if (!level || level < 1 || level > 4) {
-        throw new Error(`Invalid account level ${level} for account ${code}. Must be between 1 and 4.`);
+      if (!Number.isInteger(level) || level < 1 || level > 4) {
+        throw new Error(
+          `Invalid account level ${level} for account ${code}. Must be an integer between 1 and 4.`,
+        );
       }
 
       let parentCode: string | null = null;
       if (raw.ParentCode !== null && raw.ParentCode !== undefined && raw.ParentCode.trim() !== '') {
         const pCode = raw.ParentCode.trim();
+        if (pCode === code) {
+          throw new Error(`Circular parent reference detected for account ${code}`);
+        }
         const parent = accountByCode.get(pCode);
         if (!parent) {
           throw new Error(`Account ${code} references missing parent code "${pCode}"`);
+        }
+        if (level !== parent.Level + 1) {
+          throw new Error(
+            `Account ${code} (level ${level}) has parent ${pCode} with incompatible level ${parent.Level} (expected level ${parent.Level + 1})`,
+          );
         }
         parentCode = pCode;
       }
@@ -141,12 +182,30 @@ export class HolooMappingAdapter {
         code,
         name: raw.Name.trim(),
         level,
-        levelName: HolooMappingAdapter.LEVEL_NAMES[level] || 'tafsili',
+        levelName: HolooMappingAdapter.LEVEL_NAMES[level],
         parentCode,
         isFloatingDetail,
         fingerprint,
       };
     });
+
+    // Cycle detection across all parent links
+    const parentLookup = new Map<string, string | null>(
+      mapped.map((a) => [a.code, a.parentCode]),
+    );
+    for (const acc of mapped) {
+      const visited = new Set<string>();
+      let curr: string | null = acc.code;
+      while (curr !== null) {
+        if (visited.has(curr)) {
+          throw new Error(`Circular parent reference detected involving account ${curr}`);
+        }
+        visited.add(curr);
+        curr = parentLookup.get(curr) ?? null;
+      }
+    }
+
+    return mapped;
   }
 
   /**
@@ -216,11 +275,17 @@ export class HolooMappingAdapter {
 
   /**
    * Maps Holoo opening balance voucher lines into balanced double-entry lines.
-   * Enforces integrity: no negative amounts, no simultaneous debit+credit, validates against chart codes.
+   * Enforces zero variance by default (`requireBalanced = true`), rejects simultaneous debit+credit,
+   * and validates postable accounts + floating-detail codes when chart/detail sets are provided.
    */
   mapOpeningBalance(
     rawVoucherItems: HolooRawVoucherItem[],
-    options?: { validAccountCodes?: Set<string>; requireBalanced?: boolean },
+    options?: {
+      validAccountCodes?: Set<string>;
+      validAccounts?: MappedChartAccount[];
+      validFloatingDetailCodes?: Set<string>;
+      requireBalanced?: boolean;
+    },
   ): {
     lines: MappedOpeningLine[];
     totalDebitMinor: bigint;
@@ -231,12 +296,40 @@ export class HolooMappingAdapter {
     let totalDebit = 0n;
     let totalCredit = 0n;
 
+    const accountMap = options?.validAccounts
+      ? new Map(options.validAccounts.map((a) => [a.code, a]))
+      : null;
+    const parentAccountCodes = options?.validAccounts
+      ? new Set(
+          options.validAccounts
+            .filter((a) => !a.isFloatingDetail && a.parentCode !== null)
+            .map((a) => a.parentCode as string),
+        )
+      : null;
+
     const lines: MappedOpeningLine[] = rawVoucherItems.map((item, idx) => {
       const lineNo = item.SanadId || idx + 1;
       const accountCode = item.AccountCode.trim();
 
-      if (options?.validAccountCodes && !options.validAccountCodes.has(accountCode)) {
+      if (accountMap) {
+        const account = accountMap.get(accountCode);
+        if (!account) {
+          throw new Error(`Opening balance line ${lineNo} references unknown account code: ${accountCode}`);
+        }
+        if (account.isFloatingDetail || account.level < 3 || parentAccountCodes?.has(accountCode)) {
+          throw new Error(
+            `Opening balance line ${lineNo} references non-postable account code: ${accountCode} (level ${account.level})`,
+          );
+        }
+      } else if (options?.validAccountCodes && !options.validAccountCodes.has(accountCode)) {
         throw new Error(`Opening balance line ${lineNo} references unknown account code: ${accountCode}`);
+      }
+
+      const floatingDetailCode = item.FloatingDetailCode ? item.FloatingDetailCode.trim() : null;
+      if (floatingDetailCode && options?.validFloatingDetailCodes && !options.validFloatingDetailCodes.has(floatingDetailCode)) {
+        throw new Error(
+          `Opening balance line ${lineNo} references unknown floating detail code: ${floatingDetailCode}`,
+        );
       }
 
       const debitMinor = this.parseAmountMinor(item.Debit, 'Debit', lineNo);
@@ -251,7 +344,7 @@ export class HolooMappingAdapter {
 
       return {
         accountCode,
-        floatingDetailCode: item.FloatingDetailCode ? item.FloatingDetailCode.trim() : null,
+        floatingDetailCode,
         debitMinor,
         creditMinor,
         description: item.Description ? item.Description.trim() : 'سند افتتاحیه منتقل‌شده از نرم‌افزار هلو',
@@ -260,9 +353,10 @@ export class HolooMappingAdapter {
 
     const varianceMinor = totalDebit - totalCredit;
     const isBalanced = varianceMinor === 0n;
+    const requireBalanced = options?.requireBalanced ?? true;
 
-    if (options?.requireBalanced && !isBalanced) {
-      throw new Error(`Holoo opening balance is unbalanced: variance = ${varianceMinor} Rials`);
+    if (requireBalanced && !isBalanced) {
+      throw new Error(`Holoo opening balance is unbalanced: variance = ${varianceMinor} minor units`);
     }
 
     return {
@@ -275,7 +369,8 @@ export class HolooMappingAdapter {
   }
 
   /**
-   * Produces the official reconciliation certificate verifying balancing invariants with a SHA-256 signature.
+   * Produces the reconciliation certificate verifying zero-variance balance, postable accounts,
+   * floating-detail codes, and a deterministic SHA-256 digest over canonical sorted payloads.
    */
   generateReconciliationCertificate(
     accounts: MappedChartAccount[],
@@ -283,23 +378,61 @@ export class HolooMappingAdapter {
     items: MappedItemRecord[],
     openingVoucher: HolooRawVoucherItem[],
   ): HolooReconciliationCertificate {
-    const validCodes = new Set(accounts.map((a) => a.code));
-    const opening = this.mapOpeningBalance(openingVoucher, { validAccountCodes: validCodes });
+    const validFloatingDetailCodes = new Set<string>([
+      ...accounts.filter((a) => a.isFloatingDetail).map((a) => a.code),
+      ...parties.map((p) => p.code),
+    ]);
+    const opening = this.mapOpeningBalance(openingVoucher, {
+      validAccounts: accounts,
+      validFloatingDetailCodes,
+      requireBalanced: true,
+    });
     const certifiedAt = new Date().toISOString();
 
-    const certPayload = JSON.stringify({
+    const canonicalPayload = JSON.stringify({
+      accounts: [...accounts]
+        .sort((a, b) => a.code.localeCompare(b.code))
+        .map((a) => ({
+          code: a.code,
+          isFloatingDetail: a.isFloatingDetail,
+          level: a.level,
+          name: a.name,
+          parentCode: a.parentCode,
+        })),
       balanced: opening.isBalanced,
-      totalDebitMinor: opening.totalDebitMinor.toString(),
+      items: [...items]
+        .sort((a, b) => a.sku.localeCompare(b.sku))
+        .map((i) => ({
+          barcode: i.barcode,
+          primaryUnit: i.primaryUnit,
+          sku: i.sku,
+          unitRatio: i.unitRatio,
+        })),
+      openingLines: [...opening.lines]
+        .sort((a, b) =>
+          a.accountCode !== b.accountCode
+            ? a.accountCode.localeCompare(b.accountCode)
+            : (a.floatingDetailCode ?? '').localeCompare(b.floatingDetailCode ?? ''),
+        )
+        .map((l) => ({
+          accountCode: l.accountCode,
+          creditMinor: l.creditMinor.toString(),
+          debitMinor: l.debitMinor.toString(),
+          floatingDetailCode: l.floatingDetailCode,
+        })),
+      parties: [...parties]
+        .sort((a, b) => a.code.localeCompare(b.code))
+        .map((p) => ({
+          code: p.code,
+          nationalId: p.nationalId,
+          role: p.role,
+        })),
       totalCreditMinor: opening.totalCreditMinor.toString(),
+      totalDebitMinor: opening.totalDebitMinor.toString(),
       varianceMinor: opening.varianceMinor.toString(),
-      totalAccounts: accounts.length,
-      totalParties: parties.length,
-      totalItems: items.length,
-      openingLinesCount: opening.lines.length,
-      certifiedAt,
     });
 
-    const checksum = crypto.createHash('sha256').update(certPayload).digest('hex');
+    const checksum = crypto.createHash('sha256').update(canonicalPayload).digest('hex');
 
     return {
       balanced: opening.isBalanced,
