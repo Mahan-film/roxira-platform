@@ -10,12 +10,14 @@ import { BouncedReport, DueReport } from "./cheque-reports";
 import { ChequeRecon } from "./cheque-recon";
 import { ChequesList } from "./cheques-list";
 import { DueThisWeekStrip } from "./due-strip";
+import { ChequeCalculator } from "./cheque-calculator";
 
 const TABS = [
   { key: "list", label: "فهرست چک‌ها" },
   { key: "due", label: "سررسیدها" },
   { key: "bounced", label: "چک‌های برگشتی" },
   { key: "recon", label: "تطبیق با بانک" },
+  { key: "calculator", label: "راس‌گیری و تنزیل" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -60,6 +62,7 @@ export function ChequesView() {
       {tab === "due" && <DueReport />}
       {tab === "bounced" && <BouncedReport />}
       {tab === "recon" && <ChequeRecon />}
+      {tab === "calculator" && <ChequeCalculator direction={direction} />}
     </div>
   );
 }

@@ -1,61 +1,57 @@
-# Electronic journal and ledger CSV export (LDG-01)
+# Electronic commercial books export (دفاتر تجاری الکترونیکی) & Journal/Ledger (LDG-01)
 
-Status of the layout: **unverified**.
+Status:
+- **Electronic commercial books**: **unverified** (`X-Layout-Status: unverified`; column headers aligned with `docs/tax/official/electronic-books-template.xlsx` downloaded from my.tax.gov.ir on 2026-11-11 per `docs/tax/official/README.md`, awaiting live portal upload confirmation).
+- Legacy detailed journal and ledger CSV: **unverified** internal layout.
 
-The regulation requires electronic books to be uploaded "according to the sample announced by the
-organization" (`docs/legal_sources/iran/aeinnameh-mavad-95-owner-copy.md`, chapter 4 article 6 item
-a-2, around line 172; definitions of the journal and ledger at lines 11 and 13; ledger posting by the
-15th of the next month at line 164; summary to the machine at least monthly at line 172). That
-sample itself is not in `docs/legal_sources/iran/` or `docs/research/`, so the file layout is
-unverified. The columns below are Roxira's own. They are not an
-upload file for any tax system. The API sends `X-Layout-Status: unverified` and the UI says so.
-When an official layout is found, add the source under `docs/legal_sources/iran/`, change this file
-and `LEDGER_EXPORT_LAYOUT_STATUS` in `modules/tax_compliance/reports/ledger-export.service.ts`.
+## 1. Electronic Commercial Books (سامانه دفاتر تجاری الکترونیکی)
 
-## Endpoints
+Under Bylaw 95 (آیین‌نامه تحریر دفاتر - اصلاحیه ۱۴۰۴/۰۸/۲۱، بند الف-۲ ماده ۶)، taxpayers must upload financial event summaries according to the sample announced by the tax administration.
+The upload file is an XLSX (or CSV) containing **account turnover** (گردش حساب‌ها) per kol, moein, tafsili (floating detail), and Jalali date.
 
-Both need the `tax:export` action. The tenant comes from the JWT. `year` and `quarter` select a
-Jalali season (Tehran-day bounds, half open).
+### Endpoints
+
+Both require the `tax:export` action. The tenant is strictly read from JWT.
+Returns header `X-Layout-Status: unverified`.
 
 | Endpoint | Content |
 | --- | --- |
-| `GET /enterprise-hub/tax-compliance/reports/journal.csv?year&quarter` | Electronic journal, one row per posted line |
+| `GET /enterprise-hub/tax-compliance/reports/electronic-books.xlsx?year[&quarter][&month][&half]` | Official Excel (XLSX) workbook matching `Sheet1` template |
+| `GET /enterprise-hub/tax-compliance/reports/electronic-books.csv?year[&quarter][&month][&half]` | Official CSV (UTF-8 with BOM, CRLF) |
+| `GET /enterprise-hub/tax-compliance/reports/commercial-books.xlsx` | Alias for `electronic-books.xlsx` |
+| `GET /enterprise-hub/tax-compliance/reports/commercial-books.csv` | Alias for `electronic-books.csv` |
+
+### Official Columns (Sheet1, row 1, A-I in exact order)
+
+1. **کد حساب کل** (A): General ledger account code (from chart hierarchy or first 2 digits)
+2. **عنوان حساب کل** (B): General ledger account name
+3. **کد حساب معین** (C): Subsidiary account code
+4. **عنوان حساب معین** (D): Subsidiary account name
+5. **کد حساب تفصیلی** (E): Floating detail account code (`fin_dimensions.kind = 'DETAIL'` or party reference)
+6. **عنوان حساب تفصیلی** (F): Floating detail account title
+7. **گردش بدهکار (میلیون ریال)** (G): Debit turnover in million rials (exact decimal string, no float arithmetic)
+8. **گردش بستانکار (میلیون ریال)** (H): Credit turnover in million rials (exact decimal string, no float arithmetic)
+9. **تاریخ گردش حساب** (I): Jalali date `YYYY/MM/DD`
+
+### Turnover & Totals Rules
+- Data represents **account turnover**, not voucher lines: finalized posted voucher lines (`fin_journal_entries.status = 'POSTED'`) are aggregated per kol + moein + tafsili + date.
+- Closing/opening pairs (`CLOSING_PERM`, `OPENING_AUTO`, `OPENING`, `OB-*`) are excluded.
+- Amounts are converted from minor units (`scale 2`) to exact decimal strings without float arithmetic or rounding distortion via `minorToMillionRials` (or exact rials when `unit=rial`) in `modules/accounting/money.ts`.
+- No per-row rounding or synthetic rounding plug account is applied, so accounts under 0.5M rials retain their exact turnover and total sum of debit turnover equals total sum of credit turnover.
+
+---
+
+## 2. Legacy Journal and Ledger CSV (Internal Export)
+
+Status: **unverified**.
+
+| Endpoint | Content |
+| --- | --- |
+| `GET /enterprise-hub/tax-compliance/reports/journal.csv?year&quarter` | Detailed journal, one row per posted line |
 | `GET /enterprise-hub/tax-compliance/reports/ledger.csv?year&quarter[&accountCode]` | Ledger, per account an opening row, then lines with a running balance |
 
-Only `POSTED` entries are exported. The year-end closing pair (`CLOSING_PERM`) and the automatic
-opening pair (`OPENING_AUTO`) are left out, as in the accounting reports. A season with more than
-200000 lines is refused; narrow the account (ledger) or ask for a smaller period.
-
-## Journal columns (UTF-8 with BOM, CRLF, comma separated)
-
-1. شماره سند (entry number)
-2. تاریخ سند (شمسی) `YYYY/MM/DD`
-3. ردیف (line number inside the entry)
-4. کد حساب
-5. نام حساب
-6. شرح (line description, else the entry description)
-7. کد طرف حساب
-8. بدهکار (ریال), exact decimal with two places
-9. بستانکار (ریال), exact decimal with two places
-
-Rows are ordered by entry date, entry id, line id. Total debit equals total credit.
-
-## Ledger columns
-
-1. کد حساب
-2. نام حساب
-3. شماره سند (empty on the opening row)
-4. تاریخ سند (شمسی)
-5. ردیف
-6. شرح (`مانده ابتدای دوره` on the opening row)
-7. بدهکار (ریال)
-8. بستانکار (ریال)
-9. مانده (ریال، بدهکار مثبت): running balance, debit minus credit
-
-The opening balance is the debit minus credit of every posted entry dated before the season.
-Accounts with an opening balance but no line in the season still get their opening row.
+Returns header `X-Layout-Status: unverified`.
 
 ## Safety
 
-Text cells starting with `= + - @` TAB or CR are prefixed with `'` so a description cannot run as a
-spreadsheet formula. A plain signed decimal (a negative balance) is left as a number.
+Text cells starting with `= + - @ \t \r` are prefixed with `'` so strings cannot execute as spreadsheet formulas. A plain signed decimal is left as numeric.

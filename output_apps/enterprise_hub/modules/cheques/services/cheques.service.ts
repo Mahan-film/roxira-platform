@@ -43,6 +43,19 @@ import {
 } from '../lifecycle/cheque-lifecycle';
 import { SayadRegistrationStatus, isValidReceiverNationalId, isValidSayadNumber } from '../sayad/sayad';
 import { ChequesRepository } from '../repositories/cheques.repository';
+import {
+  calculateRasgiri,
+  calculateChequesDiscounting,
+  calculateSingleDiscount,
+  RasgiriResult,
+  DiscountResult,
+  ChequeCalculationInput,
+} from '../utils/cheque-calculator.util';
+import {
+  CalculateRasgiriDto,
+  CalculateDiscountDto,
+  CalculateSingleDiscountDto,
+} from '../dto/cheque-calculator.dto';
 
 const DAY_MS = 86_400_000;
 
@@ -557,5 +570,97 @@ export class ChequesService {
       amount: event.amount === null || event.amount === undefined ? null : fromMinor(fromDb(event.amount)),
       note: cleanNote || null,
     };
+  }
+
+  /**
+   * Computes Ras-giri (weighted-average maturity) for given cheque inputs.
+   */
+  calculateRasgiri(dto: CalculateRasgiriDto): RasgiriResult {
+    return calculateRasgiri(dto.items, dto.baseDate);
+  }
+
+  /**
+   * Computes discounting for given cheque inputs and annual rate.
+   */
+  calculateDiscount(dto: CalculateDiscountDto): DiscountResult {
+    return calculateChequesDiscounting(dto.items, dto.annualRatePercent, dto.baseDate);
+  }
+
+  /**
+   * Computes discounting for a single cheque amount and days.
+   */
+  calculateSingleDiscount(dto: CalculateSingleDiscountDto): {
+    discountAmount: string;
+    netPresentValue: string;
+    effectivePeriodRatePercent: number;
+  } {
+    const res = calculateSingleDiscount(dto.amount, dto.days, dto.annualRatePercent);
+    return {
+      discountAmount: res.discountAmount,
+      netPresentValue: res.netPresentValue,
+      effectivePeriodRatePercent: res.effectivePeriodRatePercent,
+    };
+  }
+
+  private async loadCalculatorItems(
+    tenantId: string,
+    chequeIds: number[],
+  ): Promise<ChequeCalculationInput[]> {
+    const uniqueIds = Array.from(new Set(chequeIds ?? []));
+    if (uniqueIds.length === 0) {
+      throw new BadRequestException('حداقل یک فقره چک باید انتخاب شود.');
+    }
+    return Promise.all(
+      uniqueIds.map(async (id) => {
+        const cheque = await this.get(tenantId, id);
+        const remaining = cheque.remainingAmount ?? cheque.amount;
+        let remainingMinor: bigint;
+        try {
+          remainingMinor = toMinor(remaining);
+        } catch (err) {
+          if (err instanceof MoneyFormatError) {
+            throw new BadRequestException(err.message);
+          }
+          throw err;
+        }
+        if (!OPEN_STATUSES.includes(cheque.status) || remainingMinor <= 0n) {
+          throw new BadRequestException(
+            `چک شماره ${cheque.chequeNumber} تسویه یا بسته شده و مانده قابل محاسبه ندارد.`,
+          );
+        }
+        return {
+          id: cheque.id,
+          amount: remaining,
+          dueDate: cheque.dueDate,
+          sayadNumber: cheque.sayadNumber ?? undefined,
+          description: cheque.partyName ?? cheque.description ?? undefined,
+        };
+      }),
+    );
+  }
+
+  /**
+   * Computes Ras-giri for a selection of existing open cheques in the tenant.
+   */
+  async calculateSelectionRasgiri(
+    tenantId: string,
+    chequeIds: number[],
+    baseDate?: string,
+  ): Promise<RasgiriResult> {
+    const items = await this.loadCalculatorItems(tenantId, chequeIds);
+    return calculateRasgiri(items, baseDate);
+  }
+
+  /**
+   * Computes discounting for a selection of existing open cheques in the tenant.
+   */
+  async calculateSelectionDiscount(
+    tenantId: string,
+    chequeIds: number[],
+    annualRatePercent: number,
+    baseDate?: string,
+  ): Promise<DiscountResult> {
+    const items = await this.loadCalculatorItems(tenantId, chequeIds);
+    return calculateChequesDiscounting(items, annualRatePercent, baseDate);
   }
 }
