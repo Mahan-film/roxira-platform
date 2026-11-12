@@ -13,8 +13,8 @@ export function printWarehouseDocument(
   template?: Partial<PrintTemplateDto>,
 ): void {
   const data = mapStockDocumentToWarehouseA4Data(doc, warehouseName);
-  if (template?.options?.headerTitle) {
-    data.docTitle = template.options.headerTitle;
+  if (template?.options?.headerTitle?.trim()) {
+    data.docTitle = template.options.headerTitle.trim();
   }
   if (template?.logoUrl && template?.showLogo !== false) {
     data.logoUrl = safeLogoUrl(template.logoUrl);

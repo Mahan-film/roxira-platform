@@ -47,27 +47,25 @@ export function hasValidEan13Check(value: string): boolean {
   return /^\d{13}$/.test(clean) && Number(clean[12]) === computeEan13CheckDigit(clean.slice(0, 12));
 }
 
+import { BadRequestException } from '@nestjs/common';
+
 /**
- * Normalises input to safe, collision-free ASCII characters for Code128.
+ * Normalises input to safe ASCII characters for Code128.
  * Persian/Arabic digits are converted to ASCII digits; non-ASCII characters
- * are converted into uppercase hex escapes so different inputs never collide.
+ * are refused to prevent printing incorrect/corrupted barcode data.
  */
 export function toAsciiCode128(text: string): string {
-  let s = text.trim()
+  const s = (text ?? '')
+    .trim()
     .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776))
     .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632));
 
   if (!s) return 'EMPTY';
   if (/^[\x20-\x7E]+$/.test(s)) return s;
 
-  return s
-    .split('')
-    .map((char) => {
-      const code = char.charCodeAt(0);
-      if (code >= 32 && code <= 126) return char;
-      return `[${code.toString(16).toUpperCase()}]`;
-    })
-    .join('');
+  throw new BadRequestException(
+    `بارکد «${text}» شامل نویسه‌های نامعتبر غیرلاتین است. بارکد Code128 فقط کاراکترهای اسکی استاندارد را می‌پذیرد.`,
+  );
 }
 
 export function encodeCode128Svg(text: string, height = 24): { svg: string; encodedText: string } {

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { ErrorNotice, LoadingLine, PageHeader } from "@/components/app/app-ui";
+import { useAuth } from "@/components/auth/auth-provider";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -69,14 +70,15 @@ function PrintFormBuilderPage() {
   const [columns, setColumns] = useState<PrintColumnConfig[]>([]);
   const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
 
+  const { user } = useAuth();
+  const role = (user?.role || "").toLowerCase();
+  const canWrite = ["owner", "admin", "accountant", "sales"].includes(role);
+
   // Barcode sheet state
   const [barcodeCols, setBarcodeCols] = useState<4 | 5>(4);
   const [barcodeShowPrice, setBarcodeShowPrice] = useState(true);
   const [barcodeShowSku, setBarcodeShowSku] = useState(true);
-  const [barcodeItems, setBarcodeItems] = useState<BarcodeLabelItemDto[]>([
-    { sku: "PRD-101", title: "کالای نمونه ۱", barcode: "626000100101", price: "250000", count: 4 },
-    { sku: "PRD-102", title: "کالای نمونه ۲", barcode: "626000100102", price: "480000", count: 4 },
-  ]);
+  const [barcodeItems, setBarcodeItems] = useState<BarcodeLabelItemDto[]>([]);
   const [newItemSku, setNewItemSku] = useState("");
   const [newItemTitle, setNewItemTitle] = useState("");
   const [newItemBarcode, setNewItemBarcode] = useState("");
@@ -151,6 +153,10 @@ function PrintFormBuilderPage() {
   };
 
   const handleSaveTemplate = async () => {
+    if (!canWrite) {
+      setError("شما دسترسی ویرایش قالب‌های چاپی را ندارید.");
+      return;
+    }
     if (!title.trim()) {
       setError("لطفاً عنوان قالب را وارد کنید.");
       return;
@@ -192,6 +198,10 @@ function PrintFormBuilderPage() {
   };
 
   const handleDeleteTemplate = async (id: number) => {
+    if (!canWrite) {
+      setError("شما دسترسی حذف قالب‌های چاپی را ندارید.");
+      return;
+    }
     if (!confirm("آیا از حذف این قالب اطمینان دارید؟")) return;
     setLoading(true);
     try {
@@ -432,6 +442,7 @@ function PrintFormBuilderPage() {
                         size="icon"
                         variant="ghost"
                         onClick={() => handleDeleteTemplate(t.id)}
+                        disabled={!canWrite}
                         className="text-destructive hover:text-destructive"
                       >
                         <Trash2 className="size-4" />
@@ -460,7 +471,7 @@ function PrintFormBuilderPage() {
                     <RotateCcw className="size-3.5" />
                     بازنشانی به پیش‌فرض
                   </Button>
-                  <Button size="sm" onClick={handleSaveTemplate}>
+                  <Button size="sm" onClick={handleSaveTemplate} disabled={!canWrite}>
                     <Save className="size-3.5" />
                     {editingTemplateId ? "به‌روزرسانی قالب" : "ذخیره به عنوان قالب جدید"}
                   </Button>
@@ -765,7 +776,7 @@ function PrintFormBuilderPage() {
                       <td className="p-2">{item.title}</td>
                       <td className="p-2 font-mono text-muted-foreground">{item.barcode || item.sku}</td>
                       <td className="p-2">
-                        {item.price != null ? formatMoneyRial(Number(item.price)) : "—"}
+                        {item.price != null ? formatMoneyRial(item.price) : "—"}
                       </td>
                       <td className="p-2 text-center font-medium">{item.count ?? 1}</td>
                       <td className="p-2 text-center w-16">

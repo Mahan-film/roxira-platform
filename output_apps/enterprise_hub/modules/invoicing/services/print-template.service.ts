@@ -74,6 +74,9 @@ export class PrintTemplateService {
     tenantId: string,
     dto: CreatePrintTemplateDto,
   ): Promise<PrintTemplateResponseDto> {
+    if (!dto.title || typeof dto.title !== 'string' || !dto.title.trim()) {
+      throw new BadRequestException('عنوان قالب نمی‌تواند خالی یا تهی باشد.');
+    }
     const existing = await this.repository.findByTitle(tenantId, dto.title.trim());
     if (existing) {
       throw new ConflictException(
@@ -87,7 +90,6 @@ export class PrintTemplateService {
         : DEFAULT_COLUMNS_CONFIG[dto.docType] ?? [];
 
     const rawOptions: PrintTemplateOptions = {
-      headerTitle: dto.options?.headerTitle ?? PRINT_DOC_TYPE_LABELS[dto.docType],
       barcodeColumns: dto.docType === PrintDocType.BARCODE_LABELS ? 4 : undefined,
       showPrice: true,
       showSku: true,
@@ -95,6 +97,11 @@ export class PrintTemplateService {
       signatures: ['تنظیم‌کننده', 'تأییدکننده', 'دریافت‌کننده'],
       ...(dto.options ?? {}),
     };
+    if (dto.options?.headerTitle?.trim()) {
+      rawOptions.headerTitle = dto.options.headerTitle.trim();
+    } else {
+      delete rawOptions.headerTitle;
+    }
     const options = sanitizeOptions(rawOptions);
 
     let saved: PrintTemplateEntity;
@@ -113,11 +120,11 @@ export class PrintTemplateService {
         Boolean(dto.isDefault),
       );
     } catch (err: any) {
-      const isTitleConflict =
+      if (
         err?.message?.includes('UQ_inv_print_templates_tenant_title') ||
         err?.detail?.includes('UQ_inv_print_templates_tenant_title') ||
-        (err?.code === '23505' && !err?.message?.includes('default'));
-      if (isTitleConflict) {
+        err?.code === '23505'
+      ) {
         throw new ConflictException(`قالب چاپی با عنوان «${dto.title}» قبلاً برای این سازمان تعریف شده است.`);
       }
       throw err;
@@ -175,12 +182,12 @@ export class PrintTemplateService {
         id,
       );
     } catch (err: any) {
-      const isTitleConflict =
+      if (
         err?.message?.includes('UQ_inv_print_templates_tenant_title') ||
         err?.detail?.includes('UQ_inv_print_templates_tenant_title') ||
-        (err?.code === '23505' && !err?.message?.includes('default'));
-      if (isTitleConflict) {
-        throw new ConflictException(`قالب چاپی با عنوان «${dto.title}» قبلاً برای این سازمان تعریف شده است.`);
+        err?.code === '23505'
+      ) {
+        throw new ConflictException(`قالب چاپی با عنوان «${dto.title ?? existing.title}» قبلاً برای این سازمان تعریف شده است.`);
       }
       throw err;
     }
@@ -438,8 +445,8 @@ export class PrintTemplateService {
 function sanitizeOptions(opts?: Partial<PrintTemplateOptions>): PrintTemplateOptions {
   if (!opts) return {};
   return {
-    headerTitle: typeof opts.headerTitle === 'string' ? opts.headerTitle.trim().slice(0, 128) : undefined,
-    footerNote: typeof opts.footerNote === 'string' ? opts.footerNote.trim().slice(0, 500) : undefined,
+    headerTitle: typeof opts.headerTitle === 'string' && opts.headerTitle.trim().length > 0 ? opts.headerTitle.trim().slice(0, 128) : undefined,
+    footerNote: typeof opts.footerNote === 'string' && opts.footerNote.trim().length > 0 ? opts.footerNote.trim().slice(0, 500) : undefined,
     barcodeColumns: opts.barcodeColumns === 5 ? 5 : opts.barcodeColumns === 4 ? 4 : undefined,
     showPrice: opts.showPrice !== undefined ? Boolean(opts.showPrice) : undefined,
     showSku: opts.showSku !== undefined ? Boolean(opts.showSku) : undefined,

@@ -49,7 +49,7 @@ export function buildDynamicTableHtml(
       case "quantity":
         return `<td class="n">${formatNumber(item.quantity)}</td>`;
       case "unit":
-        return `<td class="c"></td>`;
+        return `<td class="c">${escapeHtml((item as any).unit ?? "")}</td>`;
       case "unitPrice":
         return `<td class="n">${formatNumber(item.unitPrice)}</td>`;
       case "discount":
