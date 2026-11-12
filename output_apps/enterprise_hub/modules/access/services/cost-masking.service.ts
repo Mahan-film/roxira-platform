@@ -19,6 +19,28 @@ export const PURCHASING_COST_FIELD_REGEX =
   /^(unit_?price|order_?unit_?price|price_?difference|unit_?cost|buy_?price|purchase_?price)$/i;
 
 /**
+ * Monetary value keys that carry cost-derived money on inventory valuation / report routes
+ * (cardex openingValue/closingValue/runningValue, stock-balance `value`, FIFO values, landed-cost `amount`,
+ * `*Minor` money fields). Applied ONLY on valuation routes (see isValuationPath), so selling-side
+ * `amount` / `totalAmount` on sales and invoicing routes are untouched.
+ */
+export const VALUATION_VALUE_FIELD_REGEX =
+  /^(?!.*cost_?cent[er]).*(value|valuation|amount|worth|fifo|weighted|average|running_?val|minor$)/i;
+
+/**
+ * Detects routes whose responses are cost-derived money: everything under inventory (reports, cardex,
+ * stock-balance, valuation, documents, openings, landed cost, purchasing), manufacturing / production /
+ * COGS / landed-cost / valuation routes elsewhere, and the gross-profit / profitability reports.
+ */
+export function isValuationPath(pathname: string): boolean {
+  if (!pathname) return false;
+  const clean = pathname.split('?')[0].split('#')[0].replace(/^\/v\d+/, '');
+  return /\/(inventory|manufactur[a-z]*|production|cogs|landed-?cost|valuation|stock-valuation|gross-profit|profitability)(\/|$)/i.test(
+    clean,
+  );
+}
+
+/**
  * Detects whether a request pathname targets purchasing, supplier invoices, or procurement workflows.
  */
 export function isPurchasingPath(pathname: string): boolean {
@@ -58,7 +80,7 @@ export class CostMaskingService {
    * Explicitly avoids masking cost centre dimension keys (e.g. costCenter, costCentre, costCenterId).
    * When isPurchasingRoute is true, also matches purchase-specific fields like unitPrice, orderUnitPrice, and priceDifference.
    */
-  isCostField(key: string, isPurchasingRoute = false): boolean {
+  isCostField(key: string, isPurchasingRoute = false, isValuationRoute = false): boolean {
     if (/^(cost_?cent(er|re)(_?(id|code|name|title))?)$/i.test(key)) {
       return false;
     }
@@ -66,6 +88,9 @@ export class CostMaskingService {
       return true;
     }
     if (isPurchasingRoute && PURCHASING_COST_FIELD_REGEX.test(key)) {
+      return true;
+    }
+    if (isValuationRoute && VALUATION_VALUE_FIELD_REGEX.test(key)) {
       return true;
     }
     return false;
@@ -83,6 +108,7 @@ export class CostMaskingService {
     canViewCost: boolean,
     visited = new Map<object, any>(),
     isPurchasingRoute = false,
+    isValuationRoute = false,
   ): T {
     if (canViewCost || payload === null || payload === undefined) {
       return payload;
@@ -114,7 +140,7 @@ export class CostMaskingService {
       const sanitizedArr: any[] = [];
       visited.set(payload, sanitizedArr);
       for (const item of payload) {
-        sanitizedArr.push(this.maskCostFields(item, canViewCost, visited, isPurchasingRoute));
+        sanitizedArr.push(this.maskCostFields(item, canViewCost, visited, isPurchasingRoute, isValuationRoute));
       }
       return sanitizedArr as unknown as T;
     }
@@ -124,7 +150,7 @@ export class CostMaskingService {
       const sanitizedSet = new Set();
       visited.set(payload, sanitizedSet);
       for (const item of payload) {
-        sanitizedSet.add(this.maskCostFields(item, canViewCost, visited, isPurchasingRoute));
+        sanitizedSet.add(this.maskCostFields(item, canViewCost, visited, isPurchasingRoute, isValuationRoute));
       }
       return sanitizedSet as unknown as T;
     }
@@ -134,10 +160,10 @@ export class CostMaskingService {
       const sanitizedMap = new Map();
       visited.set(payload, sanitizedMap);
       for (const [k, v] of payload.entries()) {
-        const isKeyCost = typeof k === 'string' && this.isCostField(k, isPurchasingRoute);
+        const isKeyCost = typeof k === 'string' && this.isCostField(k, isPurchasingRoute, isValuationRoute);
         sanitizedMap.set(
           k,
-          isKeyCost ? null : this.maskCostFields(v, canViewCost, visited, isPurchasingRoute),
+          isKeyCost ? null : this.maskCostFields(v, canViewCost, visited, isPurchasingRoute, isValuationRoute),
         );
       }
       return sanitizedMap as unknown as T;
@@ -149,10 +175,10 @@ export class CostMaskingService {
       proto && proto !== Object.prototype ? Object.create(proto) : {};
     visited.set(payload, sanitized);
     for (const [key, value] of Object.entries(payload)) {
-      if (this.isCostField(key, isPurchasingRoute)) {
+      if (this.isCostField(key, isPurchasingRoute, isValuationRoute)) {
         sanitized[key] = null;
       } else if (typeof value === 'object' && value !== null) {
-        sanitized[key] = this.maskCostFields(value, canViewCost, visited, isPurchasingRoute);
+        sanitized[key] = this.maskCostFields(value, canViewCost, visited, isPurchasingRoute, isValuationRoute);
       } else {
         sanitized[key] = value;
       }

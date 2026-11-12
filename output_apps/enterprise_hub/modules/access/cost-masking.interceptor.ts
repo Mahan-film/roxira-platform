@@ -5,11 +5,12 @@ import {
   Injectable,
   NestInterceptor,
   Optional,
+  StreamableFile,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { AccessRequest } from './access-context';
-import { CostMaskingService, isPurchasingPath } from './services/cost-masking.service';
+import { CostMaskingService, isPurchasingPath, isValuationPath } from './services/cost-masking.service';
 
 /**
  * Intercepts HTTP responses and automatically scrubs sensitive purchase cost and
@@ -61,12 +62,14 @@ export class CostMaskingInterceptor implements NestInterceptor {
         }
 
         const isPurchasing = isPurchasingPath(pathname);
+        const isValuation = isValuationPath(unversioned);
 
         // Fail-closed on non-object payloads (e.g. text/plain, raw CSV export streams, or Buffer)
         // on purchasing routes to prevent leaking purchase unit prices through export endpoints (Lesson 25).
         if (
-          isPurchasing &&
-          (typeof data !== 'object' ||
+          (isPurchasing || isValuation) &&
+          (data instanceof StreamableFile ||
+            typeof data !== 'object' ||
             data === null ||
             (typeof Buffer !== 'undefined' && Buffer.isBuffer(data)) ||
             typeof (data as any)?.pipe === 'function')
@@ -76,7 +79,7 @@ export class CostMaskingInterceptor implements NestInterceptor {
           );
         }
 
-        return this.costMasking.maskCostFields(data, false, undefined, isPurchasing);
+        return this.costMasking.maskCostFields(data, false, undefined, isPurchasing, isValuation);
       }),
     );
   }
