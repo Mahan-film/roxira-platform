@@ -55,7 +55,7 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
       accountType: AccountType.LIABILITY,
       level: AccountLevel.MOEIN,
       currency: Currency.USD,
-      balance: '8000000000.00', // 8,000,000,000 Rials = 800,000,000,000 minor
+      balance: '-8000000000.00', // credit-nature AP: debit-positive ledger stores it negative (8B Rial = 800,000,000,000 minor)
     },
     {
       id: 4,
@@ -536,6 +536,82 @@ describe('FX Revaluation / تسعیر ارز (#230 / T75)', () => {
       // Assert plan uses the tenant's custom resolved accounts
       expect(res.plan.voucherLines.some((l) => l.accountCode === '4199')).toBe(true);
       expect(res.plan.voucherLines.some((l) => l.accountCode === '4120')).toBe(false);
+    });
+  });
+
+  describe('Credit-nature (AP) reconcile uses the account normal side', () => {
+    const ap = (bookValueRialMinor: bigint): ForeignAccountBalance => ({
+      accountCode: '2010',
+      accountName: 'حساب پرداختنی تجاری دلاری',
+      currency: Currency.USD,
+      foreignAmountMinor: 1_000_000n, // 10,000 USD
+      bookValueRialMinor,
+      isLiability: true,
+    });
+
+    it('AP in USD with rate up posts an FX LOSS voucher against the negative ledger balance', async () => {
+      await revaluationService.postMonthEndRevaluation('tenant-1', {
+        period: '1405-08',
+        date: '2026-11-21',
+        balances: [ap(800_000_000_000n)],
+        rates: { [Currency.USD]: 920000n },
+      });
+      expect(mockPostingRules.post).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({
+          sourceId: '1405-08:2010:USD',
+          amounts: { gain: 0n, loss: 120_000_000_000n },
+          overrides: { monetary_asset: '2010' },
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('AP in USD with rate down posts an FX GAIN voucher', async () => {
+      await revaluationService.postMonthEndRevaluation('tenant-1', {
+        period: '1405-08',
+        date: '2026-11-21',
+        balances: [ap(800_000_000_000n)],
+        rates: { [Currency.USD]: 780000n },
+      });
+      expect(mockPostingRules.post).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({ amounts: { gain: 20_000_000_000n, loss: 0n } }),
+        expect.anything(),
+      );
+    });
+
+    it('rejects an AP book value that does not match the ledger (including the wrong-sign value)', async () => {
+      await expect(
+        revaluationService.postMonthEndRevaluation('tenant-1', {
+          period: '1405-08',
+          date: '2026-11-21',
+          balances: [ap(799_999_999_999n)],
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPostingRules.post).not.toHaveBeenCalled();
+    });
+
+    it('rejects a zero-balance account when the client sends a non-zero book value', async () => {
+      (mockAccounting.listAccounts as jest.Mock).mockResolvedValue([
+        ...defaultAccounts,
+        {
+          code: '2011',
+          name: 'پرداختنی صفر',
+          level: AccountLevel.MOEIN,
+          accountType: AccountType.LIABILITY,
+          balance: '0.00',
+          currency: Currency.USD,
+        },
+      ]);
+      await expect(
+        revaluationService.postMonthEndRevaluation('tenant-1', {
+          period: '1405-08',
+          date: '2026-11-21',
+          balances: [{ ...ap(800_000_000_000n), accountCode: '2011' }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPostingRules.post).not.toHaveBeenCalled();
     });
   });
 

@@ -195,6 +195,28 @@ export class FxRevaluationService {
     };
   }
 
+  private requireRoleAccount(role: string, code: string | undefined): string {
+    if (!code) {
+      throw new BadRequestException(`posting role «${role}» has no account mapped for currency.fx_revaluation`);
+    }
+    return code;
+  }
+
+  /**
+   * The ledger balance is debit-positive (ChartOfAccountEntity.balance), so a liability with a normal
+   * credit balance is stored negative. The client book value is a non-negative amount on the account's
+   * normal side, so credit-nature accounts (liability, equity, revenue) are negated before comparing.
+   */
+  private naturalBookValueMinor(balance: string | number | null | undefined, accountType?: AccountType): bigint {
+    if (balance === undefined || balance === null) return 0n;
+    const minor = toMinor(balance);
+    const creditNature =
+      accountType === AccountType.LIABILITY ||
+      accountType === AccountType.EQUITY ||
+      accountType === AccountType.REVENUE;
+    return creditNature ? -minor : minor;
+  }
+
   /**
    * Generates a complete month-end FX revaluation voucher plan for all foreign-currency accounts.
    * Resolves posting roles fx_gain and fx_loss from resolved roles or template defaults.
@@ -206,10 +228,14 @@ export class FxRevaluationService {
     resolvedAccounts?: { fxGain?: string; fxLoss?: string },
   ): MonthEndRevaluationVoucherPlan {
     const tpl = findTemplate('currency.fx_revaluation');
-    const fxGainAccount =
-      resolvedAccounts?.fxGain ?? tpl?.defaults?.fx_gain ?? DEFAULT_ROLE_ACCOUNTS.fx_gain ?? '4120';
-    const fxLossAccount =
-      resolvedAccounts?.fxLoss ?? tpl?.defaults?.fx_loss ?? DEFAULT_ROLE_ACCOUNTS.fx_loss ?? '5210';
+    const fxGainAccount = this.requireRoleAccount(
+      'fx_gain',
+      resolvedAccounts?.fxGain ?? tpl?.defaults?.fx_gain ?? DEFAULT_ROLE_ACCOUNTS.fx_gain,
+    );
+    const fxLossAccount = this.requireRoleAccount(
+      'fx_loss',
+      resolvedAccounts?.fxLoss ?? tpl?.defaults?.fx_loss ?? DEFAULT_ROLE_ACCOUNTS.fx_loss,
+    );
 
     const items = balances.map((b) => this.revalueBalance(b, rates?.[b.currency] ?? b.rateRialPerUnit));
 
@@ -331,10 +357,14 @@ export class FxRevaluationService {
     // Resolve posting roles for fx_gain and fx_loss for this tenant
     const desc = await this.postingRules.describe(tenantId);
     const revalDesc = desc.find((d) => d.docType === 'currency.fx_revaluation');
-    const fxGainAccount =
-      revalDesc?.roles.find((r) => r.role === 'fx_gain')?.accountCode ?? DEFAULT_ROLE_ACCOUNTS.fx_gain ?? '4120';
-    const fxLossAccount =
-      revalDesc?.roles.find((r) => r.role === 'fx_loss')?.accountCode ?? DEFAULT_ROLE_ACCOUNTS.fx_loss ?? '5210';
+    const fxGainAccount = this.requireRoleAccount(
+      'fx_gain',
+      revalDesc?.roles.find((r) => r.role === 'fx_gain')?.accountCode ?? DEFAULT_ROLE_ACCOUNTS.fx_gain,
+    );
+    const fxLossAccount = this.requireRoleAccount(
+      'fx_loss',
+      revalDesc?.roles.find((r) => r.role === 'fx_loss')?.accountCode ?? DEFAULT_ROLE_ACCOUNTS.fx_loss,
+    );
 
     const plan = this.generateMonthEndVoucher(
       request.period,
@@ -399,22 +429,19 @@ export class FxRevaluationService {
             .getOne();
 
           if (lockedAccount) {
-            ledgerBalanceMinor =
-              lockedAccount.balance !== undefined && lockedAccount.balance !== null
-                ? toMinor(lockedAccount.balance)
-                : 0n;
+            ledgerBalanceMinor = this.naturalBookValueMinor(lockedAccount.balance, lockedAccount.accountType);
             accountName = lockedAccount.name;
           } else {
             // Fallback for mocked entity manager in unit tests
             const freshAccounts = await this.accounting.listAccounts(tenantId);
             const acc = freshAccounts.find((a) => a.code === item.accountCode);
-            ledgerBalanceMinor = acc?.balance !== undefined && acc.balance !== null ? toMinor(acc.balance) : 0n;
+            ledgerBalanceMinor = this.naturalBookValueMinor(acc?.balance, acc?.accountType);
             if (acc) accountName = acc.name;
           }
         } else {
           const freshAccounts = await this.accounting.listAccounts(tenantId);
           const acc = freshAccounts.find((a) => a.code === item.accountCode);
-          ledgerBalanceMinor = acc?.balance !== undefined && acc.balance !== null ? toMinor(acc.balance) : 0n;
+          ledgerBalanceMinor = this.naturalBookValueMinor(acc?.balance, acc?.accountType);
           if (acc) accountName = acc.name;
         }
 
