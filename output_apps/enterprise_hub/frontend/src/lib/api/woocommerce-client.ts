@@ -21,8 +21,7 @@ export async function updateWooCommerceConfig(
 ): Promise<WooCommerceConfig> {
   return apiRequest<WooCommerceConfig>(`${WOO_BASE}/config`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
+    body: input,
     signal,
   });
 }

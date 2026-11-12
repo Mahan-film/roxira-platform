@@ -270,7 +270,7 @@ export const MENU_GROUPS: MenuGroup[] = [
       {
         href: "/app/settings/integrations/woocommerce",
         label: "اتصال به ووکامرس",
-        icon: "Plug",
+        icon: "ShoppingCart",
         module: "invoicing",
         keywords: ["woocommerce", "ووکامرس", "فروشگاه", "sync"],
       },

@@ -4890,11 +4890,11 @@
     "policy": "platformAdmin"
   },
   "PUT /api/integrations/woocommerce/config (WooCommerceConfigController.updateConfig)": {
-    "policy": "invoicing:create",
+    "policy": "invoicing:approve",
     "owner": true,
     "admin": true,
     "accountant": true,
-    "sales": true,
+    "sales": false,
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,

@@ -35,7 +35,7 @@ export class WooCommerceConfigController {
   }
 
   @Put('config')
-  @RequireAction(AccessAction.CREATE)
+  @RequireAction(AccessAction.APPROVE)
   @ApiOperation({ summary: 'ذخیره تنظیمات اتصال به ووکامرس' })
   @ApiResponse({ status: 200, type: WooCommerceConfigResponseDto })
   async updateConfig(

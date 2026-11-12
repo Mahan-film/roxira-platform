@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateWooCommerceIntegration1789900003000 implements MigrationInterface {
-  name = 'CreateWooCommerceIntegration1789900003000';
+export class CreateWooCommerceIntegration1789900003400 implements MigrationInterface {
+  name = 'CreateWooCommerceIntegration1789900003400';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // 1. Create woocommerce_configs table
@@ -12,7 +12,7 @@ export class CreateWooCommerceIntegration1789900003000 implements MigrationInter
         "store_url" varchar(500) NOT NULL,
         "consumer_key_encrypted" text NOT NULL,
         "consumer_secret_encrypted" text NOT NULL,
-        "webhook_secret" varchar(255) NOT NULL,
+        "webhook_secret" text NOT NULL,
         "auto_sync_orders" boolean NOT NULL DEFAULT true,
         "auto_sync_stock" boolean NOT NULL DEFAULT true,
         "last_sync_at" timestamptz,
@@ -51,13 +51,13 @@ export class CreateWooCommerceIntegration1789900003000 implements MigrationInter
     `);
 
     await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS "IDX_wc_sync_logs_tenant_created"
+      CREATE INDEX IF NOT EXISTS "IDX_woocommerce_sync_logs_tenant_created"
         ON "woocommerce_sync_logs" ("tenant_id", "created_at" DESC);
-      CREATE INDEX IF NOT EXISTS "IDX_wc_sync_logs_tenant_ext"
+      CREATE INDEX IF NOT EXISTS "IDX_woocommerce_sync_logs_tenant_ext"
         ON "woocommerce_sync_logs" ("tenant_id", "direction", "external_id");
       CREATE UNIQUE INDEX IF NOT EXISTS "UQ_wc_sync_logs_tenant_success"
         ON "woocommerce_sync_logs" ("tenant_id", "direction", "external_id")
-        WHERE "status" = 'SUCCESS';
+        WHERE "status" = 'success';
     `);
 
     await queryRunner.query(`
