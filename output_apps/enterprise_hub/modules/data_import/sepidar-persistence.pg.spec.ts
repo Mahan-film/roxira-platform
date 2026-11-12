@@ -11,6 +11,7 @@ import * as path from 'path';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { TenantScope } from '../access/services/tenant-scope';
+import { AccountType } from '../accounting/enums/accounting.enum';
 import { ChartOfAccountEntity } from '../accounting/entities/chart-of-account.entity';
 import { JournalEntryEntity } from '../accounting/entities/journal-entry.entity';
 import { JournalEntryLineEntity } from '../accounting/entities/journal-entry-line.entity';
@@ -194,6 +195,7 @@ describePg('Sepidar Data Persistence on PostgreSQL (NOSUPERUSER NOBYPASSRLS)', (
     await expect(
       service.persistSepidarData(TENANT_C, {
         accounts: SYNTHETIC_SEPIDAR_ACCOUNTS,
+        accountTypeMap: { 'F-001': AccountType.EXPENSE, 'F-002': AccountType.EXPENSE },
         parties: SYNTHETIC_SEPIDAR_PARTIES,
         items: SYNTHETIC_SEPIDAR_ITEMS,
         openingVoucher: [

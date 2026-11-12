@@ -83,11 +83,16 @@ export interface SepidarPersistenceCertificate {
   };
 }
 
+export type SepidarImportAccountInput = SepidarRawAccount & {
+  AccountType?: AccountType;
+};
+
 export interface SepidarImportInput {
   useSynthetic?: boolean;
   openingDate?: string;
   customerGroup?: CustomerGroup;
-  accounts?: SepidarRawAccount[];
+  accountTypeMap?: Record<string, AccountType>;
+  accounts?: SepidarImportAccountInput[];
   parties?: SepidarRawParty[];
   items?: SepidarRawItem[];
   openingVoucher?: SepidarRawVoucherItem[];
@@ -97,6 +102,10 @@ export interface SepidarImportInput {
 const OPENING_ENTRY_NUMBER = 'JV-OPENING-SEPIDAR';
 const MAX_SEPIDAR_RIAL = 999_999_999_999_999n;
 const SEPIDAR_IDEMPOTENCY_ENTITY = 'sepidar_idempotency';
+const SYNTHETIC_FLOAT_ACCOUNT_TYPES: Record<string, AccountType> = {
+  'F-001': AccountType.EXPENSE,
+  'F-002': AccountType.EXPENSE,
+};
 
 /**
  * Converts a whole-IRR Sepidar amount into scale-2 Roxira minor units via `parseMinor`.
@@ -181,11 +190,20 @@ export class SepidarPersistenceService {
     idempotencyKey?: string,
   ): Promise<SepidarPersistenceCertificate> {
     const isSynthetic = input?.useSynthetic === true;
-    if (isSynthetic && process.env.NODE_ENV === 'production') {
-      throw new BadRequestException('Synthetic fixture import is disabled in production.');
+    if (isSynthetic) {
+      const env = process.env.NODE_ENV;
+      const explicitlyAllowed =
+        env === 'test' ||
+        env === 'development' ||
+        process.env.ALLOW_SYNTHETIC_SEPIDAR_IMPORT === '1';
+      if (env === 'production' || !explicitlyAllowed) {
+        throw new BadRequestException(
+          'Synthetic fixture import is disabled outside development/test environments.',
+        );
+      }
     }
 
-    const rawAccounts = isSynthetic
+    const rawAccounts: SepidarImportAccountInput[] = isSynthetic
       ? SYNTHETIC_SEPIDAR_ACCOUNTS
       : input?.accounts ?? [];
     const rawParties = isSynthetic
@@ -214,7 +232,22 @@ export class SepidarPersistenceService {
       );
     }
 
-    const openingDate = input?.openingDate ? new Date(input.openingDate) : new Date();
+    const explicitOpeningDate = input?.openingDate ?? null;
+    if (explicitOpeningDate !== null) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(explicitOpeningDate)) {
+        throw new BadRequestException('Invalid openingDate value.');
+      }
+      const [y, m, d] = explicitOpeningDate.split('-').map((p) => Number(p));
+      const dt = new Date(Date.UTC(y, m - 1, d));
+      if (
+        dt.getUTCFullYear() !== y ||
+        dt.getUTCMonth() !== m - 1 ||
+        dt.getUTCDate() !== d
+      ) {
+        throw new BadRequestException('Invalid openingDate calendar date.');
+      }
+    }
+    const openingDate = explicitOpeningDate ? new Date(explicitOpeningDate) : new Date();
     if (Number.isNaN(openingDate.getTime())) {
       throw new BadRequestException('Invalid openingDate value.');
     }
@@ -224,6 +257,7 @@ export class SepidarPersistenceService {
     // All Sepidar amounts are whole IRR integers; validate strictly (reject floats/fractions)
     // and convert once through `parseMinor` into Roxira scale-2 minor units.
     let mappedAccounts: MappedChartAccount[];
+    const explicitAccountTypesByCode = new Map<string, AccountType>();
     let mappedParties: MappedPartyRecord[];
     let mappedItems: MappedItemRecord[];
     let mappedOpeningLines: MappedOpeningLine[];
@@ -232,15 +266,44 @@ export class SepidarPersistenceService {
     let validCheques: MappedRoxiraCheque[];
 
     try {
-      const openingAmountByLineId = new Map<number, { debitMinor: bigint; creditMinor: bigint }>();
+      const baseTypeMap = isSynthetic
+        ? { ...SYNTHETIC_FLOAT_ACCOUNT_TYPES, ...(input?.accountTypeMap ?? {}) }
+        : (input?.accountTypeMap ?? {});
+      for (const [code, accType] of Object.entries(baseTypeMap)) {
+        explicitAccountTypesByCode.set(code.trim(), accType);
+      }
+      for (const rawAcc of rawAccounts) {
+        if (rawAcc.AccountType !== undefined) {
+          explicitAccountTypesByCode.set(rawAcc.Code.trim(), rawAcc.AccountType);
+        }
+      }
+
+      const openingAmountByIndex = new Map<
+        number,
+        {
+          accountCode: string;
+          floatingDetailCode: string | null;
+          debitMinor: bigint;
+          creditMinor: bigint;
+        }
+      >();
       for (let i = 0; i < rawVoucher.length; i++) {
         const line = rawVoucher[i];
         const debitMinor = parseSepidarRialToMinor(line.Debit, 'Debit', line.VoucherItemID);
         const creditMinor = parseSepidarRialToMinor(line.Credit, 'Credit', line.VoucherItemID);
-        openingAmountByLineId.set(i, { debitMinor, creditMinor });
+        openingAmountByIndex.set(i, {
+          accountCode: line.AccountCode.trim(),
+          floatingDetailCode: line.FloatingDetailCode ? line.FloatingDetailCode.trim() : null,
+          debitMinor,
+          creditMinor,
+        });
       }
 
-      const openRawChequeMinors: Array<{ chequeNumber: string; amountMinor: bigint }> = [];
+      const openRawCheques: Array<{
+        chequeNumber: string;
+        bankName: string | null;
+        amountMinor: bigint;
+      }> = [];
       for (const rawChq of rawCheques) {
         const isClosed =
           rawChq.State === 'cleared' || rawChq.State === 'returned' || rawChq.State === 'bounced';
@@ -251,24 +314,44 @@ export class SepidarPersistenceService {
             `Invalid Sepidar cheque ${rawChq.ChequeNumber}: Amount must be positive`,
           );
         }
-        openRawChequeMinors.push({ chequeNumber: rawChq.ChequeNumber, amountMinor });
+        openRawCheques.push({
+          chequeNumber: rawChq.ChequeNumber.trim(),
+          bankName: rawChq.BankName ? rawChq.BankName.trim() : null,
+          amountMinor,
+        });
       }
 
       mappedAccounts = this.mappingAdapter.mapAccounts(rawAccounts);
+      // Fail fast before opening DB transaction if any account prefix lacks valid Iranian COA group & no explicit AccountType
+      for (const acc of mappedAccounts) {
+        this.resolveAccountType(acc.code, explicitAccountTypesByCode.get(acc.code));
+      }
       mappedParties = this.mappingAdapter.mapParties(rawParties);
       mappedItems = this.mappingAdapter.mapItems(rawItems);
 
       const mappedOpeningResult = this.mappingAdapter.mapOpeningBalance(rawVoucher, {
         requireBalanced: rawVoucher.length > 0,
       });
+      if (mappedOpeningResult.lines.length !== rawVoucher.length) {
+        throw new BadRequestException('Opening voucher mapped line count mismatch.');
+      }
       mappedOpeningLines = mappedOpeningResult.lines.map((line, i) => {
-        const converted = openingAmountByLineId.get(i)!;
-        totalOpeningDebitMinor += converted.debitMinor;
-        totalOpeningCreditMinor += converted.creditMinor;
+        const rawConverted = openingAmountByIndex.get(i);
+        if (
+          !rawConverted ||
+          rawConverted.accountCode !== line.accountCode ||
+          rawConverted.floatingDetailCode !== (line.floatingDetailCode ?? null)
+        ) {
+          throw new BadRequestException(
+            `Opening voucher line alignment mismatch at index ${i} (${line.accountCode}).`,
+          );
+        }
+        totalOpeningDebitMinor += rawConverted.debitMinor;
+        totalOpeningCreditMinor += rawConverted.creditMinor;
         return {
           ...line,
-          debitMinor: converted.debitMinor,
-          creditMinor: converted.creditMinor,
+          debitMinor: rawConverted.debitMinor,
+          creditMinor: rawConverted.creditMinor,
         };
       });
 
@@ -279,15 +362,23 @@ export class SepidarPersistenceService {
           `Invalid Sepidar cheque ${firstErr.chequeNumber}: ${firstErr.reason}`,
         );
       }
+      if (mappedCheques.validCheques.length !== openRawCheques.length) {
+        throw new BadRequestException('Sepidar open cheques alignment count mismatch.');
+      }
       validCheques = mappedCheques.validCheques.map((chq, idx) => {
-        const matched = openRawChequeMinors[idx];
-        const amountMinor =
-          matched && matched.chequeNumber === chq.chequeNumber
-            ? matched.amountMinor
-            : parseSepidarRialToMinor(chq.amountFormatted, 'Amount', idx + 1);
+        const matched = openRawCheques[idx];
+        if (
+          !matched ||
+          matched.chequeNumber !== chq.chequeNumber ||
+          matched.bankName !== (chq.bankName ?? null)
+        ) {
+          throw new BadRequestException(
+            `Sepidar cheque alignment mismatch at index ${idx} (${chq.chequeNumber}).`,
+          );
+        }
         return {
           ...chq,
-          amountMinor,
+          amountMinor: matched.amountMinor,
         };
       });
     } catch (err) {
@@ -297,30 +388,39 @@ export class SepidarPersistenceService {
       );
     }
 
-    const requestFingerprint = this.computeCanonicalSha256(tenantId, {
+    const requestFingerprint = this.computeRequestFingerprint(tenantId, {
+      openingDate: explicitOpeningDate,
+      customerGroup,
       accounts: mappedAccounts.map((a) => ({
         code: a.code,
         name: a.name,
         level: a.level,
         parentCode: a.parentCode ?? null,
+        accountType: this.resolveAccountType(a.code, explicitAccountTypesByCode.get(a.code)),
       })),
       parties: mappedParties.map((p) => ({
         code: p.code,
         name: p.name,
         role: p.role,
+        customerGroup,
         nationalId: p.nationalId ?? null,
+        economicCode: p.economicCode ?? null,
+        phone: p.phone ?? null,
       })),
       items: mappedItems.map((i) => ({
         sku: i.sku,
         name: i.name,
         barcode: i.barcode || i.sku,
         primaryUnit: i.primaryUnit,
+        secondaryUnit: i.secondaryUnit ?? null,
+        unitRatio: i.unitRatio !== null && i.unitRatio !== undefined ? Number(i.unitRatio) : null,
       })),
       openingLines: mappedOpeningLines.map((l) => ({
         accountCode: l.accountCode,
         floatingDetailCode: l.floatingDetailCode ?? null,
         debitMinor: l.debitMinor.toString(),
         creditMinor: l.creditMinor.toString(),
+        description: l.description ?? null,
       })),
       cheques: validCheques.map((c) => ({
         chequeNumber: c.chequeNumber,
@@ -328,7 +428,15 @@ export class SepidarPersistenceService {
         bankName: c.bankName ?? null,
         direction: c.direction,
         amountMinor: c.amountMinor.toString(),
+        issueDate: c.issueDate,
         dueDate: c.dueDate,
+        partyName: c.partyName,
+        partyCode: c.partyCode ?? null,
+        receiverNationalId: c.receiverNationalId ?? null,
+        spentToName: c.spentToName ?? null,
+        spentToCode: c.spentToCode ?? null,
+        spentToNationalId: c.spentToNationalId ?? null,
+        status: c.status ?? ChequeStatus.REGISTERED,
       })),
       totals: {
         openingDebitMinor: totalOpeningDebitMinor,
@@ -395,13 +503,19 @@ export class SepidarPersistenceService {
         }
       }
 
-      const accountResult = await this.persistAccounts(tenantId, mappedAccounts, em);
+      const accountResult = await this.persistAccounts(
+        tenantId,
+        mappedAccounts,
+        explicitAccountTypesByCode,
+        em,
+      );
       const partyResult = await this.persistParties(tenantId, mappedParties, customerGroup, em);
       const itemResult = await this.persistItems(tenantId, mappedItems, em);
       const voucherResult = await this.persistOpeningVoucher(
         tenantId,
         mappedOpeningLines,
         openingDate,
+        explicitOpeningDate,
         idempotencyKey,
         requestFingerprint,
         em,
@@ -431,9 +545,41 @@ export class SepidarPersistenceService {
     });
   }
 
+  /**
+   * Uses explicit AccountType if supplied; otherwise maps Iranian COA group prefixes
+   * per `iran-chart-template.ts` (1=ASSET, 2=LIABILITY, 3/9=EQUITY, 4/7=REVENUE, 5/6/8=EXPENSE).
+   * Rejects unknown prefixes when no explicit AccountType is given.
+   */
+  private resolveAccountType(code: string, explicitType?: AccountType): AccountType {
+    if (explicitType !== undefined) {
+      return explicitType;
+    }
+    switch (code.charAt(0)) {
+      case '1':
+        return AccountType.ASSET;
+      case '2':
+        return AccountType.LIABILITY;
+      case '3':
+      case '9':
+        return AccountType.EQUITY;
+      case '4':
+      case '7':
+        return AccountType.REVENUE;
+      case '5':
+      case '6':
+      case '8':
+        return AccountType.EXPENSE;
+      default:
+        throw new BadRequestException(
+          `Cannot infer accountType for account code "${code}": provide explicit AccountType.`,
+        );
+    }
+  }
+
   private async persistAccounts(
     tenantId: string,
     accounts: MappedChartAccount[],
+    explicitAccountTypesByCode: Map<string, AccountType>,
     em: EntityManager,
   ): Promise<{ inserted: number; skipped: number }> {
     const repo = em.getRepository(ChartOfAccountEntity);
@@ -451,12 +597,18 @@ export class SepidarPersistenceService {
         case 4: levelEnum = AccountLevel.TAFSILI; break;
       }
 
+      const accountType = this.resolveAccountType(
+        acc.code,
+        explicitAccountTypesByCode.get(acc.code),
+      );
+
       const existing = await repo.findOne({ where: { tenantId, code: acc.code } });
       if (existing) {
         if (
           existing.name !== acc.name ||
           existing.level !== levelEnum ||
-          (existing.parentCode ?? null) !== (acc.parentCode ?? null)
+          (existing.parentCode ?? null) !== (acc.parentCode ?? null) ||
+          existing.accountType !== accountType
         ) {
           throw new ConflictException(
             `Account ${acc.code} already exists in database with conflicting attributes.`,
@@ -464,20 +616,6 @@ export class SepidarPersistenceService {
         }
         skipped++;
         continue;
-      }
-
-      let accountType: AccountType = AccountType.ASSET;
-      switch (acc.code.charAt(0)) {
-        case '1': accountType = AccountType.ASSET; break;
-        case '2': accountType = AccountType.LIABILITY; break;
-        case '3': accountType = AccountType.EQUITY; break;
-        case '4': accountType = AccountType.REVENUE; break;
-        case '5':
-        case '6': accountType = AccountType.EXPENSE; break;
-        case '7': accountType = AccountType.REVENUE; break;
-        case '8': accountType = AccountType.EXPENSE; break;
-        case '9': accountType = AccountType.EQUITY; break;
-        default: accountType = AccountType.ASSET;
       }
 
       const entity = repo.create({
@@ -518,7 +656,10 @@ export class SepidarPersistenceService {
         if (
           existing.name !== p.name ||
           existing.role !== roleEnum ||
-          (existing.nationalId ?? null) !== (p.nationalId ?? null)
+          existing.customerGroup !== customerGroup ||
+          (existing.nationalId ?? null) !== (p.nationalId ?? null) ||
+          (existing.economicCode ?? null) !== (p.economicCode ?? null) ||
+          (existing.phone ?? null) !== (p.phone ?? null)
         ) {
           throw new ConflictException(
             `Party ${p.code} already exists in database with conflicting attributes.`,
@@ -557,10 +698,33 @@ export class SepidarPersistenceService {
     let skipped = 0;
 
     for (const item of items) {
+      if (
+        item.unitRatio !== null &&
+        item.unitRatio !== undefined &&
+        !/^\d+(\.\d{1,4})?$/.test(item.unitRatio)
+      ) {
+        throw new BadRequestException(`Invalid unitRatio "${item.unitRatio}" for item ${item.sku}`);
+      }
+
+      const expectedBarcode = item.barcode || item.sku;
+      const expectedUnit = item.primaryUnit ?? 'piece';
+      const expectedSecondaryUnit = item.secondaryUnit ?? null;
+      const expectedRatio =
+        item.unitRatio !== null && item.unitRatio !== undefined ? Number(item.unitRatio) : null;
+
       const existing = await repo.findOne({ where: { tenantId, sku: item.sku } });
       if (existing) {
-        const expectedUnit = item.primaryUnit ?? 'piece';
-        if (existing.name !== item.name || (existing.primaryUnit ?? 'piece') !== expectedUnit) {
+        const existingRatio =
+          existing.unitRatio !== null && existing.unitRatio !== undefined
+            ? Number(existing.unitRatio)
+            : null;
+        if (
+          existing.name !== item.name ||
+          (existing.barcode ?? null) !== expectedBarcode ||
+          (existing.primaryUnit ?? 'piece') !== expectedUnit ||
+          (existing.secondaryUnit ?? null) !== expectedSecondaryUnit ||
+          existingRatio !== expectedRatio
+        ) {
           throw new ConflictException(
             `Stock item ${item.sku} already exists in database with conflicting attributes.`,
           );
@@ -569,20 +733,16 @@ export class SepidarPersistenceService {
         continue;
       }
 
-      if (item.unitRatio !== null && item.unitRatio !== undefined && !/^\d+(\.\d{1,4})?$/.test(item.unitRatio)) {
-        throw new BadRequestException(`Invalid unitRatio "${item.unitRatio}" for item ${item.sku}`);
-      }
-
       const entity = repo.create({
         tenantId,
         sku: item.sku,
         name: item.name,
-        barcode: item.barcode || item.sku,
+        barcode: expectedBarcode,
         quantity: 0,
         minQuantity: 0,
-        primaryUnit: item.primaryUnit ?? 'piece',
-        secondaryUnit: item.secondaryUnit ?? null,
-        unitRatio: (item.unitRatio ?? null) as unknown as number | null,
+        primaryUnit: expectedUnit,
+        secondaryUnit: expectedSecondaryUnit,
+        unitRatio: expectedRatio,
       });
 
       await repo.save(entity);
@@ -596,6 +756,7 @@ export class SepidarPersistenceService {
     tenantId: string,
     lines: MappedOpeningLine[],
     openingDate: Date,
+    explicitOpeningDate: string | null,
     idempotencyKey: string | undefined,
     requestFingerprint: string,
     em: EntityManager,
@@ -616,6 +777,15 @@ export class SepidarPersistenceService {
       ) {
         throw new ConflictException(
           `Idempotency-Key "${idempotencyKey}" reused with a different opening voucher payload.`,
+        );
+      }
+
+      if (
+        explicitOpeningDate !== null &&
+        new Date(existing.date).getTime() !== openingDate.getTime()
+      ) {
+        throw new ConflictException(
+          `Opening voucher ${OPENING_ENTRY_NUMBER} already exists in database with a different openingDate.`,
         );
       }
 
@@ -778,12 +948,20 @@ export class SepidarPersistenceService {
       }
 
       if (existing) {
+        const expectedStatus = c.status ?? ChequeStatus.REGISTERED;
         if (
           parseMinor(existing.amount) !== c.amountMinor ||
           existing.direction !== c.direction ||
           existing.issueDate !== c.issueDate ||
           existing.dueDate !== c.dueDate ||
-          (existing.bankName ?? null) !== (c.bankName ?? null)
+          (existing.bankName ?? null) !== (c.bankName ?? null) ||
+          existing.partyName !== c.partyName ||
+          (existing.partyCode ?? null) !== (c.partyCode ?? null) ||
+          (existing.receiverNationalId ?? null) !== (c.receiverNationalId ?? null) ||
+          (existing.spentToName ?? null) !== (c.spentToName ?? null) ||
+          (existing.spentToCode ?? null) !== (c.spentToCode ?? null) ||
+          (existing.spentToNationalId ?? null) !== (c.spentToNationalId ?? null) ||
+          existing.status !== expectedStatus
         ) {
           throw new ConflictException(
             `Cheque ${c.chequeNumber} already exists in database with conflicting attributes or amount.`,
@@ -983,6 +1161,95 @@ export class SepidarPersistenceService {
       canonicalSha256,
       idempotencySummary,
     };
+  }
+
+  private computeRequestFingerprint(
+    tenantId: string,
+    data: {
+      openingDate: string | null;
+      customerGroup: CustomerGroup;
+      accounts: Array<{
+        code: string;
+        name: string;
+        level: number;
+        parentCode: string | null;
+        accountType: AccountType;
+      }>;
+      parties: Array<{
+        code: string;
+        name: string;
+        role: string;
+        customerGroup: CustomerGroup;
+        nationalId: string | null;
+        economicCode: string | null;
+        phone: string | null;
+      }>;
+      items: Array<{
+        sku: string;
+        name: string;
+        barcode: string | null;
+        primaryUnit: string;
+        secondaryUnit: string | null;
+        unitRatio: number | null;
+      }>;
+      openingLines: Array<{
+        accountCode: string;
+        floatingDetailCode: string | null;
+        debitMinor: string;
+        creditMinor: string;
+        description: string | null;
+      }>;
+      cheques: Array<{
+        chequeNumber: string;
+        sayadNumber: string;
+        bankName: string | null;
+        direction: string;
+        amountMinor: string;
+        issueDate: string;
+        dueDate: string;
+        partyName: string;
+        partyCode: string | null;
+        receiverNationalId: string | null;
+        spentToName: string | null;
+        spentToCode: string | null;
+        spentToNationalId: string | null;
+        status: string;
+      }>;
+      totals: {
+        openingDebitMinor: bigint;
+        openingCreditMinor: bigint;
+        chequesAmountMinor: bigint;
+      };
+    },
+  ): string {
+    const canonicalPayload = JSON.stringify({
+      tenantId,
+      openingDate: data.openingDate,
+      customerGroup: data.customerGroup,
+      accounts: [...data.accounts].sort((a, b) => a.code.localeCompare(b.code)),
+      parties: [...data.parties].sort((a, b) => a.code.localeCompare(b.code)),
+      items: [...data.items].sort((a, b) => a.sku.localeCompare(b.sku)),
+      openingLines: [...data.openingLines].sort((a, b) =>
+        a.accountCode === b.accountCode
+          ? (a.floatingDetailCode ?? '').localeCompare(b.floatingDetailCode ?? '')
+          : a.accountCode.localeCompare(b.accountCode),
+      ),
+      cheques: [...data.cheques].sort((a, b) =>
+        (a.sayadNumber || `${a.bankName ?? ''}:${a.chequeNumber}`).localeCompare(
+          b.sayadNumber || `${b.bankName ?? ''}:${b.chequeNumber}`,
+        ),
+      ),
+      totals: {
+        openingDebitMinor: data.totals.openingDebitMinor.toString(),
+        openingCreditMinor: data.totals.openingCreditMinor.toString(),
+        varianceMinor: (
+          data.totals.openingDebitMinor - data.totals.openingCreditMinor
+        ).toString(),
+        chequesAmountMinor: data.totals.chequesAmountMinor.toString(),
+      },
+    });
+
+    return crypto.createHash('sha256').update(canonicalPayload).digest('hex');
   }
 
   private computeCanonicalSha256(
