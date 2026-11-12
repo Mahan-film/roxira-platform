@@ -3581,6 +3581,17 @@
     "read_only": false,
     "legacy_member": true
   },
+  "POST /enterprise-hub/currency/revaluation (CurrencyController.revalueMonthEnd)": {
+    "policy": "accounting:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/damages/ (DamagesController.create)": {
     "policy": "damages:create",
     "owner": true,
