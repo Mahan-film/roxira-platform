@@ -30,6 +30,7 @@ import {
   listPrintTemplates,
   updatePrintTemplate,
 } from "@/lib/api/print-templates-client";
+import { parseRialsInput } from "@/lib/print/barcode-price";
 import { printBarcodeSheet } from "@/lib/print/open-barcode-sheet-window";
 import {
   BarcodeLabelItemDto,
@@ -73,8 +74,8 @@ function PrintFormBuilderPage() {
   const [barcodeShowPrice, setBarcodeShowPrice] = useState(true);
   const [barcodeShowSku, setBarcodeShowSku] = useState(true);
   const [barcodeItems, setBarcodeItems] = useState<BarcodeLabelItemDto[]>([
-    { sku: "PRD-101", title: "کالای نمونه ۱", barcode: "626000100101", price: 250000, count: 4 },
-    { sku: "PRD-102", title: "کالای نمونه ۲", barcode: "626000100102", price: 480000, count: 4 },
+    { sku: "PRD-101", title: "کالای نمونه ۱", barcode: "626000100101", price: "250000", count: 4 },
+    { sku: "PRD-102", title: "کالای نمونه ۲", barcode: "626000100102", price: "480000", count: 4 },
   ]);
   const [newItemSku, setNewItemSku] = useState("");
   const [newItemTitle, setNewItemTitle] = useState("");
@@ -225,25 +226,17 @@ function PrintFormBuilderPage() {
     setColumns(updated);
   };
 
-  const toAsciiDigits = (s: string) =>
-    s.replace(/[۰-۹٠-٩]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩".indexOf(d) % 10));
-
-  const parsePriceToRials = (raw: string): number | undefined => {
-    if (!raw.trim()) return undefined;
-    const ascii = toAsciiDigits(raw.trim()).replace(/[^\d.]/g, "");
-    if (!ascii) return undefined;
-    const parts = ascii.split(".");
-    const n = parseInt(parts[0], 10);
-    return Number.isFinite(n) && n >= 0 ? n : undefined;
-  };
-
   const addBarcodeItem = () => {
     if (!newItemSku.trim() || !newItemTitle.trim()) {
       setError("لطفاً کد کالا و نام کالا را برای برچسب وارد کنید.");
       return;
     }
     const count = parseInt(newItemCount, 10) || 1;
-    const price = parsePriceToRials(newItemPrice);
+    const price = parseRialsInput(newItemPrice);
+    if (price === null) {
+      setError("قیمت باید عدد صحیح به ریال باشد (بدون اعشار).");
+      return;
+    }
     setBarcodeItems((prev) => [
       ...prev,
       {
@@ -772,7 +765,7 @@ function PrintFormBuilderPage() {
                       <td className="p-2">{item.title}</td>
                       <td className="p-2 font-mono text-muted-foreground">{item.barcode || item.sku}</td>
                       <td className="p-2">
-                        {item.price != null ? formatMoneyRial(item.price) : "—"}
+                        {item.price != null ? formatMoneyRial(Number(item.price)) : "—"}
                       </td>
                       <td className="p-2 text-center font-medium">{item.count ?? 1}</td>
                       <td className="p-2 text-center w-16">

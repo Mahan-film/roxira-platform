@@ -3,6 +3,7 @@ import type { StockDocument } from "../../types/inventory.ts";
 import type { PrintTemplateDto } from "../../types/print-template.ts";
 
 import { renderTemplate } from "./render-template.ts";
+import { safeLogoUrl } from "./safe-url.ts";
 import { mapStockDocumentToWarehouseA4Data } from "./warehouse-document.ts";
 
 /** Opens the stock document in its own window and starts printing. Does nothing if a pop-up blocker stops it. */
@@ -16,7 +17,7 @@ export function printWarehouseDocument(
     data.docTitle = template.options.headerTitle;
   }
   if (template?.logoUrl && template?.showLogo !== false) {
-    data.logoUrl = template.logoUrl;
+    data.logoUrl = safeLogoUrl(template.logoUrl);
   }
   if (template?.options?.footerNote) {
     data.footerText = template.options.footerNote;
