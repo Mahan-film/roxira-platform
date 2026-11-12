@@ -110,16 +110,24 @@ export class PrintTemplateRepository {
     manager?: EntityManager,
   ): Promise<PrintTemplateEntity | null> {
     return this.withRepo(tenantId, manager, async (repo) => {
+      if (paperSize) {
+        return repo.findOne({
+          where: { tenantId, docType, isDefault: true, paperSize },
+          order: { id: 'DESC' },
+        });
+      }
+      const anyDefault = await repo.findOne({
+        where: { tenantId, docType, isDefault: true },
+        order: { id: 'DESC' },
+      });
+      if (anyDefault) return anyDefault;
+
       const targetSize =
-        paperSize ??
-        (docType === PrintDocType.RECEIPT_PAYMENT_VOUCHER ? PrintPaperSize.A5 : PrintPaperSize.A4);
-      const where: FindOptionsWhere<PrintTemplateEntity> = {
-        tenantId,
-        docType,
-        isDefault: true,
-        paperSize: targetSize,
-      };
-      return repo.findOne({ where, order: { id: 'DESC' } });
+        docType === PrintDocType.RECEIPT_PAYMENT_VOUCHER ? PrintPaperSize.A5 : PrintPaperSize.A4;
+      return repo.findOne({
+        where: { tenantId, docType, paperSize: targetSize, isDefault: true },
+        order: { id: 'DESC' },
+      });
     });
   }
 

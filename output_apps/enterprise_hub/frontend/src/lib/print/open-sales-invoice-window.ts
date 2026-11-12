@@ -142,7 +142,7 @@ export function printSalesInvoice(
   ) {
     const dynamicTable = buildDynamicTableHtml(invoice, options.columnsConfig);
     if (dynamicTable) {
-      html = html.replace(/<table>[\s\S]*?<\/table>/, dynamicTable);
+      html = html.replace(/<table>[\s\S]*?<\/table>/, () => dynamicTable);
     }
   }
 
