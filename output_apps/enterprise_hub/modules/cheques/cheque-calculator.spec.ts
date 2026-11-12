@@ -259,6 +259,12 @@ describe('Cheque Ras-giri & Discounting Calculator (T72)', () => {
           { type: 'body', metatype: CalculateSelectionDiscountDto },
         ),
       ).rejects.toThrow();
+      await expect(
+        pipe.transform(
+          { chequeIds: [1, 1], annualRatePercent: 24 },
+          { type: 'body', metatype: CalculateSelectionDiscountDto },
+        ),
+      ).rejects.toThrow();
     });
 
     it('enforces CHEQUES:READ guard on calculator endpoints (allows cheque_reviewer, denies hr)', async () => {

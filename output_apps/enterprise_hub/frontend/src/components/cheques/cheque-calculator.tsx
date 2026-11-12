@@ -13,6 +13,7 @@ import {
   listCheques,
 } from "@/lib/api/cheques-client";
 import {
+  areCalculatorResultsEqual,
   calculateClientRasgiriAndDiscount,
   ClientChequeItem,
   ClientRasgiriDiscountResult,
@@ -102,6 +103,7 @@ export function ChequeCalculator({ direction: initialDirection = "received" }: C
     }
   };
 
+  const rateEmpty = annualRateInput.trim() === "";
   const rateValid = parseRateScaled(annualRateInput) !== null;
   const calculationItems: ClientChequeItem[] =
     mode === "existing"
@@ -169,9 +171,15 @@ export function ChequeCalculator({ direction: initialDirection = "received" }: C
               annualRatePercent: rateNumber,
               baseDate,
             });
-      setServerVerifyMessage(
-        `محاسبه سرور تأیید شد: راس ${formatNumber(serverRes.weightedAverageDays)} روز، کارمزد ${formatMoneyRial(serverRes.totalDiscountAmount)}`,
-      );
+      if (areCalculatorResultsEqual(result, serverRes)) {
+        setServerVerifyMessage(
+          `محاسبه سرور با مرورگر تطابق دارد: راس ${formatNumber(serverRes.weightedAverageDays)} روز، کارمزد ${formatMoneyRial(serverRes.totalDiscountAmount)}`,
+        );
+      } else {
+        setServerVerifyMessage(
+          `عدم تطابق با سرور: مرورگر (جمع ${result.totalAmountFormatted}، راس ${formatNumber(result.weightedAverageDays)} روز، کارمزد ${result.totalDiscountFormatted}) ≠ سرور (جمع ${formatMoneyRial(serverRes.totalAmount)}، راس ${formatNumber(serverRes.weightedAverageDays)} روز، کارمزد ${formatMoneyRial(serverRes.totalDiscountAmount)})`,
+        );
+      }
     } catch (err) {
       setServerVerifyMessage(err instanceof Error ? err.message : "خطا در دریافت محاسبه از سرور");
     } finally {
@@ -250,6 +258,10 @@ export function ChequeCalculator({ direction: initialDirection = "received" }: C
               </div>
               {!rateValid ? (
                 <p className="mt-1 text-xs text-red-600">نرخ تنزیل باید بین ۰ تا ۱۰۰ درصد باشد.</p>
+              ) : rateEmpty ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  در صورت خالی بودن نرخ، نرخ ۰٪ و کارمزد تنزیل صفر در نظر گرفته می‌شود (مبنای ۳۶۵ روز).
+                </p>
               ) : (
                 <p className="mt-1 text-xs text-muted-foreground">
                   مبنای محاسبه ۳۶۵ روز؛ برای چک‌های سررسیدگذشته روز منفی در راس‌گیری لحاظ می‌شود و کارمزد تنزیل صفر است.
@@ -328,7 +340,11 @@ export function ChequeCalculator({ direction: initialDirection = "received" }: C
         <Card className="bg-gradient-to-br from-blue-50/50 to-blue-100/30 dark:from-blue-950/20 dark:to-blue-900/10 border-blue-200/50">
           <CardContent className="pt-5">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">خالص دریافتی پس از تنزیل</span>
+              <span className="text-xs font-medium text-muted-foreground">
+                {mode === "existing" && direction === "issued"
+                  ? "خالص تعهد پس از تنزیل"
+                  : "خالص دریافتی پس از تنزیل"}
+              </span>
               <Calculator className="size-4 text-blue-500" />
             </div>
             <p className="mt-2 text-xl font-bold tracking-tight text-blue-900 dark:text-blue-200">

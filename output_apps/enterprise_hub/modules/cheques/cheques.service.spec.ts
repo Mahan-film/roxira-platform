@@ -845,4 +845,18 @@ describe('ChequesService Ras-giri and Discounting (T72)', () => {
     const rasPartial = await t.service.calculateSelectionRasgiri(A, [partial.id], '2026-11-10');
     expect(rasPartial.totalAmount).toBe('300');
   });
+
+  it('rejects spent cheques and dedupes duplicate chequeIds in loadCalculatorItems', async () => {
+    const t = build();
+    const spent = await t.service.create(A, received({ sayadNumber: undefined, amount: 500, dueDate: '2026-11-20' }) as never);
+    await t.service.transition(A, spent.id, { status: ChequeStatus.SPENT, spentToName: 'شخص ثالث' });
+    await expect(
+      t.service.calculateSelectionRasgiri(A, [spent.id], '2026-11-10'),
+    ).rejects.toThrow('تسویه یا بسته شده');
+
+    const open = await t.service.create(A, received({ sayadNumber: undefined, amount: 500, dueDate: '2026-11-20' }) as never);
+    const deduped = await t.service.calculateSelectionRasgiri(A, [open.id, open.id], '2026-11-10');
+    expect(deduped.totalCount).toBe(1);
+    expect(deduped.totalAmount).toBe('500');
+  });
 });

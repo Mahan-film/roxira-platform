@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  areCalculatorResultsEqual,
   calculateClientRasgiriAndDiscount,
   effectiveChequeAmount,
   isCalculatorEligibleCheque,
@@ -14,16 +15,52 @@ test("tehranTodayIso uses Asia/Tehran calendar day across UTC midnight boundary"
   assert.equal(tehranTodayIso(new Date("2026-11-11T20:30:00Z")), "2026-11-12");
 });
 
-test("cleared cheques with remainingAmount 0 are excluded and never fall back to face amount", () => {
+test("cleared, returned, spent, and zero-remaining cheques are excluded and never fall back to face amount", () => {
   const cleared = { status: "cleared" as const, remainingAmount: 0, amount: 100_000_000 };
+  const returned = { status: "returned" as const, remainingAmount: 100_000_000, amount: 100_000_000 };
+  const spent = { status: "spent" as const, remainingAmount: 100_000_000, amount: 100_000_000 };
   const partial = { status: "deposited" as const, remainingAmount: 40_000_000, amount: 100_000_000 };
   const zeroOpen = { status: "registered" as const, remainingAmount: "0.00", amount: 50_000_000 };
 
   assert.equal(isCalculatorEligibleCheque(cleared), false);
+  assert.equal(isCalculatorEligibleCheque(returned), false);
+  assert.equal(isCalculatorEligibleCheque(spent), false);
   assert.equal(isCalculatorEligibleCheque(zeroOpen), false);
   assert.equal(isCalculatorEligibleCheque(partial), true);
   assert.equal(effectiveChequeAmount(cleared), 0);
   assert.equal(effectiveChequeAmount(partial), 40_000_000);
+});
+
+test("areCalculatorResultsEqual detects server vs client matches and mismatches", () => {
+  const client = {
+    totalAmountDecimal: "1000000000",
+    weightedAverageDays: 90,
+    totalDiscountDecimal: "59178082",
+  };
+  assert.equal(
+    areCalculatorResultsEqual(client, {
+      totalAmount: "1000000000",
+      weightedAverageDays: 90,
+      totalDiscountAmount: "59178082",
+    }),
+    true,
+  );
+  assert.equal(
+    areCalculatorResultsEqual(client, {
+      totalAmount: "1000000000",
+      weightedAverageDays: 91,
+      totalDiscountAmount: "59178082",
+    }),
+    false,
+  );
+  assert.equal(
+    areCalculatorResultsEqual(client, {
+      totalAmount: "1000000000",
+      weightedAverageDays: 90,
+      totalDiscountAmount: "59178083",
+    }),
+    false,
+  );
 });
 
 test("rasgiri hand-verified weighted average days and half-up rounding", () => {

@@ -1,7 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   ArrayMinSize,
+  ArrayUnique,
   IsArray,
   IsDateString,
   IsInt,
@@ -138,6 +140,8 @@ export class CalculateSelectionRasgiriDto {
   @ApiProperty({ description: 'شناسه‌های چک‌های انتخاب‌شده', type: [Number], example: [1, 2] })
   @IsArray({ message: 'فهرست شناسه‌های چک باید آرایه باشد.' })
   @ArrayMinSize(1, { message: 'حداقل یک فقره چک باید انتخاب شود.' })
+  @ArrayMaxSize(200, { message: 'حداکثر ۲۰۰ فقره چک قابل انتخاب هم‌زمان است.' })
+  @ArrayUnique({ message: 'شناسه‌های چک نباید تکراری باشد.' })
   @IsInt({ each: true, message: 'شناسه چک باید عدد صحیح باشد.' })
   @Min(1, { each: true, message: 'شناسه چک نامعتبر است.' })
   chequeIds: number[];

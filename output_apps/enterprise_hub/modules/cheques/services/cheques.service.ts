@@ -606,11 +606,12 @@ export class ChequesService {
     tenantId: string,
     chequeIds: number[],
   ): Promise<ChequeCalculationInput[]> {
-    if (!chequeIds || chequeIds.length === 0) {
+    const uniqueIds = Array.from(new Set(chequeIds ?? []));
+    if (uniqueIds.length === 0) {
       throw new BadRequestException('حداقل یک فقره چک باید انتخاب شود.');
     }
     return Promise.all(
-      chequeIds.map(async (id) => {
+      uniqueIds.map(async (id) => {
         const cheque = await this.get(tenantId, id);
         const remaining = cheque.remainingAmount ?? cheque.amount;
         const remainingMinor = toMinor(remaining);

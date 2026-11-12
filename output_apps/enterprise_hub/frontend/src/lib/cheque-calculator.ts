@@ -29,11 +29,13 @@ export interface ClientChequeDetail {
   dueDate: string;
   dueDateJalali: string;
   days: number;
+  /** Display-only weight ratio percentage (not a money amount). */
   weightPercent: number;
   discountDecimal: string;
   discountFormatted: string;
   netPresentValueDecimal: string;
   netPresentValueFormatted: string;
+  /** Display-only period discount rate ratio percentage (not a money amount). */
   effectivePeriodRatePercent: number;
   sayadNumber?: string;
   description?: string;
@@ -98,16 +100,37 @@ export function formatTomansFromMinor(minor: bigint): string {
   return formatMoneyRial(minorToRialString(minor), "toman");
 }
 
-/** True only when a cheque is open (not cleared/returned) and has positive remaining amount. */
+const OPEN_CALCULATOR_STATUSES = new Set(["registered", "delivered", "deposited", "bounced"]);
+
+/** True only when a cheque has an open status matching server OPEN_STATUSES and positive remaining amount. */
 export function isCalculatorEligibleCheque(
   cheque: Pick<Cheque, "status" | "remainingAmount" | "amount">,
 ): boolean {
-  if (cheque.status === "cleared" || cheque.status === "returned") {
+  if (!OPEN_CALCULATOR_STATUSES.has(cheque.status)) {
     return false;
   }
   const effective = cheque.remainingAmount ?? cheque.amount;
   const minor = toMinorUnits(effective);
   return minor !== null && minor > ZERO;
+}
+
+/** Exact comparison between client calculation and server response using BigInt minor units. */
+export function areCalculatorResultsEqual(
+  client: Pick<ClientRasgiriDiscountResult, "totalAmountDecimal" | "weightedAverageDays" | "totalDiscountDecimal">,
+  server: { totalAmount: number | string; weightedAverageDays: number; totalDiscountAmount: number | string },
+): boolean {
+  const clientAmount = toMinorUnits(client.totalAmountDecimal);
+  const serverAmount = toMinorUnits(server.totalAmount);
+  const clientDiscount = toMinorUnits(client.totalDiscountDecimal);
+  const serverDiscount = toMinorUnits(server.totalDiscountAmount);
+  if (clientAmount === null || serverAmount === null || clientDiscount === null || serverDiscount === null) {
+    return false;
+  }
+  return (
+    clientAmount === serverAmount &&
+    client.weightedAverageDays === server.weightedAverageDays &&
+    clientDiscount === serverDiscount
+  );
 }
 
 /** Remaining amount to use in calculations (never falls back from 0 to face amount). */
