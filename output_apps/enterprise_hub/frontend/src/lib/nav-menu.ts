@@ -210,6 +210,12 @@ export const MENU_GROUPS: MenuGroup[] = [
     icon: "Landmark",
     items: [
       { href: "/app/tax", label: "مالیات و مودیان", icon: "Landmark", module: "tax" },
+      {
+        href: "/app/tax/electronic-books",
+        label: "دفاتر تجاری الکترونیکی",
+        icon: "BookOpenCheck",
+        module: "tax",
+      },
     ],
   },
   {
@@ -253,6 +259,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         label: "قواعد سازمان",
         icon: "Settings",
         module: "members",
+      },
+      {
+        href: "/app/settings/integrations/receipt-bot",
+        label: "بات دریافت رسید",
+        icon: "Bot",
+        module: "accounting",
+        keywords: ["telegram", "bot", "تلگرام", "رسید", "بات"],
       },
       {
         href: "/app/settings/audit",

@@ -1,5 +1,6 @@
 import {
-  Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query, Req,
+  BadRequestException,
+  Body, Controller, Delete, Get, HttpCode, HttpStatus, NotFoundException, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AccessRequest, requireAccess } from '../access-context';
@@ -10,6 +11,7 @@ import {
   AccessAction,
   AccessModule,
   SYSTEM_ROLES,
+  SystemRole,
 } from '../catalogue';
 import { AnyMember, AuthOnly, ModuleAccess, RequireAction } from '../decorators';
 import {
@@ -29,6 +31,8 @@ import { MembersService } from '../services/members.service';
 import { OrganizationsService } from '../services/organizations.service';
 import { RolesService } from '../services/roles.service';
 import { StructureService } from '../services/structure.service';
+import { LoginWindowService } from '../services/login-window.service';
+import { SetLoginScheduleDto } from '../dto/login-schedule.dto';
 
 /**
  * Organisation administration: members, invitations, roles, structure, security
@@ -50,6 +54,7 @@ export class OrgController {
     private readonly orgs: OrganizationsService,
     private readonly entitlements: EntitlementsService,
     private readonly audit: AuditService,
+    private readonly loginWindow: LoginWindowService,
   ) {}
 
   // ---------------------------------------------------------------- self
@@ -121,6 +126,62 @@ export class OrgController {
   @HttpCode(HttpStatus.NO_CONTENT)
   removeMember(@Req() req: AccessRequest, @Param('id', ParseUUIDPipe) id: string) {
     return this.members.remove(requireAccess(req), id, req);
+  }
+
+  @RequireAction(AccessAction.ADMIN)
+  @Get('members/:userId/login-schedule')
+  @ApiOperation({ summary: 'Get allowed login time window schedule for a member' })
+  async getLoginSchedule(
+    @Req() req: AccessRequest,
+    @Param('userId', ParseUUIDPipe) userId: string,
+  ) {
+    const ctx = requireAccess(req);
+    return this.loginWindow.findByTenantUser(ctx.tenantId, userId);
+  }
+
+  @RequireAction(AccessAction.ADMIN)
+  @Put('members/:userId/login-schedule')
+  @ApiOperation({ summary: 'Update allowed login time window schedule for a member' })
+  async setLoginSchedule(
+    @Req() req: AccessRequest,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() dto: SetLoginScheduleDto,
+  ) {
+    const ctx = requireAccess(req);
+    const members = await this.members.list(ctx);
+    const targetMember = members.find((m) => m.userId === userId);
+    if (!targetMember) {
+      throw new NotFoundException('عضو مورد نظر در این سازمان یافت نشد.');
+    }
+
+    const existing = await this.loginWindow.findByTenantUser(ctx.tenantId, userId);
+    const effectiveEnforce = dto.enforceSchedule ?? existing?.enforceSchedule ?? true;
+    if (effectiveEnforce) {
+      // Administrative break-glass protection: Organization owner can never be subjected
+      // to restrictive login schedules to guarantee emergency recovery (#738).
+      if (targetMember.roleKey === SystemRole.OWNER) {
+        throw new BadRequestException(
+          'امکان محدودسازی ساعات ورود برای مالک سازمان وجود ندارد (مسیر بازیابی اضطراری).',
+        );
+      }
+
+      const isCaller = userId === ctx.userId;
+      if (isCaller) {
+        const check = this.loginWindow.checkLoginWindow(
+          {
+            timezone: dto.timezone ?? existing?.timezone ?? 'Asia/Tehran',
+            enforceSchedule: true,
+            windows: dto.windows ?? existing?.windows ?? [],
+          },
+          new Date(),
+        );
+        if (!check.allowed) {
+          throw new BadRequestException('امکان تنظیم برنامه‌ای که دسترسی شما را در زمان فعلی مسدود کند وجود ندارد.');
+        }
+      }
+    }
+
+    return this.loginWindow.saveSchedule(ctx.tenantId, userId, dto);
   }
 
   // --------------------------------------------------------- invitations

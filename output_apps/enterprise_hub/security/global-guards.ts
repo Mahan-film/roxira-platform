@@ -4,6 +4,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../modules/auth/guards/jwt-auth.guard';
 import { AccessGuard } from '../modules/access/access.guard';
 import { AuditInterceptor } from '../modules/access/audit.interceptor';
+import { CostMaskingInterceptor } from '../modules/access/cost-masking.interceptor';
 import { RolesGuard } from '../modules/auth/guards/roles.guard';
 import { ProxyAwareThrottlerGuard } from './proxy-aware-throttler.guard';
 
@@ -18,6 +19,7 @@ export const globalThrottlerModule = ThrottlerModule.forRoot([
 /**
  * گاردهای سراسری؛ ترتیب مهم است: Throttler → JWT → Roles → Access (membership, permission,
  * entitlement, 2FA policy; default deny). AuditInterceptor logs mutating requests.
+ * CostMaskingInterceptor scrubs cost and purchase prices from responses for non-entitled roles.
  * (JwtService باید توسط ماژول میزبان در دسترس باشد: AuthModule آن را export می‌کند.)
  */
 export const GLOBAL_GUARD_PROVIDERS: Provider[] = [
@@ -26,4 +28,5 @@ export const GLOBAL_GUARD_PROVIDERS: Provider[] = [
   { provide: APP_GUARD, useClass: RolesGuard },
   { provide: APP_GUARD, useClass: AccessGuard },
   { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
+  { provide: APP_INTERCEPTOR, useClass: CostMaskingInterceptor },
 ];

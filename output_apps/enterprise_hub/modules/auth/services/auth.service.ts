@@ -43,6 +43,7 @@ import { AuditService } from '../../access/services/audit.service';
 import { InvitationsService } from '../../access/services/invitations.service';
 import { OrganizationsService } from '../../access/services/organizations.service';
 import { MembershipsRepository } from '../../access/repositories/memberships.repository';
+import { LoginWindowService } from '../../access/services/login-window.service';
 import { LoginChallengeService, MfaChallenge } from './login-challenge.service';
 import { MailService } from './mail.service';
 import { SessionsService } from './sessions.service';
@@ -127,6 +128,7 @@ export class AuthService {
     private readonly audit: AuditService,
     private readonly mail: MailService,
     private readonly sessions: SessionsService,
+    private readonly loginWindow: LoginWindowService,
   ) {}
 
   /**
@@ -402,6 +404,12 @@ export class AuthService {
    * Organisation a new session starts in: the requested one if the user is an
    * ACTIVE member, else the last active one, else the first membership, else none.
    */
+  /** Login-window check with the member's role so the owner break-glass (LESSONS 31) works on login and refresh. */
+  private async assertLoginWindow(tenantId: string, userId: string): Promise<void> {
+    const m = await this.memberships.findByTenantUser(tenantId, userId);
+    await this.loginWindow.assertAllowed(tenantId, userId, undefined, m?.roleKey);
+  }
+
   private async pickTenant(user: UserEntity, requested?: string | null): Promise<string | null> {
     const active = (await this.memberships.listForUser(user.id)).filter((m) => m.status === 'ACTIVE');
     const ids = active.map((m) => m.tenantId);
@@ -437,6 +445,9 @@ export class AuthService {
 
   private async finishLogin(user: UserEntity, ctx: LoginContext, mfa: boolean): Promise<AuthSessionDto> {
     const tenantId = await this.pickTenant(user, ctx.tenantId);
+    if (tenantId) {
+      await this.assertLoginWindow(tenantId, user.id);
+    }
     const deviceHash = sha256(ctx.userAgent ?? 'unknown');
     const newDevice = await this.refreshTokens.isNewDevice(user.id, deviceHash);
     const session = await this.issueSessionForUser(user, {
@@ -511,6 +522,9 @@ export class AuthService {
       throw new UnauthorizedException(REFRESH_INVALID_ERROR);
     }
     const tenantId = await this.pickTenant(user, meta.tenantId);
+    if (tenantId) {
+      await this.assertLoginWindow(tenantId, user.id);
+    }
     return this.issueSessionForUser(user, {
       familyId,
       mfa: meta.mfa,

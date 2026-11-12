@@ -12,13 +12,16 @@ export const SESSION_STORAGE_KEY = 'roxira.auth.session';
  *  - 'm1': a fresh, empty tenant for the M1 gate (e2e/tests/m1-shop-month.spec.ts), which imports the
  *    sample-company fixture and posts a whole month. APP_E2E_SESSION_FILE_M1 (mint one with
  *    `scripts/infra/e2e/mkuser.sh m1`), else the import tenant of the browser project.
+ *  - 'accountant': a fresh, empty tenant for the Accountant Day gate (e2e/tests/m1-accountant-day.spec.ts).
+ *    APP_E2E_SESSION_FILE_ACCOUNTANT.
  */
-export type SessionKind = 'seeded' | 'import' | 'm1';
+export type SessionKind = 'seeded' | 'import' | 'm1' | 'accountant';
 
 /** The session JSON file for a tenant kind, or undefined when the env does not provide one. */
 export function findSessionFile(kind: SessionKind, projectName: string): string | undefined {
   const env = process.env;
   const importFile = env[`APP_E2E_SESSION_FILE_IMPORT_${projectName.toUpperCase()}`];
+  if (kind === 'accountant') return env.APP_E2E_SESSION_FILE_ACCOUNTANT ?? importFile ?? env.APP_E2E_SESSION_FILE;
   if (kind === 'm1') return env.APP_E2E_SESSION_FILE_M1 ?? importFile ?? env.APP_E2E_SESSION_FILE;
   return (kind === 'import' ? importFile : undefined) ?? env.APP_E2E_SESSION_FILE;
 }

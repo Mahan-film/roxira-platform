@@ -33,5 +33,6 @@ import { CaptureService } from './services/capture.service';
   ],
   controllers: [CaptureController],
   providers: [CaptureService, CaptureLlmService, CaptureRepository, TenantScope],
+  exports: [CaptureService],
 })
 export class InvoiceCaptureModule {}

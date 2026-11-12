@@ -1,6 +1,7 @@
 import {
   Banknote,
   BookOpenCheck,
+  Bot,
   Boxes,
   Building2,
   Calculator,
@@ -38,6 +39,7 @@ import {
 export const NAV_ICONS: Record<string, LucideIcon> = {
   Banknote,
   BookOpenCheck,
+  Bot,
   Boxes,
   Building2,
   Calculator,

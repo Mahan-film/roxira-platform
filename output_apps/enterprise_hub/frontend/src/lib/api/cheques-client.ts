@@ -99,3 +99,53 @@ export function applyChequeRecon(
 ): Promise<ReconApplyResult> {
   return apiRequest<ReconApplyResult>(`${CHEQUES_ENDPOINT}/reconciliation/apply`, { method: "POST", body: payload, signal });
 }
+
+export interface ServerCalculatorItem {
+  id?: string | number;
+  amount: string;
+  dueDate: string;
+  sayadNumber?: string;
+  description?: string;
+}
+
+export interface ServerDiscountResult {
+  totalAmount: string;
+  totalDiscountAmount: string;
+  netPresentValue: string;
+  annualRatePercent: number;
+  baseDate: string;
+  weightedAverageDays: number;
+  items: Array<{
+    id?: string | number;
+    amount: string;
+    dueDate: string;
+    days: number;
+    discountAmount: string;
+    netPresentValue: string;
+    effectivePeriodRatePercent: number;
+  }>;
+}
+
+/** POST /enterprise-hub/cheques/calculator/discount */
+export function calculateDiscountApi(
+  payload: { items: ServerCalculatorItem[]; annualRatePercent: number; baseDate?: string },
+  signal?: AbortSignal,
+): Promise<ServerDiscountResult> {
+  return apiRequest<ServerDiscountResult>(`${CHEQUES_ENDPOINT}/calculator/discount`, {
+    method: "POST",
+    body: payload,
+    signal,
+  });
+}
+
+/** POST /enterprise-hub/cheques/calculator/selection-discount */
+export function calculateSelectionDiscountApi(
+  payload: { chequeIds: number[]; annualRatePercent: number; baseDate?: string },
+  signal?: AbortSignal,
+): Promise<ServerDiscountResult> {
+  return apiRequest<ServerDiscountResult>(`${CHEQUES_ENDPOINT}/calculator/selection-discount`, {
+    method: "POST",
+    body: payload,
+    signal,
+  });
+}
