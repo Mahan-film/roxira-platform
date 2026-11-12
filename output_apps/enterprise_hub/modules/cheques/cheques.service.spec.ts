@@ -4,6 +4,7 @@ import { ChequeEventEntity } from './entities/cheque-event.entity';
 import { ChequeEntity } from './entities/cheque.entity';
 import { ChequeDirection, ChequeStatus } from './enums/cheque.enum';
 import { toMinor } from '../accounting/money';
+import { CHART_TEMPLATES } from '../accounting/constants/iran-chart-template';
 import { ChequesService } from './services/cheques.service';
 import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
 
@@ -24,6 +25,9 @@ function build() {
   let entries: Entry[] = [];
   let seq = 0;
   const accounts = new Map<string, Set<string>>();
+  const fixedCharts = new Map<string, Array<{ code: string; name?: string; accountType?: string; level?: string }>>();
+  const mappings = new Map<string, Array<{ docType: string; role: string; accountCode: string }>>();
+  const createdAccounts: Array<{ tenantId: string; code: string }> = [];
   const failNextPosting = { on: false };
   /** Manager each `listEvents` read was run with (undefined = a separate TenantScope connection). */
   const eventReadManagers: unknown[] = [];
@@ -86,10 +90,16 @@ function build() {
 
   const accounting = {
     async listAccounts(tenantId: string) {
+      const custom = fixedCharts.get(tenantId);
+      if (custom) {
+        const extra = [...(accounts.get(tenantId) ?? [])].map((code) => ({ code }));
+        return [...custom, ...extra];
+      }
       return ['1010', '1020', '2010', '1099', ...(accounts.get(tenantId) ?? [])].map((code) => ({ code }));
     },
     async createAccount(tenantId: string, dto: { code: string }) {
       accounts.set(tenantId, (accounts.get(tenantId) ?? new Set()).add(dto.code));
+      createdAccounts.push({ tenantId, code: dto.code });
     },
     async createJournalEntry(tenantId: string, dto: Entry) {
       if (failNextPosting.on) {
@@ -110,8 +120,8 @@ function build() {
     async runInTransaction<T>(_t: string, work: (m: unknown) => Promise<T>) {
       return work({});
     },
-    async listMappings() {
-      return [];
+    async listMappings(tenantId: string, types: string[]) {
+      return (mappings.get(tenantId) ?? []).filter((m) => types.includes(m.docType));
     },
     async findSource(_t: string, st: string, sid: string, dt: string) {
       return sources.get(`${st}/${sid}/${dt}`) ?? null;
@@ -140,7 +150,16 @@ function build() {
     service,
     failNextPosting,
     accounts,
+    createdAccounts,
     eventReadManagers,
+    setChart(tenantId: string, chart: Array<{ code: string; name?: string; accountType?: string; level?: string }>) {
+      fixedCharts.set(tenantId, chart);
+    },
+    mapRole(tenantId: string, docType: string, role: string, accountCode: string) {
+      const list = mappings.get(tenantId) ?? [];
+      list.push({ docType, role, accountCode });
+      mappings.set(tenantId, list);
+    },
     resetChart() {
       accounts.clear();
     },
@@ -168,10 +187,13 @@ const received = (over: Record<string, unknown> = {}) => ({
 const shape = (entry: Entry) => entry.lines.map((l) => `${toMinor(l.debit ?? 0) > 0n ? 'Dr' : 'Cr'}${l.accountCode}`);
 
 describe('ChequesService lifecycle and ledger', () => {
-  it('creates the cheque accounts per tenant on first use', async () => {
+  it('creates missing default cheque role accounts per tenant on first use', async () => {
     const t = build();
-    await t.service.create(A, received() as never);
-    expect([...(t.accounts.get(A) ?? [])].sort()).toEqual(['1110', '1120', '2110']);
+    const rec = await t.service.create(A, received() as never);
+    expect([...(t.accounts.get(A) ?? [])].sort()).toEqual(['1021']);
+    await t.service.transition(A, rec.id, { status: ChequeStatus.CLEARED, eventDate: '2026-12-01' });
+    await t.service.create(A, received({ direction: ChequeDirection.ISSUED, sayadNumber: undefined }) as never);
+    expect([...(t.accounts.get(A) ?? [])].sort()).toEqual(['1012', '1021', '2011']);
     expect(t.accounts.get(B)).toBeUndefined();
   });
 
@@ -179,16 +201,16 @@ describe('ChequesService lifecycle and ledger', () => {
     const t = build();
     const created = await t.service.create(A, received() as never);
     expect(created.status).toBe('registered');
-    expect(shape(t.entries[0])).toEqual(['Dr1110', 'Cr1020']);
+    expect(shape(t.entries[0])).toEqual(['Dr1021', 'Cr1020']);
     expect(t.entries[0].lines[1].partyCode).toBe('C-1');
 
     await t.service.transition(A, created.id, { status: ChequeStatus.DEPOSITED, eventDate: '2026-11-25' });
     const done = await t.service.transition(A, created.id, { status: ChequeStatus.CLEARED, eventDate: '2026-12-01' });
 
     expect(t.entries.map(shape)).toEqual([
-      ['Dr1110', 'Cr1020'],
-      ['Dr1120', 'Cr1110'],
-      ['Dr1010', 'Cr1120'],
+      ['Dr1021', 'Cr1020'],
+      ['Dr1023', 'Cr1021'],
+      ['Dr1012', 'Cr1023'],
     ]);
     expect(done.status).toBe('cleared');
     expect(done.allowedNext).toEqual([]);
@@ -202,7 +224,7 @@ describe('ChequesService lifecycle and ledger', () => {
     await t.service.transition(A, id, { status: ChequeStatus.DEPOSITED });
     await t.service.transition(A, id, { status: ChequeStatus.BOUNCED });
     await t.service.transition(A, id, { status: ChequeStatus.DEPOSITED });
-    expect(t.entries.map(shape).slice(2)).toEqual([['Dr1020', 'Cr1120'], ['Dr1120', 'Cr1020']]);
+    expect(t.entries.map(shape).slice(2)).toEqual([['Dr1020', 'Cr1023'], ['Dr1023', 'Cr1020']]);
   });
 
   it('received: endorsing needs a third-party name and settles the supplier payable', async () => {
@@ -211,18 +233,18 @@ describe('ChequesService lifecycle and ledger', () => {
     await expect(t.service.transition(A, id, { status: ChequeStatus.SPENT })).rejects.toBeInstanceOf(BadRequestException);
     const spent = await t.service.transition(A, id, { status: ChequeStatus.SPENT, spentToName: 'تأمین‌کننده' });
     expect(spent.spentToName).toBe('تأمین‌کننده');
-    expect(shape(t.entries[1])).toEqual(['Dr2010', 'Cr1110']);
+    expect(shape(t.entries[1])).toEqual(['Dr2010', 'Cr1021']);
     expect(t.entries[1].lines.every((l) => l.partyCode === undefined)).toBe(true);
   });
 
   it('issued: register -> clear, and bounce is status-only', async () => {
     const t = build();
     const a = await t.service.create(A, received({ direction: ChequeDirection.ISSUED, sayadNumber: undefined }) as never);
-    expect(shape(t.entries[0])).toEqual(['Dr2010', 'Cr2110']);
+    expect(shape(t.entries[0])).toEqual(['Dr2010', 'Cr2011']);
     await t.service.transition(A, a.id, { status: ChequeStatus.BOUNCED });
     expect(t.entries).toHaveLength(1);
     await t.service.transition(A, a.id, { status: ChequeStatus.CLEARED });
-    expect(shape(t.entries[1])).toEqual(['Dr2110', 'Cr1010']);
+    expect(shape(t.entries[1])).toEqual(['Dr2011', 'Cr1012']);
     expect(t.events.map((e) => e.journalEntryId)).toEqual([1, null, 2]);
   });
 
@@ -312,15 +334,15 @@ describe('ChequesService money and chart', () => {
     const b = await t.service.create(A, received({ sayadNumber: undefined }) as never);
     await t.service.transition(A, a.id, { status: ChequeStatus.CLEARED });
     await t.service.transition(A, b.id, { status: ChequeStatus.BOUNCED });
-    expect(t.entries.map(shape).slice(2)).toEqual([['Dr1010', 'Cr1110'], ['Dr1020', 'Cr1110']]);
+    expect(t.entries.map(shape).slice(2)).toEqual([['Dr1012', 'Cr1021'], ['Dr1020', 'Cr1021']]);
   });
 
-  it('recreates the cheque accounts after a chart reset', async () => {
+  it('recreates missing default cheque accounts after a chart reset', async () => {
     const t = build();
     await t.service.create(A, received({ sayadNumber: undefined }) as never);
     t.resetChart();
     await t.service.create(A, received({ sayadNumber: undefined }) as never);
-    expect([...(t.accounts.get(A) ?? [])].sort()).toEqual(['1110', '1120', '2110']);
+    expect([...(t.accounts.get(A) ?? [])].sort()).toEqual(['1021']);
   });
 });
 
@@ -369,7 +391,7 @@ describe('ChequesService issued lifecycle (CHK-01)', () => {
     expect(delivered.allowedNext).toEqual(['cleared', 'bounced', 'returned']);
     expect(t.entries).toHaveLength(1);
     const done = await t.service.transition(A, c.id, { status: ChequeStatus.CLEARED });
-    expect(shape(t.entries[1])).toEqual(['Dr2110', 'Cr1010']);
+    expect(shape(t.entries[1])).toEqual(['Dr2011', 'Cr1012']);
     expect(done.events.map((e) => e.toStatus)).toEqual(['registered', 'delivered', 'cleared']);
   });
 
@@ -380,7 +402,7 @@ describe('ChequesService issued lifecycle (CHK-01)', () => {
     await t.service.transition(A, c.id, { status: ChequeStatus.BOUNCED });
     expect(t.entries).toHaveLength(1);
     await t.service.transition(A, c.id, { status: ChequeStatus.CLEARED });
-    expect(shape(t.entries[1])).toEqual(['Dr2110', 'Cr1010']);
+    expect(shape(t.entries[1])).toEqual(['Dr2011', 'Cr1012']);
   });
 
   it('issued: delivered -> returned cancels the note payable back to the payable', async () => {
@@ -388,7 +410,7 @@ describe('ChequesService issued lifecycle (CHK-01)', () => {
     const c = await t.service.create(A, issued() as never);
     await t.service.transition(A, c.id, { status: ChequeStatus.DELIVERED });
     await t.service.transition(A, c.id, { status: ChequeStatus.RETURNED });
-    expect(shape(t.entries[1])).toEqual(['Dr2110', 'Cr2010']);
+    expect(shape(t.entries[1])).toEqual(['Dr2011', 'Cr2010']);
   });
 
   it('received cheques cannot be delivered; issued cannot go back to registered', async () => {
@@ -460,7 +482,7 @@ describe('ChequesService partial payment (CHK-01)', () => {
     await t.service.transition(A, c.id, { status: ChequeStatus.DEPOSITED });
     const after = await t.service.partialPayment(A, c.id, { amount: 30 });
     expect(after).toMatchObject({ status: 'deposited', settledAmount: 30, remainingAmount: 70 });
-    expect(shape(t.entries[2])).toEqual(['Dr1010', 'Cr1120']);
+    expect(shape(t.entries[2])).toEqual(['Dr1012', 'Cr1023']);
     expect(t.entries[2].lines[0].debit).toBe('30.00');
     expect(after.events.at(-1)).toMatchObject({ fromStatus: 'deposited', toStatus: 'deposited', amount: 30 });
   });
@@ -473,7 +495,7 @@ describe('ChequesService partial payment (CHK-01)', () => {
     const done = await t.service.transition(A, c.id, { status: ChequeStatus.CLEARED });
     expect(t.entries[3].lines[0].debit).toBe('70.00');
     expect(done).toMatchObject({ status: 'cleared', settledAmount: 100, remainingAmount: 0 });
-    const toBank = t.entries.flatMap((e) => e.lines).filter((l) => l.accountCode === '1010').reduce((s, l) => s + toMinor(l.debit ?? 0), 0n);
+    const toBank = t.entries.flatMap((e) => e.lines).filter((l) => l.accountCode === '1012').reduce((s, l) => s + toMinor(l.debit ?? 0), 0n);
     expect(toBank).toBe(toMinor(100));
   });
 
@@ -483,18 +505,18 @@ describe('ChequesService partial payment (CHK-01)', () => {
     await t.service.transition(A, c.id, { status: ChequeStatus.DEPOSITED });
     await t.service.partialPayment(A, c.id, { amount: 40 });
     await t.service.transition(A, c.id, { status: ChequeStatus.BOUNCED });
-    expect(shape(t.entries[3])).toEqual(['Dr1020', 'Cr1120']);
+    expect(shape(t.entries[3])).toEqual(['Dr1020', 'Cr1023']);
     expect(t.entries[3].lines[0].debit).toBe('60.00');
     // the bounced remainder shows in the due list at 60, not 100
     expect((await t.service.listDue(A, { asOf: '2026-12-10' })).receivedTotal).toBe(60);
   });
 
-  it('issued: partial payment from delivered posts Dr 2110 / Cr 1010 for the part', async () => {
+  it('issued: partial payment from delivered posts Dr 2011 / Cr 1012 for the part', async () => {
     const t = build();
     const c = await t.service.create(A, issued({ amount: 100 }) as never);
     await t.service.transition(A, c.id, { status: ChequeStatus.DELIVERED });
     await t.service.partialPayment(A, c.id, { amount: '25.50' });
-    expect(shape(t.entries[1])).toEqual(['Dr2110', 'Cr1010']);
+    expect(shape(t.entries[1])).toEqual(['Dr2011', 'Cr1012']);
     expect(t.entries[1].lines[0].debit).toBe('25.50');
     expect((await t.service.get(A, c.id)).remainingAmount).toBe(74.5);
   });
@@ -610,16 +632,16 @@ describe('ChequesService bank account override (CHK-01 follow-up)', () => {
     const c = await t.service.create(A, received({ sayadNumber: undefined, amount: 100 }) as never);
     await t.service.transition(A, c.id, { status: ChequeStatus.DEPOSITED });
     await t.service.transition(A, c.id, { status: ChequeStatus.CLEARED, bankAccountId: 7 });
-    expect(shape(t.entries[2])).toEqual(['Dr1099', 'Cr1120']);
+    expect(shape(t.entries[2])).toEqual(['Dr1099', 'Cr1023']);
     expect(t.events.at(-1)!.bankAccountId).toBe(7);
   });
 
-  it('clearing without a bank account still posts to 1010', async () => {
+  it('clearing without a bank account posts to default bank role account 1012', async () => {
     const t = build();
     const c = await t.service.create(A, received({ sayadNumber: undefined, amount: 100 }) as never);
     await t.service.transition(A, c.id, { status: ChequeStatus.DEPOSITED });
     await t.service.transition(A, c.id, { status: ChequeStatus.CLEARED });
-    expect(shape(t.entries[2])).toEqual(['Dr1010', 'Cr1120']);
+    expect(shape(t.entries[2])).toEqual(['Dr1012', 'Cr1023']);
     expect(t.events.at(-1)!.bankAccountId).toBeNull();
   });
 
@@ -628,7 +650,7 @@ describe('ChequesService bank account override (CHK-01 follow-up)', () => {
     const c = await t.service.create(A, received({ sayadNumber: undefined, amount: 100 }) as never);
     await t.service.transition(A, c.id, { status: ChequeStatus.DEPOSITED });
     await t.service.partialPayment(A, c.id, { amount: 30, bankAccountId: 7 });
-    expect(shape(t.entries[2])).toEqual(['Dr1099', 'Cr1120']);
+    expect(shape(t.entries[2])).toEqual(['Dr1099', 'Cr1023']);
     expect(t.events.at(-1)!.bankAccountId).toBe(7);
   });
 
@@ -869,5 +891,73 @@ describe('ChequesService Ras-giri and Discounting (T72)', () => {
     await expect(
       t.service.calculateSelectionDiscount(A, [otherTenantCheque.id], 24, '2026-11-10'),
     ).rejects.toThrow('چک یافت نشد');
+  });
+});
+
+describe('ChequesService T98 role resolution on Iran chart template', () => {
+  const realIranChart = CHART_TEMPLATES.find((c) => c.key === 'iran-trading')!.accounts.map((a) => ({
+    code: a.code,
+    name: a.name,
+    accountType: a.accountType,
+    level: a.level,
+  }));
+
+  it('posts received and issued cheques to template notes/bank accounts (1021/2011/1012) and never touches 1110/1120/2110', async () => {
+    const t = build();
+    t.setChart(A, realIranChart);
+
+    const rec = await t.service.create(A, received({ sayadNumber: undefined, amount: 250 }) as never);
+    await t.service.transition(A, rec.id, { status: ChequeStatus.DEPOSITED });
+    await t.service.transition(A, rec.id, { status: ChequeStatus.CLEARED });
+
+    const recSpent = await t.service.create(A, received({ sayadNumber: undefined, amount: 150 }) as never);
+    await t.service.transition(A, recSpent.id, { status: ChequeStatus.SPENT, spentToName: 'تأمین‌کننده' });
+
+    const iss = await t.service.create(A, issued({ amount: 300 }) as never);
+    await t.service.transition(A, iss.id, { status: ChequeStatus.DELIVERED });
+    await t.service.transition(A, iss.id, { status: ChequeStatus.CLEARED });
+
+    expect(t.createdAccounts).toEqual([]);
+    expect(t.entries.map(shape)).toEqual([
+      ['Dr1021', 'Cr1020'],
+      ['Dr1023', 'Cr1021'],
+      ['Dr1012', 'Cr1023'],
+      ['Dr1021', 'Cr1020'],
+      ['Dr2010', 'Cr1021'],
+      ['Dr2010', 'Cr2011'],
+      ['Dr2011', 'Cr1012'],
+    ]);
+    const touchedCodes = new Set(t.entries.flatMap((e) => e.lines.map((l) => l.accountCode)));
+    expect(touchedCodes.has('1110')).toBe(false); // زمین (FIXED_ASSET)
+    expect(touchedCodes.has('1120')).toBe(false); // استهلاک انباشته (ACCUMULATED_DEPRECIATION)
+    expect(touchedCodes.has('2110')).toBe(false); // تسهیلات مالی بلندمدت (LONG_TERM_LOAN)
+  });
+
+  it('routes cheque postings per tenant using custom posting-rule mappings', async () => {
+    const t = build();
+    t.setChart(A, [
+      ...realIranChart,
+      { code: '1029', name: 'اسناد دریافتنی اختصاصی', accountType: 'ASSET', level: 'moein' },
+      { code: '1028', name: 'اسناد در جریان وصول اختصاصی', accountType: 'ASSET', level: 'moein' },
+      { code: '1019', name: 'حساب بانکی اختصاصی', accountType: 'ASSET', level: 'moein' },
+      { code: '2019', name: 'اسناد پرداختنی اختصاصی', accountType: 'LIABILITY', level: 'moein' },
+    ]);
+    t.mapRole(A, '*', 'cheques_receivable', '1029');
+    t.mapRole(A, '*', 'cheques_in_collection', '1028');
+    t.mapRole(A, '*', 'bank', '1019');
+    t.mapRole(A, '*', 'cheques_payable', '2019');
+
+    const rec = await t.service.create(A, received({ sayadNumber: undefined, amount: 500 }) as never);
+    await t.service.transition(A, rec.id, { status: ChequeStatus.DEPOSITED });
+    await t.service.transition(A, rec.id, { status: ChequeStatus.CLEARED });
+    const iss = await t.service.create(A, issued({ amount: 200 }) as never);
+
+    expect(t.entries.map(shape)).toEqual([
+      ['Dr1029', 'Cr1020'],
+      ['Dr1028', 'Cr1029'],
+      ['Dr1019', 'Cr1028'],
+      ['Dr2010', 'Cr2019'],
+    ]);
+    expect(t.createdAccounts).toEqual([]);
   });
 });

@@ -24,7 +24,12 @@ import {
 
 const currencyStub = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
 
-describePg('Cheque lifecycle on PostgreSQL', () => {
+/**
+ * Real PostgreSQL spec running as roxira_app (NOSUPERUSER NOBYPASSRLS) (LESSONS 5):
+ * - Verifies lazy account creation and role resolution for cheque lifecycle on PostgreSQL.
+ * - Asserts non-collision with fixed assets and depreciation.
+ */
+describePg('Cheque lifecycle on PostgreSQL (NOSUPERUSER NOBYPASSRLS) (T98)', () => {
   let testDb: TestDatabaseContext;
   let service: ChequesService;
   let accounting: AccountingService;
@@ -59,6 +64,8 @@ describePg('Cheque lifecycle on PostgreSQL', () => {
 
   beforeAll(async () => {
     testDb = await createTestDatabase('chq');
+    const [userRow] = await testDb.app.query(`SELECT current_user`);
+    expect(userRow.current_user).toBe('roxira_app');
     accounting = new AccountingService(new AccountingRepository(testDb.scope), currencyStub);
     const chequesRepo = new ChequesRepository(testDb.scope);
     banking = new BankingService(
@@ -81,9 +88,15 @@ describePg('Cheque lifecycle on PostgreSQL', () => {
       // the tenant may already be seeded with the default chart: create only what is missing
       const have = new Set((await accounting.listAccounts(tenantId)).map((a) => a.code));
       for (const [code, name, type] of [
-        ['1010', 'بانک', AccountType.ASSET],
+        ['1010', 'موجودی نقد و بانک', AccountType.ASSET],
+        ['1012', 'بانک‌ها', AccountType.ASSET],
         ['1020', 'حساب‌های دریافتنی', AccountType.ASSET],
+        ['1021', 'اسناد دریافتنی', AccountType.ASSET],
+        ['1110', 'زمین', AccountType.ASSET],
+        ['1120', 'استهلاک انباشته', AccountType.ASSET],
         ['2010', 'حساب‌های پرداختنی', AccountType.LIABILITY],
+        ['2011', 'اسناد پرداختنی', AccountType.LIABILITY],
+        ['2110', 'تسهیلات مالی بلندمدت', AccountType.LIABILITY],
       ] as const) {
         if (!have.has(code)) await accounting.createAccount(tenantId, { code, name, accountType: type } as never);
       }
@@ -116,9 +129,10 @@ describePg('Cheque lifecycle on PostgreSQL', () => {
     const dbEvents = await q<{ journal_entry_id: number; amount: string }>(
       `SELECT journal_entry_id, amount FROM fin_cheque_events WHERE cheque_id = $1 ORDER BY id`, [c.id]);
     expect(dbEvents.every((e) => e.journal_entry_id !== null && e.amount === '100.00')).toBe(true);
+    expect(await balance(T1, '1021')).toBe(0n);
+    expect(await balance(T1, '1012')).toBe(100n);
     expect(await balance(T1, '1110')).toBe(0n);
     expect(await balance(T1, '1120')).toBe(0n);
-    expect(await balance(T1, '1010')).toBe(100n);
   });
 
   it('received: bounce restores the receivable; return afterwards posts nothing', async () => {
@@ -146,22 +160,24 @@ describePg('Cheque lifecycle on PostgreSQL', () => {
   });
 
   it('issued: register -> deliver -> clear leaves the note payable at zero and the bank credited', async () => {
-    const bank = await balance(T1, '1010');
+    const bank = await balance(T1, '1012');
     const c = await service.create(T1, base({ direction: ChequeDirection.ISSUED }) as never);
-    expect(await balance(T1, '2110')).toBe(-100n);
+    expect(await balance(T1, '2011')).toBe(-100n);
+    expect(await balance(T1, '2110')).toBe(0n);
     await service.transition(T1, c.id, { status: ChequeStatus.DELIVERED });
     await service.transition(T1, c.id, { status: ChequeStatus.CLEARED });
+    expect(await balance(T1, '2011')).toBe(0n);
     expect(await balance(T1, '2110')).toBe(0n);
-    expect(await balance(T1, '1010')).toBe(bank - 100n);
+    expect(await balance(T1, '1012')).toBe(bank - 100n);
   });
 
   it('partial payment: part clears, the remainder bounces, the DB check keeps settled <= amount', async () => {
     const c = await service.create(T1, base({ amount: '1000' }) as never);
     await service.transition(T1, c.id, { status: ChequeStatus.DEPOSITED });
-    const bank = await balance(T1, '1010');
+    const bank = await balance(T1, '1012');
     const part = await service.partialPayment(T1, c.id, { amount: '400' });
     expect(part).toMatchObject({ status: 'deposited', settledAmount: 400, remainingAmount: 600 });
-    expect(await balance(T1, '1010')).toBe(bank + 400n);
+    expect(await balance(T1, '1012')).toBe(bank + 400n);
     const receivable = await balance(T1, '1020');
     await service.transition(T1, c.id, { status: ChequeStatus.BOUNCED });
     expect(await balance(T1, '1020')).toBe(receivable + 600n);
@@ -171,12 +187,12 @@ describePg('Cheque lifecycle on PostgreSQL', () => {
   it('partial payment: a client idempotency key makes a retry replay instead of settling twice', async () => {
     const c = await service.create(T1, base({ amount: '1000' }) as never);
     await service.transition(T1, c.id, { status: ChequeStatus.DEPOSITED });
-    const bank = await balance(T1, '1010');
+    const bank = await balance(T1, '1012');
     const first = await service.partialPayment(T1, c.id, { amount: '300', idempotencyKey: 'pg-pay-1' });
     const retry = await service.partialPayment(T1, c.id, { amount: '300', idempotencyKey: 'pg-pay-1' });
     expect(first).toMatchObject({ status: 'deposited', settledAmount: 300, remainingAmount: 700 });
     expect(retry).toMatchObject({ status: 'deposited', settledAmount: 300, remainingAmount: 700 });
-    expect(await balance(T1, '1010')).toBe(bank + 300n);
+    expect(await balance(T1, '1012')).toBe(bank + 300n);
     const parts = await q<{ n: string }>(
       `SELECT count(*)::text AS n FROM fin_cheque_events WHERE cheque_id = $1 AND from_status = to_status`, [c.id]);
     expect(parts[0].n).toBe('1');
@@ -237,7 +253,7 @@ describePg('Cheque lifecycle on PostgreSQL', () => {
       const ledger = async (code: string, name: string) =>
         (await accounting.listAccounts(T1)).find((a) => a.code === code) ??
         (await accounting.createAccount(T1, { code, name, accountType: AccountType.ASSET } as never));
-      const bankLedger = await ledger('1010', 'بانک');
+      const bankLedger = await ledger('1012', 'بانک‌ها');
       const otherLedger = await ledger('1099', 'بانک دیگر');
       bankAccountId = (await banking.createAccount(T1, { name: 'جاری', accountNumber: `91${seq}001`, ledgerAccountId: bankLedger.id, openingBalance: 0 } as never)).id;
       otherBankAccountId = (await banking.createAccount(T1, { name: 'دیگر', accountNumber: `91${seq}002`, ledgerAccountId: otherLedger.id, openingBalance: 0 } as never)).id;

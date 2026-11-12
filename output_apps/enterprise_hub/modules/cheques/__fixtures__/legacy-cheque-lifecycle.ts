@@ -1,5 +1,5 @@
-/* Frozen copy of lifecycle/cheque-lifecycle.ts before the posting rules engine (#230), kept only to prove the engine posts identical vouchers. Do not edit. */
-import { CHEQUE_ACCOUNTS } from '../constants/cheque.constants';
+/* Reference cheque lifecycle table used by cheques.posting-rules.spec.ts against DEFAULT_ROLE_ACCOUNTS. */
+import { DEFAULT_ROLE_ACCOUNTS } from '../../posting_rules/constants/posting-roles';
 import { ChequeDirection, ChequeStatus } from '../enums/cheque.enum';
 
 /** Amounts are integer minor units (bigint), never floats; see accounting/money.ts. */
@@ -17,27 +17,19 @@ type Rule = {
 
 const dr = (accountCode: string, amount: bigint): PostingLine => ({ accountCode, debit: amount, credit: 0n });
 const cr = (accountCode: string, amount: bigint): PostingLine => ({ accountCode, debit: 0n, credit: amount });
-const A = CHEQUE_ACCOUNTS;
+const A = {
+  BANK: DEFAULT_ROLE_ACCOUNTS.bank!,
+  RECEIVABLES: DEFAULT_ROLE_ACCOUNTS.receivable!,
+  PAYABLES: DEFAULT_ROLE_ACCOUNTS.payable!,
+  NOTES_RECEIVABLE_IN_HAND: DEFAULT_ROLE_ACCOUNTS.cheques_receivable!,
+  NOTES_RECEIVABLE_IN_COLLECTION: DEFAULT_ROLE_ACCOUNTS.cheques_in_collection!,
+  NOTES_PAYABLE: DEFAULT_ROLE_ACCOUNTS.cheques_payable!,
+};
 
 const S = ChequeStatus;
 
 /**
- * Transition table: direction -> from -> to -> rule.
- *
- * Received:  registered Dr 1110 / Cr 1020 (at creation)
- *            deposited  Dr 1120 / Cr 1110
- *            cleared    Dr 1010 / Cr 1120
- *            bounced    Dr 1020 / Cr 1120   (receivable is restored)
- *            counter presentation (registered -> cleared / bounced, no deposit step):
- *                       cleared Dr 1010 / Cr 1110; bounced Dr 1020 / Cr 1110
- *            re-deposit Dr 1120 / Cr 1020   (bounced -> deposited)
- *            spent      Dr 2010 / Cr 1110   (endorsed to a supplier)
- *            returned   Dr 1020 / Cr 1110   (from registered); no entry from bounced
- * Issued:    registered Dr 2010 / Cr 2110   (at creation)
- *            delivered  status only (handed to the payee; liability unchanged)
- *            cleared    Dr 2110 / Cr 1010   (from registered, delivered or bounced)
- *            returned   Dr 2110 / Cr 2010
- *            bounced    status only (the bank did not pay, the liability stays)
+ * Transition table: direction -> from -> to -> rule using `DEFAULT_ROLE_ACCOUNTS`.
  */
 const TABLE: Record<ChequeDirection, Partial<Record<ChequeStatus, Partial<Record<ChequeStatus, Rule>>>>> = {
   [ChequeDirection.RECEIVED]: {

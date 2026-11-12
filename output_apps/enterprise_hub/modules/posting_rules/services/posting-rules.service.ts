@@ -61,6 +61,23 @@ export class PostingRulesService {
     return mapped ?? DEFAULT_ROLE_ACCOUNTS[role] ?? null;
   }
 
+  /** Resolves every distinct role of a template for this tenant, flagging whether it used a default. */
+  async resolveRolesForTemplate(
+    tenantId: string,
+    docType: string,
+    overrides: RoleAccounts = {},
+    manager?: EntityManager,
+  ): Promise<Array<{ role: PostingRole; accountCode: string | undefined; isDefault: boolean }>> {
+    const template = requireTemplate(docType);
+    const mapping = await this.mappingFor(tenantId, docType, manager);
+    const roles = [...new Set(template.lines.map((line) => line.role))];
+    return roles.map((role) => ({
+      role,
+      accountCode: resolveRole(template, role, mapping, overrides),
+      isDefault: overrides[role] === undefined && mapping[role] === undefined,
+    }));
+  }
+
   /** Refuses codes that are not in the tenant's chart or are header (group / kol) accounts. */
   private async assertPostable(tenantId: string, proposal: VoucherProposal): Promise<void> {
     const accounts = new Map((await this.accounting.listAccounts(tenantId)).map((a) => [a.code, a]));
