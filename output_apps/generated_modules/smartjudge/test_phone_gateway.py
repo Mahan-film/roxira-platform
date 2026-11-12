@@ -4,12 +4,12 @@ from output_apps.generated_modules.smartjudge import chat_auth
 KEY = "k" * 40
 
 
-def test_off_when_key_unset_or_short(monkeypatch):
+def test_header_ignored_when_feature_off(monkeypatch):
+    # agent may send the header before the server has the key: stay anonymous, never 401
     monkeypatch.delenv("SMARTJUDGE_PHONE_GATEWAY_KEY", raising=False)
-    user = chat_auth.authenticate({"x-phone-gateway-key": KEY})
-    assert user.token_invalid and not user.authenticated
+    assert chat_auth.authenticate({"x-phone-gateway-key": KEY}) == chat_auth.ANONYMOUS
     monkeypatch.setenv("SMARTJUDGE_PHONE_GATEWAY_KEY", "short")
-    assert chat_auth.authenticate({"x-phone-gateway-key": "short"}).token_invalid
+    assert chat_auth.authenticate({"x-phone-gateway-key": "short"}) == chat_auth.ANONYMOUS
 
 
 def test_absent_header_is_plain_anonymous(monkeypatch):

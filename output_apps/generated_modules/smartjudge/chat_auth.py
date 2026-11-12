@@ -430,12 +430,13 @@ def phone_gateway_key(env_key: Optional[str] = None) -> str:
 
 
 def phone_gateway_user(headers: Optional[Mapping[str, str]], env_key: Optional[str] = None) -> Optional[CurrentUser]:
-    """None when the header is absent; the gateway identity on a match; an invalid user otherwise."""
+    """None when the header is absent or the feature is off (so deploy order cannot break the phone
+    line); the gateway identity on a match; an invalid user (401) on a wrong key."""
     value = headers.get(PHONE_GATEWAY_HEADER) if headers is not None else None
-    if not value:
-        return None
     key = phone_gateway_key(env_key)
-    if not key or not hmac.compare_digest(str(value).strip(), key):
+    if not value or not key:
+        return None
+    if not hmac.compare_digest(str(value).strip(), key):
         return _INVALID
     return CurrentUser(phone=PHONE_GATEWAY_ID, tier="VIP", authenticated=True, plan_level="free")
 
