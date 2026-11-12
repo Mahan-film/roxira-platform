@@ -311,6 +311,7 @@ export class MoadianService implements OnModuleInit {
     if ('error' in vatResolution) {
       const baseResult = runMoadianPreFlightValidation(invoice, {
         defaultSstid: credential?.defaultSstid,
+        memoryId: credential?.memoryId,
       });
       return {
         valid: false,
@@ -319,6 +320,7 @@ export class MoadianService implements OnModuleInit {
     }
     return runMoadianPreFlightValidation(invoice, {
       defaultSstid: credential?.defaultSstid,
+      memoryId: credential?.memoryId,
       expectedVatRate: vatResolution.rate,
     });
   }
@@ -408,6 +410,8 @@ export class MoadianService implements OnModuleInit {
     if ('error' in vatResolution) {
       const baseResult = runMoadianPreFlightValidation(invoice, {
         defaultSstid: credential.defaultSstid,
+        memoryId: credential.memoryId,
+        invoiceType: computedInty,
       });
       preFlight = {
         valid: false,
@@ -416,6 +420,8 @@ export class MoadianService implements OnModuleInit {
     } else {
       preFlight = runMoadianPreFlightValidation(invoice, {
         defaultSstid: credential.defaultSstid,
+        memoryId: credential.memoryId,
+        invoiceType: computedInty,
         expectedVatRate: vatResolution.rate,
       });
     }
