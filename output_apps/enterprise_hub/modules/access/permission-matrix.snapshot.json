@@ -104,6 +104,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "DELETE /enterprise-hub/integrations/receipt-bot/link (ReceiptBotController.unlink)": {
+    "policy": "accounting:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "DELETE /enterprise-hub/inventory/openings/:id (OpeningBalanceController.remove)": {
     "policy": "inventory:create",
     "owner": true,
@@ -1498,6 +1509,17 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/integrations/receipt-bot/status (ReceiptBotController.getStatus)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/inventory/documents/ (StockDocumentsController.list)": {
     "policy": "inventory:read",
     "owner": true,
@@ -2673,6 +2695,9 @@
     "hr": false,
     "read_only": false,
     "legacy_member": false
+  },
+  "POST /api/integrations/receipt-bot/webhook (ReceiptBotWebhookController.handleWebhook)": {
+    "policy": "public"
   },
   "POST /approvals/delegations (ApprovalsController.createDelegation)": {
     "policy": "members:approve",
@@ -3908,6 +3933,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/integrations/receipt-bot/link-code (ReceiptBotController.generateCode)": {
+    "policy": "accounting:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/inventory/documents/adjustments (StockDocumentsController.createAdjustment)": {
     "policy": "inventory:post",
     "owner": true,
@@ -4811,6 +4847,17 @@
     "owner": true,
     "admin": true,
     "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PUT /enterprise-hub/integrations/receipt-bot/preferences (ReceiptBotController.updatePreferences)": {
+    "policy": "accounting:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
     "sales": false,
     "cheque_reviewer": false,
     "hr": false,
