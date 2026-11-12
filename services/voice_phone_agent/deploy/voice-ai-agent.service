@@ -1,0 +1,19 @@
+[Unit]
+Description=Smart Judge Persian phone agent (LiveKit SIP)
+After=docker.service network-online.target voice-ai-tts.service
+Wants=network-online.target voice-ai-tts.service
+
+[Service]
+User=mahan
+WorkingDirectory=/home/mahan/voice-ai/agent
+# no HTTP(S)_PROXY here on purpose: the code picks proxy vs direct per request
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node --max-old-space-size=384 dist/main.js
+Restart=always
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=15
+MemoryMax=700M
+
+[Install]
+WantedBy=multi-user.target
