@@ -64,6 +64,7 @@ export class MoadianController {
 
   @RequireAction(AccessAction.READ)
   @Post('invoices/:invoiceId/pre-flight')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'اعتبارسنجی پیش از ارسال صورتحساب به سامانه مودیان' })
   @ApiResponse({ status: HttpStatus.OK })
   async preFlight(
