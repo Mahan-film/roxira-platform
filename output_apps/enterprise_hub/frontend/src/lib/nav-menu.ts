@@ -93,7 +93,7 @@ export const MENU_GROUPS: MenuGroup[] = [
       },
       {
         href: "/app/inventory/production",
-        label: "فرمول ساخت و تولید",
+        label: "فرمول ساخت و تولید (BOM)",
         icon: "Factory",
         module: "inventory",
         keywords: ["bom", "production", "تولید", "فرمول ساخت", "ضایعات"],

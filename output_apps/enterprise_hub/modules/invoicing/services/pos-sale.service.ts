@@ -385,7 +385,7 @@ export class PosSaleService {
           status === 409;
 
         // Transient DB/network errors (5xx) and auth errors (401/403) must fail the batch
-        // so the client keeps pending sales in its queue rather than marking permanent conflicts.
+        // so the client sync coordinator can isolate and probe deterministically failing items.
         if (!isBusinessRejection) {
           throw error;
         }

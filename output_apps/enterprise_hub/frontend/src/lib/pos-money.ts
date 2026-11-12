@@ -156,6 +156,10 @@ export function splitPosPayment(
   const cardNum = bigintToSafeJsonNumber(cardAmount);
   const remainderNum = bigintToSafeJsonNumber(payableTotal - cardAmount);
 
+  if (payableNum === null || cardNum === null || remainderNum === null) {
+    return null;
+  }
+
   if (cardAmount > BIGINT_ZERO && cardAmount < payableTotal) {
     return [
       { method: "CARD", amount: cardNum },
@@ -165,9 +169,9 @@ export function splitPosPayment(
   return [{ method: cardAmount > BIGINT_ZERO ? "CARD" : primaryMethod, amount: payableNum }];
 }
 
-export function bigintToSafeJsonNumber(value: bigint): number {
+export function bigintToSafeJsonNumber(value: bigint): number | null {
   if (value > BigInt(Number.MAX_SAFE_INTEGER) || value < BigInt(Number.MIN_SAFE_INTEGER)) {
-    throw new RangeError("Amount exceeds JS safe integer bounds");
+    return null;
   }
   // Safe exact conversion validated within IEEE-754 integer range for JSON DTO serialization
   return Number.parseInt(value.toString(10), 10);
@@ -179,6 +183,7 @@ export function parsePosQuantity(raw: string): number | null {
   const whole = scaled / BIGINT_HUNDRED;
   const frac = Number.parseInt((scaled % BIGINT_HUNDRED).toString(10), 10);
   const wholeNum = bigintToSafeJsonNumber(whole);
+  if (wholeNum === null) return null;
   return wholeNum + frac / 100;
 }
 

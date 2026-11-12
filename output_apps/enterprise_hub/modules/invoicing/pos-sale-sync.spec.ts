@@ -370,6 +370,13 @@ describe('Offline Counter Sales Sync & Conflict Detection (#782 / T93)', () => {
           { quantity: 1, unitPrice: 999 },
         ],
       },
+      {
+        vatPercent: 10,
+        lines: [
+          { quantity: 1.1, unitPrice: 2500 },
+          { quantity: 0.3, unitPrice: 10000 },
+        ],
+      },
     ];
 
     for (const c of cases) {

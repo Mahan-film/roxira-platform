@@ -121,9 +121,10 @@ async function executeTenantSync(
     const statusCode = extractStatusCode(err);
     const message = err instanceof Error && err.message ? err.message : "خطای ارتباط با سرور";
 
-    // If a batch was rejected by request validation / payload size (400/413/422) and has multiple items,
-    // probe one-by-one so valid items succeed and only malformed rows become conflicts.
-    if ((statusCode === 400 || statusCode === 413 || statusCode === 422) && pending.length > 1) {
+    // If a batch was rejected by request validation / payload size / server error (400/413/422/5xx) and has multiple items,
+    // probe one-by-one so valid items succeed and only malformed or deterministically failing rows become conflicts.
+    const isServer5xx = typeof statusCode === "number" && statusCode >= 500 && statusCode < 600;
+    if ((statusCode === 400 || statusCode === 413 || statusCode === 422 || isServer5xx) && pending.length > 1) {
       return isolateBadBatchItems(pending.map((p) => p.sale), tenantId, caller);
     }
 
@@ -208,16 +209,17 @@ async function isolateBadBatchItems(
       const status = extractStatusCode(itemErr);
       const msg =
         itemErr instanceof Error && itemErr.message ? itemErr.message : "خطای اعتبارسنجی فروش";
-      if (status === 400 || status === 422) {
+      const isItemServer5xx = typeof status === "number" && status >= 500 && status < 600;
+      if (status === 400 || status === 422 || isItemServer5xx) {
         const conf: PosConflict = {
           clientUuid: sale.idempotencyKey,
           code: "VALIDATION_FAILED",
-          error: msg,
+          error: isItemServer5xx ? `خطای سرور در ثبت فروش: ${msg}` : msg,
         };
         conflicts.push(conf);
         await updateQueuedSale(
           sale.idempotencyKey,
-          { status: "conflict", conflictCode: "VALIDATION_FAILED", error: msg },
+          { status: "conflict", conflictCode: "VALIDATION_FAILED", error: conf.error },
           tenantId,
         );
       } else {

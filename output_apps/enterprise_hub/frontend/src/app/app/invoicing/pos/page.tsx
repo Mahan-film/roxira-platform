@@ -274,6 +274,12 @@ export default function PosCounterPage() {
   });
   const cartTotals = computePosCartTotals(validLines, vatRate ?? 0);
   const estimatedPayableNumber = bigintToSafeJsonNumber(cartTotals.payableTotal);
+  const hasExceededSafeBounds =
+    cartTotals.payableTotal > BigInt(Number.MAX_SAFE_INTEGER) ||
+    lines.some((l) => {
+      const trimmedPrice = normaliseNumericInput(l.unitPrice);
+      return trimmedPrice !== "" && parsePosUnitPrice(l.unitPrice) === null;
+    });
 
   function resetForm() {
     setPhone("");
@@ -281,6 +287,40 @@ export default function PosCounterPage() {
     setLines([{ uid: nextUid.current++, code: "", description: "", quantity: "1", unitPrice: "" }]);
     setCardAmount("");
     setMethod("CASH");
+  }
+
+  function editConflictedSale(item: QueuedPosSale) {
+    if (lines.some((l) => l.code.trim() || l.description.trim())) {
+      if (
+        typeof window !== "undefined" &&
+        !window.confirm("اقلام موجود در سبد خرید با اقلام این فروش جایگزین خواهند شد. ادامه می‌دهید؟")
+      ) {
+        return;
+      }
+    }
+    setPhone(item.sale.customer?.phone ?? "");
+    setName(item.sale.customer?.name ?? "");
+    const loadedLines = item.sale.lines.map((l: { code?: string; description?: string; quantity: number; unitPrice: number }) => ({
+      uid: nextUid.current++,
+      code: l.code ?? "",
+      description: l.description ?? "",
+      quantity: String(l.quantity),
+      unitPrice: String(l.unitPrice),
+    }));
+    setLines(
+      loadedLines.length > 0
+        ? loadedLines
+        : [{ uid: nextUid.current++, code: "", description: "", quantity: "1", unitPrice: "" }],
+    );
+    const cardPay = item.sale.payments.find((p: { method: PaymentMethod; amount: number }) => p.method === "CARD");
+    setCardAmount(cardPay ? String(cardPay.amount) : "");
+    const nonCard = item.sale.payments.find((p: { method: PaymentMethod; amount: number }) => p.method !== "CARD");
+    setMethod(nonCard?.method === "BANK_TRANSFER" ? "BANK_TRANSFER" : "CASH");
+    void removeQueuedSale(item.clientUuid, tenantId).then(() => refreshQueue(tenantId));
+    setNotice({
+      type: "info",
+      message: "فروش دارای مغایرت در سبد خرید بارگذاری شد. اقلام یا مبالغ را اصلاح و مجدداً ثبت نمایید.",
+    });
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -293,6 +333,13 @@ export default function PosCounterPage() {
       setNotice({
         type: "error",
         message: "نرخ مالیات بر ارزش افزوده سازمان هنوز دریافت نشده است؛ برای محاسبه دقیق، ابتدا در حالت آنلاین صفحه را بارگذاری کنید.",
+      });
+      return;
+    }
+    if (hasExceededSafeBounds || estimatedPayableNumber === null) {
+      setNotice({
+        type: "error",
+        message: "مبالغ واردشده فراتر از سقف اعداد معتبر محاسباتی سیستم است. لطفاً مبالغ را اصلاح کنید.",
       });
       return;
     }
@@ -352,14 +399,22 @@ export default function PosCounterPage() {
 
     // Queue offline immediately when navigator reports offline
     if (!isOnline) {
-      await queueOfflineSale(salePayload, tenantId);
-      await refreshQueue(tenantId);
-      setNotice({
-        type: "info",
-        message: `فروش با موفقیت در صف آفلاین ذخیره شد (شناسه: ${clientUuid.slice(0, 12)}). به محض اتصال به اینترنت همگام‌سازی خواهد شد.`,
-      });
-      resetForm();
-      setBusy(false);
+      try {
+        await queueOfflineSale(salePayload, tenantId);
+        await refreshQueue(tenantId);
+        setNotice({
+          type: "info",
+          message: `فروش با موفقیت در صف آفلاین ذخیره شد (شناسه: ${clientUuid.slice(0, 12)}). به محض اتصال به اینترنت همگام‌سازی خواهد شد.`,
+        });
+        resetForm();
+      } catch {
+        setNotice({
+          type: "error",
+          message: "خطا در ذخیره‌سازی آفلاین: حافظه مرورگر در دسترس نیست یا مسدود شده است.",
+        });
+      } finally {
+        setBusy(false);
+      }
       return;
     }
 
@@ -373,14 +428,21 @@ export default function PosCounterPage() {
       resetForm();
     } catch (err: unknown) {
       if (isOfflineOrTransientError(err)) {
-        // Network drop / 5xx during live submission -> fall back safely to offline queue
-        await queueOfflineSale(salePayload, tenantId);
-        await refreshQueue(tenantId);
-        setNotice({
-          type: "info",
-          message: "ارتباط با سرور برقرار نشد؛ فروش در صف آفلاین ذخیره شد و به محض اتصال مجدد ثبت خواهد شد.",
-        });
-        resetForm();
+        try {
+          // Network drop / 5xx during live submission -> fall back safely to offline queue
+          await queueOfflineSale(salePayload, tenantId);
+          await refreshQueue(tenantId);
+          setNotice({
+            type: "info",
+            message: "ارتباط با سرور برقرار نشد؛ فروش در صف آفلاین ذخیره شد و به محض اتصال مجدد ثبت خواهد شد.",
+          });
+          resetForm();
+        } catch {
+          setNotice({
+            type: "error",
+            message: "ارتباط با سرور قطع شد و ذخیره‌سازی آفلاین در مرورگر نیز با خطا مواجه شد. کالا را تحویل ندهید.",
+          });
+        }
       } else {
         // 4xx validation or permission error -> show directly without queueing a permanently failing sale
         setNotice({
@@ -482,6 +544,14 @@ export default function PosCounterPage() {
                   <p className="text-rose-600 dark:text-rose-400 text-xs mt-0.5">{item.error || "کسری موجودی کالا"}</p>
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => editConflictedSale(item)}
+                  >
+                    ویرایش در سبد
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"

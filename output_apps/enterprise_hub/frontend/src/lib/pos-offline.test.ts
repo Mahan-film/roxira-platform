@@ -28,7 +28,13 @@ registerHooksFn?.({
 });
 
 import type { CreatePosSaleDto, InvoiceResponseDto } from "../types/invoicing.ts";
-import { computePosCartTotals, parsePosQuantity, parsePosUnitPrice, splitPosPayment } from "./pos-money.ts";
+import {
+  bigintToSafeJsonNumber,
+  computePosCartTotals,
+  parsePosQuantity,
+  parsePosUnitPrice,
+  splitPosPayment,
+} from "./pos-money.ts";
 import {
   clearAllOfflineSales,
   clearSyncedSales,
@@ -402,6 +408,23 @@ test("computePosCartTotals rounds VAT per line matching InvoicingService.quote o
   assert.equal(fractionalMulti.netTotal, BigInt(45));
   assert.equal(fractionalMulti.vatTotal, BigInt(4));
   assert.equal(fractionalMulti.payableTotal, BigInt(50));
+
+  // Non-binary exact fractional quantities (1.1 and 0.3)
+  const fractionalNonBinary = computePosCartTotals(
+    [
+      { quantity: "1.1", unitPrice: "2500" },
+      { quantity: "0.3", unitPrice: "10000" },
+    ],
+    10,
+  );
+  assert.equal(fractionalNonBinary.netTotal, BigInt(5750));
+  assert.equal(fractionalNonBinary.vatTotal, BigInt(575));
+  assert.equal(fractionalNonBinary.payableTotal, BigInt(6325));
+
+  // Large amounts bound test: parsePosUnitPrice and bigintToSafeJsonNumber safely return null instead of throwing
+  assert.equal(parsePosUnitPrice("99999999999999999999"), null);
+  assert.equal(bigintToSafeJsonNumber(BigInt(Number.MAX_SAFE_INTEGER) + BigInt(1)), null);
+  assert.equal(bigintToSafeJsonNumber(BigInt(5000)), 5000);
 });
 
 test("per-tenant VAT rate cache and unsynced logout counter are tenant-isolated and validated", () => {

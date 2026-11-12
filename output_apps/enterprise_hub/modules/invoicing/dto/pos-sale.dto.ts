@@ -212,7 +212,8 @@ export class SyncPosSalesDto {
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(500)
-  @IsObject({ each: true })
+  @ValidateNested({ each: true })
+  @Type(() => CreatePosSaleDto)
   sales: CreatePosSaleDto[];
 }
 
