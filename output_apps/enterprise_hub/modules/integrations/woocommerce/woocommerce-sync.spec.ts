@@ -17,6 +17,10 @@ describe('WooCommerce Crypto & Sync Logic (Unit Specs)', () => {
   const tenantId = '11111111-1111-4111-8111-111111111111';
   const tenantB = '22222222-2222-4222-8222-222222222222';
 
+  beforeAll(() => {
+    process.env.WOOCOMMERCE_KEY_ENCRYPTION_KEY = 'test_woocommerce_encryption_key_32b!';
+  });
+
   describe('Credential Encryption & Masking', () => {
     it('seals and opens credentials with tenant AAD binding', () => {
       const plaintext = 'ck_secr3t_token_12345';

@@ -31,7 +31,7 @@ export class WooCommerceWebhookController {
     @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
     @Headers('x-wc-webhook-signature') signature: string | undefined,
     @Headers('x-wc-webhook-topic') topic: string | undefined,
-    @Body() body: any,
+    @Body() body: WooCommerceOrderWebhookDto,
     @Req() req: Request,
   ) {
     if (!signature) {
@@ -57,12 +57,11 @@ export class WooCommerceWebhookController {
       body?.id !== undefined ||
       body?.line_items !== undefined
     ) {
-      const orderDto = body as WooCommerceOrderWebhookDto;
-      if (!orderDto.id || !orderDto.total) {
-        throw new BadRequestException('Invalid WooCommerce order payload');
+      if (!body.id || !body.total || !Array.isArray(body.line_items)) {
+        throw new BadRequestException('Invalid WooCommerce order payload: id, total, and line_items array are required');
       }
 
-      const result = await this.syncService.importOrder(tenantId, orderDto);
+      const result = await this.syncService.importOrder(tenantId, body);
       return {
         status: 'ok',
         ...result,
