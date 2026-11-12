@@ -218,7 +218,7 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
       );
     });
 
-    it('returns Persian error when VAT rate is not 10% for fiscal year 1405', () => {
+    it('returns Persian error when VAT rate does not match expected statutory rate (e.g. 10%)', () => {
       const invalid = {
         ...validInvoice,
         items: [

@@ -180,14 +180,16 @@ function MoadianCard() {
     setInvoiceId(id);
     selectedRef.current = id;
     if (!id) return;
-    try {
-      const pre = await preflightMoadianInvoice(id);
-      if (selectedRef.current === id) {
-        setPreFlightErrors(pre.errors);
+    if (status?.enabled) {
+      try {
+        const pre = await preflightMoadianInvoice(id);
+        if (selectedRef.current === id) {
+          setPreFlightErrors(pre.errors);
+        }
+      } catch (err) {
+        // No local re-validation: the server result is the only source of truth.
+        if (selectedRef.current === id) setError(loadErrorMessage(err));
       }
-    } catch (err) {
-      // No local re-validation: the server result is the only source of truth.
-      if (selectedRef.current === id) setError(loadErrorMessage(err));
     }
     try {
       const existing = await getMoadianSubmission(id);

@@ -1134,6 +1134,23 @@ describe('Moadian server pre-flight validation & controller', () => {
 
       await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
     }
+
+    // Positive control: accountant is allowed to invoke pre-flight
+    const allowedAccess = new AccessStub();
+    allowedAccess.grant('user-2', TENANT_A, SystemRole.ACCOUNTANT);
+    const allowedGuard = new AccessGuard(new Reflector(), allowedAccess as never, { assertAllowed: jest.fn(async () => undefined) } as never);
+    const allowedCtx = {
+      getHandler: () => MoadianController.prototype.preFlight,
+      getClass: () => MoadianController,
+      switchToHttp: () => ({
+        getRequest: () => ({
+          method: 'POST',
+          originalUrl: '/v1/enterprise-hub/tax-compliance/moadian/invoices/11111111-1111-4111-8111-111111111111/pre-flight',
+          user: { sub: 'user-2', tenantId: TENANT_A, role: SystemRole.ACCOUNTANT },
+        }),
+      }),
+    } as never;
+    await expect(allowedGuard.canActivate(allowedCtx)).resolves.toBe(true);
   });
 
   it('preFlightValidate returns VAT_RATE_UNRESOLVED when invoice date is invalid', async () => {

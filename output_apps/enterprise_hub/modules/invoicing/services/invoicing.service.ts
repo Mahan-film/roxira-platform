@@ -438,15 +438,14 @@ export class InvoicingService {
         `تعداد سطر «${description}»`,
       );
 
-      const unitPrice = this.roundTo(item.unitPrice, scale);
       prepared.push({
         item,
-        unitPrice,
+        unitPrice: item.unitPrice,
         itemId,
         sku,
         description,
-        gross: item.quantity * unitPrice,
-        lineDiscount: this.lineDiscount({ ...item, unitPrice }, scale),
+        gross: item.quantity * item.unitPrice,
+        lineDiscount: this.lineDiscount(item, scale),
         taxCode: item.taxCode ?? derivedTaxCode ?? null,
       });
     }
@@ -459,19 +458,23 @@ export class InvoicingService {
       const vatRate = this.normalizeVatRate(line.item.vatRate, defaultVatRate);
       const math = computeLineMath({
         quantity: numberToScaled(line.item.quantity, LINE_QUANTITY_DECIMALS),
-        unitPrice: numberToScaled(line.unitPrice, scale + LINE_PRICE_EXTRA_DECIMALS),
+        unitPrice: numberToScaled(line.item.unitPrice, scale + LINE_PRICE_EXTRA_DECIMALS),
         discount: toUnits(discount, scale),
         vatRate: numberToScaled(vatRate, LINE_RATE_DECIMALS),
       });
       const tax = fromUnits(math.tax, scale);
       const total = fromUnits(math.total, scale);
+      const isFractionalRial = scale === 0 && line.item.unitPrice < 1;
+      const storedUnitPrice = isFractionalRial
+        ? line.item.unitPrice
+        : this.roundTo(line.item.unitPrice, scale);
 
       normalized.push({
         itemId: line.itemId,
         sku: line.sku,
         description: line.description,
         quantity: line.item.quantity,
-        unitPrice: line.unitPrice,
+        unitPrice: storedUnitPrice,
         discount,
         ...(invoiceDiscount ? { invoiceDiscountShare: share } : {}),
         vatRate,
@@ -556,7 +559,7 @@ export class InvoicingService {
     let finalPayable = 0;
 
     for (const item of items) {
-      totalAmount += item.quantity * item.unitPrice;
+      totalAmount += Math.max(0, item.total - item.tax + item.discount);
       totalDiscount += item.discount;
       totalTax += item.tax;
       finalPayable += item.total;
