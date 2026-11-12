@@ -8,6 +8,32 @@ export interface MoadianStatusResponse {
   configured: boolean;
 }
 
+export type MoadianSettlementMethod = "CASH" | "CREDIT";
+
+export interface PutMoadianCredentialDto {
+  memoryId: string;
+  economicCode: string;
+  certificatePem: string;
+  privateKeyPem: string;
+  defaultSstid?: string;
+  defaultMeasurementUnit?: string;
+  settlementMethod?: MoadianSettlementMethod;
+}
+
+export interface MoadianCredentialResponseDto {
+  memoryId: string;
+  economicCode: string;
+  keyFingerprint: string;
+  certificateSubject: string | null;
+  certificateValidTo: string | null;
+  defaultSstid: string | null;
+  defaultMeasurementUnit: string | null;
+  settlementMethod: MoadianSettlementMethod;
+  enabled: boolean;
+  baseUrl: string;
+  updatedAt: string;
+}
+
 export type MoadianSubmissionStatus =
   | "QUEUED"
   | "SENT"

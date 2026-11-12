@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, FileText, Send } from "lucide-react";
+import Link from "next/link";
+import { Download, FileText, Send, Sparkles } from "lucide-react";
 
 import {
   ErrorNotice,
@@ -220,8 +221,16 @@ function MoadianCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Send className="size-4" /> اتصال به سامانه مودیان
+        <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
+          <span className="flex items-center gap-2">
+            <Send className="size-4" /> اتصال به سامانه مودیان
+          </span>
+          <Link href="/app/tax/wizard">
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              ویزارد راه‌اندازی مودیان
+            </Button>
+          </Link>
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -236,12 +245,20 @@ function MoadianCard() {
             </AlertDescription>
           </Alert>
         )}
-        {status && enabled && !configured && (
+        {status && !configured && (
           <Alert>
             <AlertTitle>اطلاعات اتصال ثبت نشده است</AlertTitle>
-            <AlertDescription>
-              شناسه حافظه مالیاتی، گواهی و کلید خصوصی این سازمان هنوز ثبت نشده
-              است (PUT moadian/credentials).
+            <AlertDescription className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-1">
+              <span>
+                شناسه حافظه مالیاتی، گواهی و کلید خصوصی این سازمان هنوز ثبت نشده
+                است (PUT moadian/credentials).
+              </span>
+              <Link href="/app/tax/wizard">
+                <Button size="sm" variant="outline" className="gap-1 text-xs whitespace-nowrap">
+                  <Sparkles className="h-3.5 w-3.5 text-primary" />
+                  شروع ویزارد راه‌اندازی
+                </Button>
+              </Link>
             </AlertDescription>
           </Alert>
         )}

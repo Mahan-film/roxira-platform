@@ -4,8 +4,10 @@ import {
   TAX_COMPLIANCE_RESOURCE_PATH,
 } from "@/lib/api/config";
 import type {
+  MoadianCredentialResponseDto,
   MoadianStatusResponse,
   MoadianSubmissionResponse,
+  PutMoadianCredentialDto,
   SeasonalTransactionsResponse,
   SeasonalVatReport,
   VatReturnDraft,
@@ -16,6 +18,20 @@ const BASE = `${API_PROXY_BASE_PATH}/${TAX_COMPLIANCE_RESOURCE_PATH}`;
 /** GET moadian/status — answers even when MOADIAN_ENABLED is off. */
 export function getMoadianStatus(signal?: AbortSignal) {
   return apiRequest<MoadianStatusResponse>(`${BASE}/moadian/status`, { signal });
+}
+
+/** GET moadian/credentials — public credential info. */
+export function getMoadianCredential(signal?: AbortSignal) {
+  return apiRequest<MoadianCredentialResponseDto>(`${BASE}/moadian/credentials`, { signal });
+}
+
+/** PUT moadian/credentials — update or register taxpayer credentials. */
+export function putMoadianCredential(payload: PutMoadianCredentialDto, signal?: AbortSignal) {
+  return apiRequest<MoadianCredentialResponseDto>(`${BASE}/moadian/credentials`, {
+    method: "PUT",
+    body: payload,
+    signal,
+  });
 }
 
 /** POST moadian/invoices/:id/submit (queued; 503 when the flag is off). */
