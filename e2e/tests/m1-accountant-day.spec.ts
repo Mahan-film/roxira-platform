@@ -364,7 +364,8 @@ test.describe('Accountant day · go-live gate on the local stack', () => {
       await page.keyboard.press('Insert');
       await expect(page.locator('#voucher-cell-2-0')).toBeVisible();
       await expect(page.locator('#voucher-cell-2-0')).toBeFocused();
-      await expect(form.getByText('سند تراز است')).toBeVisible();
+      // The balance badge is in the card header, outside the form element.
+      await expect(page.getByText('سند تراز است', { exact: true })).toBeVisible();
 
       // Ctrl+S saves; the form closes on success and stays (with an error alert) on a refusal.
       await page.keyboard.press('Control+s');
