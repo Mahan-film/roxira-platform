@@ -28,7 +28,9 @@ export class WooCommerceLineItemDto {
   @IsOptional() @IsNumber() variation_id?: number;
   @IsNumber() quantity: number;
   @IsOptional() @IsString() subtotal?: string;
+  @IsOptional() @IsString() subtotal_tax?: string;
   @IsOptional() @IsString() total?: string;
+  @IsOptional() @IsString() total_tax?: string;
   @IsOptional() @IsString() sku?: string;
   @IsOptional() price?: number | string;
 }
@@ -61,6 +63,16 @@ export class WooCommerceOrderWebhookDto {
   @IsOptional()
   @IsString()
   total_tax?: string;
+
+  @ApiPropertyOptional({ description: 'مجموع تخفیف', default: '0' })
+  @IsOptional()
+  @IsString()
+  discount_total?: string;
+
+  @ApiPropertyOptional({ description: 'هزینه ارسال', default: '0' })
+  @IsOptional()
+  @IsString()
+  shipping_total?: string;
 
   @ApiPropertyOptional({ description: 'اطلاعات خریدار' })
   @IsOptional()

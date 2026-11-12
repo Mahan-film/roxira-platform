@@ -12,6 +12,8 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import { Request } from 'express';
 import { Public } from '../../../auth/decorators/public.decorator';
 import { WooCommerceOrderWebhookDto } from '../dto/woocommerce-order.dto';
@@ -31,11 +33,16 @@ export class WooCommerceWebhookController {
     @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
     @Headers('x-wc-webhook-signature') signature: string | undefined,
     @Headers('x-wc-webhook-topic') topic: string | undefined,
-    @Body() body: WooCommerceOrderWebhookDto,
+    @Body() body: Record<string, unknown>,
     @Req() req: Request,
   ) {
     if (!signature) {
       throw new UnauthorizedException('Missing X-WC-Webhook-Signature header');
+    }
+
+    const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
+    if (!rawBody || rawBody.length === 0) {
+      throw new UnauthorizedException('Missing raw request body for HMAC verification');
     }
 
     const secret = await this.syncService.getWebhookSecret(tenantId);
@@ -43,31 +50,38 @@ export class WooCommerceWebhookController {
       throw new UnauthorizedException('WooCommerce integration not configured for tenant');
     }
 
-    // Verify HMAC signature
-    const rawPayload = (req as any).rawBody || (typeof body === 'string' ? body : JSON.stringify(body));
-    const isValid = verifyHmacSignature(rawPayload, signature, secret);
+    const isValid = verifyHmacSignature(rawBody, signature, secret);
     if (!isValid) {
       throw new UnauthorizedException('Invalid webhook signature');
     }
 
-    // Handle order event
-    const normalizedTopic = (topic || '').toLowerCase();
-    if (
-      normalizedTopic.includes('order') ||
-      body?.id !== undefined ||
-      body?.line_items !== undefined
-    ) {
-      if (!body.id || !body.total || !Array.isArray(body.line_items)) {
-        throw new BadRequestException('Invalid WooCommerce order payload: id, total, and line_items array are required');
-      }
+    const normalizedTopic = (topic || '').trim().toLowerCase();
+    const isOrderTopic = normalizedTopic
+      ? normalizedTopic.startsWith('order.')
+      : body?.id !== undefined && Array.isArray(body?.line_items);
 
-      const result = await this.syncService.importOrder(tenantId, body);
-      return {
-        status: 'ok',
-        ...result,
-      };
+    if (!isOrderTopic) {
+      return { status: 'ignored', topic: normalizedTopic };
     }
 
-    return { status: 'ignored', topic: normalizedTopic };
+    const dto = plainToInstance(WooCommerceOrderWebhookDto, body);
+    const errors = await validate(dto, {
+      whitelist: false,
+      forbidNonWhitelisted: false,
+    });
+    if (errors.length > 0) {
+      const messages = errors.flatMap((e) => Object.values(e.constraints || {}));
+      throw new BadRequestException(
+        messages.length > 0
+          ? messages
+          : 'Invalid WooCommerce order payload: id, total, and line_items array are required',
+      );
+    }
+
+    const result = await this.syncService.importOrder(tenantId, dto);
+    return {
+      status: 'ok',
+      ...result,
+    };
   }
 }

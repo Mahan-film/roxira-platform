@@ -6,14 +6,39 @@ function getMasterKey(customKey?: Buffer): Buffer {
   if (customKey && customKey.length === 32) {
     return customKey;
   }
-  const envKey =
-    process.env.WOOCOMMERCE_KEY_ENCRYPTION_KEY ||
-    process.env.MOADIAN_KEY_ENCRYPTION_KEY ||
-    process.env.APP_SECRET;
+  const envKey = process.env.WOOCOMMERCE_KEY_ENCRYPTION_KEY;
   if (!envKey || envKey.trim().length === 0) {
     throw new Error('WOOCOMMERCE_KEY_ENCRYPTION_KEY is not configured (fail closed)');
   }
   return createHash('sha256').update(envKey.trim()).digest();
+}
+
+export function assertSafeStoreUrl(rawUrl: string): URL {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl.trim());
+  } catch {
+    throw new Error('Invalid WooCommerce storeUrl');
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new Error('WooCommerce storeUrl must use http or https');
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host === '::1' ||
+    host === '0.0.0.0' ||
+    host.endsWith('.local') ||
+    host.endsWith('.internal') ||
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^169\.254\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+  ) {
+    throw new Error('WooCommerce storeUrl cannot point to a private or loopback address');
+  }
+  return parsed;
 }
 
 export function sealSecret(plaintext: string, tenantId: string, customKey?: Buffer): string {

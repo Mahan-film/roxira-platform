@@ -8,7 +8,7 @@ import {
 } from 'typeorm';
 
 @Entity({ name: 'woocommerce_configs' })
-@Index('IDX_woocommerce_configs_tenant', ['tenantId'], { unique: true })
+@Index('UQ_woocommerce_configs_tenant', ['tenantId'], { unique: true })
 export class WooCommerceConfigEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -25,7 +25,7 @@ export class WooCommerceConfigEntity {
   @Column({ type: 'text', name: 'consumer_secret_encrypted' })
   consumerSecretEncrypted: string;
 
-  @Column({ type: 'varchar', length: 128, name: 'webhook_secret' })
+  @Column({ type: 'text', name: 'webhook_secret' })
   webhookSecret: string;
 
   @Column({ type: 'boolean', name: 'auto_sync_orders', default: true })
