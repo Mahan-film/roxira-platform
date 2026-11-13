@@ -296,6 +296,7 @@ export class BarcodeLabelItemDto {
   @IsOptional()
   @Transform(({ value }) => (value !== undefined && value !== null ? String(value) : undefined))
   @IsString()
+  @MaxLength(18, { message: 'قیمت نمی‌تواند بیشتر از ۱۸ رقم باشد' })
   @Matches(/^[0-9]+$/, { message: 'قیمت باید مقدار عدد صحیح به ریال باشد' })
   price?: string;
 

@@ -121,6 +121,12 @@ export class PrintTemplateService {
       );
     } catch (err: any) {
       if (
+        err?.message?.includes('UQ_inv_print_templates_tenant_default') ||
+        err?.detail?.includes('UQ_inv_print_templates_tenant_default')
+      ) {
+        throw new ConflictException('تنظیم قالب پیش‌فرض به دلیل درخواست همزمان دیگری با خطا مواجه شد؛ لطفاً دوباره تلاش کنید.');
+      }
+      if (
         err?.message?.includes('UQ_inv_print_templates_tenant_title') ||
         err?.detail?.includes('UQ_inv_print_templates_tenant_title') ||
         err?.code === '23505'
@@ -182,6 +188,12 @@ export class PrintTemplateService {
         id,
       );
     } catch (err: any) {
+      if (
+        err?.message?.includes('UQ_inv_print_templates_tenant_default') ||
+        err?.detail?.includes('UQ_inv_print_templates_tenant_default')
+      ) {
+        throw new ConflictException('تنظیم قالب پیش‌فرض به دلیل درخواست همزمان دیگری با خطا مواجه شد؛ لطفاً دوباره تلاش کنید.');
+      }
       if (
         err?.message?.includes('UQ_inv_print_templates_tenant_title') ||
         err?.detail?.includes('UQ_inv_print_templates_tenant_title') ||

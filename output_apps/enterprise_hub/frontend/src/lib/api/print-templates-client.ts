@@ -14,7 +14,6 @@ const PRINT_TEMPLATES_ENDPOINT = `${API_PROXY_BASE_PATH}/${INVOICING_RESOURCE_PA
 export interface QueryPrintTemplateParams {
   docType?: PrintDocType;
   paperSize?: PrintPaperSize;
-  search?: string;
 }
 
 /**
