@@ -23,7 +23,7 @@ export enum WooCommerceSyncStatus {
 @Index('IDX_woocommerce_sync_logs_tenant_ext', ['tenantId', 'direction', 'externalId'])
 @Index('UQ_wc_sync_logs_tenant_success', ['tenantId', 'direction', 'externalId'], {
   unique: true,
-  where: `"status" = 'success'`,
+  where: `"status" = 'success' AND "direction" = 'INBOUND_ORDER'`,
 })
 export class WooCommerceSyncLogEntity {
   @PrimaryGeneratedColumn('uuid')

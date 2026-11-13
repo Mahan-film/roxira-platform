@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -68,7 +69,14 @@ export class WooCommerceConfigController {
     @Body() dto: PushWooCommerceStockDto,
   ) {
     const tenantId = requireTenantId(req);
-    const priceMinor = dto.price ? toMinor(dto.price) : undefined;
+    let priceMinor: bigint | undefined;
+    if (dto.price !== undefined && dto.price !== null && String(dto.price).trim() !== '') {
+      try {
+        priceMinor = toMinor(dto.price);
+      } catch {
+        throw new BadRequestException('فرمت مبلغ قیمت کالا نامعتبر است.');
+      }
+    }
     return this.syncService.pushStockUpdate(tenantId, dto.sku, dto.quantity, priceMinor);
   }
 }
