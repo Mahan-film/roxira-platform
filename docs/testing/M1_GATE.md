@@ -8,7 +8,7 @@ The spec runs one month of the fictional trading company in `e2e/fixtures/sample
 | File | Role |
 |---|---|
 | `e2e/tests/m1-shop-month.spec.ts` | The gate: a fixture self-check plus one test per gate step |
-| `e2e/tests/m1-accountant-day.spec.ts` | The accountant day go-live gate (T91, extended in T99): sign up a fresh tenant, chart from template, opening balances, 5 vouchers typed in the voucher grid with the keyboard, draft-and-issued sales invoice and issued purchase invoice through the invoicing module alongside receipt and received cheque, customer/supplier party sub-ledgers, trial balance, P&L, balance sheet, period close, reopen refused. |
+| `e2e/tests/m1-accountant-day.spec.ts` | The accountant day go-live gate (T91, extended in T99 and T102): sign up a fresh tenant, chart from template, opening balances, 5 vouchers typed in the voucher grid with the keyboard, draft-and-issued sales invoice and issued purchase invoice through the invoicing module alongside receipt and received cheque, customer/supplier party sub-ledgers, trial balance, P&L, balance sheet, period close (closing voucher, temporary accounts closed, next year's opening voucher), reopen refused, and statutory electronic commercial books export across operational, opening, and closing scopes in rial and million rial units. |
 | `e2e/tests/m1/expected-totals.ts` | `README_TOTALS` (mirrors `e2e/fixtures/sample-company/README.md` lines 10-19), the month's hand-entered documents, and `M1_EXPECTED_CLOSING` |
 | `e2e/tests/m1/fixture-data.ts` | Fixture file paths and CSV readers that recompute the README totals |
 | `e2e/tests/m1/accountant-day-expected.ts` | Hand-computed ledger totals, trial balance, P&L and balance sheet constants for the accountant day gate |

@@ -10,7 +10,9 @@ import {
   CUSTOMER,
   DAY_ITEM,
   EXPECTED_BALANCES,
+  EXPECTED_ELECTRONIC_BOOKS_SCOPES,
   EXPECTED_PARTY_SUBLEDGER,
+  EXPECTED_YEAR_END_CLOSING,
   FISCAL_YEAR_1405,
   FISCAL_YEAR_1406,
   INCOME_STATEMENT,
@@ -123,11 +125,83 @@ test.describe('Accountant day · figures self-check', () => {
     expect(supp.credit).toBe(EXPECTED_PARTY_SUBLEDGER.supplier.credit);
     expect(supp.debit - supp.credit).toBe(EXPECTED_PARTY_SUBLEDGER.supplier.closing);
   });
+
+  test('year-end closing and electronic books expected figures balance [T102]', () => {
+    const sumDebit = (lines: readonly VoucherLine[]) => lines.reduce((acc, l) => acc + l.debit, 0n);
+    const sumCredit = (lines: readonly VoucherLine[]) => lines.reduce((acc, l) => acc + l.credit, 0n);
+
+    expect(sumDebit(EXPECTED_YEAR_END_CLOSING.summaryLines)).toBe(sumCredit(EXPECTED_YEAR_END_CLOSING.summaryLines));
+    expect(sumDebit(EXPECTED_YEAR_END_CLOSING.retainedLines)).toBe(sumCredit(EXPECTED_YEAR_END_CLOSING.retainedLines));
+    expect(sumDebit(EXPECTED_YEAR_END_CLOSING.closingLines)).toBe(sumCredit(EXPECTED_YEAR_END_CLOSING.closingLines));
+    expect(sumDebit(EXPECTED_YEAR_END_CLOSING.nextYearOpeningLines)).toBe(
+      sumCredit(EXPECTED_YEAR_END_CLOSING.nextYearOpeningLines),
+    );
+
+    const tempNet = EXPECTED_YEAR_END_CLOSING.summaryLines
+      .filter((l) => l.code !== '3050')
+      .reduce((acc, l) => acc + l.debit - l.credit, 0n);
+    expect(tempNet).toBe(INCOME_STATEMENT.netProfit);
+
+    for (const [scope, figures] of Object.entries(EXPECTED_ELECTRONIC_BOOKS_SCOPES)) {
+      expect(figures.totalDebit, `scope ${scope} debit equals credit`).toBe(figures.totalCredit);
+      expect(figures.totalDebit).toBeGreaterThan(0n);
+    }
+  });
 });
 
 // -----------------------------------------------------------------------------
 // The day itself: serial, one fresh tenant, real API and UI.
 // -----------------------------------------------------------------------------
+
+function parseCsvRows(csvText: string): string[][] {
+  const clean = csvText.replace(/^\uFEFF/, '').trim();
+  const lines = clean.split(/\r?\n/).filter((line) => line.trim().length > 0);
+  return lines.map((line) => {
+    const values: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        values.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    values.push(current.trim());
+    return values;
+  });
+}
+
+function parseRials(val: string): bigint {
+  const trimmed = val.trim();
+  if (!trimmed || trimmed === '0') return 0n;
+  const negative = trimmed.startsWith('-');
+  const unsigned = negative ? trimmed.slice(1) : trimmed;
+  const [intPart] = unsigned.split('.');
+  const total = BigInt(intPart || '0');
+  return negative ? -total : total;
+}
+
+function parseMillionRialsToRials(val: string): bigint {
+  const trimmed = val.trim();
+  if (!trimmed || trimmed === '0') return 0n;
+  const negative = trimmed.startsWith('-');
+  const unsigned = negative ? trimmed.slice(1) : trimmed;
+  const [intPart, fracPart = ''] = unsigned.split('.');
+  const intVal = BigInt(intPart || '0');
+  const fracVal = BigInt(fracPart.padEnd(6, '0').slice(0, 6));
+  const total = intVal * 1_000_000n + fracVal;
+  return negative ? -total : total;
+}
 
 type Money = number | string;
 
@@ -159,6 +233,7 @@ test.describe('Accountant day · go-live gate on the local stack', () => {
     orgName: '',
     session: null as StoredSession | null,
     fiscalYearId: 0,
+    nextFiscalYearId: 0,
     stockItemId: 0,
     lockId: 0,
     chequeId: 0,
@@ -707,7 +782,7 @@ test.describe('Accountant day · go-live gate on the local stack', () => {
     for (const check of bs.checks) expect(check.ok, `balance sheet check ${check.key}`).toBe(true);
   });
 
-  test('11 period close: close fiscal year 1405 into 1406 and lock the period [T91]', async ({ page }) => {
+  test('11 period close: close fiscal year 1405 into 1406 and verify closing vouchers [T91+T102]', async ({ page }) => {
     expect(state.fiscalYearId).toBeGreaterThan(0);
 
     const closed = await postApi<{
@@ -717,7 +792,75 @@ test.describe('Accountant day · go-live gate on the local stack', () => {
     }>(page, `accounting/fiscal-years/${state.fiscalYearId}/close`, { nextYear: { ...FISCAL_YEAR_1406 } }, 200);
     expect(closed.year.status).toBe('CLOSED');
     expect(closed.nextYear.status).toBe('OPEN');
-    expect(closed.entryNumbers.length).toBeGreaterThanOrEqual(2);
+    expect(closed.entryNumbers).toHaveLength(4);
+
+    state.nextFiscalYearId = closed.nextYear.id;
+
+    const [summaryNumber, retainedNumber, closingNumber, openingNumber] = closed.entryNumbers;
+    expect(summaryNumber, 'summary closing voucher number').toBe(`FC-${state.fiscalYearId}-1-1`);
+    expect(retainedNumber, 'retained earnings voucher number').toBe(`FC-${state.fiscalYearId}-1-2`);
+    expect(closingNumber, 'permanent closing voucher number').toBe(`FC-${state.fiscalYearId}-1-3`);
+    expect(openingNumber, 'next year opening voucher number').toBe(`FO-${state.fiscalYearId}-1`);
+
+    // Verify closing vouchers and lines via accounting API:
+    // 1. Summary voucher closes temporary accounts (4020, 5020, 5030, 5050, 5110) to 3050
+    const summaryEntries = await getApi<{ data: Array<{ id: number; entryNumber: string; entryType: string }> }>(
+      page,
+      `accounting/journal-entries?entryNumber=${encodeURIComponent(summaryNumber)}`,
+    );
+    const summaryEntry = summaryEntries.data.find((e) => e.entryNumber === summaryNumber);
+    expect(summaryEntry, `journal entry ${summaryNumber} found`).toBeDefined();
+    expect(summaryEntry!.entryType).toBe('CLOSING_TEMP');
+    await expectVoucherLines(page, summaryEntry!.id, EXPECTED_YEAR_END_CLOSING.summaryLines);
+
+    // 2. Retained earnings voucher transfers 10M net loss from 3050 to 3040
+    const retainedEntries = await getApi<{ data: Array<{ id: number; entryNumber: string; entryType: string }> }>(
+      page,
+      `accounting/journal-entries?entryNumber=${encodeURIComponent(retainedNumber)}`,
+    );
+    const retainedEntry = retainedEntries.data.find((e) => e.entryNumber === retainedNumber);
+    expect(retainedEntry, `journal entry ${retainedNumber} found`).toBeDefined();
+    expect(retainedEntry!.entryType).toBe('CLOSING_TEMP');
+    await expectVoucherLines(page, retainedEntry!.id, EXPECTED_YEAR_END_CLOSING.retainedLines);
+
+    // 3. Permanent closing voucher closes balance sheet accounts to 0
+    const closingEntries = await getApi<{ data: Array<{ id: number; entryNumber: string; entryType: string }> }>(
+      page,
+      `accounting/journal-entries?entryNumber=${encodeURIComponent(closingNumber)}`,
+    );
+    const closingEntry = closingEntries.data.find((e) => e.entryNumber === closingNumber);
+    expect(closingEntry, `journal entry ${closingNumber} found`).toBeDefined();
+    expect(closingEntry!.entryType).toBe('CLOSING_PERM');
+    await expectVoucherLines(page, closingEntry!.id, EXPECTED_YEAR_END_CLOSING.closingLines);
+
+    // 4. Next year opening voucher establishes permanent balances in fiscal year 1406
+    const openingEntries = await getApi<{ data: Array<{ id: number; entryNumber: string; entryType: string }> }>(
+      page,
+      `accounting/journal-entries?entryNumber=${encodeURIComponent(openingNumber)}`,
+    );
+    const openingEntry = openingEntries.data.find((e) => e.entryNumber === openingNumber);
+    expect(openingEntry, `journal entry ${openingNumber} found`).toBeDefined();
+    expect(openingEntry!.entryType).toBe('OPENING_AUTO');
+    await expectVoucherLines(page, openingEntry!.id, EXPECTED_YEAR_END_CLOSING.nextYearOpeningLines);
+
+    // Assert that in next year (1406), temporary accounts have zero opening balance
+    // and retained earnings (3040) carries the 10M loss as opening debit
+    const nextTrial = await getApi<TrialBalance>(
+      page,
+      `accounting/reports/trial-balance?columns=6&fiscalYearId=${state.nextFiscalYearId}`,
+    );
+    expect(nextTrial.balanced, 'next year trial balance is balanced').toBe(true);
+    const nextByCode = new Map(
+      nextTrial.rows.map((r) => [r.code, { debit: rials(r.openingDebit), credit: rials(r.openingCredit) }]),
+    );
+    for (const tempCode of ['4020', '5020', '5030', '5050', '5110']) {
+      const row = nextByCode.get(tempCode);
+      if (row) {
+        expect(row.debit, `temporary account ${tempCode} has 0 opening debit in next year`).toBe(0n);
+        expect(row.credit, `temporary account ${tempCode} has 0 opening credit in next year`).toBe(0n);
+      }
+    }
+    expect(nextByCode.get('3040')?.debit, '3040 opening debit in 1406 carries the 10M loss').toBe(10_000_000n);
 
     const locks = await getApi<Array<{ id: number; active: boolean }>>(page, 'accounting/period-locks');
     const activeLock = locks.find((l) => l.active);
@@ -750,5 +893,134 @@ test.describe('Accountant day · go-live gate on the local stack', () => {
     const unlockText = await unlock.text();
     expect(unlock.status(), `unlock of a closed-year lock is refused with 409: ${unlockText}`).toBe(409);
     expect(unlockText).toContain('سال مالی بسته');
+  });
+
+  test('13 electronic commercial books: export statutory books for 1405 with separate scopes and units [T102]', async ({ page }) => {
+    // 1. Presets endpoint returns valid periods
+    const presets = await getApi<{ presets: Array<{ key: string; label: string }> }>(
+      page,
+      'tax-compliance/reports/electronic-books/presets?year=1405',
+    );
+    expect(presets.presets.length, 'presets are returned for year 1405').toBeGreaterThan(0);
+
+    const scopes = ['opening', 'operational', 'closing_temp', 'closing_perm'] as const;
+
+    // 2. Preview for each voucher scope in both rial and million_rial units
+    for (const scope of scopes) {
+      const previewRial = await getApi<{
+        rowCount: number;
+        roundingDifference: string;
+        voucherScope: string;
+        unit: string;
+      }>(page, `tax-compliance/reports/electronic-books/preview?year=1405&voucherScope=${scope}&unit=rial`);
+      expect(previewRial.voucherScope).toBe(scope);
+      expect(previewRial.unit).toBe('rial');
+      expect(previewRial.roundingDifference, `scope ${scope} rial rounding difference is 0`).toBe('0');
+      expect(previewRial.rowCount, `scope ${scope} rial preview has rows`).toBeGreaterThan(0);
+
+      const previewMillion = await getApi<{
+        rowCount: number;
+        roundingDifference: string;
+        voucherScope: string;
+        unit: string;
+      }>(page, `tax-compliance/reports/electronic-books/preview?year=1405&voucherScope=${scope}&unit=million_rial`);
+      expect(previewMillion.voucherScope).toBe(scope);
+      expect(previewMillion.unit).toBe('million_rial');
+      expect(previewMillion.roundingDifference, `scope ${scope} million_rial rounding difference is 0`).toBe('0');
+      expect(previewMillion.rowCount, `scope ${scope} million_rial preview has rows`).toBeGreaterThan(0);
+    }
+
+    // 3. Export CSV and assert separate files, unit settings, and balanced debits/credits
+    for (const scope of scopes) {
+      const expected = EXPECTED_ELECTRONIC_BOOKS_SCOPES[scope];
+
+      // A. Unit: rial
+      const resRial = await page.request.get(
+        `/api/backend/enterprise-hub/tax-compliance/reports/electronic-books?year=1405&voucherScope=${scope}&unit=rial&format=csv`,
+        { headers: headers() },
+      );
+      expect(resRial.status(), `GET electronic-books ${scope} rial CSV status`).toBe(200);
+      const dispRial = resRial.headers()['content-disposition'] ?? '';
+      expect(dispRial, `scope ${scope} rial separate file name in Content-Disposition`).toContain(
+        `attachment; filename="electronic-books-1405-${scope}.csv"`,
+      );
+      expect(resRial.headers()['x-electronic-books-unit'], 'header unit is rial').toBe('rial');
+      expect(resRial.headers()['x-electronic-books-rounding-diff'], 'header rounding difference is 0').toBe('0');
+
+      const csvTextRial = await resRial.text();
+      const rowsRial = parseCsvRows(csvTextRial);
+      expect(rowsRial.length, `scope ${scope} rial CSV row count`).toBeGreaterThan(1);
+      const headerRowRial = rowsRial[0];
+      expect(headerRowRial[6], 'column 6 header in rials').toContain('گردش بدهکار (ریال)');
+      expect(headerRowRial[7], 'column 7 header in rials').toContain('گردش بستانکار (ریال)');
+
+      let debitSumRial = 0n;
+      let creditSumRial = 0n;
+      for (const row of rowsRial.slice(1)) {
+        debitSumRial += parseRials(row[6]);
+        creditSumRial += parseRials(row[7]);
+      }
+      expect(debitSumRial, `scope ${scope} rial debits equal credits`).toBe(creditSumRial);
+      expect(debitSumRial, `scope ${scope} rial total matches expected`).toBe(expected.totalDebit);
+
+      // B. Unit: million_rial
+      const resMillion = await page.request.get(
+        `/api/backend/enterprise-hub/tax-compliance/reports/electronic-books?year=1405&voucherScope=${scope}&unit=million_rial&format=csv`,
+        { headers: headers() },
+      );
+      expect(resMillion.status(), `GET electronic-books ${scope} million_rial CSV status`).toBe(200);
+      const dispMillion = resMillion.headers()['content-disposition'] ?? '';
+      expect(dispMillion, `scope ${scope} million separate file name in Content-Disposition`).toContain(
+        `attachment; filename="electronic-books-1405-${scope}.csv"`,
+      );
+      expect(resMillion.headers()['x-electronic-books-unit'], 'header unit is million_rial').toBe('million_rial');
+      expect(resMillion.headers()['x-electronic-books-rounding-diff'], 'header rounding difference is 0').toBe('0');
+
+      const csvTextMillion = await resMillion.text();
+      const rowsMillion = parseCsvRows(csvTextMillion);
+      expect(rowsMillion.length, `scope ${scope} million_rial CSV row count`).toBeGreaterThan(1);
+      const headerRowMillion = rowsMillion[0];
+      expect(headerRowMillion[6], 'column 6 header in million rials').toContain('گردش بدهکار (میلیون ریال)');
+      expect(headerRowMillion[7], 'column 7 header in million rials').toContain('گردش بستانکار (میلیون ریال)');
+
+      let debitSumMillion = 0n;
+      let creditSumMillion = 0n;
+      for (const row of rowsMillion.slice(1)) {
+        debitSumMillion += parseMillionRialsToRials(row[6]);
+        creditSumMillion += parseMillionRialsToRials(row[7]);
+      }
+      expect(debitSumMillion, `scope ${scope} million_rial debits equal credits`).toBe(creditSumMillion);
+      expect(debitSumMillion, `scope ${scope} million_rial total matches expected`).toBe(expected.totalDebit);
+
+      // C. XLSX format auto-selected for <= 1000 rows
+      const resXlsx = await page.request.get(
+        `/api/backend/enterprise-hub/tax-compliance/reports/electronic-books?year=1405&voucherScope=${scope}&unit=million_rial`,
+        { headers: headers() },
+      );
+      expect(resXlsx.status(), `GET electronic-books ${scope} XLSX status`).toBe(200);
+      expect(resXlsx.headers()['content-type']).toContain('spreadsheetml');
+      const dispXlsx = resXlsx.headers()['content-disposition'] ?? '';
+      expect(dispXlsx).toContain(`attachment; filename="electronic-books-1405-${scope}.xlsx"`);
+    }
+
+    // 4. Verify opening voucher of next year (1406) exports as a balanced separate opening file
+    const res1406Opening = await page.request.get(
+      '/api/backend/enterprise-hub/tax-compliance/reports/electronic-books?year=1406&voucherScope=opening&unit=rial&format=csv',
+      { headers: headers() },
+    );
+    expect(res1406Opening.status()).toBe(200);
+    expect(res1406Opening.headers()['content-disposition']).toContain(
+      'attachment; filename="electronic-books-1406-opening.csv"',
+    );
+    const rows1406 = parseCsvRows(await res1406Opening.text());
+    expect(rows1406.length).toBeGreaterThan(1);
+    let debit1406 = 0n;
+    let credit1406 = 0n;
+    for (const row of rows1406.slice(1)) {
+      debit1406 += parseRials(row[6]);
+      credit1406 += parseRials(row[7]);
+    }
+    expect(debit1406, '1406 opening voucher debits equal credits').toBe(credit1406);
+    expect(debit1406, '1406 opening voucher carries forward 1,093M Rials').toBe(1_093_000_000n);
   });
 });
