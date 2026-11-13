@@ -36,7 +36,7 @@ export const FISCAL_YEAR_1406 = { name: '1406', startDate: '2027-03-21', endDate
 
 /** Opening voucher, posted through the API: cash box 200M + bank 500M + inventory 300M = capital 1,000M. */
 export const OPENING_VOUCHER: Voucher = {
-  entryNumber: 'OP-01',
+  entryNumber: 'OB-1405-01',
   description: 'سند افتتاحیه سال مالی ۱۴۰۵',
   date: '2026-03-21',
   lines: [
@@ -289,3 +289,79 @@ export function trialBalanceTotals(balances: Readonly<Record<string, bigint>>): 
   }
   return { debit, credit };
 }
+
+/**
+ * Expected journal lines posted by the year-end closing procedure for fiscal year 1405 (T102).
+ * Summary: closes temporary accounts (4020, 5020, 5030, 5050, 5110) to income summary 3050 (10M net loss).
+ * Retained: transfers income summary 3050 to retained earnings 3040.
+ * Closing: reverses all permanent balance sheet accounts to 0.
+ * NextYearOpening: opens permanent accounts in fiscal year 1406 carrying forward the 1405 closing balances.
+ */
+export const EXPECTED_YEAR_END_CLOSING = {
+  summaryLines: [
+    { code: '4020', debit: 100_000_000n, credit: 0n },
+    { code: '3050', debit: 10_000_000n, credit: 0n },
+    { code: '5020', debit: 0n, credit: 30_000_000n },
+    { code: '5030', debit: 0n, credit: 15_000_000n },
+    { code: '5050', debit: 0n, credit: 15_000_000n },
+    { code: '5110', debit: 0n, credit: 50_000_000n },
+  ],
+  retainedLines: [
+    { code: '3040', debit: 10_000_000n, credit: 0n },
+    { code: '3050', debit: 0n, credit: 10_000_000n },
+  ],
+  closingLines: [
+    { code: '2010', debit: 33_000_000n, credit: 0n },
+    { code: '2020', debit: 10_000_000n, credit: 0n },
+    { code: '3010', debit: 1_050_000_000n, credit: 0n },
+    { code: '1010', debit: 0n, credit: 50_000_000n },
+    { code: '1011', debit: 0n, credit: 235_000_000n },
+    { code: '1012', debit: 0n, credit: 515_000_000n },
+    { code: '1030', debit: 0n, credit: 280_000_000n },
+    { code: '1045', debit: 0n, credit: 3_000_000n },
+    { code: '3040', debit: 0n, credit: 10_000_000n },
+  ],
+  nextYearOpeningLines: [
+    { code: '1010', debit: 50_000_000n, credit: 0n },
+    { code: '1011', debit: 235_000_000n, credit: 0n },
+    { code: '1012', debit: 515_000_000n, credit: 0n },
+    { code: '1030', debit: 280_000_000n, credit: 0n },
+    { code: '1045', debit: 3_000_000n, credit: 0n },
+    { code: '3040', debit: 10_000_000n, credit: 0n },
+    { code: '2010', debit: 0n, credit: 33_000_000n },
+    { code: '2020', debit: 0n, credit: 10_000_000n },
+    { code: '3010', debit: 0n, credit: 1_050_000_000n },
+  ],
+} as const;
+
+/**
+ * Expected statutory electronic commercial books turnover per voucher scope for fiscal year 1405 (T102).
+ * Every scope has totalDebit === totalCredit and roundingDifference === 0.
+ */
+export const EXPECTED_ELECTRONIC_BOOKS_SCOPES = {
+  opening: {
+    totalDebit: 1_000_000_000n,
+    totalCredit: 1_000_000_000n,
+    expectedFilenameCsv: 'electronic-books-1405-opening.csv',
+    expectedFilenameXlsx: 'electronic-books-1405-opening.xlsx',
+  },
+  operational: {
+    totalDebit: 463_000_000n,
+    totalCredit: 463_000_000n,
+    expectedFilenameCsv: 'electronic-books-1405-operational.csv',
+    expectedFilenameXlsx: 'electronic-books-1405-operational.xlsx',
+  },
+  closing_temp: {
+    totalDebit: 120_000_000n,
+    totalCredit: 120_000_000n,
+    expectedFilenameCsv: 'electronic-books-1405-closing_temp.csv',
+    expectedFilenameXlsx: 'electronic-books-1405-closing_temp.xlsx',
+  },
+  closing_perm: {
+    totalDebit: 1_093_000_000n,
+    totalCredit: 1_093_000_000n,
+    expectedFilenameCsv: 'electronic-books-1405-closing_perm.csv',
+    expectedFilenameXlsx: 'electronic-books-1405-closing_perm.xlsx',
+  },
+} as const;
+
