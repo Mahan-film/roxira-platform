@@ -144,6 +144,12 @@ export class InvoicePaymentLinkService {
       );
     }
 
+    if (invoice.currency && invoice.currency !== 'IRR') {
+      throw new BadRequestException(
+        `درگاه پرداخت آنلاین زیبال تنها از صورتحساب‌های با واحد پول ریال (IRR) پشتیبانی می‌کند (ارز فعلی: ${invoice.currency}).`,
+      );
+    }
+
     const amountMinor = toMinor(invoice.finalPayable);
     if (amountMinor <= 0n) {
       throw new BadRequestException('مبلغ قابل پرداخت فاکتور باید بزرگتر از صفر باشد.');
@@ -177,14 +183,27 @@ export class InvoicePaymentLinkService {
       throw new BadGatewayException(requestResult.message || 'خطا در دریافت شناسه پرداخت از درگاه زیبال.');
     }
 
-    const paymentLink = await this.paymentRepo.createPaymentLink(tenantId, {
-      invoiceId: invoice.id,
-      trackId: requestResult.trackId,
-      paymentUrl: requestResult.paymentUrl,
-      amount: amountMinor,
-      status: 'PENDING',
-      gateway: gatewayConfig.gateway,
-    });
+    let paymentLink;
+    try {
+      paymentLink = await this.paymentRepo.createPaymentLink(tenantId, {
+        invoiceId: invoice.id,
+        trackId: requestResult.trackId,
+        paymentUrl: requestResult.paymentUrl,
+        amount: amountMinor,
+        status: 'PENDING',
+        gateway: gatewayConfig.gateway,
+      });
+    } catch (err: unknown) {
+      const code =
+        (err as { code?: string; driverError?: { code?: string } })?.code ??
+        (err as { driverError?: { code?: string } })?.driverError?.code;
+      if (code === '23505') {
+        throw new ConflictException(
+          'برای این صورتحساب پیش‌تر لینک پرداخت فعال یا تاییدشده ثبت شده است.',
+        );
+      }
+      throw err;
+    }
 
     return {
       paymentLinkId: paymentLink.id,

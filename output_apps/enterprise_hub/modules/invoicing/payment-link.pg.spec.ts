@@ -20,7 +20,7 @@ import { StockDocumentsRepository } from '../inventory/repositories/stock-docume
 import { InventoryService } from '../inventory/services/inventory.service';
 import { PostingRulesRepository } from '../posting_rules/repositories/posting-rules.repository';
 import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
-import { CreateInvoiceOnlinePaymentLinks1789900003300 } from '../../migrations/1789900003300-CreateInvoiceOnlinePaymentLinks';
+import { CreateInvoiceOnlinePaymentLinks1789900004500 } from '../../migrations/1789900004500-CreateInvoiceOnlinePaymentLinks';
 import {
   createTestDatabase,
   describePg,
@@ -361,13 +361,13 @@ describePg('Invoice Online Payment Links on PostgreSQL (NOSUPERUSER NOBYPASSRLS)
     expect(res.paid).toBe(false);
 
     const link = await paymentRepo.findPaymentLinkByTrackId(T1, 'zibal_track_bad_amt');
-    expect(link?.status).toBe('FAILED');
+    expect(link?.status).toBe('RECONCILIATION_REQUIRED');
     const invAfter = await invoicingRepo.findById(T1, invoice.id);
     expect(invAfter?.status).toBe(InvoiceStatus.ISSUED);
   });
 
   it('reversibility: migration down() and up() succeed cleanly', async () => {
-    const migration = new CreateInvoiceOnlinePaymentLinks1789900003300();
+    const migration = new CreateInvoiceOnlinePaymentLinks1789900004500();
     const qr = testDb.owner.createQueryRunner();
 
     await migration.down(qr);
