@@ -36,3 +36,6 @@ These are real mistakes found in review. Each line is a rule. Reviewers add a li
 23. Before reporting a PR as done, read its latest `Cross-family review` comment. A `Verdict: blocker` for the current head means the task is not done.
 24. Copy UI text, field names and error codes from the real source file before you write a spec (WAVE 4 #681 asserted four labels and a 400 that do not exist; #644 read `total_amount` where capture drafts store `total`).
 25. A permissive default (`roleKey = 'owner'`, a missing setting treated as allowed) is a security bug. Fail closed (#675).
+26. Global `ValidationPipe` with `enableImplicitConversion: true` coerces non-empty strings like `"false"` to boolean `true` before `@IsBoolean()`; preserve raw `obj[key]` with `@Transform` before `@IsBoolean()` and cover with supertest `ValidationPipe` specs.
+27. Spreadsheet XLSX readers can return 5-digit Excel serial dates as strings rather than JS numbers; handle numeric serial strings too and verify with an XLSX serial-date fixture test.
+28. Never silently return null -> 0n on malformed non-empty spreadsheet money cells; throw 400 citing column and row number.
