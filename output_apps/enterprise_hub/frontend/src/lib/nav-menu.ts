@@ -64,6 +64,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         module: "invoicing",
         keywords: ["invoice", "فاکتور"],
       },
+      {
+        href: "/app/quotations",
+        label: "پیش‌فاکتورها",
+        icon: "FileSpreadsheet",
+        module: "invoicing",
+        keywords: ["quotation", "proforma", "پیش‌فاکتور"],
+      },
     ],
   },
   {

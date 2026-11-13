@@ -39,6 +39,7 @@ import { PostingRulesModule } from './modules/posting_rules/posting-rules.module
 import { SalesModule } from './modules/sales/sales.module';
 import { SalesDeliveryModule } from './modules/sales/delivery/sales-delivery.module';
 import { SalesReturnModule } from './modules/sales/returns/sales-return.module';
+import { QuotationToInvoiceModule } from './modules/sales/invoicing/quotation-to-invoice.module';
 import { ContractingModule } from './modules/contracting/contracting.module';
 import { CountryPacksModule } from './modules/country_packs/country-packs.module';
 import { ReceiptBotModule } from './modules/integrations/receipt_bot/receipt-bot.module';
@@ -120,6 +121,7 @@ const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(proce
     SalesModule,
     SalesDeliveryModule,
     SalesReturnModule,
+    QuotationToInvoiceModule,
     ContractingModule,
     CountryPacksModule,
     ReceiptBotModule,
