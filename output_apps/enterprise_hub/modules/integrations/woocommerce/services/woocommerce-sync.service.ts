@@ -14,9 +14,14 @@ import { Currency } from '../../../currency/enums/currency.enum';
 import { CurrencyService } from '../../../currency/services/currency.service';
 import { InvoiceItem, InvoicePartyInfo } from '../../../invoicing/entities/invoice.entity';
 import { InvoiceJurisdiction } from '../../../invoicing/enums/invoice-jurisdiction.enum';
-import { EInvoiceType, InvoiceDirection } from '../../../invoicing/enums/invoice-kind.enum';
+import {
+  EInvoiceType,
+  InvoiceDirection,
+  InvoiceSubject,
+} from '../../../invoicing/enums/invoice-kind.enum';
 import { InvoiceStatus } from '../../../invoicing/enums/invoice-status.enum';
 import { InvoicingRepository } from '../../../invoicing/repositories/invoicing.repository';
+import { TenantsRepository } from '../../../tenants/repositories/tenants.repository';
 import {
   UpdateWooCommerceConfigDto,
   WooCommerceConfigResponseDto,
@@ -41,6 +46,28 @@ const SUPPORTED_ORDER_CURRENCIES = new Set<string>(Object.values(Currency));
 const TOMAN_TO_RIAL = 10;
 const RATIO_SCALE = 1_000_000;
 
+function parseWooAmount(val?: string | number | null): bigint {
+  if (val === undefined || val === null || val === '') return 0n;
+  if (typeof val === 'number') {
+    return toMinor(val);
+  }
+  const str = String(val).trim();
+  if (!str) return 0n;
+  const parts = str.split('.');
+  if (parts.length === 2 && parts[1].length > 2) {
+    const num = parseFloat(str);
+    if (!Number.isFinite(num)) throw new BadRequestException(`مبلغ ارزی نامعتبر است: ${str}`);
+    return toMinor(num.toFixed(2));
+  }
+  try {
+    return toMinor(str);
+  } catch {
+    const num = parseFloat(str);
+    if (!Number.isFinite(num)) throw new BadRequestException(`مبلغ ارزی نامعتبر است: ${str}`);
+    return toMinor(num.toFixed(2));
+  }
+}
+
 function isMaskedSecretInput(value?: string): boolean {
   if (!value) return true;
   const trimmed = value.trim();
@@ -59,6 +86,7 @@ export class WooCommerceSyncService {
     private readonly wooRepo: WooCommerceRepository,
     private readonly invoicingRepo: InvoicingRepository,
     private readonly currencyService: CurrencyService,
+    private readonly tenantsRepo: TenantsRepository,
   ) {}
 
   async getConfig(tenantId: string): Promise<WooCommerceConfigResponseDto> {
@@ -251,20 +279,25 @@ export class WooCommerceSyncService {
           address: buyerAddress || '',
         };
 
+        const tenant = await this.tenantsRepo.findById(tenantId);
         const sellerInfo: InvoicePartyInfo = {
-          name: 'فروشنده',
+          name: tenant?.name || 'فروشگاه اینترنتی',
         };
 
-        const orderTotalMinor = toMinor(order.total || '0');
-        const totalTaxMinor = toMinor(order.total_tax || '0');
-        const orderDiscountMinor = toMinor(order.discount_total || '0');
+        const orderTotalMinor = parseWooAmount(order.total);
+        const totalTaxMinor = parseWooAmount(order.total_tax);
+        const orderDiscountMinor = parseWooAmount(order.discount_total);
 
         let sumLineDiscountsMinor = 0n;
         const items: InvoiceItem[] = (order.line_items || []).map((line) => {
-          const rawQty = Math.max(1, line.quantity || 1);
-          const lineTotalMinor = toMinor(line.total || line.subtotal || '0');
-          const lineSubtotalMinor = toMinor(line.subtotal || line.total || '0');
-          const lineTaxMinor = toMinor(line.total_tax || '0');
+          const numQty =
+            typeof line.quantity === 'number'
+              ? line.quantity
+              : parseFloat(String(line.quantity || 1));
+          const rawQty = Number.isFinite(numQty) && numQty > 0 ? numQty : 1;
+          const lineTotalMinor = parseWooAmount(line.total || line.subtotal);
+          const lineSubtotalMinor = parseWooAmount(line.subtotal || line.total);
+          const lineTaxMinor = parseWooAmount(line.total_tax);
           const lineDiscountMinor =
             lineSubtotalMinor > lineTotalMinor ? lineSubtotalMinor - lineTotalMinor : 0n;
           sumLineDiscountsMinor += lineDiscountMinor;
@@ -272,13 +305,9 @@ export class WooCommerceSyncService {
           let qty = rawQty;
           let unitPriceMinor: bigint;
           if (line.price !== undefined && line.price !== null) {
-            unitPriceMinor = toMinor(String(line.price));
-          } else if (lineSubtotalMinor % BigInt(rawQty) === 0n) {
-            unitPriceMinor = lineSubtotalMinor / BigInt(rawQty);
+            unitPriceMinor = parseWooAmount(String(line.price));
           } else {
-            // Avoid rounding error when subtotal is not evenly divisible by quantity
-            unitPriceMinor = lineSubtotalMinor;
-            qty = 1;
+            unitPriceMinor = BigInt(Math.round(Number(lineSubtotalMinor) / rawQty));
           }
 
           const vatRate =
@@ -293,25 +322,25 @@ export class WooCommerceSyncService {
                 ? line.name || `کالای ووکامرس #${line.product_id}`
                 : `${line.name || `کالای ووکامرس #${line.product_id}`} (×${rawQty})`,
             quantity: qty,
-            unitPrice: minorToDecimal(unitPriceMinor) as unknown as number,
-            discount: minorToDecimal(lineDiscountMinor) as unknown as number,
+            unitPrice: Number(minorToDecimal(unitPriceMinor)),
+            discount: Number(minorToDecimal(lineDiscountMinor)),
             vatRate,
-            tax: minorToDecimal(lineTaxMinor) as unknown as number,
-            total: minorToDecimal(lineTotalMinor + lineTaxMinor) as unknown as number,
+            tax: Number(minorToDecimal(lineTaxMinor)),
+            total: Number(minorToDecimal(lineTotalMinor + lineTaxMinor)),
           };
         });
 
-        const shippingMinor = toMinor(order.shipping_total || '0');
+        const shippingMinor = parseWooAmount(order.shipping_total);
         if (shippingMinor > 0n) {
           items.push({
             sku: 'SHIPPING',
             description: 'هزینه ارسال سفارش',
             quantity: 1,
-            unitPrice: minorToDecimal(shippingMinor) as unknown as number,
+            unitPrice: Number(minorToDecimal(shippingMinor)),
             discount: 0,
             vatRate: 0,
             tax: 0,
-            total: minorToDecimal(shippingMinor) as unknown as number,
+            total: Number(minorToDecimal(shippingMinor)),
           });
         }
 
@@ -343,20 +372,20 @@ export class WooCommerceSyncService {
             jurisdiction,
             exchangeRate,
             fxRate,
-            amountFx: minorToDecimal(orderTotalMinor) as unknown as number,
+            amountFx: Number(minorToDecimal(orderTotalMinor)),
             baseCurrency: BASE_CURRENCY,
-            baseTotalAmount: minorToDecimal(baseTotalAmountMinor) as unknown as number,
-            baseTotalTax: minorToDecimal(baseTotalTaxMinor) as unknown as number,
-            baseFinalPayable: minorToDecimal(baseFinalPayableMinor) as unknown as number,
+            baseTotalAmount: Number(minorToDecimal(baseTotalAmountMinor)),
+            baseTotalTax: Number(minorToDecimal(baseTotalTaxMinor)),
+            baseFinalPayable: Number(minorToDecimal(baseFinalPayableMinor)),
             einvoiceType,
-            subject: 1,
+            subject: InvoiceSubject.ORIGINAL,
             sellerInfo,
             buyerInfo,
             items,
-            totalAmount: minorToDecimal(totalAmountMinor) as unknown as number,
-            totalDiscount: minorToDecimal(totalDiscountMinor) as unknown as number,
-            totalTax: minorToDecimal(totalTaxMinor) as unknown as number,
-            finalPayable: minorToDecimal(orderTotalMinor) as unknown as number,
+            totalAmount: Number(minorToDecimal(totalAmountMinor)),
+            totalDiscount: Number(minorToDecimal(totalDiscountMinor)),
+            totalTax: Number(minorToDecimal(totalTaxMinor)),
+            finalPayable: Number(minorToDecimal(orderTotalMinor)),
           },
           manager,
         );
@@ -442,18 +471,22 @@ export class WooCommerceSyncService {
     const origin = parsed.origin;
 
     const host = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase();
-    if (!net.isIP(host)) {
-      try {
-        const resolved = await dns.lookup(host, { all: true });
-        for (const addr of resolved) {
-          if (PRIVATE_BLOCKLIST.check(addr.address, addr.family === 4 ? 'ipv4' : 'ipv6')) {
-            throw new BadRequestException('WooCommerce storeUrl resolves to a private or loopback address');
+    const verifyHostNotPrivate = async () => {
+      if (!net.isIP(host)) {
+        try {
+          const resolved = await dns.lookup(host, { all: true });
+          for (const addr of resolved) {
+            if (PRIVATE_BLOCKLIST.check(addr.address, addr.family === 4 ? 'ipv4' : 'ipv6')) {
+              throw new BadRequestException('WooCommerce storeUrl resolves to a private or loopback address');
+            }
           }
+        } catch (err: any) {
+          if (err instanceof BadRequestException) throw err;
         }
-      } catch (err: any) {
-        if (err instanceof BadRequestException) throw err;
       }
-    }
+    };
+
+    await verifyHostNotPrivate();
 
     const consumerKey = openSecret(config.consumerKeyEncrypted, tenantId);
     const consumerSecret = openSecret(config.consumerSecretEncrypted, tenantId);
@@ -474,6 +507,7 @@ export class WooCommerceSyncService {
         {
           method: 'GET',
           headers: { Authorization: authHeader },
+          redirect: 'error',
           signal: AbortSignal.timeout(10_000),
         },
       );
@@ -485,6 +519,7 @@ export class WooCommerceSyncService {
         throw new NotFoundException(`WooCommerce product not found for SKU ${sku}`);
       }
 
+      await verifyHostNotPrivate();
       const updateRes = await fetch(`${origin}${basePath}/wp-json/wc/v3/products/${products[0].id}`, {
         method: 'PUT',
         headers: {
@@ -492,6 +527,7 @@ export class WooCommerceSyncService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
+        redirect: 'error',
         signal: AbortSignal.timeout(10_000),
       });
       if (!updateRes.ok) {
