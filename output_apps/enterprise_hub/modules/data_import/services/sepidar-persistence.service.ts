@@ -108,8 +108,26 @@ const SYNTHETIC_FLOAT_ACCOUNT_TYPES: Record<string, AccountType> = {
   'F-002': AccountType.EXPENSE,
 };
 
-/** Canonical Iranian group account types sourced directly from iran-chart-template.ts (1=ASSET, 2=LIABILITY, 3=EQUITY, 4=REVENUE, 5=EXPENSE). */
-const STANDARD_IRAN_GROUP_TYPES = new Map<string, AccountType>();
+/**
+ * Canonical Iranian chart of accounts group prefix mappings (1..9):
+ * Sourced directly from iran-chart-template.ts (1=ASSET, 2=LIABILITY, 3=EQUITY, 4=REVENUE, 5=EXPENSE)
+ * and extended to standard Iranian 9-group practice:
+ * 6=EXPENSE (هزینه‌های توزیع و فروش، عمومی و اداری),
+ * 7=REVENUE (سایر درآمدها),
+ * 8=EXPENSE (هزینه‌های مالی و مالیات),
+ * 9=EQUITY (حساب‌های انتظامی/آماری).
+ */
+const STANDARD_IRAN_GROUP_TYPES = new Map<string, AccountType>([
+  ['1', AccountType.ASSET],
+  ['2', AccountType.LIABILITY],
+  ['3', AccountType.EQUITY],
+  ['4', AccountType.REVENUE],
+  ['5', AccountType.EXPENSE],
+  ['6', AccountType.EXPENSE],
+  ['7', AccountType.REVENUE],
+  ['8', AccountType.EXPENSE],
+  ['9', AccountType.EQUITY],
+]);
 for (const template of CHART_TEMPLATES) {
   for (const acc of template.accounts) {
     if (acc.level === AccountLevel.GROUP) {
@@ -380,10 +398,12 @@ export class SepidarPersistenceService {
       }
       validCheques = mappedCheques.validCheques.map((chq, idx) => {
         const matched = openRawCheques[idx];
+        const matchedBank = matched?.bankName ? matched.bankName.trim() : null;
+        const chqBank = chq.bankName ? chq.bankName.trim() : null;
         if (
           !matched ||
           matched.chequeNumber !== chq.chequeNumber ||
-          matched.bankName !== (chq.bankName ?? null)
+          matchedBank !== chqBank
         ) {
           throw new BadRequestException(
             `Sepidar cheque alignment mismatch at index ${idx} (${chq.chequeNumber}).`,
@@ -825,59 +845,59 @@ export class SepidarPersistenceService {
           );
         }
 
-      if (lines.length > 0) {
-        const storedLines = await lineRepo.find({
-          where: { tenantId, journalEntryId: existing.id },
-        });
-        const storedDebit = storedLines.reduce((s, l) => s + parseMinor(l.debit), 0n);
-        const storedCredit = storedLines.reduce((s, l) => s + parseMinor(l.credit), 0n);
-        const incomingDebit = lines.reduce((s, l) => s + l.debitMinor, 0n);
-        const incomingCredit = lines.reduce((s, l) => s + l.creditMinor, 0n);
-        if (
-          storedLines.length !== lines.length ||
-          storedDebit !== incomingDebit ||
-          storedCredit !== incomingCredit
-        ) {
-          throw new ConflictException(
-            `Opening voucher ${OPENING_ENTRY_NUMBER} already exists in database with different lines or totals.`,
-          );
-        }
+        if (lines.length > 0) {
+          const storedLines = await lineRepo.find({
+            where: { tenantId, journalEntryId: existing.id },
+          });
+          const storedDebit = storedLines.reduce((s, l) => s + parseMinor(l.debit), 0n);
+          const storedCredit = storedLines.reduce((s, l) => s + parseMinor(l.credit), 0n);
+          const incomingDebit = lines.reduce((s, l) => s + l.debitMinor, 0n);
+          const incomingCredit = lines.reduce((s, l) => s + l.creditMinor, 0n);
+          if (
+            storedLines.length !== lines.length ||
+            storedDebit !== incomingDebit ||
+            storedCredit !== incomingCredit
+          ) {
+            throw new ConflictException(
+              `Opening voucher ${OPENING_ENTRY_NUMBER} already exists in database with different lines or totals.`,
+            );
+          }
 
-        const storedAccIds = Array.from(new Set(storedLines.map((l) => l.accountId)));
-        const storedAccounts =
-          storedAccIds.length > 0
-            ? await accountRepo.find({ where: { tenantId, id: In(storedAccIds) } })
-            : [];
-        const idToCode = new Map(storedAccounts.map((a) => [a.id, a.code]));
-        const normalizeLineKey = (
-          code: string,
-          partyCode: string | null | undefined,
-          debit: bigint,
-          credit: bigint,
-        ) => `${code}|${partyCode ?? ''}|${debit.toString()}|${credit.toString()}`;
-        const storedSignatures = storedLines
-          .map((l) =>
-            normalizeLineKey(
-              idToCode.get(l.accountId) ?? String(l.accountId),
-              l.partyCode,
-              parseMinor(l.debit),
-              parseMinor(l.credit),
-            ),
-          )
-          .sort();
-        const incomingSignatures = lines
-          .map((l) =>
-            normalizeLineKey(l.accountCode, l.floatingDetailCode, l.debitMinor, l.creditMinor),
-          )
-          .sort();
-        const exactMatch = storedSignatures.every((sig, idx) => sig === incomingSignatures[idx]);
-        if (!exactMatch) {
-          throw new ConflictException(
-            `Opening voucher ${OPENING_ENTRY_NUMBER} already exists in database with different account breakdown.`,
-          );
+          const storedAccIds = Array.from(new Set(storedLines.map((l) => l.accountId)));
+          const storedAccounts =
+            storedAccIds.length > 0
+              ? await accountRepo.find({ where: { tenantId, id: In(storedAccIds) } })
+              : [];
+          const idToCode = new Map(storedAccounts.map((a) => [a.id, a.code]));
+          const normalizeLineKey = (
+            code: string,
+            partyCode: string | null | undefined,
+            debit: bigint,
+            credit: bigint,
+          ) => `${code}|${partyCode ?? ''}|${debit.toString()}|${credit.toString()}`;
+          const storedSignatures = storedLines
+            .map((l) =>
+              normalizeLineKey(
+                idToCode.get(l.accountId) ?? String(l.accountId),
+                l.partyCode,
+                parseMinor(l.debit),
+                parseMinor(l.credit),
+              ),
+            )
+            .sort();
+          const incomingSignatures = lines
+            .map((l) =>
+              normalizeLineKey(l.accountCode, l.floatingDetailCode, l.debitMinor, l.creditMinor),
+            )
+            .sort();
+          const exactMatch = storedSignatures.every((sig, idx) => sig === incomingSignatures[idx]);
+          if (!exactMatch) {
+            throw new ConflictException(
+              `Opening voucher ${OPENING_ENTRY_NUMBER} already exists in database with different account breakdown.`,
+            );
+          }
         }
       }
-    }
 
       return { created: false };
     }

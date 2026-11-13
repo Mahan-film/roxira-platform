@@ -464,6 +464,19 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
       ).rejects.toThrow(ConflictException);
     });
 
+    it('aligns cheques properly when bankName has surrounding whitespace', async () => {
+      const chq = {
+        ...SYNTHETIC_SEPIDAR_CHEQUES[0],
+        ChequeId: 888,
+        ChequeNumber: 'SERIAL-WS',
+        SayadNumber: '9999888877776666',
+        BankName: '  بانک صادرات  ',
+        Amount: 5_000_000,
+      };
+      const res = await service.persistSepidarData(tenantId, { cheques: [chq] });
+      expect(res.counts.cheques).toBe(1);
+    });
+
     it('rejects fractional IRR inputs, production useSynthetic, and re-runs with conflicting attributes', async () => {
       await expect(
         service.persistSepidarData(tenantId, {
@@ -644,9 +657,41 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
             ParentAccountID: null,
             AccountType: AccountType.LIABILITY,
           },
+          {
+            AccountID: 2,
+            Code: '6010',
+            Title: 'Distribution and Sales Expense',
+            Level: 2,
+            ParentAccountID: null,
+          },
+          {
+            AccountID: 3,
+            Code: '7010',
+            Title: 'Other Non-Operating Revenue',
+            Level: 2,
+            ParentAccountID: null,
+          },
+          {
+            AccountID: 4,
+            Code: '8010',
+            Title: 'Finance Expense',
+            Level: 2,
+            ParentAccountID: null,
+          },
+          {
+            AccountID: 5,
+            Code: '9010',
+            Title: 'Memorandum Account',
+            Level: 2,
+            ParentAccountID: null,
+          },
         ],
       });
       expect(accountsStore[0].accountType).toBe(AccountType.LIABILITY);
+      expect(accountsStore.find((a) => a.code === '6010')?.accountType).toBe(AccountType.EXPENSE);
+      expect(accountsStore.find((a) => a.code === '7010')?.accountType).toBe(AccountType.REVENUE);
+      expect(accountsStore.find((a) => a.code === '8010')?.accountType).toBe(AccountType.EXPENSE);
+      expect(accountsStore.find((a) => a.code === '9010')?.accountType).toBe(AccountType.EQUITY);
 
       const pipe = new ValidationPipe({
         whitelist: true,
