@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
 import { CurrencyModule } from '../../currency/currency.module';
 import { InvoicingModule } from '../../invoicing/invoicing.module';
+import { TenantsModule } from '../../tenants/tenants.module';
 import { WooCommerceConfigController } from './controllers/woocommerce-config.controller';
 import { WooCommerceWebhookController } from './controllers/woocommerce-webhook.controller';
 import { WooCommerceConfigEntity } from './entities/woocommerce-config.entity';
@@ -18,6 +19,7 @@ import { WooCommerceSyncService } from './services/woocommerce-sync.service';
     ]),
     CurrencyModule,
     InvoicingModule,
+    TenantsModule,
   ],
   controllers: [
     WooCommerceConfigController,

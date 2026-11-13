@@ -1,5 +1,6 @@
 import { BadRequestException, INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { randomBytes } from 'crypto';
 import request from 'supertest';
 import { BASE_CURRENCY, DEFAULT_RATES_PER_USD } from '../../currency/constants/currency.constants';
 import { Currency } from '../../currency/enums/currency.enum';
@@ -25,7 +26,8 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
   const tenantB = '22222222-2222-4222-8222-222222222222';
 
   beforeAll(() => {
-    process.env.WOOCOMMERCE_KEY_ENCRYPTION_KEY = 'test_woocommerce_encryption_key_32b!';
+    process.env.WOOCOMMERCE_KEY_ENCRYPTION_KEY =
+      process.env.WOOCOMMERCE_KEY_ENCRYPTION_KEY || randomBytes(32).toString('hex').slice(0, 32);
   });
 
   describe('Credential Encryption, Masking & SSRF Guard', () => {
@@ -103,7 +105,15 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
         create: jest.fn().mockResolvedValue({ id: 'inv-uuid-101' }),
       };
       const currencyService = new CurrencyService({ get: () => '' } as any);
-      service = new WooCommerceSyncService(mockWooRepo, mockInvoicingRepo, currencyService);
+      const mockTenantsRepo = {
+        findById: jest.fn().mockResolvedValue({ id: tenantId, name: 'شرکت نمونه' }),
+      };
+      service = new WooCommerceSyncService(
+        mockWooRepo,
+        mockInvoicingRepo,
+        currencyService,
+        mockTenantsRepo as any,
+      );
     });
 
     it('returns generatedWebhookSecret once on initial blank secret and saves real secrets containing dots', async () => {
@@ -204,13 +214,14 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
           exchangeRate: 1,
           fxRate: DEFAULT_RATES_PER_USD[Currency.IRR],
           baseCurrency: BASE_CURRENCY,
-          baseTotalAmount: '105.00',
-          baseTotalTax: '10.00',
-          baseFinalPayable: '110.00',
-          totalAmount: '105.00',
-          totalDiscount: '5.00',
-          totalTax: '10.00',
-          finalPayable: '110.00',
+          baseTotalAmount: 105,
+          baseTotalTax: 10,
+          baseFinalPayable: 110,
+          totalAmount: 105,
+          totalDiscount: 5,
+          totalTax: 10,
+          finalPayable: 110,
+          sellerInfo: { name: 'شرکت نمونه' },
         }),
         undefined,
       );
@@ -236,9 +247,48 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
         expect.objectContaining({
           taxInvoiceNumber: 'WOO-202',
           einvoiceType: 1, // WITH_BUYER because company is provided
+          sellerInfo: { name: 'شرکت نمونه' },
           items: expect.arrayContaining([
-            expect.objectContaining({ sku: 'WOO-10', total: '120000.00' }),
-            expect.objectContaining({ sku: 'SHIPPING', description: 'هزینه ارسال سفارش', total: '30000.00' }),
+            expect.objectContaining({ sku: 'WOO-10', total: 120000 }),
+            expect.objectContaining({ sku: 'SHIPPING', description: 'هزینه ارسال سفارش', total: 30000 }),
+          ]),
+        }),
+        undefined,
+      );
+    });
+
+    it('handles decimal quantities and clamps currencies with >2 decimals cleanly', async () => {
+      const orderWithDecimals = {
+        id: 205,
+        currency: 'OMR',
+        total: '12.345',
+        total_tax: '1.234',
+        discount_total: '0.500',
+        billing: { first_name: 'علی' },
+        line_items: [
+          {
+            id: 1,
+            name: 'سیب',
+            product_id: 25,
+            quantity: 2.5,
+            subtotal: '11.611',
+            total: '11.611',
+          },
+        ],
+      };
+
+      const res = await service.importOrder(tenantId, orderWithDecimals as any);
+      expect(res.success).toBe(true);
+      expect(mockInvoicingRepo.create).toHaveBeenCalledWith(
+        tenantId,
+        expect.objectContaining({
+          taxInvoiceNumber: 'WOO-205',
+          finalPayable: 12.35,
+          items: expect.arrayContaining([
+            expect.objectContaining({
+              sku: 'WOO-25',
+              quantity: 2.5,
+            }),
           ]),
         }),
         undefined,

@@ -6,9 +6,13 @@
  * - Confirms secret preservation on partial re-save and concurrent order import idempotency under advisory lock + unique partial index.
  */
 import 'reflect-metadata';
+import { randomBytes } from 'crypto';
+import { UnauthorizedException } from '@nestjs/common';
 import { CurrencyService } from '../../currency/services/currency.service';
 import { InvoiceEntity } from '../../invoicing/entities/invoice.entity';
 import { InvoicingRepository } from '../../invoicing/repositories/invoicing.repository';
+import { TenantEntity } from '../../tenants/entities/tenant.entity';
+import { TenantsRepository } from '../../tenants/repositories/tenants.repository';
 import { CreateWooCommerceIntegration1789900004300 } from '../../../migrations/1789900004300-CreateWooCommerceIntegration';
 import {
   createTestDatabase,
@@ -17,6 +21,7 @@ import {
   TEST_T1 as T1,
   TEST_T2 as T2,
 } from '../../../test/support/test-pg';
+import { WooCommerceWebhookController } from './controllers/woocommerce-webhook.controller';
 import { WooCommerceConfigEntity } from './entities/woocommerce-config.entity';
 import {
   WooCommerceSyncDirection,
@@ -32,10 +37,11 @@ describePg('WooCommerce Integration on PostgreSQL (NOSUPERUSER NOBYPASSRLS) (T85
   let wooRepo: WooCommerceRepository;
   let invoicingRepo: InvoicingRepository;
   let syncService: WooCommerceSyncService;
+  let tenantsRepo: TenantsRepository;
 
   beforeAll(async () => {
     process.env.WOOCOMMERCE_KEY_ENCRYPTION_KEY =
-      process.env.WOOCOMMERCE_KEY_ENCRYPTION_KEY || 'test_woocommerce_encryption_key_32b!';
+      process.env.WOOCOMMERCE_KEY_ENCRYPTION_KEY || randomBytes(32).toString('hex').slice(0, 32);
 
     testDb = await createTestDatabase('wc');
 
@@ -50,8 +56,9 @@ describePg('WooCommerce Integration on PostgreSQL (NOSUPERUSER NOBYPASSRLS) (T85
       testDb.app,
       testDb.scope,
     );
+    tenantsRepo = new TenantsRepository(testDb.app.getRepository(TenantEntity));
     const currencyService = new CurrencyService({ get: () => '' } as any);
-    syncService = new WooCommerceSyncService(wooRepo, invoicingRepo, currencyService);
+    syncService = new WooCommerceSyncService(wooRepo, invoicingRepo, currencyService, tenantsRepo);
 
     for (const tid of [T1, T2]) {
       await testDb
@@ -168,6 +175,20 @@ describePg('WooCommerce Integration on PostgreSQL (NOSUPERUSER NOBYPASSRLS) (T85
 
     const invalidSig = computeHmacSignature(payload, 'wrong-secret');
     expect(verifyHmacSignature(payload, invalidSig, realSecret!)).toBe(false);
+  });
+
+  it('exercises webhook controller HMAC validation rejecting missing/bad signatures with 401', async () => {
+    const webhookController = new WooCommerceWebhookController(syncService);
+    const rawPayload = Buffer.from(JSON.stringify({ id: 9999, line_items: [] }));
+    const mockReq = { rawBody: rawPayload } as any;
+
+    await expect(
+      webhookController.handleWebhook(T1, undefined, 'order.created', {}, mockReq),
+    ).rejects.toThrow(UnauthorizedException);
+
+    await expect(
+      webhookController.handleWebhook(T1, 'bad-signature', 'order.created', {}, mockReq),
+    ).rejects.toThrow(UnauthorizedException);
   });
 
   it('allows multiple outbound stock pushes for the same sku without unique index violation', async () => {
