@@ -1,10 +1,11 @@
-/** Lifecycle of a sales quotation. CONVERTED is terminal: a quotation converts into one order only. */
+/** Lifecycle of a sales quotation. CONVERTED is terminal: a quotation converts into one order or invoice only. */
 export enum SalesQuotationStatus {
   DRAFT = 'DRAFT',
   SENT = 'SENT',
   ACCEPTED = 'ACCEPTED',
   REJECTED = 'REJECTED',
   CONVERTED = 'CONVERTED',
+  EXPIRED = 'EXPIRED',
 }
 
 /** Lifecycle of a sales order. CANCELLED is terminal. */
@@ -22,15 +23,23 @@ export const SALES_ORDER_PREFIX = 'SO';
 
 /** Allowed quotation transitions; anything not listed here is a 409. */
 export const QUOTATION_TRANSITIONS: Readonly<Record<SalesQuotationStatus, readonly SalesQuotationStatus[]>> = {
-  [SalesQuotationStatus.DRAFT]: [SalesQuotationStatus.SENT],
-  [SalesQuotationStatus.SENT]: [SalesQuotationStatus.ACCEPTED, SalesQuotationStatus.REJECTED],
-  [SalesQuotationStatus.ACCEPTED]: [SalesQuotationStatus.REJECTED],
+  [SalesQuotationStatus.DRAFT]: [SalesQuotationStatus.SENT, SalesQuotationStatus.EXPIRED],
+  [SalesQuotationStatus.SENT]: [SalesQuotationStatus.ACCEPTED, SalesQuotationStatus.REJECTED, SalesQuotationStatus.EXPIRED],
+  [SalesQuotationStatus.ACCEPTED]: [SalesQuotationStatus.REJECTED, SalesQuotationStatus.EXPIRED],
   [SalesQuotationStatus.REJECTED]: [],
   [SalesQuotationStatus.CONVERTED]: [],
+  [SalesQuotationStatus.EXPIRED]: [],
 };
 
 /** States a quotation must be in to convert into an order. */
 export const QUOTATION_CONVERTIBLE: readonly SalesQuotationStatus[] = [
+  SalesQuotationStatus.SENT,
+  SalesQuotationStatus.ACCEPTED,
+];
+
+/** States a quotation must be in to convert into an invoice (1-click conversion). */
+export const QUOTATION_INVOICE_CONVERTIBLE: readonly SalesQuotationStatus[] = [
+  SalesQuotationStatus.DRAFT,
   SalesQuotationStatus.SENT,
   SalesQuotationStatus.ACCEPTED,
 ];
