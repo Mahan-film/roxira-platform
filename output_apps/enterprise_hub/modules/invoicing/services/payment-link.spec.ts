@@ -243,6 +243,53 @@ describe('Payment Link Crypto & Unit Logic (T90)', () => {
       );
     });
 
+    it('rejects non-IRR invoices to avoid currency undercharge bugs', async () => {
+      invoicingRepo.findById.mockResolvedValueOnce({
+        id: 'inv-irt',
+        direction: InvoiceDirection.SALE,
+        status: InvoiceStatus.ISSUED,
+        currency: 'IRT',
+        finalPayable: 250000,
+      });
+
+      await expect(service.createPaymentLink(T1, 'inv-irt')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('handles race conditions via unique index conflict (code 23505) and throws ConflictException', async () => {
+      invoicingRepo.findById.mockResolvedValueOnce({
+        id: 'inv-race',
+        direction: InvoiceDirection.SALE,
+        status: InvoiceStatus.ISSUED,
+        currency: 'IRR',
+        finalPayable: 500000,
+      });
+
+      const encrypted = sealMerchantId('zibal_test_merchant', T1);
+      paymentRepo.findConfig.mockResolvedValueOnce({
+        tenantId: T1,
+        gateway: 'zibal',
+        encryptedMerchantId: encrypted,
+        isActive: true,
+      });
+
+      jest.spyOn(gatewayAdapter, 'requestPayment').mockResolvedValueOnce({
+        success: true,
+        trackId: 'trk-race',
+        paymentUrl: 'https://gateway.zibal.ir/start/trk-race',
+      });
+
+      paymentRepo.createPaymentLink.mockRejectedValueOnce({
+        code: '23505',
+        driverError: { code: '23505' },
+      });
+
+      await expect(service.createPaymentLink(T1, 'inv-race')).rejects.toThrow(
+        ConflictException,
+      );
+    });
+
     it('creates payment link on issued sales invoice using configured callback base URL', async () => {
       invoicingRepo.findById.mockResolvedValue({
         id: 'inv-1',

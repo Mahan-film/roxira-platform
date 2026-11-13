@@ -51,9 +51,12 @@ export class PaymentGatewayAdapter {
    */
   async requestPayment(params: PaymentRequestParams): Promise<PaymentRequestResult> {
     try {
+      if (params.amountRials > BigInt(Number.MAX_SAFE_INTEGER) || params.amountRials <= 0n) {
+        throw new Error('مبلغ ریالی پرداخت خارج از بازه عددی مجاز است.');
+      }
       const payload: Record<string, unknown> = {
         merchant: params.merchantId,
-        amount: Number(params.amountRials),
+        amount: parseInt(params.amountRials.toString(), 10),
         orderId: params.orderId,
         description: params.description,
         callbackUrl: params.callbackUrl,

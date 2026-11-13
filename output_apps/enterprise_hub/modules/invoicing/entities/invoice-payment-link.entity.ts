@@ -10,6 +10,14 @@ import {
 @Entity('invoice_payment_links')
 @Index(['tenantId', 'invoiceId'])
 @Index(['tenantId', 'gatewayRef'])
+@Index('UQ_invoice_payment_links_tenant_gateway_ref', ['tenantId', 'gatewayRef'], {
+  unique: true,
+  where: '"gateway_ref" IS NOT NULL',
+})
+@Index('UQ_invoice_payment_links_active', ['tenantId', 'invoiceId'], {
+  unique: true,
+  where: `"status" IN ('PENDING', 'SETTLING', 'VERIFYING', 'PAID_UNSETTLED')`,
+})
 export class InvoicePaymentLinkEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -36,7 +44,7 @@ export class InvoicePaymentLinkEntity {
   amount: bigint;
 
   @Column({ type: 'varchar', length: 32, default: 'PENDING' })
-  status: string; // PENDING | PAID | FAILED
+  status: string; // PENDING | PAID | FAILED | VERIFYING | PAID_UNSETTLED | SETTLING | RECONCILIATION_REQUIRED | UNVERIFIED
 
   @Column({ type: 'varchar', length: 32, default: 'zibal' })
   gateway: string;
