@@ -2189,16 +2189,6 @@
     "read_only": true,
     "legacy_member": false
   },
-    "policy": "tax:read",
-    "owner": true,
-    "admin": true,
-    "accountant": true,
-    "sales": false,
-    "cheque_reviewer": false,
-    "hr": false,
-    "read_only": true,
-    "legacy_member": false
-  },
   "GET /enterprise-hub/tax-compliance/reports/journal.csv (LedgerExportController.journal)": {
     "policy": "tax:export",
     "owner": true,
