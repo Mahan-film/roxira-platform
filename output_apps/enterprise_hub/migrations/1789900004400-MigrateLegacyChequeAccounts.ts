@@ -7,7 +7,7 @@ export class MigrateLegacyChequeAccounts1789900004400 implements MigrationInterf
     // 1. Ensure 1021 ('اسناد دریافتنی') exists for tenants having legacy 1110 named 'اسناد دریافتنی'
     await queryRunner.query(`
       INSERT INTO "fin_chart_of_accounts" ("tenant_id", "code", "name", "account_type", "level", "currency", "balance")
-      SELECT DISTINCT a."tenant_id", '1021', 'اسناد دریافتنی', 'ASSET', 'moein', 'IRR', 0
+      SELECT DISTINCT a."tenant_id", '1021', 'اسناد دریافتنی', 'ASSET'::accounttype, 'MOEIN', 'IRR', 0
       FROM "fin_chart_of_accounts" a
       WHERE a."code" = '1110' AND a."name" = 'اسناد دریافتنی'
         AND NOT EXISTS (
@@ -42,7 +42,7 @@ export class MigrateLegacyChequeAccounts1789900004400 implements MigrationInterf
     // 4. Ensure 1023 ('اسناد در جریان وصول') exists for tenants having legacy 1120 named 'اسناد در جریان وصول'
     await queryRunner.query(`
       INSERT INTO "fin_chart_of_accounts" ("tenant_id", "code", "name", "account_type", "level", "currency", "balance")
-      SELECT DISTINCT a."tenant_id", '1023', 'اسناد در جریان وصول', 'ASSET', 'moein', 'IRR', 0
+      SELECT DISTINCT a."tenant_id", '1023', 'اسناد در جریان وصول', 'ASSET'::accounttype, 'MOEIN', 'IRR', 0
       FROM "fin_chart_of_accounts" a
       WHERE a."code" = '1120' AND a."name" = 'اسناد در جریان وصول'
         AND NOT EXISTS (
@@ -77,7 +77,7 @@ export class MigrateLegacyChequeAccounts1789900004400 implements MigrationInterf
     // 7. Ensure 2011 ('اسناد پرداختنی') exists for tenants having legacy 2110 named 'اسناد پرداختنی'
     await queryRunner.query(`
       INSERT INTO "fin_chart_of_accounts" ("tenant_id", "code", "name", "account_type", "level", "currency", "balance")
-      SELECT DISTINCT a."tenant_id", '2011', 'اسناد پرداختنی', 'LIABILITY', 'moein', 'IRR', 0
+      SELECT DISTINCT a."tenant_id", '2011', 'اسناد پرداختنی', 'LIABILITY'::accounttype, 'MOEIN', 'IRR', 0
       FROM "fin_chart_of_accounts" a
       WHERE a."code" = '2110' AND a."name" = 'اسناد پرداختنی'
         AND NOT EXISTS (
