@@ -13,15 +13,3 @@ export async function printBarcodeSheet(dto: RenderBarcodeSheetDto): Promise<voi
   printWindow.onafterprint = () => printWindow.close();
   printWindow.print();
 }
-
-/**
- * شیت آماده HTML را مستقیماً چاپ می‌کند.
- */
-export function printRawHtml(html: string): void {
-  const printWindow = window.open("", "_blank");
-  if (!printWindow) return;
-  printWindow.document.write(html);
-  printWindow.document.close();
-  printWindow.onafterprint = () => printWindow.close();
-  printWindow.print();
-}
