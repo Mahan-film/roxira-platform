@@ -2,6 +2,8 @@ import {
   CreateInvoiceDto,
   CreatePosSaleDto,
   PosSaleResponse,
+  PosSyncResult,
+  SyncPosSalesDto,
   InvoiceResponseDto,
   PaginatedInvoiceResponse,
   QueryInvoiceDto,
@@ -122,6 +124,20 @@ export async function createPosSale(
   signal?: AbortSignal,
 ): Promise<PosSaleResponse> {
   return apiRequest<PosSaleResponse>(`${INVOICING_ENDPOINT}/pos-sales`, {
+    method: "POST",
+    body: payload,
+    signal,
+  });
+}
+
+/**
+ * همگام‌سازی دسته‌ای فروش‌های آفلاین پایانه — POST /enterprise-hub/invoicing/pos-sales/sync.
+ */
+export async function syncPosSales(
+  payload: SyncPosSalesDto,
+  signal?: AbortSignal,
+): Promise<PosSyncResult> {
+  return apiRequest<PosSyncResult>(`${INVOICING_ENDPOINT}/pos-sales/sync`, {
     method: "POST",
     body: payload,
     signal,

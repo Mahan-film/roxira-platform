@@ -210,10 +210,17 @@ function InvoicingPage() {
               {direction === InvoiceDirection.PURCHASE ? "فاکتور خرید" : "فاکتور فروش"}
             </Button>
             {direction === InvoiceDirection.SALE && (
-              <Button variant="outline" onClick={() => setShowQuickSale(true)}>
-                <Plus />
-                فروش سریع
-              </Button>
+              <>
+                <Button variant="outline" onClick={() => setShowQuickSale(true)}>
+                  <Plus />
+                  فروش سریع
+                </Button>
+                <Link href="/app/invoicing/pos">
+                  <Button variant="outline">
+                    پایانه فروش (POS)
+                  </Button>
+                </Link>
+              </>
             )}
           </div>
         }
