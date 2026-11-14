@@ -1223,10 +1223,13 @@ test.describe('M1 gate · one month of «سپهر البرز نمونه»', () =
     await loginAsTestTenant(page, '/app/cheques');
     const cheque = M1_MONTH_OPERATIONS.chequeReceived; // 36,712,500 to 1110, not deposited
 
-    // Tenant setup, as step 07 does for cash: the cheque template's receivable role defaults to the legacy
-    // code 1020, which this chart does not have (the first run failed with UNKNOWN_ACCOUNT 1020). Pin it to 1201.
+    // Tenant setup: The M1 sample company uses custom CSV chart e2e/fixtures/sample-company/chart-of-accounts.csv
+    // where 1110 is explicitly defined as 'اسناد دریافتنی نزد صندوق' (not land) and 1201 is receivables.
+    // We pin the tenant's cheque creation roles to these custom fixture accounts.
     const pinned = await apiPut(page, 'posting-rules/cheque.received.create/roles/receivable', { accountCode: '1201' });
     expect(pinned, 'PUT posting-rules cheque.received.create receivable -> 1201').toBe(204);
+    const pinnedNotes = await apiPut(page, 'posting-rules/cheque.received.create/roles/cheques_receivable', { accountCode: '1110' });
+    expect(pinnedNotes, 'PUT posting-rules cheque.received.create cheques_receivable -> 1110').toBe(204);
     const accountsBefore = await apiGet<Array<{ code: string; balance: number | string }>>(page, 'accounting/accounts');
     // ChequeDirection is lowercase 'received'; amount may be a number or a decimal string.
     const created = await apiPost<{ id: number; status: string }>(page, 'cheques', {

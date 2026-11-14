@@ -5,14 +5,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
-import { AccountType } from '../../accounting/enums/accounting.enum';
+import { CHART_TEMPLATES } from '../../accounting/constants/iran-chart-template';
+import { AccountLevel } from '../../accounting/enums/accounting.enum';
 import { MoneyFormatError, fromDb, fromMinor, minorToDecimal, toMinor } from '../../accounting/money';
 import { AccountingService } from '../../accounting/services/accounting.service';
 import { BankingService } from '../../banking/services/banking.service';
 import { RoleAccounts } from '../../posting_rules/domain/posting-engine';
 import { PostingResult, PostingRulesService } from '../../posting_rules/services/posting-rules.service';
 import {
-  CHEQUE_ACCOUNT_DEFINITIONS,
   DEFAULT_DUE_WINDOW_DAYS,
   PG_UNIQUE_VIOLATION,
 } from '../constants/cheque.constants';
@@ -76,12 +76,19 @@ const addDays = (date: string, days: number): string =>
  * Every state change that has a ledger effect posts one balanced journal entry
  * through `AccountingService.createJournalEntry` inside the same transaction as
  * the status change and the event row, so a failed posting leaves the cheque
- * untouched. The accounting module itself is not modified: the three cheque
- * accounts (1110, 1120, 2110) are created per tenant on first use via the public
- * `createAccount`. No Sayad network call is made anywhere in this module.
+ * untouched. Accounts are resolved per tenant via `PostingRulesService` (`1012`,
+ * `1020`, `1021`, `2010`, `2011` from `iran-chart-template.ts` by default); missing
+ * unmapped default accounts are created lazily via `createAccount` without touching
+ * fixed-asset (`1110`/`1120`) or long-term loan (`2110`) codes. No Sayad network
+ * call is made anywhere in this module.
  */
 @Injectable()
 export class ChequesService {
+  private static readonly TEMPLATE_ACCOUNTS = new Map(
+    (CHART_TEMPLATES.find((t) => t.key === 'iran-trading')?.accounts ?? [])
+      .filter((a) => a.level !== AccountLevel.GROUP && a.level !== AccountLevel.KOL)
+      .map((a) => [a.code, a] as const),
+  );
   constructor(
     private readonly chequesRepository: ChequesRepository,
     private readonly accountingService: AccountingService,
@@ -117,7 +124,8 @@ export class ChequesService {
     if (amountMinor <= 0n) {
       throw new BadRequestException('مبلغ چک باید بزرگ‌تر از صفر باشد.');
     }
-    await this.ensureAccounts(tenantId);
+    const posting = creationPosting(dto.direction, amountMinor);
+    await this.ensureAccounts(tenantId, posting.docType);
 
     try {
       const saved = await this.chequesRepository.runInTransaction(tenantId, async (manager) => {
@@ -142,7 +150,6 @@ export class ChequesService {
           },
           manager,
         );
-        const posting = creationPosting(cheque.direction, amountMinor);
         const journalEntryId = (
           await this.post(tenantId, cheque, 'new', issueDate, posting.description, posting.docType, amountMinor, manager)
         ).entryId;
@@ -163,9 +170,13 @@ export class ChequesService {
   }
 
   async transition(tenantId: string, id: number, dto: TransitionChequeDto): Promise<ChequeDetailResponseDto> {
-    await this.ensureAccounts(tenantId);
     const eventDate = dto.eventDate ? dateOnly(dto.eventDate) : todayUtc();
     const overrides = await this.bankOverrides(tenantId, dto.bankAccountId);
+    const current = await this.chequesRepository.findById(tenantId, id);
+    const rulePreview = current ? findRule(current.direction, current.status, dto.status) : null;
+    if (rulePreview?.docType) {
+      await this.ensureAccounts(tenantId, rulePreview.docType, overrides);
+    }
 
     await this.chequesRepository.runInTransaction(tenantId, async (manager) => {
       const cheque = await this.chequesRepository.findByIdForUpdate(tenantId, id, manager);
@@ -250,9 +261,13 @@ export class ChequesService {
       throw error;
     }
     if (paid <= 0n) throw new BadRequestException('مبلغ پرداخت باید بزرگ‌تر از صفر باشد.');
-    await this.ensureAccounts(tenantId);
     const eventDate = dto.eventDate ? dateOnly(dto.eventDate) : todayUtc();
     const overrides = await this.bankOverrides(tenantId, dto.bankAccountId);
+    const current = await this.chequesRepository.findById(tenantId, id);
+    const partialPreview = current ? partialPaymentPosting(current.direction, current.status, paid) : null;
+    if (partialPreview?.docType) {
+      await this.ensureAccounts(tenantId, partialPreview.docType, overrides);
+    }
 
     await this.chequesRepository.runInTransaction(tenantId, async (manager) => {
       const cheque = await this.chequesRepository.findByIdForUpdate(tenantId, id, manager);
@@ -496,7 +511,7 @@ export class ChequesService {
 
   /**
    * The bank-side line of a clearing posts to the chosen bank account's own ledger account. Without
-   * a choice the posting rules default (1010) applies, so old callers and old events are unchanged.
+   * a choice the tenant's mapped bank role (or global default 1012) applies.
    */
   private async bankOverrides(tenantId: string, bankAccountId?: number): Promise<RoleAccounts | undefined> {
     if (!bankAccountId) return undefined;
@@ -511,20 +526,31 @@ export class ChequesService {
   }
 
   /**
-   * Makes sure the cheque accounts exist for the tenant. Checked against the live chart on
-   * every call (not cached in process memory) so a chart reset or import cannot leave the
-   * service believing accounts exist that do not.
+   * Ensures unmapped default role accounts referenced by `docType` exist in the tenant's chart,
+   * creating them from `iran-chart-template.ts` when a tenant starts on a minimal chart. Custom
+   * tenant mappings and bank overrides are never auto-created here and are validated by
+   * `PostingRulesService.assertPostable`.
    */
-  private async ensureAccounts(tenantId: string): Promise<void> {
+  private async ensureAccounts(tenantId: string, docType: string, overrides?: RoleAccounts): Promise<void> {
+    const resolved = await this.postingRules.resolveRolesForTemplate(tenantId, docType, overrides);
+    const defaultCodes = [...new Set(resolved.filter((r) => r.isDefault && r.accountCode).map((r) => r.accountCode!))];
+    if (defaultCodes.length === 0) return;
+
     const existing = new Set((await this.accountingService.listAccounts(tenantId)).map((a) => a.code));
-    for (const definition of CHEQUE_ACCOUNT_DEFINITIONS) {
-      if (existing.has(definition.code)) continue;
+    for (const code of defaultCodes) {
+      if (existing.has(code)) continue;
+      const definition = ChequesService.TEMPLATE_ACCOUNTS.get(code);
+      if (!definition) continue;
       try {
         await this.accountingService.createAccount(tenantId, {
           code: definition.code,
           name: definition.name,
-          accountType: definition.accountType as AccountType,
+          accountType: definition.accountType,
+          ...(definition.level ? { level: definition.level } : {}),
+          ...(definition.parentCode && existing.has(definition.parentCode) ? { parentCode: definition.parentCode } : {}),
+          ...(definition.reportLine ? { reportLine: definition.reportLine } : {}),
         });
+        existing.add(code);
       } catch (error) {
         if (!(error instanceof ConflictException)) throw error; // concurrent first use
       }

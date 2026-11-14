@@ -79,7 +79,7 @@ export const DEFAULT_ROLE_ACCOUNTS: Readonly<Partial<Record<PostingRole, string>
   bank: '1012',
   petty_cash: '1013',
   cheques_receivable: '1021',
-  cheques_in_collection: '1021',
+  cheques_in_collection: '1023',
   cheques_payable: '2011',
   payroll_expense: '5010',
   employer_insurance_expense: '5040',
