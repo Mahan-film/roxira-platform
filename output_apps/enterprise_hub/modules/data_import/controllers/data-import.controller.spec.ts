@@ -14,6 +14,7 @@ import { DataImportService } from '../services/data-import.service';
 import { EntityImportService } from '../services/entity-import.service';
 import { PackageImportService } from '../services/package-import.service';
 import { ChunkedUploadService } from '../services/chunked-upload.service';
+import { SepidarPersistenceService } from '../services/sepidar-persistence.service';
 import { DataImportController } from './data-import.controller';
 
 const SECRET = 'data-import-test-secret-1234567890';
@@ -59,6 +60,31 @@ describe('DataImportController (access control)', () => {
         JwtAuthGuard,
         { provide: ChunkedUploadService, useValue: {} },
         {
+          provide: SepidarPersistenceService,
+          useValue: {
+            persistSepidarData: jest.fn().mockResolvedValue({
+              tenantId: 'tenant-1',
+              certifiedAt: '2026-11-12T00:00:00.000Z',
+              balanced: true,
+              varianceMinor: '0',
+              counts: { accounts: 0, parties: 0, items: 0, openingLines: 0, cheques: 0 },
+              totals: { openingDebitMinor: '0', openingCreditMinor: '0', chequesAmountMinor: '0' },
+              canonicalSha256: '0'.repeat(64),
+              idempotencySummary: {
+                accountsInserted: 0,
+                accountsSkipped: 0,
+                partiesInserted: 0,
+                partiesSkipped: 0,
+                itemsInserted: 0,
+                itemsSkipped: 0,
+                openingVoucherCreated: false,
+                chequesInserted: 0,
+                chequesSkipped: 0,
+              },
+            }),
+          },
+        },
+        {
           provide: PackageImportService,
           useValue: {
             createPackage: jest
@@ -90,6 +116,8 @@ describe('DataImportController (access control)', () => {
     stub.grant('owner', 'tenant-1', 'owner');
     stub.grant('admin', 'tenant-1', 'owner');
     stub.grant('member', 'tenant-1', 'legacy_member');
+    stub.grant('accountant', 'tenant-1', 'accountant');
+    stub.grant('sales', 'tenant-1', 'sales');
 
     app = moduleRef.createNestApplication();
     app.useGlobalPipes(
@@ -195,5 +223,91 @@ describe('DataImportController (access control)', () => {
       )
       .send({ uploadId: VALID_UUID, mapping: { name: 'notAField' } })
       .expect(400);
+  });
+
+  describe('POST /enterprise-hub/data-import/sepidar/persist', () => {
+    const sepidarUrl = '/enterprise-hub/data-import/sepidar/persist';
+    const validSepidarBody = {
+      accounts: [{ AccountID: 1, Code: '1', Title: 'دارایی', Level: 1, ParentAccountID: null }],
+    };
+
+    it('rejects unauthenticated requests with 401', async () => {
+      await request(app.getHttpServer()).post(sepidarUrl).send(validSepidarBody).expect(401);
+    });
+
+    it('rejects a tenant MEMBER (read-only / no create permission) with 403', async () => {
+      await request(app.getHttpServer())
+        .post(sepidarUrl)
+        .set(
+          'Authorization',
+          `Bearer ${token({
+            role: UserRole.USER,
+            tenantId: 'tenant-1',
+            tenantRole: TenantRole.MEMBER,
+          })}`,
+        )
+        .send(validSepidarBody)
+        .expect(403);
+    });
+
+    it('rejects malformed nested account elements with 400', async () => {
+      await request(app.getHttpServer())
+        .post(sepidarUrl)
+        .set(
+          'Authorization',
+          `Bearer ${token({
+            role: UserRole.USER,
+            tenantId: 'tenant-1',
+            tenantRole: TenantRole.OWNER,
+          })}`,
+        )
+        .send({ accounts: [{ Code: 123, Level: 99 }] })
+        .expect(400);
+    });
+
+    it('allows tenant OWNER with valid payload (200)', async () => {
+      await request(app.getHttpServer())
+        .post(sepidarUrl)
+        .set(
+          'Authorization',
+          `Bearer ${token({
+            role: UserRole.USER,
+            tenantId: 'tenant-1',
+            tenantRole: TenantRole.OWNER,
+          })}`,
+        )
+        .send(validSepidarBody)
+        .expect(200);
+    });
+
+    it('allows tenant ACCOUNTANT (200) and rejects SALES (403)', async () => {
+      await request(app.getHttpServer())
+        .post(sepidarUrl)
+        .set(
+          'Authorization',
+          `Bearer ${token({
+            sub: 'accountant',
+            role: UserRole.USER,
+            tenantId: 'tenant-1',
+            tenantRole: TenantRole.MEMBER,
+          })}`,
+        )
+        .send(validSepidarBody)
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .post(sepidarUrl)
+        .set(
+          'Authorization',
+          `Bearer ${token({
+            sub: 'sales',
+            role: UserRole.USER,
+            tenantId: 'tenant-1',
+            tenantRole: TenantRole.MEMBER,
+          })}`,
+        )
+        .send(validSepidarBody)
+        .expect(403);
+    });
   });
 });
