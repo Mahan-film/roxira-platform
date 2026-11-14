@@ -1,14 +1,14 @@
 import * as path from 'node:path';
 import { RoomServiceClient } from 'livekit-server-sdk';
 import { dispose } from '@livekit/rtc-node';
-import { cfg } from './config.js';
+import { cfg, validateConfig } from './config.js';
 import { closeHttp, fetchDirect } from './http.js';
 import { logger } from './log.js';
 import { CallSession, type Prompts } from './session.js';
 import { cachedPrompt } from './tts.js';
 
 const log = logger('main');
-const rooms = new RoomServiceClient(cfg.livekitHttp, cfg.livekitKey, cfg.livekitSecret);
+let rooms: RoomServiceClient;
 const sessions = new Map<string, CallSession>();
 const finished = new Map<string, number>(); // room -> ended at (avoid re-joining a closing room)
 let stopping = false;
@@ -67,8 +67,9 @@ async function poll(prompts: Prompts) {
 }
 
 async function main() {
+  validateConfig();
+  rooms = new RoomServiceClient(cfg.livekitHttp, cfg.livekitKey, cfg.livekitSecret);
   log.info(`STT=${cfg.sttProvider} TTS=${cfg.ttsProvider}(${cfg.ttsVoice}) brain=${cfg.judgeBase} max_calls=${cfg.maxConcurrentCalls}`);
-  if (!cfg.judgeToken && !cfg.judgeGatewayKey) log.warn('SMARTJUDGE_TOKEN empty: anonymous Smart Judge limits apply (per IP per hour)');
   await waitForTts();
   const prompts = await loadPrompts();
   log.info('ready for incoming calls');

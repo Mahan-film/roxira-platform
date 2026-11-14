@@ -20,8 +20,8 @@ export const cfg = {
 
   livekitHttp: str('LIVEKIT_URL', 'http://127.0.0.1:7880'),
   livekitWs: str('LIVEKIT_WS_URL', 'ws://127.0.0.1:7880'),
-  livekitKey: str('LIVEKIT_API_KEY', 'devkey'),
-  livekitSecret: str('LIVEKIT_API_SECRET', 'secret'),
+  livekitKey: str('LIVEKIT_API_KEY'),
+  livekitSecret: str('LIVEKIT_API_SECRET'),
   roomPrefix: str('ROOM_PREFIX', 'call-'),
   sipIdentityPrefix: str('SIP_IDENTITY_PREFIX', 'sip_'),
   agentIdentity: str('AGENT_IDENTITY', 'ai-agent-bot'),
@@ -73,3 +73,12 @@ export const cfg = {
 };
 
 export type Cfg = typeof cfg;
+
+export function validateConfig(c: Cfg = cfg): void {
+  if (!c.livekitKey || !c.livekitSecret) {
+    throw new Error('LIVEKIT_API_KEY and LIVEKIT_API_SECRET must be set');
+  }
+  if (!c.judgeGatewayKey && !c.judgeToken) {
+    throw new Error('SMARTJUDGE_PHONE_GATEWAY_KEY (or SMARTJUDGE_TOKEN) must be set');
+  }
+}
