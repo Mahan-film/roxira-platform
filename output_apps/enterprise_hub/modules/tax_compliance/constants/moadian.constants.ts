@@ -22,6 +22,8 @@ export const MOADIAN_QUEUE = 'moadian';
 export const MOADIAN_SEND_JOB = 'moadian.send';
 export const MOADIAN_POLL_JOB = 'moadian.poll';
 export const MOADIAN_SYNC_STATUS_JOB = 'moadian.sync-status';
+/** کار صف برای مسیر جدید outbox/adapter (TaxTransmissionService). */
+export const MOADIAN_TX_JOB = 'moadian.tx';
 
 export const MOADIAN_DEFAULT_POLL_DELAY_MS = 60_000;
 export const MOADIAN_DEFAULT_MAX_POLLS = 30;

@@ -62,6 +62,8 @@ export enum MoadianInquiryStatus {
  * SUCCESS: استعلام موفق — صورتحساب در سامانه ثبت شد.
  * FAILED: استعلام ناموفق (خطای اعتبارسنجی مودیان) — اصلاح و ارسال مجدد لازم است.
  * ERROR: خطای انتقال/پیکربندی پس از اتمام تلاش‌های مجدد.
+ * UNKNOWN: تایم‌اوت/5xx؛ نمی‌دانیم بسته رسیده یا نه. هرگز FAILED نیست و uid/taxid عوض نمی‌شود؛
+ *   پیش از هر ارسال مجدد باید inquiry-by-uid اجرا شود (docs/tax/TAX_TRANSMISSION_DESIGN.md).
  */
 export enum MoadianSubmissionStatus {
   QUEUED = 'QUEUED',
@@ -69,4 +71,5 @@ export enum MoadianSubmissionStatus {
   SUCCESS = 'SUCCESS',
   FAILED = 'FAILED',
   ERROR = 'ERROR',
+  UNKNOWN = 'UNKNOWN',
 }

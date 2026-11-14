@@ -302,7 +302,8 @@ export class MoadianService implements OnModuleInit {
     }
     if (
       existing?.status === MoadianSubmissionStatus.QUEUED ||
-      existing?.status === MoadianSubmissionStatus.SENT
+      existing?.status === MoadianSubmissionStatus.SENT ||
+      existing?.status === MoadianSubmissionStatus.UNKNOWN
     ) {
       return this.toSubmissionResponse(existing);
     }
@@ -338,6 +339,7 @@ export class MoadianService implements OnModuleInit {
 
     const fields: Partial<MoadianSubmissionEntity> = {
       invoiceId,
+      ins: subject,
       uid: randomUUID(),
       taxId: packet.header.taxid,
       serial: String(serial),
