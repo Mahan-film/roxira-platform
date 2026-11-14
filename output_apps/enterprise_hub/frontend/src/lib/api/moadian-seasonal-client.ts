@@ -4,8 +4,10 @@ import {
   TAX_COMPLIANCE_RESOURCE_PATH,
 } from "@/lib/api/config";
 import type {
+  MoadianCredentialResponseDto,
   MoadianStatusResponse,
   MoadianSubmissionResponse,
+  PutMoadianCredentialDto,
   SeasonalTransactionsResponse,
   SeasonalVatReport,
   VatReturnDraft,
@@ -18,12 +20,31 @@ export function getMoadianStatus(signal?: AbortSignal) {
   return apiRequest<MoadianStatusResponse>(`${BASE}/moadian/status`, { signal });
 }
 
+/** GET moadian/credentials — public credential info. */
+export function getMoadianCredential(signal?: AbortSignal) {
+  return apiRequest<MoadianCredentialResponseDto>(`${BASE}/moadian/credentials`, { signal });
+}
+
+/** PUT moadian/credentials — update or register taxpayer credentials. */
+export function putMoadianCredential(payload: PutMoadianCredentialDto, signal?: AbortSignal) {
+  return apiRequest<MoadianCredentialResponseDto>(`${BASE}/moadian/credentials`, {
+    method: "PUT",
+    body: payload,
+    signal,
+  });
+}
+
 /** POST moadian/invoices/:id/submit (queued; 503 when the flag is off). */
 export function submitToMoadian(invoiceId: string, signal?: AbortSignal) {
   return apiRequest<MoadianSubmissionResponse>(
     `${BASE}/moadian/invoices/${encodeURIComponent(invoiceId)}/submit`,
     { method: "POST", signal },
   );
+}
+
+/** GET moadian/submissions — list submission statuses for current tenant. */
+export function listMoadianSubmissions(signal?: AbortSignal) {
+  return apiRequest<MoadianSubmissionResponse[]>(`${BASE}/moadian/submissions`, { signal });
 }
 
 /** GET moadian/invoices/:id/status — 404 means never submitted. */

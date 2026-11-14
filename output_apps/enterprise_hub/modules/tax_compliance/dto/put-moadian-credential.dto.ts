@@ -1,6 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEnum, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+  ValidateIf,
+} from 'class-validator';
 import { MoadianSettlementMethod } from '../enums/moadian.enum';
 
 /**
@@ -26,11 +34,23 @@ export class PutMoadianCredentialDto {
   @Matches(/-----BEGIN CERTIFICATE-----/, { message: 'گواهی باید در قالب PEM باشد.' })
   certificatePem: string;
 
-  @ApiProperty({ description: 'کلید خصوصی RSA متناظر با گواهی (PEM، فقط ورودی)' })
+  @ApiPropertyOptional({
+    description:
+      'استفاده از کلید خصوصی فعال ذخیره‌شده سازمان (از گام تولید کلید/CSR) بدون نیاز به ارسال مجدد PEM',
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  useActiveSigningKey?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'کلید خصوصی RSA متناظر با گواهی (PEM، فقط ورودی؛ در صورت useActiveSigningKey=true اختیاری است)',
+  })
+  @ValidateIf((o: PutMoadianCredentialDto) => !o.useActiveSigningKey || o.privateKeyPem !== undefined)
   @IsString()
   @MaxLength(16_384)
   @Matches(/-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/, { message: 'کلید خصوصی باید در قالب PEM باشد.' })
-  privateKeyPem: string;
+  privateKeyPem?: string;
 
   @ApiPropertyOptional({ description: 'شناسه ۱۳ رقمی پیش‌فرض کالا/خدمت', example: '2330001234567' })
   @IsOptional()

@@ -2,7 +2,10 @@ import 'reflect-metadata';
 import {
   ForbiddenException,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { randomBytes } from 'crypto';
 import { FindManyOptions } from 'typeorm';
 import { AuthenticatedRequest } from '../auth/guards/jwt-auth.guard';
 import { UserRole } from '../auth/enums/user-role.enum';
@@ -10,6 +13,7 @@ import { InvoiceResponseDto } from '../invoicing/dto/invoice-response.dto';
 import { InvoicingService } from '../invoicing/services/invoicing.service';
 import { TenantRole } from '../tenants/enums/tenant-role.enum';
 import { AddTaxComplianceTenantIsolation1789190000000 } from '../../migrations/1789190000000-AddTaxComplianceTenantIsolation';
+import { MOADIAN_ENV } from './constants/moadian.constants';
 import { TaxComplianceController } from './controllers/tax-compliance.controller';
 import { QueryTaxSignatureDto } from './dto/query-tax-signature.dto';
 import { TaxInvoiceSignatureEntity } from './entities/tax-invoice-signature.entity';
@@ -17,6 +21,7 @@ import { TaxSigningKeyEntity } from './entities/tax-signing-key.entity';
 import { TaxSubmissionStatus } from './enums/tax-compliance.enum';
 import { TaxComplianceRepository } from './repositories/tax-compliance.repository';
 import { TaxComplianceService } from './services/tax-compliance.service';
+import { isSealedSecret, openSecret, parseMasterKey } from './utils/secret-box.util';
 
 const requestWith = (user: unknown): AuthenticatedRequest =>
   ({ user }) as unknown as AuthenticatedRequest;
@@ -178,12 +183,25 @@ const buildSignatureData = (
   signedPacket: { verification: { qrCodePayload: `qr-${tenantId}` } },
 });
 
-const buildService = () => {
+const TEST_MASTER_KEY_B64 = randomBytes(32).toString('base64');
+
+const buildConfig = (masterKey?: string): ConfigService =>
+  ({
+    get: jest.fn((key: string) =>
+      key === MOADIAN_ENV.KEY_ENCRYPTION_KEY ? masterKey : undefined,
+    ),
+  }) as unknown as ConfigService;
+
+const buildService = (masterKey: string | null = TEST_MASTER_KEY_B64) => {
   const repository =
     new InMemoryTaxComplianceRepository() as unknown as TaxComplianceRepository;
   return {
     repository,
-    service: new TaxComplianceService(repository, invoicingService),
+    service: new TaxComplianceService(
+      repository,
+      invoicingService,
+      buildConfig(masterKey ?? undefined),
+    ),
   };
 };
 
@@ -431,6 +449,40 @@ describe('TaxComplianceService — cross-tenant isolation', () => {
     await expect(
       service.signInvoice('tenant-b', { invoiceId: 'inv-a' }),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('seals generated signing private keys with AES-256-GCM bound to tenantId and unseals for CSR/signing', async () => {
+    const { repository, service } = buildService();
+    await service.generateKeyPair('tenant-a', {
+      modulusLength: 2048,
+      subject: { commonName: 'Tenant A' },
+    });
+
+    const stored = await repository.findActiveKeyWithPrivate('tenant-a');
+    expect(stored).not.toBeNull();
+    expect(isSealedSecret(stored!.privateKeyPem)).toBe(true);
+    expect(stored!.privateKeyPem).not.toContain('BEGIN PRIVATE KEY');
+
+    const masterKey = parseMasterKey(TEST_MASTER_KEY_B64);
+    expect(() =>
+      openSecret(stored!.privateKeyPem, masterKey, 'tenant-b'),
+    ).toThrow();
+    expect(openSecret(stored!.privateKeyPem, masterKey, 'tenant-a')).toContain(
+      'BEGIN PRIVATE KEY',
+    );
+
+    const csr = await service.generateCertificateRequest('tenant-a', {
+      subject: { commonName: 'Tenant A Rotated' },
+    });
+    expect(csr.certificateRequestPem).toContain('BEGIN CERTIFICATE REQUEST');
+  });
+
+  it('fails closed when MOADIAN_KEY_ENCRYPTION_KEY is missing during key generation', async () => {
+    const { service } = buildService(null);
+
+    await expect(
+      service.generateKeyPair('tenant-a', { modulusLength: 2048 }),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 });
 
