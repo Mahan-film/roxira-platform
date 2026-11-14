@@ -216,6 +216,7 @@ export const MENU_GROUPS: MenuGroup[] = [
         icon: "BookOpenCheck",
         module: "tax",
       },
+      { href: "/app/tax/kartable", label: "تطبیق کارپوشه مودیان", icon: "ClipboardList", module: "tax" },
     ],
   },
   {

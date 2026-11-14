@@ -6,6 +6,9 @@ import { CaptureDocumentEntity } from '../invoice_capture/entities/capture.entit
 import { InvoicingModule } from '../invoicing/invoicing.module';
 import { MOADIAN_QUEUE } from './constants/moadian.constants';
 import { MoadianController } from './controllers/moadian.controller';
+import { KartableReconciliationController } from './controllers/kartable-reconciliation.controller';
+import { KartableReconciliationRepository } from './repositories/kartable-reconciliation.repository';
+import { KartableReconciliationService } from './services/kartable-reconciliation.service';
 import { DoctorWithholdingController } from './controllers/doctor-withholding.controller';
 import { DoctorWithholdingService } from './services/doctor-withholding.service';
 import { RentalTaxController } from './controllers/rental-tax.controller';
@@ -72,7 +75,7 @@ import { AccessModule } from '../access/access.module';
     AccessModule,
     BullModule.registerQueue({ name: MOADIAN_QUEUE }),
   ],
-  controllers: [TaxComplianceController, MoadianController, SeasonalReportController, LedgerExportController, CorporateTaxController, BusinessTaxController, RentalTaxController, DoctorWithholdingController],
+  controllers: [TaxComplianceController, MoadianController, SeasonalReportController, LedgerExportController, CorporateTaxController, BusinessTaxController, RentalTaxController, DoctorWithholdingController, KartableReconciliationController],
   providers: [
     TaxComplianceService,
     TaxComplianceRepository,
@@ -97,6 +100,8 @@ import { AccessModule } from '../access/access.module';
     TenantScope,
     SeasonalReportRepository,
     MoadianCompliancePolicyService,
+    KartableReconciliationRepository,
+    KartableReconciliationService,
   ],
   exports: [
     TaxComplianceService,
@@ -105,6 +110,7 @@ import { AccessModule } from '../access/access.module';
     TaxInspectorService,
     QuarterlyTaxComparisonService,
     YearEndTaxRolloverService,
+    KartableReconciliationService,
   ],
 })
 export class TaxComplianceModule {}
