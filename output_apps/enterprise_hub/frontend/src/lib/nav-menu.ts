@@ -117,6 +117,12 @@ export const MENU_GROUPS: MenuGroup[] = [
         icon: "Wallet",
         module: "accounting",
       },
+      {
+        href: "/app/treasury/sms",
+        label: "پیامک‌های بانکی",
+        icon: "MessageSquareText",
+        module: "banking",
+      },
     ],
   },
   {

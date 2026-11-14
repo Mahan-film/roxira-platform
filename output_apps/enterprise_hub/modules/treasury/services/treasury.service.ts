@@ -76,8 +76,20 @@ export class TreasuryService {
 
   // ------------------------------------------------------------------ documents
 
-  async createDocument(tenantId: string, dto: CreateTreasuryDocumentDto): Promise<TreasuryDocumentDetailResponseDto> {
+  /**
+   * Posts a receipt/payment. With `outerManager` the document, lines and voucher join the caller's
+   * transaction (and are visible only once it commits); cheques are registered by their own service
+   * in separate transactions, so callers passing a manager must not send cheque methods.
+   */
+  async createDocument(
+    tenantId: string,
+    dto: CreateTreasuryDocumentDto,
+    outerManager?: EntityManager,
+  ): Promise<TreasuryDocumentDetailResponseDto> {
     const kind = dto.kind;
+    if (outerManager && dto.methods.some((m) => m.method === TreasuryMethod.CHEQUE)) {
+      throw new BadRequestException('ثبت چک داخل تراکنش بیرونی پشتیبانی نمی‌شود.');
+    }
     const docDate = dateOnly(dto.docDate);
     const methods = dto.methods.map((m) => ({ ...m, minor: amountOf(m.amount, 'مبلغ') }));
     if (methods.some((m) => m.minor <= 0n)) throw new BadRequestException('مبلغ هر روش پرداخت باید بزرگ‌تر از صفر باشد.');
@@ -183,8 +195,8 @@ export class TreasuryService {
         manager,
       );
       return document.id;
-    });
-    return this.getDocument(tenantId, saved);
+    }, outerManager);
+    return this.getDocument(tenantId, saved, outerManager);
   }
 
   /** Moves the unallocated part of a document (an advance) onto invoices. */
@@ -249,12 +261,12 @@ export class TreasuryService {
     return this.getDocument(tenantId, documentId);
   }
 
-  async getDocument(tenantId: string, id: number): Promise<TreasuryDocumentDetailResponseDto> {
-    const document = await this.repository.findDocument(tenantId, id);
+  async getDocument(tenantId: string, id: number, manager?: EntityManager): Promise<TreasuryDocumentDetailResponseDto> {
+    const document = await this.repository.findDocument(tenantId, id, manager);
     if (!document) throw new NotFoundException('سند دریافت/پرداخت یافت نشد.');
     const [lines, allocations] = await Promise.all([
-      this.repository.listLines(tenantId, id),
-      this.repository.listAllocationsOfDocument(tenantId, id),
+      this.repository.listLines(tenantId, id, manager),
+      this.repository.listAllocationsOfDocument(tenantId, id, manager),
     ]);
     return {
       ...this.toDto(document),
