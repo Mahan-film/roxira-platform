@@ -1,0 +1,24 @@
+{
+  "name": "smartjudge-voice-agent",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Persian phone agent: LiveKit SIP -> VAD -> STT -> Smart Judge -> TTS",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node --max-old-space-size=384 dist/main.js",
+    "dev": "tsx src/main.ts",
+    "tts": "/home/mahan/voice-ai/.venv/bin/python tts_server.py",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@livekit/rtc-node": "^1.2.2",
+    "livekit-server-sdk": "^2.19.3",
+    "undici": "^6.29.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
