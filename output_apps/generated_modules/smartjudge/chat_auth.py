@@ -410,11 +410,50 @@ def configure(resolve_token: Callable[[str], Optional[CurrentUser]]) -> None:
     _resolve_token = resolve_token
 
 
+# Phone gateway (the LiveKit/SIP phone agent on the edge server): a service identity, not a person.
+# The X-Phone-Gateway-Key header is compared (constant time) with SMARTJUDGE_PHONE_GATEWAY_KEY; the
+# feature is off unless that key is at least 32 chars. It gets legacy-VIP routing (paid fallback when
+# free models are busy) and its own daily cap (PHONE_GATEWAY_DAILY_LIMIT). Never log either value.
+PHONE_GATEWAY_HEADER = "x-phone-gateway-key"
+PHONE_GATEWAY_ID = "phone-gateway"
+PHONE_GATEWAY_MIN_LEN = 32
+
+
+def phone_gateway_daily_limit() -> int:
+    return _int_env("PHONE_GATEWAY_DAILY_LIMIT", 400)
+
+
+def phone_gateway_key(env_key: Optional[str] = None) -> str:
+    key = os.environ.get("SMARTJUDGE_PHONE_GATEWAY_KEY", "") if env_key is None else env_key
+    key = key.strip()
+    return key if len(key) >= PHONE_GATEWAY_MIN_LEN else ""
+
+
+def phone_gateway_user(headers: Optional[Mapping[str, str]], env_key: Optional[str] = None) -> Optional[CurrentUser]:
+    """None when the header is absent or the feature is off (so deploy order cannot break the phone
+    line); the gateway identity on a match; an invalid user (401) on a wrong key."""
+    value = headers.get(PHONE_GATEWAY_HEADER) if headers is not None else None
+    key = phone_gateway_key(env_key)
+    if not value or not key:
+        return None
+    if not hmac.compare_digest(str(value).strip(), key):
+        return _INVALID
+    return CurrentUser(phone=PHONE_GATEWAY_ID, tier="VIP", authenticated=True, plan_level="free")
+
+
+def is_phone_gateway(user: "CurrentUser") -> bool:
+    return bool(user.authenticated and user.phone == PHONE_GATEWAY_ID)
+
+
 def authenticate(headers: Mapping[str, str], query_params: Optional[Mapping[str, str]] = None) -> CurrentUser:
     """Header bearer token (and ``?token=`` only when ``query_params`` is given, i.e. WebSocket).
 
     No token -> anonymous. Bad/expired token -> ``token_invalid`` user (callers answer 401).
+    The phone-gateway header, when present, wins over any bearer token.
     """
+    gateway = phone_gateway_user(headers)
+    if gateway is not None:
+        return gateway
     token = None
     header = headers.get("authorization") if headers is not None else None
     if header and header[:7].lower() == "bearer ":
@@ -573,6 +612,9 @@ def daily_chat_key(user: "CurrentUser", ip: str) -> tuple[str, int, str]:
     """(redis key, limit, kind) for the 24 h answered-question counter.
 
     kind is guest / free / basic / pro / premium / team / vip (vip = legacy VIP without a level)."""
+    if is_phone_gateway(user):
+        # the phone line has its own budget, separate from every web user's VIP counter
+        return f"rl:chat-day:phone:{PHONE_GATEWAY_ID}", phone_gateway_daily_limit(), "vip"
     level = user_level(user)
     if level == "guest":
         return f"rl:chat-day:guest:{ip}", chat_anon_daily_limit(), "guest"
