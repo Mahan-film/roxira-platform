@@ -1,11 +1,15 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { CheckCircle2, Pencil, Printer, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { printSalesInvoice } from "@/lib/print/open-sales-invoice-window";
 import { printSalesInvoiceA5 } from "@/lib/print/open-sales-invoice-a5-window";
+import { getDefaultPrintTemplateOrNull } from "@/lib/api/print-templates-client";
+import { loadSalesInvoiceTemplates, type SalesInvoiceTemplates } from "@/lib/print/sales-invoice-templates";
+import { PrintDocType, PrintPaperSize } from "@/types/print-template";
 import {
   formatGregorianDate,
   formatJalaliDate,
@@ -50,6 +54,26 @@ export function InvoicePrintView({
   const canEdit =
     invoice.status === InvoiceStatus.DRAFT ||
     invoice.status === InvoiceStatus.ISSUED;
+
+  const [templates, setTemplates] = useState<SalesInvoiceTemplates>({
+    a4: null,
+    a5: null,
+    thermal: null,
+  });
+
+  useEffect(() => {
+    let active = true;
+    loadSalesInvoiceTemplates((size) =>
+      getDefaultPrintTemplateOrNull(PrintDocType.SALES_INVOICE, PrintPaperSize[size]),
+    )
+      .then((tpls) => {
+        if (active) setTemplates(tpls);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const foreign = isForeignInvoice(invoice);
   const formatDate = (value?: string | Date | null) =>
@@ -104,7 +128,7 @@ export function InvoicePrintView({
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => printSalesInvoice(invoice, statusLabel(invoice.status))}
+              onClick={() => printSalesInvoice(invoice, statusLabel(invoice.status), templates.a4)}
             >
               <Printer />
               چاپ
@@ -112,11 +136,27 @@ export function InvoicePrintView({
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => printSalesInvoiceA5(invoice, statusLabel(invoice.status))}
+              onClick={() =>
+                templates.a5
+                  ? printSalesInvoice(invoice, statusLabel(invoice.status), templates.a5)
+                  : printSalesInvoiceA5(invoice, statusLabel(invoice.status))
+              }
             >
               <Printer />
               چاپ A5
             </Button>
+            {templates.thermal && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() =>
+                  printSalesInvoice(invoice, statusLabel(invoice.status), templates.thermal)
+                }
+              >
+                <Printer />
+                چاپ حرارتی ۸۰ میلی‌متر
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={onClose}>
               <X />
               بستن

@@ -10,12 +10,24 @@ import {
   type InvoiceResponseDto,
 } from "../../types/invoicing.ts";
 
+import { safeLogoUrl } from "./safe-url.ts";
+import type { PrintColumnConfig } from "../../types/print-template.ts";
+
 /** The Moadian e-invoice types; any other value (there is no "none" member) is not an e-invoice. */
 const MOADIAN_TYPES: readonly EInvoiceType[] = [
   EInvoiceType.WITH_BUYER,
   EInvoiceType.WITHOUT_BUYER,
   EInvoiceType.RETAIL,
 ];
+
+export interface SalesInvoicePrintCustomOptions {
+  docTitle?: string;
+  logoUrl?: string;
+  footerText?: string;
+  notes?: string;
+  showLogo?: boolean;
+  columnsConfig?: PrintColumnConfig[];
+}
 
 /**
  * Data for print-templates/sales-invoice-a4. The API carries no Moadian tax id, tracking code,
@@ -25,12 +37,14 @@ const MOADIAN_TYPES: readonly EInvoiceType[] = [
 export function mapInvoiceToSalesInvoiceA4Data(
   invoice: InvoiceResponseDto,
   statusLabel: string,
+  options?: SalesInvoicePrintCustomOptions,
 ): Record<string, unknown> {
   const foreign = isForeignInvoice(invoice);
   const isEinvoice = MOADIAN_TYPES.includes(invoice.einvoiceType);
+  const logo = options?.showLogo === false ? "" : safeLogoUrl(options?.logoUrl);
 
   return {
-    docTitle: "فاکتور فروش",
+    docTitle: options?.docTitle || "فاکتور فروش",
     invoiceNumber: invoice.taxInvoiceNumber,
     issueDateJalali: formatJalaliDate(invoice.issuedAt ?? invoice.createdAt),
     issueTime: "",
@@ -45,9 +59,9 @@ export function mapInvoiceToSalesInvoiceA4Data(
     relatedTaxId: "",
     qrSvg: "",
     showQr: false,
-    logoUrl: "",
-    footerText: "",
-    notes: "",
+    logoUrl: logo,
+    footerText: options?.footerText ?? "",
+    notes: options?.notes ?? "",
     settlementMethod: "",
     cashAmount: "",
     creditAmount: "",

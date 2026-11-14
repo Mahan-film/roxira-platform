@@ -64,6 +64,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         module: "invoicing",
         keywords: ["invoice", "فاکتور"],
       },
+      {
+        href: "/app/invoicing/print-templates",
+        label: "قالب‌های چاپ و بارکد",
+        icon: "Printer",
+        module: "invoicing",
+        keywords: ["print", "template", "barcode", "چاپ", "بارکد"],
+      },
     ],
   },
   {
