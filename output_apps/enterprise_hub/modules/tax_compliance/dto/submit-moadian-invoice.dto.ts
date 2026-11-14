@@ -1,6 +1,18 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsInt, IsObject, IsOptional, IsString, Length, Max, Min, ValidateNested } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsInt,
+  IsObject,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Length,
+  Max,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 
 /** Pattern-specific data the invoice does not hold, keyed by Moadian field name. */
 export class MoadianExtrasDto {
@@ -60,4 +72,10 @@ export class SubmitMoadianInvoiceDto {
   @ValidateNested()
   @Type(() => MoadianExtrasDto)
   extras?: MoadianExtrasDto;
+}
+
+/** Route parameter DTO for Moadian invoice endpoints. */
+export class MoadianInvoiceIdParamDto {
+  @IsUUID('4', { message: 'شناسه صورتحساب باید UUID معتبر باشد.' })
+  invoiceId!: string;
 }

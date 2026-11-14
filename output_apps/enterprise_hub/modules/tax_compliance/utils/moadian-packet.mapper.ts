@@ -169,8 +169,11 @@ function rialFactor(invoice: InvoiceResponseDto): number {
 }
 
 function digitsOnly(value: string | undefined | null): string | null {
-  const trimmed = (value ?? '').replace(/\s+/g, '');
-  return /^\d+$/.test(trimmed) ? trimmed : null;
+  const normalized = (value ?? '')
+    .replace(/[۰-۹]/g, (c) => String(c.charCodeAt(0) - 0x06f0))
+    .replace(/[٠-٩]/g, (c) => String(c.charCodeAt(0) - 0x0660))
+    .replace(/\s+/g, '');
+  return /^\d+$/.test(normalized) ? normalized : null;
 }
 
 /** نوع خریدار بر اساس طول شناسه ملی: ۱۰ رقم = حقیقی، ۱۱ رقم = حقوقی. */
@@ -249,7 +252,11 @@ export function mapInvoiceToMoadianPacket(
   const inty = bid || tinb ? MoadianInvoiceType.WITH_BUYER : MoadianInvoiceType.WITHOUT_BUYER;
 
   const body: Bag[] = (invoice.items ?? []).map((item, index) => {
-    const sstid = ctx.defaultSstid;
+    const rawSstid =
+      (item.taxCode && item.taxCode.trim().length > 0 ? item.taxCode : null) ??
+      (item as unknown as { sstid?: string }).sstid ??
+      ctx.defaultSstid;
+    const sstid = rawSstid ? digitsOnly(rawSstid) : null;
     if (!sstid || !SSTID_PATTERN.test(sstid)) {
       throw new MoadianMappingError(`سطر ${index + 1} شناسه ۱۳ رقمی کالا/خدمت مودیان (sstid) ندارد`);
     }

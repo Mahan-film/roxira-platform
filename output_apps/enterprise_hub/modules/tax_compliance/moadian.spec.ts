@@ -17,6 +17,7 @@ import { InvoiceResponseDto } from '../invoicing/dto/invoice-response.dto';
 import { InvoiceJurisdiction } from '../invoicing/enums/invoice-jurisdiction.enum';
 import { InvoiceStatus } from '../invoicing/enums/invoice-status.enum';
 import { InvoicingService } from '../invoicing/services/invoicing.service';
+import { VatRateResolver } from '../invoicing/services/vat-rate.resolver';
 import { TenantRole } from '../tenants/enums/tenant-role.enum';
 import { CreateMoadianTables1789310000000 } from '../../migrations/1789310000000-CreateMoadianTables';
 import {
@@ -129,7 +130,7 @@ function buildInvoice(overrides: Partial<InvoiceResponseDto> = {}): InvoiceRespo
     warehouseId: null,
     customerId: null,
     sellerInfo: { name: 'Seller', economicCode: '10101010101' },
-    buyerInfo: { name: 'Buyer', nationalId: '0012345678', economicCode: '00123456780012' },
+    buyerInfo: { name: 'Buyer', nationalId: '0012345679', economicCode: '00123456780012' },
     items: [
       {
         description: 'Consulting',
@@ -248,7 +249,7 @@ describe('Moadian packet mapping', () => {
     expect(header.ins).toBe(1);
     expect(header.tins).toBe('10101010101');
     expect(header.tob).toBe(MoadianBuyerType.NATURAL);
-    expect(header.bid).toBe('0012345678');
+    expect(header.bid).toBe('0012345679');
 
     expect(body).toHaveLength(2);
     expect(body[0]).toMatchObject({
@@ -279,6 +280,29 @@ describe('Moadian packet mapping', () => {
     });
     expect(header.tbill).toBe(buildInvoice().finalPayable);
     expect(payments).toEqual([]);
+  });
+
+  it('uses taxCode on invoice item directly when present', () => {
+    const inv = buildInvoice({
+      items: [
+        {
+          taxCode: '2330009999999',
+          description: 'Item with explicit taxCode',
+          quantity: 1,
+          unitPrice: 100_000,
+          discount: 0,
+          vatRate: 0.1,
+          tax: 10_000,
+          total: 110_000,
+        },
+      ],
+    });
+    const ctxWithoutDefault: MoadianMappingContext = {
+      ...mappingContext,
+      defaultSstid: null,
+    };
+    const packet = mapInvoiceToMoadianPacket(inv, ctxWithoutDefault);
+    expect(packet.body[0].sstid).toBe('2330009999999');
   });
 
   it('converts toman (IRT) amounts to rials with the stored fxRate', () => {
@@ -619,12 +643,19 @@ function buildMoadian(options: { enabled?: boolean; invoices?: InvoiceResponseDt
       throw new NotFoundException('invoice not found');
     }),
   } as unknown as InvoicingService;
+  const vatRateResolver = {
+    generalRate: jest.fn(async (_tenantId: string, _onDate: string) => ({
+      rate: 0.1,
+      source: 'statutory' as const,
+    })),
+  } as unknown as VatRateResolver;
   const service = new MoadianService(
     repository as unknown as MoadianRepository,
     invoicingService,
     client,
     config,
     queue,
+    vatRateResolver,
   );
   return { service, repository, state, jobs, env };
 }
@@ -1036,6 +1067,208 @@ describe('Moadian — tenant isolation', () => {
     await expect(controller.getCredential(owner)).resolves.toMatchObject({ memoryId: 'A1B2C3' });
     const otherOwner = requestWith({ tenantId: TENANT_B, role: UserRole.USER, tenantRole: TenantRole.OWNER });
     await expect(controller.getCredential(otherOwner)).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('Moadian server pre-flight validation & controller', () => {
+  it('preFlightValidate returns valid result on compliant invoice', async () => {
+    const { service } = buildMoadian();
+    await service.putCredential(TENANT_A, credentialDto());
+    const res = await service.preFlightValidate(TENANT_A, INVOICE_A);
+    expect(res.valid).toBe(true);
+    expect(res.errors).toEqual([]);
+  });
+
+  it('controller.preFlight forwards request and checks tenant', async () => {
+    const { service } = buildMoadian();
+    await service.putCredential(TENANT_A, credentialDto());
+    const controller = new MoadianController(service);
+    const requestWith = (user: unknown) => ({ user }) as unknown as AuthenticatedRequest;
+
+    await expect(
+      controller.preFlight({ invoiceId: INVOICE_A }, requestWith({ tenantId: null, role: UserRole.ADMIN })),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    const owner = requestWith({ tenantId: TENANT_A, role: UserRole.USER, tenantRole: TenantRole.OWNER });
+    const res = await controller.preFlight({ invoiceId: INVOICE_A }, owner);
+    expect(res.valid).toBe(true);
+  });
+
+  it('MoadianInvoiceIdParamDto validates UUIDv4 and rejects non-UUID invoiceId', async () => {
+    const { validate } = await import('class-validator');
+    const { plainToInstance } = await import('class-transformer');
+    const { MoadianInvoiceIdParamDto } = await import('./dto/submit-moadian-invoice.dto');
+
+    const bad = plainToInstance(MoadianInvoiceIdParamDto, { invoiceId: 'not-a-uuid' });
+    const badErrors = await validate(bad);
+    expect(badErrors.length).toBeGreaterThan(0);
+
+    const good = plainToInstance(MoadianInvoiceIdParamDto, {
+      invoiceId: '11111111-1111-4111-8111-111111111111',
+    });
+    expect(await validate(good)).toEqual([]);
+  });
+
+  it('AccessGuard refuses pre-flight endpoint for sales, hr, and cheque_reviewer (403)', async () => {
+    const { Reflector } = await import('@nestjs/core');
+    const { AccessGuard } = await import('../access/access.guard');
+    const { SystemRole } = await import('../access/catalogue');
+    const { AccessStub } = await import('../../test/support/access-stub');
+
+    for (const role of [SystemRole.SALES, SystemRole.HR, SystemRole.CHEQUE_REVIEWER]) {
+      const access = new AccessStub();
+      access.grant('user-1', TENANT_A, role);
+      const loginWindow = { assertAllowed: jest.fn(async () => undefined) };
+      const guard = new AccessGuard(new Reflector(), access as never, loginWindow as never);
+      const ctx = {
+        getHandler: () => MoadianController.prototype.preFlight,
+        getClass: () => MoadianController,
+        switchToHttp: () => ({
+          getRequest: () => ({
+            method: 'POST',
+            originalUrl: '/v1/enterprise-hub/tax-compliance/moadian/invoices/11111111-1111-4111-8111-111111111111/pre-flight',
+            user: { sub: 'user-1', tenantId: TENANT_A, role },
+          }),
+        }),
+      } as never;
+
+      await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
+    }
+
+    // Positive control: accountant is allowed to invoke pre-flight
+    const allowedAccess = new AccessStub();
+    allowedAccess.grant('user-2', TENANT_A, SystemRole.ACCOUNTANT);
+    const allowedGuard = new AccessGuard(new Reflector(), allowedAccess as never, { assertAllowed: jest.fn(async () => undefined) } as never);
+    const allowedCtx = {
+      getHandler: () => MoadianController.prototype.preFlight,
+      getClass: () => MoadianController,
+      switchToHttp: () => ({
+        getRequest: () => ({
+          method: 'POST',
+          originalUrl: '/v1/enterprise-hub/tax-compliance/moadian/invoices/11111111-1111-4111-8111-111111111111/pre-flight',
+          user: { sub: 'user-2', tenantId: TENANT_A, role: SystemRole.ACCOUNTANT },
+        }),
+      }),
+    } as never;
+    await expect(allowedGuard.canActivate(allowedCtx)).resolves.toBe(true);
+  });
+
+  it('preFlightValidate returns VAT_RATE_UNRESOLVED when invoice date is invalid', async () => {
+    const badDateInvoice = buildInvoice({
+      id: 'inv-bad-date',
+      issuedAt: 'not-a-valid-date' as unknown as Date,
+    });
+    const { service } = buildMoadian({ invoices: [badDateInvoice] });
+    await service.putCredential(TENANT_A, credentialDto());
+
+    const res = await service.preFlightValidate(TENANT_A, 'inv-bad-date');
+    expect(res.valid).toBe(false);
+    expect(res.errors.some((e) => e.code === 'VAT_RATE_UNRESOLVED')).toBe(true);
+  });
+
+  it('submitInvoice rejects with BadRequestException on pre-flight failure', async () => {
+    const badInvoice = buildInvoice({
+      id: 'bad-inv-1',
+      items: [
+        {
+          taxCode: 'invalid-tax-code',
+          description: 'Bad item',
+          quantity: 1,
+          unitPrice: 100_000,
+          discount: 0,
+          vatRate: 0.1,
+          tax: 10_000,
+          total: 110_000,
+        },
+      ],
+    });
+    const { service } = buildMoadian({ invoices: [badInvoice] });
+    await service.putCredential(TENANT_A, credentialDto());
+
+    await expect(service.submitInvoice(TENANT_A, 'bad-inv-1')).rejects.toThrow(BadRequestException);
+    await expect(service.submitInvoice(TENANT_A, 'bad-inv-1')).rejects.toThrow(/اعتبارسنجی پیش از ارسال مودیان/);
+  });
+
+  it('409 ConflictException precedes pre-flight validation on already submitted invoices', async () => {
+    const badInvoice = buildInvoice({
+      id: 'bad-inv-2',
+      items: [
+        {
+          taxCode: '123',
+          description: 'Bad item',
+          quantity: 1,
+          unitPrice: 100_000,
+          discount: 0,
+          vatRate: 0.1,
+          tax: 10_000,
+          total: 110_000,
+        },
+      ],
+    });
+    const { service, repository } = buildMoadian({ invoices: [badInvoice] });
+    await service.putCredential(TENANT_A, credentialDto());
+
+    repository.submissions.push({
+      id: 'sub-existing',
+      tenantId: TENANT_A,
+      invoiceId: 'bad-inv-2',
+      status: MoadianSubmissionStatus.SUCCESS,
+      taxId: 'A1B2C30510C00000000019',
+      serial: '1',
+      uid: 'some-uid',
+      referenceNumber: 'REF-1',
+      packet: {},
+      errors: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as unknown as MoadianSubmissionEntity);
+
+    await expect(service.submitInvoice(TENANT_A, 'bad-inv-2')).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('fails preflight and submit with VAT_RATE_UNRESOLVED when statutory row is missing or resolver throws', async () => {
+    const { service } = buildMoadian();
+    await service.putCredential(TENANT_A, credentialDto());
+    (service as unknown as { vatRateResolver: { generalRate: jest.Mock } }).vatRateResolver.generalRate = jest
+      .fn()
+      .mockRejectedValue(new BadRequestException('پارامترهای قانونی برای این سال ثبت نشده است'));
+
+    const res = await service.preFlightValidate(TENANT_A, INVOICE_A);
+    expect(res.valid).toBe(false);
+    expect(res.errors.some((e) => e.code === 'VAT_RATE_UNRESOLVED')).toBe(true);
+
+    await expect(service.submitInvoice(TENANT_A, INVOICE_A)).rejects.toThrow(BadRequestException);
+  });
+
+  it('validates across fiscal years outside 1404-1405 using resolved statutory rate', async () => {
+    const inv1402 = buildInvoice({
+      id: 'inv-1402',
+      issuedAt: new Date('2023-05-01T10:00:00Z'),
+      items: [
+        {
+          taxCode: '2330001234567',
+          description: '1402 item with 9% VAT',
+          quantity: 1,
+          unitPrice: 100_000,
+          discount: 0,
+          vatRate: 0.09,
+          tax: 9_000,
+          total: 109_000,
+        },
+      ],
+      totalAmount: 100_000,
+      totalDiscount: 0,
+      totalTax: 9_000,
+      finalPayable: 109_000,
+    });
+    const { service } = buildMoadian({ invoices: [inv1402] });
+    await service.putCredential(TENANT_A, credentialDto());
+    (service as unknown as { vatRateResolver: { generalRate: jest.Mock } }).vatRateResolver.generalRate = jest
+      .fn()
+      .mockResolvedValue({ rate: 0.09, source: 'statutory' });
+
+    const res = await service.preFlightValidate(TENANT_A, 'inv-1402');
+    expect(res.valid).toBe(true);
   });
 });
 

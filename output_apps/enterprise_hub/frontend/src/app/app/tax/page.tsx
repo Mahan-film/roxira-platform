@@ -33,8 +33,10 @@ import {
   getSeasonalTransactions,
   getSeasonalVat,
   getVatReturn,
+  preflightMoadianInvoice,
   submitToMoadian,
 } from "@/lib/api/moadian-seasonal-client";
+import type { MoadianPreFlightError } from "@/lib/moadian-preflight";
 import { formatMoneyRial, formatNumber } from "@/lib/fa-format";
 import { nextDeadlineView, type NextDeadlineInput } from "@/lib/tax-deadline";
 import { InvoiceStatus, type InvoiceResponseDto } from "@/types/invoicing";
@@ -95,6 +97,7 @@ function MoadianCard() {
   const [invoiceId, setInvoiceId] = useState("");
   const [submission, setSubmission] = useState<MoadianSubmissionResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [preFlightErrors, setPreFlightErrors] = useState<MoadianPreFlightError[]>([]);
   const [busy, setBusy] = useState(false);
   const [polling, setPolling] = useState(false);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -173,9 +176,21 @@ function MoadianCard() {
     stopPolling();
     setSubmission(null);
     setError(null);
+    setPreFlightErrors([]);
     setInvoiceId(id);
     selectedRef.current = id;
     if (!id) return;
+    if (status?.enabled) {
+      try {
+        const pre = await preflightMoadianInvoice(id);
+        if (selectedRef.current === id) {
+          setPreFlightErrors(pre.errors);
+        }
+      } catch (err) {
+        // No local re-validation: the server result is the only source of truth.
+        if (selectedRef.current === id) setError(loadErrorMessage(err));
+      }
+    }
     try {
       const existing = await getMoadianSubmission(id);
       // Ignore a late answer for an invoice that is no longer selected.
@@ -194,6 +209,19 @@ function MoadianCard() {
     setBusy(true);
     setError(null);
     stopPolling();
+    try {
+      const pre = await preflightMoadianInvoice(invoiceId);
+      if (!pre.valid) {
+        setPreFlightErrors(pre.errors);
+        setError("خطاهای اعتبارسنجی پیش از ارسال مودیان وجود دارد؛ لطفاً اطلاعات صورتحساب را اصلاح کنید.");
+        setBusy(false);
+        return;
+      }
+    } catch (err) {
+      setError(loadErrorMessage(err));
+      setBusy(false);
+      return;
+    }
     try {
       const id = invoiceId;
       const result = await submitToMoadian(id);
@@ -289,6 +317,21 @@ function MoadianCard() {
             {busy ? "در حال ارسال…" : "ارسال به مودیان"}
           </Button>
         </div>
+
+        {preFlightErrors.length > 0 && (
+          <Alert variant="destructive">
+            <AlertTitle>خطاهای پیش از ارسال مودیان ({preFlightErrors.length} مورد)</AlertTitle>
+            <AlertDescription>
+              <ul className="list-disc ps-5 text-xs space-y-1 mt-2">
+                {preFlightErrors.map((err, idx) => (
+                  <li key={idx}>
+                    <span className="font-semibold">{err.field}:</span> {err.message}
+                  </li>
+                ))}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        )}
 
         {error && <ErrorNotice title="خطا در ارسال به مودیان" message={error} />}
 

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -12,6 +12,7 @@ import {
   IsPositive,
   IsString,
   IsUUID,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -64,6 +65,12 @@ export class InvoicePartyInfoDto {
   @MaxLength(512)
   address?: string;
 
+  @ApiPropertyOptional({ description: 'کد پستی ۱۰ رقمی', example: '1234567890' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(16)
+  postalCode?: string;
+
   @ApiPropertyOptional({ description: 'تلفن تماس', example: '02112345678' })
   @IsOptional()
   @IsString()
@@ -96,6 +103,22 @@ export class InvoiceItemDto {
   @IsString()
   @MaxLength(64)
   sku?: string;
+
+  @ApiPropertyOptional({ description: 'شناسه ۱۳ رقمی کالا/خدمت مودیان (SSTID)', example: '2330001234567' })
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }) => {
+    if (typeof value !== 'string') return value;
+    const cleaned = value
+      .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776))
+      .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632))
+      .replace(/\s+/g, '');
+    return cleaned === '' ? undefined : cleaned;
+  })
+  @Matches(/^\d{13}$/, {
+    message: 'شناسه کالا/خدمت مودیان (SSTID) باید دقیقاً ۱۳ رقم عددی باشد.',
+  })
+  taxCode?: string;
 
   @ApiPropertyOptional({
     description: 'شرح کالا یا خدمت؛ در صورت انتخاب کالا از انبار خودکار پر می‌شود.',

@@ -4676,6 +4676,17 @@
     "read_only": true,
     "legacy_member": false
   },
+  "POST /enterprise-hub/tax-compliance/moadian/invoices/:invoiceId/pre-flight (MoadianController.preFlight)": {
+    "policy": "tax:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/tax-compliance/moadian/invoices/:invoiceId/submit (MoadianController.submit)": {
     "policy": "tax:post",
     "owner": true,

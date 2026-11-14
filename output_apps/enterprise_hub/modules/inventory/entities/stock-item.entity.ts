@@ -77,4 +77,8 @@ export class StockItemEntity {
   /** Item attributes up to 10 key-value pairs (e.g. size, colour) */
   @Column({ type: 'jsonb', nullable: true })
   attributes?: Record<string, string> | null;
+
+  /** شناسه ۱۳ رقمی کالا/خدمت در سامانه مودیان (SSTID) */
+  @Column({ type: 'varchar', length: 13, name: 'tax_code', nullable: true })
+  taxCode?: string | null;
 }
