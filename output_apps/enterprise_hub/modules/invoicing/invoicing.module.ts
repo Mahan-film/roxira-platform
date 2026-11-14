@@ -19,14 +19,20 @@ import { SalesReportController } from './controllers/sales-report.controller';
 import { PurchasesReportController } from './controllers/purchases-report.controller';
 import { GrossProfitReportController } from './controllers/gross-profit-report.controller';
 import { InvoiceEntity } from './entities/invoice.entity';
+import { InvoicePaymentGatewayConfigEntity } from './entities/invoice-payment-gateway-config.entity';
+import { InvoicePaymentLinkEntity } from './entities/invoice-payment-link.entity';
 import { SuiteEventsProcessor } from './processors/suite-events.processor';
 import { InvoicingRepository } from './repositories/invoicing.repository';
+import { InvoicePaymentLinkRepository } from './repositories/invoice-payment-link.repository';
 import { InvoicePostingService } from './services/invoice-posting.service';
 import { InvoicingService } from './services/invoicing.service';
+import { InvoicePaymentLinkService } from './services/invoice-payment-link.service';
+import { PaymentGatewayAdapter } from './services/payment-gateway.adapter';
 import { SalesReportService } from './services/sales-report.service';
 import { PurchasesReportService } from './services/purchases-report.service';
 import { GrossProfitReportService } from './services/gross-profit-report.service';
 import { VatRateResolver } from './services/vat-rate.resolver';
+import { InvoicePaymentLinkController } from './controllers/invoice-payment-link.controller';
 
 /**
  * ماژول صورتحساب مالیاتی هوشمند (Smart Invoicing).
@@ -41,7 +47,12 @@ import { VatRateResolver } from './services/vat-rate.resolver';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([InvoiceEntity, StatutoryParameterEntity]),
+    TypeOrmModule.forFeature([
+      InvoiceEntity,
+      StatutoryParameterEntity,
+      InvoicePaymentGatewayConfigEntity,
+      InvoicePaymentLinkEntity,
+    ]),
     CurrencyModule,
     CrmModule,
     InventoryModule,
@@ -51,11 +62,21 @@ import { VatRateResolver } from './services/vat-rate.resolver';
     PartiesModule,
     BullModule.registerQueue({ name: SUITE_EVENTS_QUEUE }),
   ],
-  controllers: [InvoicingController, PosSalesController, SalesReportController, PurchasesReportController, GrossProfitReportController],
+  controllers: [
+    InvoicingController,
+    PosSalesController,
+    SalesReportController,
+    PurchasesReportController,
+    GrossProfitReportController,
+    InvoicePaymentLinkController,
+  ],
   providers: [
     InvoicingService,
     InvoicingRepository,
     InvoicePostingService,
+    InvoicePaymentLinkService,
+    InvoicePaymentLinkRepository,
+    PaymentGatewayAdapter,
     PosSaleService,
     SuiteEventsProcessor,
     // VAT-01: the general VAT rate comes from the statutory store, read-only here.
@@ -66,6 +87,6 @@ import { VatRateResolver } from './services/vat-rate.resolver';
     PurchasesReportService,
     GrossProfitReportService,
   ],
-  exports: [InvoicingService, InvoicingRepository],
+  exports: [InvoicingService, InvoicingRepository, InvoicePaymentLinkService, InvoicePaymentLinkRepository],
 })
 export class InvoicingModule {}
