@@ -1520,6 +1520,28 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/integrations/woocommerce/config (WooCommerceConfigController.getConfig)": {
+    "policy": "invoicing:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/integrations/woocommerce/logs (WooCommerceConfigController.getLogs)": {
+    "policy": "invoicing:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/inventory/documents/ (StockDocumentsController.list)": {
     "policy": "inventory:read",
     "owner": true,
@@ -4087,6 +4109,20 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/integrations/woocommerce/stock-push (WooCommerceConfigController.pushStock)": {
+    "policy": "invoicing:approve",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/integrations/woocommerce/webhook/:tenantId (WooCommerceWebhookController.handleWebhook)": {
+    "policy": "public"
+  },
   "POST /enterprise-hub/inventory/documents/adjustments (StockDocumentsController.createAdjustment)": {
     "policy": "inventory:post",
     "owner": true,
@@ -4998,6 +5034,17 @@
   },
   "PUT /enterprise-hub/integrations/receipt-bot/preferences (ReceiptBotController.updatePreferences)": {
     "policy": "accounting:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PUT /enterprise-hub/integrations/woocommerce/config (WooCommerceConfigController.updateConfig)": {
+    "policy": "invoicing:approve",
     "owner": true,
     "admin": true,
     "accountant": true,
