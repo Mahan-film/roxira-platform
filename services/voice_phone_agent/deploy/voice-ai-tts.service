@@ -1,0 +1,16 @@
+[Unit]
+Description=Smart Judge voice agent - edge-tts sidecar
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=mahan
+WorkingDirectory=/home/mahan/voice-ai/agent
+EnvironmentFile=-/home/mahan/voice-ai/agent/.env
+ExecStart=/home/mahan/voice-ai/.venv/bin/python tts_server.py
+Restart=always
+RestartSec=3
+MemoryMax=200M
+
+[Install]
+WantedBy=multi-user.target
