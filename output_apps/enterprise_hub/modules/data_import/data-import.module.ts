@@ -56,6 +56,8 @@ import { TenantExportController } from './controllers/tenant-export.controller';
 import { TenantExportRepository } from './repositories/tenant-export.repository';
 import { SepidarMappingAdapter } from './migration/bak/sepidar-mapping.adapter';
 import { HolooMappingAdapter } from './migration/bak/holoo-mapping.adapter';
+import { ImportDryRunController } from './controllers/import-dry-run.controller';
+import { ImportDryRunService } from './services/import-dry-run.service';
 import { TenantScope } from '../access/services/tenant-scope';
 import { BulkImportController } from './bulk/bulk-import.controller';
 import { BulkImportProcessor } from './bulk/bulk-import.processor';
@@ -110,7 +112,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
       }),
     }),
   ],
-  controllers: [DataImportController, BulkImportController, TenantExportController],
+  controllers: [DataImportController, BulkImportController, TenantExportController, ImportDryRunController],
   providers: [
     DataImportService,
     DataImportRepository,
@@ -192,6 +194,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     BulkImportProcessor,
     TenantExportRepository,
     TenantExportService,
+    ImportDryRunService,
     {
       provide: OBJECT_STORE,
       // R2 (S3 API) in production; a folder on disk only for development. Settings come from the environment.
@@ -204,6 +207,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     SepidarChequesFifoAdapter,
     TenantExportRepository,
     TenantExportService,
+    ImportDryRunService,
     SepidarMappingAdapter,
     HolooMappingAdapter,
   ],

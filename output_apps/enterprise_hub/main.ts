@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 import { isSwaggerEnabled } from './security/swagger.util';
 
@@ -21,6 +22,9 @@ async function bootstrap(): Promise<void> {
 
   app.set('trust proxy', process.env.TRUST_PROXY ?? 'loopback, linklocal, uniquelocal');
   app.disable('x-powered-by');
+
+  app.use(json({ limit: process.env.BODY_LIMIT ?? '10mb' }));
+  app.use(urlencoded({ extended: true, limit: process.env.BODY_LIMIT ?? '10mb' }));
 
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
 
