@@ -5,6 +5,8 @@ import { ServiceUnavailableException } from '@nestjs/common';
 import {
   AssistantLlmService,
   buildCandidates,
+  CustomerDataDegradedException,
+  parseKeyPoolProviders,
   readRoleModelIds,
   selectAttempts,
 } from './services/assistant-llm.service';
@@ -188,5 +190,95 @@ describe('AssistantLlmService', () => {
       service.complete([{ role: 'user', content: 'x' }], [], 'auto', Date.now() - 1),
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
     expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('routes to LiteLLM gateway when KEYPOOL_URL is configured', async () => {
+    let capturedUrl = '';
+    let capturedBody: any = null;
+    global.fetch = jest.fn(async (url: string, init?: { body?: string }) => {
+      capturedUrl = String(url);
+      capturedBody = JSON.parse(String(init?.body));
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'پاسخ از درگاه', tool_calls: [] } }],
+          usage: { prompt_tokens: 50, completion_tokens: 25, total_tokens: 75 },
+        }),
+      } as unknown as Response;
+    }) as unknown as typeof fetch;
+
+    const service = new AssistantLlmService(
+      configWith({
+        KEYPOOL_URL: 'http://127.0.0.1:4000/v1',
+        KEYPOOL_MASTER_KEY: 'master-key-xyz',
+        MODELS_CONFIG_PATH: file,
+      }),
+    );
+    const turn = await service.complete([{ role: 'user', content: 'سوال' }], []);
+
+    expect(capturedUrl).toBe('http://127.0.0.1:4000/v1/chat/completions');
+    expect(capturedBody.metadata.customer_data).toBe('true');
+    expect(turn.content).toBe('پاسخ از درگاه');
+    expect(turn.promptTokens).toBe(50);
+    expect(turn.totalTokens).toBe(75);
+    expect(turn.customerDataFallback).toBe(false);
+  });
+
+  it('throws CustomerDataDegradedException when CUSTOMER_DATA_FREE_FALLBACK is false and paid models fail', async () => {
+    global.fetch = jest.fn(async (_url: unknown, init?: { body?: string }) => {
+      const body = JSON.parse(String(init?.body));
+      return { ok: false, status: 500 } as Response;
+    }) as unknown as typeof fetch;
+
+    const service = new AssistantLlmService(
+      configWith({
+        OPENROUTER_API_KEY: 'test',
+        MODELS_CONFIG_PATH: file,
+        CUSTOMER_DATA_FREE_FALLBACK: 'false',
+      }),
+    );
+
+    await expect(
+      service.complete([{ role: 'user', content: 'x' }], []),
+    ).rejects.toBeInstanceOf(CustomerDataDegradedException);
+  });
+
+  it('marks customerDataFallback as true when free model serves customer request', async () => {
+    global.fetch = jest.fn(async (_url: unknown, init?: { body?: string }) => {
+      const body = JSON.parse(String(init?.body));
+      if (body.model === 'vendor/free-a:free') {
+        return {
+          ok: true,
+          json: async () => ({
+            choices: [{ message: { content: 'پاسخ رایگان', tool_calls: [] } }],
+          }),
+        } as unknown as Response;
+      }
+      return { ok: false, status: 429 } as Response;
+    }) as unknown as typeof fetch;
+
+    const service = new AssistantLlmService(
+      configWith({
+        OPENROUTER_API_KEY: 'test',
+        MODELS_CONFIG_PATH: file,
+        CUSTOMER_DATA_FREE_FALLBACK: 'true',
+      }),
+    );
+
+    const turn = await service.complete([{ role: 'user', content: 'x' }], []);
+    expect(turn.customerDataFallback).toBe(true);
+    expect(turn.model).toBe('vendor/free-a:free');
+  });
+
+  it('parses customer_data policy from real config/key_pool.yaml', () => {
+    const text = fs.readFileSync(
+      path.resolve(__dirname, '../../../../config/key_pool.yaml'),
+      'utf8',
+    );
+    const pool = parseKeyPoolProviders(text);
+    expect(pool['groq']?.customerData).toBe('forbidden');
+    expect(pool['openrouter-paid']?.customerData).toBe('allowed');
+    expect(pool['openrouter-private']?.customerData).toBe('allowed');
+    expect(pool['openrouter-free']?.customerData).toBe('forbidden');
   });
 });

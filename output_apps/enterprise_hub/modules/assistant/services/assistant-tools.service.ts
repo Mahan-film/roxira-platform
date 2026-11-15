@@ -1,6 +1,10 @@
-import { requireModulePermission } from '../../access/access-context';
+import {
+  requireFieldVisibility,
+  requireModulePermission,
+  requireScopedAction,
+} from '../../access/access-context';
 import { AccessAction, AccessModule } from '../../access/catalogue';
-import { BadRequestException, HttpException, Injectable } from '@nestjs/common';
+import { BadRequestException, HttpException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { McpToolsService } from '../../../mcp/mcp-tools.service';
 import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
 import { PipelineStage } from '../../crm/enums/crm.enums';
@@ -9,6 +13,9 @@ import { InventoryService } from '../../inventory/services/inventory.service';
 import { InvoiceStatus } from '../../invoicing/enums/invoice-status.enum';
 import { InvoiceSummaryRow } from '../../invoicing/repositories/invoicing.repository';
 import { InvoicingService } from '../../invoicing/services/invoicing.service';
+import { FinancialReportsService } from '../../accounting/services/financial-reports.service';
+import { fromMinor } from '../../accounting/money';
+import { StructureService } from '../../access/services/structure.service';
 import {
   requireTenantId,
 } from '../../tenants/tenant-context';
@@ -202,6 +209,39 @@ export const ASSISTANT_TOOLS: AssistantToolDefinition[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'profit',
+      description:
+        'Calculates gross profit, operating profit, net profit and revenue from the general ledger income statement for a named Jalali period or date range.',
+      parameters: {
+        type: 'object',
+        properties: {
+          period: {
+            type: 'string',
+            enum: [...ASSISTANT_PERIODS],
+            description:
+              'Named Jalali period: today, yesterday, this_week, last_week, this_month, last_month, this_year, last_year.',
+          },
+          from: {
+            type: 'string',
+            description:
+              'Optional explicit start date, Jalali (1405/01/01) or Gregorian ISO (2026-03-21). Overrides period.',
+          },
+          to: {
+            type: 'string',
+            description: 'Optional explicit end date (inclusive), Jalali or Gregorian ISO.',
+          },
+          branchName: {
+            type: 'string',
+            description: 'Optional branch name to filter by. Resolved server-side against allowed branches.',
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+  },
 ];
 
 function optionalString(args: ToolArgs, key: string): string | undefined {
@@ -271,6 +311,7 @@ const TOOL_MODULES: Record<string, AccessModule> = {
   crm: AccessModule.CRM,
   accounting: AccessModule.ACCOUNTING,
   hr: AccessModule.HR,
+  profit: AccessModule.ACCOUNTING,
 };
 
 @Injectable()
@@ -282,6 +323,8 @@ export class AssistantToolsService {
     private readonly invoicingService: InvoicingService,
     private readonly inventoryService: InventoryService,
     private readonly metrics: AssistantMetricsService,
+    private readonly financialReports: FinancialReportsService,
+    @Optional() private readonly structureService?: StructureService,
   ) {
     this.handlers = {
       invoicing_sales_summary: (request, args) =>
@@ -315,6 +358,8 @@ export class AssistantToolsService {
           limit: rowLimit(args),
         });
       },
+      profit: (request, args) => this.profit(request, args),
+      accounting_profit: (request, args) => this.profit(request, args),
     };
   }
 
@@ -482,6 +527,76 @@ export class AssistantToolsService {
         pipelineStage: lead.pipelineStage,
         estimatedValue: lead.estimatedValue,
       })),
+    };
+  }
+
+  private async profit(
+    request: AuthenticatedRequest,
+    args: ToolArgs,
+  ): Promise<unknown> {
+    const tenantId = requireTenantId(request);
+    const accessCtx = (request as any).access;
+    if (accessCtx) {
+      requireFieldVisibility(accessCtx, 'margin');
+    }
+
+    const branchName = optionalString(args, 'branchName') || optionalString(args, 'branch');
+    if (branchName && accessCtx && this.structureService) {
+      const branches = await this.structureService.listBranches(accessCtx);
+      const matched = branches.find(
+        (b) => b.name === branchName || b.name.includes(branchName) || b.code === branchName,
+      );
+      if (!matched) {
+        throw new NotFoundException(`شعبه‌ای با نام ${branchName} یافت نشد.`);
+      }
+      requireScopedAction(accessCtx, 'accounting:read', { branchId: matched.id });
+    }
+
+    const range = resolvePeriod({
+      period: optionalString(args, 'period') ?? 'this_month',
+      from: optionalString(args, 'from'),
+      to: optionalString(args, 'to'),
+    });
+
+    const fromIso = range.from ? range.from.toISOString().slice(0, 10) : undefined;
+    const toIso = range.to ? new Date(range.to.getTime() - 1).toISOString().slice(0, 10) : undefined;
+
+    const statement = await this.financialReports.incomeStatement(tenantId, {
+      from: fromIso,
+      to: toIso,
+    });
+
+    const sourceRecordId = `income-statement:${range.label}`;
+    const rev = fromMinor(statement.revenue.total);
+    const cogs = fromMinor(statement.costOfSales.total);
+    const gross = fromMinor(statement.grossProfit);
+    const opExp = fromMinor(statement.operatingExpenses.total);
+    const opProfit = fromMinor(statement.operatingProfit);
+    const netProfit = fromMinor(statement.netProfit);
+
+    return {
+      source_record_id: sourceRecordId,
+      period: range.label,
+      from: fromIso ?? null,
+      to: toIso ?? null,
+      currency: 'IRR',
+      revenue: rev,
+      costOfSales: cogs,
+      grossProfit: gross,
+      grossProfitToman: Number.isFinite(Number(gross)) ? Math.round(Number(gross) / 10) : null,
+      operatingExpenses: opExp,
+      operatingProfit: opProfit,
+      operatingProfitToman: Number.isFinite(Number(opProfit)) ? Math.round(Number(opProfit) / 10) : null,
+      netProfit: netProfit,
+      netProfitToman: Number.isFinite(Number(netProfit)) ? Math.round(Number(netProfit) / 10) : null,
+      source_fields: {
+        revenue: { source_record_id: sourceRecordId, field_path: 'revenue', value: rev },
+        costOfSales: { source_record_id: sourceRecordId, field_path: 'costOfSales', value: cogs },
+        grossProfit: { source_record_id: sourceRecordId, field_path: 'grossProfit', value: gross },
+        operatingExpenses: { source_record_id: sourceRecordId, field_path: 'operatingExpenses', value: opExp },
+        operatingProfit: { source_record_id: sourceRecordId, field_path: 'operatingProfit', value: opProfit },
+        netProfit: { source_record_id: sourceRecordId, field_path: 'netProfit', value: netProfit },
+      },
     };
   }
 }

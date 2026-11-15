@@ -51,11 +51,29 @@ describe('AssistantToolsService (tenant scoping)', () => {
       cash: 150, bank: 850, receivables: 1, payables: 1, taxDue: 0, inventory: 0,
     }),
   };
+  const financialReports = {
+    incomeStatement: jest.fn().mockResolvedValue({
+      revenue: { total: 100_000_000_00n },
+      costOfSales: { total: 40_000_000_00n },
+      grossProfit: 60_000_000_00n,
+      operatingExpenses: { total: 15_000_000_00n },
+      operatingProfit: 45_000_000_00n,
+      netProfit: 40_000_000_00n,
+    }),
+  };
+  const structureService = {
+    listBranches: jest.fn().mockResolvedValue([
+      { id: 'branch-central', name: 'شعبه مرکزی', code: 'CENTRAL' },
+      { id: 'branch-west', name: 'شعبه غرب', code: 'WEST' },
+    ]),
+  };
   const service = new AssistantToolsService(
     mcpTools as never,
     invoicingService as never,
     inventoryService as never,
     new AssistantMetricsService(metricSources as never),
+    financialReports as never,
+    structureService as never,
   );
 
   beforeEach(() => jest.clearAllMocks());
@@ -229,5 +247,147 @@ describe('AssistantToolsService (tenant scoping)', () => {
     expect(tool).toBeDefined();
     const properties = (tool?.function.parameters as { properties: Record<string, unknown> }).properties;
     expect(Object.keys(properties)).toEqual(['id']);
+  });
+
+  describe('profit(from, to) tool and Persian golden eval', () => {
+    it('profit tool definition exists and takes no tenant argument', () => {
+      const tool = ASSISTANT_TOOLS.find((t) => t.function.name === 'profit');
+      expect(tool).toBeDefined();
+      const props = Object.keys(
+        (tool?.function.parameters as { properties: Record<string, unknown> }).properties,
+      );
+      expect(props.some((k) => /tenant/i.test(k))).toBe(false);
+      expect(props).toContain('period');
+      expect(props).toContain('from');
+      expect(props).toContain('to');
+      expect(props).toContain('branchName');
+    });
+
+    it('runs profit tool with JWT tenant and returns structured financial figures and source fields', async () => {
+      const out = await service.run(owner, 'profit', {
+        period: 'this_month',
+        ...HOSTILE,
+      });
+      expect(out.ok).toBe(true);
+      const res = out.result as any;
+      expect(res.source_record_id).toContain('income-statement:');
+      expect(res.revenue).toBe(100000000);
+      expect(res.grossProfit).toBe(60000000);
+      expect(res.grossProfitToman).toBe(6000000);
+      expect(res.operatingProfit).toBe(45000000);
+      expect(res.netProfit).toBe(40000000);
+      expect(res.source_fields.grossProfit).toEqual({
+        source_record_id: res.source_record_id,
+        field_path: 'grossProfit',
+        value: 60000000,
+      });
+      expect(financialReports.incomeStatement).toHaveBeenCalledWith(TENANT_ID, expect.any(Object));
+    });
+
+    it('resolves branchName against allowed branches and rejects unknown branches', async () => {
+      const out = await service.run(owner, 'profit', {
+        branchName: 'شعبه مرکزی',
+      });
+      expect(out.ok).toBe(true);
+
+      const badOut = await service.run(owner, 'profit', {
+        branchName: 'شعبه ناموجود',
+      });
+      expect(badOut.ok).toBe(false);
+    });
+
+    it('refuses profit for member without accounting permission', async () => {
+      const out = await service.run(member, 'profit', {});
+      expect(out.ok).toBe(false);
+    });
+
+    // --- 10 Persian golden eval test cases (day, month, custom range) ---
+    const goldenQuestions = [
+      {
+        id: 1,
+        type: 'day',
+        question: 'سود امروز شرکت چقدر است؟',
+        args: { period: 'today' },
+        expectedMatch: 'امروز',
+      },
+      {
+        id: 2,
+        type: 'day',
+        question: 'سود دیروز چقدر بود؟',
+        args: { period: 'yesterday' },
+        expectedMatch: 'دیروز',
+      },
+      {
+        id: 3,
+        type: 'month',
+        question: 'سود این ماه را گزارش بده',
+        args: { period: 'this_month' },
+        expectedMatch: 'ماه',
+      },
+      {
+        id: 4,
+        type: 'month',
+        question: 'سود ماه گذشته چقدر بوده است؟',
+        args: { period: 'last_month' },
+        expectedMatch: 'ماه',
+      },
+      {
+        id: 5,
+        type: 'month',
+        question: 'سود ماه مهر چقدر بود؟',
+        args: { from: '1405/07/01', to: '1405/07/30' },
+        expectedMatch: '1405/07/01 تا 1405/07/30',
+      },
+      {
+        id: 6,
+        type: 'month',
+        question: 'سود از ابتدای آبان تا الان چقدر بوده است؟',
+        args: { from: '1405/08/01', to: '1405/08/24' },
+        expectedMatch: '1405/08/01 تا 1405/08/24',
+      },
+      {
+        id: 7,
+        type: 'custom_range',
+        question: 'سود سه‌ماهه اول سال را محاسبه کن',
+        args: { from: '1405/01/01', to: '1405/03/31' },
+        expectedMatch: '1405/01/01 تا 1405/03/31',
+      },
+      {
+        id: 8,
+        type: 'custom_range',
+        question: 'سود در بازه تابستان ۱۴۰۵/۰۴/۰۱ تا ۱۴۰۵/۰۶/۳۱ چقدر است؟',
+        args: { from: '1405/04/01', to: '1405/06/31' },
+        expectedMatch: '1405/04/01 تا 1405/06/31',
+      },
+      {
+        id: 9,
+        type: 'custom_range',
+        question: 'سود دوره 2026-04-01 تا 2026-06-30 چقدر است؟',
+        args: { from: '2026-04-01', to: '2026-06-30' },
+        expectedMatch: '2026-04-01 تا 2026-06-30',
+      },
+      {
+        id: 10,
+        type: 'year_to_date',
+        question: 'سود کل از ابتدای سال مالی تا امروز چقدر است؟',
+        args: { period: 'this_year' },
+        expectedMatch: 'سال',
+      },
+    ];
+
+    goldenQuestions.forEach((q) => {
+      it(`Golden Eval #${q.id} (${q.type}): "${q.question}"`, async () => {
+        const out = await service.run(owner, 'profit', q.args);
+        expect(out.ok).toBe(true);
+        const res = out.result as any;
+        expect(res.period).toContain(q.expectedMatch);
+        expect(res.revenue).toBe(100000000);
+        expect(res.grossProfit).toBe(60000000);
+        expect(res.netProfit).toBe(40000000);
+        expect(res.source_record_id).toBeDefined();
+        expect(res.source_fields.grossProfit.value).toBe(60000000);
+        expect(res.source_fields.netProfit.value).toBe(40000000);
+      });
+    });
   });
 });

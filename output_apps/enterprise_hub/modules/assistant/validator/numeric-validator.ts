@@ -117,13 +117,20 @@ function wordNumbers(text: string): Token[] {
     const value = total + thousands + small;
     const loneArticle = seen === 1 && (lastSmall === 'یک' || lastSmall === 'one') && scaleSeen === 1;
     if (!loneArticle) {
+      const restWords = words.slice(i);
+      const nextWord = restWords[0]?.word ?? '';
+      const isToman = ['تومان', 'تومن', 'toman'].includes(nextWord);
       tokens.push({
         text: words.slice(start, i).map((w) => w.word).join(' '),
         value,
         decimals: 0,
         magnitude: scaleSeen,
         kind: 'number',
+        toman: isToman,
       });
+      if (isToman) {
+        i += 1;
+      }
     }
   }
   return tokens;
@@ -240,8 +247,15 @@ export function extractNumbers(text: string): Token[] {
 
 // -------------------------------------------------------------------- evidence
 
+export interface EvidenceRecord {
+  value: number;
+  sourceRecordId?: string;
+  fieldPath?: string;
+}
+
 export interface Evidence {
   numbers: Set<number>;
+  records: EvidenceRecord[];
   /** تاریخ‌ها به شکل `y/m/d` شمسی و میلادی و `y/m` ماه. */
   dates: Set<string>;
 }
@@ -263,9 +277,10 @@ function jalaliOf(date: Date): { jy: number; jm: number; jd: number } {
     month: 'numeric',
     day: 'numeric',
   }).formatToParts(date);
-  const pick = (type: string): number =>
-    Number(parts.find((part) => part.type === type)?.value);
   return { jy: pick('year'), jm: pick('month'), jd: pick('day') };
+  function pick(type: string): number {
+    return Number(parts.find((part) => part.type === type)?.value);
+  }
 }
 
 function addDate(evidence: Evidence, date: Date): void {
@@ -277,41 +292,82 @@ function addDate(evidence: Evidence, date: Date): void {
   evidence.dates.add(iso.replace(/-/g, '/').replace(/\/0/g, '/'));
 }
 
-/** عدد خام را به مجموعهٔ شواهد اضافه می‌کند. */
-function addNumber(evidence: Evidence, value: number): void {
-  if (Number.isFinite(value)) evidence.numbers.add(Math.abs(value));
+/** عدد خام را به همراه شناسه سند و مسیر فیلد به مجموعهٔ شواهد اضافه می‌کند. */
+function addNumber(
+  evidence: Evidence,
+  value: number,
+  sourceRecordId?: string,
+  fieldPath?: string,
+): void {
+  if (Number.isFinite(value)) {
+    const abs = Math.abs(value);
+    evidence.numbers.add(abs);
+    evidence.records.push({ value: abs, sourceRecordId, fieldPath });
+  }
 }
 
 /** پارامترهای صفحه‌بندی عدد کسب‌وکاری نیستند و شاهد حساب نمی‌شوند. */
 const PAGINATION_KEYS: ReadonlySet<string> = new Set(['limit', 'page', 'offset', 'skip', 'pageSize']);
 
-function collect(evidence: Evidence, value: unknown, depth: number): void {
+function collect(
+  evidence: Evidence,
+  value: unknown,
+  depth: number,
+  sourceRecordId?: string,
+  fieldPath?: string,
+): void {
   if (depth > 12 || value === null || value === undefined) return;
   if (typeof value === 'number') {
-    addNumber(evidence, value);
+    addNumber(evidence, value, sourceRecordId, fieldPath);
   } else if (typeof value === 'bigint') {
-    addNumber(evidence, Number(value));
+    addNumber(evidence, Number(value), sourceRecordId, fieldPath);
   } else if (typeof value === 'string') {
-    collectText(evidence, value);
+    collectText(evidence, value, sourceRecordId, fieldPath);
   } else if (Array.isArray(value)) {
-    addNumber(evidence, value.length);
-    for (const item of value) collect(evidence, item, depth + 1);
+    addNumber(evidence, value.length, sourceRecordId, fieldPath ? `${fieldPath}.length` : 'length');
+    for (let idx = 0; idx < value.length; idx++) {
+      collect(evidence, value[idx], depth + 1, sourceRecordId, fieldPath ? `${fieldPath}[${idx}]` : `[${idx}]`);
+    }
   } else if (typeof value === 'object') {
     if (value instanceof Date) {
       addDate(evidence, value);
       return;
     }
-    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-      if (PAGINATION_KEYS.has(key)) continue;
-      collect(evidence, item, depth + 1);
+    const obj = value as Record<string, unknown>;
+    const currentSource = typeof obj.source_record_id === 'string'
+      ? obj.source_record_id
+      : typeof obj.id === 'string'
+        ? obj.id
+        : sourceRecordId;
+
+    if (obj.source_fields && typeof obj.source_fields === 'object') {
+      for (const [k, v] of Object.entries(obj.source_fields as Record<string, any>)) {
+        if (v && v.value !== undefined && v.value !== null) {
+          const num = Number(v.value);
+          if (Number.isFinite(num)) {
+            addNumber(evidence, num, v.source_record_id || currentSource, v.field_path || k);
+          }
+        }
+      }
+    }
+
+    for (const [key, item] of Object.entries(obj)) {
+      if (PAGINATION_KEYS.has(key) || key === 'source_fields') continue;
+      const path = fieldPath ? `${fieldPath}.${key}` : key;
+      collect(evidence, item, depth + 1, currentSource, path);
     }
   }
 }
 
-function collectText(evidence: Evidence, text: string): void {
+function collectText(
+  evidence: Evidence,
+  text: string,
+  sourceRecordId?: string,
+  fieldPath?: string,
+): void {
   const latin = toLatinDigits(text);
   for (const token of extractNumbers(text)) {
-    if (token.kind === 'number') addNumber(evidence, token.value);
+    if (token.kind === 'number') addNumber(evidence, token.value, sourceRecordId, fieldPath);
   }
   for (const match of latin.matchAll(ISO_DATE_RE)) {
     const date = new Date(`${match[0]}T12:00:00Z`);
@@ -326,7 +382,7 @@ function collectText(evidence: Evidence, text: string): void {
   }
   // سال‌هایی مثل «سال 1405» در برچسب‌ها.
   for (const match of latin.matchAll(/(?<!\d)(1[34]\d{2})(?!\d)/g)) {
-    addNumber(evidence, Number(match[1]));
+    addNumber(evidence, Number(match[1]), sourceRecordId, fieldPath);
   }
 }
 
@@ -336,7 +392,7 @@ export function buildEvidence(input: {
   userTexts?: readonly string[];
   now: Date;
 }): Evidence {
-  const evidence: Evidence = { numbers: new Set(), dates: new Set() };
+  const evidence: Evidence = { numbers: new Set(), records: [], dates: new Set() };
   addDate(evidence, input.now);
   for (const result of input.toolResults) collect(evidence, result, 0);
   for (const text of input.userTexts ?? []) {
@@ -410,7 +466,103 @@ export function validateNumbers(
   return { ok: unsupported.length === 0, unsupported, checked: tokens.length };
 }
 
-/** یک‌جا: شواهد را می‌سازد و پاسخ را یا برمی‌گرداند یا با پرهیز جایگزین می‌کند. */
+/**
+ * در صورت رد شدن متن پاسخ، داده‌های عددی مستند ابزارها به‌صورت جدول مارک‌داون
+ * رندر می‌شوند تا کاربر بدون حدس و خطای مدل به اطلاعات دسترسی داشته باشد.
+ */
+export function renderVerifiedTable(toolResults: readonly unknown[]): string {
+  const rows: Array<{ source: string; field: string; value: string; unit: string }> = [];
+
+  for (const item of toolResults) {
+    if (!item || typeof item !== 'object') continue;
+    const obj = item as Record<string, unknown>;
+
+    // شاخص‌های کلیدی صورت سود و زیان (profit)
+    if (obj.source_fields && typeof obj.source_fields === 'object') {
+      const srcFields = obj.source_fields as Record<
+        string,
+        { source_record_id?: string; field_path?: string; value?: unknown }
+      >;
+      for (const [key, val] of Object.entries(srcFields)) {
+        if (val && val.value !== undefined && val.value !== null) {
+          rows.push({
+            source: val.source_record_id || String(obj.source_record_id || 'income_statement'),
+            field: val.field_path || key,
+            value: String(val.value),
+            unit: String(obj.currency || 'IRR'),
+          });
+        }
+      }
+      continue;
+    }
+
+    // متریک‌های تاییدشده (assistant_metric)
+    if (obj.id && obj.value !== undefined && obj.value !== null) {
+      rows.push({
+        source: String(obj.source_record_id || `metric:${String(obj.id)}`),
+        field: String(obj.labelFa || obj.id),
+        value: String(obj.value),
+        unit: String(obj.unit || 'IRR'),
+      });
+      continue;
+    }
+
+    // خلاصه فروش به تفکیک ارز
+    if (Array.isArray(obj.byCurrency)) {
+      for (const curr of obj.byCurrency) {
+        rows.push({
+          source: String(obj.source_record_id || `sales_summary:${String(obj.period || 'current')}`),
+          field: `فروش (${curr.currency})`,
+          value: `تعداد: ${curr.count}، جمع کل: ${curr.total}`,
+          unit: String(curr.currency),
+        });
+      }
+      continue;
+    }
+
+    // اقلام انبار
+    if (Array.isArray(obj.items)) {
+      for (const it of obj.items.slice(0, 15)) {
+        rows.push({
+          source: String(obj.source_record_id || `item:${it.sku || it.name}`),
+          field: String(it.name || it.sku),
+          value: `موجودی: ${it.quantity ?? 0} (حداقل: ${it.minQuantity ?? 0})`,
+          unit: 'عدد',
+        });
+      }
+      continue;
+    }
+
+    // سایر فیلدهای عددی خوانا
+    const sourceId = String(obj.source_record_id || obj.id || 'tool_data');
+    for (const [k, v] of Object.entries(obj)) {
+      if (['source_record_id', 'source_fields', 'error', 'byCurrency', 'items'].includes(k)) continue;
+      if (typeof v === 'number' || typeof v === 'string' || typeof v === 'bigint') {
+        rows.push({
+          source: sourceId,
+          field: k,
+          value: String(v),
+          unit: String(obj.currency || '—'),
+        });
+      }
+    }
+  }
+
+  if (rows.length === 0) {
+    return ABSTAIN_MESSAGE_FA;
+  }
+
+  const lines = [
+    'پاسخ متنی به دلیل مغایرت آماری مسدود شد. داده‌های مستند استخراج‌شده از سامانه در جدول زیر ارائه می‌شود:',
+    '',
+    '| شناسه منبع | ردیف / فیلد | مقدار | واحد |',
+    '|---|---|---|---|',
+    ...rows.slice(0, 25).map((r) => `| ${r.source} | ${r.field} | ${r.value} | ${r.unit} |`),
+  ];
+  return lines.join('\n');
+}
+
+/** یک‌جا: شواهد را می‌سازد و پاسخ را یا برمی‌گرداند یا با پرهیز/جدول جایگزین می‌کند. */
 export function enforceNumericEvidence(input: {
   answer: string;
   toolResults: readonly unknown[];
@@ -419,7 +571,11 @@ export function enforceNumericEvidence(input: {
 }): { answer: string; validation: NumericValidation; abstained: boolean } {
   const evidence = buildEvidence(input);
   const validation = validateNumbers(input.answer, evidence);
-  return validation.ok
-    ? { answer: input.answer, validation, abstained: false }
-    : { answer: ABSTAIN_MESSAGE_FA, validation, abstained: true };
+  if (validation.ok) {
+    return { answer: input.answer, validation, abstained: false };
+  }
+  const fallback = input.toolResults.length > 0
+    ? renderVerifiedTable(input.toolResults)
+    : ABSTAIN_MESSAGE_FA;
+  return { answer: fallback, validation, abstained: true };
 }

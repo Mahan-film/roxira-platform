@@ -3,6 +3,7 @@ import {
   buildEvidence,
   enforceNumericEvidence,
   extractNumbers,
+  renderVerifiedTable,
   toLatinDigits,
   validateNumbers,
 } from './numeric-validator';
@@ -206,5 +207,37 @@ describe('evidence building', () => {
 
   it('toLatinDigits normalises both digit sets', () => {
     expect(toLatinDigits('۰۱۲٣٤٥')).toBe('012345');
+  });
+
+  describe('renderVerifiedTable', () => {
+    it('renders a markdown table with source_record_id and field_path when tool results exist', () => {
+      const toolData = [
+        {
+          source_record_id: 'income-statement:1405/01/01-1405/06/31',
+          currency: 'IRR',
+          source_fields: {
+            grossProfit: {
+              source_record_id: 'income-statement:1405/01/01-1405/06/31',
+              field_path: 'grossProfit',
+              value: '50000000',
+            },
+            netProfit: {
+              source_record_id: 'income-statement:1405/01/01-1405/06/31',
+              field_path: 'netProfit',
+              value: '35000000',
+            },
+          },
+        },
+      ];
+      const table = renderVerifiedTable(toolData);
+      expect(table).toContain('شناسه منبع');
+      expect(table).toContain('income-statement:1405/01/01-1405/06/31');
+      expect(table).toContain('grossProfit');
+      expect(table).toContain('50000000');
+    });
+
+    it('falls back to ABSTAIN_MESSAGE_FA when tool results are empty', () => {
+      expect(renderVerifiedTable([])).toBe(ABSTAIN_MESSAGE_FA);
+    });
   });
 });

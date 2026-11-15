@@ -7,6 +7,10 @@ import { ASSISTANT_TZ_OFFSET_MS } from '../constants/assistant.constants';
 
 /** بازه‌های نام‌دار قابل‌فهم برای ابزارهای دستیار (بر پایه تقویم شمسی). */
 export const ASSISTANT_PERIODS = [
+  'today',
+  'yesterday',
+  'this_week',
+  'last_week',
   'this_month',
   'last_month',
   'this_year',
@@ -25,6 +29,26 @@ export interface DateRange {
   label: string;
 }
 
+export interface CalendarBoundary {
+  fromIso: string;
+  toIso: string;
+  fromJalali: string;
+  toJalali: string;
+}
+
+export interface CalendarContext {
+  todayIso: string;
+  todayJalali: string;
+  boundaries: {
+    today: CalendarBoundary;
+    yesterday: CalendarBoundary;
+    thisWeek: CalendarBoundary;
+    lastWeek: CalendarBoundary;
+    thisMonth: CalendarBoundary;
+    thisFiscalYear: CalendarBoundary;
+  };
+}
+
 /** تاریخ شمسی امروز در منطقه زمانی ایران. */
 export function jalaliToday(now: Date): { jy: number; jm: number; jd: number } {
   const parts = new Intl.DateTimeFormat('en-US-u-ca-persian-nu-latn', {
@@ -38,10 +62,80 @@ export function jalaliToday(now: Date): { jy: number; jm: number; jd: number } {
   return { jy: pick('year'), jm: pick('month'), jd: pick('day') };
 }
 
+/** تبدیل تاریخ میلادی به رشته شمسی YYYY/MM/DD. */
+export function formatJalaliDate(date: Date): string {
+  const { jy, jm, jd } = jalaliToday(date);
+  return `${jy}/${String(jm).padStart(2, '0')}/${String(jd).padStart(2, '0')}`;
+}
+
 /** نیمه‌شب تهران در روز شمسی داده‌شده، به‌صورت لحظه UTC. */
 export function tehranMidnight(jy: number, jm: number, jd: number): Date {
   const { gy, gm, gd } = jalaliToGregorian(jy, jm, jd);
   return new Date(Date.UTC(gy, gm - 1, gd) - ASSISTANT_TZ_OFFSET_MS);
+}
+
+/** مرزهای تقویمی محاسبه‌شده در سمت سرور برای تزریق به پرامپت دستیار. */
+export function getCalendarContext(now: Date = new Date()): CalendarContext {
+  const { jy, jm, jd } = jalaliToday(now);
+  const todayStart = tehranMidnight(jy, jm, jd);
+  const todayEnd = new Date(todayStart.getTime() + 24 * 3600 * 1000);
+
+  const yesterdayStart = new Date(todayStart.getTime() - 24 * 3600 * 1000);
+  const yesterdayEnd = todayStart;
+
+  // تقویم هجری شمسی: شروع هفته روز شنبه است.
+  // getDay(): 0=Sun, 1=Mon, ..., 6=Sat
+  const dayOfWeek = now.getDay();
+  const daysSinceSaturday = (dayOfWeek + 1) % 7;
+  const thisWeekStart = new Date(todayStart.getTime() - daysSinceSaturday * 24 * 3600 * 1000);
+  const thisWeekEnd = new Date(thisWeekStart.getTime() + 7 * 24 * 3600 * 1000);
+
+  const lastWeekStart = new Date(thisWeekStart.getTime() - 7 * 24 * 3600 * 1000);
+  const lastWeekEnd = thisWeekStart;
+
+  const thisMonthStart = monthStart(jy, jm);
+  const thisMonthEnd = monthStart(jy, jm + 1);
+
+  const thisFiscalYearStart = tehranMidnight(jy, 1, 1);
+  const thisFiscalYearEnd = tehranMidnight(jy + 1, 1, 1);
+
+  const b = (from: Date, to: Date): CalendarBoundary => ({
+    fromIso: from.toISOString().slice(0, 10),
+    toIso: new Date(to.getTime() - 1).toISOString().slice(0, 10),
+    fromJalali: formatJalaliDate(from),
+    toJalali: formatJalaliDate(new Date(to.getTime() - 1)),
+  });
+
+  return {
+    todayIso: now.toISOString().slice(0, 10),
+    todayJalali: `${jy}/${String(jm).padStart(2, '0')}/${String(jd).padStart(2, '0')}`,
+    boundaries: {
+      today: b(todayStart, todayEnd),
+      yesterday: b(yesterdayStart, yesterdayEnd),
+      thisWeek: b(thisWeekStart, thisWeekEnd),
+      lastWeek: b(lastWeekStart, lastWeekEnd),
+      thisMonth: b(thisMonthStart, thisMonthEnd),
+      thisFiscalYear: b(thisFiscalYearStart, thisFiscalYearEnd),
+    },
+  };
+}
+
+/** تبدیل بلوک تقویمی سرور به متن راهنما برای پرامپت دستیار. */
+export function formatCalendarBlock(now: Date = new Date()): string {
+  const ctx = getCalendarContext(now);
+  const b = ctx.boundaries;
+  return [
+    '[CALENDAR_CONTEXT]',
+    `Today ISO: ${ctx.todayIso}`,
+    `Today Jalali: ${ctx.todayJalali}`,
+    `Today boundary: ${b.today.fromIso} (${b.today.fromJalali}) to ${b.today.toIso} (${b.today.toJalali})`,
+    `Yesterday boundary: ${b.yesterday.fromIso} (${b.yesterday.fromJalali}) to ${b.yesterday.toIso} (${b.yesterday.toJalali})`,
+    `This week boundary: ${b.thisWeek.fromIso} (${b.thisWeek.fromJalali}) to ${b.thisWeek.toIso} (${b.thisWeek.toJalali})`,
+    `Last week boundary: ${b.lastWeek.fromIso} (${b.lastWeek.fromJalali}) to ${b.lastWeek.toIso} (${b.lastWeek.toJalali})`,
+    `This month boundary: ${b.thisMonth.fromIso} (${b.thisMonth.fromJalali}) to ${b.thisMonth.toIso} (${b.thisMonth.toJalali})`,
+    `This fiscal year boundary: ${b.thisFiscalYear.fromIso} (${b.thisFiscalYear.fromJalali}) to ${b.thisFiscalYear.toIso} (${b.thisFiscalYear.toJalali})`,
+    '[/CALENDAR_CONTEXT]',
+  ].join('\n');
 }
 
 function monthStart(jy: number, jm: number): Date {
@@ -92,8 +186,34 @@ export function resolvePeriod(
   }
 
   const period = (input.period ?? 'this_month') as AssistantPeriod;
-  const { jy, jm } = jalaliToday(now);
+  const { jy, jm, jd } = jalaliToday(now);
   switch (period) {
+    case 'today': {
+      const start = tehranMidnight(jy, jm, jd);
+      const to = new Date(start.getTime() + 24 * 3600 * 1000);
+      return { from: start, to, label: `امروز (${jy}/${String(jm).padStart(2, '0')}/${String(jd).padStart(2, '0')})` };
+    }
+    case 'yesterday': {
+      const todayStart = tehranMidnight(jy, jm, jd);
+      const start = new Date(todayStart.getTime() - 24 * 3600 * 1000);
+      return { from: start, to: todayStart, label: `دیروز (${formatJalaliDate(start)})` };
+    }
+    case 'this_week': {
+      const todayStart = tehranMidnight(jy, jm, jd);
+      const dayOfWeek = now.getDay();
+      const daysSinceSaturday = (dayOfWeek + 1) % 7;
+      const start = new Date(todayStart.getTime() - daysSinceSaturday * 24 * 3600 * 1000);
+      const to = new Date(start.getTime() + 7 * 24 * 3600 * 1000);
+      return { from: start, to, label: `این هفته (${formatJalaliDate(start)} تا ${formatJalaliDate(new Date(to.getTime() - 1))})` };
+    }
+    case 'last_week': {
+      const todayStart = tehranMidnight(jy, jm, jd);
+      const dayOfWeek = now.getDay();
+      const daysSinceSaturday = (dayOfWeek + 1) % 7;
+      const thisWeekStart = new Date(todayStart.getTime() - daysSinceSaturday * 24 * 3600 * 1000);
+      const start = new Date(thisWeekStart.getTime() - 7 * 24 * 3600 * 1000);
+      return { from: start, to: thisWeekStart, label: `هفته گذشته (${formatJalaliDate(start)} تا ${formatJalaliDate(new Date(thisWeekStart.getTime() - 1))})` };
+    }
     case 'this_month':
       return {
         from: monthStart(jy, jm),

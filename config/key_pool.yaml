@@ -110,6 +110,7 @@ gateway:
 providers:
   groq:
     tier: free
+    customer_data: forbidden
     data_policy: may_log
     base_url: https://api.groq.com/openai/v1
     litellm_prefix: groq
@@ -122,6 +123,7 @@ providers:
 
   sambanova:
     tier: free
+    customer_data: forbidden
     data_policy: may_log
     base_url: https://api.sambanova.ai/v1
     litellm_prefix: sambanova
@@ -132,6 +134,7 @@ providers:
 
   mistral:
     tier: free
+    customer_data: forbidden
     data_policy: may_log   # free "Experiment" plan may train on prompts
     base_url: https://api.mistral.ai/v1
     litellm_prefix: mistral
@@ -149,6 +152,7 @@ providers:
 
   gemini:
     tier: free
+    customer_data: forbidden
     data_policy: may_log   # Google free tier content is used to improve products
     base_url: https://generativelanguage.googleapis.com/v1beta/openai
     litellm_prefix: gemini
@@ -163,6 +167,7 @@ providers:
 
   openrouter-free:
     tier: free
+    customer_data: forbidden
     data_policy: may_log
     base_url: https://openrouter.ai/api/v1
     litellm_prefix: openrouter
@@ -180,6 +185,7 @@ providers:
 
   openrouter-paid:
     tier: paid
+    customer_data: allowed
     data_policy: no_train
     base_url: https://openrouter.ai/api/v1
     litellm_prefix: openrouter
@@ -195,6 +201,7 @@ providers:
 
   openrouter-private:
     tier: paid
+    customer_data: allowed
     data_policy: no_train
     base_url: https://openrouter.ai/api/v1
     litellm_prefix: openrouter
@@ -213,6 +220,7 @@ providers:
   # `python3 scripts/infra/key_pool/inventory.py --probe` returns ok for it on the server.
   nvidia-nim:   # build.nvidia.com hosted endpoints (NVIDIA developer program, free credits / rate limit)
     tier: free
+    customer_data: forbidden
     data_policy: may_log
     base_url: https://integrate.api.nvidia.com/v1
     litellm_prefix: nvidia_nim
@@ -224,6 +232,7 @@ providers:
 
   cloudflare-ai:   # Workers AI, OpenAI-compatible route; the account id is part of the URL (not a secret)
     tier: free
+    customer_data: forbidden
     data_policy: may_log
     base_url: https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/v1
     api_base: https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/v1
@@ -237,6 +246,7 @@ providers:
 
   deepseek:   # DeepSeek's own API (paid, pay as you go). NOT for `private`: terms allow use of prompts.
     tier: paid
+    customer_data: forbidden
     data_policy: may_log
     base_url: https://api.deepseek.com/v1
     litellm_prefix: deepseek
@@ -247,6 +257,7 @@ providers:
 
   chutes:   # pay per token since 2025; OpenAI-compatible
     tier: paid
+    customer_data: forbidden
     data_policy: may_log
     base_url: https://llm.chutes.ai/v1
     api_base: https://llm.chutes.ai/v1
@@ -258,6 +269,7 @@ providers:
 
   together:
     tier: paid
+    customer_data: forbidden
     data_policy: may_log
     base_url: https://api.together.xyz/v1
     litellm_prefix: together_ai
@@ -268,6 +280,7 @@ providers:
 
   fireworks:
     tier: paid
+    customer_data: forbidden
     data_policy: may_log
     base_url: https://api.fireworks.ai/inference/v1
     litellm_prefix: fireworks_ai
@@ -278,6 +291,7 @@ providers:
 
   omniroute:   # last-resort local gateway (scraped/free combos); public data only. 502 on 2026-11-05 (upstream auth), so rank last.
     tier: free
+    customer_data: forbidden
     data_policy: may_log
     base_url: http://127.0.0.1:20128/v1
     api_base: http://127.0.0.1:20128/v1
@@ -292,6 +306,7 @@ providers:
     # No key at all: rendered with api_key "none" and always available. Local host => prompts
     # never leave the machine, so this is the one free provider that can be data_policy no_train.
     tier: free
+    customer_data: allowed
     data_policy: no_train
     base_url: http://roxira_embeddings:80/v1
     api_base: http://roxira_embeddings:80/v1   # LiteLLM needs the explicit base for the openai prefix
