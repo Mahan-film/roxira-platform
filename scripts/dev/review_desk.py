@@ -499,6 +499,7 @@ WHAT COUNTS:
 - Major: a real bug on a less common path, a missing test for a risky path, a race/idempotency hole, a misleading claim in the PR body, a rule below broken without immediate damage.
 - Minor: small correctness, clarity or consistency issues. Do not report pure style, formatting or naming taste.
 - Cite every finding as `path:line` using the line numbers printed at the left of the diff (new-file numbers). Only cite files and lines that appear in the diff. Do not invent files, functions or tests. If you are not sure something is a bug, say so in the finding or leave it out.
+- Your training data is older than this repo. Never claim that a version, release, model id, API, package or GitHub Action "does not exist" or "is not released yet" from memory: this repo's own CI already runs on versions newer than you may know. Flag a version only if the diff itself shows a contradiction (e.g. two different versions of the same action in one change).
 
 PROJECT RULES (from AGENTS.md and docs/agents/LESSONS.md):
 {lessons}
@@ -727,7 +728,12 @@ def provider_keys(pcfg: dict) -> list[str]:
             if any(os.environ.get(s) for s in slots):
                 names = list(slots)
                 break
-    return [n for n in names if os.environ.get(n)]
+    present = [n for n in names if os.environ.get(n)]
+    for n in present:  # keys that come from the environment (GitHub Actions), not the file, are redacted too
+        v = os.environ[n].strip()
+        if len(v) >= 12:
+            _SECRET_VALUES.add(v)
+    return present
 
 
 def provider_base_url(name: str, pcfg: dict) -> str:
