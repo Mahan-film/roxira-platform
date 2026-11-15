@@ -214,13 +214,13 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
           exchangeRate: 1,
           fxRate: DEFAULT_RATES_PER_USD[Currency.IRR],
           baseCurrency: BASE_CURRENCY,
-          baseTotalAmount: 105,
-          baseTotalTax: 10,
-          baseFinalPayable: 110,
-          totalAmount: 105,
-          totalDiscount: 5,
-          totalTax: 10,
-          finalPayable: 110,
+          baseTotalAmount: '105.00',
+          baseTotalTax: '10.00',
+          baseFinalPayable: '110.00',
+          totalAmount: '105.00',
+          totalDiscount: '5.00',
+          totalTax: '10.00',
+          finalPayable: '110.00',
           sellerInfo: { name: 'شرکت نمونه' },
         }),
         undefined,
@@ -249,8 +249,8 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
           einvoiceType: 1, // WITH_BUYER because company is provided
           sellerInfo: { name: 'شرکت نمونه' },
           items: expect.arrayContaining([
-            expect.objectContaining({ sku: 'WOO-10', total: 120000 }),
-            expect.objectContaining({ sku: 'SHIPPING', description: 'هزینه ارسال سفارش', total: 30000 }),
+            expect.objectContaining({ sku: 'WOO-10', total: '120000.00' }),
+            expect.objectContaining({ sku: 'SHIPPING', description: 'هزینه ارسال سفارش', total: '30000.00' }),
           ]),
         }),
         undefined,
@@ -283,7 +283,7 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
         tenantId,
         expect.objectContaining({
           taxInvoiceNumber: 'WOO-205',
-          finalPayable: 12.35,
+          finalPayable: '12.35',
           items: expect.arrayContaining([
             expect.objectContaining({
               sku: 'WOO-25',
