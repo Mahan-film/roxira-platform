@@ -8,7 +8,7 @@ import {
 import { randomBytes } from 'crypto';
 import * as dns from 'dns/promises';
 import * as net from 'net';
-import { fromDb, fromMinor, minorToDecimal, parseScaled, toMinor } from '../../../accounting/money';
+import { fromDb, minorToDecimal, parseScaled, toMinor } from '../../../accounting/money';
 import { BASE_CURRENCY } from '../../../currency/constants/currency.constants';
 import { Currency } from '../../../currency/enums/currency.enum';
 import { CurrencyService } from '../../../currency/services/currency.service';
@@ -315,11 +315,11 @@ export class WooCommerceSyncService {
                 ? line.name || `کالای ووکامرس #${line.product_id}`
                 : `${line.name || `کالای ووکامرس #${line.product_id}`} (×${rawQty})`,
             quantity: qty,
-            unitPrice: fromMinor(unitPriceMinor) as number,
-            discount: fromMinor(lineDiscountMinor) as number,
+            unitPrice: minorToDecimal(unitPriceMinor) as unknown as number,
+            discount: minorToDecimal(lineDiscountMinor) as unknown as number,
             vatRate,
-            tax: fromMinor(lineTaxMinor) as number,
-            total: fromMinor(lineTotalMinor + lineTaxMinor) as number,
+            tax: minorToDecimal(lineTaxMinor) as unknown as number,
+            total: minorToDecimal(lineTotalMinor + lineTaxMinor) as unknown as number,
           };
         });
 
@@ -329,11 +329,11 @@ export class WooCommerceSyncService {
             sku: 'SHIPPING',
             description: 'هزینه ارسال سفارش',
             quantity: 1,
-            unitPrice: fromMinor(shippingMinor) as number,
+            unitPrice: minorToDecimal(shippingMinor) as unknown as number,
             discount: 0,
             vatRate: 0,
             tax: 0,
-            total: fromMinor(shippingMinor) as number,
+            total: minorToDecimal(shippingMinor) as unknown as number,
           });
         }
 
@@ -365,20 +365,20 @@ export class WooCommerceSyncService {
             jurisdiction,
             exchangeRate,
             fxRate,
-            amountFx: fromMinor(orderTotalMinor) as number,
+            amountFx: minorToDecimal(orderTotalMinor) as unknown as number,
             baseCurrency: BASE_CURRENCY,
-            baseTotalAmount: fromMinor(baseTotalAmountMinor) as number,
-            baseTotalTax: fromMinor(baseTotalTaxMinor) as number,
-            baseFinalPayable: fromMinor(baseFinalPayableMinor) as number,
+            baseTotalAmount: minorToDecimal(baseTotalAmountMinor) as unknown as number,
+            baseTotalTax: minorToDecimal(baseTotalTaxMinor) as unknown as number,
+            baseFinalPayable: minorToDecimal(baseFinalPayableMinor) as unknown as number,
             einvoiceType,
             subject: InvoiceSubject.ORIGINAL,
             sellerInfo,
             buyerInfo,
             items,
-            totalAmount: fromMinor(totalAmountMinor) as number,
-            totalDiscount: fromMinor(totalDiscountMinor) as number,
-            totalTax: fromMinor(totalTaxMinor) as number,
-            finalPayable: fromMinor(orderTotalMinor) as number,
+            totalAmount: minorToDecimal(totalAmountMinor) as unknown as number,
+            totalDiscount: minorToDecimal(totalDiscountMinor) as unknown as number,
+            totalTax: minorToDecimal(totalTaxMinor) as unknown as number,
+            finalPayable: minorToDecimal(orderTotalMinor) as unknown as number,
           },
           manager,
         );
