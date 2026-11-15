@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Currency } from '../../currency/enums/currency.enum';
-import { JournalEntryStatus } from '../enums/accounting.enum';
+import { JournalEntryStatus, JournalEntryType } from '../enums/accounting.enum';
 import { Money } from '../money';
 
 /**
@@ -50,6 +50,13 @@ export class JournalEntryResponseDto {
 
   @ApiProperty({ description: 'شمارهٔ کاری سند' })
   entryNumber: string;
+
+  @ApiProperty({
+    enum: JournalEntryType,
+    description: 'نوع سند (عادی، بستن حساب‌های موقت، بستن حساب‌های دائم، افتتاحیه خودکار)',
+    example: JournalEntryType.NORMAL,
+  })
+  entryType: JournalEntryType;
 
   @ApiProperty({
     description: 'شمارهٔ قطعی (bigint به رشته)؛ تا قطعی‌شدن سند null است.',

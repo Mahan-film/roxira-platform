@@ -212,6 +212,7 @@ export class AccountingService {
     return {
       id: entity.id,
       entryNumber: entity.entryNumber,
+      entryType: entity.entryType ?? JournalEntryType.NORMAL,
       permanentNumber:
         entity.permanentNumber != null ? String(entity.permanentNumber) : null,
       permanentFiscalYearId: entity.permanentFiscalYearId ?? null,
