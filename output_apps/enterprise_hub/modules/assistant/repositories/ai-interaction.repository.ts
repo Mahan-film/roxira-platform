@@ -89,17 +89,40 @@ export class AiInteractionRepository {
 
   /**
    * Periodic purge job for expired interactions (retention: 90 days).
-   * Runs directly with administrative privileges or connection pool.
+   * Supports tenant-scoped purge (under roxira_app RLS) or global manager purge.
    */
-  async purgeExpired(m?: { query: (sql: string, params?: unknown[]) => Promise<unknown> }): Promise<number> {
+  async purgeExpired(
+    m?: { query: (sql: string, params?: unknown[]) => Promise<unknown> },
+    tenantId?: string,
+  ): Promise<number> {
+    if (tenantId) {
+      return this.scope.run(tenantId, async (scopeManager) => {
+        const result = (await scopeManager.query(
+          `DELETE FROM ai_interactions WHERE tenant_id = $1 AND expires_at < now() RETURNING id`,
+          [tenantId],
+        )) as unknown;
+        if (Array.isArray(result)) {
+          if (result.length === 2 && typeof result[1] === 'number') {
+            return result[1];
+          }
+          return result.length;
+        }
+        return 0;
+      });
+    }
+
     if (m) {
       const result = (await m.query(
         `DELETE FROM ai_interactions WHERE expires_at < now() RETURNING id`,
-      )) as unknown[];
-      return Array.isArray(result) ? result.length : 0;
+      )) as unknown;
+      if (Array.isArray(result)) {
+        if (result.length === 2 && typeof result[1] === 'number') {
+          return result[1];
+        }
+        return result.length;
+      }
+      return 0;
     }
-    // If called without specific manager, use scope with null tenant in system context
-    // or run directly on current connection
     return 0;
   }
 }

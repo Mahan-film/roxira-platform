@@ -58,7 +58,8 @@ describePg('ai_interactions table and RLS on real PostgreSQL', () => {
       expiresAt: expiredDate,
     });
 
-    const purged = await repo.purgeExpired(testDb.app);
+    // Purge runs inside tenant scope under roxira_app RLS
+    const purged = await repo.purgeExpired(undefined, TEST_T1);
     expect(purged).toBeGreaterThanOrEqual(1);
 
     const t1Rows = await repo.listRecent(TEST_T1);
