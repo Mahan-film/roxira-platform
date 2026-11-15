@@ -511,6 +511,84 @@ roles:
         price_per_1m: { in: 0, out: 0 }
         public_code_only: true
 
+  # ---- Local review desk (scripts/dev/review_desk.py, runs on the hub laptop, no Claude tokens) ----
+  review_desk:
+    description: >
+      Cross-family PR review desk. Order = owner directive 2026-11-13: direct provider APIs first
+      (Gemini, SambaNova, Mistral, Groq), OpenRouter only when all of them fail. `provider` is a key of
+      config/key_pool.yaml `providers:` (base_url and key slot NAMES come from there; the desk rotates
+      every set slot on 401/402/403/429). Every direct id is provider-native, verified with the provider's
+      GET /models on 2026-11-13, hence catalogue_listed: false (scripts/check_models.py skips it). The desk
+      skips every entry whose family (scripts/dev/check_reviewer_family.py) matches a family of the PR's
+      author, so a Claude-written PR is never reviewed by an Anthropic model and an Antigravity (Gemini)
+      PR is not reviewed by Gemini. Diffs of this public repo only: free tiers may log prompts.
+      SambaNova serves no DeepSeek model any more (GET /models 2026-11-13: GLM-5.3, gpt-oss-120b,
+      Llama-3.3-70B, MiniMax-M3.1-Flash, gemma-4-31B), so DeepSeek is reached through OpenRouter only.
+    data_policy: non_sensitive_only
+    # PR author login -> model families that write its PRs (besides commit trailers such as
+    # Co-Authored-By: Claude, which the desk reads itself). mahan-films = owner's Antigravity lanes.
+    author_families:
+      mahan-films: [google]
+    models:
+      # 2026-11-13 live test (AI Studio free tier, keys GEMINI_API_KEY.._4): 3.6 Flash answered in
+      # 34-150 s; 3.8 Flash answered 503 "high demand" or timed out (150 s) on every try; 3.5 Flash
+      # answered in 30 s; 3.7 Flash and gemini-flash-latest timed out (300 s). So 3.6 leads, 3.8 is
+      # second until it is reliable. The desk retries a 503 once. Gemini Pro stays banned (owner policy).
+      - id: gemini-3.6-flash
+        provider: gemini
+        price_per_1m: null
+        catalogue_listed: false
+        public_code_only: true
+      - id: gemini-3.8-flash
+        provider: gemini
+        price_per_1m: null
+        catalogue_listed: false
+        public_code_only: true
+      - id: gemini-3.5-flash
+        provider: gemini
+        price_per_1m: null
+        catalogue_listed: false
+        public_code_only: true
+      # SambaNova: GET /models works but chat answered 402 PAYMENT_METHOD_REQUIRED on 2026-11-13
+      # (no balance on the account); kept so it starts working once billing is added.
+      - id: GLM-5.3
+        provider: sambanova
+        price_per_1m: null
+        catalogue_listed: false
+        public_code_only: true
+      - id: gpt-oss-120b
+        provider: sambanova
+        price_per_1m: null
+        catalogue_listed: false
+        public_code_only: true
+      # Mistral keys 1-4 answer 402 (budget exhausted, see config/key_pool.yaml); _5/_6 are not set here.
+      - id: mistral-large-latest
+        provider: mistral
+        price_per_1m: null
+        catalogue_listed: false
+        public_code_only: true
+      - id: mistral-medium-latest
+        provider: mistral
+        price_per_1m: null
+        catalogue_listed: false
+        public_code_only: true
+      - id: openai/gpt-oss-120b
+        provider: groq
+        price_per_1m: null
+        catalogue_listed: false
+        public_code_only: true
+        note: Groq free tier, ~8k TPM per key, so it only takes small diff chunks (413 on big ones).
+      # extra_body is merged over the key_pool provider's extra_body. Without reasoning disabled,
+      # DeepSeek spent all 6000 output tokens on reasoning and returned an empty answer (2026-11-13).
+      - id: deepseek/deepseek-v4.1-flash
+        provider: openrouter-paid
+        price_per_1m: { in: 0.036, out: 0.405, cache_read: 0.0054 }
+        extra_body: { reasoning: { enabled: false } }
+      - id: z-ai/glm-5.3
+        provider: openrouter-paid
+        price_per_1m: { in: 0.079, out: 4.80 }
+        extra_body: { reasoning: { enabled: false } }
+
 # ---- Routing: per-task chains and daily cost caps (issue #288, docs/ops/MODEL_ROUTING.md) ----
 # `tasks` maps each AI call site (by task name) to a chain of roles tried in order:
 # free -> cheapest paid -> strong only when needed. A role in a chain is expanded to its
@@ -538,6 +616,7 @@ budgets:
     reviewer: 0.10
     mechanical: 0.05
     agent_runner: 0.20
+    review_desk: 0.10
     free: 0
     stt: 0.10
     tts: 0
