@@ -533,7 +533,13 @@ export class ChequesService {
    */
   private async ensureAccounts(tenantId: string, docType: string, overrides?: RoleAccounts): Promise<void> {
     const resolved = await this.postingRules.resolveRolesForTemplate(tenantId, docType, overrides);
-    const defaultCodes = [...new Set(resolved.filter((r) => r.isDefault && r.accountCode).map((r) => r.accountCode!))];
+    const defaultCodes = [
+      ...new Set(
+        resolved
+          .filter((r) => r.isDefault && typeof r.accountCode === 'string' && r.accountCode.trim().length > 0)
+          .map((r) => r.accountCode!),
+      ),
+    ];
     if (defaultCodes.length === 0) return;
 
     const existing = new Set((await this.accountingService.listAccounts(tenantId)).map((a) => a.code));

@@ -27,7 +27,8 @@ export class MigrateLegacyChequeAccounts1789900004400 implements MigrationInterf
         AND a."code" = '1110'
         AND a."name" = 'اسناد دریافتنی'
         AND target."tenant_id" = l."tenant_id"
-        AND target."code" = '1021';
+        AND target."code" = '1021'
+        AND target."name" = 'اسناد دریافتنی';
     `);
 
     // 3. Delete legacy 1110 if it was created solely as 'اسناد دریافتنی'
@@ -59,7 +60,8 @@ export class MigrateLegacyChequeAccounts1789900004400 implements MigrationInterf
         AND a."code" = '1120'
         AND a."name" = 'اسناد در جریان وصول'
         AND target."tenant_id" = l."tenant_id"
-        AND target."code" = '1023';
+        AND target."code" = '1023'
+        AND target."name" = 'اسناد در جریان وصول';
     `);
 
     // 6. Delete legacy 1120 if it was created solely as 'اسناد در جریان وصول'
@@ -91,7 +93,8 @@ export class MigrateLegacyChequeAccounts1789900004400 implements MigrationInterf
         AND a."code" = '2110'
         AND a."name" = 'اسناد پرداختنی'
         AND target."tenant_id" = l."tenant_id"
-        AND target."code" = '2011';
+        AND target."code" = '2011'
+        AND target."name" = 'اسناد پرداختنی';
     `);
 
     // 9. Delete legacy 2110 if it was created solely as 'اسناد پرداختنی'
@@ -127,7 +130,83 @@ export class MigrateLegacyChequeAccounts1789900004400 implements MigrationInterf
     `);
   }
 
-  public async down(_queryRunner: QueryRunner): Promise<void> {
-    // Non-destructive: down does not recreate legacy collisions with fixed assets
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    // Recreate legacy chart accounts and re-link lines in rollback
+    await queryRunner.query(`
+      INSERT INTO "fin_chart_of_accounts" ("tenant_id", "code", "name", "account_type", "level", "currency", "balance")
+      SELECT DISTINCT a."tenant_id", '1110', 'اسناد دریافتنی', 'ASSET'::accounttype, 'MOEIN', 'IRR', 0
+      FROM "fin_chart_of_accounts" a
+      WHERE a."code" = '1021' AND a."name" = 'اسناد دریافتنی'
+        AND NOT EXISTS (
+          SELECT 1 FROM "fin_chart_of_accounts" x
+          WHERE x."tenant_id" = a."tenant_id" AND x."code" = '1110'
+        );
+
+      UPDATE "fin_journal_entry_lines" l
+      SET "account_id" = target."id"
+      FROM "fin_chart_of_accounts" a,
+           "fin_chart_of_accounts" target
+      WHERE l."account_id" = a."id"
+        AND a."tenant_id" = l."tenant_id"
+        AND a."code" = '1021'
+        AND a."name" = 'اسناد دریافتنی'
+        AND target."tenant_id" = l."tenant_id"
+        AND target."code" = '1110'
+        AND target."name" = 'اسناد دریافتنی';
+
+      INSERT INTO "fin_chart_of_accounts" ("tenant_id", "code", "name", "account_type", "level", "currency", "balance")
+      SELECT DISTINCT a."tenant_id", '1120', 'اسناد در جریان وصول', 'ASSET'::accounttype, 'MOEIN', 'IRR', 0
+      FROM "fin_chart_of_accounts" a
+      WHERE a."code" = '1023' AND a."name" = 'اسناد در جریان وصول'
+        AND NOT EXISTS (
+          SELECT 1 FROM "fin_chart_of_accounts" x
+          WHERE x."tenant_id" = a."tenant_id" AND x."code" = '1120'
+        );
+
+      UPDATE "fin_journal_entry_lines" l
+      SET "account_id" = target."id"
+      FROM "fin_chart_of_accounts" a,
+           "fin_chart_of_accounts" target
+      WHERE l."account_id" = a."id"
+        AND a."tenant_id" = l."tenant_id"
+        AND a."code" = '1023'
+        AND a."name" = 'اسناد در جریان وصول'
+        AND target."tenant_id" = l."tenant_id"
+        AND target."code" = '1120'
+        AND target."name" = 'اسناد در جریان وصول';
+
+      INSERT INTO "fin_chart_of_accounts" ("tenant_id", "code", "name", "account_type", "level", "currency", "balance")
+      SELECT DISTINCT a."tenant_id", '2110', 'اسناد پرداختنی', 'LIABILITY'::accounttype, 'MOEIN', 'IRR', 0
+      FROM "fin_chart_of_accounts" a
+      WHERE a."code" = '2011' AND a."name" = 'اسناد پرداختنی'
+        AND NOT EXISTS (
+          SELECT 1 FROM "fin_chart_of_accounts" x
+          WHERE x."tenant_id" = a."tenant_id" AND x."code" = '2110'
+        );
+
+      UPDATE "fin_journal_entry_lines" l
+      SET "account_id" = target."id"
+      FROM "fin_chart_of_accounts" a,
+           "fin_chart_of_accounts" target
+      WHERE l."account_id" = a."id"
+        AND a."tenant_id" = l."tenant_id"
+        AND a."code" = '2011'
+        AND a."name" = 'اسناد پرداختنی'
+        AND target."tenant_id" = l."tenant_id"
+        AND target."code" = '2110'
+        AND target."name" = 'اسناد پرداختنی';
+
+      UPDATE "fin_posting_role_maps"
+      SET "account_code" = '1110'
+      WHERE "role" = 'cheques_receivable' AND "account_code" = '1021';
+
+      UPDATE "fin_posting_role_maps"
+      SET "account_code" = '1120'
+      WHERE "role" = 'cheques_in_collection' AND "account_code" = '1023';
+
+      UPDATE "fin_posting_role_maps"
+      SET "account_code" = '2110'
+      WHERE "role" = 'cheques_payable' AND "account_code" = '2011';
+    `);
   }
 }
