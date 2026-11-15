@@ -40,6 +40,27 @@ describe('Payment Link Crypto & Unit Logic (T90)', () => {
       expect(() => openMerchantId(sealed, T2)).toThrow();
     });
 
+    it('fails closed when PAYMENT_GATEWAY_ENCRYPTION_KEY is unset or empty', () => {
+      const orig = process.env.PAYMENT_GATEWAY_ENCRYPTION_KEY;
+      try {
+        delete process.env.PAYMENT_GATEWAY_ENCRYPTION_KEY;
+        expect(() => sealMerchantId('secret', T1)).toThrow(/not configured/);
+      } finally {
+        process.env.PAYMENT_GATEWAY_ENCRYPTION_KEY = orig;
+      }
+    });
+
+    it('derives key via PBKDF2 for password-like secrets', () => {
+      const orig = process.env.PAYMENT_GATEWAY_ENCRYPTION_KEY;
+      try {
+        process.env.PAYMENT_GATEWAY_ENCRYPTION_KEY = 'simple-passphrase-test';
+        const sealed = sealMerchantId('my-secret', T1);
+        expect(openMerchantId(sealed, T1)).toBe('my-secret');
+      } finally {
+        process.env.PAYMENT_GATEWAY_ENCRYPTION_KEY = orig;
+      }
+    });
+
     it('masks merchant key revealing at most last 4 characters', () => {
       expect(maskMerchantId('zibal_merchant_12345')).toBe('****2345');
       expect(maskMerchantId('1234')).toBe('****');

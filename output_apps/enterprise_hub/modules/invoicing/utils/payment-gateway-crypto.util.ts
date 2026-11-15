@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
+import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from 'crypto';
 
 const VERSION = 'v1';
 
@@ -7,17 +7,26 @@ function getMasterKey(): Buffer {
   if (!envKey || envKey.trim().length === 0) {
     throw new Error('PAYMENT_GATEWAY_ENCRYPTION_KEY is not configured (fail closed)');
   }
-  return createHash('sha256').update(envKey.trim()).digest();
+  const trimmed = envKey.trim();
+  if (/^[0-9a-fA-F]{64}$/.test(trimmed)) {
+    return Buffer.from(trimmed, 'hex');
+  }
+  if (/^[A-Za-z0-9+/=]{44}$/.test(trimmed)) {
+    const b64 = Buffer.from(trimmed, 'base64');
+    if (b64.length === 32) return b64;
+  }
+  const salt = process.env.PAYMENT_GATEWAY_ENCRYPTION_SALT || 'roxira-payment-gateway-kdf-salt';
+  return pbkdf2Sync(trimmed, salt, 100_000, 32, 'sha256');
 }
 
 /**
- * Seals merchant credentials at rest via AES-256-GCM using tenant ID as Authenticated Additional Data (AAD).
+ * Seals merchant credentials at rest via AES-256-GCM using version and tenant ID as Authenticated Additional Data (AAD).
  */
 export function sealMerchantId(plaintext: string, tenantId: string): string {
   const masterKey = getMasterKey();
   const iv = randomBytes(12);
   const cipher = createCipheriv('aes-256-gcm', masterKey, iv);
-  cipher.setAAD(Buffer.from(tenantId, 'utf8'));
+  cipher.setAAD(Buffer.from(`${VERSION}:${tenantId}`, 'utf8'));
   const ciphertext = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
   return [
     VERSION,
@@ -28,7 +37,7 @@ export function sealMerchantId(plaintext: string, tenantId: string): string {
 }
 
 /**
- * Opens and verifies sealed merchant credentials using tenant ID as AAD.
+ * Opens and verifies sealed merchant credentials using version and tenant ID as AAD.
  */
 export function openMerchantId(sealed: string, tenantId: string): string {
   const masterKey = getMasterKey();
@@ -42,7 +51,7 @@ export function openMerchantId(sealed: string, tenantId: string): string {
   const ct = Buffer.from(ctB64, 'base64url');
 
   const decipher = createDecipheriv('aes-256-gcm', masterKey, iv);
-  decipher.setAAD(Buffer.from(tenantId, 'utf8'));
+  decipher.setAAD(Buffer.from(`${VERSION}:${tenantId}`, 'utf8'));
   decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(ct), decipher.final()]).toString('utf8');
 }
