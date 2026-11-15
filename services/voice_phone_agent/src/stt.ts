@@ -74,5 +74,7 @@ const HALLUCINATIONS = [/زیرنویس/, /امیدوارم از این ویدی
 function clean(t: string): string {
   const s = t.replace(/\s+/g, ' ').trim();
   if (s.length < 2 || HALLUCINATIONS.some((re) => re.test(s))) return '';
+  // on near-silence Whisper may echo the vocabulary prompt back
+  if (cfg.sttPrompt && s.length >= 12 && cfg.sttPrompt.includes(s.replace(/[.،]+$/, ''))) return '';
   return s;
 }

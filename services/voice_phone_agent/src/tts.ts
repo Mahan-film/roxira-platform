@@ -1,7 +1,8 @@
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { decodeTo48k, fadeEdges } from './audio.js';
+import { OUT_RATE, decodeTo48k, fadeEdges } from './audio.js';
 import { cfg } from './config.js';
 import { fetchDirect, fetchProxied } from './http.js';
 
@@ -35,6 +36,79 @@ async function synthEncoded(text: string, signal?: AbortSignal): Promise<Buffer>
   const buf = Buffer.from(await r.arrayBuffer());
   if (buf.length < 200) throw new Error(`${cfg.ttsProvider} tts returned ${buf.length} bytes`);
   return buf;
+}
+
+const FRAME_BYTES = 960; // 480 samples (10 ms @ 48 kHz) s16le
+const TAIL_BYTES = FRAME_BYTES * 4; // held back so the last 40 ms can be faded
+
+/**
+ * Streaming synthesis: PCM reaches `onPcm` while the sentence is still being generated, always in
+ * whole 10 ms frames (no zero-padded gaps between chunks). Only the edge sidecar streams; other
+ * providers fall back to one chunk. Resolves when the sentence is complete.
+ */
+export async function synthesizeStream(
+  text: string, signal: AbortSignal, onPcm: (pcm: Int16Array) => void,
+): Promise<void> {
+  if (cfg.ttsProvider !== 'edge') { onPcm(await synthesize(text, signal)); return; }
+  const r = await fetchDirect(`${cfg.edgeTtsUrl}/tts/stream`, {
+    method: 'POST', signal, headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, voice: cfg.ttsVoice, rate: cfg.ttsRate }),
+  });
+  if (!r.ok || !r.body) throw new Error(`edge tts stream ${r.status}: ${(await r.text()).slice(0, 200)}`);
+
+  const ff = spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-probesize', '32', '-analyzeduration', '0',
+    '-fflags', 'nobuffer', '-f', 'mp3', '-i', 'pipe:0',
+    '-f', 's16le', '-acodec', 'pcm_s16le', '-ac', '1', '-ar', String(OUT_RATE), 'pipe:1'],
+  { stdio: ['pipe', 'pipe', 'pipe'] });
+  const onAbort = () => ff.kill('SIGKILL');
+  signal.addEventListener('abort', onAbort, { once: true });
+
+  let pending = Buffer.alloc(0);
+  let first = true;
+  const emit = (buf: Buffer, last: boolean) => {
+    if (!buf.length) return;
+    const pcm = new Int16Array(buf.length / 2);
+    Buffer.from(pcm.buffer).set(buf);
+    if (first) { fadeIn(pcm); first = false; }
+    if (last) fadeOut(pcm);
+    onPcm(pcm);
+  };
+  let err = '';
+  ff.stderr.on('data', (b: Buffer) => { err += b.toString(); });
+  ff.stdout.on('data', (b: Buffer) => {
+    pending = Buffer.concat([pending, b]);
+    const ready = Math.floor((pending.length - TAIL_BYTES) / FRAME_BYTES) * FRAME_BYTES;
+    if (ready > 0) { emit(pending.subarray(0, ready), false); pending = pending.subarray(ready); }
+  });
+  const closed = new Promise<number | null>((res, rej) => { ff.on('close', res); ff.on('error', rej); });
+  ff.stdin.on('error', () => { /* reported via close */ });
+
+  try {
+    for await (const chunk of r.body as unknown as AsyncIterable<Uint8Array>) {
+      if (signal.aborted) break;
+      if (!ff.stdin.write(chunk)) await new Promise((res) => ff.stdin.once('drain', res));
+    }
+    ff.stdin.end();
+    const code = await closed;
+    if (signal.aborted) throw new Error('aborted');
+    if (code !== 0) throw new Error(`ffmpeg exit ${code}: ${err.slice(0, 200)}`);
+    const whole = Math.ceil(pending.length / FRAME_BYTES) * FRAME_BYTES;
+    const tail = Buffer.alloc(whole); // pads only the very last frame of the sentence
+    pending.copy(tail);
+    emit(tail, true);
+  } finally {
+    signal.removeEventListener('abort', onAbort);
+    if (ff.exitCode === null) ff.kill('SIGKILL');
+  }
+}
+
+function fadeIn(pcm: Int16Array, ms = 8) {
+  const n = Math.min(Math.floor((OUT_RATE * ms) / 1000), pcm.length);
+  for (let i = 0; i < n; i++) pcm[i] = Math.round((pcm[i] * i) / n);
+}
+function fadeOut(pcm: Int16Array, ms = 8) {
+  const n = Math.min(Math.floor((OUT_RATE * ms) / 1000), pcm.length);
+  for (let i = 0; i < n; i++) pcm[pcm.length - 1 - i] = Math.round((pcm[pcm.length - 1 - i] * i) / n);
 }
 
 /**

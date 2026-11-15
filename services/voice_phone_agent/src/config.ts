@@ -35,7 +35,11 @@ export const cfg = {
   groqSttModel: str('GROQ_STT_MODEL', 'whisper-large-v3-turbo'),
   openaiKey: str('OPENAI_API_KEY'),
   openaiSttModel: str('OPENAI_STT_MODEL', 'whisper-1'),
-  sttPrompt: str('STT_PROMPT', 'گفت‌وگوی تلفنی دربارهٔ یک پرسش حقوقی: دادخواست، مهریه، چک، اجاره، طلاق، ارث، شکایت کیفری.'),
+  // Whisper vocabulary hint (keep under ~220 tokens). Terms come from real phone-call misrecognitions.
+  sttPrompt: str('STT_PROMPT', 'پرسش حقوقی تلفنی: مهلت تجدیدنظرخواهی، آرای وحدت رویه، دادنامه، واخواهی، فرجام‌خواهی، '
+    + 'دادخواست، دادسرا، بازپرس، شورای حل اختلاف، دیوان عالی کشور، دیوان عدالت اداری، اجرای احکام، '
+    + 'مهریه، نفقه، اعسار، طلاق توافقی، حضانت، ارث، انحصار وراثت، چک برگشتی، سفته، قولنامه، '
+    + 'سند رسمی، اجاره‌نامه، تخلیه، دیه، قانون مدنی، آیین دادرسی، ماده، تبصره.'),
 
   ttsProvider: str('TTS_PROVIDER', 'edge') as 'edge' | 'openai' | 'smartjudge',
   edgeTtsUrl: str('EDGE_TTS_URL', 'http://127.0.0.1:5055'),
@@ -51,7 +55,7 @@ export const cfg = {
   judgeTimeoutMs: num('SMARTJUDGE_TIMEOUT_MS', 45000),
 
   vadStartMs: num('VAD_START_MS', 160),
-  vadEndSilenceMs: num('VAD_END_SILENCE_MS', 750),
+  vadEndSilenceMs: num('VAD_END_SILENCE_MS', 600),
   vadMinUtteranceMs: num('VAD_MIN_UTTERANCE_MS', 350),
   vadMaxUtteranceMs: num('VAD_MAX_UTTERANCE_MS', 20000),
   vadEnergyRatio: num('VAD_ENERGY_RATIO', 3.0),
