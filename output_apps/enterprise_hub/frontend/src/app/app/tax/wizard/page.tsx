@@ -285,8 +285,8 @@ export default function MoadianWizardPage() {
         memoryId: memId,
         economicCode: econ,
         certificatePem: certPemInput.trim(),
-        useActiveSigningKey: useActiveSigningKey && !trimmedKey ? true : undefined,
-        privateKeyPem: trimmedKey || undefined,
+        useActiveSigningKey: useActiveSigningKey ? true : undefined,
+        privateKeyPem: useActiveSigningKey ? undefined : (trimmedKey || undefined),
         defaultSstid: defaultSstidInput.trim() || undefined,
         settlementMethod: settlementMethodInput,
       });
@@ -391,7 +391,7 @@ export default function MoadianWizardPage() {
     id: inv.id,
     invoiceNumber: inv.taxInvoiceNumber,
     issueDate: inv.issuedAt || inv.createdAt,
-    total: inv.finalPayable,
+    total: inv.finalPayable != null ? String(inv.finalPayable) : undefined,
     buyerName: inv.buyerInfo?.name ?? "خریدار عمومی",
     status: inv.status,
     direction: inv.direction,
@@ -922,7 +922,10 @@ export default function MoadianWizardPage() {
                       type="checkbox"
                       className="mt-1 h-4 w-4 rounded border-input"
                       checked={useActiveSigningKey}
-                      onChange={(e) => setUseActiveSigningKey(e.target.checked)}
+                      onChange={(e) => {
+                        setUseActiveSigningKey(e.target.checked);
+                        if (e.target.checked) setPrivKeyPemInput("");
+                      }}
                     />
                     <div className="space-y-1 text-xs">
                       <Label htmlFor="use-active-key-checkbox" className="text-sm font-medium cursor-pointer">
