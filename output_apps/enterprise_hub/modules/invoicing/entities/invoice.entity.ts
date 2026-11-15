@@ -43,6 +43,8 @@ export interface InvoiceItem {
   sku?: string | null;
   /** شناسه ۱۳ رقمی کالا/خدمت در سامانه مودیان (SSTID). */
   taxCode?: string | null;
+  /** Legacy alias for taxCode (SSTID). */
+  sstid?: string | null;
   description: string;
   quantity: number;
   unitPrice: number;

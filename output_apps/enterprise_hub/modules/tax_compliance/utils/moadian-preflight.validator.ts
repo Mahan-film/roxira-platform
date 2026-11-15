@@ -156,21 +156,22 @@ export function validateVatRateForYear(
   vatRate: number,
   expectedRate?: number | null,
 ): { valid: boolean; expected: number; isExempt: boolean } {
-  const rate = Math.round(Number(vatRate) * 10000) / 10000;
+  const rateBp = Math.round(Number(vatRate) * 10000);
 
   // Zero-rated / exempt is always permissible
-  if (rate === 0) {
+  if (rateBp === 0) {
     return { valid: true, expected: 0, isExempt: true };
   }
 
   if (expectedRate !== undefined && expectedRate !== null) {
-    const valid = Math.abs(rate - expectedRate) < 1e-4;
+    const expectedBp = Math.round(Number(expectedRate) * 10000);
+    const valid = rateBp === expectedBp;
     return { valid, expected: expectedRate, isExempt: false };
   }
 
   // Without a specific expected rate, accept any valid rate between 0 and 1
-  if (rate >= 0 && rate <= 1) {
-    return { valid: true, expected: rate, isExempt: false };
+  if (rateBp >= 0 && rateBp <= 10000) {
+    return { valid: true, expected: rateBp / 10000, isExempt: false };
   }
 
   return { valid: false, expected: 0, isExempt: false };
@@ -230,7 +231,7 @@ export function toMinorUnits(value: number | string | null | undefined, scale: n
   if (value === null || value === undefined || value === '') return 0n;
   let text: string;
   if (typeof value === 'number') {
-    if (!Number.isFinite(value) || Math.abs(value) >= 1e21) {
+    if (!Number.isFinite(value) || Math.abs(value) > Number.MAX_SAFE_INTEGER) {
       throw new InvalidAmountError(`Invalid amount: ${value}`);
     }
     text = value.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits: 20 });

@@ -108,6 +108,8 @@ export interface InvoiceItem {
   itemId?: number | null;
   sku?: string | null;
   taxCode?: string | null;
+  /** Legacy alias for taxCode (SSTID). */
+  sstid?: string | null;
   description: string;
   quantity: number;
   unitPrice: number;

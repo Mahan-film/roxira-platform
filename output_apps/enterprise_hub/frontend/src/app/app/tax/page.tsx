@@ -191,6 +191,10 @@ function MoadianCard() {
         // No local re-validation: the server result is the only source of truth.
         if (selectedRef.current === id) setError(loadErrorMessage(err));
       }
+    } else if (status === undefined) {
+      if (selectedRef.current === id) {
+        setError("امکان بررسی پیش‌پرواز صورتحساب وجود ندارد؛ وضعیت سامانه مودیان هنوز دریافت نشده است.");
+      }
     }
     try {
       const existing = await getMoadianSubmission(id);
