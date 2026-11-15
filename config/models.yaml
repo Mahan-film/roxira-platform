@@ -578,6 +578,10 @@ roles:
         catalogue_listed: false
         public_code_only: true
         note: Groq free tier, ~8k TPM per key, so it only takes small diff chunks (413 on big ones).
+        # max_chunk_chars (optional, review_desk only): the desk splits any diff chunk bigger than this
+        # before sending it to this model, so the 413 round trip is skipped. A 413 on a smaller chunk is
+        # still handled by splitting down to ~6k chars. 19k-char chunks worked on 2026-11-15, 50k-97k failed.
+        max_chunk_chars: 18000
       # extra_body is merged over the key_pool provider's extra_body. Without reasoning disabled,
       # DeepSeek spent all 6000 output tokens on reasoning and returned an empty answer (2026-11-13).
       - id: deepseek/deepseek-v4.1-flash

@@ -18,6 +18,10 @@ which scripts/dev/verify_agent_report.py and the hub's merge rule read. A PR is 
 
 Models: role `review_desk` in config/models.yaml (order = priority; direct provider APIs first, OpenRouter
 last). Base URLs and key slot NAMES: config/key_pool.yaml `providers:`. No model id lives in this file.
+Request size: when a provider answers 413 (or 400/429 saying the request is too large / over the token or
+context limit) the chunk is halved (file boundaries, else line boundaries) down to ~6k chars, the same
+provider reviews the parts and the sub-reviews are merged. An entry may carry `max_chunk_chars` in
+config/models.yaml so the desk pre-splits for that model. The posted desk notes say when this happened.
 Cross-family rule: an entry whose family (check_reviewer_family.family) matches any family of the PR's
 author is skipped (Claude-written PR -> never an Anthropic model).
 Network: provider APIs go through the HTTP proxy $REVIEW_DESK_PROXY (default http://127.0.0.1:10808;
@@ -548,6 +552,7 @@ def build_messages(
     *,
     lessons: str,
     nonce: str | None = None,
+    part: bool = False,
 ) -> list[dict[str, str]]:
     nonce = nonce or _secrets.token_hex(6)
     system = SYSTEM_PROMPT.replace("{nonce}", nonce).replace("{lessons}", lessons)
@@ -567,6 +572,12 @@ def build_messages(
     if total > 1:
         notes.append(
             f"This is chunk {idx} of {total}: other files of the PR are reviewed separately; do not report them as missing."
+        )
+    if part:
+        notes.append(
+            "The desk split this chunk because of the provider's request size limit: you see only one part "
+            "of it; the other parts (and the rest of a file marked 'continued') are reviewed separately, "
+            "so do not report them as missing."
         )
     if plan.summarised:
         notes.append("Summarised, not shown: " + "; ".join(plan.summarised[:30]))
@@ -620,6 +631,7 @@ def parse_review(text: str) -> Review:
     """Parse Blocker/Major/Minor bullets and the Verdict line. Raises ValueError when there is no verdict."""
     rev = Review()
     section: list[str] | None = None
+    seen: set[str] = set()
     for raw in strip_thinking(text).splitlines():
         line = raw.rstrip()
         v = VERDICT_RE.match(line)
@@ -630,6 +642,7 @@ def parse_review(text: str) -> Review:
         s = SECTION_RE.match(line)
         if s:
             key = s.group(1).lower().rstrip("s")
+            seen.add(key)
             section = {"blocker": rev.blocker, "major": rev.major, "minor": rev.minor}[key]
             continue
         if section is None or not line.strip() or NONE_RE.match(line):
@@ -638,6 +651,9 @@ def parse_review(text: str) -> Review:
             section.append(re.sub(r"^\s*[-*]\s+", "", line).strip())
         elif section:
             section[-1] += " " + line.strip()  # wrapped continuation of the previous bullet
+    if rev.verdict is None and seen == {"blocker", "major", "minor"}:
+        # complete answer that only lost its last line (gpt-oss does this): the sections decide
+        rev.verdict = "blocker" if rev.blocker else "no blocker"
     if rev.verdict is None:
         raise ValueError("no Verdict line")
     if rev.blocker:
@@ -675,6 +691,7 @@ def format_comment(
     *,
     author_fams: set[str],
     trail: list[str],
+    splits: list[str] | None = None,
 ) -> str:
     seen: list[str] = []
     for s in served:
@@ -704,6 +721,8 @@ def format_comment(
         lines.append("- truncated (start only): " + ", ".join(f"`{p}`" for p in plan.truncated))
     if plan.not_reviewed:
         lines.append("- NOT reviewed (size cap): " + ", ".join(f"`{p}`" for p in plan.not_reviewed))
+    if splits:
+        lines.append("- chunk split to fit the provider's request size limit: " + "; ".join(splits))
     lines.append("- providers tried: " + ", ".join(trail))
     lines.append("")
     lines.append(f"Verdict: {rev.verdict}")
@@ -729,7 +748,9 @@ def provider_keys(pcfg: dict) -> list[str]:
                 names = list(slots)
                 break
     present = [n for n in names if os.environ.get(n)]
-    for n in present:  # keys that come from the environment (GitHub Actions), not the file, are redacted too
+    for n in (
+        present
+    ):  # keys that come from the environment (GitHub Actions), not the file, are redacted too
         v = os.environ[n].strip()
         if len(v) >= 12:
             _SECRET_VALUES.add(v)
@@ -755,6 +776,14 @@ class Candidate:
     paid: bool
     price: tuple[float, float]
     extra: dict = field(default_factory=dict)  # entry-level extra_body from config/models.yaml
+    max_chunk_chars: int | None = (
+        None  # entry-level cap: the desk pre-splits bigger chunks for this model
+    )
+
+
+def _chunk_cap(raw: object) -> int | None:
+    """`max_chunk_chars` of a models.yaml entry: a positive int, anything else means no cap."""
+    return raw if isinstance(raw, int) and not isinstance(raw, bool) and raw > 0 else None
 
 
 def candidates(
@@ -782,12 +811,172 @@ def candidates(
                 paid=(p_in > 0 or p_out > 0),
                 price=(p_in, p_out),
                 extra=dict(e.get("extra_body") or {}),
+                max_chunk_chars=_chunk_cap(e.get("max_chunk_chars")),
             )
         )
     return kept, skipped
 
 
 RETRY_503_SLEEP = 10.0
+
+# ---- splitting a chunk the provider refuses as too large -------------------------------------------
+
+# A chunk at or below this is never split further. The prompt around a chunk (rules, PR body, file list) is
+# 10-17k chars on its own, so on Groq's 8k-token window even a 10k-char chunk can be refused (PR #796).
+MIN_SPLIT_CHARS = 6_000
+SPLIT_PAUSE = {
+    "groq": 6.0
+}  # seconds between sub-chunks of one provider (requests/tokens-per-minute limits)
+TOO_LARGE_RE = re.compile(
+    r"(?i)request too large|too large|context[ _]length|context_length_exceeded|maximum context"
+    r"|token limit|too many tokens|reduce the length|exceeds? the (?:limit|maximum)"
+)
+
+
+RETRY_HINT_RE = re.compile(r"(?i)try again in\s+(\d+(?:\.\d+)?)\s*s\b")
+# longer waits ("try again in 14m") are not worth blocking the desk: next provider
+MAX_RATE_WAIT = 60.0
+
+
+def retry_hint(body: str) -> float:
+    """Seconds a 429 body asks us to wait ("Please try again in 5.43s"); 0 when absent or above the cap."""
+    m = RETRY_HINT_RE.search(body or "")
+    wait = float(m.group(1)) if m else 0.0
+    return wait if 0 < wait <= MAX_RATE_WAIT else 0.0
+
+
+class TooLarge(llm_route.AttemptError):
+    """The provider refused the request because of its size (HTTP 413, or 400/429 saying so)."""
+
+
+def is_too_large(code: int, body: str) -> bool:
+    """HTTP 413 always; 400/429 only when the error body talks about size / token limit / context length."""
+    if code == 413:
+        return True
+    return code in (400, 429) and bool(TOO_LARGE_RE.search(body or ""))
+
+
+def chunk_size(chunk: list[str]) -> int:
+    return sum(len(b) for b in chunk) + 2 * max(len(chunk) - 1, 0)
+
+
+def split_chunk(chunk: list[str]) -> list[list[str]] | None:
+    """Halve a chunk on file boundaries; a single file block is halved on a line boundary (header repeated).
+    None when it cannot shrink (one block with fewer than two body lines)."""
+    if len(chunk) > 1:
+        best, best_gap, left = 1, None, 0
+        total = chunk_size(chunk)
+        for k in range(1, len(chunk)):
+            left += len(chunk[k - 1]) + 2
+            gap = abs(total - 2 * left)
+            if best_gap is None or gap < best_gap:
+                best, best_gap = k, gap
+        return [chunk[:best], chunk[best:]]
+    lines = chunk[0].splitlines()
+    header, body = lines[0], lines[1:]
+    if len(body) < 2:
+        return None
+    total, left, best, best_gap = sum(len(x) + 1 for x in body), 0, 1, None
+    for k in range(1, len(body)):
+        left += len(body[k - 1]) + 1
+        gap = abs(total - 2 * left)
+        if best_gap is None or gap < best_gap:
+            best, best_gap = k, gap
+    return [
+        ["\n".join([header, *body[:best]])],
+        ["\n".join([f"{header} [continued from the previous part]", *body[best:]])],
+    ]
+
+
+def render_review(rev: Review) -> str:
+    """Review -> the answer format parse_review reads (used for merged sub-reviews)."""
+    out: list[str] = []
+    for title, items in (("Blocker", rev.blocker), ("Major", rev.major), ("Minor", rev.minor)):
+        out.append(f"**{title}**")
+        out.extend(f"- {i}" for i in items) if items else out.append("- none")
+    out.append(f"Verdict: {rev.verdict or 'no blocker'}")
+    return "\n".join(out)
+
+
+def review_split(
+    chunk: list[str],
+    send: Callable[[list[str]], str],
+    *,
+    max_chars: int | None = None,
+    floor: int = MIN_SPLIT_CHARS,
+    pause: float = 0.0,
+    sleep: Callable[[float], None] = time.sleep,
+    parts: list[int] | None = None,
+) -> Review:
+    """Review one chunk through `send(chunk) -> answer text`. When the chunk is above `max_chars` (model cap)
+    or `send` raises TooLarge, halve it (split_chunk), review the halves (same provider, `pause` seconds apart)
+    and merge them. A chunk at or below `floor` is never split on TooLarge: the error propagates. `parts`
+    (optional) receives the number of leaf requests sent."""
+    sub = split_chunk(chunk) if max_chars and chunk_size(chunk) > max_chars else None
+    if sub is None:
+        try:
+            rev = parse_review(send(chunk))
+        except TooLarge:
+            sub = split_chunk(chunk) if chunk_size(chunk) > floor else None
+            if sub is None:
+                raise
+        else:
+            if parts is not None:
+                parts.append(1)
+            return rev
+    reviews: list[Review] = []
+    for n, piece in enumerate(sub):
+        if n and pause > 0:
+            sleep(pause)
+        reviews.append(
+            review_split(
+                piece, send, max_chars=max_chars, floor=floor, pause=pause, sleep=sleep, parts=parts
+            )
+        )
+    return merge_reviews(reviews)
+
+
+def with_split(
+    att: llm_route.Attempt,
+    c: Candidate,
+    chunk: list[str],
+    build: Callable[[list[str], bool], list[dict[str, str]]],
+    splits: dict[str, int],
+    *,
+    sleep: Callable[[float], None] = time.sleep,
+) -> llm_route.Attempt:
+    """Wrap an attempt so that it reviews `chunk` itself and splits it when the provider says too large.
+    `build(chunk, is_part)` makes the messages; `splits[attempt name]` = leaf count when it had to split."""
+
+    def call(messages: list[dict[str, str]], max_tokens: int) -> tuple[str, int, int]:
+        tok = [0, 0]
+        texts: list[str] = []
+        leaves: list[int] = []
+
+        def send(sub: list[str]) -> str:
+            is_part = sub is not chunk
+            text, tin, tout = att.call(messages if not is_part else build(sub, True), max_tokens)
+            tok[0] += tin
+            tok[1] += tout
+            texts.append(text)
+            return text
+
+        rev = review_split(
+            chunk,
+            send,
+            max_chars=c.max_chunk_chars,
+            pause=SPLIT_PAUSE.get(c.provider.split("-")[0], 0.0),
+            sleep=sleep,
+            parts=leaves,
+        )
+        if len(leaves) > 1:
+            splits[att.name] = len(leaves)
+            return render_review(rev), tok[0], tok[1]
+        return texts[-1], tok[0], tok[1]
+
+    return llm_route.Attempt(
+        att.name, att.role, att.paid, call, att.price_per_1m, public_only=att.public_only
+    )
 
 
 def _dump_bad_answer(c: Candidate, text: str) -> None:
@@ -823,9 +1012,13 @@ def make_attempt(
         }
         last = "error"
         t0 = time.time()
-        for round_no in range(2):  # a second round only after every key said 503 (model overloaded)
+        rate_wait = 0.0
+        # a second round only after every key said 503 (model overloaded), or 429 with a short
+        # "try again in Ns" hint (per-minute token window of a free tier)
+        for round_no in range(2):
             if round_no:
-                time.sleep(RETRY_503_SLEEP)
+                time.sleep(RETRY_503_SLEEP if last == "http503" else rate_wait + 0.5)
+            rate_wait = 0.0
             for key_name in keys:
                 req = urllib.request.Request(
                     base + "/chat/completions",
@@ -841,6 +1034,15 @@ def make_attempt(
                         text, tin, tout = llm_route._parse_openai(r.read())
                 except urllib.error.HTTPError as e:
                     last = f"http{e.code}"
+                    if e.code in (400, 413, 429):
+                        try:
+                            err_body = e.read(4000).decode("utf-8", "replace")
+                        except (OSError, ValueError):
+                            err_body = ""
+                        if is_too_large(e.code, err_body):
+                            raise TooLarge(last) from None  # same key would answer the same: split
+                        if e.code == 429:
+                            rate_wait = max(rate_wait, retry_hint(err_body))
                     if e.code in (401, 402, 403, 429, 500, 502, 503, 529):
                         continue  # rotate to the next key slot
                     raise llm_route.AttemptError(last) from None
@@ -855,7 +1057,7 @@ def make_attempt(
                 ms = int((time.time() - t0) * 1000)
                 served_log.append(Served(c.model, c.provider, c.family, ms))
                 return text, tin, tout
-            if last != "http503":
+            if last != "http503" and not (last == "http429" and rate_wait):
                 break
         raise llm_route.AttemptError(last)
 
@@ -911,20 +1113,46 @@ def review_pr(
     reviews: list[Review] = []
     served: list[Served] = []
     trail: list[str] = list(skipped)
+    split_notes: list[str] = []
     for i, chunk in enumerate(plan.chunks, 1):
         served_log: list[Served] = []
-        attempts = [make_attempt(c, pool, opener, served_log, timeout=timeout) for c in cands]
-        msgs = build_messages(pr, chunk, i, len(plan.chunks), plan, lessons=lessons)
+        splits: dict[str, int] = {}
+
+        def build(sub: list[str], is_part: bool, i: int = i) -> list[dict[str, str]]:
+            return build_messages(pr, sub, i, len(plan.chunks), plan, lessons=lessons, part=is_part)
+
+        attempts = [
+            with_split(
+                make_attempt(c, pool, opener, served_log, timeout=timeout), c, chunk, build, splits
+            )
+            for c in cands
+        ]
+        msgs = build(chunk, False)
         size = sum(len(m["content"]) for m in msgs)
         try:
             res = llm_route.route(TASK, msgs, attempts, max_tokens=max_tokens, public=True)
         except (llm_route.AllAttemptsFailed, llm_route.CapReached) as exc:
             log(f"PR #{n} chunk {i}/{len(plan.chunks)}: {redact(str(exc))}", file=sys.stderr)
             return Outcome(n, "failed:all providers failed")
-        s = served_log[-1]
+        s = Served(
+            served_log[-1].model,
+            served_log[-1].provider,
+            served_log[-1].family,
+            sum(  # every sub-request of a split chunk (parts a failed earlier candidate served do not count)
+                x.ms
+                for x in served_log
+                if (x.model, x.provider) == (served_log[-1].model, served_log[-1].provider)
+            ),
+        )
+        if res.served in splits:
+            split_notes.append(
+                f"chunk {i}/{len(plan.chunks)} ({chunk_size(chunk)} chars) sent as "
+                f"{splits[res.served]} parts to {res.served}"
+            )
         log(
             f"PR #{n} chunk {i}/{len(plan.chunks)} ({size} chars): {res.served} in {s.ms} ms; "
-            f"trail {', '.join(f'{a}={b}' for a, b in res.attempts)}",
+            f"trail {', '.join(f'{a}={b}' for a, b in res.attempts)}"
+            + (f"; split into {splits[res.served]} parts" if res.served in splits else ""),
             file=sys.stderr,
         )
         trail.extend(f"{a}={b}" for a, b in res.attempts if b != "ok")
@@ -932,7 +1160,9 @@ def review_pr(
         served.append(s)
         reviews.append(parse_review(res.text))
     rev = merge_reviews(reviews)
-    comment = format_comment(head, served, rev, plan, author_fams=fams, trail=trail)
+    comment = format_comment(
+        head, served, rev, plan, author_fams=fams, trail=trail, splits=split_notes
+    )
     if dry_run:
         return Outcome(n, "dry-run", rev.verdict, comment, served)
     now_head = json.loads(gh(["pr", "view", str(n), "--json", "headRefOid"]))["headRefOid"]

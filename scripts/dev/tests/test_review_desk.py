@@ -252,22 +252,28 @@ def test_format_comment_shape():
 
 
 def test_redact_patterns_and_loaded_values(tmp_path, monkeypatch):
-    fake_val = "zz-test-" + "value-" + "0123456789" + "abcdef"  # built at runtime: no scannable literal
+    fake_val = (
+        "zz-test-" + "value-" + "0123456789" + "abcdef"
+    )  # built at runtime: no scannable literal
     fake_hex = "abcdef" + "0123456789" + "abcdef01"
     env = tmp_path / "x.env"
-    env.write_text(
-        "FAKE_DESK_TEST_KEY=" + fake_val + "\nSHORT=abc\n", encoding="utf-8"
-    )
+    env.write_text("FAKE_DESK_TEST_KEY=" + fake_val + "\nSHORT=abc\n", encoding="utf-8")
     monkeypatch.delenv("FAKE_DESK_TEST_KEY", raising=False)
     assert rd.load_env_file(str(env)) == 2
     text = (
-        "value " + fake_val + " and sk-or-" + "v1-"
+        "value "
+        + fake_val
+        + " and sk-or-"
+        + "v1-"
         + "a" * 40
         + " and AIza"
         + "B" * 35
         + " and gsk_"
         + "c" * 30
-        + " and API_" + "KEY=" + fake_hex + " and tokenizer = someFunctionName"
+        + " and API_"
+        + "KEY="
+        + fake_hex
+        + " and tokenizer = someFunctionName"
     )
     out = rd.redact(text)
     assert (
@@ -307,3 +313,186 @@ def test_env_only_keys_are_redacted(monkeypatch):
 
 def test_prompt_forbids_version_claims_from_memory():
     assert "does not exist" in rd.SYSTEM_PROMPT and "from memory" in rd.SYSTEM_PROMPT
+
+
+# ---- too-large requests: splitting a chunk ----------------------------------------------------------
+
+
+def _block(path, rows, width=40):
+    return "\n".join(
+        [f"### FILE {path}  (+{rows} -0)"] + [f"{i:>5} +" + "x" * width for i in range(rows)]
+    )
+
+
+def _answer(finding=None):
+    body = f"- {finding}" if finding else "- none"
+    return f"**Blocker**\n- none\n**Major**\n{body}\n**Minor**\n- none\nVerdict: no blocker"
+
+
+def test_is_too_large_codes_and_bodies():
+    assert rd.is_too_large(413, "")
+    assert rd.is_too_large(400, '{"error":{"message":"Request too large for model"}}')
+    assert rd.is_too_large(429, "maximum context length is 8192 tokens")
+    assert rd.is_too_large(400, "token limit exceeded")
+    assert not rd.is_too_large(429, "rate limit reached, retry in 5s")
+    assert not rd.is_too_large(400, "invalid model")
+    assert not rd.is_too_large(500, "request too large")
+
+
+def test_split_chunk_on_file_boundaries_balanced():
+    chunk = [_block("a.py", 10), _block("b.py", 10), _block("c.py", 10), _block("d.py", 10)]
+    left, right = rd.split_chunk(chunk)
+    assert left + right == chunk and len(left) == 2 and len(right) == 2
+
+
+def test_split_chunk_single_file_on_line_boundary():
+    block = _block("big.py", 100)
+    left, right = rd.split_chunk([block])
+    (lt,), (rt,) = left, right
+    assert lt.startswith("### FILE big.py") and rt.startswith("### FILE big.py")
+    assert "[continued" in rt.splitlines()[0]
+    # nothing lost, nothing duplicated: body lines of both halves are the original body
+    assert lt.splitlines()[1:] + rt.splitlines()[1:] == block.splitlines()[1:]
+    assert rd.chunk_size(left) < len(block) and rd.chunk_size(right) < len(block)
+    assert rd.split_chunk([_block("tiny.py", 1)]) is None  # one body line cannot shrink
+
+
+def test_review_split_no_split_when_it_fits():
+    calls = []
+
+    def send(chunk):
+        calls.append(chunk)
+        return _answer()
+
+    parts = []
+    rev = rd.review_split([_block("a.py", 5)], send, parts=parts)
+    assert len(calls) == 1 and parts == [1] and rev.verdict == "no blocker"
+
+
+def test_review_split_halves_on_413_and_merges():
+    big = [_block("a.py", 200), _block("b.py", 200)]  # ~18k chars
+    assert rd.chunk_size(big) > rd.MIN_SPLIT_CHARS
+    sizes, slept = [], []
+
+    def send(chunk):
+        sizes.append(rd.chunk_size(chunk))
+        if rd.chunk_size(chunk) > 10_000:
+            raise rd.TooLarge("http413")
+        path = chunk[0].splitlines()[0].split()[2]
+        return _answer(f"`{path}:1` — bug in {path}")
+
+    parts = []
+    rev = rd.review_split(big, send, pause=2.5, sleep=slept.append, parts=parts)
+    assert sizes[0] == rd.chunk_size(big) and len(sizes) == 3 and parts == [1, 1]
+    assert [m.split("`")[1] for m in rev.major] == ["a.py:1", "b.py:1"]
+    assert slept == [2.5]  # one pause between the two sub-chunks, none before the first
+
+
+def test_review_split_recurses_to_floor_then_gives_up():
+    chunk = [_block("a.py", 600)]  # ~27k chars, single file
+    sizes = []
+
+    def send(c):
+        sizes.append(rd.chunk_size(c))
+        raise rd.TooLarge("http413")
+
+    with pytest.raises(rd.TooLarge):
+        rd.review_split(chunk, send, sleep=lambda s: None)
+    assert min(sizes) <= rd.MIN_SPLIT_CHARS  # reached the floor ...
+    last_split_parent = [s for s in sizes if s > rd.MIN_SPLIT_CHARS]
+    assert last_split_parent and len(sizes) < 20  # ... and stopped there, no endless retries
+
+
+def test_review_split_other_errors_are_not_split():
+    def send(chunk):
+        raise rd.llm_route.AttemptError("http402")
+
+    with pytest.raises(rd.llm_route.AttemptError) as ei:
+        rd.review_split([_block("a.py", 400)], send)
+    assert ei.value.kind == "http402" and not isinstance(ei.value, rd.TooLarge)
+
+
+def test_review_split_presplit_by_max_chars_skips_the_413_round_trip():
+    chunk = [_block("a.py", 100), _block("b.py", 100), _block("c.py", 100), _block("d.py", 100)]
+    seen = []
+
+    def send(c):
+        seen.append(rd.chunk_size(c))
+        return _answer()
+
+    rd.review_split(chunk, send, max_chars=9_000)
+    assert len(seen) == 4 and max(seen) <= 9_000 and rd.chunk_size(chunk) > 9_000
+
+
+def test_with_split_wraps_an_attempt_and_reports_parts():
+    cand = rd.Candidate("m", "groq", "openai", False, (0.0, 0.0), max_chunk_chars=None)
+    chunk = [_block("a.py", 200), _block("b.py", 200)]
+    sent = []
+
+    def raw(messages, max_tokens):
+        sent.append(messages)
+        if len(messages[1]["content"]) > 12_000:
+            raise rd.TooLarge("http413")
+        return _answer("`x.py:1` — one"), 10, 5
+
+    att = rd.llm_route.Attempt("groq/m", "review_desk", False, raw, public_only=True)
+
+    def build(sub, is_part):
+        return [
+            {"role": "system", "content": "s"},
+            {"role": "user", "content": "\n".join(sub) + ("P" if is_part else "")},
+        ]
+
+    splits = {}
+    wrapped = rd.with_split(att, cand, chunk, build, splits, sleep=lambda s: None)
+    text, tin, tout = wrapped.call(build(chunk, False), 100)
+    assert splits == {"groq/m": 2} and (tin, tout) == (20, 10)
+    assert rd.parse_review(text).major == ["`x.py:1` — one"]  # merged and de-duplicated
+    assert sent[1][1]["content"].endswith("P")  # parts are built with is_part=True
+    # the pause table is keyed by provider family name
+    assert rd.SPLIT_PAUSE["groq"] > 0
+
+
+def test_candidate_reads_max_chunk_chars_from_the_registry():
+    kept, _ = rd.candidates(set())
+    by_provider = {c.provider: c for c in kept}
+    assert by_provider["groq"].max_chunk_chars == 18000
+    assert by_provider["gemini"].max_chunk_chars is None
+    assert rd._chunk_cap(0) is None and rd._chunk_cap("9") is None and rd._chunk_cap(True) is None
+
+
+def test_format_comment_notes_a_split():
+    out = rd.format_comment(
+        HEAD,
+        [rd.Served("m", "groq", "openai", 5)],
+        rd.Review(verdict="no blocker"),
+        rd.DiffPlan(chunks=[["x"]]),
+        author_fams=set(),
+        trail=["groq/m=ok(1.0s)"],
+        splits=["chunk 1/1 (50000 chars) sent as 3 parts to groq/m"],
+    )
+    assert "chunk split to fit the provider's request size limit: chunk 1/1" in out
+    assert "split" not in rd.format_comment(
+        HEAD,
+        [rd.Served("m", "groq", "openai", 5)],
+        rd.Review(verdict="no blocker"),
+        rd.DiffPlan(chunks=[["x"]]),
+        author_fams=set(),
+        trail=["t"],
+    )
+
+
+def test_retry_hint_reads_short_waits_only():
+    assert rd.retry_hint("TPM: Limit 8000. Please try again in 5.43s. Need more") == 5.43
+    assert rd.retry_hint("try again in 14m2s") == 0.0
+    assert rd.retry_hint("try again in 95s") == 0.0 and rd.retry_hint("") == 0.0
+
+
+def test_verdict_inferred_only_from_a_complete_answer():
+    full = "**Blocker**\n- none\n\n**Major**\n- `a.ts:1` - bug\n\n**Minor**\n- none"
+    assert rd.parse_review(full).verdict == "no blocker"
+    assert (
+        rd.parse_review(full.replace("- none", "- `b.ts:2` - loses money", 1)).verdict == "blocker"
+    )
+    with pytest.raises(ValueError):
+        rd.parse_review("**Blocker**\n- none\n**Major**\n- none")
