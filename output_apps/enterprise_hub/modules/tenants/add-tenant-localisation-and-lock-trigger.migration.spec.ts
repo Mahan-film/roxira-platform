@@ -1,4 +1,4 @@
-import { AddTenantLocalisationAndLockTrigger1789900005500 } from './1789900005500-AddTenantLocalisationAndLockTrigger';
+import { AddTenantLocalisationAndLockTrigger1789900005500 } from '../../migrations/1789900005500-AddTenantLocalisationAndLockTrigger';
 
 const createRunner = () => {
   const queries: string[] = [];
