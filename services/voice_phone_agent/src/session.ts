@@ -5,14 +5,23 @@ import {
   AudioStream, LocalAudioTrack, Room, RoomEvent, TrackKind, TrackPublishOptions, TrackSource,
   type RemoteParticipant, type RemoteTrack, type RemoteTrackPublication,
 } from '@livekit/rtc-node';
-import { IN_RATE } from './audio.js';
+import { IN_RATE, concat, wav } from './audio.js';
 import { JudgeError, askJudge, type Turn } from './brain.js';
 import { cfg } from './config.js';
 import { logger, type Log } from './log.js';
 import { Player } from './player.js';
-import { transcribe } from './stt.js';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { transcribeDetailed } from './stt.js';
 import { synthesizeStream } from './tts.js';
+import { looksIncomplete } from './turn.js';
 import { EnergyVad } from './vad.js';
+
+const sleep = (ms: number, signal: AbortSignal) => new Promise<void>((resolve) => {
+  if (signal.aborted) return resolve();
+  const t = setTimeout(resolve, ms);
+  signal.addEventListener('abort', () => { clearTimeout(t); resolve(); }, { once: true });
+});
 
 /** One sentence being synthesized: buffers PCM until it is its turn to play, then streams it live. */
 class StreamedClip {
@@ -41,6 +50,15 @@ export class CallSession {
   private history: Turn[] = [];
   private turnCtl: AbortController | null = null;
   private turnBusy = false;
+  /**
+   * Caller audio of the turn not answered yet. A new utterance that arrives before the answer
+   * starts playing is the caller continuing the same thought: it is appended and the whole turn
+   * is transcribed again, instead of answering half a sentence.
+   */
+  private pending: Int16Array[] = [];
+  private pendingMs = 0;
+  private callerId = '';
+  private turnNo = 0;
   private lastActivity = Date.now();
   private timers: NodeJS.Timeout[] = [];
   private listening = false;
@@ -101,6 +119,7 @@ export class CallSession {
   private listen(track: RemoteTrack) {
     if (this.listening || this.busyOnly) return;
     this.listening = true;
+    this.callerId = [...this.room.remoteParticipants.keys()].find((k) => k.startsWith(cfg.sipIdentityPrefix)) ?? '';
     this.log.info('listening to caller audio');
     const stream = new AudioStream(track, { sampleRate: IN_RATE, numChannels: 1, frameSizeMs: 20 });
     const vad = new EnergyVad({
@@ -114,7 +133,9 @@ export class CallSession {
       },
       onUtterance: (pcm, ms) => {
         this.lastActivity = Date.now();
-        void this.handleTurn(pcm, ms);
+        this.pending.push(pcm);
+        this.pendingMs += ms;
+        void this.handleTurn();
       },
     });
     void (async () => {
@@ -129,27 +150,52 @@ export class CallSession {
     })();
   }
 
-  private async handleTurn(pcm: Int16Array, voicedMs: number) {
+  private clearPending() {
+    this.pending = [];
+    this.pendingMs = 0;
+  }
+
+  /** Ask the caller to say it again (unclear audio). Pure noise blips are dropped silently. */
+  private askRepeat(m: Record<string, number>, why: string) {
+    const ms = this.pendingMs;
+    this.clearPending();
+    if (ms < 800) { this.log.info(`${why}; ignored (short)`, m); return; }
+    this.player.interrupt();
+    this.player.enqueue(this.prompts.repeat);
+    this.log.info(`${why}; asked to repeat`, m);
+  }
+
+  private async handleTurn() {
     this.turnCtl?.abort();
     const ctl = new AbortController();
     this.turnCtl = ctl;
     this.turnBusy = true;
     const t0 = Date.now();
-    const m: Record<string, number> = { speech_ms: Math.round(voicedMs) };
-    // latency masking: filler plays while STT + Smart Judge work
-    this.player.interrupt();
-    this.player.enqueue(this.prompts.filler);
+    const pcm = concat(this.pending);
+    const m: Record<string, number> = { speech_ms: Math.round(this.pendingMs), segments: this.pending.length };
+    let fillerTimer: NodeJS.Timeout | undefined;
     try {
-      const text = await transcribe(pcm, ctl.signal);
+      const tr = await transcribeDetailed(pcm, ctl.signal);
       m.stt_ms = Date.now() - t0;
-      if (ctl.signal.aborted) return;
-      if (!text) {
-        this.player.interrupt();
-        this.player.enqueue(this.prompts.repeat);
-        this.log.info('empty transcript', m);
-        return;
+      if (ctl.signal.aborted) return; // caller went on talking: the next utterance merges with this one
+      if (tr.logprob !== null) m.logprob = Math.round(tr.logprob * 100) / 100;
+      this.record(pcm, tr.text, tr.logprob);
+      if (!tr.text) return this.askRepeat(m, 'empty transcript');
+      if (tr.logprob !== null && tr.logprob < cfg.sttMinLogprob) {
+        // a garbled transcript sent to the brain gets a confident answer to the wrong question
+        return this.askRepeat(m, `low-confidence transcript "${tr.text.slice(0, 80)}"`);
       }
-      this.log.info('caller:', text);
+      if (looksIncomplete(tr.text)) {
+        m.hold_ms = cfg.turnHoldMs;
+        await sleep(cfg.turnHoldMs, ctl.signal);
+        if (ctl.signal.aborted) return; // the caller continued: merged into the next turn
+      }
+      const text = tr.text;
+      this.log.info('caller:', text, tr.provider.startsWith('smartjudge-fallback') ? `[${tr.provider}]` : '');
+      // "one moment" only when the answer is slow; never on top of a caller who just paused
+      fillerTimer = setTimeout(() => {
+        if (!ctl.signal.aborted && !m.first_audio_ms) this.player.enqueue(this.prompts.filler);
+      }, cfg.fillerDelayMs);
 
       let answer = '';
       let chain: Promise<void> = Promise.resolve();
@@ -164,7 +210,11 @@ export class CallSession {
           if (ctl.signal.aborted) return;
           clip.attach((pcm) => {
             if (ctl.signal.aborted) return;
-            if (!m.first_audio_ms) m.first_audio_ms = Date.now() - t0;
+            if (!m.first_audio_ms) {
+              m.first_audio_ms = Date.now() - t0;
+              clearTimeout(fillerTimer);
+              this.clearPending(); // the answer is audible now: later speech is a new turn
+            }
             this.player.enqueue(pcm);
           });
           try {
@@ -176,6 +226,7 @@ export class CallSession {
       }
       await chain;
       if (ctl.signal.aborted) return;
+      this.clearPending();
       m.total_ms = Date.now() - t0;
       this.log.info('agent:', answer.trim().slice(0, 300), m);
       this.history.push({ role: 'user', content: text }, { role: 'assistant', content: answer.trim() });
@@ -184,10 +235,31 @@ export class CallSession {
       if (ctl.signal.aborted) return;
       const err = e as Error;
       this.log.error('turn failed:', err instanceof JudgeError ? `judge ${err.status} ${err.message}` : err.message, m);
+      this.clearPending();
       this.player.interrupt();
       this.player.enqueue(this.prompts.error);
     } finally {
+      clearTimeout(fillerTimer);
       if (this.turnCtl === ctl) { this.turnBusy = false; this.lastActivity = Date.now(); }
+    }
+  }
+
+  /** Testing aid, off unless DEBUG_RECORD_CALLERS lists this caller: turn audio + transcript, kept 48 h. */
+  private record(pcm: Int16Array, text: string, logprob: number | null) {
+    if (!this.callerId || !cfg.debugRecordCallers.includes(this.callerId)) return;
+    try {
+      const dir = cfg.debugRecordDir;
+      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+      const base = path.join(dir, `${new Date().toISOString().replace(/[:.]/g, '-')}-t${++this.turnNo}`);
+      fs.writeFileSync(`${base}.wav`, wav(pcm, IN_RATE), { mode: 0o600 });
+      fs.writeFileSync(`${base}.json`, JSON.stringify({ room: this.roomName, text, logprob }), { mode: 0o600 });
+      const cutoff = Date.now() - 48 * 3600_000;
+      for (const f of fs.readdirSync(dir)) {
+        const p = path.join(dir, f);
+        if (fs.statSync(p).mtimeMs < cutoff) fs.unlinkSync(p);
+      }
+    } catch (e) {
+      this.log.warn('debug record failed:', (e as Error).message);
     }
   }
 
