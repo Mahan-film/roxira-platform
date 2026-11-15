@@ -287,16 +287,17 @@ export class SepidarChequeDto {
   State: 'in_hand' | 'deposited' | 'spent' | 'delivered' | 'cleared' | 'bounced' | 'returned';
 
   @ApiProperty({
+    type: String,
     description:
       'Whole IRR integer amount string (max 15 digits to fit numeric(18,2) after x100 minor conversion)',
   })
   @Transform(({ value }) =>
-    value === null || value === undefined ? value : String(value).trim(),
+    typeof value === 'string' ? value.trim() : value,
   )
   @IsString()
   @MaxLength(16)
   @Matches(/^\d+$/, { message: 'Amount must be a non-negative integer Rial string' })
-  Amount: string | number;
+  Amount: string;
 
   @ApiProperty()
   @IsString()

@@ -81,7 +81,9 @@ export interface SepidarPersistenceCertificate {
     openingVoucherCreated: boolean;
     chequesInserted: number;
     chequesSkipped: number;
+    closedSkipped: number;
   };
+  closedSkipped: number;
 }
 
 export type SepidarImportAccountInput = SepidarRawAccount & {
@@ -295,6 +297,7 @@ export class SepidarPersistenceService {
     let totalOpeningDebitMinor = 0n;
     let totalOpeningCreditMinor = 0n;
     let validCheques: MappedRoxiraCheque[];
+    let closedSkipped = 0;
 
     try {
       const baseTypeMap = isSynthetic
@@ -330,6 +333,7 @@ export class SepidarPersistenceService {
         });
       }
 
+      closedSkipped = 0;
       const openRawChequeInputs: SepidarRawCheque[] = [];
       const openRawCheques: Array<{
         chequeNumber: string;
@@ -339,7 +343,10 @@ export class SepidarPersistenceService {
       for (const rawChq of rawCheques) {
         const isClosed =
           rawChq.State === 'cleared' || rawChq.State === 'returned' || rawChq.State === 'bounced';
-        if (isClosed) continue;
+        if (isClosed) {
+          closedSkipped++;
+          continue;
+        }
         const amountMinor = parseSepidarRialToMinor(rawChq.Amount, 'Amount', rawChq.ChequeId);
         if (amountMinor <= 0n) {
           throw new BadRequestException(
@@ -603,6 +610,7 @@ export class SepidarPersistenceService {
           openingVoucherCreated: voucherResult.created,
           chequesInserted: chequeResult.inserted,
           chequesSkipped: chequeResult.skipped,
+          closedSkipped,
         },
         em,
       );
@@ -1259,6 +1267,7 @@ export class SepidarPersistenceService {
       },
       canonicalSha256,
       idempotencySummary,
+      closedSkipped: idempotencySummary.closedSkipped,
     };
   }
 

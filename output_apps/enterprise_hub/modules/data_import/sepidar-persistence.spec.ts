@@ -432,7 +432,7 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
         ChequeNumber: 'SERIAL-99',
         SayadNumber: '1234567890123456',
         BankName: 'بانک ملت',
-        Amount: 10_000_000,
+        Amount: '10000000',
       };
       const chq2DifferentSayadSameBank = {
         ...SYNTHETIC_SEPIDAR_CHEQUES[0],
@@ -440,7 +440,7 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
         ChequeNumber: 'SERIAL-99',
         SayadNumber: '6543210987654321',
         BankName: 'بانک ملت',
-        Amount: 20_000_000,
+        Amount: '20000000',
       };
       const duplicateOfChq1 = { ...chq1 };
 
@@ -471,7 +471,7 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
         ChequeNumber: 'SERIAL-WS',
         SayadNumber: '9999888877776666',
         BankName: '  بانک صادرات  ',
-        Amount: 5_000_000,
+        Amount: '5000000',
       };
       const res = await service.persistSepidarData(tenantId, { cheques: [chq] });
       expect(res.counts.cheques).toBe(1);
@@ -761,7 +761,7 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
           ChequeId: 101,
           ChequeNumber: 'CHQ-OPEN-1',
           Direction: 'received',
-          Amount: 10_000_000,
+          Amount: '10000000',
           IssueDate: '2026-03-20',
           DueDate: '2026-04-20',
           PartyName: 'شرکت آریا',
@@ -774,7 +774,7 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
           ChequeId: 102,
           ChequeNumber: 'CHQ-CLOSED-1',
           Direction: 'received',
-          Amount: 20_000_000,
+          Amount: '20000000',
           IssueDate: '2026-03-20',
           DueDate: '2026-04-20',
           PartyName: 'شرکت آریا',
@@ -791,6 +791,8 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
 
       expect(cert.counts.cheques).toBe(1);
       expect(cert.idempotencySummary.chequesInserted).toBe(1);
+      expect(cert.closedSkipped).toBe(1);
+      expect(cert.idempotencySummary.closedSkipped).toBe(1);
       expect(chequesStore).toHaveLength(1);
       expect(chequesStore[0].chequeNumber).toBe('CHQ-OPEN-1');
     });
@@ -800,7 +802,7 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
         ChequeId: 201,
         ChequeNumber: 'CHQ-DESC-1',
         Direction: 'received',
-        Amount: 5_000_000,
+        Amount: '5000000',
         IssueDate: '2026-03-20',
         DueDate: '2026-04-20',
         PartyName: 'شرکت پارس',

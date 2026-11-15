@@ -228,7 +228,7 @@ describe('DataImportController (access control)', () => {
   describe('POST /enterprise-hub/data-import/sepidar/persist', () => {
     const sepidarUrl = '/enterprise-hub/data-import/sepidar/persist';
     const validSepidarBody = {
-      accounts: [{ AccountID: 1, Code: '1', Title: 'دارایی', Level: 1, ParentAccountID: null }],
+      accounts: [{ AccountID: 1, Code: '1010', Title: 'موجودی نقد', Level: 1, ParentAccountID: null }],
     };
 
     it('rejects unauthenticated requests with 401', async () => {
@@ -308,6 +308,37 @@ describe('DataImportController (access control)', () => {
         )
         .send(validSepidarBody)
         .expect(403);
+    });
+
+    it('rejects cheque payload with number Amount (must be integer Rial string) with 400', async () => {
+      await request(app.getHttpServer())
+        .post(sepidarUrl)
+        .set(
+          'Authorization',
+          `Bearer ${token({
+            role: UserRole.USER,
+            tenantId: 'tenant-1',
+            tenantRole: TenantRole.OWNER,
+          })}`,
+        )
+        .send({
+          cheques: [
+            {
+              ChequeId: 1,
+              ChequeNumber: 'CHQ-1',
+              SayadNumber: '1234567890123456',
+              Direction: 'received',
+              State: 'in_hand',
+              Amount: 150000000,
+              IssueDate: '2026-10-01',
+              DueDate: '2026-11-01',
+              PartyCode: 'P-1',
+              PartyName: 'طرف حساب',
+              BankName: 'بانک ملت',
+            },
+          ],
+        })
+        .expect(400);
     });
   });
 });

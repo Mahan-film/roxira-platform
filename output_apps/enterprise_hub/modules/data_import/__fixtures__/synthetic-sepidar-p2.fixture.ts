@@ -9,7 +9,7 @@ export interface SepidarRawCheque {
   SayadNumber: string;
   Direction: 'received' | 'issued';
   State: 'in_hand' | 'deposited' | 'spent' | 'delivered' | 'cleared' | 'bounced' | 'returned';
-  Amount: number | string; // in IRR
+  Amount: string; // in IRR (whole integer string)
   IssueDate: string; // YYYY-MM-DD
   DueDate: string; // YYYY-MM-DD
   PartyCode: string;
@@ -53,7 +53,7 @@ export const SYNTHETIC_SEPIDAR_CHEQUES: SepidarRawCheque[] = [
     SayadNumber: '1234567890123456',
     Direction: 'received',
     State: 'in_hand',
-    Amount: 150000000, // 150,000,000 IRR
+    Amount: '150000000', // 150,000,000 IRR
     IssueDate: '2026-09-15',
     DueDate: '2026-11-25',
     PartyCode: 'CUST-001',
@@ -70,7 +70,7 @@ export const SYNTHETIC_SEPIDAR_CHEQUES: SepidarRawCheque[] = [
     SayadNumber: '2345678901234567',
     Direction: 'received',
     State: 'deposited',
-    Amount: 280000000, // 280,000,000 IRR
+    Amount: '280000000', // 280,000,000 IRR
     IssueDate: '2026-10-01',
     DueDate: '2026-12-10',
     PartyCode: 'CUST-002',
@@ -88,7 +88,7 @@ export const SYNTHETIC_SEPIDAR_CHEQUES: SepidarRawCheque[] = [
     SayadNumber: '3456789012345678',
     Direction: 'received',
     State: 'spent',
-    Amount: 95000000, // 95,000,000 IRR
+    Amount: '95000000', // 95,000,000 IRR
     IssueDate: '2026-10-10',
     DueDate: '2026-11-30',
     PartyCode: 'CUST-003',
@@ -106,7 +106,7 @@ export const SYNTHETIC_SEPIDAR_CHEQUES: SepidarRawCheque[] = [
     SayadNumber: '4567890123456789',
     Direction: 'issued',
     State: 'in_hand',
-    Amount: 320000000, // 320,000,000 IRR
+    Amount: '320000000', // 320,000,000 IRR
     IssueDate: '2026-10-20',
     DueDate: '2026-12-25',
     PartyCode: 'SUPP-002',
@@ -122,7 +122,7 @@ export const SYNTHETIC_SEPIDAR_CHEQUES: SepidarRawCheque[] = [
     SayadNumber: '5678901234567890',
     Direction: 'issued',
     State: 'delivered',
-    Amount: 110000000, // 110,000,000 IRR
+    Amount: '110000000', // 110,000,000 IRR
     IssueDate: '2026-11-01',
     DueDate: '2026-12-05',
     PartyCode: 'SUPP-003',
@@ -138,7 +138,7 @@ export const SYNTHETIC_SEPIDAR_CHEQUES: SepidarRawCheque[] = [
     SayadNumber: '6789012345678901',
     Direction: 'received',
     State: 'cleared',
-    Amount: 50000000,
+    Amount: '50000000',
     IssueDate: '2026-08-01',
     DueDate: '2026-09-01',
     PartyCode: 'CUST-001',
@@ -152,7 +152,7 @@ export const SYNTHETIC_SEPIDAR_CHEQUES: SepidarRawCheque[] = [
     SayadNumber: '7890123456789012',
     Direction: 'received',
     State: 'bounced',
-    Amount: 40000000,
+    Amount: '40000000',
     IssueDate: '2026-08-15',
     DueDate: '2026-09-15',
     PartyCode: 'CUST-002',
