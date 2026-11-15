@@ -7,7 +7,7 @@ import { Search, X, type LucideIcon } from "lucide-react";
 import { useAccess } from "@/components/app/access-provider";
 import { useImportHandoff } from "@/components/app/import-handoff";
 import { navIcon } from "@/components/app/nav-icons";
-import { QUICK_CREATE, visibleGroups } from "@/lib/nav-menu";
+import { QUICK_CREATE, SETTINGS_ITEM, visibleGroups } from "@/lib/nav-menu";
 import { useAssistantEnabled } from "@/lib/use-assistant-enabled";
 import { cn } from "@/lib/utils";
 
@@ -99,8 +99,17 @@ export function CommandPalette({
           run: go(leaf.href),
         })),
     );
+    const settingsAction: CommandAction = {
+      id: SETTINGS_ITEM.href,
+      labelFa: SETTINGS_ITEM.label,
+      labelEn: "تنظیمات سازمان",
+      keywords: SETTINGS_ITEM.keywords ?? [],
+      icon: navIcon(SETTINGS_ITEM.icon),
+      run: go(SETTINGS_ITEM.href),
+    };
     return [
       ...navActions,
+      settingsAction,
       ...createActions,
       ...(can("data_import", "create")
         ? [
@@ -120,7 +129,7 @@ export function CommandPalette({
   const results = useMemo(() => {
     const q = query.trim();
     if (!q) return actions;
-    return actions
+    const matched = actions
       .map((action) => ({
         action,
         score: Math.max(
@@ -132,7 +141,21 @@ export function CommandPalette({
       .filter((entry) => entry.score > 0)
       .sort((a, b) => b.score - a.score)
       .map((entry) => entry.action);
-  }, [actions, query]);
+
+    const askAssistantAction: CommandAction = {
+      id: `ask-assistant-${q}`,
+      labelFa: `پرسش از دستیار هوشمند: «${q}»`,
+      labelEn: "Enter asks assistant",
+      keywords: [q, "دستیار", "ai", "هوش مصنوعی", "ask"],
+      icon: navIcon("MessageSquareText"),
+      run: () => {
+        onOpenChange(false);
+        router.push(`/app/assistant?q=${encodeURIComponent(q)}`);
+      },
+    };
+
+    return [...matched, askAssistantAction];
+  }, [actions, onOpenChange, query, router]);
 
   // Global Cmd+K / Ctrl+K toggle.
   useEffect(() => {
@@ -183,7 +206,12 @@ export function CommandPalette({
       setActiveIndex((index) => Math.max(index - 1, 0));
     } else if (event.key === "Enter") {
       event.preventDefault();
-      results[activeIndex]?.run();
+      if (results[activeIndex]) {
+        results[activeIndex].run();
+      } else if (query.trim()) {
+        onOpenChange(false);
+        router.push(`/app/assistant?q=${encodeURIComponent(query.trim())}`);
+      }
     } else if (event.key === "Escape") {
       event.preventDefault();
       onOpenChange(false);
@@ -224,7 +252,7 @@ export function CommandPalette({
               results[activeIndex] ? `command-${results[activeIndex].id}` : undefined
             }
             aria-autocomplete="list"
-            placeholder="جست‌وجو یا فرمان… (مثلاً: مشتری جدید)"
+            placeholder="جست‌وجو یا پرسش از دستیار… (Enter برای دستیار)"
             className="h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
           <button

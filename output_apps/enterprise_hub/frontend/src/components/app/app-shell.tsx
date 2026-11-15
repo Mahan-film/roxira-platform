@@ -15,9 +15,13 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { ClientErrorReporter } from "@/components/observability/client-error-reporter";
 import { EnterpriseRouteGuard } from "@/components/auth/enterprise-route-guard";
 import { navIcon } from "@/components/app/nav-icons";
+import { BranchSwitcher } from "@/components/app/branch-switcher";
+import { NotificationsButton } from "@/components/app/notifications-button";
 import { useAssistantEnabled } from "@/lib/use-assistant-enabled";
-import { OPERATOR_ITEMS, activeHref, visibleGroups } from "@/lib/nav-menu";
+import { OPERATOR_ITEMS, SETTINGS_ITEM, activeHref, visibleGroups } from "@/lib/nav-menu";
 import { cn } from "@/lib/utils";
+
+const SettingsIcon = navIcon(SETTINGS_ITEM.icon);
 
 function SidebarContent({
   pathname,
@@ -33,6 +37,7 @@ function SidebarContent({
   const hrefs = [
     ...groups.flatMap((group) => group.items.map((item) => item.href)),
     ...(user?.role === "ADMIN" ? OPERATOR_ITEMS.map((item) => item.href) : []),
+    SETTINGS_ITEM.href,
   ];
   const active = activeHref(pathname, hrefs);
   // All groups start expanded; collapsing is only in-memory, never persisted.
@@ -154,6 +159,20 @@ function SidebarContent({
       </nav>
 
       <div className="flex shrink-0 flex-col gap-2 border-t border-border pt-3">
+        <Link
+          href={SETTINGS_ITEM.href}
+          onClick={onNavigate}
+          aria-current={active === SETTINGS_ITEM.href ? "page" : undefined}
+          className={cn(
+            "flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            active === SETTINGS_ITEM.href
+              ? "bg-indigo-500/15 font-bold text-indigo-300 ring-1 ring-indigo-500/30"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground",
+          )}
+        >
+          <SettingsIcon className="size-4 shrink-0" aria-hidden="true" />
+          <span>{SETTINGS_ITEM.label}</span>
+        </Link>
         {user && (
           <span className="flex items-center gap-1.5 px-2 text-xs text-muted-foreground">
             <UserRound className="size-3.5" aria-hidden="true" />
@@ -291,6 +310,13 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <Menu className="size-5" aria-hidden="true" />
               </button>
               <span className="text-sm font-bold lg:hidden">نرم‌افزار روکسیرا</span>
+
+              {/* Branch switcher in header */}
+              <div className="hidden sm:block">
+                <BranchSwitcher />
+              </div>
+
+              {/* Ask / Ctrl K */}
               <button
                 type="button"
                 onClick={() => openPalette("all")}
@@ -298,7 +324,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 className="ms-auto inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <Search className="size-4" aria-hidden="true" />
-                <span className="hidden sm:inline">جست‌وجو یا فرمان…</span>
+                <span className="hidden sm:inline">جست‌وجو، اسناد یا پرسش از دستیار…</span>
                 <kbd
                   className="hidden rounded border border-border px-1.5 py-0.5 font-mono text-[10px] sm:inline"
                   dir="ltr"
@@ -306,15 +332,20 @@ export function AppShell({ children }: { children: ReactNode }) {
                   Ctrl K
                 </kbd>
               </button>
+
+              {/* +ایجاد */}
               <button
                 type="button"
                 onClick={() => openPalette("create")}
-                aria-label="ثبت جدید"
+                aria-label="+ایجاد"
                 className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-indigo-500/15 text-xs font-bold text-indigo-300 transition-colors hover:bg-indigo-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-auto sm:gap-2 sm:px-3"
               >
                 <Plus className="size-4" aria-hidden="true" />
-                <span className="hidden sm:inline">ثبت جدید</span>
+                <span className="hidden sm:inline">+ایجاد</span>
               </button>
+
+              {/* Notifications */}
+              <NotificationsButton />
             </header>
 
             <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:py-8">
