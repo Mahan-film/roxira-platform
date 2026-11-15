@@ -50,60 +50,112 @@ export async function transcribe(
   return (await transcribeDetailed(pcm16k, signal, doFetch)).text;
 }
 
-/** transcribe() plus confidence. Primary provider first; if all its keys fail, the Smart Judge server STT. */
+type Settled = { ok: true; text: string; model: string } | { ok: false; err: string; model: string };
+
+const settle = (p: Promise<string>, model: string): Promise<Settled> =>
+  p.then((text) => ({ ok: true as const, text, model }), (e) => ({ ok: false as const, err: (e as Error).message, model }));
+
+/** First result with text among `ps`, or null once all failed/are empty or `ms` passed. */
+function firstWithText(ps: Promise<Settled>[], ms: number): Promise<Settled | null> {
+  return new Promise((resolve) => {
+    let left = ps.length;
+    const t = setTimeout(() => resolve(null), Math.max(0, ms));
+    if (!left) { clearTimeout(t); resolve(null); }
+    for (const p of ps) {
+      void p.then((r) => {
+        if (r.ok && r.text) { clearTimeout(t); resolve(r); }
+        else if (--left === 0) { clearTimeout(t); resolve(null); }
+      });
+    }
+  });
+}
+
+/**
+ * transcribe() plus confidence.
+ * hybrid (default when Gemini keys exist): Whisper and Gemini run in parallel. Whisper (~0.4 s) gives
+ * avg_logprob, the gate for "real speech or noise" (Gemini invents plausible questions from noise);
+ * Gemini's text is used when it arrives in time, because on real phone calls it hears Persian far
+ * better (2026-11-15 call: Whisper "آخر آده رای بحث زدیه", Gemini "آخرین آرای وحدت رویه چی هستش").
+ * Fallbacks when Whisper fails entirely: Gemini, then the Smart Judge server STT.
+ */
 export async function transcribeDetailed(
   pcm16k: Int16Array,
   signal: AbortSignal,
   doFetch: typeof fetchProxied = fetchProxied,
+  /** called with Whisper's result as soon as it is in (before Gemini), e.g. to skip the filler on echo/noise */
+  onWhisper?: (w: Transcript) => void,
 ): Promise<Transcript> {
   const wavBuf = wav(pcm16k, IN_RATE);
   if (cfg.sttProvider === 'smartjudge') {
     return { text: await smartjudgeStt(wavBuf, signal), logprob: null, provider: 'smartjudge' };
   }
-  let why = '';
+  const t0 = Date.now();
+  const gctl = new AbortController();
+  const stop = () => gctl.abort();
+  signal.addEventListener('abort', stop, { once: true });
+  const hybrid = cfg.sttMode === 'hybrid' && cfg.geminiKeys.length > 0;
+  // each model starts on a different key so parallel requests do not share one key's per-minute quota
+  const gem = hybrid
+    ? cfg.geminiSttModels.map((m, i) => settle(geminiStt(wavBuf, gctl.signal, doFetch, m, i), m))
+    : [];
   try {
-    return await whisperStt(wavBuf, signal, doFetch);
-  } catch (e) {
-    if (signal.aborted) throw e;
-    why = (e as Error).message.slice(0, 80);
-  }
-  // fallback 1: Gemini (other company, other keys) - only reached when every Whisper key failed
-  if (cfg.geminiKeys.length) {
+    let w: Transcript | null = null;
+    let why = '';
     try {
-      const text = await geminiStt(wavBuf, signal, doFetch);
-      return { text, logprob: null, provider: `gemini-fallback (${why})` };
+      w = await whisperStt(wavBuf, signal, doFetch);
     } catch (e) {
       if (signal.aborted) throw e;
-      why += `; gemini ${(e as Error).message.slice(0, 60)}`;
+      why = (e as Error).message.slice(0, 80);
     }
+    if (w) {
+      onWhisper?.(w);
+      // no speech, or Whisper unsure: the gate in session.ts decides (asks the caller to repeat)
+      if (!hybrid || !w.text || (w.logprob !== null && w.logprob < cfg.sttMinLogprob)) return w;
+      // the preferred model (all its parallel copies) up to GEMINI_WAIT_MS; then any backup that already answered
+      const preferred = cfg.geminiSttModels[0];
+      const isPref = (_: unknown, i: number) => cfg.geminiSttModels[i] === preferred;
+      const best = (await firstWithText(gem.filter(isPref), t0 + cfg.geminiWaitMs - Date.now()))
+        ?? (await firstWithText(gem.filter((p, i) => !isPref(p, i)), 50));
+      if (!best || !best.ok) return w;
+      return { text: best.text, logprob: w.logprob, provider: `gemini:${best.model}+whisper-gate` };
+    }
+    // Whisper down: Gemini alone (parallel calls already running, or started now), then Smart Judge
+    const gs = gem.length ? gem : cfg.geminiKeys.length ? [settle(geminiStt(wavBuf, gctl.signal, doFetch, cfg.geminiSttModels[0], 0), cfg.geminiSttModels[0])] : [];
+    const g = await firstWithText(gs, 8000);
+    if (g && g.ok) return { text: g.text, logprob: null, provider: `gemini-fallback:${g.model} (${why})` };
+    if (signal.aborted) throw new Error('aborted');
+    if (!(cfg.judgeGatewayKey || cfg.judgeToken)) throw new Error(`stt failed: ${why}`);
+    const text = await smartjudgeStt(wavBuf, signal);
+    return { text, logprob: null, provider: `smartjudge-fallback (${why})` };
+  } finally {
+    gctl.abort(); // drop Gemini requests nobody waits for
+    signal.removeEventListener('abort', stop);
   }
-  // fallback 2: the domestic Smart Judge server STT (slower, no proxy needed)
-  if (!(cfg.judgeGatewayKey || cfg.judgeToken)) throw new Error(`stt failed: ${why}`);
-  const text = await smartjudgeStt(wavBuf, signal);
-  return { text, logprob: null, provider: `smartjudge-fallback (${why})` };
 }
 
 let geminiCursor = 0;
 
-async function geminiStt(wavBuf: Buffer, signal: AbortSignal, doFetch: typeof fetchProxied): Promise<string> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${cfg.geminiSttModel}:generateContent`;
+async function geminiStt(
+  wavBuf: Buffer, signal: AbortSignal, doFetch: typeof fetchProxied, model: string, keyOffset: number,
+): Promise<string> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
   const body = JSON.stringify({
     contents: [{ parts: [
-      { text: 'Transcribe this Persian phone call audio verbatim in Persian script. Output only the transcript. '
-        + 'If there is no clearly intelligible speech, output nothing.' },
+      { text: cfg.geminiSttPrompt },
       { inline_data: { mime_type: 'audio/wav', data: wavBuf.toString('base64') } },
     ] }],
     generationConfig: { temperature: 0 },
   });
   let lastErr = '';
+  const base = geminiCursor + keyOffset;
+  geminiCursor = (geminiCursor + 1) % Math.max(1, cfg.geminiKeys.length);
   for (let i = 0; i < cfg.geminiKeys.length; i++) {
-    const key = cfg.geminiKeys[(geminiCursor + i) % cfg.geminiKeys.length];
+    const key = cfg.geminiKeys[(base + i) % cfg.geminiKeys.length];
     const r = await doFetch(url, {
       method: 'POST', body, signal,
       headers: { 'x-goog-api-key': key, 'Content-Type': 'application/json' },
     });
     if (r.ok) {
-      geminiCursor = (geminiCursor + i + 1) % cfg.geminiKeys.length;
       const j = (await r.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
       return clean((j.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '').join(''));
     }
