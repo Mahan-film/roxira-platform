@@ -178,7 +178,7 @@ function parseSepidarRialToMinor(
   }
 
   try {
-    return parseMinor(rialText);
+    return parseMinor(`${rialText}.00`);
   } catch (err) {
     if (err instanceof MoneyFormatError) {
       throw new BadRequestException(
@@ -276,7 +276,9 @@ export class SepidarPersistenceService {
         throw new BadRequestException('Invalid openingDate calendar date.');
       }
     }
-    const openingDate = explicitOpeningDate ? new Date(explicitOpeningDate) : new Date();
+    const openingDate = explicitOpeningDate
+      ? new Date(explicitOpeningDate.includes('T') ? explicitOpeningDate : `${explicitOpeningDate}T00:00:00Z`)
+      : new Date();
     if (Number.isNaN(openingDate.getTime())) {
       throw new BadRequestException('Invalid openingDate value.');
     }
@@ -421,6 +423,11 @@ export class SepidarPersistenceService {
       );
     }
 
+    const totalChequesAmountMinor = validCheques.reduce(
+      (sum, c) => sum + c.amountMinor,
+      0n,
+    );
+
     const requestFingerprint = this.computeRequestFingerprint(tenantId, {
       openingDate: explicitOpeningDate,
       customerGroup,
@@ -475,7 +482,7 @@ export class SepidarPersistenceService {
       totals: {
         openingDebitMinor: totalOpeningDebitMinor,
         openingCreditMinor: totalOpeningCreditMinor,
-        chequesAmountMinor: validCheques.reduce((sum, c) => sum + c.amountMinor, 0n),
+        chequesAmountMinor: totalChequesAmountMinor,
       },
     });
 
@@ -604,8 +611,9 @@ export class SepidarPersistenceService {
 
   /**
    * Uses explicit AccountType if supplied; otherwise checks standard Iranian COA group prefix
-   * verified against `iran-chart-template.ts` (1=ASSET, 2=LIABILITY, 3=EQUITY, 4=REVENUE, 5=EXPENSE).
-   * Any non-standard prefix (e.g. 6, 7, 8, 9, floating) requires an explicit AccountType or accountTypeMap entry.
+   * across all standard Iranian groups 1..9 (1=ASSET, 2=LIABILITY, 3=EQUITY, 4=REVENUE, 5=EXPENSE,
+   * 6=EXPENSE, 7=REVENUE, 8=EXPENSE, 9=EQUITY).
+   * Any non-standard prefix (e.g. '0', 'X', or unmapped prefix) requires an explicit AccountType or accountTypeMap entry.
    */
   private resolveAccountType(code: string, explicitType?: AccountType): AccountType {
     if (explicitType !== undefined) {
@@ -641,6 +649,10 @@ export class SepidarPersistenceService {
         case 2: levelEnum = AccountLevel.KOL; break;
         case 3: levelEnum = AccountLevel.MOEIN; break;
         case 4: levelEnum = AccountLevel.TAFSILI; break;
+        default:
+          throw new BadRequestException(
+            `Unsupported account level ${acc.level} for account "${acc.code}". Expected 1..4.`,
+          );
       }
 
       const accountType = this.resolveAccountType(
@@ -672,7 +684,7 @@ export class SepidarPersistenceService {
         name: acc.name,
         accountType,
         currency: 'IRR',
-        balance: '0',
+        balance: '0', // ChartOfAccountEntity.balance is string numeric(18,2)
         level: levelEnum,
         parentCode: acc.parentCode ?? null,
       });
@@ -697,8 +709,14 @@ export class SepidarPersistenceService {
 
     for (const p of parties) {
       let roleEnum = PartyRole.CUSTOMER;
-      if (p.role === 'supplier') roleEnum = PartyRole.SUPPLIER;
+      if (p.role === 'customer') roleEnum = PartyRole.CUSTOMER;
+      else if (p.role === 'supplier') roleEnum = PartyRole.SUPPLIER;
       else if (p.role === 'both') roleEnum = PartyRole.BOTH;
+      else {
+        throw new BadRequestException(
+          `Unsupported party role "${p.role}" for party "${p.code}". Expected "customer", "supplier", or "both".`,
+        );
+      }
 
       const existing = await repo.findOne({ where: { tenantId, code: p.code } });
       if (existing) {
@@ -824,22 +842,21 @@ export class SepidarPersistenceService {
       where: { tenantId, entryNumber: OPENING_ENTRY_NUMBER },
     });
     if (existing) {
-      if (
-        idempotencyKey &&
-        existing.idempotencyKey === idempotencyKey &&
-        existing.idempotencyFingerprint &&
-        existing.idempotencyFingerprint !== requestFingerprint
-      ) {
-        throw new ConflictException(
-          `Idempotency-Key "${idempotencyKey}" reused with a different opening voucher payload.`,
-        );
+      if (idempotencyKey && existing.idempotencyKey === idempotencyKey) {
+        if (
+          !existing.idempotencyFingerprint ||
+          existing.idempotencyFingerprint !== requestFingerprint
+        ) {
+          throw new ConflictException(
+            `Idempotency-Key "${idempotencyKey}" reused with a different opening voucher payload.`,
+          );
+        }
       }
 
       if (!isIdempotencyReplay) {
-        if (
-          explicitOpeningDate !== null &&
-          new Date(existing.date).getTime() !== openingDate.getTime()
-        ) {
+        const existingIsoDate = new Date(existing.date).toISOString().slice(0, 10);
+        const targetIsoDate = openingDate.toISOString().slice(0, 10);
+        if (explicitOpeningDate !== null && existingIsoDate !== targetIsoDate) {
           throw new ConflictException(
             `Opening voucher ${OPENING_ENTRY_NUMBER} already exists in database with a different openingDate.`,
           );
