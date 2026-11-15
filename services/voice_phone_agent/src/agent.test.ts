@@ -16,6 +16,27 @@ test('looksIncomplete holds on unfinished Persian turns', () => {
   }
 });
 
+test('STT falls back to Gemini when every Groq key fails', async () => {
+  const prev = { p: cfg.sttProvider, g: cfg.groqKeys, m: cfg.geminiKeys };
+  cfg.sttProvider = 'groq';
+  cfg.groqKeys = ['g1', 'g2'];
+  cfg.geminiKeys = ['m1'];
+  const urls: string[] = [];
+  try {
+    const out = await transcribe(new Int16Array(1600), new AbortController().signal, (async (url) => {
+      urls.push(String(url));
+      if (String(url).includes('groq')) return new Response('down', { status: 503 });
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'مهریه را چطور بگیرم؟' }] } }] }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }) as typeof import('./http.js').fetchProxied);
+    assert.equal(out, 'مهریه را چطور بگیرم؟');
+    assert.equal(urls.filter((u) => u.includes('groq')).length, 2);
+    assert.ok(urls.at(-1)!.includes('generativelanguage'));
+  } finally {
+    cfg.sttProvider = prev.p; cfg.groqKeys = prev.g; cfg.geminiKeys = prev.m;
+  }
+});
+
 test('weightedLogprob weights segments by duration', () => {
   assert.equal(weightedLogprob({}), null);
   const v = weightedLogprob({ segments: [{ start: 0, end: 3, avg_logprob: -0.1 }, { start: 3, end: 4, avg_logprob: -1.3 }] });
