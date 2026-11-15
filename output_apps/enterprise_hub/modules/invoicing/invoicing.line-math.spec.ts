@@ -106,4 +106,33 @@ describe('invoice line math (shared by InvoicingService and the Moadian pre-flig
     const result = runMoadianPreFlightValidation(invoice, { expectedVatRate: 0.1 });
     expect(result.errors.filter((e) => /MATH_MISMATCH|HEADER_/.test(e.code))).toEqual([]);
   });
+
+  it('computes line math from stored unit price (e.g. unitPrice 1.5 IRR rounded to 2 stores 2 and computes tax/total from 2, matching pre-flight)', async () => {
+    const service = buildService();
+    const fractionalDto = dto(2, 1.5);
+    const invoice = await service.create('tenant-a', fractionalDto);
+    expect(invoice.items[0].unitPrice).toBe(2);
+    expect(invoice.items[0].tax).toBe(0);
+    expect(invoice.items[0].total).toBe(4);
+    expect(invoice.totalAmount).toBe(4);
+    expect(invoice.finalPayable).toBe(4);
+    const result = runMoadianPreFlightValidation(invoice, { expectedVatRate: 0.1 });
+    expect(result.errors.filter((e) => /MATH_MISMATCH|HEADER_/.test(e.code))).toEqual([]);
+  });
+
+  it('sums unrounded line gross once for multi-line invoices (e.g. two lines qty 1.5 × 3 IRR = 9 IRR totalAmount)', async () => {
+    const service = buildService();
+    const twoLineDto: CreateInvoiceDto = {
+      ...dto(1.5, 3),
+      items: [
+        { description: 'کالا ۱', quantity: 1.5, unitPrice: 3, discount: 0, taxCode: '2330001234567' },
+        { description: 'کالا ۲', quantity: 1.5, unitPrice: 3, discount: 0, taxCode: '2330001234567' },
+      ],
+    };
+    const invoice = await service.create('tenant-a', twoLineDto);
+    // Unrounded line 1 = 4.5, unrounded line 2 = 4.5. Sum = 9.0 -> 9 IRR (not 5 + 5 = 10)
+    expect(invoice.totalAmount).toBe(9);
+    const result = runMoadianPreFlightValidation(invoice, { expectedVatRate: 0.1 });
+    expect(result.errors.filter((e) => /MATH_MISMATCH|HEADER_/.test(e.code))).toEqual([]);
+  });
 });
