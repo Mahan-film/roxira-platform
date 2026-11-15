@@ -164,7 +164,7 @@ test("activeHref matches the longest href, with /app exact-match only", () => {
   assert.equal(activeHref("/app/settings/security", hrefs), "/app/settings/security");
   assert.equal(activeHref("/app", hrefs), "/app");
   assert.equal(activeHref("/app/unknown", hrefs), null);
-  assert.equal(activeHref("/damages", hrefs), "/damages");
+  assert.equal(activeHref("/app/damages", hrefs), "/app/damages");
 });
 
 test("the report builder has a menu entry under accounting reports and its page exists", () => {

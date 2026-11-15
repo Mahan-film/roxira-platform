@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { JalaliDateInput } from "@/components/ui/jalali-date-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -149,22 +150,18 @@ export function ContractForm({ employee, onCreated }: ContractFormProps) {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="ct-start">تاریخ شروع</Label>
-              <Input
+              <JalaliDateInput
                 id="ct-start"
-                type="date"
-                dir="ltr"
                 value={startDate}
-                onChange={(event) => setStartDate(event.target.value)}
+                onChange={setStartDate}
               />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="ct-end">تاریخ پایان (اختیاری)</Label>
-              <Input
+              <JalaliDateInput
                 id="ct-end"
-                type="date"
-                dir="ltr"
                 value={endDate}
-                onChange={(event) => setEndDate(event.target.value)}
+                onChange={setEndDate}
               />
             </div>
             <div className="grid gap-2">

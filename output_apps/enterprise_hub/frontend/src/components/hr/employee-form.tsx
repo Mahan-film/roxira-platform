@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { JalaliDateInput } from "@/components/ui/jalali-date-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -223,12 +224,10 @@ export function EmployeeForm({ onCreated }: EmployeeFormProps) {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="hr-hire-date">تاریخ استخدام</Label>
-              <Input
+              <JalaliDateInput
                 id="hr-hire-date"
-                type="date"
-                dir="ltr"
                 value={hireDate}
-                onChange={(event) => setHireDate(event.target.value)}
+                onChange={setHireDate}
               />
             </div>
             <div className="grid gap-2">

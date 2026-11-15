@@ -45,10 +45,10 @@ export const MENU_GROUPS: MenuGroup[] = [
       },
       {
         href: "/app/import",
-        label: "ورود از اکسل",
+        label: "ورود اطلاعات",
         icon: "FileUp",
         module: "data_import",
-        keywords: ["excel", "csv", "اکسل"],
+        keywords: ["import", "excel", "csv", "pdf", "sql", "اکسل", "ورود", "انتقال"],
       },
     ],
   },
@@ -98,12 +98,6 @@ export const MENU_GROUPS: MenuGroup[] = [
         module: "inventory",
         keywords: ["bom", "production", "تولید", "فرمول ساخت", "ضایعات"],
       },
-      {
-        href: "/damages",
-        label: "خسارت‌ها",
-        icon: "ShieldAlert",
-        module: "damages",
-      },
     ],
   },
   {
@@ -118,6 +112,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         module: "banking",
       },
       { href: "/app/cheques", label: "چک‌ها", icon: "Banknote", module: "cheques" },
+      {
+        href: "/app/damages",
+        label: "خسارت تاخیر تادیه",
+        icon: "ShieldAlert",
+        module: "damages",
+        keywords: ["damages", "late payment", "خسارت", "تاخیر", "تأخیر", "ماده ۵۲۲"],
+      },
       {
         href: "/app/treasury/petty-cash",
         label: "صندوق و تنخواه",
