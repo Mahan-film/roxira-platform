@@ -270,7 +270,16 @@ function PrintFormBuilderPage() {
       setError("لطفاً کد کالا و نام کالا را برای برچسب وارد کنید.");
       return;
     }
-    const count = parseInt(newItemCount, 10) || 1;
+    const parsedCount = parseInt(newItemCount, 10);
+    if (isNaN(parsedCount) || parsedCount <= 0) {
+      setError("تعداد برچسب باید عدد صحیح مثبت باشد.");
+      return;
+    }
+    if (totalLabelsCount + parsedCount > 500) {
+      setError("حداکثر ۵۰۰ برچسب در یک شیت مجاز است.");
+      return;
+    }
+    const count = parsedCount;
     const price = parseRialsInput(newItemPrice);
     if (price === null) {
       setError("قیمت باید عدد صحیح به ریال باشد (بدون اعشار).");
@@ -303,6 +312,10 @@ function PrintFormBuilderPage() {
   const handlePrintBarcodes = async () => {
     if (barcodeItems.length === 0) {
       setError("حداقل یک ردیف کالا برای چاپ برچسب اضافه کنید.");
+      return;
+    }
+    if (totalLabelsCount > 500) {
+      setError("حداکثر ۵۰۰ برچسب در یک شیت مجاز است.");
       return;
     }
     setBarcodePrinting(true);

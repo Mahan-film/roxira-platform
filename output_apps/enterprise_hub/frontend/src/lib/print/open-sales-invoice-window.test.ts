@@ -6,7 +6,7 @@ import type { InvoiceResponseDto } from "../../types/invoicing.ts";
 import type { PrintTemplateDto } from "../../types/print-template.ts";
 import { formatNumber } from "../fa-format.ts";
 
-import { buildDynamicTableHtml, buildSalesInvoiceHtml } from "./open-sales-invoice-window.ts";
+import { buildDynamicTableHtml, buildSalesInvoiceHtml, injectStyleTag, replaceTableById } from "./open-sales-invoice-window.ts";
 import { renderTemplate } from "./render-template.ts";
 import { loadSalesInvoiceTemplates } from "./sales-invoice-templates.ts";
 import { mapInvoiceToSalesInvoiceA4Data } from "./sales-invoice.ts";
@@ -109,4 +109,20 @@ test("templates are requested for A4, A5 and thermal", async () => {
   });
   assert.deepEqual(asked.sort(), ["A4", "A5", "THERMAL_80MM"]);
   assert.deepEqual(out, { a4: null, a5: null, thermal: null });
+});
+
+test("replaceTableById handles nested tables cleanly", () => {
+  const sample = `<div><table id="invoice-items-table"><tr><td><table><tr><td>nested</td></tr></table></td></tr></table></div>`;
+  const res = replaceTableById(sample, "invoice-items-table", '<table id="new"><tr><td>replaced</td></tr></table>');
+  assert.equal(res, '<div><table id="new"><tr><td>replaced</td></tr></table></div>');
+});
+
+test("injectStyleTag handles head with whitespace or missing head", () => {
+  const withHead = `<html><head><title>Test</title> </head ><body>Content</body></html>`;
+  const res = injectStyleTag(withHead, "body { color: red; }");
+  assert.ok(res.includes("<style>\nbody { color: red; }\n</style>"));
+
+  const noHead = `<html><body>Content</body></html>`;
+  const resNoHead = injectStyleTag(noHead, "body { color: red; }");
+  assert.ok(resNoHead.includes("<style>\nbody { color: red; }\n</style>"));
 });

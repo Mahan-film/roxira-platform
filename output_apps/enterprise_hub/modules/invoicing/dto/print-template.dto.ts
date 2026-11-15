@@ -22,6 +22,14 @@ import {
 } from 'class-validator';
 import { PrintDocType, PrintPaperSize } from '../enums/print-template.enum';
 
+/** Prevents `enableImplicitConversion: true` from coercing `"false"` or `"0"` into boolean `true`. */
+export const transformBoolean = ({ obj, key, value }: { obj?: Record<string, unknown>; key?: string; value: unknown }): unknown => {
+  const raw = obj && key && key in obj ? obj[key] : value;
+  if (raw === 'true' || raw === true || raw === 1 || raw === '1') return true;
+  if (raw === 'false' || raw === false || raw === 0 || raw === '0') return false;
+  return raw;
+};
+
 export class PrintColumnConfigDto {
   @ApiProperty({ description: 'کلید فنی فیلد یا ستون', example: 'description' })
   @IsString()
@@ -35,6 +43,7 @@ export class PrintColumnConfigDto {
   label: string;
 
   @ApiProperty({ description: 'نمایش ستون در چاپ', example: true })
+  @Transform(transformBoolean)
   @IsBoolean()
   visible: boolean;
 
@@ -75,16 +84,19 @@ export class PrintTemplateOptionsDto {
 
   @ApiPropertyOptional({ description: 'نمایش قیمت در برچسب بارکد' })
   @IsOptional()
+  @Transform(transformBoolean)
   @IsBoolean()
   showPrice?: boolean;
 
   @ApiPropertyOptional({ description: 'نمایش کد کالا در برچسب بارکد' })
   @IsOptional()
+  @Transform(transformBoolean)
   @IsBoolean()
   showSku?: boolean;
 
   @ApiPropertyOptional({ description: 'نمایش جایگاه‌های امضا' })
   @IsOptional()
+  @Transform(transformBoolean)
   @IsBoolean()
   showSignatures?: boolean;
 
@@ -123,11 +135,13 @@ export class CreatePrintTemplateDto {
 
   @ApiPropertyOptional({ description: 'تنظیم به عنوان قالب پیش‌فرض این نوع سند', default: false })
   @IsOptional()
+  @Transform(transformBoolean)
   @IsBoolean()
   isDefault?: boolean;
 
   @ApiPropertyOptional({ description: 'نمایش لوگوی سازمان در سربرگ', default: true })
   @IsOptional()
+  @Transform(transformBoolean)
   @IsBoolean()
   showLogo?: boolean;
 
@@ -171,11 +185,13 @@ export class UpdatePrintTemplateDto {
 
   @ApiPropertyOptional({ description: 'تنظیم به عنوان قالب پیش‌فرض' })
   @IsOptional()
+  @Transform(transformBoolean)
   @IsBoolean()
   isDefault?: boolean;
 
   @ApiPropertyOptional({ description: 'نمایش لوگوی سازمان در سربرگ' })
   @IsOptional()
+  @Transform(transformBoolean)
   @IsBoolean()
   showLogo?: boolean;
 
@@ -330,11 +346,13 @@ export class RenderBarcodeSheetDto {
 
   @ApiPropertyOptional({ description: 'نمایش قیمت مصرف‌کننده در برچسب', default: true })
   @IsOptional()
+  @Transform(transformBoolean)
   @IsBoolean()
   showPrice?: boolean;
 
   @ApiPropertyOptional({ description: 'نمایش کد کالا در برچسب', default: true })
   @IsOptional()
+  @Transform(transformBoolean)
   @IsBoolean()
   showSku?: boolean;
 }

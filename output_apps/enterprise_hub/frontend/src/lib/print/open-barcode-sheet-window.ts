@@ -5,6 +5,11 @@ import { RenderBarcodeSheetDto } from "@/types/print-template";
  * شیت برچسب بارکد را از سرور دریافت و در پنجره جدید چاپ باز می‌کند.
  */
 export async function printBarcodeSheet(dto: RenderBarcodeSheetDto): Promise<void> {
+  const totalCount = (dto.items || []).reduce((acc, item) => acc + (item.count ?? 1), 0);
+  if (totalCount > 500) {
+    throw new Error("حداکثر ۵۰۰ برچسب در یک شیت مجاز است.");
+  }
+
   // Open window synchronously in the user gesture task to avoid popup blockers
   const printWindow = window.open("", "_blank");
   if (!printWindow) return;

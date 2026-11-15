@@ -112,6 +112,53 @@ export function buildDynamicTableHtml(
   </table>`;
 }
 
+/**
+ * Safely replaces a table element by its id attribute, properly handling nested tables
+ * by tracking opening and closing table tags instead of fragile regex matching.
+ */
+export function replaceTableById(html: string, tableId: string, replacementHtml: string): string {
+  const tableOpenRegex = new RegExp(`<table[^>]*\\bid=["']${tableId}["'][^>]*>`, "i");
+  const match = tableOpenRegex.exec(html);
+  if (!match) return html;
+
+  const startIndex = match.index;
+  let depth = 1;
+  const tagRegex = /<\/?table\b[^>]*>/gi;
+  tagRegex.lastIndex = startIndex + match[0].length;
+
+  let tagMatch: RegExpExecArray | null;
+  while ((tagMatch = tagRegex.exec(html)) !== null) {
+    if (tagMatch[0].startsWith("</")) {
+      depth--;
+      if (depth === 0) {
+        const endIndex = tagMatch.index + tagMatch[0].length;
+        return html.slice(0, startIndex) + replacementHtml + html.slice(endIndex);
+      }
+    } else {
+      depth++;
+    }
+  }
+  return html.replace(tableOpenRegex, replacementHtml);
+}
+
+/**
+ * Safely injects a <style> block into HTML without relying on fragile string replacement.
+ */
+export function injectStyleTag(html: string, styleContent: string): string {
+  const styleTag = `<style>\n${styleContent}\n</style>`;
+  const headCloseRegex = /<\/head\s*>/i;
+  if (headCloseRegex.test(html)) {
+    return html.replace(headCloseRegex, `${styleTag}\n</head>`);
+  }
+  const bodyOpenRegex = /<body\b[^>]*>/i;
+  const bodyMatch = bodyOpenRegex.exec(html);
+  if (bodyMatch) {
+    const insertPos = bodyMatch.index + bodyMatch[0].length;
+    return html.slice(0, insertPos) + `\n${styleTag}` + html.slice(insertPos);
+  }
+  return `${styleTag}\n${html}`;
+}
+
 /** Renders the sales invoice HTML. With no saved template this is the original layout. */
 export function buildSalesInvoiceHtml(
   invoice: InvoiceResponseDto,
@@ -154,19 +201,17 @@ export function buildSalesInvoiceHtml(
   ) {
     const dynamicTable = buildDynamicTableHtml(invoice, options.columnsConfig);
     if (dynamicTable) {
-      html = html.replace(/<table id="invoice-items-table"[\s\S]*?<\/table>/, () => dynamicTable);
+      html = replaceTableById(html, "invoice-items-table", dynamicTable);
     }
   }
 
   if (isThermal) {
-    html = html.replace(
-      "</head>",
-      `<style>
+    const thermalCss = `
         @page { size: 80mm auto; margin: 2mm; }
         body { width: 76mm !important; margin: 0 auto !important; font-size: 11px !important; }
         table { font-size: 10px !important; width: 100% !important; }
-      </style></head>`,
-    );
+    `.trim();
+    html = injectStyleTag(html, thermalCss);
   }
   return html;
 }

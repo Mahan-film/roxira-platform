@@ -300,7 +300,7 @@ export class PrintTemplateService {
         ? (Number.isFinite(amount) ? String(Math.round(amount)) : '')
         : String(amount).trim();
       if (!/^\d{1,18}$/.test(digits)) return '';
-      const minor = BigInt(digits) * 100n;
+      const minor = toMinor(digits);
       return `${formatMoney(minor)} ریال`;
     };
 

@@ -1,9 +1,17 @@
 import 'reflect-metadata';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, INestApplication, ValidationPipe } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import request from 'supertest';
 import { PrintDocType, PrintPaperSize } from './enums/print-template.enum';
 import { PrintColumnConfig, PrintTemplateEntity } from './entities/print-template.entity';
 import { PrintTemplateService, DEFAULT_COLUMNS_CONFIG } from './services/print-template.service';
 import { PrintTemplateRepository } from './repositories/print-template.repository';
+import { PrintTemplateController } from './controllers/print-template.controller';
+import {
+  CreatePrintTemplateDto,
+  RenderBarcodeSheetDto,
+  UpdatePrintTemplateDto,
+} from './dto/print-template.dto';
 import { generateBarcodeSvg, encodeCode128Svg, encodeEan13Svg, isEan13 } from './services/barcode.helper';
 
 describe('PrintTemplateService & Repository', () => {
@@ -376,5 +384,158 @@ describe('PrintTemplateService & Repository', () => {
         } as never),
       ).toThrow(BadRequestException);
     });
+  });
+});
+
+describe('PrintTemplate validation & boolean coercion (Rule 26)', () => {
+  const pipe = new ValidationPipe({
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
+    transformOptions: { enableImplicitConversion: true },
+  });
+
+  it('transforms string "false" and "0" into boolean false without coercing to true', async () => {
+    const createDto = await pipe.transform(
+      {
+        docType: PrintDocType.SALES_INVOICE,
+        paperSize: PrintPaperSize.A4,
+        title: 'قالب آزمایشی',
+        isDefault: 'false',
+        showLogo: '0',
+      },
+      { type: 'body', metatype: CreatePrintTemplateDto },
+    );
+    expect(createDto.isDefault).toBe(false);
+    expect(createDto.showLogo).toBe(false);
+
+    const updateDto = await pipe.transform(
+      { isDefault: 'false', showLogo: false },
+      { type: 'body', metatype: UpdatePrintTemplateDto },
+    );
+    expect(updateDto.isDefault).toBe(false);
+    expect(updateDto.showLogo).toBe(false);
+
+    const barcodeDto = await pipe.transform(
+      {
+        columns: 4,
+        items: [{ sku: 'SKU-1', title: 'کالا ۱' }],
+        showPrice: 'false',
+        showSku: '0',
+      },
+      { type: 'body', metatype: RenderBarcodeSheetDto },
+    );
+    expect(barcodeDto.showPrice).toBe(false);
+    expect(barcodeDto.showSku).toBe(false);
+  });
+
+  it('rejects invalid boolean strings', async () => {
+    await expect(
+      pipe.transform(
+        {
+          docType: PrintDocType.SALES_INVOICE,
+          paperSize: PrintPaperSize.A4,
+          title: 'قالب آزمایشی',
+          isDefault: 'not-a-bool',
+        },
+        { type: 'body', metatype: CreatePrintTemplateDto },
+      ),
+    ).rejects.toBeDefined();
+  });
+});
+
+describe('PrintTemplateController boolean coercion with supertest (Rule 26)', () => {
+  let app: INestApplication;
+  const mockService = {
+    create: jest.fn().mockImplementation((_tId, dto) => Promise.resolve({ id: 1, ...dto })),
+    renderBarcodeLabelSheetHtml: jest.fn().mockReturnValue('<html></html>'),
+  };
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({
+      controllers: [PrintTemplateController],
+      providers: [
+        {
+          provide: PrintTemplateService,
+          useValue: mockService,
+        },
+      ],
+    }).compile();
+
+    app = moduleRef.createNestApplication();
+    app.use((req: any, _res: any, next: any) => {
+      req.user = { sub: 'u1', tenantId: 't-test-1111' };
+      next();
+    });
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+        transformOptions: { enableImplicitConversion: true },
+      }),
+    );
+    await app.init();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  beforeEach(() => {
+    mockService.create.mockClear();
+    mockService.renderBarcodeLabelSheetHtml.mockClear();
+  });
+
+  it('preserves isDefault=false and showLogo=false when sent as string "false" or "0"', async () => {
+    await request(app.getHttpServer())
+      .post('/enterprise-hub/invoicing/print-templates')
+      .send({
+        docType: 'sales_invoice',
+        paperSize: 'A4',
+        title: 'قالب آزمایشی سوپرتست',
+        isDefault: 'false',
+        showLogo: '0',
+      })
+      .expect(201);
+
+    expect(mockService.create).toHaveBeenCalledWith(
+      't-test-1111',
+      expect.objectContaining({
+        isDefault: false,
+        showLogo: false,
+      }),
+    );
+  });
+
+  it('rejects invalid boolean in POST request with 400', async () => {
+    await request(app.getHttpServer())
+      .post('/enterprise-hub/invoicing/print-templates')
+      .send({
+        docType: 'sales_invoice',
+        paperSize: 'A4',
+        title: 'قالب آزمایشی',
+        isDefault: 'invalid-value',
+      })
+      .expect(400);
+  });
+
+  it('preserves showPrice=false and showSku=false in barcode sheet request', async () => {
+    await request(app.getHttpServer())
+      .post('/enterprise-hub/invoicing/print-templates/barcode-sheet')
+      .send({
+        columns: 4,
+        items: [{ sku: 'SKU-1', title: 'کالا ۱' }],
+        showPrice: 'false',
+        showSku: '0',
+      })
+      .expect(200);
+
+    expect(mockService.renderBarcodeLabelSheetHtml).toHaveBeenCalledWith(
+      expect.objectContaining({
+        showPrice: false,
+        showSku: false,
+      }),
+    );
   });
 });
