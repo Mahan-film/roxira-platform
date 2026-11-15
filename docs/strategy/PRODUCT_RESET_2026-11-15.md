@@ -66,6 +66,8 @@ This document is the hub's answer, grounded in a read-only audit of `main` at `3
 
 ## 3. Target information architecture (36 items → 8 hubs)
 
+> **Superseded 2026-11-15:** the IA is now 7 hubs plus a header and a settings footer. See `docs/strategy/research/R1_PRODUCT_UX.md`, decision 1, and the T106 amendment in WAVE 14. The table below is kept for history.
+
 | Hub | Contains (today's pages) |
 |---|---|
 | خانه | dashboard, assistant (chat box on the home page), tasks/alerts ("3 cheques due this week") |
