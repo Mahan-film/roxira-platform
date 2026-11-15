@@ -8,7 +8,7 @@ import {
 import { randomBytes } from 'crypto';
 import * as dns from 'dns/promises';
 import * as net from 'net';
-import { minorToDecimal, toMinor } from '../../../accounting/money';
+import { fromDb, fromMinor, minorToDecimal, parseScaled, toMinor } from '../../../accounting/money';
 import { BASE_CURRENCY } from '../../../currency/constants/currency.constants';
 import { Currency } from '../../../currency/enums/currency.enum';
 import { CurrencyService } from '../../../currency/services/currency.service';
@@ -48,23 +48,15 @@ const RATIO_SCALE = 1_000_000;
 
 function parseWooAmount(val?: string | number | null): bigint {
   if (val === undefined || val === null || val === '') return 0n;
-  if (typeof val === 'number') {
-    return toMinor(val);
-  }
   const str = String(val).trim();
   if (!str) return 0n;
-  const parts = str.split('.');
-  if (parts.length === 2 && parts[1].length > 2) {
-    const num = parseFloat(str);
-    if (!Number.isFinite(num)) throw new BadRequestException(`مبلغ ارزی نامعتبر است: ${str}`);
-    return toMinor(num.toFixed(2));
+  if (!/^-?\d+(\.\d+)?$/.test(str)) {
+    throw new BadRequestException(`مبلغ ارزی نامعتبر است: ${str}`);
   }
   try {
-    return toMinor(str);
+    return fromDb(str);
   } catch {
-    const num = parseFloat(str);
-    if (!Number.isFinite(num)) throw new BadRequestException(`مبلغ ارزی نامعتبر است: ${str}`);
-    return toMinor(num.toFixed(2));
+    throw new BadRequestException(`مبلغ ارزی نامعتبر است: ${str}`);
   }
 }
 
@@ -226,8 +218,8 @@ export class WooCommerceSyncService {
       throw new BadRequestException(`Missing valid IRR FX rate for currency ${orderCurrency}`);
     }
 
-    const fromUnitsScaled = BigInt(Math.round(this.currencyService.unitsPerUsd(orderCurrency) * RATIO_SCALE));
-    const toUnitsScaled = BigInt(Math.round(this.currencyService.unitsPerUsd(BASE_CURRENCY) * RATIO_SCALE));
+    const fromUnitsScaled = parseScaled(this.currencyService.unitsPerUsd(orderCurrency), 6);
+    const toUnitsScaled = parseScaled(this.currencyService.unitsPerUsd(BASE_CURRENCY), 6);
     if (fromUnitsScaled <= 0n || toUnitsScaled <= 0n) {
       throw new BadRequestException(`Invalid FX units for currency ${orderCurrency}`);
     }
@@ -323,11 +315,11 @@ export class WooCommerceSyncService {
                 ? line.name || `کالای ووکامرس #${line.product_id}`
                 : `${line.name || `کالای ووکامرس #${line.product_id}`} (×${rawQty})`,
             quantity: qty,
-            unitPrice: Number(minorToDecimal(unitPriceMinor)),
-            discount: Number(minorToDecimal(lineDiscountMinor)),
+            unitPrice: fromMinor(unitPriceMinor) as number,
+            discount: fromMinor(lineDiscountMinor) as number,
             vatRate,
-            tax: Number(minorToDecimal(lineTaxMinor)),
-            total: Number(minorToDecimal(lineTotalMinor + lineTaxMinor)),
+            tax: fromMinor(lineTaxMinor) as number,
+            total: fromMinor(lineTotalMinor + lineTaxMinor) as number,
           };
         });
 
@@ -337,11 +329,11 @@ export class WooCommerceSyncService {
             sku: 'SHIPPING',
             description: 'هزینه ارسال سفارش',
             quantity: 1,
-            unitPrice: Number(minorToDecimal(shippingMinor)),
+            unitPrice: fromMinor(shippingMinor) as number,
             discount: 0,
             vatRate: 0,
             tax: 0,
-            total: Number(minorToDecimal(shippingMinor)),
+            total: fromMinor(shippingMinor) as number,
           });
         }
 
@@ -373,20 +365,20 @@ export class WooCommerceSyncService {
             jurisdiction,
             exchangeRate,
             fxRate,
-            amountFx: Number(minorToDecimal(orderTotalMinor)),
+            amountFx: fromMinor(orderTotalMinor) as number,
             baseCurrency: BASE_CURRENCY,
-            baseTotalAmount: Number(minorToDecimal(baseTotalAmountMinor)),
-            baseTotalTax: Number(minorToDecimal(baseTotalTaxMinor)),
-            baseFinalPayable: Number(minorToDecimal(baseFinalPayableMinor)),
+            baseTotalAmount: fromMinor(baseTotalAmountMinor) as number,
+            baseTotalTax: fromMinor(baseTotalTaxMinor) as number,
+            baseFinalPayable: fromMinor(baseFinalPayableMinor) as number,
             einvoiceType,
             subject: InvoiceSubject.ORIGINAL,
             sellerInfo,
             buyerInfo,
             items,
-            totalAmount: Number(minorToDecimal(totalAmountMinor)),
-            totalDiscount: Number(minorToDecimal(totalDiscountMinor)),
-            totalTax: Number(minorToDecimal(totalTaxMinor)),
-            finalPayable: Number(minorToDecimal(orderTotalMinor)),
+            totalAmount: fromMinor(totalAmountMinor) as number,
+            totalDiscount: fromMinor(totalDiscountMinor) as number,
+            totalTax: fromMinor(totalTaxMinor) as number,
+            finalPayable: fromMinor(orderTotalMinor) as number,
           },
           manager,
         );
