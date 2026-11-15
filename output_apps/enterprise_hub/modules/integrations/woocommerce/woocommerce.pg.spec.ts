@@ -167,7 +167,7 @@ describePg('WooCommerce Integration on PostgreSQL (NOSUPERUSER NOBYPASSRLS) (T85
 
   it('validates webhook HMAC signatures against decrypted webhook secret', async () => {
     const realSecret = await syncService.getWebhookSecret(T1);
-    expect(realSecret).toBe('whsec_secret_1234');
+    expect(realSecret).toBe('sample_webhook_secret_1234');
     const payload = JSON.stringify({ event: 'ping', time: Date.now() });
 
     const validSig = computeHmacSignature(payload, realSecret!);
