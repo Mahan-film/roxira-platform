@@ -98,7 +98,7 @@ describePg('WooCommerce Integration on PostgreSQL (NOSUPERUSER NOBYPASSRLS) (T85
       storeUrl: 'https://store1.example.com',
       consumerKey: 'ck_tenant1_test_key',
       consumerSecret: 'cs_tenant1_test_secret',
-      webhookSecret: 'whsec_secret_1234',
+      webhookSecret: 'sample_webhook_secret_1234',
     });
 
     const t1Config = await syncService.getConfig(T1);
@@ -112,7 +112,7 @@ describePg('WooCommerce Integration on PostgreSQL (NOSUPERUSER NOBYPASSRLS) (T85
       webhookSecret: t1Config.webhookSecret,
       autoSyncStock: false,
     });
-    expect(await syncService.getWebhookSecret(T1)).toBe('whsec_secret_1234');
+    expect(await syncService.getWebhookSecret(T1)).toBe('sample_webhook_secret_1234');
 
     // Raw DB row has encrypted webhook secret (not plaintext)
     const [rawCfg] = await testDb.rawQuery<{ webhook_secret: string }>(
@@ -120,7 +120,7 @@ describePg('WooCommerce Integration on PostgreSQL (NOSUPERUSER NOBYPASSRLS) (T85
       [T1],
     );
     expect(rawCfg.webhook_secret).toMatch(/^v1\./);
-    expect(rawCfg.webhook_secret).not.toContain('whsec_secret_1234');
+    expect(rawCfg.webhook_secret).not.toContain('sample_webhook_secret_1234');
 
     // Tenant 2 cannot see Tenant 1's config
     await expect(syncService.getConfig(T2)).rejects.toThrow(/not found/);
