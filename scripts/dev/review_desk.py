@@ -727,7 +727,12 @@ def provider_keys(pcfg: dict) -> list[str]:
             if any(os.environ.get(s) for s in slots):
                 names = list(slots)
                 break
-    return [n for n in names if os.environ.get(n)]
+    present = [n for n in names if os.environ.get(n)]
+    for n in present:  # keys that come from the environment (GitHub Actions), not the file, are redacted too
+        v = os.environ[n].strip()
+        if len(v) >= 12:
+            _SECRET_VALUES.add(v)
+    return present
 
 
 def provider_base_url(name: str, pcfg: dict) -> str:
