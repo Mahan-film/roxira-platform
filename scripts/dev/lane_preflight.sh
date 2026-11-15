@@ -21,7 +21,7 @@ if root=$(git rev-parse --show-toplevel 2>/dev/null); then
   ok "git clone at $root"
   url=$(git remote get-url origin 2>/dev/null || true)
   case "$url" in
-    *Mahan-film/roxira-platform*) ok "origin = $REPO" ;;
+    *"$REPO"*) ok "origin = $REPO" ;;
     *) fail "origin is '$url'" "git remote set-url origin git@github.com:$REPO.git" ;;
   esac
   if git fetch -q origin main 2>/dev/null; then
