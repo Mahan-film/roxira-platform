@@ -1,13 +1,16 @@
 import 'reflect-metadata';
-import { ForbiddenException, ValidationPipe } from '@nestjs/common';
+import { ForbiddenException, INestApplication, ValidationPipe } from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { RequestMethod } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import request from 'supertest';
 import { AccessAction, AccessModule } from '../access/catalogue';
 import { ACCESS_ACTION_KEY, ACCESS_MODULE_KEY, ANY_MEMBER_KEY } from '../access/decorators';
 import { AuthenticatedRequest } from '../auth/guards/jwt-auth.guard';
 import { OnboardingController } from './controllers/onboarding.controller';
-import { OnboardingStepParamDto, SetOnboardingStepDto } from './dto/onboarding.dto';
+import { OnboardingStepParamDto, SetOnboardingStepDto, UpdateOnboardingDto } from './dto/onboarding.dto';
 import { OnboardingStep, OnboardingStepStatus } from './enums/onboarding-step.enum';
+import { OnboardingService } from './services/onboarding.service';
 
 const proto = OnboardingController.prototype as unknown as Record<string, object>;
 const meta = (key: string, handler: string) => Reflect.getMetadata(key, proto[handler]);
@@ -67,5 +70,128 @@ describe('Onboarding request validation (the global ValidationPipe settings)', (
     await expect(
       pipe.transform({ status: 'done', tenantId: '11111111-1111-4111-8111-111111111111' }, { type: 'body', metatype: SetOnboardingStepDto }),
     ).rejects.toBeDefined();
+  });
+
+  it('correctly handles boolean coercion for UpdateOnboardingDto (Rule 26)', async () => {
+    const resFalseStr = await pipe.transform({ dismissed: 'false' }, { type: 'body', metatype: UpdateOnboardingDto });
+    expect(resFalseStr.dismissed).toBe(false);
+
+    const resFalseBool = await pipe.transform({ dismissed: false }, { type: 'body', metatype: UpdateOnboardingDto });
+    expect(resFalseBool.dismissed).toBe(false);
+
+    const resZeroStr = await pipe.transform({ dismissed: '0' }, { type: 'body', metatype: UpdateOnboardingDto });
+    expect(resZeroStr.dismissed).toBe(false);
+
+    const resTrueStr = await pipe.transform({ dismissed: 'true' }, { type: 'body', metatype: UpdateOnboardingDto });
+    expect(resTrueStr.dismissed).toBe(true);
+
+    await expect(pipe.transform({ dismissed: 'not-a-bool' }, { type: 'body', metatype: UpdateOnboardingDto })).rejects.toBeDefined();
+    await expect(pipe.transform({ firstVisitHandled: 'false' }, { type: 'body', metatype: UpdateOnboardingDto })).rejects.toBeDefined();
+    await expect(pipe.transform({ firstVisitHandled: '0' }, { type: 'body', metatype: UpdateOnboardingDto })).rejects.toBeDefined();
+    await expect(pipe.transform({ firstVisitHandled: false }, { type: 'body', metatype: UpdateOnboardingDto })).rejects.toBeDefined();
+
+    const resFirstVisit = await pipe.transform({ firstVisitHandled: true }, { type: 'body', metatype: UpdateOnboardingDto });
+    expect(resFirstVisit.firstVisitHandled).toBe(true);
+  });
+});
+
+describe('UpdateOnboardingDto boolean coercion (Rule 26) with supertest and global ValidationPipe', () => {
+  let app: INestApplication;
+  const mockService = {
+    update: jest.fn().mockImplementation((_tenantId, dto) => Promise.resolve(dto)),
+  };
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({
+      controllers: [OnboardingController],
+      providers: [
+        {
+          provide: OnboardingService,
+          useValue: mockService,
+        },
+      ],
+    }).compile();
+
+    app = moduleRef.createNestApplication();
+    app.use((req: any, _res: any, next: any) => {
+      req.user = { sub: 'u1', tenantId: 't1' };
+      next();
+    });
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+        transformOptions: { enableImplicitConversion: true },
+      }),
+    );
+    await app.init();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  beforeEach(() => {
+    mockService.update.mockClear();
+  });
+
+  it('preserves dismissed=false when sent as string "false"', async () => {
+    await request(app.getHttpServer())
+      .patch('/tenants/me/onboarding')
+      .send({ dismissed: 'false' })
+      .expect(200);
+    expect(mockService.update).toHaveBeenCalledWith('t1', { dismissed: false });
+  });
+
+  it('preserves dismissed=false when sent as boolean false', async () => {
+    await request(app.getHttpServer())
+      .patch('/tenants/me/onboarding')
+      .send({ dismissed: false })
+      .expect(200);
+    expect(mockService.update).toHaveBeenCalledWith('t1', { dismissed: false });
+  });
+
+  it('preserves dismissed=false when sent as string "0"', async () => {
+    await request(app.getHttpServer())
+      .patch('/tenants/me/onboarding')
+      .send({ dismissed: '0' })
+      .expect(200);
+    expect(mockService.update).toHaveBeenCalledWith('t1', { dismissed: false });
+  });
+
+  it('rejects firstVisitHandled when sent as string "false" or "0" or boolean false', async () => {
+    await request(app.getHttpServer())
+      .patch('/tenants/me/onboarding')
+      .send({ firstVisitHandled: 'false' })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .patch('/tenants/me/onboarding')
+      .send({ firstVisitHandled: '0' })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .patch('/tenants/me/onboarding')
+      .send({ firstVisitHandled: false })
+      .expect(400);
+
+    expect(mockService.update).not.toHaveBeenCalled();
+  });
+
+  it('accepts firstVisitHandled=true', async () => {
+    await request(app.getHttpServer())
+      .patch('/tenants/me/onboarding')
+      .send({ firstVisitHandled: true })
+      .expect(200);
+    expect(mockService.update).toHaveBeenCalledWith('t1', { firstVisitHandled: true });
+  });
+
+  it('accepts firstVisitHandled="true"', async () => {
+    await request(app.getHttpServer())
+      .patch('/tenants/me/onboarding')
+      .send({ firstVisitHandled: 'true' })
+      .expect(200);
+    expect(mockService.update).toHaveBeenCalledWith('t1', { firstVisitHandled: true });
   });
 });

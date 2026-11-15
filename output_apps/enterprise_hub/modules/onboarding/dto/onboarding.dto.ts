@@ -52,16 +52,26 @@ export class SaveOnboardingProfileDto {
   nationalId?: string;
 }
 
+/** Prevents `enableImplicitConversion: true` from coercing `"false"` or `"0"` into boolean `true`. */
+export const transformBoolean = ({ obj, key, value }: { obj?: Record<string, unknown>; key?: string; value: unknown }): unknown => {
+  const raw = obj && key && key in obj ? obj[key] : value;
+  if (raw === 'true' || raw === true || raw === 1 || raw === '1') return true;
+  if (raw === 'false' || raw === false || raw === 0 || raw === '0') return false;
+  return raw;
+};
+
 /** Body of `PATCH /tenants/me/onboarding`. */
 export class UpdateOnboardingDto {
   @ApiPropertyOptional({ description: 'Hide the dashboard banner (true) or show it again (false)' })
   @IsOptional()
-  @IsBoolean()
+  @Transform(transformBoolean)
+  @IsBoolean({ message: 'مقدار پنهان‌سازی بنر باید بولی باشد.' })
   dismissed?: boolean;
 
   @ApiPropertyOptional({ description: 'Record that the first-login redirect was handled; only true is accepted', enum: [true] })
   @IsOptional()
-  @IsIn([true])
+  @Transform(transformBoolean)
+  @IsIn([true], { message: 'تنها مقدار مجاز برای ثبت هدایت ورود نخست true است.' })
   firstVisitHandled?: true;
 }
 
