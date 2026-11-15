@@ -280,7 +280,21 @@ export default function TreasurySmsPage() {
                   {parsePreview.dateTime && (
                     <div>
                       <span className="text-muted-foreground">تاریخ: </span>
-                      <span className="font-mono text-xs">{parsePreview.dateTime.slice(0, 10)}</span>
+                      <span className="font-mono text-xs">
+                        {(() => {
+                          try {
+                            const d = new Date(parsePreview.dateTime);
+                            return new Intl.DateTimeFormat('fa-IR', {
+                              timeZone: 'Asia/Tehran',
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
+                            }).format(d);
+                          } catch {
+                            return parsePreview.dateTime.slice(0, 10);
+                          }
+                        })()}
+                      </span>
                     </div>
                   )}
                 </div>

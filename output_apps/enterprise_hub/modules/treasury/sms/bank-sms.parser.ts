@@ -147,7 +147,7 @@ export function parseBankSms(rawText: string): BankSmsParsedResult {
   if (balanceMatch) {
     const rawBalanceStr = balanceMatch[1].replace(/,/g, '');
     let balMinor = toMinor(rawBalanceStr);
-    if (/تومان/.test(balanceMatch[0])) {
+    if (/تومان/.test(balanceMatch[0]) || (!/ریال|ريال/.test(balanceMatch[0]) && /تومان/.test(amountMatch[0]))) {
       balMinor = balMinor * 10n;
     }
     balanceMinor = balMinor;
@@ -183,15 +183,19 @@ export function parseBankSms(rawText: string): BankSmsParsedResult {
 
   // 7. Extract Date and Time
   let dateTime: string | undefined;
-  // Match Jalali date: "1403/08/22" or "03/08/22" or "1403-08-22"
-  const dateMatch = /(\d{2,4})[\/\-](\d{1,2})[\/\-](\d{1,2})/i.exec(normalised);
+  // Match Jalali date: "1403/08/22" or "03/08/22" or "1403-08-22", guarded against adjacent digits/slashes
+  const dateMatch =
+    /(?<!\d)(?:(1[34]\d{2})|(\d{2}))[\/\-](0?[1-9]|1[0-2])[\/\-](0?[1-9]|[12]\d|3[01])(?!\d|[\/\.])/i.exec(
+      normalised,
+    );
   const timeMatch = /(\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(normalised);
 
   if (dateMatch) {
-    let jy = parseInt(dateMatch[1], 10);
-    if (jy < 100) jy += 1400; // 03 -> 1403
-    const jm = parseInt(dateMatch[2], 10);
-    const jd = parseInt(dateMatch[3], 10);
+    const rawYear = dateMatch[1] ?? dateMatch[2];
+    let jy = parseInt(rawYear, 10);
+    if (jy < 100) jy = jy >= 90 ? 1300 + jy : 1400 + jy; // 03 -> 1403, 98 -> 1398
+    const jm = parseInt(dateMatch[3], 10);
+    const jd = parseInt(dateMatch[4], 10);
 
     const hour = timeMatch ? parseInt(timeMatch[1], 10) : 12;
     const minute = timeMatch ? parseInt(timeMatch[2], 10) : 0;
@@ -241,6 +245,15 @@ export function toTehranDateString(d: Date | string | number | null | undefined)
   if (Number.isNaN(dt.getTime())) {
     return '';
   }
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tehran' }).format(dt);
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Tehran',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(dt);
+  const year = parts.find((p) => p.type === 'year')?.value;
+  const month = parts.find((p) => p.type === 'month')?.value;
+  const day = parts.find((p) => p.type === 'day')?.value;
+  return year && month && day ? `${year}-${month}-${day}` : '';
 }
 
