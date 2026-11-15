@@ -26,3 +26,18 @@ list (number, date, body, subject, excerpt, source_url). Any failure returns no 
 not rows in iran_laws_v3: rulings have no article structure, a different relevance profile, and must never be mixed into «مبنای قانونی».
 
 Rollback: unset the flag and recreate `enterprise_app`.
+
+## Keeping the collection current: the delta loop
+The full crawl is a one-off, so new Supreme Court unity rulings (after number 882) arrive through `law_watch` instead:
+1. **Mac `scripts/legal/law_watch.py`** (every 6 h) stages ekhtebar posts as `data/legal/staged/law_watch_*.jsonl`; unity rulings are
+   `change_type: unity_ruling` records (a short version first, an edited long version later, text capped near 12000 chars).
+2. **Relay PR** brings those staged files to the repo (see `docs/legal/IRAN_RELAY.md`).
+3. **`scripts/legal/rulings_delta.py`** (offline, deterministic; `--dry-run` prints a summary) keeps the newest version per post, parses
+   number/date, extracts the holding (after «ج) رأی وحدت رویه شماره N»; a short version is the bare holding; else the excerpt with
+   `needs_review: true`), drops every ruling already in `unity_rulings_*.jsonl` / `admin_court_board_rulings_*.jsonl` and writes
+   `data/legal/staged/unity_rulings_delta_<date>.jsonl` in the corpus schema. News posts without a ruling number (for example an
+   announcement of a new ruling) are listed as skipped; the numbered post usually follows within days and a later run picks it up. Commit the delta file via PR.
+4. **`scripts/legal/upsert_rulings_delta_on_server.sh [--dry-run] [--include-review] FILE...`** (server): snapshot, then
+   `ingest_rulings.py apply --allow-existing` into the existing `iran_rulings_v1` (deterministic point ids, so reruns are idempotent;
+   `needs_review` rows are skipped unless `--include-review`). A server timer that runs steps 3-4 automatically needs owner approval;
+   until then a human runs the script after the delta PR merges.
