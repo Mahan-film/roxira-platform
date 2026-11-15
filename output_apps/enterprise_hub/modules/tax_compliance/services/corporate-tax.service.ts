@@ -1,5 +1,7 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { minorToDecimal, parseMinor, scaledToDecimal } from '../../accounting/money';
+import { CountryPackCls } from '../../country_packs/country-pack.context';
+import { CountryPackRegistry } from '../../country_packs/country-pack.registry';
 import { isoDate, jalaliMonthEnd } from '../../hr/services/jalali-period';
 import { isValidStatutoryValue, StatutoryKey } from '../../hr/statutory/statutory-catalogue';
 import { StatutoryRepository } from '../../hr/statutory/statutory.repository';
@@ -52,20 +54,32 @@ const KEYS = ['corporate_tax_rate', 'corporate_tax_effective_floor'] as const;
 /** Provision computation for the corporate income tax workbench. Preview only, rates from the store. */
 @Injectable()
 export class CorporateTaxService {
-  constructor(private readonly statutory: StatutoryRepository) {}
+  constructor(
+    private readonly statutory: StatutoryRepository,
+    @Optional() private readonly packRegistry?: CountryPackRegistry,
+  ) {}
 
-  private async rates(tenantId: string, fiscalYear: number): Promise<CorporateTaxParameterUse[]> {
-    const rows = await this.statutory.findForYear(tenantId, IRAN, fiscalYear);
+  private async rates(
+    tenantId: string,
+    fiscalYear: number,
+    countryCode?: string,
+  ): Promise<CorporateTaxParameterUse[]> {
+    const pack = this.packRegistry?.resolve(countryCode) ?? CountryPackCls.current();
+    const country = pack?.country ?? countryCode ?? IRAN;
+    const rule = pack?.taxRules?.find((r) => r.kind === 'corporate_income_tax');
+    const keys = (rule?.statutoryKeys as readonly string[] | undefined) ?? KEYS;
+
+    const rows = await this.statutory.findForYear(tenantId, country, fiscalYear);
     const resolved = resolveParameters(rows, isoDate(jalaliMonthEnd(fiscalYear, 12)));
-    return KEYS.map((key) => {
-      const row = resolved.get(key);
-      if (!row || !isValidStatutoryValue(key, row.value)) {
+    return keys.map((key) => {
+      const row = resolved.get(key as StatutoryKey);
+      if (!row || !isValidStatutoryValue(key as StatutoryKey, row.value)) {
         throw new BadRequestException(
           `پارامتر قانونی «${key}» برای سال ${fiscalYear} تعریف نشده یا نامعتبر است؛ منبع قانونی تأییدشده لازم است.`,
         );
       }
       return {
-        key,
+        key: key as StatutoryKey,
         value: String(row.value),
         effectiveFrom: row.effectiveFrom.slice(0, 10),
         version: row.version,
@@ -75,8 +89,12 @@ export class CorporateTaxService {
     });
   }
 
-  async preview(tenantId: string, dto: CorporateTaxPreviewDto): Promise<CorporateTaxPreview> {
-    const parameters = await this.rates(tenantId, dto.fiscalYear);
+  async preview(
+    tenantId: string,
+    dto: CorporateTaxPreviewDto,
+    countryCode?: string,
+  ): Promise<CorporateTaxPreview> {
+    const parameters = await this.rates(tenantId, dto.fiscalYear, countryCode);
     const rate = parameters[0].value;
     const floor = parameters[1].value;
     const profit = parseMinor(dto.accountingProfit);

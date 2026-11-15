@@ -1,19 +1,83 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsNumber, Max, Min } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Length,
+  Max,
+  Min,
+} from 'class-validator';
 
 /**
  * DTO تنظیمات سازمان (PATCH /tenants/me/settings).
  * نرخ VAT به‌صورت نسبت ذخیره می‌شود (۰٫۱ = ۱۰٪).
+ * فیلدهای بومی‌سازی شرکت (WAVE 15 - T137 / R4 Decision 1).
  */
 export class UpdateTenantSettingsDto {
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'نرخ پیش‌فرض مالیات بر ارزش افزوده (نسبت؛ ۰٫۱ = ۱۰٪)',
     example: 0.1,
     minimum: 0,
     maximum: 1,
   })
+  @IsOptional()
   @IsNumber({ maxDecimalPlaces: 4 })
   @Min(0)
   @Max(1)
-  defaultVatRate: number;
+  defaultVatRate?: number;
+
+  @ApiPropertyOptional({
+    description: 'کد کشور سازمان (ISO 3166-1 alpha-2). پس از ثبت نخستین سند قطعی قفل می‌شود.',
+    example: 'IR',
+  })
+  @IsOptional()
+  @IsString()
+  @Length(2, 2)
+  countryCode?: string;
+
+  @ApiPropertyOptional({
+    description: 'کد ارز مبنا (ISO 4217). پس از ثبت نخستین سند قطعی قفل می‌شود.',
+    example: 'IRR',
+  })
+  @IsOptional()
+  @IsString()
+  @Length(3, 3)
+  bookCurrencyCode?: string;
+
+  @ApiPropertyOptional({
+    description: 'تقویم پیش‌فرض سازمان (jalali یا gregorian)',
+    example: 'jalali',
+  })
+  @IsOptional()
+  @IsString()
+  defaultCalendar?: string;
+
+  @ApiPropertyOptional({
+    description: 'منطقه زمانی IANA',
+    example: 'Asia/Tehran',
+  })
+  @IsOptional()
+  @IsString()
+  timezone?: string;
+
+  @ApiPropertyOptional({
+    description: 'لوکال BCP 47',
+    example: 'fa-IR',
+  })
+  @IsOptional()
+  @IsString()
+  locale?: string;
+
+  @ApiPropertyOptional({
+    description: 'ماه شروع سال مالی (۱ تا ۱۲)',
+    example: 1,
+    minimum: 1,
+    maximum: 12,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  fiscalYearStartMonth?: number;
 }

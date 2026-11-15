@@ -1,5 +1,7 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { AuditService } from '../../access/services/audit.service';
+import { CountryPackCls } from '../../country_packs/country-pack.context';
+import { CountryPackRegistry } from '../../country_packs/country-pack.registry';
 import { gregorianToJalali, isoDate, jalaliMonthEnd, jalaliMonthStart } from '../services/jalali-period';
 import {
   isStatutoryKey,
@@ -158,15 +160,26 @@ export class StatutoryService {
   constructor(
     private readonly repository: StatutoryRepository,
     private readonly audit: AuditService,
+    @Optional() private readonly packRegistry?: CountryPackRegistry,
   ) {}
+
+  private resolveCountry(explicitCountry?: string): string {
+    return (
+      explicitCountry ??
+      this.packRegistry?.resolve().country ??
+      CountryPackCls.current()?.country ??
+      IRAN
+    );
+  }
 
   /** Parameters in force at the end of a Jalali month (or year end when `month` is omitted). */
   private async inForce(
     tenantId: string,
     year: number,
     month: number,
+    country?: string,
   ): Promise<Map<StatutoryKey, StatutoryParameterEntity>> {
-    const rows = await this.repository.findForYear(tenantId, IRAN, year);
+    const rows = await this.repository.findForYear(tenantId, this.resolveCountry(country), year);
     return resolveParameters(rows, isoDate(jalaliMonthEnd(year, month)));
   }
 
@@ -174,8 +187,9 @@ export class StatutoryService {
     tenantId: string,
     year: number,
     month = 12,
+    country?: string,
   ): Promise<PayrollYearRates> {
-    return toPayrollRates(year, await this.inForce(tenantId, year, month));
+    return toPayrollRates(year, await this.inForce(tenantId, year, month, country));
   }
 
   /**
@@ -185,30 +199,31 @@ export class StatutoryService {
   async ratesForLatestUpTo(
     tenantId: string,
     year: number | undefined,
+    country?: string,
   ): Promise<PayrollYearRates> {
-    const years = await this.repository.configuredYears(tenantId, IRAN);
+    const years = await this.repository.configuredYears(tenantId, this.resolveCountry(country));
     if (years.length === 0) {
       throw new BadRequestException('پارامترهای قانونی حقوق تعریف نشده است.');
     }
     const match =
       [...years].reverse().find((item) => year === undefined || item <= year) ??
       years[0];
-    return this.ratesFor(tenantId, match);
+    return this.ratesFor(tenantId, match, 12, country);
   }
 
   /** Whether any parameter exists for this year (a run for an empty year is refused). */
-  async hasYear(tenantId: string, year: number): Promise<boolean> {
-    const rows = await this.repository.findForYear(tenantId, IRAN, year);
+  async hasYear(tenantId: string, year: number, country?: string): Promise<boolean> {
+    const rows = await this.repository.findForYear(tenantId, this.resolveCountry(country), year);
     return rows.length > 0;
   }
 
   /** Sanavat terms in force on a Gregorian date: the tenant's own rows beat platform defaults. */
-  async settlementTermsOn(tenantId: string, asOf: string): Promise<SettlementTerms> {
+  async settlementTermsOn(tenantId: string, asOf: string, country?: string): Promise<SettlementTerms> {
     const jalali = gregorianToJalali(asOf);
     if (!jalali) {
       throw new BadRequestException('تاریخ معتبر نیست.');
     }
-    const rows = await this.repository.findKeysUpToYear(tenantId, IRAN, [...SETTLEMENT_KEYS], jalali.jy);
+    const rows = await this.repository.findKeysUpToYear(tenantId, this.resolveCountry(country), [...SETTLEMENT_KEYS], jalali.jy);
     const resolved = resolveParameters(rows, asOf);
     const parameters: SettlementParameterUse[] = [];
     for (const key of SETTLEMENT_KEYS) {
@@ -242,12 +257,12 @@ export class StatutoryService {
    * Contract figures in force on a Gregorian date, read-only, for the contracting module (T3, #227).
    * A tenant's own row beats the platform default; `unclear` terms carry rate null.
    */
-  async contractTermsOn(tenantId: string, asOf: string): Promise<ContractTerms> {
+  async contractTermsOn(tenantId: string, asOf: string, country?: string): Promise<ContractTerms> {
     const jalali = gregorianToJalali(asOf);
     if (!jalali) {
       throw new BadRequestException('تاریخ معتبر نیست.');
     }
-    const rows = await this.repository.findKeysUpToYear(tenantId, IRAN, CONTRACT_TERM_KEYS, jalali.jy);
+    const rows = await this.repository.findKeysUpToYear(tenantId, this.resolveCountry(country), CONTRACT_TERM_KEYS, jalali.jy);
     return buildContractTerms(asOf, resolveParameters(rows, asOf));
   }
 
@@ -255,8 +270,9 @@ export class StatutoryService {
     tenantId: string,
     year: number,
     month = 12,
+    country?: string,
   ): Promise<ResolvedParameter[]> {
-    const parameters = await this.inForce(tenantId, year, month);
+    const parameters = await this.inForce(tenantId, year, month, country);
     return [...parameters.entries()].map(([key, row]) => ({
       key,
       label: STATUTORY_KEYS[key].label,
@@ -276,11 +292,12 @@ export class StatutoryService {
     tenantId: string,
     year: number,
     key: string,
+    country?: string,
   ): Promise<StatutoryParameterEntity[]> {
     if (!isStatutoryKey(key)) {
       throw new BadRequestException('کلید پارامتر قانونی معتبر نیست.');
     }
-    const rows = await this.repository.findForYear(tenantId, IRAN, year);
+    const rows = await this.repository.findForYear(tenantId, this.resolveCountry(country), year);
     return rows.filter((row) => row.paramKey === key);
   }
 
@@ -294,6 +311,7 @@ export class StatutoryService {
       effectiveFrom?: string;
       source: string;
       verified: boolean;
+      country?: string;
     },
   ): Promise<ResolvedParameter[]> {
     const { key, fiscalYear } = input;
@@ -312,9 +330,10 @@ export class StatutoryService {
       throw new BadRequestException('تاریخ نفوذ باید در همان سال مالی باشد.');
     }
 
-    const before = (await this.history(tenantId, fiscalYear, key))[0] ?? null;
+    const country = this.resolveCountry(input.country);
+    const before = (await this.history(tenantId, fiscalYear, key, country))[0] ?? null;
     const row = await this.repository.insertVersion(tenantId, {
-      country: IRAN,
+      country,
       fiscalYear,
       paramKey: key,
       effectiveFrom,

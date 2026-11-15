@@ -26,6 +26,27 @@ export class TenantMeResponseDto {
   @ApiProperty({ description: 'نرخ پیش‌فرض VAT سازمان (نسبت)', example: 0.1 })
   defaultVatRate: number;
 
+  @ApiProperty({ description: 'کد کشور سازمان (ISO 3166-1 alpha-2)', example: 'IR' })
+  countryCode: string;
+
+  @ApiProperty({ description: 'نسخه بسته کشوری', example: '1.0.0' })
+  packVersion: string;
+
+  @ApiProperty({ description: 'کد ارز مبنا (ISO 4217)', example: 'IRR' })
+  bookCurrencyCode: string;
+
+  @ApiProperty({ description: 'تقویم پیش‌فرض سازمان', example: 'jalali' })
+  defaultCalendar: string;
+
+  @ApiProperty({ description: 'منطقه زمانی', example: 'Asia/Tehran' })
+  timezone: string;
+
+  @ApiProperty({ description: 'زبان و لوکال اصلی', example: 'fa-IR' })
+  locale: string;
+
+  @ApiProperty({ description: 'ماه شروع سال مالی (۱ تا ۱۲)', example: 1 })
+  fiscalYearStartMonth: number;
+
   static fromEntity(
     tenant: TenantEntity,
     tenantRole: TenantRole | null,
@@ -36,6 +57,13 @@ export class TenantMeResponseDto {
       slug: tenant.slug,
       tenantRole,
       defaultVatRate: Number(tenant.defaultVatRate ?? 0.1),
+      countryCode: tenant.countryCode ?? 'IR',
+      packVersion: tenant.packVersion ?? '1.0.0',
+      bookCurrencyCode: tenant.bookCurrencyCode ?? 'IRR',
+      defaultCalendar: tenant.defaultCalendar ?? 'jalali',
+      timezone: tenant.timezone ?? 'Asia/Tehran',
+      locale: tenant.locale ?? 'fa-IR',
+      fiscalYearStartMonth: tenant.fiscalYearStartMonth ?? 1,
     };
   }
 }

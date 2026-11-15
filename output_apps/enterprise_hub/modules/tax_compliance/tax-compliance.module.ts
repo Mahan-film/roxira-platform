@@ -52,6 +52,7 @@ import { TaxComplianceService } from './services/tax-compliance.service';
 import { MoadianCompliancePolicyService } from './services/moadian-compliance-policy.service';
 import { TenantPolicyModule } from '../tenants/policy/policy.module';
 import { AccessModule } from '../access/access.module';
+import { CountryPacksModule } from '../country_packs/country-packs.module';
 
 /**
  * ماژول تطبیق سامانه مودیان و امضای الکترونیک صورتحساب‌ها.
@@ -80,6 +81,7 @@ import { AccessModule } from '../access/access.module';
     InvoicingModule,
     TenantPolicyModule,
     AccessModule,
+    CountryPacksModule,
     BullModule.registerQueue({ name: MOADIAN_QUEUE }),
   ],
   controllers: [TaxComplianceController, MoadianController, SeasonalReportController, LedgerExportController, CorporateTaxController, BusinessTaxController, RentalTaxController, DoctorWithholdingController, KartableReconciliationController],

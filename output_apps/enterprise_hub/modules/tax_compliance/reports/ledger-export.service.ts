@@ -1,6 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { minorToDecimal, minorToMillionRials } from '../../accounting/money';
 import { AuditService } from '../../access/services/audit.service';
+import { CountryPackCls } from '../../country_packs/country-pack.context';
+import { CountryPackRegistry } from '../../country_packs/country-pack.registry';
 import { tehranMidnight } from '../../assistant/services/jalali-period';
 import { isoDate, jalaliMonthDays, jalaliMonthEnd } from '../../hr/services/jalali-period';
 import { StatutoryRepository } from '../../hr/statutory/statutory.repository';
@@ -117,6 +119,7 @@ export class LedgerExportService {
     private readonly repository: LedgerExportRepository,
     private readonly statutory: StatutoryRepository,
     private readonly audit: AuditService,
+    @Optional() private readonly packRegistry?: CountryPackRegistry,
   ) {}
 
   private bounds(year: number, quarter: number): { fromDay: string; toDay: string } {
@@ -140,9 +143,11 @@ export class LedgerExportService {
   }
 
   /** Resolves upload periodicity (months) from statutory settings without swallowing repository failures. */
-  async resolvePeriodicityMonths(tenantId: string, year: number): Promise<number> {
+  async resolvePeriodicityMonths(tenantId: string, year: number, countryCode?: string): Promise<number> {
     const fallback = this.defaultPeriodicityMonths(year);
-    const rows = await this.statutory.findForYear(tenantId, IRAN, year);
+    const pack = this.packRegistry?.resolve(countryCode) ?? CountryPackCls.current();
+    const country = pack?.country ?? countryCode ?? IRAN;
+    const rows = await this.statutory.findForYear(tenantId, country, year);
     const resolved = resolveParameters(rows, isoDate(jalaliMonthEnd(year, 12)));
     const param = resolved.get('commercial_books_periodicity');
     if (param && typeof param.value === 'number' && [1, 3, 6, 12].includes(param.value)) {
