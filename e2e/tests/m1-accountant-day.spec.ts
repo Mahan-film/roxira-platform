@@ -693,6 +693,12 @@ test.describe('Accountant day · go-live gate on the local stack', () => {
   });
 
   test('08 cheque received and cleared through the cheques module [T91]', async ({ page }) => {
+    // Pin posting rule roles so this tenant routes cheque postings to the hand-written expected accounts:
+    // cheques_receivable -> 1110, bank -> 1010 (as defined in accountant-day-expected.ts)
+    await putApi(page, 'posting-rules/cheque.received.create/roles/cheques_receivable', { accountCode: '1110' }, 204);
+    await putApi(page, 'posting-rules/cheque.received.clear_direct/roles/cheques_receivable', { accountCode: '1110' }, 204);
+    await putApi(page, 'posting-rules/cheque.received.clear_direct/roles/bank', { accountCode: '1010' }, 204);
+
     const created = await postApi<{ id: number; status: string }>(
       page,
       'cheques',
