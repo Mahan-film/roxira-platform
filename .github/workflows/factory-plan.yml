@@ -23,13 +23,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write
-  pull-requests: write
-  issues: write
-  # Needed only to dispatch agent-task.yml for the first ready task(s) once
-  # the plan is written -- a GITHUB_TOKEN-authored label/issue-create never
-  # triggers other workflows on its own (see docs/AGENTS_WORKFORCE.md #6).
-  actions: write
+  contents: read
 
 env:
   ISSUE_NUMBER: ${{ github.event.issue.number }}
@@ -39,6 +33,11 @@ jobs:
     name: Approve and plan
     runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: write
     # A PR also fires issue_comment events; github.event.issue.pull_request only
     # exists when the commented-on "issue" is actually a PR, so this excludes those.
     if: >
@@ -53,12 +52,12 @@ jobs:
       )
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.13"
 

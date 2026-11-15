@@ -33,12 +33,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write
-  pull-requests: write
-  issues: write
-  # Needed only to dispatch ci.yml on the new branch (`gh workflow run`) once a
-  # PR is opened, since that PR doesn't trigger `pull_request` events on its own.
-  actions: write
+  contents: read
 
 env:
   ISSUE_NUMBER: ${{ github.event.issue.number || github.event.inputs.issue_number }}
@@ -49,6 +44,11 @@ jobs:
     name: Run agent task
     runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 20
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: write
     # Job guard: kill switch + author/actor allowlist. Both must hold before any
     # checkout happens. AGENT_ALLOWED_ACTORS is a comma-separated repo variable;
     # unset defaults to the repo owner only. `contains(',a,b,', ',x,')`-style
@@ -64,14 +64,14 @@ jobs:
       )
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           # Do not leave GITHUB_TOKEN in .git/config: the agent's shell could read it and
           # push anywhere (incl. main). agent_runner pushes with an explicit token URL instead.
           persist-credentials: false
 
       - name: Set up Node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "20"
 

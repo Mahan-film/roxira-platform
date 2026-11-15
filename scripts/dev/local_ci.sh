@@ -162,6 +162,7 @@ fi
 
 run_step "system inventory up to date" step_inventory
 run_step "no new hardcoded model ids" python3 scripts/ci/check_hardcoded_model_ids.py
+run_step "pinned GitHub Actions" python3 scripts/ci/check_pinned_actions.py
 
 # reviewer family: REPORT-ONLY for now (prints the finding, never fails the run).
 step_reviewer_family() {
