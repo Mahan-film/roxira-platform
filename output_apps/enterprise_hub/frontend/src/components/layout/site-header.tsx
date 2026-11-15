@@ -6,6 +6,7 @@ import { LogOut, UserRound } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { PortalAuthActions } from "@/components/auth/portal-auth-actions";
 import { PortalMobileNav } from "@/components/layout/portal-mobile-nav";
+import { useTranslations } from "next-intl";
 
 const NAV_LINKS: { href: string; label: string }[] = [
   { href: "/accounting", label: "حسابداری" },
@@ -18,6 +19,7 @@ const NAV_LINKS: { href: string; label: string }[] = [
 ];
 
 export function SiteHeader() {
+    const t = useTranslations('layout');
   const { isAuthenticated, user, logout, isLoading } = useAuth();
 
   return (
@@ -28,7 +30,7 @@ export function SiteHeader() {
             R
           </span>
           <span className="flex flex-col leading-tight">
-            <span className="text-sm font-bold text-white">روکسیرا</span>
+            <span className="text-sm font-bold text-white">{t('site-header.864fa78a')}</span>
             <span className="font-mono text-[10px] text-slate-500" dir="ltr">
               Roxira
             </span>
@@ -60,12 +62,11 @@ export function SiteHeader() {
             <button
               type="button"
               onClick={logout}
-              title="خروج از حساب"
+              title={t('site-header.bf5696ba')}
               className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-slate-300 transition-colors hover:border-rose-400/40 hover:bg-rose-500/10 hover:text-rose-200"
             >
               <LogOut className="size-3.5" />
-              خروج
-            </button>
+              {t('site-header.39db927c')}</button>
           </div>
         ) : (
           <PortalAuthActions />
