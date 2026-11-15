@@ -40,12 +40,44 @@ async def tts(request: web.Request) -> web.Response:
     return web.json_response({"error": "tts failed"}, status=502)
 
 
+async def tts_stream(request: web.Request) -> web.StreamResponse:
+    """Same as /tts but forwards mp3 chunks as Microsoft sends them (first audio in ~0.5 s, not after the
+    whole sentence). Retries / voice fallback only before the first byte; after that the stream just ends."""
+    body = await request.json()
+    text = str(body.get("text") or "").strip()[:1500]
+    if not text:
+        return web.json_response({"error": "empty text"}, status=400)
+    voice = body.get("voice") or "fa-IR-DilaraNeural"
+    rate = body.get("rate") or "+0%"
+    resp = web.StreamResponse(headers={"Content-Type": "audio/mpeg"})
+    for v in (voice, voice, FALLBACK_VOICE.get(voice, voice)):
+        sent = 0
+        try:
+            async with asyncio.timeout(20):
+                async for chunk in edge_tts.Communicate(text, v, rate=rate, proxy=PROXY).stream():
+                    if chunk["type"] == "audio" and chunk["data"]:
+                        if not resp.prepared:
+                            await resp.prepare(request)
+                        await resp.write(chunk["data"])
+                        sent += len(chunk["data"])
+            if sent > 200:
+                break
+        except Exception as exc:  # noqa: BLE001
+            print(f"[tts-stream] {v} {type(exc).__name__}: {exc} (sent {sent} B)", flush=True)
+            if sent:
+                break
+    if resp.prepared:
+        await resp.write_eof()
+        return resp
+    return web.json_response({"error": "tts failed"}, status=502)
+
+
 async def health(_request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
 app = web.Application(client_max_size=64 * 1024)
-app.add_routes([web.post("/tts", tts), web.get("/health", health)])
+app.add_routes([web.post("/tts", tts), web.post("/tts/stream", tts_stream), web.get("/health", health)])
 
 if __name__ == "__main__":
     web.run_app(app, host="127.0.0.1", port=PORT, print=None)

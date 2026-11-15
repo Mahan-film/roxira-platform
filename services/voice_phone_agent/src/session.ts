@@ -11,8 +11,23 @@ import { cfg } from './config.js';
 import { logger, type Log } from './log.js';
 import { Player } from './player.js';
 import { transcribe } from './stt.js';
-import { synthesize } from './tts.js';
+import { synthesizeStream } from './tts.js';
 import { EnergyVad } from './vad.js';
+
+/** One sentence being synthesized: buffers PCM until it is its turn to play, then streams it live. */
+class StreamedClip {
+  private buf: Int16Array[] = [];
+  private sink: ((pcm: Int16Array) => void) | null = null;
+  readonly done: Promise<void>;
+  constructor(text: string, signal: AbortSignal) {
+    this.done = synthesizeStream(text, signal, (pcm) => (this.sink ? this.sink(pcm) : this.buf.push(pcm)));
+    this.done.catch(() => {}); // awaited by the playback chain
+  }
+  attach(sink: (pcm: Int16Array) => void) {
+    this.buf.splice(0).forEach(sink);
+    this.sink = sink;
+  }
+}
 
 export interface Prompts {
   greeting: Int16Array; filler: Int16Array; repeat: Int16Array;
@@ -143,14 +158,17 @@ export class CallSession {
         if (ctl.signal.aborted) break;
         if (first) { m.first_sentence_ms = Date.now() - t0; first = false; }
         answer += sentence + ' ';
-        const pending = synthesize(sentence, ctl.signal);
-        pending.catch(() => {}); // awaited in order below
+        // synthesis of every sentence starts now; playback stays in sentence order
+        const clip = new StreamedClip(sentence, ctl.signal);
         chain = chain.then(async () => {
-          try {
-            const audio = await pending;
+          if (ctl.signal.aborted) return;
+          clip.attach((pcm) => {
             if (ctl.signal.aborted) return;
             if (!m.first_audio_ms) m.first_audio_ms = Date.now() - t0;
-            this.player.enqueue(audio);
+            this.player.enqueue(pcm);
+          });
+          try {
+            await clip.done;
           } catch (e) {
             if (!ctl.signal.aborted) this.log.warn('tts failed for a sentence:', (e as Error).message);
           }

@@ -42,7 +42,12 @@ export class Player {
     this.pumping = true;
     const my = this.epoch;
     try {
-      while (!this.closed && this.queue.length && my === this.epoch) {
+      while (!this.closed && my === this.epoch) {
+        if (!this.queue.length) {
+          // streamed TTS: more audio usually arrives before the source drains; keep it fed, no gap
+          if (this.source.queuedDuration > 40) { await new Promise((r) => setTimeout(r, 10)); continue; }
+          break;
+        }
         const pcm = this.queue.shift()!;
         for (let i = 0; i < pcm.length; i += FRAME) {
           if (this.closed || my !== this.epoch) break;
