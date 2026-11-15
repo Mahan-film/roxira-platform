@@ -11,7 +11,7 @@ REPO="${ROXIRA_REPO:-Mahan-film/roxira-platform}"
 STATE="${HUB_AUTOPILOT_STATE:-$HOME/.cache/roxira/hub_autopilot.last}"
 DRY=0; [ "${1:-}" = "--dry-run" ] && DRY=1
 mkdir -p "$(dirname "$STATE")"
-since=$(cat "$STATE" 2>/dev/null || date -u -d '-1 day' +%Y-%m-%dT%H:%M:%SZ)
+since=$(cat "$STATE" 2>/dev/null || date -u -d '-1 day' +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -v-1d +%Y-%m-%dT%H:%M:%SZ)
 now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 echo "== hub autopilot $now (since $since)"
@@ -25,7 +25,7 @@ gh pr list --repo "$REPO" --state open --limit 60 --json number,title,isDraft \
 while read -r n; do
   info=$(gh pr view "$n" --repo "$REPO" --json headRefOid,comments,statusCheckRollup,mergeable,autoMergeRequest --jq '
     .headRefOid as $h
-    | ([.statusCheckRollup[]|(.conclusion//.status)]|map(select(.!="SUCCESS" and .!="SKIPPED" and .!="NEUTRAL"))|length) as $bad
+    | ([.statusCheckRollup[]|(.conclusion//.state//.status)]|map(select(.!="SUCCESS" and .!="SKIPPED" and .!="NEUTRAL"))|length) as $bad
     | ([.comments[]|select(.body|startswith("Cross-family"))]|last) as $c
     | (if $c==null then "none" elif ($c.body|contains($h)) then (if ($c.body|test("Verdict: no blocker")) then "ok" else "blocker" end) else "stale" end) as $v
     | "\($bad) \($v) \(.mergeable) \(.autoMergeRequest!=null)"')
