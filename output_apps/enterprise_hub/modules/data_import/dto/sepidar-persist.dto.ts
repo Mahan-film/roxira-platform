@@ -286,11 +286,17 @@ export class SepidarChequeDto {
   @IsIn(['in_hand', 'deposited', 'spent', 'delivered', 'cleared', 'bounced', 'returned'])
   State: 'in_hand' | 'deposited' | 'spent' | 'delivered' | 'cleared' | 'bounced' | 'returned';
 
-  @ApiProperty({ description: 'Whole IRR integer amount (max 15 digits to fit numeric(18,2) after x100 minor conversion)' })
-  @IsInt()
-  @IsPositive()
-  @Max(999_999_999_999_999)
-  Amount: number;
+  @ApiProperty({
+    description:
+      'Whole IRR integer amount string (max 15 digits to fit numeric(18,2) after x100 minor conversion)',
+  })
+  @Transform(({ value }) =>
+    value === null || value === undefined ? value : String(value).trim(),
+  )
+  @IsString()
+  @MaxLength(16)
+  @Matches(/^\d+$/, { message: 'Amount must be a non-negative integer Rial string' })
+  Amount: string | number;
 
   @ApiProperty()
   @IsString()

@@ -9,7 +9,7 @@ export interface SepidarRawCheque {
   SayadNumber: string;
   Direction: 'received' | 'issued';
   State: 'in_hand' | 'deposited' | 'spent' | 'delivered' | 'cleared' | 'bounced' | 'returned';
-  Amount: number; // in IRR
+  Amount: number | string; // in IRR
   IssueDate: string; // YYYY-MM-DD
   DueDate: string; // YYYY-MM-DD
   PartyCode: string;

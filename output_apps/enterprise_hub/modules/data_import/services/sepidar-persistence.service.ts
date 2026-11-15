@@ -684,7 +684,7 @@ export class SepidarPersistenceService {
         name: acc.name,
         accountType,
         currency: 'IRR',
-        balance: '0', // ChartOfAccountEntity.balance is string numeric(18,2)
+        balance: '0.00', // ChartOfAccountEntity.balance is string numeric(18,2)
         level: levelEnum,
         parentCode: acc.parentCode ?? null,
       });

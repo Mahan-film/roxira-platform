@@ -133,7 +133,8 @@ export class SepidarChequesFifoAdapter {
       }
 
       // 5. Amount validation (non-negative integer minor units)
-      if (raw.Amount <= 0) {
+      const numericAmount = Number(raw.Amount);
+      if (Number.isNaN(numericAmount) || numericAmount <= 0) {
         errors.push({
           chequeId: raw.ChequeId,
           chequeNumber: raw.ChequeNumber,
@@ -142,7 +143,7 @@ export class SepidarChequesFifoAdapter {
         continue;
       }
 
-      const amountMinor = BigInt(Math.round(raw.Amount));
+      const amountMinor = BigInt(Math.round(numericAmount));
 
       validCheques.push({
         chequeNumber: raw.ChequeNumber,
