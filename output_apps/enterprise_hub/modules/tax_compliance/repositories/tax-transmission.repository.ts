@@ -119,7 +119,11 @@ export class TaxTransmissionRepository {
       .execute();
     const row = (result.raw as Array<{ next_serial: string | number }>)[0];
     if (!row) throw new Error('Moadian credential not found for tenant');
-    return Number(row.next_serial) - 1;
+    const serialBig = BigInt(row.next_serial) - 1n;
+    if (serialBig < 1n || serialBig > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new RangeError(`Reserved serial out of safe range: ${row.next_serial}`);
+    }
+    return Number(serialBig);
   }
 
   findByInvoice(tenantId: string, invoiceId: string, ins: number): Promise<MoadianSubmissionEntity | null> {

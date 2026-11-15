@@ -201,7 +201,7 @@ export class TaxTransmissionService {
     const { tenantId } = ctx;
     const rows = await adapter.inquireByUid(ctx, [submission.uid]);
     const row = rows.find((r) => r.uid === submission.uid) ?? null;
-    const status = row?.status ?? MoadianInquiryStatus.NOT_FOUND;
+    const status = row ? row.status : MoadianInquiryStatus.TIMEOUT;
     const pollCount = (submission.pollCount ?? 0) + 1;
 
     if (status === MoadianInquiryStatus.SUCCESS) {
@@ -263,7 +263,10 @@ export class TaxTransmissionService {
     submission: MoadianSubmissionEntity,
     data: TransmissionJobData,
   ): Promise<TransmissionOutcome> {
-    if (this.wasEverSent(submission)) return 'done';
+    if (this.wasEverSent(submission)) {
+      await this.schedulePoll(data, submission.pollCount ?? 0);
+      return 'poll';
+    }
     const { tenantId } = ctx;
     const claimed = await this.repository.claimForSend(
       tenantId,
@@ -280,7 +283,7 @@ export class TaxTransmissionService {
     if (result?.error) throw result.error;
     await this.repository.update(tenantId, claimed.id, {
       status: MoadianSubmissionStatus.SENT,
-      referenceNumber: result?.referenceNumber ?? null,
+      referenceNumber: result?.referenceNumber ?? claimed.referenceNumber ?? null,
       sentAt: new Date(),
       errors: [],
     });
@@ -315,7 +318,7 @@ export class TaxTransmissionService {
       // 401/403/404 are operational/auth/endpoint errors and stay retryable below.
       await this.repository.update(tenantId, submission.id, {
         status: MoadianSubmissionStatus.FAILED,
-        errors: api.errors.length ? api.errors : [{ code: String(api.httpStatus), message: api.message }],
+        errors: api.errors?.length ? api.errors : [{ code: String(api.httpStatus), message: api.message }],
       });
       return 'done';
     }
@@ -337,7 +340,7 @@ export class TaxTransmissionService {
     }
     // Configuration or unexpected error before anything was proven sent: keep the state, surface it.
     await this.repository.update(tenantId, submission.id, {
-      errors: [{ code: 'CLIENT', message: (error as Error).message }],
+      errors: [{ code: 'CLIENT', message: error instanceof Error ? error.message : String(error) }],
     });
     throw error;
   }
