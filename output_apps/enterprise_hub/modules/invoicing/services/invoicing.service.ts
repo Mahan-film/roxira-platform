@@ -73,6 +73,7 @@ import {
   LINE_QUANTITY_DECIMALS,
   LINE_RATE_DECIMALS,
   numberToScaled,
+  sumGrossMinor,
 } from './invoice-line-math';
 
 /** What a caller adds to `create` beyond the invoice itself (POS sales, invoices from deliveries). */
@@ -456,18 +457,18 @@ export class InvoicingService {
       const share = fromUnits(shares[index], scale);
       const discount = this.roundTo(line.lineDiscount + share, scale);
       const vatRate = this.normalizeVatRate(line.item.vatRate, defaultVatRate);
+      const isFractionalRial = scale === 0 && line.item.unitPrice < 1;
+      const storedUnitPrice = isFractionalRial
+        ? line.item.unitPrice
+        : this.roundTo(line.item.unitPrice, scale);
       const math = computeLineMath({
         quantity: numberToScaled(line.item.quantity, LINE_QUANTITY_DECIMALS),
-        unitPrice: numberToScaled(line.item.unitPrice, scale + LINE_PRICE_EXTRA_DECIMALS),
+        unitPrice: numberToScaled(storedUnitPrice, scale + LINE_PRICE_EXTRA_DECIMALS),
         discount: toUnits(discount, scale),
         vatRate: numberToScaled(vatRate, LINE_RATE_DECIMALS),
       });
       const tax = fromUnits(math.tax, scale);
       const total = fromUnits(math.total, scale);
-      const isFractionalRial = scale === 0 && line.item.unitPrice < 1;
-      const storedUnitPrice = isFractionalRial
-        ? line.item.unitPrice
-        : this.roundTo(line.item.unitPrice, scale);
 
       normalized.push({
         itemId: line.itemId,
@@ -553,23 +554,30 @@ export class InvoicingService {
     currency: Currency = Currency.IRR,
   ): InvoiceTotals {
     const scale = this.moneyScale(currency);
-    let totalAmount = 0;
-    let totalDiscount = 0;
-    let totalTax = 0;
-    let finalPayable = 0;
+    const lineMaths = items.map((item) =>
+      computeLineMath({
+        quantity: numberToScaled(item.quantity, LINE_QUANTITY_DECIMALS),
+        unitPrice: numberToScaled(item.unitPrice, scale + LINE_PRICE_EXTRA_DECIMALS),
+        discount: toUnits(item.discount, scale),
+        vatRate: numberToScaled(item.vatRate ?? 0, LINE_RATE_DECIMALS),
+      }),
+    );
+    const totalAmountMinor = sumGrossMinor(lineMaths);
+    let totalDiscountUnits = 0n;
+    let totalTaxUnits = 0n;
+    let finalPayableUnits = 0n;
 
     for (const item of items) {
-      totalAmount += Math.max(0, item.total - item.tax + item.discount);
-      totalDiscount += item.discount;
-      totalTax += item.tax;
-      finalPayable += item.total;
+      totalDiscountUnits += toUnits(item.discount, scale);
+      totalTaxUnits += toUnits(item.tax, scale);
+      finalPayableUnits += toUnits(item.total, scale);
     }
 
     return {
-      totalAmount: this.roundTo(totalAmount, scale),
-      totalDiscount: this.roundTo(totalDiscount, scale),
-      totalTax: this.roundTo(totalTax, scale),
-      finalPayable: this.roundTo(finalPayable, scale),
+      totalAmount: fromUnits(totalAmountMinor, scale),
+      totalDiscount: fromUnits(totalDiscountUnits, scale),
+      totalTax: fromUnits(totalTaxUnits, scale),
+      finalPayable: fromUnits(finalPayableUnits, scale),
     };
   }
 
