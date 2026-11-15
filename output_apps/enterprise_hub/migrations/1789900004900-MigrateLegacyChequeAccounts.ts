@@ -1,20 +1,20 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class MigrateLegacyChequeAccounts1789900004400 implements MigrationInterface {
-  name = 'MigrateLegacyChequeAccounts1789900004400';
+export class MigrateLegacyChequeAccounts1789900004900 implements MigrationInterface {
+  name = 'MigrateLegacyChequeAccounts1789900004900';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // 1. Ensure 1021 ('اسناد دریافتنی') exists for tenants having legacy 1110 named 'اسناد دریافتنی'
+    // 1. Ensure 1021 ('اسناد دریافتنی') exists for tenants having legacy 1110
     await queryRunner.query(`
       INSERT INTO "fin_chart_of_accounts" ("tenant_id", "code", "name", "account_type", "level", "currency", "balance")
       SELECT DISTINCT a."tenant_id", '1021', 'اسناد دریافتنی', 'ASSET'::accounttype, 'MOEIN', 'IRR', 0
       FROM "fin_chart_of_accounts" a
-      WHERE a."code" = '1110' AND a."name" = 'اسناد دریافتنی'
+      WHERE a."code" = '1110'
       ON CONFLICT ("tenant_id", "code") DO UPDATE
       SET "name" = EXCLUDED."name";
     `);
 
-    // 2. Re-point journal entry lines from legacy 1110 ('اسناد دریافتنی') to 1021
+    // 2. Re-point journal entry lines from legacy 1110 to 1021
     await queryRunner.query(`
       UPDATE "fin_journal_entry_lines" l
       SET "account_id" = target."id"
@@ -23,28 +23,30 @@ export class MigrateLegacyChequeAccounts1789900004400 implements MigrationInterf
       WHERE l."account_id" = a."id"
         AND a."tenant_id" = l."tenant_id"
         AND a."code" = '1110'
-        AND a."name" = 'اسناد دریافتنی'
         AND target."tenant_id" = l."tenant_id"
         AND target."code" = '1021';
     `);
 
-    // 3. Delete legacy 1110 if it was created solely as 'اسناد دریافتنی'
+    // 3. Delete legacy 1110 only if no orphaned journal lines remain
     await queryRunner.query(`
-      DELETE FROM "fin_chart_of_accounts"
-      WHERE "code" = '1110' AND "name" = 'اسناد دریافتنی';
+      DELETE FROM "fin_chart_of_accounts" a
+      WHERE a."code" = '1110'
+        AND NOT EXISTS (
+          SELECT 1 FROM "fin_journal_entry_lines" l WHERE l."account_id" = a."id"
+        );
     `);
 
-    // 4. Ensure 1023 ('اسناد در جریان وصول') exists for tenants having legacy 1120 named 'اسناد در جریان وصول'
+    // 4. Ensure 1023 ('اسناد در جریان وصول') exists for tenants having legacy 1120
     await queryRunner.query(`
       INSERT INTO "fin_chart_of_accounts" ("tenant_id", "code", "name", "account_type", "level", "currency", "balance")
       SELECT DISTINCT a."tenant_id", '1023', 'اسناد در جریان وصول', 'ASSET'::accounttype, 'MOEIN', 'IRR', 0
       FROM "fin_chart_of_accounts" a
-      WHERE a."code" = '1120' AND a."name" = 'اسناد در جریان وصول'
+      WHERE a."code" = '1120'
       ON CONFLICT ("tenant_id", "code") DO UPDATE
       SET "name" = EXCLUDED."name";
     `);
 
-    // 5. Re-point journal entry lines from legacy 1120 ('اسناد در جریان وصول') to 1023
+    // 5. Re-point journal entry lines from legacy 1120 to 1023
     await queryRunner.query(`
       UPDATE "fin_journal_entry_lines" l
       SET "account_id" = target."id"
@@ -53,28 +55,30 @@ export class MigrateLegacyChequeAccounts1789900004400 implements MigrationInterf
       WHERE l."account_id" = a."id"
         AND a."tenant_id" = l."tenant_id"
         AND a."code" = '1120'
-        AND a."name" = 'اسناد در جریان وصول'
         AND target."tenant_id" = l."tenant_id"
         AND target."code" = '1023';
     `);
 
-    // 6. Delete legacy 1120 if it was created solely as 'اسناد در جریان وصول'
+    // 6. Delete legacy 1120 only if no orphaned journal lines remain
     await queryRunner.query(`
-      DELETE FROM "fin_chart_of_accounts"
-      WHERE "code" = '1120' AND "name" = 'اسناد در جریان وصول';
+      DELETE FROM "fin_chart_of_accounts" a
+      WHERE a."code" = '1120'
+        AND NOT EXISTS (
+          SELECT 1 FROM "fin_journal_entry_lines" l WHERE l."account_id" = a."id"
+        );
     `);
 
-    // 7. Ensure 2011 ('اسناد پرداختنی') exists for tenants having legacy 2110 named 'اسناد پرداختنی'
+    // 7. Ensure 2011 ('اسناد پرداختنی') exists for tenants having legacy 2110
     await queryRunner.query(`
       INSERT INTO "fin_chart_of_accounts" ("tenant_id", "code", "name", "account_type", "level", "currency", "balance")
       SELECT DISTINCT a."tenant_id", '2011', 'اسناد پرداختنی', 'LIABILITY'::accounttype, 'MOEIN', 'IRR', 0
       FROM "fin_chart_of_accounts" a
-      WHERE a."code" = '2110' AND a."name" = 'اسناد پرداختنی'
+      WHERE a."code" = '2110'
       ON CONFLICT ("tenant_id", "code") DO UPDATE
       SET "name" = EXCLUDED."name";
     `);
 
-    // 8. Re-point journal entry lines from legacy 2110 ('اسناد پرداختنی') to 2011
+    // 8. Re-point journal entry lines from legacy 2110 to 2011
     await queryRunner.query(`
       UPDATE "fin_journal_entry_lines" l
       SET "account_id" = target."id"
@@ -83,15 +87,17 @@ export class MigrateLegacyChequeAccounts1789900004400 implements MigrationInterf
       WHERE l."account_id" = a."id"
         AND a."tenant_id" = l."tenant_id"
         AND a."code" = '2110'
-        AND a."name" = 'اسناد پرداختنی'
         AND target."tenant_id" = l."tenant_id"
         AND target."code" = '2011';
     `);
 
-    // 9. Delete legacy 2110 if it was created solely as 'اسناد پرداختنی'
+    // 9. Delete legacy 2110 only if no orphaned journal lines remain
     await queryRunner.query(`
-      DELETE FROM "fin_chart_of_accounts"
-      WHERE "code" = '2110' AND "name" = 'اسناد پرداختنی';
+      DELETE FROM "fin_chart_of_accounts" a
+      WHERE a."code" = '2110'
+        AND NOT EXISTS (
+          SELECT 1 FROM "fin_journal_entry_lines" l WHERE l."account_id" = a."id"
+        );
     `);
 
     // 10. Update posting role mappings if explicitly set to legacy codes

@@ -1,4 +1,4 @@
-import { MigrateLegacyChequeAccounts1789900004400 as Migration } from '../../migrations/1789900004400-MigrateLegacyChequeAccounts';
+import { MigrateLegacyChequeAccounts1789900004900 as Migration } from '../../migrations/1789900004900-MigrateLegacyChequeAccounts';
 
 const runner = () => {
   const queries: string[] = [];
