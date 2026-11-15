@@ -50,14 +50,24 @@ describe('Payment Link Crypto & Unit Logic (T90)', () => {
       }
     });
 
-    it('derives key via PBKDF2 for password-like secrets', () => {
-      const orig = process.env.PAYMENT_GATEWAY_ENCRYPTION_KEY;
+    it('derives key via PBKDF2 for password-like secrets and fails closed without salt', () => {
+      const origKey = process.env.PAYMENT_GATEWAY_ENCRYPTION_KEY;
+      const origSalt = process.env.PAYMENT_GATEWAY_ENCRYPTION_SALT;
       try {
         process.env.PAYMENT_GATEWAY_ENCRYPTION_KEY = 'simple-passphrase-test';
+        delete process.env.PAYMENT_GATEWAY_ENCRYPTION_SALT;
+        expect(() => sealMerchantId('my-secret', T1)).toThrow(/PAYMENT_GATEWAY_ENCRYPTION_SALT is required/);
+
+        process.env.PAYMENT_GATEWAY_ENCRYPTION_SALT = 'unique-test-deployment-salt-5678';
         const sealed = sealMerchantId('my-secret', T1);
         expect(openMerchantId(sealed, T1)).toBe('my-secret');
       } finally {
-        process.env.PAYMENT_GATEWAY_ENCRYPTION_KEY = orig;
+        process.env.PAYMENT_GATEWAY_ENCRYPTION_KEY = origKey;
+        if (origSalt !== undefined) {
+          process.env.PAYMENT_GATEWAY_ENCRYPTION_SALT = origSalt;
+        } else {
+          delete process.env.PAYMENT_GATEWAY_ENCRYPTION_SALT;
+        }
       }
     });
 
@@ -67,12 +77,12 @@ describe('Payment Link Crypto & Unit Logic (T90)', () => {
       expect(maskMerchantId('')).toBe('');
     });
 
-    it('validates PaymentCallbackQueryDto and forbids unknown fields like tenantId', async () => {
+    it('validates PaymentCallbackQueryDto and forbids unknown fields like tenantId without unsafe implicit conversion', async () => {
       const pipe = new ValidationPipe({
         whitelist: true,
         forbidNonWhitelisted: true,
         transform: true,
-        transformOptions: { enableImplicitConversion: true },
+        transformOptions: { enableImplicitConversion: false },
       });
 
       await expect(
@@ -87,10 +97,18 @@ describe('Payment Link Crypto & Unit Logic (T90)', () => {
       ).rejects.toThrow(BadRequestException);
 
       const valid = await pipe.transform(
-        { trackId: 'trk-1', status: 2, success: 1, orderId: 'inv-1' },
+        { trackId: 'trk-1', status: '2', success: '1', orderId: 'inv-1' },
         { type: 'body', metatype: PaymentCallbackQueryDto },
       );
       expect(valid).toEqual({ trackId: 'trk-1', status: '2', success: '1', orderId: 'inv-1' });
+
+      // Verifies string literals like "false" or "0" are preserved and not coerced to boolean true
+      const falseCallback = await pipe.transform(
+        { trackId: 'trk-2', status: '-1', success: 'false', orderId: 'inv-2' },
+        { type: 'query', metatype: PaymentCallbackQueryDto },
+      );
+      expect(falseCallback.success).toBe('false');
+      expect(typeof falseCallback.success).toBe('string');
     });
 
     it('restricts ConfigurePaymentGatewayDto.gateway to supported gateways', async () => {

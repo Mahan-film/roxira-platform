@@ -15,8 +15,11 @@ function getMasterKey(): Buffer {
     const b64 = Buffer.from(trimmed, 'base64');
     if (b64.length === 32) return b64;
   }
-  const salt = process.env.PAYMENT_GATEWAY_ENCRYPTION_SALT || 'roxira-payment-gateway-kdf-salt';
-  return pbkdf2Sync(trimmed, salt, 100_000, 32, 'sha256');
+  const salt = process.env.PAYMENT_GATEWAY_ENCRYPTION_SALT;
+  if (!salt || salt.trim().length === 0) {
+    throw new Error('PAYMENT_GATEWAY_ENCRYPTION_SALT is required when deriving key from passphrase (fail closed)');
+  }
+  return pbkdf2Sync(trimmed, salt.trim(), 100_000, 32, 'sha256');
 }
 
 /**
