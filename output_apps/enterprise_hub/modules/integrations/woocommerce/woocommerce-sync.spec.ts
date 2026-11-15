@@ -156,7 +156,7 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
         storeUrl: 'https://shop.example.com',
         consumerKey: 'ck_real_key_1234',
         consumerSecret: 'cs_real_secret_5678',
-        webhookSecret: 'whsec_real_secret_9999',
+        webhookSecret: 'sample_wh_test_secret_9999',
       });
       expect(initial.webhookSecret).toBe('...9999');
 
@@ -175,7 +175,7 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
       });
 
       expect(updated.autoSyncOrders).toBe(false);
-      expect(await service.getWebhookSecret(tenantId)).toBe('whsec_real_secret_9999');
+      expect(await service.getWebhookSecret(tenantId)).toBe('sample_wh_test_secret_9999');
       const secondSave = mockWooRepo.saveConfig.mock.calls[1][1];
       expect(secondSave.consumerKeyEncrypted).toBe(stored.consumerKeyEncrypted);
       expect(secondSave.consumerSecretEncrypted).toBe(stored.consumerSecretEncrypted);
