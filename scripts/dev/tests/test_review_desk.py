@@ -113,11 +113,13 @@ def test_candidates_drop_author_family_and_keep_order():
     assert any("same-family(google)" in s for s in skipped)
     kept_a, _ = rd.candidates({"anthropic"})
     assert all(c.family != "anthropic" for c in kept_a)
-    # owner directive: direct providers first, OpenRouter last
+    # owner directive 2026-11-15: free first (any provider), paid OpenRouter strictly last
     provs = [c.provider for c in kept_a]
-    first_or = next(i for i, p in enumerate(provs) if p.startswith("openrouter"))
-    assert all(p.startswith("openrouter") for p in provs[first_or:])
+    first_paid = next(i for i, p in enumerate(provs) if p == "openrouter-paid")
+    assert all(p == "openrouter-paid" for p in provs[first_paid:])
     assert provs[0] == "gemini"
+    # a Gemini-written PR still starts on a free model
+    assert kept[0].provider != "openrouter-paid"
 
 
 def test_no_model_id_literal_in_script():

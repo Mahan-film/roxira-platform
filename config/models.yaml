@@ -514,8 +514,8 @@ roles:
   # ---- Local review desk (scripts/dev/review_desk.py, runs on the hub laptop, no Claude tokens) ----
   review_desk:
     description: >
-      Cross-family PR review desk. Order = owner directive 2026-11-13: direct provider APIs first
-      (Gemini, SambaNova, Mistral, Groq), OpenRouter only when all of them fail. `provider` is a key of
+      Cross-family PR review desk. Order = owner directive 2026-11-15: free models first on every pooled key
+      (Gemini, OpenRouter :free, Groq), then inert no-balance providers, paid OpenRouter last. `provider` is a key of
       config/key_pool.yaml `providers:` (base_url and key slot NAMES come from there; the desk rotates
       every set slot on 401/402/403/429). Every direct id is provider-native, verified with the provider's
       GET /models on 2026-11-13, hence catalogue_listed: false (scripts/check_models.py skips it). The desk
@@ -530,16 +530,16 @@ roles:
     author_families:
       mahan-films: [google]
     models:
-      # 2026-11-13 live test (AI Studio free tier, keys GEMINI_API_KEY.._4): 3.6 Flash answered in
-      # 34-150 s; 3.8 Flash answered 503 "high demand" or timed out (150 s) on every try; 3.5 Flash
-      # answered in 30 s; 3.7 Flash and gemini-flash-latest timed out (300 s). So 3.6 leads, 3.8 is
-      # second until it is reliable. The desk retries a 503 once. Gemini Pro stays banned (owner policy).
+      # Order = owner directive 2026-11-15: free first, every pooled key, paid last. Live test 2026-11-15
+      # (scripts: hub audit, all 4 Gemini keys behave the same): 3-flash-preview ~1 s, 3.5/3.6-flash 6-10 s,
+      # 3.7/3.8-flash and gemini-flash-latest hung >60 s, so 3.8 moved to the end. Gemini never reviews
+      # Antigravity (google) PRs: for those the first reviewer is the free Nemotron Ultra below.
       - id: gemini-3.6-flash
         provider: gemini
         price_per_1m: null
         catalogue_listed: false
         public_code_only: true
-      - id: gemini-3.8-flash
+      - id: gemini-3-flash-preview
         provider: gemini
         price_per_1m: null
         catalogue_listed: false
@@ -549,29 +549,13 @@ roles:
         price_per_1m: null
         catalogue_listed: false
         public_code_only: true
-      # SambaNova: GET /models works but chat answered 402 PAYMENT_METHOD_REQUIRED on 2026-11-13
-      # (no balance on the account); kept so it starts working once billing is added.
-      - id: GLM-5.3
-        provider: sambanova
-        price_per_1m: null
-        catalogue_listed: false
+      # OpenRouter :free (cost 0; key OPENROUTER_API_KEY_AGENTS, the product key's data policy blocks most
+      # :free endpoints). 1M context, so big diffs need no split. All answered on 2026-11-15.
+      - id: nvidia/nemotron-3-ultra-550b-a55b:free
+        provider: openrouter-free
+        price_per_1m: { in: 0, out: 0 }
         public_code_only: true
-      - id: gpt-oss-120b
-        provider: sambanova
-        price_per_1m: null
-        catalogue_listed: false
-        public_code_only: true
-      # Mistral keys 1-4 answer 402 (budget exhausted, see config/key_pool.yaml); _5/_6 are not set here.
-      - id: mistral-large-latest
-        provider: mistral
-        price_per_1m: null
-        catalogue_listed: false
-        public_code_only: true
-      - id: mistral-medium-latest
-        provider: mistral
-        price_per_1m: null
-        catalogue_listed: false
-        public_code_only: true
+        note: Largest free model (nvidia family); 1M context.
       - id: openai/gpt-oss-120b
         provider: groq
         price_per_1m: null
@@ -582,6 +566,33 @@ roles:
         # before sending it to this model, so the 413 round trip is skipped. A 413 on a smaller chunk is
         # still handled by splitting down to ~6k chars. 19k-char chunks worked on 2026-11-15, 50k-97k failed.
         max_chunk_chars: 18000
+      - id: cohere/north-mini-code:free
+        provider: openrouter-free
+        price_per_1m: { in: 0, out: 0 }
+        public_code_only: true
+        note: Code model (cohere family), 256k context.
+      - id: inclusionai/ling-3.2-flash:free
+        provider: openrouter-free
+        price_per_1m: { in: 0, out: 0 }
+        public_code_only: true
+        note: inclusionai family, 1M context; also works on the product key.
+      # SambaNova and Mistral keys 1-4 answered 402 (no balance / monthly budget exhausted) on 2026-11-15;
+      # kept late so they start working again once the owner adds billing or the budget resets.
+      - id: GLM-5.3
+        provider: sambanova
+        price_per_1m: null
+        catalogue_listed: false
+        public_code_only: true
+      - id: mistral-medium-latest
+        provider: mistral
+        price_per_1m: null
+        catalogue_listed: false
+        public_code_only: true
+      - id: gemini-3.8-flash
+        provider: gemini
+        price_per_1m: null
+        catalogue_listed: false
+        public_code_only: true
       # extra_body is merged over the key_pool provider's extra_body. Without reasoning disabled,
       # DeepSeek spent all 6000 output tokens on reasoning and returned an empty answer (2026-11-13).
       - id: deepseek/deepseek-v4.1-flash
