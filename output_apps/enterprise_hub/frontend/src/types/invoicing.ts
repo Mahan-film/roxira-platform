@@ -257,3 +257,26 @@ export interface PosSaleResponse {
   customerLevel: "anonymous" | "phone" | "name_phone";
   customerCreated: boolean;
 }
+
+export interface PosConflict {
+  clientUuid: string;
+  code: "OUT_OF_STOCK" | "ITEM_NOT_FOUND" | "VALIDATION_FAILED" | "CONFLICT" | "UNKNOWN";
+  error: string;
+  missingItems?: string[];
+}
+
+export interface PosSyncedItem {
+  clientUuid: string;
+  invoice: InvoiceResponseDto;
+  replayed: boolean;
+}
+
+export interface PosSyncResult {
+  synced: PosSyncedItem[];
+  conflicts: PosConflict[];
+  totalProcessed: number;
+}
+
+export interface SyncPosSalesDto {
+  sales: CreatePosSaleDto[];
+}

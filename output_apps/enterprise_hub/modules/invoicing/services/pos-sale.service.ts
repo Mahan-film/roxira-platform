@@ -1,16 +1,26 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
+import { validate, type ValidationError } from 'class-validator';
 import { createHash } from 'crypto';
 import { CustomerIdentityService } from '../../crm/services/customer-identity.service';
 import { Currency } from '../../currency/enums/currency.enum';
 import { InventoryRepository } from '../../inventory/repositories/inventory.repository';
 import { TenantsRepository } from '../../tenants/repositories/tenants.repository';
 import { CreateInvoiceDto } from '../dto/create-invoice.dto';
-import { CreatePosSaleDto, PosSaleResponseDto } from '../dto/pos-sale.dto';
+import {
+  CreatePosSaleDto,
+  PosConflictDto,
+  PosSaleResponseDto,
+  PosSyncedItemDto,
+  PosSyncResultDto,
+  SyncPosSalesDto,
+} from '../dto/pos-sale.dto';
 import { InvoiceDirection, InvoiceSubject } from '../enums/invoice-kind.enum';
 import { InvoiceStatus } from '../enums/invoice-status.enum';
 import { InvoicingRepository } from '../repositories/invoicing.repository';
@@ -315,5 +325,131 @@ export class PosSaleService {
         `جمع پرداخت‌ها (${paid}) با مبلغ قابل پرداخت (${payable}) برابر نیست.`,
       );
     }
+  }
+
+  /**
+   * Synchronises an array of queued counter sales submitted from an offline POS client (#782 / T93).
+   * Processes each sale under its client UUID idempotency key:
+   * - If already processed: replays existing invoice without duplication.
+   * - If inventory stock is insufficient: catches and records structured conflict item.
+   * - If valid: posts invoice, payments, and stock/voucher movements.
+   * Returns a comprehensive sync summary containing synced sales and conflicts for out-of-stock items.
+   */
+  async syncSales(tenantId: string, dto: SyncPosSalesDto): Promise<PosSyncResultDto> {
+    const synced: PosSyncedItemDto[] = [];
+    const conflicts: PosConflictDto[] = [];
+
+    for (const rawSale of dto.sales) {
+      const clientUuid =
+        typeof (rawSale as { idempotencyKey?: unknown })?.idempotencyKey === 'string' &&
+        (rawSale as { idempotencyKey: string }).idempotencyKey.trim()
+          ? (rawSale as { idempotencyKey: string }).idempotencyKey
+          : 'unknown';
+
+      const saleDto = plainToInstance(CreatePosSaleDto, rawSale, {
+        enableImplicitConversion: true,
+      });
+      const validationErrors = await validate(saleDto, {
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      });
+      if (validationErrors.length > 0) {
+        conflicts.push({
+          clientUuid,
+          code: 'VALIDATION_FAILED',
+          error: this.formatValidationErrors(validationErrors),
+        });
+        continue;
+      }
+
+      try {
+        const result = await this.createSale(tenantId, saleDto);
+        synced.push({
+          clientUuid,
+          invoice: result.invoice,
+          replayed: result.replayed,
+        });
+      } catch (error: unknown) {
+        const status =
+          error instanceof HttpException
+            ? error.getStatus()
+            : typeof (error as { status?: unknown })?.status === 'number'
+              ? (error as { status: number }).status
+              : undefined;
+        const isBusinessRejection =
+          error instanceof BadRequestException ||
+          error instanceof NotFoundException ||
+          error instanceof ConflictException ||
+          status === 400 ||
+          status === 404 ||
+          status === 409;
+
+        // Transient DB/network errors (5xx) and auth errors (401/403) must fail the batch
+        // so the client sync coordinator can isolate and probe deterministically failing items.
+        if (!isBusinessRejection) {
+          throw error;
+        }
+
+        const message =
+          error instanceof Error && error.message ? error.message : 'خطا در ثبت فروش';
+        const isNotFound = error instanceof NotFoundException || status === 404;
+        const isOutOfStock =
+          !isNotFound &&
+          (message.includes('موجودی') || message.includes('کافی نیست'));
+        const isIdempotencyConflict = error instanceof ConflictException || status === 409;
+
+        const code: PosConflictDto['code'] = isOutOfStock
+          ? 'OUT_OF_STOCK'
+          : isNotFound
+            ? 'ITEM_NOT_FOUND'
+            : isIdempotencyConflict
+              ? 'CONFLICT'
+              : 'VALIDATION_FAILED';
+
+        const missingItems =
+          isOutOfStock || isNotFound
+            ? this.extractFailingSkus(message, saleDto)
+            : undefined;
+
+        conflicts.push({
+          clientUuid,
+          code,
+          error: message,
+          ...(missingItems && missingItems.length > 0 ? { missingItems } : {}),
+        });
+      }
+    }
+
+    return {
+      synced,
+      conflicts,
+      totalProcessed: dto.sales.length,
+    };
+  }
+
+  private extractFailingSkus(message: string, sale: CreatePosSaleDto): string[] {
+    const stockMatch = message.match(/موجودی کالای\s+(\S+)\s+کافی نیست/);
+    if (stockMatch?.[1]) {
+      return [stockMatch[1]];
+    }
+    const missingMatch = message.match(/کد یا بارکد\s+(\S+)\s+یافت نشد/);
+    if (missingMatch?.[1]) {
+      return [missingMatch[1]];
+    }
+    return [];
+  }
+
+  private formatValidationErrors(errors: ValidationError[]): string {
+    const messages: string[] = [];
+    const visit = (err: ValidationError): void => {
+      if (err.constraints) {
+        messages.push(...Object.values(err.constraints));
+      }
+      if (err.children) {
+        err.children.forEach(visit);
+      }
+    };
+    errors.forEach(visit);
+    return messages.length > 0 ? messages.join(' | ') : 'داده‌های فروش نامعتبر است.';
   }
 }

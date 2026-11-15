@@ -8,6 +8,7 @@ import {
   IsIn,
   IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsPositive,
   IsString,
@@ -204,4 +205,50 @@ export class PosSaleResponseDto {
 
   @ApiProperty({ description: 'برای این فروش مشتری تازه ساخته شد' })
   customerCreated: boolean;
+}
+
+export class SyncPosSalesDto {
+  @ApiProperty({ type: [CreatePosSaleDto], description: 'فهرست تراکنش‌های فروش آفلاین برای همگام‌سازی و ثبت در سرور' })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => CreatePosSaleDto)
+  sales: CreatePosSaleDto[];
+}
+
+export class PosConflictDto {
+  @ApiProperty({ description: 'شناسه یکتای سمت کلاینت (clientUuid)' })
+  clientUuid: string;
+
+  @ApiProperty({ enum: ['OUT_OF_STOCK', 'ITEM_NOT_FOUND', 'VALIDATION_FAILED', 'CONFLICT', 'UNKNOWN'] })
+  code: 'OUT_OF_STOCK' | 'ITEM_NOT_FOUND' | 'VALIDATION_FAILED' | 'CONFLICT' | 'UNKNOWN';
+
+  @ApiProperty({ description: 'شرح خطای عدم ثبت فروش یا کسری موجودی' })
+  error: string;
+
+  @ApiPropertyOptional({ description: 'شناسه یا کد کالاهای دارای کسری موجودی' })
+  missingItems?: string[];
+}
+
+export class PosSyncedItemDto {
+  @ApiProperty({ description: 'شناسه یکتای سمت کلاینت (clientUuid)' })
+  clientUuid: string;
+
+  @ApiProperty({ type: InvoiceResponseDto })
+  invoice: InvoiceResponseDto;
+
+  @ApiProperty({ description: 'درخواست قبلاً ثبت شده بوده و بازیابی شد' })
+  replayed: boolean;
+}
+
+export class PosSyncResultDto {
+  @ApiProperty({ type: [PosSyncedItemDto], description: 'فروش‌های با موفقیت ثبت شده' })
+  synced: PosSyncedItemDto[];
+
+  @ApiProperty({ type: [PosConflictDto], description: 'فروش‌های دارای مغایرت یا کسری موجودی' })
+  conflicts: PosConflictDto[];
+
+  @ApiProperty({ description: 'تعداد کل تراکنش‌های پردازش شده' })
+  totalProcessed: number;
 }

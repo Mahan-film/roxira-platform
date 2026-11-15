@@ -4439,6 +4439,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/invoicing/pos-sales/sync (PosSalesController.sync)": {
+    "policy": "invoicing:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/mcp/ (McpController.handlePost)": {
     "policy": "assistant:read",
     "owner": true,
