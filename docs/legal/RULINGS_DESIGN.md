@@ -39,5 +39,30 @@ The full crawl is a one-off, so new Supreme Court unity rulings (after number 88
    announcement of a new ruling) are listed as skipped; the numbered post usually follows within days and a later run picks it up. Commit the delta file via PR.
 4. **`scripts/legal/upsert_rulings_delta_on_server.sh [--dry-run] [--include-review] FILE...`** (server): snapshot, then
    `ingest_rulings.py apply --allow-existing` into the existing `iran_rulings_v1` (deterministic point ids, so reruns are idempotent;
-   `needs_review` rows are skipped unless `--include-review`). A server timer that runs steps 3-4 automatically needs owner approval;
-   until then a human runs the script after the delta PR merges.
+   `needs_review` rows are skipped unless `--include-review`). It still requires `pwd == $REPO` (env, default `/opt/roxira_platform`)
+   and a clean git tree.
+
+### The loop is now automatic (owner approval 2026-11-15)
+Relay PRs from `relay/<date>` that only add `data/legal/staged/*.jsonl` are queued by `scripts/dev/hub_autopilot.sh` (green CI, MERGEABLE;
+a duplicate `change_id` flagged by the desk is expected: law_watch files are append logs, consumers keep the newest `modified_at`).
+On the server a systemd timer (`roxira-rulings-update.timer`, every 6 h with a random delay, `Persistent=true`) runs
+`scripts/legal/rulings_auto_update.sh`:
+* it uses its **own** checkout `/opt/roxira_legal_worker` (fast-forwarded to `origin/main` each run); the production checkout
+  `/opt/roxira_platform` is never pulled or modified by it;
+* it runs `rulings_delta.py` into `/var/lib/roxira/rulings/out`, adds every committed `data/legal/staged/unity_rulings_delta_*.jsonl` (git is not the truth of what the server holds), keeps the newest row per `ruling_id` and compares with `/var/lib/roxira/rulings/upserted.json`
+  (ruling_id -> sha256 of holding+text); `needs_review` rows are held back;
+* only when something is new it calls the upsert script (`REPO=/opt/roxira_legal_worker`, all safety checks kept, Qdrant snapshot first)
+  and then records the rows in the state file. A failed upsert leaves the state untouched, so the next run retries;
+* runs never overlap (`flock`); exit 0 when nothing is new. New rulings are published with `source_tier: unofficial` in the payload.
+
+**Install (owner, once, as root on the server):** `cd /opt/roxira_platform && sudo bash scripts/legal/install_rulings_timer.sh`
+(idempotent; creates state dir and worker checkout, runs one `--dry-run`, enables the timer, prints `systemctl list-timers`).
+Remove with `... install_rulings_timer.sh --uninstall`.
+
+**Check:** `journalctl -u roxira-rulings-update -n 100 --no-pager`; `systemctl list-timers roxira-rulings-update.timer`; run now with
+`systemctl start roxira-rulings-update.service`; state: `cat /var/lib/roxira/rulings/upserted.json`.
+
+**Roll back:** every write is preceded by a Qdrant snapshot of `iran_rulings_v1` (name printed in the journal, stored in
+`roxira_qdrant_prod:/qdrant/storage/snapshots/iran_rulings_v1/`). Restore it via the Qdrant snapshot-recovery API, then delete the
+affected ids from `upserted.json` (or stop the timer with `systemctl disable --now roxira-rulings-update.timer`) so they are not
+re-applied. Switching retrieval off entirely: unset `SMARTJUDGE_RULINGS_COLLECTION` (see above).
