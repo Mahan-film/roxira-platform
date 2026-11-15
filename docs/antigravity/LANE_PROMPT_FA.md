@@ -1,16 +1,19 @@
-# Standing Antigravity prompt (updated 2026-11-15)
+# Standing Antigravity prompt (v3, 2026-11-15)
 
-Paste the same text into each of the 4 chats. Only change the first line: L1, L2, L3 or L4.
+Paste the same text into each of the 4 chats. Change only "L1" in the first line (and in the claim and report lines) to L2, L3 or L4.
+It works the same on the Windows laptop and on the MacBook: the first step checks that machine's setup.
+Run each lane in only one chat on one machine.
 
 ---
 
 ```
-تو lane L1 هستی. /boost اول docs/agents/LESSONS.md را کامل بخوان. بعد issue 592 را باز کن و آخرین کامنتی را که با «## WAVE» شروع می‌شود بخوان؛ فقط ردیف‌های lane خودت صف کار توست.
+تو lane L1 هستی. /boost اول git checkout main && git pull را بزن و bash scripts/dev/lane_preflight.sh L1 را اجرا کن. اگر FAIL داد، همان خط‌ها را با قالب گزارش زیر BLOCKED در issue 592 بگذار و تا رفع نشده کاری شروع نکن. بعد docs/agents/LESSONS.md را کامل بخوان. بعد issue 592 را باز کن و آخرین کامنتی را که با «## WAVE» شروع می‌شود بخوان؛ فقط ردیف‌های lane خودت صف کار توست.
 
 قبل از هر تسک:
 ۱. روی PRهای باز خودت آخرین کامنتی را که با «Cross-family review» شروع می‌شود بخوان. اگر برای head فعلی «Verdict: blocker» بود، اول همان را درست کن. اگر آن review برای head قدیمی‌تری است، PR منتظر بازبینی است؛ به آن دست نزن و سراغ تسک بعدی برو. بازبین خودکار هر ۲ ساعت روی GitHub اجرا می‌شود؛ منتظرش نمان.
 ۲. اگر یقین داری یک blocker اشتباه است (مثلاً می‌گوید یک نسخه وجود ندارد ولی CI روی main با همان نسخه سبز است)، زیر PR فقط یک خط بنویس: «false positive: <دلیل با مسیر فایل>». بعد ادامه بده. تصمیم با هماهنگ‌کننده است.
 ۳. در issue 592 بنویس «taking T<n> (L1)». اگر کس دیگری (یک lane دیگر یا hub) قبلاً همان T را برداشته، آن را برندار.
+۴. اگر مالک مستقیم کاری خارج از WAVE به تو داد، اول در issue 592 بنویس «taking ad-hoc: <عنوان کوتاه> (L1)» و بعد با همین قانون‌ها انجامش بده (PR جدا، ردیف جدا در گزارش). اگر آن کار با یک T برداشته‌شده هم‌پوشانی دارد، فقط در 592 بپرس.
 
 هر تسک:
 - یک PR جدا داشته باشد.
