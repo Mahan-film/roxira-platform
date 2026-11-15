@@ -10,7 +10,7 @@
 #      it never touches, pulls or reads the state of the production checkout /opt/roxira_platform beyond reading its origin URL
 #      once, on the first run, to create the worker clone;
 #   3. runs scripts/legal/rulings_delta.py there, writing to RULINGS_STATE_DIR (default /var/lib/roxira/rulings, outside any git tree);
-#   4. compares the delta rows with state/upserted.json (ruling_id -> sha256 of holding+text); needs_review rows are never upserted;
+#   4. merges committed data/legal/staged/unity_rulings_delta_*.jsonl with the fresh delta (newest per ruling_id) and compares with state/upserted.json (ruling_id -> sha256 of holding+text); needs_review rows are never upserted;
 #   5. only when something is new, calls upsert_rulings_delta_on_server.sh (REPO=worker checkout) on the new rows, and only after it
 #      succeeded records them in the state file. Rows keep their unofficial source label (source_tier travels in the payload).
 #
@@ -82,8 +82,10 @@ python3 scripts/legal/rulings_delta.py --out-dir "$OUT" || die "rulings_delta.py
 STATE_FILE="$STATE_DIR/upserted.json"
 PENDING="$STATE_DIR/pending/unity_rulings_new.jsonl"
 rm -f "$PENDING"
+# Sources, newest wins per ruling_id: (a) every COMMITTED delta file in the worker checkout (git is not the truth of what the server
+# holds; the state file is), (b) the freshly computed delta from rulings_delta.py.
 shopt -s nullglob
-DELTAS=("$OUT"/unity_rulings_delta_*.jsonl)
+DELTAS=("$WORKER"/data/legal/staged/unity_rulings_delta_*.jsonl "$OUT"/unity_rulings_delta_*.jsonl)
 shopt -u nullglob
 if [ "${#DELTAS[@]}" -eq 0 ]; then
   log "no delta rows; nothing new"
@@ -95,19 +97,25 @@ from pathlib import Path
 
 state_file, pending, files = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3:]
 state = json.loads(state_file.read_text(encoding="utf-8")) if state_file.exists() else {}
-rows, review = [], 0
+best, review = {}, 0
 for f in files:
     for ln in Path(f).read_text(encoding="utf-8").splitlines():
         if not ln.strip():
             continue
         r = json.loads(ln)
-        if r.get("needs_review"):
-            review += 1
-            continue
-        h = hashlib.sha256((r.get("holding", "") + "\n" + r.get("text", "")).encode("utf-8")).hexdigest()
-        if state.get(r["ruling_id"]) != h:
-            r["_h"] = h
-            rows.append(r)
+        k = str(r.get("wp_modified") or "")
+        cur = best.get(r["ruling_id"])
+        if cur is None or k >= str(cur.get("wp_modified") or ""):  # later file wins ties (fresh delta is listed last)
+            best[r["ruling_id"]] = r
+rows = []
+for rid, r in sorted(best.items()):
+    if r.get("needs_review"):
+        review += 1
+        continue
+    h = hashlib.sha256((r.get("holding", "") + "\n" + r.get("text", "")).encode("utf-8")).hexdigest()
+    if state.get(rid) != h:
+        r["_h"] = h
+        rows.append(r)
 if rows:
     pending.write_text("".join(json.dumps({k: v for k, v in r.items() if k != "_h"}, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
     pending.with_suffix(".hashes.json").write_text(json.dumps({r["ruling_id"]: r["_h"] for r in rows}), encoding="utf-8")

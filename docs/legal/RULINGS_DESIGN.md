@@ -49,7 +49,7 @@ On the server a systemd timer (`roxira-rulings-update.timer`, every 6 h with a r
 `scripts/legal/rulings_auto_update.sh`:
 * it uses its **own** checkout `/opt/roxira_legal_worker` (fast-forwarded to `origin/main` each run); the production checkout
   `/opt/roxira_platform` is never pulled or modified by it;
-* it runs `rulings_delta.py` into `/var/lib/roxira/rulings/out` and compares the rows with `/var/lib/roxira/rulings/upserted.json`
+* it runs `rulings_delta.py` into `/var/lib/roxira/rulings/out`, adds every committed `data/legal/staged/unity_rulings_delta_*.jsonl` (git is not the truth of what the server holds), keeps the newest row per `ruling_id` and compares with `/var/lib/roxira/rulings/upserted.json`
   (ruling_id -> sha256 of holding+text); `needs_review` rows are held back;
 * only when something is new it calls the upsert script (`REPO=/opt/roxira_legal_worker`, all safety checks kept, Qdrant snapshot first)
   and then records the rows in the state file. A failed upsert leaves the state untouched, so the next run retries;
