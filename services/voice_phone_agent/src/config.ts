@@ -34,6 +34,10 @@ export const cfg = {
   groqKeys: ['GROQ_API_KEY', 'GROQ_API_KEY_2', 'GROQ_API_KEY_3', 'GROQ_API_KEY_4'].map((k) => str(k)).filter(Boolean),
   // whisper-large-v3 beat -turbo on simulated Persian phone audio (CER 0.046 vs 0.058, +60 ms), 2026-11-15
   groqSttModel: str('GROQ_STT_MODEL', 'whisper-large-v3'),
+  // Outage fallback only (after every Groq key failed). Very accurate on clear phone audio (CER 0.01)
+  // but on heavy noise it invents a plausible question instead of returning nothing, so never primary.
+  geminiKeys: ['GEMINI_API_KEY', 'GEMINI_API_KEY_2', 'GEMINI_API_KEY_3', 'GEMINI_API_KEY_4'].map((k) => str(k)).filter(Boolean),
+  geminiSttModel: str('GEMINI_STT_MODEL', 'gemini-3.1-flash-lite'),
   openaiKey: str('OPENAI_API_KEY'),
   openaiSttModel: str('OPENAI_STT_MODEL', 'whisper-1'),
   // Whisper vocabulary hint (keep under ~220 tokens). Terms come from real phone-call misrecognitions.

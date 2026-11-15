@@ -60,14 +60,57 @@ export async function transcribeDetailed(
   if (cfg.sttProvider === 'smartjudge') {
     return { text: await smartjudgeStt(wavBuf, signal), logprob: null, provider: 'smartjudge' };
   }
+  let why = '';
   try {
     return await whisperStt(wavBuf, signal, doFetch);
   } catch (e) {
-    if (signal.aborted || !(cfg.judgeGatewayKey || cfg.judgeToken)) throw e;
-    // quota, outage or proxy down: the domestic server STT is slower but keeps the call alive
-    const text = await smartjudgeStt(wavBuf, signal);
-    return { text, logprob: null, provider: `smartjudge-fallback (${(e as Error).message.slice(0, 80)})` };
+    if (signal.aborted) throw e;
+    why = (e as Error).message.slice(0, 80);
   }
+  // fallback 1: Gemini (other company, other keys) - only reached when every Whisper key failed
+  if (cfg.geminiKeys.length) {
+    try {
+      const text = await geminiStt(wavBuf, signal, doFetch);
+      return { text, logprob: null, provider: `gemini-fallback (${why})` };
+    } catch (e) {
+      if (signal.aborted) throw e;
+      why += `; gemini ${(e as Error).message.slice(0, 60)}`;
+    }
+  }
+  // fallback 2: the domestic Smart Judge server STT (slower, no proxy needed)
+  if (!(cfg.judgeGatewayKey || cfg.judgeToken)) throw new Error(`stt failed: ${why}`);
+  const text = await smartjudgeStt(wavBuf, signal);
+  return { text, logprob: null, provider: `smartjudge-fallback (${why})` };
+}
+
+let geminiCursor = 0;
+
+async function geminiStt(wavBuf: Buffer, signal: AbortSignal, doFetch: typeof fetchProxied): Promise<string> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${cfg.geminiSttModel}:generateContent`;
+  const body = JSON.stringify({
+    contents: [{ parts: [
+      { text: 'Transcribe this Persian phone call audio verbatim in Persian script. Output only the transcript. '
+        + 'If there is no clearly intelligible speech, output nothing.' },
+      { inline_data: { mime_type: 'audio/wav', data: wavBuf.toString('base64') } },
+    ] }],
+    generationConfig: { temperature: 0 },
+  });
+  let lastErr = '';
+  for (let i = 0; i < cfg.geminiKeys.length; i++) {
+    const key = cfg.geminiKeys[(geminiCursor + i) % cfg.geminiKeys.length];
+    const r = await doFetch(url, {
+      method: 'POST', body, signal,
+      headers: { 'x-goog-api-key': key, 'Content-Type': 'application/json' },
+    });
+    if (r.ok) {
+      geminiCursor = (geminiCursor + i + 1) % cfg.geminiKeys.length;
+      const j = (await r.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+      return clean((j.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '').join(''));
+    }
+    lastErr = `${r.status}`;
+    if (r.status !== 429 && r.status !== 403 && r.status < 500) break;
+  }
+  throw new Error(`gemini stt ${lastErr}`);
 }
 
 async function smartjudgeStt(wavBuf: Buffer, signal: AbortSignal): Promise<string> {
