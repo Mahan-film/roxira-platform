@@ -91,6 +91,8 @@ export class CreateInvoiceOnlinePaymentLinks1789900004500 implements MigrationIn
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
+    // Non-reversible schema rollback warning: dropping these tables drops recorded payment histories
+    // and merchant credentials. In production disaster recovery, restore from database snapshots before rollback.
     await queryRunner.query(`DROP FUNCTION IF EXISTS public.lookup_invoice_payment_tenant_by_track_id(text);`);
     await queryRunner.query(`DROP POLICY IF EXISTS "invoice_payment_links_tenant" ON "invoice_payment_links";`);
     await queryRunner.query(`DROP POLICY IF EXISTS "invoice_payment_gateway_configs_tenant" ON "invoice_payment_gateway_configs";`);
