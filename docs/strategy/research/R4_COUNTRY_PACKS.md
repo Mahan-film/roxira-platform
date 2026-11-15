@@ -59,6 +59,8 @@ Source: the owner's deep-research run of prompt 4, received 2026-11-15. This fil
 | L4 | **Current pack behind the interfaces** | The existing e-invoice transmission becomes the pack's `EInvoiceAdapter`, statutory payroll becomes its `PayrollRulesAdapter`, and the tax rules become pack data. Callers go through the resolved pack. Behaviour is unchanged and all specs pass. |
 | L4 | **`my` pack skeleton** | Add metadata, an SME chart template, effective-dated sales/service tax codes and thresholds as versioned JSON with source URLs, plus spec tests. There is no network adapter yet. |
 
+> **More WAVE 15 rows** (feature-gap audit, customer legal drafts, plan entitlements and metering, period lock, universal search, export after cancellation, legal as-of and abstention, voice disclosure and consent) are in `R5_R6_R7_GTM_LEGAL_PORTFOLIO.md`. Post them together with this table.
+
 ## WAVE 16+ (later)
 - **Malaysia:**
   - e-invoice API adapter against the sandbox (needs the owner's sandbox account), including:
