@@ -64,6 +64,8 @@ Output: a feature priority table (feature, how many competitors have it, how oft
 
 ## ۶. پرامپت ثابت Antigravity (هر بار همین را بدهید)
 
+> **۲۰۲۶-۱۱-۱۵:** نسخهٔ جدید در `docs/antigravity/LANE_PROMPT_FA.md` است (lane در خط اول، بازبین خودکار هر ۲ ساعت، false positive، migration). متن زیر قدیمی است.
+
 ```
 /boost اول docs/agents/LESSONS.md را کامل بخوان. بعد issue 592 را باز کن و آخرین کامنتی را که با «## WAVE» شروع می‌شود بخوان؛ صف کار تو همان است. تسک‌ها را به ترتیب بردار: برای هر کدام اول در issue 592 بنویس «taking T<n>»، کار را در یک PR جدا انجام بده، specها را اجرا کن، push کن، و با gh pr view <n> --json mergeable چک کن که MERGEABLE است. در هر PR بخش‌های «Coordinator must add» و «What was NOT checked» را بنویس. منتظر merge نمان (قانون Stacking). هیچ‌وقت merge نکن؛ بازبین ساعتی این کار را می‌کند. قبل از هر تسک، آخرین کامنت «Cross-family review» روی PRهای خودت را بخوان؛ اگر «Verdict: blocker» بود، اول همان را درست کن. در گزارش فقط PRهایی را بنویس که در همین موج باز یا push کرده‌ای. هر PR تو که CONFLICTING شد، rebase کن، specها را اجرا کن و push کن (T37). در هر گزارش فقط مسیری را بنویس که خودت باز کرده‌ای. تا وقتی تسک آزاد هست ادامه بده.
 
