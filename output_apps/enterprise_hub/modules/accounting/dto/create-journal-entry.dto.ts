@@ -8,6 +8,7 @@ import {
   IsISO8601,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   MinLength,
   ValidateNested,
@@ -103,6 +104,11 @@ export class JournalEntryLineDto {
   @IsString()
   @MaxLength(255)
   description?: string;
+
+  @ApiPropertyOptional({ description: 'شناسه شعبه سطر سند', example: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' })
+  @IsOptional()
+  @IsUUID()
+  branchId?: string;
 }
 
 /**
@@ -138,6 +144,14 @@ export class CreateJournalEntryDto {
   @IsOptional()
   @IsISO8601()
   date?: string;
+
+  @ApiPropertyOptional({
+    description: 'شناسه شعبه پیش‌فرض سند',
+    example: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+  })
+  @IsOptional()
+  @IsUUID()
+  branchId?: string;
 
   @ApiProperty({ description: 'شرح کلی سند', example: 'فروش نقدی خدمات مشاوره' })
   @IsString()

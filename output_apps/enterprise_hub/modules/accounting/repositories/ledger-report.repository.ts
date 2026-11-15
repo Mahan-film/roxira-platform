@@ -75,7 +75,7 @@ export class LedgerReportRepository {
    */
   async accountBuckets(
     tenantId: string,
-    range: { yearStart: string; from: string; to: string; byParty?: boolean; byCostCenter?: boolean },
+    range: { yearStart: string; from: string; to: string; byParty?: boolean; byCostCenter?: boolean; branchId?: string },
     manager?: EntityManager,
   ): Promise<AccountBucketRow[]> {
     const party = range.byParty ? `, l.party_code` : range.byCostCenter ? `, l.cost_center_id` : '';
@@ -84,6 +84,11 @@ export class LedgerReportRepository {
       : range.byCostCenter
         ? `, l.cost_center_id AS "costCenterId"`
         : '';
+    const branchFilter = range.branchId ? ` AND l.branch_id = $5` : '';
+    const params: unknown[] = [tenantId, range.yearStart, range.from, range.to];
+    if (range.branchId) {
+      params.push(range.branchId);
+    }
     const sum = (column: string, condition: string): string =>
       `COALESCE(SUM(l.${column}) FILTER (WHERE ${condition}), 0)`;
     const opening = `${DAY} < $2 OR (${KIND} = 'OPENING' AND ${DAY} <= $4)`;
@@ -99,10 +104,10 @@ export class LedgerReportRepository {
          FROM fin_journal_entry_lines l
          JOIN fin_journal_entries e ON e.id = l.journal_entry_id AND e.tenant_id = l.tenant_id
          JOIN fin_chart_of_accounts a ON a.id = l.account_id AND a.tenant_id = l.tenant_id
-        WHERE l.tenant_id = $1 AND e.status = 'POSTED' AND ${NOT_PAIR}
+        WHERE l.tenant_id = $1 AND e.status = 'POSTED' AND ${NOT_PAIR}${branchFilter}
         GROUP BY a.id, a.code${party}
         ORDER BY a.code${party}`,
-      [tenantId, range.yearStart, range.from, range.to],
+      params,
     ));
     return rows;
   }

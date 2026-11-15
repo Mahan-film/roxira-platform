@@ -143,6 +143,7 @@ export class InvoicingRepository {
           issuedAt: entity.issuedAt,
           paidAt: entity.paidAt,
           warehouseId: entity.warehouseId ?? null,
+          branchId: entity.branchId ?? null,
         },
       );
       entity.tenantId = tenantId;
@@ -248,6 +249,7 @@ export class InvoicingRepository {
     direction: InvoiceDirection,
     from?: string,
     to?: string,
+    branchId?: string,
   ): Promise<InvoiceEntity[]> {
     return this.withRepo(tenantId, undefined, (repo) => {
       const query = repo
@@ -255,6 +257,9 @@ export class InvoicingRepository {
         .where('invoice.tenantId = :tenantId', { tenantId })
         .andWhere('invoice.direction = :direction', { direction })
         .andWhere('invoice.status IN (:...statuses)', { statuses: [InvoiceStatus.ISSUED, InvoiceStatus.PAID] });
+      if (branchId) {
+        query.andWhere('invoice.branchId = :branchId', { branchId });
+      }
       if (from) {
         query.andWhere('invoice.issuedAt >= :from', { from: new Date(`${from}T00:00:00+03:30`) });
       }
@@ -271,8 +276,26 @@ export class InvoicingRepository {
    * Issued and paid sale invoices of the tenant for the sales report. `from` and `to` are Tehran days
    * (YYYY-MM-DD), both inclusive; the period is by issue date.
    */
-  async findSalesBetween(tenantId: string, from?: string, to?: string): Promise<InvoiceEntity[]> {
-    return this.findDocsBetween(tenantId, InvoiceDirection.SALE, from, to);
+  async findSalesBetween(
+    tenantId: string,
+    from?: string,
+    to?: string,
+    branchId?: string,
+  ): Promise<InvoiceEntity[]> {
+    return this.findDocsBetween(tenantId, InvoiceDirection.SALE, from, to, branchId);
+  }
+
+  /**
+   * Issued and paid purchase invoices of the tenant for report queries. `from` and `to` are Tehran days
+   * (YYYY-MM-DD), both inclusive; the period is by issue date.
+   */
+  async findPurchasesBetween(
+    tenantId: string,
+    from?: string,
+    to?: string,
+    branchId?: string,
+  ): Promise<InvoiceEntity[]> {
+    return this.findDocsBetween(tenantId, InvoiceDirection.PURCHASE, from, to, branchId);
   }
 
   async findAndCount(
@@ -299,6 +322,7 @@ export class InvoicingRepository {
       status?: InvoiceEntity['status'];
       currency?: InvoiceEntity['currency'];
       direction?: InvoiceEntity['direction'];
+      branchId?: string;
       skip: number;
       take: number;
     },
@@ -326,6 +350,11 @@ export class InvoicingRepository {
       if (options.currency) {
         query.andWhere('invoice.currency = :currency', {
           currency: options.currency,
+        });
+      }
+      if (options.branchId) {
+        query.andWhere('invoice.branchId = :branchId', {
+          branchId: options.branchId,
         });
       }
 

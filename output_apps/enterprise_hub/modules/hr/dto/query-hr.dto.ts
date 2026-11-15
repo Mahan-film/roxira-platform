@@ -5,6 +5,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   MaxLength,
   Min,
@@ -47,6 +48,11 @@ export class QueryEmployeeDto {
   @IsString()
   @MaxLength(120)
   department?: string;
+
+  @ApiPropertyOptional({ description: 'فیلتر بر اساس شناسه شعبه' })
+  @IsOptional()
+  @IsUUID()
+  branchId?: string;
 }
 
 /**

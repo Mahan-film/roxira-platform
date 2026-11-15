@@ -621,6 +621,7 @@ export class InvoicingService {
       subject: entity.subject ?? InvoiceSubject.ORIGINAL,
       relatedInvoiceId: entity.relatedInvoiceId ?? null,
       warehouseId: entity.warehouseId ?? null,
+      branchId: entity.branchId ?? null,
     };
   }
 
@@ -698,6 +699,7 @@ export class InvoicingService {
       subject,
       relatedInvoiceId: related?.id ?? null,
       warehouseId: source.warehouseId ?? null,
+      branchId: source.branchId ?? related?.branchId ?? null,
       customerId,
       sellerInfo: source.sellerInfo,
       buyerInfo,
@@ -1059,7 +1061,7 @@ export class InvoicingService {
     page: number;
     limit: number;
   }> {
-    const { page, limit, status, taxInvoiceNumber, search, currency, direction } =
+    const { page, limit, status, taxInvoiceNumber, search, currency, direction, branchId } =
       query;
     const skip = (page - 1) * limit;
 
@@ -1071,6 +1073,7 @@ export class InvoicingService {
           status,
           currency,
           direction,
+          branchId,
           skip,
           take: limit,
         },
@@ -1108,6 +1111,9 @@ export class InvoicingService {
     }
     if (direction) {
       where.direction = direction;
+    }
+    if (branchId) {
+      where.branchId = branchId;
     }
 
     const [entities, total] = await this.invoicingRepository.findAndCount(

@@ -316,4 +316,12 @@ export class CreateInvoiceDto {
   @IsNumber({ maxDecimalPlaces: 6 })
   @IsPositive()
   fxRate?: number;
+
+  @ApiPropertyOptional({
+    description: 'شناسه شعبه صادرکننده صورتحساب',
+    example: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+  })
+  @IsOptional()
+  @IsUUID()
+  branchId?: string;
 }

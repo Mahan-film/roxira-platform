@@ -27,6 +27,7 @@ import { PayslipEntity } from './payslip.entity';
   unique: true,
 })
 @Index('IDX_hr_employees_tenant_created_at', ['tenantId', 'createdAt'])
+@Index('IDX_hr_employees_tenant_branch', ['tenantId', 'branchId'])
 export class EmployeeEntity {
   @PrimaryGeneratedColumn()
   id: number;
@@ -34,6 +35,10 @@ export class EmployeeEntity {
   /** شناسه سازمان مالک پرونده کارمند (تنها از توکن تأییدشده JWT). */
   @Column({ type: 'uuid', name: 'tenant_id' })
   tenantId: string;
+
+  /** شناسه شعبه (Task T122). */
+  @Column({ type: 'uuid', name: 'branch_id', nullable: true })
+  branchId: string | null;
 
   @Column({ type: 'varchar', length: 32, name: 'employee_number' })
   employeeNumber: string;

@@ -22,6 +22,7 @@ import { JournalEntryEntity } from './journal-entry.entity';
   'tenantId',
   'journalEntryId',
 ])
+@Index('IDX_fin_journal_entry_lines_tenant_branch', ['tenantId', 'branchId'])
 export class JournalEntryLineEntity {
   @PrimaryGeneratedColumn()
   id: number;
@@ -29,6 +30,10 @@ export class JournalEntryLineEntity {
   /** شناسه سازمان مالک سطر (denormalised برای فیلتر بدون join). */
   @Column({ type: 'uuid', name: 'tenant_id' })
   tenantId: string;
+
+  /** شناسه شعبه (Task T122). */
+  @Column({ type: 'uuid', name: 'branch_id', nullable: true })
+  branchId: string | null;
 
   @Index()
   @Column({ type: 'integer', name: 'journal_entry_id' })

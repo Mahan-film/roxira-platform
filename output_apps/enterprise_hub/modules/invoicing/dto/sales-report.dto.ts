@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsOptional, Matches } from 'class-validator';
+import { IsIn, IsOptional, IsUUID, Matches } from 'class-validator';
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -18,6 +18,11 @@ export class SalesReportQueryDto {
   @IsOptional()
   @Matches(DATE_ONLY, { message: 'to must be YYYY-MM-DD' })
   to?: string;
+
+  @ApiPropertyOptional({ description: 'فیلتر بر اساس شناسه شعبه' })
+  @IsOptional()
+  @IsUUID()
+  branchId?: string;
 
   @ApiPropertyOptional({ enum: ['xlsx', 'pdf'], description: 'Omit for JSON' })
   @IsOptional()

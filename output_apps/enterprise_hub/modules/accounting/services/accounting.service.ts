@@ -130,6 +130,7 @@ interface NormalisedJournalLine {
   detailCode: string | null;
   costCenterCode: string | null;
   projectCode: string | null;
+  branchId: string | null;
 }
 
 /** Minor units as a JS number for consumers that need one (base-currency conversion, banking). */
@@ -234,7 +235,10 @@ export class AccountingService {
    * ارز سطر باید متعارف باشد و در صورت ارائه هم‌زمان `amount_fx` و `fx_rate`،
    * معادل ریالی آن‌ها با مبلغ سطر تطبیق کند.
    */
-  private normalizeLine(line: JournalEntryLineDto): NormalisedJournalLine {
+  private normalizeLine(
+    line: JournalEntryLineDto,
+    defaultBranchId?: string,
+  ): NormalisedJournalLine {
     const amount = (value: Money | undefined): bigint => {
       try {
         return value == null ? 0n : toMinor(value);
@@ -323,6 +327,7 @@ export class AccountingService {
       detailCode: line.detailCode?.trim() || null,
       costCenterCode: line.costCenterCode?.trim() || null,
       projectCode: line.projectCode?.trim() || null,
+      branchId: line.branchId ?? defaultBranchId ?? null,
     };
   }
 
@@ -662,6 +667,7 @@ export class AccountingService {
       detailCode: line.detailCode,
       costCenterCode: line.costCenterCode,
       projectCode: line.projectCode,
+      branchId: line.branchId,
     }));
   }
 
@@ -674,7 +680,7 @@ export class AccountingService {
     await this.ensureDefaultAccounts(tenantId, manager);
 
     const status = dto.status ?? JournalEntryStatus.POSTED;
-    const normalizedLines = dto.lines.map((line) => this.normalizeLine(line));
+    const normalizedLines = dto.lines.map((line) => this.normalizeLine(line, dto.branchId));
 
     const idempotencyKey = dto.idempotencyKey?.trim() || null;
     const idempotencyFingerprint = idempotencyKey
@@ -934,7 +940,7 @@ export class AccountingService {
       const entry = await this.lockEditableVoucher(tenantId, id, manager);
       // An absent working number keeps the voucher's current one.
       const entryNumber = dto.entryNumber?.trim() || entry.entryNumber;
-      const normalizedLines = dto.lines.map((line) => this.normalizeLine(line));
+      const normalizedLines = dto.lines.map((line) => this.normalizeLine(line, dto.branchId));
       if (entry.status === JournalEntryStatus.TEMPORARY) {
         this.assertBalanced(normalizedLines);
       }

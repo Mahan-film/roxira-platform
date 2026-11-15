@@ -131,6 +131,9 @@ export class InvoiceResponseDto {
   @ApiProperty({ description: 'انبار حرکت کالا', nullable: true })
   warehouseId: number | null;
 
+  @ApiProperty({ description: 'شناسه شعبه صادرکننده صورتحساب', nullable: true })
+  branchId: string | null;
+
   @ApiProperty({ description: 'وضعیت ارسال به سامانه مودیان', nullable: true })
   moadianStatus?: string | null;
 

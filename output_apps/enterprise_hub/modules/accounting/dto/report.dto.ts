@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { ArrayMaxSize, IsBoolean, IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
+import { ArrayMaxSize, IsBoolean, IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
 import { AccountLevel } from '../enums/accounting.enum';
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
@@ -23,6 +23,11 @@ export class ReportPeriodDto {
   @IsOptional()
   @Matches(DATE_ONLY, { message: 'to must be YYYY-MM-DD' })
   to?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by organisation branch UUID', example: '11111111-1111-4111-8111-111111111111' })
+  @IsOptional()
+  @IsUUID()
+  branchId?: string;
 }
 
 export class TrialBalanceQueryDto extends ReportPeriodDto {

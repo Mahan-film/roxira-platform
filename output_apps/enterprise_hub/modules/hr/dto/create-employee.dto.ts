@@ -6,6 +6,7 @@ import {
   IsISO8601,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   Max,
   MaxLength,
@@ -127,4 +128,12 @@ export class CreateEmployeeDto {
   @IsString()
   @Matches(/^\d{1,20}$/, { message: 'شماره بیمه باید فقط شامل رقم باشد.' })
   insuranceNumber?: string;
+
+  @ApiPropertyOptional({
+    description: 'شناسه شعبه محل خدمت',
+    example: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+  })
+  @IsOptional()
+  @IsUUID()
+  branchId?: string;
 }

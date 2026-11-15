@@ -12,12 +12,17 @@ import {
  */
 @Entity({ name: 'fin_pos_settlements' })
 @Index('IDX_fin_pos_settlements_tenant_date', ['tenantId', 'date'])
+@Index('IDX_fin_pos_settlements_tenant_branch', ['tenantId', 'branchId'])
 export class PosSettlementEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column({ type: 'uuid', name: 'tenant_id' })
   tenantId: string;
+
+  /** شناسه شعبه (Task T122). */
+  @Column({ type: 'uuid', name: 'branch_id', nullable: true })
+  branchId: string | null;
 
   @Column({ type: 'integer', name: 'bank_account_id' })
   bankAccountId: number;
