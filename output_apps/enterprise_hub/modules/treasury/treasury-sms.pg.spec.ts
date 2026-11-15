@@ -1,0 +1,174 @@
+/**
+ * Treasury SMS drafts on real PostgreSQL as non-superuser role (NOSUPERUSER NOBYPASSRLS):
+ * Proves FORCE ROW LEVEL SECURITY and strict cross-tenant isolation on `fin_treasury_sms_drafts`.
+ */
+import 'reflect-metadata';
+import * as path from 'path';
+import { ConflictException } from '@nestjs/common';
+import { DataSource } from 'typeorm';
+import { TenantScope } from '../access/services/tenant-scope';
+import { APP_PASSWORD } from '../../test/support/test-pg';
+import { TreasurySmsDraftEntity, TreasurySmsDraftStatus } from './entities/treasury-sms-draft.entity';
+import { TreasurySmsRepository } from './repositories/treasury-sms.repository';
+import { TreasurySmsService } from './services/treasury-sms.service';
+import { TreasuryService } from './services/treasury.service';
+
+const HOST = process.env.ROXIRA_TEST_PG_HOST;
+const describePg = HOST ? describe : describe.skip;
+const OWNER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
+const OWNER_PW = process.env.ROXIRA_TEST_PG_PASSWORD;
+const PORT = Number(process.env.ROXIRA_TEST_PG_PORT ?? 5432);
+const ROLE_NAME = `rx_treasury_sms_${process.pid}`;
+const ROLE_PW = `pw_${process.pid}_${Math.random().toString(36).slice(2)}`;
+
+const T1 = '11111111-1111-4111-8111-111111111111';
+const T2 = '22222222-2222-4222-8222-222222222222';
+const U1 = '11111111-1111-4111-8111-222222222222';
+const U2 = '22222222-2222-4222-8222-333333333333';
+
+const dsOptions = (database: string, username = OWNER, password = OWNER_PW) => ({
+  type: 'postgres' as const,
+  host: HOST,
+  port: PORT,
+  username,
+  password,
+  database,
+  entities: [path.join(__dirname, '../**/*.entity.ts')],
+  migrations: [path.join(__dirname, '../../migrations/*.ts')],
+  migrationsTransactionMode: 'each' as const,
+  synchronize: false,
+  logging: false,
+});
+
+describePg('TreasurySmsDrafts RLS isolation (NOSUPERUSER NOBYPASSRLS)', () => {
+  const db = `treasury_sms_${process.pid}`;
+  let adminDs: DataSource;
+  let ownerDs: DataSource;
+  let appDs: DataSource;
+  let scope: TenantScope;
+  let repository: TreasurySmsRepository;
+  let service: TreasurySmsService;
+
+  beforeAll(async () => {
+    adminDs = await new DataSource({ ...dsOptions('postgres'), entities: [], migrations: [] }).initialize();
+    await adminDs.query(`DROP DATABASE IF EXISTS "${db}" WITH (FORCE)`);
+    await adminDs.query(`CREATE DATABASE "${db}"`);
+    await adminDs.query(`DROP ROLE IF EXISTS "${ROLE_NAME}"`);
+    await adminDs.query(`CREATE ROLE "${ROLE_NAME}" LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${ROLE_PW}'`);
+
+    ownerDs = await new DataSource(dsOptions(db)).initialize();
+    await ownerDs.runMigrations();
+
+    await ownerDs.query(
+      `GRANT CONNECT ON DATABASE "${db}" TO "${ROLE_NAME}";
+       GRANT USAGE ON SCHEMA public TO "${ROLE_NAME}";
+       GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "${ROLE_NAME}";
+       GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO "${ROLE_NAME}";`,
+    );
+
+    appDs = await new DataSource(dsOptions(db, ROLE_NAME, ROLE_PW)).initialize();
+    scope = new TenantScope(appDs);
+    repository = new TreasurySmsRepository(appDs.getRepository(TreasurySmsDraftEntity), scope);
+    service = new TreasurySmsService(repository, {} as TreasuryService);
+  }, 60_000);
+
+  afterAll(async () => {
+    await appDs?.destroy();
+    await ownerDs?.destroy();
+    if (adminDs) {
+      await adminDs.query(`DROP DATABASE IF EXISTS "${db}" WITH (FORCE)`);
+      await adminDs.query(`DROP ROLE IF EXISTS "${ROLE_NAME}"`);
+      await adminDs.destroy();
+    }
+  }, 30_000);
+
+  it('enforces FORCE ROW LEVEL SECURITY on fin_treasury_sms_drafts', async () => {
+    const rows = await ownerDs.query(`
+      SELECT relname AS tablename, relrowsecurity AS rowsecurity, relforcerowsecurity AS forcerowsecurity
+      FROM pg_class
+      WHERE relname = 'fin_treasury_sms_drafts' AND relkind = 'r';
+    `);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].rowsecurity).toBe(true);
+    expect(rows[0].forcerowsecurity).toBe(true);
+  });
+
+  it('proves Tenant 1 SMS drafts cannot be seen or modified by Tenant 2 under non-superuser app role', async () => {
+    const MELLI_SMS = `بانک ملی ایران
+واریز: ۲,۵۰۰,۰۰۰ ریال
+حساب: ...۴۳۲۱
+مانده: ۱۰,۰۰۰,۰۰۰ ریال
+۱۴۰۳/۰۸/۲۲-۱۴:۳۰`;
+
+    const draftT1 = await service.captureSms(T1, U1, MELLI_SMS);
+    expect(draftT1.id).toBeDefined();
+
+    // Tenant 1 sees their draft
+    const listT1 = await service.listDrafts(T1);
+    expect(listT1.some((d) => d.id === draftT1.id)).toBe(true);
+
+    // Tenant 2 sees nothing
+    const listT2 = await service.listDrafts(T2);
+    expect(listT2.some((d) => d.id === draftT1.id)).toBe(false);
+
+    // Tenant 2 cannot reject or modify Tenant 1 draft
+    await expect(service.rejectDraft(T2, draftT1.id)).rejects.toThrow();
+
+    // Direct scoped SQL query under Tenant 2 context sees 0 rows
+    const crossRows = await scope.run(T2, (manager) =>
+      manager.query(`SELECT * FROM fin_treasury_sms_drafts WHERE id = $1`, [draftT1.id]),
+    );
+    expect(crossRows).toHaveLength(0); // RLS filtered out because app.tenant_id is T2
+  });
+
+  it('rejects duplicate SMS capture within same tenant (smsHash unique index) while allowing across tenants', async () => {
+    const SMS = `بانک ملت
+واریز: ۳,۵۰۰,۰۰۰ ریال
+حساب: ...۸۷۶۵
+مانده: ۹,۰۰۰,۰۰۰ ریال
+۱۴۰۳/۰۸/۲۳-۱۰:۰۰`;
+    await service.captureSms(T1, U1, SMS);
+    await expect(service.captureSms(T1, U1, SMS)).rejects.toThrow(ConflictException);
+    const otherTenantDraft = await service.captureSms(T2, U2, SMS);
+    expect(otherTenantDraft.tenantId).toBe(T2);
+  });
+
+  it('posts exactly once when two confirms of one draft run concurrently', async () => {
+    const SMS = `بانک ملی ایران
+واریز: ۱,۰۰۰,۰۰۰ ریال
+حساب: ...۴۳۲۱
+مانده: ۱۰,۰۰۰,۰۰۰ ریال
+۱۴۰۳/۰۸/۲۲-۱۴:۳۰`;
+    await ownerDs.query(
+      `INSERT INTO "fin_treasury_documents"
+        ("id", "tenant_id", "kind", "doc_number", "doc_date", "party_type", "party_code", "party_name", "total")
+       VALUES (7, $1, 'receipt', 'RC-TEST-7', '2024-11-12', 'customer', 'C1', 'Customer', 1000000.00)
+       ON CONFLICT DO NOTHING`,
+      [T1],
+    );
+    const createDocument = jest.fn(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+      return { id: 7 };
+    });
+    const racing = new TreasurySmsService(repository, { createDocument } as unknown as TreasuryService);
+    const draft = await racing.captureSms(T1, U1, SMS);
+    const body = { partyCode: 'C1', partyName: 'Customer', bankAccountId: 5 };
+
+    const results = await Promise.allSettled([
+      racing.confirmDraft(T1, U1, draft.id, body),
+      racing.confirmDraft(T1, U1, draft.id, body),
+    ]);
+
+    expect(createDocument).toHaveBeenCalledTimes(1);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const failed = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect(failed.reason).toBeInstanceOf(ConflictException);
+    const after = await racing.getDraft(T1, draft.id);
+    expect(after.status).toBe(TreasurySmsDraftStatus.CONFIRMED);
+    expect(after.matchedDocumentId).toBe(7);
+
+    // Concurrent reject against confirmed draft also fails atomically
+    await expect(racing.rejectDraft(T1, draft.id)).rejects.toThrow(ConflictException);
+  });
+});

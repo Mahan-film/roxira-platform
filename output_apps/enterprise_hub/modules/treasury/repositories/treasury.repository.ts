@@ -67,8 +67,9 @@ export interface AllocationRow {
 export class TreasuryRepository {
   constructor(private readonly scope: TenantScope) {}
 
-  runInTransaction<T>(tenantId: string, work: (manager: EntityManager) => Promise<T>): Promise<T> {
-    return this.scope.run(tenantId, work);
+  /** Opens a tenant transaction, or joins `manager`'s when the caller already holds one. */
+  runInTransaction<T>(tenantId: string, work: (manager: EntityManager) => Promise<T>, manager?: EntityManager): Promise<T> {
+    return manager ? this.scope.within(tenantId, manager, work) : this.scope.run(tenantId, work);
   }
 
   private within<T>(tenantId: string, manager: EntityManager | undefined, work: (m: EntityManager) => Promise<T>): Promise<T> {
