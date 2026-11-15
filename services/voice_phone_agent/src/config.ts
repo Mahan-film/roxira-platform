@@ -34,10 +34,23 @@ export const cfg = {
   groqKeys: ['GROQ_API_KEY', 'GROQ_API_KEY_2', 'GROQ_API_KEY_3', 'GROQ_API_KEY_4'].map((k) => str(k)).filter(Boolean),
   // whisper-large-v3 beat -turbo on simulated Persian phone audio (CER 0.046 vs 0.058, +60 ms), 2026-11-15
   groqSttModel: str('GROQ_STT_MODEL', 'whisper-large-v3'),
-  // Outage fallback only (after every Groq key failed). Very accurate on clear phone audio (CER 0.01)
-  // but on heavy noise it invents a plausible question instead of returning nothing, so never primary.
+  // hybrid = Whisper + Gemini in parallel (Whisper gates noise, Gemini text wins); whisper = Whisper only
+  sttMode: str('STT_MODE', 'hybrid') as 'hybrid' | 'whisper',
+  // Gemini hears real phone Persian much better than Whisper, but on heavy noise it invents a plausible
+  // question instead of returning nothing - so Whisper's confidence always decides "speech or noise".
   geminiKeys: ['GEMINI_API_KEY', 'GEMINI_API_KEY_2', 'GEMINI_API_KEY_3', 'GEMINI_API_KEY_4'].map((k) => str(k)).filter(Boolean),
-  geminiSttModel: str('GEMINI_STT_MODEL', 'gemini-3.1-flash-lite'),
+  // All run in parallel, each on its own key; the first id is preferred. 3-flash-preview was exact on the
+  // real 2026-11-15 call ("آخرین آرای ...", 1.8-4.6 s), so it runs twice to cut its slow tail;
+  // 3.5-flash-lite (~1.2 s) is the fast backup but heard "آخر رای", which the brain read as a definition question.
+  geminiSttModels: str('GEMINI_STT_MODELS', 'gemini-3-flash-preview,gemini-3-flash-preview,gemini-3.5-flash-lite')
+    .split(',').map((s) => s.trim()).filter(Boolean),
+  // max wait (from end of speech) for the preferred model; 3-flash-preview took 3.2-4.5 s on all 4 keys
+  // (2026-11-15). After that a backup that already answered, else Whisper's own text.
+  geminiWaitMs: num('GEMINI_WAIT_MS', 4800),
+  geminiSttPrompt: str('GEMINI_STT_PROMPT', 'Transcribe this Persian phone call verbatim in Persian script. '
+    + 'The caller is asking an Iranian legal question; typical terms: آرای وحدت رویه، دادنامه، تجدیدنظرخواهی، '
+    + 'مهریه، چک برگشتی، دیوان عالی کشور، قانون مدنی، ماده، تبصره. Write what was said, do not correct or '
+    + 'complete it. Output only the transcript. If there is no clearly intelligible speech, output nothing.'),
   openaiKey: str('OPENAI_API_KEY'),
   openaiSttModel: str('OPENAI_STT_MODEL', 'whisper-1'),
   // Whisper vocabulary hint (keep under ~220 tokens). Terms come from real phone-call misrecognitions.
@@ -69,8 +82,9 @@ export const cfg = {
   // Semantic end of turn: when the transcript looks unfinished ("... که", "... در مورد"),
   // wait this much longer for the caller to go on before answering.
   turnHoldMs: num('TURN_HOLD_MS', 1200),
-  // Short "one moment" only if no answer audio has started by then (never right at end of speech).
-  fillerDelayMs: num('FILLER_DELAY_MS', 1800),
+  // Short "one moment" if no answer audio has started this long after the caller stopped talking
+  // (never right at end of speech; speech that resumes during it is merged into the same turn).
+  fillerDelayMs: num('FILLER_DELAY_MS', 2000),
   // Whisper confidence floor (duration-weighted avg_logprob). Below it the caller is asked to
   // repeat instead of the brain answering a guess. Calibrated 2026-11-15 on noisy phone clips:
   // usable transcripts -0.05..-0.45, garbage -0.83..-0.92.

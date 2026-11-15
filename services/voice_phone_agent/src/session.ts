@@ -14,7 +14,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { transcribeDetailed } from './stt.js';
 import { synthesizeStream } from './tts.js';
-import { looksIncomplete } from './turn.js';
+import { looksIncomplete, stripEcho } from './turn.js';
 import { EnergyVad } from './vad.js';
 
 const sleep = (ms: number, signal: AbortSignal) => new Promise<void>((resolve) => {
@@ -108,6 +108,7 @@ export class CallSession {
     }
 
     this.player.enqueue(this.prompts.greeting);
+    this.noteSaid(cfg.greetingText);
     this.timers.push(setTimeout(() => void this.sayGoodbye('max duration'), cfg.maxCallSeconds * 1000));
     this.timers.push(setInterval(() => {
       if (!this.turnBusy && !this.player.speaking && Date.now() - this.lastActivity > cfg.idleHangupSeconds * 1000) {
@@ -155,6 +156,18 @@ export class CallSession {
     this.pendingMs = 0;
   }
 
+  /** What the agent said recently: its echo on the line is removed from the caller's transcript. */
+  private said: { text: string; at: number }[] = [];
+  private noteSaid(text: string) {
+    const now = Date.now();
+    this.said = this.said.filter((s) => now - s.at < 45_000);
+    this.said.push({ text, at: now });
+  }
+  private recentSaid(): string[] {
+    const now = Date.now();
+    return this.said.filter((s) => now - s.at < 45_000).map((s) => s.text);
+  }
+
   /** Ask the caller to say it again (unclear audio). Pure noise blips are dropped silently. */
   private askRepeat(m: Record<string, number>, why: string) {
     const ms = this.pendingMs;
@@ -173,9 +186,18 @@ export class CallSession {
     const t0 = Date.now();
     const pcm = concat(this.pending);
     const m: Record<string, number> = { speech_ms: Math.round(this.pendingMs), segments: this.pending.length };
-    let fillerTimer: NodeJS.Timeout | undefined;
+    // "one moment" if nothing is audible FILLER_DELAY_MS after the caller stopped; not for echo or noise
+    let noFiller = false;
+    const fillerTimer = setTimeout(() => {
+      if (ctl.signal.aborted || m.first_audio_ms || noFiller) return;
+      this.player.enqueue(this.prompts.filler);
+      this.noteSaid(cfg.fillerText);
+    }, cfg.fillerDelayMs);
     try {
-      const tr = await transcribeDetailed(pcm, ctl.signal);
+      const tr = await transcribeDetailed(pcm, ctl.signal, undefined, (w) => {
+        const unsure = !w.text || (w.logprob !== null && w.logprob < cfg.sttMinLogprob);
+        if (unsure || !stripEcho(w.text, this.recentSaid()).text) noFiller = true;
+      });
       m.stt_ms = Date.now() - t0;
       if (ctl.signal.aborted) return; // caller went on talking: the next utterance merges with this one
       if (tr.logprob !== null) m.logprob = Math.round(tr.logprob * 100) / 100;
@@ -185,17 +207,21 @@ export class CallSession {
         // a garbled transcript sent to the brain gets a confident answer to the wrong question
         return this.askRepeat(m, `low-confidence transcript "${tr.text.slice(0, 80)}"`);
       }
-      if (looksIncomplete(tr.text)) {
+      // the agent's own voice coming back on the line (speakerphone / line echo)
+      const echo = stripEcho(tr.text, this.recentSaid());
+      if (echo.removed) this.log.info(`echo removed: "${echo.removed.slice(0, 80)}"`);
+      if (!echo.text) {
+        this.clearPending();
+        this.log.info('only echo of the agent; ignored', m);
+        return;
+      }
+      const text = echo.text;
+      if (looksIncomplete(text)) {
         m.hold_ms = cfg.turnHoldMs;
         await sleep(cfg.turnHoldMs, ctl.signal);
         if (ctl.signal.aborted) return; // the caller continued: merged into the next turn
       }
-      const text = tr.text;
-      this.log.info('caller:', text, tr.provider.startsWith('smartjudge-fallback') ? `[${tr.provider}]` : '');
-      // "one moment" only when the answer is slow; never on top of a caller who just paused
-      fillerTimer = setTimeout(() => {
-        if (!ctl.signal.aborted && !m.first_audio_ms) this.player.enqueue(this.prompts.filler);
-      }, cfg.fillerDelayMs);
+      this.log.info('caller:', text, `[${tr.provider.split(' ')[0]}]`);
 
       let answer = '';
       let chain: Promise<void> = Promise.resolve();
@@ -208,6 +234,7 @@ export class CallSession {
         const clip = new StreamedClip(sentence, ctl.signal);
         chain = chain.then(async () => {
           if (ctl.signal.aborted) return;
+          this.noteSaid(sentence);
           clip.attach((pcm) => {
             if (ctl.signal.aborted) return;
             if (!m.first_audio_ms) {
