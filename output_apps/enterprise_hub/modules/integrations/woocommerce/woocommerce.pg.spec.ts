@@ -43,7 +43,7 @@ describePg('WooCommerce Integration on PostgreSQL (NOSUPERUSER NOBYPASSRLS) (T85
 
   beforeAll(async () => {
     process.env.WOOCOMMERCE_KEY_ENCRYPTION_KEY =
-      process.env.WOOCOMMERCE_KEY_ENCRYPTION_KEY || randomBytes(32).toString('hex').slice(0, 32);
+      process.env.WOOCOMMERCE_KEY_ENCRYPTION_KEY || randomBytes(32).toString('hex');
 
     testDb = await createTestDatabase('wc');
 
