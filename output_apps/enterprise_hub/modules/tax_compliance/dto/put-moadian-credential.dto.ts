@@ -40,13 +40,19 @@ export class PutMoadianCredentialDto {
     default: false,
   })
   @IsOptional()
+  @Transform(({ obj, key }) => {
+    const raw = obj?.[key];
+    if (raw === 'false' || raw === false) return false;
+    if (raw === 'true' || raw === true) return true;
+    return raw;
+  })
   @IsBoolean()
   useActiveSigningKey?: boolean;
 
   @ApiPropertyOptional({
     description: 'کلید خصوصی RSA متناظر با گواهی (PEM، فقط ورودی؛ در صورت useActiveSigningKey=true اختیاری است)',
   })
-  @ValidateIf((o: PutMoadianCredentialDto) => !o.useActiveSigningKey || o.privateKeyPem !== undefined)
+  @ValidateIf((o: PutMoadianCredentialDto) => !o.useActiveSigningKey)
   @IsString()
   @MaxLength(16_384)
   @Matches(/-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/, { message: 'کلید خصوصی باید در قالب PEM باشد.' })

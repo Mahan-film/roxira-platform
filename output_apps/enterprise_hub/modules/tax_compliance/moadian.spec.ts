@@ -6,6 +6,7 @@ import {
   ForbiddenException,
   NotFoundException,
   ServiceUnavailableException,
+  ValidationPipe,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
@@ -26,6 +27,7 @@ import {
   MOADIAN_SEND_JOB,
   MOADIAN_SYNC_STATUS_JOB,
 } from './constants/moadian.constants';
+import { PutMoadianCredentialDto } from './dto/put-moadian-credential.dto';
 import { MoadianProcessor } from './processors/moadian.processor';
 import { MoadianController } from './controllers/moadian.controller';
 import { MoadianCredentialEntity } from './entities/moadian-credential.entity';
@@ -1446,5 +1448,48 @@ describe('Moadian status sync (T82)', () => {
     const result = await processor.process(job);
     expect(result).toEqual({ outcome: 'done' });
     expect(syncSpy).toHaveBeenCalledWith(TENANT_A);
+  });
+
+  describe('PutMoadianCredentialDto ValidationPipe (Rule 26)', () => {
+    const pipe = new ValidationPipe({
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    });
+
+    it('transforms "false" string to boolean false and requires privateKeyPem', async () => {
+      const target = { metatype: PutMoadianCredentialDto, type: 'body' as const };
+      const raw = {
+        memoryId: 'A1B2C3',
+        economicCode: '10101010101',
+        certificatePem: '-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----\n',
+        useActiveSigningKey: 'false',
+      };
+      await expect(pipe.transform(raw, target)).rejects.toThrow();
+    });
+
+    it('transforms "true" string to boolean true and allows missing privateKeyPem', async () => {
+      const target = { metatype: PutMoadianCredentialDto, type: 'body' as const };
+      const raw = {
+        memoryId: 'A1B2C3',
+        economicCode: '10101010101',
+        certificatePem: '-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----\n',
+        useActiveSigningKey: 'true',
+      };
+      const dto = (await pipe.transform(raw, target)) as PutMoadianCredentialDto;
+      expect(dto.useActiveSigningKey).toBe(true);
+    });
+
+    it('preserves boolean false and rejects if privateKeyPem is missing', async () => {
+      const target = { metatype: PutMoadianCredentialDto, type: 'body' as const };
+      const raw = {
+        memoryId: 'A1B2C3',
+        economicCode: '10101010101',
+        certificatePem: '-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----\n',
+        useActiveSigningKey: false,
+      };
+      await expect(pipe.transform(raw, target)).rejects.toThrow();
+    });
   });
 });
