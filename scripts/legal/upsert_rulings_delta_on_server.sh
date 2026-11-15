@@ -9,12 +9,13 @@
 #
 # Point ids are deterministic (ingest_pipeline.point_id), so a rerun overwrites the same points: idempotent. Refuses when the collection
 # does not exist (the first build is build_rulings_collection_on_server.sh). Takes a Qdrant snapshot of the collection before writing.
-# Never touches iran_laws_v2/v3 and never prints env values. Server timer for this job needs owner approval (docs/legal/RULINGS_DESIGN.md).
+# Never touches iran_laws_v2/v3 and never prints env values. The server timer (scripts/legal/rulings_auto_update.sh) was approved by the
+# owner 2026-11-15 and calls this script with REPO=its own checkout; the safety checks below are unchanged (pwd == REPO, clean tree).
 set -euo pipefail
 
 DST=iran_rulings_v1
 QDRANT=${QDRANT_URL:-http://127.0.0.1:6333}
-REPO=/opt/roxira_platform
+REPO=${REPO:-/opt/roxira_platform} # the automatic job (rulings_auto_update.sh) sets REPO to its own checkout; must be a physical path
 APP=roxira_app_prod
 QDR=roxira_qdrant_prod
 MIN_FREE_GB=${MIN_FREE_GB:-3}

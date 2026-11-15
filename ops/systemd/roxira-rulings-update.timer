@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the Roxira rulings auto-update every 6 hours
+
+[Timer]
+OnCalendar=*-*-* 00/6:20:00
+RandomizedDelaySec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

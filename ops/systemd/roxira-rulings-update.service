@@ -1,0 +1,14 @@
+# Automatic unity-ruling updates into Qdrant iran_rulings_v1. Installed by scripts/legal/install_rulings_timer.sh (owner, once).
+# Runs from its OWN checkout (/opt/roxira_legal_worker), never from or into /opt/roxira_platform.
+[Unit]
+Description=Roxira rulings auto-update (law_watch delta -> iran_rulings_v1)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=RULINGS_WORKER_DIR=/opt/roxira_legal_worker
+Environment=RULINGS_STATE_DIR=/var/lib/roxira/rulings
+ExecStart=/bin/bash /opt/roxira_legal_worker/scripts/legal/rulings_auto_update.sh
+TimeoutStartSec=3600
+Nice=10
