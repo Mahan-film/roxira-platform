@@ -8,6 +8,8 @@
 import 'reflect-metadata';
 import { randomBytes } from 'crypto';
 import { UnauthorizedException } from '@nestjs/common';
+import { DEFAULT_RATES_PER_USD } from '../../currency/constants/currency.constants';
+import { Currency } from '../../currency/enums/currency.enum';
 import { CurrencyService } from '../../currency/services/currency.service';
 import { InvoiceEntity } from '../../invoicing/entities/invoice.entity';
 import { InvoicingRepository } from '../../invoicing/repositories/invoicing.repository';
@@ -160,7 +162,7 @@ describePg('WooCommerce Integration on PostgreSQL (NOSUPERUSER NOBYPASSRLS) (T85
 
     const savedInvoice = await invoicingRepo.findById(T1, resA.invoiceId!);
     expect(savedInvoice).not.toBeNull();
-    expect(Number(savedInvoice!.exchangeRate)).toBeCloseTo(1 / 920000, 6);
+    expect(Number(savedInvoice!.exchangeRate)).toBeCloseTo(1 / DEFAULT_RATES_PER_USD[Currency.IRR], 6);
     expect(Number(savedInvoice!.fxRate)).toBe(1);
     expect(Number(savedInvoice!.baseFinalPayable)).toBeCloseTo(1.3, 2);
   });

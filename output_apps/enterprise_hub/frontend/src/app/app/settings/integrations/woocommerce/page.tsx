@@ -120,7 +120,11 @@ export default function WooCommerceSettingsPage() {
   };
 
   const copyWebhookUrl = () => {
-    const fullUrl = `${window.location.origin}${config?.webhookUrl || "/api/backend/enterprise-hub/integrations/woocommerce/webhook"}`;
+    const rawUrl = config?.webhookUrl || "/api/backend/enterprise-hub/integrations/woocommerce/webhook";
+    const fullUrl =
+      rawUrl.startsWith("http://") || rawUrl.startsWith("https://")
+        ? rawUrl
+        : `${window.location.origin}${rawUrl}`;
     navigator.clipboard.writeText(fullUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);

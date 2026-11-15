@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { TenantScope } from '../../access/services/tenant-scope';
+import { AccessModule } from '../../access/access.module';
 import { CurrencyModule } from '../../currency/currency.module';
 import { InvoicingModule } from '../../invoicing/invoicing.module';
 import { TenantsModule } from '../../tenants/tenants.module';
@@ -17,6 +17,7 @@ import { WooCommerceSyncService } from './services/woocommerce-sync.service';
       WooCommerceConfigEntity,
       WooCommerceSyncLogEntity,
     ]),
+    AccessModule,
     CurrencyModule,
     InvoicingModule,
     TenantsModule,
@@ -28,7 +29,6 @@ import { WooCommerceSyncService } from './services/woocommerce-sync.service';
   providers: [
     WooCommerceRepository,
     WooCommerceSyncService,
-    TenantScope,
   ],
   exports: [
     WooCommerceSyncService,
