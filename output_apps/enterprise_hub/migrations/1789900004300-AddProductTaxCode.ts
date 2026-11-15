@@ -13,8 +13,9 @@ export class AddProductTaxCode1789900004300 implements MigrationInterface {
   }
 
   public async down(q: QueryRunner): Promise<void> {
+    // Preserve stored SSTIDs on rollback by renaming to backup column rather than deleting
     await q.query(
-      `ALTER TABLE "erp_stock_items" DROP COLUMN IF EXISTS "tax_code"`,
+      `ALTER TABLE "erp_stock_items" RENAME COLUMN "tax_code" TO "tax_code_backup_t71"`,
     );
   }
 }
