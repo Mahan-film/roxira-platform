@@ -5,6 +5,7 @@ import { Loader2Icon, SendHorizonalIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { JalaliDateInput } from "@/components/ui/jalali-date-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -155,12 +156,10 @@ export function DamageCalculationForm({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="dueDate">تاریخ سررسید</Label>
-              <Input
+              <JalaliDateInput
                 id="dueDate"
-                type="date"
                 value={values.dueDate}
-                onChange={(event) => updateField("dueDate", event.target.value)}
-                aria-invalid={Boolean(errors.dueDate)}
+                onChange={(iso) => updateField("dueDate", iso)}
               />
               {errors.dueDate && (
                 <p className="text-sm text-destructive">{errors.dueDate}</p>
@@ -169,14 +168,10 @@ export function DamageCalculationForm({
 
             <div className="grid gap-2">
               <Label htmlFor="paymentDate">تاریخ پرداخت</Label>
-              <Input
+              <JalaliDateInput
                 id="paymentDate"
-                type="date"
                 value={values.paymentDate}
-                onChange={(event) =>
-                  updateField("paymentDate", event.target.value)
-                }
-                aria-invalid={Boolean(errors.paymentDate)}
+                onChange={(iso) => updateField("paymentDate", iso)}
               />
               {errors.paymentDate && (
                 <p className="text-sm text-destructive">
@@ -189,6 +184,7 @@ export function DamageCalculationForm({
           <div className="grid gap-2">
             <Label htmlFor="calculationMethod">روش محاسبه</Label>
             <Select
+              items={DAMAGE_CALCULATION_METHOD_LABELS}
               value={values.calculationMethod}
               onValueChange={(value) =>
                 updateField(

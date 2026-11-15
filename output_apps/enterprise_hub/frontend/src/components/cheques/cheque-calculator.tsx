@@ -6,6 +6,7 @@ import { Calculator, Calendar, CheckSquare, Coins, Percent, Plus, RefreshCw, Squ
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { JalaliDateInput } from "@/components/ui/jalali-date-input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   calculateDiscountApi,
@@ -220,12 +221,7 @@ export function ChequeCalculator({ direction: initialDirection = "received" }: C
             <div>
               <label className="text-xs font-medium text-muted-foreground">تاریخ مبنا (به وقت تهران)</label>
               <div className="mt-1 flex items-center gap-2">
-                <Input
-                  type="date"
-                  value={baseDate}
-                  onChange={(e) => setBaseDate(e.target.value)}
-                  className="text-sm"
-                />
+                <JalaliDateInput value={baseDate} onChange={setBaseDate} />
                 <Button
                   size="sm"
                   variant="ghost"
@@ -495,11 +491,9 @@ export function ChequeCalculator({ direction: initialDirection = "received" }: C
                           />
                         </TableCell>
                         <TableCell>
-                          <Input
-                            type="date"
+                          <JalaliDateInput
                             value={row.dueDate}
-                            onChange={(e) => updateManualRow(row.id, "dueDate", e.target.value)}
-                            className="text-sm"
+                            onChange={(iso) => updateManualRow(row.id, "dueDate", iso)}
                           />
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
