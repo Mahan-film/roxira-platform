@@ -70,6 +70,12 @@ export class InvoicePartyInfoDto {
   @MaxLength(32)
   phone?: string;
 
+  @ApiPropertyOptional({ description: 'کد طرف‌حساب در دفتر تفصیلی', example: 'C-001' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  partyCode?: string;
+
   @ApiPropertyOptional({ description: 'رایانامه', example: 'billing@example.com' })
   @IsOptional()
   @IsString()

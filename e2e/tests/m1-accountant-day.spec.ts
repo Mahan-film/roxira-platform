@@ -3,11 +3,14 @@ import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import type { Locator, Page } from '@playwright/test';
 import {
+  allDayLines,
   balancesFromVouchers,
   BALANCE_SHEET,
   CHEQUE,
   CUSTOMER,
+  DAY_ITEM,
   EXPECTED_BALANCES,
+  EXPECTED_PARTY_SUBLEDGER,
   FISCAL_YEAR_1405,
   FISCAL_YEAR_1406,
   INCOME_STATEMENT,
@@ -16,21 +19,25 @@ import {
   KEYBOARD_VOUCHER_JALALI_SHOWN,
   KEYBOARD_VOUCHERS,
   OPENING_VOUCHER,
+  PURCHASE_INVOICE,
   PURCHASE_VOUCHER,
   RECEIPT_VOUCHER,
+  SALES_INVOICE,
   SALES_VOUCHER,
   SUPPLIER,
   TRIAL_BALANCE,
   trialBalanceTotals,
   type Voucher,
+  type VoucherLine,
 } from './m1/accountant-day-expected';
 import { rials } from './m1/import-ui';
 
 /**
- * Accountant Day go-live gate (T91, issue #784): sign up a fresh tenant, apply the Iran chart template, enter
- * opening balances, enter five vouchers through the voucher grid with the keyboard, post a sale, a receipt, a
- * purchase and a received cheque, check the trial balance and statements against hand-computed figures, close the
- * fiscal year and prove that reopening is refused.
+ * Accountant Day go-live gate (T91 + T99, issues #784, #793): sign up a fresh tenant, apply the Iran chart
+ * template, enter opening balances, enter five vouchers through the voucher grid with the keyboard, create
+ * and issue a sales invoice and record a purchase invoice through the invoicing module alongside a receipt and
+ * a received cheque, verify party sub-ledgers and the trial balance + statements against hand-computed figures,
+ * close the fiscal year and prove that reopening is refused.
  *
  * Needs the local stack of the M1 gate (see docs/testing/M1_GATE.md). The steps share one tenant and run in order.
  */
@@ -82,6 +89,40 @@ test.describe('Accountant day · figures self-check', () => {
     expect(-EXPECTED_BALANCES['3010'] + INCOME_STATEMENT.netProfit).toBe(BALANCE_SHEET.totalEquity);
     expect(BALANCE_SHEET.totalAssets).toBe(BALANCE_SHEET.totalLiabilities + BALANCE_SHEET.totalEquity);
   });
+
+  test('invoicing figures and party sub-ledgers agree with the expected vouchers [T99]', () => {
+    const openingInventory = OPENING_VOUCHER.lines.find((l) => l.code === '1030')!.debit;
+    expect(DAY_ITEM.openingCost * BigInt(DAY_ITEM.openingQty)).toBe(openingInventory);
+
+    expect(SALES_VOUCHER.lines.find((l) => l.code === '1020')!.debit).toBe(SALES_INVOICE.payable);
+    expect(SALES_VOUCHER.lines.find((l) => l.code === '4020')!.credit).toBe(SALES_INVOICE.net);
+    expect(SALES_VOUCHER.lines.find((l) => l.code === '2020')!.credit).toBe(SALES_INVOICE.vat);
+    expect(SALES_VOUCHER.lines.find((l) => l.code === '5110')!.debit).toBe(SALES_INVOICE.cogs);
+    expect(SALES_INVOICE.net + SALES_INVOICE.vat).toBe(SALES_INVOICE.payable);
+
+    expect(PURCHASE_VOUCHER.lines.find((l) => l.code === '1030')!.debit).toBe(PURCHASE_INVOICE.net);
+    expect(PURCHASE_VOUCHER.lines.find((l) => l.code === '1045')!.debit).toBe(PURCHASE_INVOICE.vat);
+    expect(PURCHASE_VOUCHER.lines.find((l) => l.code === '2010')!.credit).toBe(PURCHASE_INVOICE.payable);
+    expect(PURCHASE_INVOICE.net + PURCHASE_INVOICE.vat).toBe(PURCHASE_INVOICE.payable);
+
+    const byParty = (accountCode: string, partyCode: string) =>
+      allDayLines()
+        .filter((l) => l.code === accountCode && l.partyCode === partyCode)
+        .reduce(
+          (acc, l) => ({ debit: acc.debit + l.debit, credit: acc.credit + l.credit }),
+          { debit: 0n, credit: 0n },
+        );
+
+    const cust = byParty(EXPECTED_PARTY_SUBLEDGER.customer.accountCode, EXPECTED_PARTY_SUBLEDGER.customer.partyCode);
+    expect(cust.debit).toBe(EXPECTED_PARTY_SUBLEDGER.customer.debit);
+    expect(cust.credit).toBe(EXPECTED_PARTY_SUBLEDGER.customer.credit);
+    expect(cust.debit - cust.credit).toBe(EXPECTED_PARTY_SUBLEDGER.customer.closing);
+
+    const supp = byParty(EXPECTED_PARTY_SUBLEDGER.supplier.accountCode, EXPECTED_PARTY_SUBLEDGER.supplier.partyCode);
+    expect(supp.debit).toBe(EXPECTED_PARTY_SUBLEDGER.supplier.debit);
+    expect(supp.credit).toBe(EXPECTED_PARTY_SUBLEDGER.supplier.credit);
+    expect(supp.debit - supp.credit).toBe(EXPECTED_PARTY_SUBLEDGER.supplier.closing);
+  });
 });
 
 // -----------------------------------------------------------------------------
@@ -115,8 +156,10 @@ test.describe('Accountant day · go-live gate on the local stack', () => {
   const state = {
     accessToken: '',
     tenantId: '',
+    orgName: '',
     session: null as StoredSession | null,
     fiscalYearId: 0,
+    stockItemId: 0,
     lockId: 0,
     chequeId: 0,
   };
@@ -161,6 +204,74 @@ test.describe('Accountant day · go-live gate on the local stack', () => {
     return JSON.parse(text) as T;
   }
 
+  async function putApi(page: Page, route: string, body: unknown, expectedStatus: number): Promise<void> {
+    const res = await page.request.put(`/api/backend/enterprise-hub/${route}`, { headers: headers(), data: body });
+    const text = await res.text();
+    expect(res.status(), `PUT ${route}: ${text}`).toBe(expectedStatus);
+  }
+
+  async function patchApi<T>(page: Page, route: string, body: unknown, expectedStatus: number): Promise<T> {
+    const res = await page.request.patch(`/api/backend/enterprise-hub/${route}`, { headers: headers(), data: body });
+    const text = await res.text();
+    expect(res.status(), `PATCH ${route}: ${text}`).toBe(expectedStatus);
+    return JSON.parse(text) as T;
+  }
+
+  interface InvoiceRecord {
+    id: string;
+    status: string;
+    totalAmount: Money;
+    totalTax: Money;
+    finalPayable: Money;
+    journalEntryId: number | null;
+    postingError: string | null;
+  }
+
+  async function waitForPostedInvoice(page: Page, invoiceId: string): Promise<InvoiceRecord> {
+    let latest!: InvoiceRecord;
+    await expect
+      .poll(
+        async () => {
+          latest = await getApi<InvoiceRecord>(page, `invoicing/${invoiceId}`);
+          expect(latest.postingError, `invoice ${invoiceId} posting error`).toBeNull();
+          return latest.journalEntryId;
+        },
+        { message: `wait for BullMQ worker to post invoice ${invoiceId}`, timeout: 20_000, intervals: [250, 500, 1_000] },
+      )
+      .not.toBeNull();
+    return latest;
+  }
+
+  async function expectVoucherLines(page: Page, journalEntryId: number, expectedLines: readonly VoucherLine[]) {
+    const entry = await getApi<{
+      status: string;
+      lines: Array<{ accountCode: string; debit: Money; credit: Money; partyCode?: string | null }>;
+    }>(page, `accounting/journal-entries/${journalEntryId}`);
+    expect(entry.status).toBe('POSTED');
+    const norm = (line: { code: string; debit: bigint; credit: bigint; partyCode?: string | null }) =>
+      `${line.code}|${line.debit}|${line.credit}|${line.partyCode ?? ''}`;
+    const actual = entry.lines
+      .map((l) => norm({ code: l.accountCode, debit: rials(l.debit), credit: rials(l.credit), partyCode: l.partyCode }))
+      .sort();
+    const expected = expectedLines.map((l) => norm(l)).sort();
+    expect(actual, `journal entry ${journalEntryId} lines`).toEqual(expected);
+  }
+
+  interface PartyLedgerReport {
+    accountCode: string;
+    partyCode: string | null;
+    opening: Money;
+    totalDebit: Money;
+    totalCredit: Money;
+    closing: Money;
+  }
+
+  const partyLedger = (page: Page, accountCode: string, partyCode: string) =>
+    getApi<PartyLedgerReport>(
+      page,
+      `accounting/reports/ledger?accountCode=${encodeURIComponent(accountCode)}&partyCode=${encodeURIComponent(partyCode)}&fiscalYearId=${state.fiscalYearId}`,
+    );
+
   const dec = (value: bigint) => `${value}.00`;
 
   async function postVoucher(page: Page, v: Voucher) {
@@ -200,6 +311,7 @@ test.describe('Accountant day · go-live gate on the local stack', () => {
     const bootSession = JSON.parse(fs.readFileSync(bootFile!, 'utf8')) as { accessToken: string };
 
     const suffix = `${Date.now().toString(36)}${crypto.randomBytes(3).toString('hex')}`;
+    const orgName = `شرکت روز حسابدار ${suffix}`;
     const password = `${crypto.randomBytes(12).toString('base64url')}-Aa1`;
     const res = await page.request.post('/api/backend/auth/signup', {
       data: {
@@ -207,9 +319,10 @@ test.describe('Accountant day · go-live gate on the local stack', () => {
         username: `acc_${suffix}`,
         password,
         displayName: 'Accountant Day',
-        organizationName: `شرکت روز حسابدار ${suffix}`,
+        organizationName: orgName,
       },
     });
+    state.orgName = orgName;
     const text = await res.text();
     expect(res.status(), `POST auth/signup must return 201: ${text.replace(password, '***')}`).toBe(201);
     const body = JSON.parse(text) as {
@@ -393,18 +506,115 @@ test.describe('Accountant day · go-live gate on the local stack', () => {
     }
   });
 
-  test('05 sales invoice: customer, sales voucher with VAT and cost of goods [T91]', async ({ page }) => {
+  test('05 sales invoice: customer, stock setup, draft and issue invoice via invoicing module [T99]', async ({ page }) => {
+    // Goods sales go to 4020 in `iran-trading` instead of service revenue 4010.
+    await putApi(page, 'posting-rules/invoice.sale.issue/roles/revenue', { accountCode: '4020' }, 204);
+
+    // Seed the FIFO layer matching opening inventory (60 x 5M = 300M); inventory inbound does not post GL entries.
+    const item = await postApi<{ id: number }>(
+      page,
+      'inventory/items',
+      { sku: DAY_ITEM.sku, barcode: DAY_ITEM.barcode, name: DAY_ITEM.name },
+      201,
+    );
+    state.stockItemId = item.id;
+    await postApi(
+      page,
+      'inventory/movements/inbound',
+      {
+        sku: DAY_ITEM.sku,
+        quantity: DAY_ITEM.openingQty,
+        unitPurchaseCost: Number(DAY_ITEM.openingCost),
+        reference: 'موجودی اول دوره روز حسابدار',
+      },
+      201,
+    );
+
     await postApi(page, 'parties', { code: CUSTOMER.code, name: CUSTOMER.name, role: 'customer' }, 201);
-    await postVoucher(page, SALES_VOUCHER);
+
+    const draft = await postApi<InvoiceRecord>(
+      page,
+      'invoicing',
+      {
+        direction: 'SALE',
+        einvoiceType: 1,
+        sellerInfo: { name: state.orgName },
+        buyerInfo: { name: CUSTOMER.name, nationalId: CUSTOMER.nationalId, partyCode: CUSTOMER.code },
+        items: [
+          {
+            itemId: state.stockItemId,
+            sku: DAY_ITEM.sku,
+            quantity: DAY_ITEM.saleQty,
+            unitPrice: Number(DAY_ITEM.saleUnitPrice),
+            vatRate: DAY_ITEM.vatRate,
+          },
+        ],
+        status: 'DRAFT',
+      },
+      201,
+    );
+    expect(draft.status).toBe('DRAFT');
+    expect(draft.journalEntryId).toBeNull();
+    expect(rials(draft.totalAmount)).toBe(SALES_INVOICE.net);
+    expect(rials(draft.totalTax)).toBe(SALES_INVOICE.vat);
+    expect(rials(draft.finalPayable)).toBe(SALES_INVOICE.payable);
+
+    const patched = await patchApi<InvoiceRecord>(page, `invoicing/${draft.id}`, { status: 'ISSUED' }, 200);
+    expect(patched.status).toBe('ISSUED');
+
+    const posted = await waitForPostedInvoice(page, draft.id);
+    await expectVoucherLines(page, posted.journalEntryId!, SALES_VOUCHER.lines);
+
+    const custLedger = await partyLedger(page, '1020', CUSTOMER.code);
+    expect(rials(custLedger.totalDebit)).toBe(SALES_INVOICE.payable);
+    expect(rials(custLedger.totalCredit)).toBe(0n);
+    expect(rials(custLedger.closing)).toBe(SALES_INVOICE.payable);
   });
 
-  test('06 receipt: partial bank settlement of the receivable [T91]', async ({ page }) => {
+  test('06 receipt: partial bank settlement of the receivable and party sub-ledger update [T91+T99]', async ({ page }) => {
     await postVoucher(page, RECEIPT_VOUCHER);
+    const custLedger = await partyLedger(page, '1020', CUSTOMER.code);
+    expect(rials(custLedger.totalDebit)).toBe(SALES_INVOICE.payable);
+    expect(rials(custLedger.totalCredit)).toBe(60_000_000n);
+    expect(rials(custLedger.closing)).toBe(50_000_000n);
   });
 
-  test('07 purchase invoice: supplier and purchase voucher with VAT input [T91]', async ({ page }) => {
+  test('07 purchase invoice: supplier, issued via invoicing module and supplier sub-ledger [T99]', async ({ page }) => {
+    expect(state.stockItemId, 'step 05 created the stock item').toBeGreaterThan(0);
     await postApi(page, 'parties', { code: SUPPLIER.code, name: SUPPLIER.name, role: 'supplier' }, 201);
-    await postVoucher(page, PURCHASE_VOUCHER);
+
+    const purchase = await postApi<InvoiceRecord>(
+      page,
+      'invoicing',
+      {
+        direction: 'PURCHASE',
+        sellerInfo: { name: SUPPLIER.name, nationalId: SUPPLIER.nationalId, partyCode: SUPPLIER.code },
+        buyerInfo: { name: state.orgName },
+        items: [
+          {
+            itemId: state.stockItemId,
+            sku: DAY_ITEM.sku,
+            quantity: DAY_ITEM.purchaseQty,
+            unitPrice: Number(DAY_ITEM.purchaseUnitCost),
+            vatRate: DAY_ITEM.vatRate,
+          },
+        ],
+        status: 'ISSUED',
+      },
+      201,
+    );
+    expect(purchase.status).toBe('ISSUED');
+    expect(rials(purchase.totalAmount)).toBe(PURCHASE_INVOICE.net);
+    expect(rials(purchase.totalTax)).toBe(PURCHASE_INVOICE.vat);
+    expect(rials(purchase.finalPayable)).toBe(PURCHASE_INVOICE.payable);
+
+    const posted = await waitForPostedInvoice(page, purchase.id);
+    await expectVoucherLines(page, posted.journalEntryId!, PURCHASE_VOUCHER.lines);
+
+    const suppLedger = await partyLedger(page, '2010', SUPPLIER.code);
+    expect(rials(suppLedger.totalDebit)).toBe(EXPECTED_PARTY_SUBLEDGER.supplier.debit);
+    expect(rials(suppLedger.totalCredit)).toBe(EXPECTED_PARTY_SUBLEDGER.supplier.credit);
+    expect(rials(suppLedger.closing)).toBe(EXPECTED_PARTY_SUBLEDGER.supplier.closing);
   });
 
   test('08 cheque received and cleared through the cheques module [T91]', async ({ page }) => {
@@ -435,9 +645,14 @@ test.describe('Accountant day · go-live gate on the local stack', () => {
       200,
     );
     expect(cleared.status).toBe('cleared');
+
+    const custLedger = await partyLedger(page, '1020', CUSTOMER.code);
+    expect(rials(custLedger.totalDebit)).toBe(EXPECTED_PARTY_SUBLEDGER.customer.debit);
+    expect(rials(custLedger.totalCredit)).toBe(EXPECTED_PARTY_SUBLEDGER.customer.credit);
+    expect(rials(custLedger.closing)).toBe(EXPECTED_PARTY_SUBLEDGER.customer.closing);
   });
 
-  test('09 trial balance balances and every account matches the hand-computed figure [T91]', async ({ page }) => {
+  test('09 trial balance and party sub-ledgers match hand-computed figures [T91+T99]', async ({ page }) => {
     const tb = await trialBalance(page);
     expect(tb.balanced, 'the trial balance reports balanced').toBe(true);
     expect(rials(tb.totals.endingDebit)).toBe(TRIAL_BALANCE.totalDebit);
@@ -448,6 +663,21 @@ test.describe('Accountant day · go-live gate on the local stack', () => {
       expect(byCode.has(code), `account ${code} is in the trial balance`).toBe(true);
       expect(byCode.get(code), `balance of account ${code} (debit positive)`).toBe(expected);
     }
+
+    const subsidiary = await getApi<{
+      rows: Array<{ code: string; periodDebit: Money; periodCredit: Money; endingDebit: Money; endingCredit: Money }>;
+    }>(page, `accounting/reports/subsidiary?fiscalYearId=${state.fiscalYearId}`);
+    const custSub = subsidiary.rows.find((r) => r.code === `1020/${CUSTOMER.code}`);
+    expect(custSub, `subsidiary row 1020/${CUSTOMER.code}`).toBeDefined();
+    expect(rials(custSub!.periodDebit)).toBe(EXPECTED_PARTY_SUBLEDGER.customer.debit);
+    expect(rials(custSub!.periodCredit)).toBe(EXPECTED_PARTY_SUBLEDGER.customer.credit);
+    expect(rials(custSub!.endingDebit) - rials(custSub!.endingCredit)).toBe(EXPECTED_PARTY_SUBLEDGER.customer.closing);
+
+    const suppSub = subsidiary.rows.find((r) => r.code === `2010/${SUPPLIER.code}`);
+    expect(suppSub, `subsidiary row 2010/${SUPPLIER.code}`).toBeDefined();
+    expect(rials(suppSub!.periodDebit)).toBe(EXPECTED_PARTY_SUBLEDGER.supplier.debit);
+    expect(rials(suppSub!.periodCredit)).toBe(EXPECTED_PARTY_SUBLEDGER.supplier.credit);
+    expect(rials(suppSub!.endingDebit) - rials(suppSub!.endingCredit)).toBe(EXPECTED_PARTY_SUBLEDGER.supplier.closing);
   });
 
   test('10 income statement and balance sheet match the hand-computed figures [T91]', async ({ page }) => {

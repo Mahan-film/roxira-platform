@@ -1,8 +1,10 @@
+import { ValidationPipe } from '@nestjs/common';
 import { AccountType } from '../accounting/enums/accounting.enum';
 import { minorToDecimal, toMinor } from '../accounting/money';
 import { AccountingService } from '../accounting/services/accounting.service';
 import { Currency } from '../currency/enums/currency.enum';
 import { InventoryService } from '../inventory/services/inventory.service';
+import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { fakePostingRules } from './__fixtures__/fake-posting-rules';
 import {
   LegacyAccounts,
@@ -220,5 +222,45 @@ describe('invoice vouchers: engine vs the frozen old line building', () => {
     expect(legacySettleLines(plain(i), 110000n, LEGACY)).toHaveLength(3);
     expect(dto(1).lines).toHaveLength(2);
     expect(minorToDecimal(toMinor(dto(1).lines[0].debit ?? 0))).toBe('1100.00');
+  });
+
+  it('passes partyCode on sale receivable and purchase payable lines', async () => {
+    const sale = invoice({
+      direction: InvoiceDirection.SALE,
+      buyerInfo: { name: 'خریدار', partyCode: 'C-101' },
+    });
+    const saleHarness = harness([sale]);
+    await saleHarness.posting.handle(ev(InvoiceStatus.ISSUED));
+    const saleLines = saleHarness.dto(0).lines as Array<{ accountCode: string; partyCode?: string }>;
+    expect(saleLines.find((l) => l.accountCode === '1201')?.partyCode).toBe('C-101');
+
+    const purchase = invoice({
+      direction: InvoiceDirection.PURCHASE,
+      sellerInfo: { name: 'تامین‌کننده', partyCode: 'S-201' },
+    });
+    const purchaseHarness = harness([purchase]);
+    await purchaseHarness.posting.handle(ev(InvoiceStatus.ISSUED));
+    const purchaseLines = purchaseHarness.dto(0).lines as Array<{ accountCode: string; partyCode?: string }>;
+    expect(purchaseLines.find((l) => l.accountCode === '2101')?.partyCode).toBe('S-201');
+  });
+
+  it('CreateInvoiceDto accepts optional buyerInfo.partyCode and sellerInfo.partyCode under forbidNonWhitelisted', async () => {
+    const pipe = new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
+    });
+    const dto = await pipe.transform(
+      {
+        direction: InvoiceDirection.PURCHASE,
+        sellerInfo: { name: 'تامین‌کننده', partyCode: 'SUPP-1' },
+        buyerInfo: { name: 'خریدار', partyCode: 'CUST-1' },
+        items: [{ sku: 'SKU-1', quantity: 1, unitPrice: 1000 }],
+      },
+      { type: 'body', metatype: CreateInvoiceDto },
+    );
+    expect(dto.sellerInfo.partyCode).toBe('SUPP-1');
+    expect(dto.buyerInfo?.partyCode).toBe('CUST-1');
   });
 });

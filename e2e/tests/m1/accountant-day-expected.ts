@@ -91,12 +91,51 @@ export const KEYBOARD_VOUCHERS = [
   },
 ] as const;
 
-export const CUSTOMER = { code: 'CUST-DAY-01', name: 'شرکت پیشگامان البرز' } as const;
-export const SUPPLIER = { code: 'SUPP-DAY-01', name: 'بازرگانی تجارت نوین' } as const;
+export const CUSTOMER = {
+  code: 'CUST-DAY-01',
+  name: 'شرکت پیشگامان البرز',
+  nationalId: '14001234567',
+} as const;
+export const SUPPLIER = {
+  code: 'SUPP-DAY-01',
+  name: 'بازرگانی تجارت نوین',
+  nationalId: '14007654321',
+} as const;
+
+/**
+ * Single stock item used by the invoicing steps (T99).
+ * Opening inbound of 60 units x 5M = 300M matches the opening inventory voucher (1030) and builds
+ * the FIFO layer so issuing the 10-unit sale posts COGS 50M and the 5-unit purchase adds 30M.
+ */
+export const DAY_ITEM = {
+  sku: 'SKU-DAY-01',
+  barcode: '6260001000001',
+  name: 'کالای نمونه روز حسابدار',
+  openingQty: 60,
+  openingCost: 5_000_000n,
+  saleQty: 10,
+  saleUnitPrice: 10_000_000n,
+  purchaseQty: 5,
+  purchaseUnitCost: 6_000_000n,
+  vatRate: 0.1,
+} as const;
+
+export const SALES_INVOICE = {
+  net: DAY_ITEM.saleUnitPrice * BigInt(DAY_ITEM.saleQty), // 100,000,000
+  vat: 10_000_000n, // 10%
+  payable: 110_000_000n,
+  cogs: DAY_ITEM.openingCost * BigInt(DAY_ITEM.saleQty), // 50,000,000
+} as const;
+
+export const PURCHASE_INVOICE = {
+  net: DAY_ITEM.purchaseUnitCost * BigInt(DAY_ITEM.purchaseQty), // 30,000,000
+  vat: 3_000_000n, // 10%
+  payable: 33_000_000n,
+} as const;
 
 /**
  * Sales: 10 units x 10M = revenue 100M, VAT 10% = 10M, receivable 110M; cost 10 x 5M = 50M leaves inventory.
- * Posted as one voucher (the invoicing module is not driven by this gate, see the PR body).
+ * Posted by the invoicing module when the draft sales invoice is issued (step 05, T99).
  */
 export const SALES_VOUCHER: Voucher = {
   entryNumber: 'INV-S-01',
@@ -122,7 +161,7 @@ export const RECEIPT_VOUCHER: Voucher = {
   ],
 };
 
-/** Purchase: 5 units x 6M = inventory 30M, VAT input 10% = 3M, payable 33M. */
+/** Purchase: 5 units x 6M = inventory 30M, VAT input 10% = 3M, payable 33M. Posted via invoicing (step 07, T99). */
 export const PURCHASE_VOUCHER: Voucher = {
   entryNumber: 'INV-P-01',
   description: `فاکتور خرید شماره ۰۱ از ${SUPPLIER.name}`,
@@ -151,10 +190,28 @@ export const CHEQUE = {
 
 export const CHEQUE_POSTED_LINES: readonly VoucherLine[] = [
   { code: '1110', debit: CHEQUE.amount, credit: 0n },
-  { code: '1020', debit: 0n, credit: CHEQUE.amount },
+  { code: '1020', debit: 0n, credit: CHEQUE.amount, partyCode: CUSTOMER.code },
   { code: '1010', debit: CHEQUE.amount, credit: 0n },
   { code: '1110', debit: 0n, credit: CHEQUE.amount },
 ];
+
+/** Hand-computed party sub-ledger closing balances (debit-positive): receivable = 0, payable = -33M. */
+export const EXPECTED_PARTY_SUBLEDGER = {
+  customer: {
+    accountCode: '1020',
+    partyCode: CUSTOMER.code,
+    debit: 110_000_000n,
+    credit: 110_000_000n,
+    closing: 0n,
+  },
+  supplier: {
+    accountCode: '2010',
+    partyCode: SUPPLIER.code,
+    debit: 0n,
+    credit: 33_000_000n,
+    closing: -33_000_000n,
+  },
+} as const;
 
 /** Every journal line of the day, in posting order (the five keyboard vouchers have two lines each). */
 export function allDayLines(): VoucherLine[] {
