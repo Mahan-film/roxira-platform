@@ -998,6 +998,7 @@ export class ImportDryRunService {
           },
         };
 
+        // Guaranteed transaction rollback: always throws DryRunRollbackSignal so tenantScope.run unconditionally rolls back
         throw new DryRunRollbackSignal(report);
       });
       throw new Error('Dry-run transaction did not roll back as expected');

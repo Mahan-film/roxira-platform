@@ -207,7 +207,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     SepidarChequesFifoAdapter,
     TenantExportRepository,
     TenantExportService,
-    ImportDryRunService,
+    ImportDryRunService, // Re-exported for external module injection (single provider instance registered above)
     SepidarMappingAdapter,
     HolooMappingAdapter,
   ],
