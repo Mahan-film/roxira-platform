@@ -50,6 +50,7 @@ export class AuthRepository {
           lastLoginAt: r.last_login_at,
           createdAt: r.created_at,
           updatedAt: r.updated_at,
+          passwordUpdatedAt: r.password_updated_at,
         } as UserEntity);
       }
       return null;
@@ -83,6 +84,7 @@ export class AuthRepository {
           lastLoginAt: r.last_login_at,
           createdAt: r.created_at,
           updatedAt: r.updated_at,
+          passwordUpdatedAt: r.password_updated_at,
         } as UserEntity);
       }
       return null;
@@ -178,6 +180,7 @@ export class AuthRepository {
           lastLoginAt: r.last_login_at,
           createdAt: r.created_at,
           updatedAt: r.updated_at,
+          passwordUpdatedAt: r.password_updated_at,
         } as UserEntity);
       }
       return null;
@@ -227,6 +230,7 @@ export class AuthRepository {
           lastLoginAt: r.last_login_at,
           createdAt: r.created_at,
           updatedAt: r.updated_at,
+          passwordUpdatedAt: r.password_updated_at,
         } as UserEntity);
       }
       return null;

@@ -31,6 +31,7 @@ const freshIp = () => `10.20.${Math.floor(ipCounter / 250)}.${(ipCounter += 1) %
 suite('Password auth (e2e, real Postgres)', () => {
   let app: INestApplication;
   let dataSource: DataSource;
+  let adminDb: DataSource | null = null;
   const sms = { sendVerificationCode: jest.fn(async () => true), templateFor: () => 'roxira-verify' };
   const resetTokens: string[] = [];
   const mail = {
@@ -51,8 +52,8 @@ suite('Password auth (e2e, real Postgres)', () => {
           type: 'postgres',
           host: process.env.DATABASE_HOST ?? '127.0.0.1',
           port: Number(process.env.DATABASE_PORT ?? 5432),
-          username: process.env.DATABASE_USER,
-          password: process.env.DATABASE_PASSWORD,
+          username: process.env.APP_DB_USER ?? process.env.DATABASE_USER,
+          password: process.env.APP_DB_PASSWORD ?? process.env.DATABASE_PASSWORD,
           database: process.env.DATABASE_NAME,
           autoLoadEntities: true,
           synchronize: false,
@@ -78,10 +79,24 @@ suite('Password auth (e2e, real Postgres)', () => {
     );
     await app.init();
     dataSource = app.get(DataSource);
-    await dataSource.query(`DELETE FROM users WHERE username LIKE 'e2e-%' OR login_email LIKE 'e2e-%' OR phone LIKE '0919%'`);
+    if (process.env.APP_E2E_ADMIN_PASSWORD) {
+      adminDb = await new DataSource({
+        type: 'postgres',
+        host: process.env.DATABASE_HOST ?? '127.0.0.1',
+        port: Number(process.env.DATABASE_PORT ?? 5432),
+        username: 'enterprise_admin',
+        password: process.env.APP_E2E_ADMIN_PASSWORD,
+        database: process.env.DATABASE_NAME ?? 'enterprise_db',
+      }).initialize();
+    }
+    const cleanDb = adminDb ?? dataSource;
+    await cleanDb.query(`DELETE FROM users WHERE username LIKE 'e2e-%' OR login_email LIKE 'e2e-%' OR phone LIKE '0919%'`);
   });
 
   afterAll(async () => {
+    if (adminDb) {
+      await adminDb.destroy();
+    }
     await app?.close();
   });
 
@@ -105,7 +120,13 @@ suite('Password auth (e2e, real Postgres)', () => {
 
     const tenant = await api(ip).get('/v1/tenants/me').set('Authorization', `Bearer ${res.body.accessToken}`).expect(200);
     expect(tenant.body.name).toBe('Alice Corp');
-    const row = (await dataSource.query(`SELECT tenant_id, tenant_role, password_hash FROM users WHERE username='e2e-alice'`))[0];
+    const checkDb = adminDb ?? dataSource;
+    const row = (
+      await checkDb.transaction(async (m) => {
+        await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [tenant.body.id]);
+        return m.query(`SELECT tenant_id, tenant_role, password_hash FROM users WHERE username='e2e-alice'`);
+      })
+    )[0];
     expect(row.tenant_role).toBe('OWNER');
     expect(row.tenant_id).toBe(tenant.body.id);
     expect(row.password_hash).toMatch(/^scrypt\$/);
