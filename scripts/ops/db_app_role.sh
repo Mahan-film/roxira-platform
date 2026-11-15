@@ -85,9 +85,17 @@ SQL
 
 cmd_plan() {
   log "dry run: role and grants are applied in a transaction, then rolled back"
+  local existed canlogin
+  existed="$(admin_psql -qtAX -c "SELECT count(*) FROM pg_roles WHERE rolname = '$ROLE'")"
+  canlogin="$(admin_psql -qtAX -c "SELECT coalesce((SELECT rolcanlogin FROM pg_roles WHERE rolname = '$ROLE'), false)")"
   { printf '\\set pw %s\n' "'$(openssl rand -hex 32)'"; grants_sql; echo 'ROLLBACK;'; } | admin_psql -qtAX
-  local n; n="$(admin_psql -qtAX -c "SELECT count(*) FROM pg_roles WHERE rolname = '$ROLE'")"
-  log "dry run finished; nothing changed (role exists now: $n)"
+  if [ "$existed" = "0" ]; then
+    admin_psql -q -c "DROP ROLE IF EXISTS $ROLE"
+  elif [ "$canlogin" = "f" ]; then
+    admin_psql -q -c "ALTER ROLE $ROLE NOLOGIN"
+  fi
+  local n; n="$(admin_psql -qtAX -c "SELECT count(*) FROM pg_roles WHERE rolname = '$ROLE' AND rolcanlogin")"
+  log "dry run finished; nothing changed (login role exists now: $n)"
 }
 
 cmd_apply() {
