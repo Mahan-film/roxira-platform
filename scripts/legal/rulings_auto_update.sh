@@ -112,7 +112,7 @@ for rid, r in sorted(best.items()):
     if r.get("needs_review"):
         review += 1
         continue
-    h = hashlib.sha256((r.get("holding", "") + "\n" + r.get("text", "")).encode("utf-8")).hexdigest()
+    h = hashlib.sha256(((r.get("holding") or "") + "\n" + (r.get("text") or "")).encode("utf-8")).hexdigest()
     if state.get(rid) != h:
         r["_h"] = h
         rows.append(r)
