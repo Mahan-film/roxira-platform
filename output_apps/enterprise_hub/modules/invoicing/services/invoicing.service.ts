@@ -457,6 +457,8 @@ export class InvoicingService {
       const share = fromUnits(shares[index], scale);
       const discount = this.roundTo(line.lineDiscount + share, scale);
       const vatRate = this.normalizeVatRate(line.item.vatRate, defaultVatRate);
+      // For IRR (scale 0), fractional unit prices (< 1 IRR) are preserved unrounded in JSONB (InvoiceEntity.items
+      // stores jsonb where decimal numbers retain arbitrary precision without integer truncation).
       const isFractionalRial = scale === 0 && line.item.unitPrice < 1;
       const storedUnitPrice = isFractionalRial
         ? line.item.unitPrice

@@ -254,7 +254,7 @@ export function mapInvoiceToMoadianPacket(
   const body: Bag[] = (invoice.items ?? []).map((item, index) => {
     const rawSstid =
       (item.taxCode && item.taxCode.trim().length > 0 ? item.taxCode : null) ??
-      (item as unknown as { sstid?: string }).sstid ??
+      (item.sstid && item.sstid.trim().length > 0 ? item.sstid : null) ??
       ctx.defaultSstid;
     const sstid = rawSstid ? digitsOnly(rawSstid) : null;
     if (!sstid || !SSTID_PATTERN.test(sstid)) {

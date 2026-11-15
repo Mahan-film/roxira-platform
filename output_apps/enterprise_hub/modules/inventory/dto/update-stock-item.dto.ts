@@ -35,6 +35,8 @@ export class UpdateStockItemDto {
 
   @ApiPropertyOptional({ description: 'شناسه ۱۳ رقمی کالا/خدمت مودیان (SSTID)' })
   @IsOptional()
+  // Empty string transforms to null, allowing callers to clear SSTID via PATCH;
+  // ValidateIf skips subsequent validation (@IsString, @Matches) when value is null.
   @Transform(({ value }) => {
     if (value === null || value === undefined) return value;
     if (typeof value !== 'string') return value;

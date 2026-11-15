@@ -13,6 +13,10 @@
  *   discount  at `scale` (already rounded, as stored), vatRate at LINE_RATE_DECIMALS.
  * Results `tax`, `total`, `taxable` and `discount` are at `scale` (minor units of the currency).
  */
+import { divRoundHalfUp, numberToScaled } from '../../accounting/money';
+
+export { divRoundHalfUp, numberToScaled };
+
 export const LINE_QUANTITY_DECIMALS = 4;
 export const LINE_PRICE_EXTRA_DECIMALS = 4;
 export const LINE_RATE_DECIMALS = 6;
@@ -40,13 +44,7 @@ export interface LineMathResult {
   total: bigint;
 }
 
-/** Integer division rounded half up; handles negative numerators symmetrically. */
-function divRoundHalfUp(numerator: bigint, divisor: bigint): bigint {
-  if (numerator < 0n) {
-    return -((-numerator * 2n + divisor) / (divisor * 2n));
-  }
-  return (numerator * 2n + divisor) / (divisor * 2n);
-}
+
 
 export function computeLineMath(input: LineMathInput): LineMathResult {
   const grossFine = input.quantity * input.unitPrice;
@@ -72,28 +70,4 @@ export function sumGrossMinor(lines: Array<Pick<LineMathResult, 'grossFine'>>): 
   );
 }
 
-/**
- * Scaled integer of a JSON number or decimal string, parsed and rounded half up without float
- * multiplication. Throws RangeError on non-finite or non-decimal values.
- */
-export function numberToScaled(value: number | string, decimals: number): bigint {
-  let text: string;
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value) || Math.abs(value) >= 1e21) {
-      throw new RangeError(`Invalid decimal number for scaling: ${value}`);
-    }
-    text = value.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits: 20 });
-  } else {
-    text = value.trim();
-  }
-  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(text);
-  if (!match) {
-    throw new RangeError(`Invalid decimal value for scaling: "${String(value)}"`);
-  }
-  const [, sign, integer, fraction = ''] = match;
-  let units = BigInt(integer + fraction.slice(0, decimals).padEnd(decimals, '0'));
-  if (fraction.length > decimals && fraction[decimals] >= '5') {
-    units += 1n;
-  }
-  return sign === '-' && units !== 0n ? -units : units;
-}
+
