@@ -303,3 +303,7 @@ def test_env_only_keys_are_redacted(monkeypatch):
     monkeypatch.setenv("RD_TEST_SLOT", value)
     assert rd.provider_keys({"keys": ["RD_TEST_SLOT", "RD_TEST_UNSET"]}) == ["RD_TEST_SLOT"]
     assert value not in rd.redact("leak " + value)
+
+
+def test_prompt_forbids_version_claims_from_memory():
+    assert "does not exist" in rd.SYSTEM_PROMPT and "from memory" in rd.SYSTEM_PROMPT
