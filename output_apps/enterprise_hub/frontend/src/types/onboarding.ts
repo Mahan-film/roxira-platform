@@ -21,6 +21,8 @@ export interface OnboardingState {
   dismissed: boolean;
   /** The first-login redirect has not been handled yet. */
   firstVisit: boolean;
+  /** Whether the last update call transitioned the first visit. */
+  firstVisitHandled?: boolean;
   companyName: string;
   economicCode: string | null;
   nationalId: string | null;

@@ -151,4 +151,10 @@ describePg('Onboarding progress (NOSUPERUSER NOBYPASSRLS)', () => {
       ownerDs.query(`UPDATE tenant_onboarding_progress SET economic_code = 'abc' WHERE tenant_id = $1`, [T1]),
     ).rejects.toThrow(/CHK_tenant_onboarding_economic_code/);
   });
+
+  it('the database refuses a malformed national id', async () => {
+    await expect(
+      ownerDs.query(`UPDATE tenant_onboarding_progress SET national_id = '123' WHERE tenant_id = $1`, [T1]),
+    ).rejects.toThrow(/CHK_tenant_onboarding_national_id/);
+  });
 });

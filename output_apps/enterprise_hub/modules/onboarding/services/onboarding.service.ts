@@ -44,13 +44,21 @@ export class OnboardingService {
   }
 
   async update(tenantId: string, dto: UpdateOnboardingDto): Promise<OnboardingStateDto> {
+    let wasFirstVisit = false;
     const row = await this.repository.update(tenantId, (current) => {
       const patch: ProgressPatch = {};
       if (dto.dismissed !== undefined) patch.dismissed = dto.dismissed;
-      if (dto.firstVisitHandled && !current.firstVisitHandledAt) patch.firstVisitHandledAt = new Date();
+      if (dto.firstVisitHandled && !current.firstVisitHandledAt) {
+        patch.firstVisitHandledAt = new Date();
+        wasFirstVisit = true;
+      }
       return patch;
     });
-    return this.view(tenantId, row);
+    const state = await this.view(tenantId, row);
+    if (dto.firstVisitHandled) {
+      state.firstVisitHandled = wasFirstVisit;
+    }
+    return state;
   }
 
   /** The new `steps` map and `completedAt` after a status change. */

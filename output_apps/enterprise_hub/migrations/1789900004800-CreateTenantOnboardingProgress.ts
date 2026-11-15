@@ -2,7 +2,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
 
 /**
- * Migration 1789900003700: per-tenant progress of the new-company setup wizard (T96).
+ * Migration 1789900004800: per-tenant progress of the new-company setup wizard (T96).
  *
  * One row per organisation (the primary key IS the tenant id). `steps` maps a step key to
  * 'done' | 'skipped'; a missing key is pending. The company economic code and national id the
@@ -11,11 +11,10 @@ import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
  *
  * Organisations that exist when this migration runs are backfilled as already handled and
  * dismissed, so only organisations created afterwards are sent to the wizard. The backfill runs
- * BEFORE FORCE RLS is enabled: the table owner is subject to FORCE RLS, so it could not insert
- * rows for other tenants afterwards.
+ * before FORCE RLS is enabled so existing organisations are cleanly initialized.
  */
-export class CreateTenantOnboardingProgress1789900004200 implements MigrationInterface {
-  name = 'CreateTenantOnboardingProgress1789900004200';
+export class CreateTenantOnboardingProgress1789900004800 implements MigrationInterface {
+  name = 'CreateTenantOnboardingProgress1789900004800';
 
   public async up(q: QueryRunner): Promise<void> {
     await q.query(`

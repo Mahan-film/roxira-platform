@@ -134,9 +134,11 @@ describe('OnboardingService: dismiss and first visit', () => {
     expect((await service.get(T1)).firstVisit).toBe(true);
     const first = await service.update(T1, { firstVisitHandled: true });
     expect(first.firstVisit).toBe(false);
+    expect(first.firstVisitHandled).toBe(true);
     const stamp = repository.rows.get(T1)?.firstVisitHandledAt;
-    await service.update(T1, { firstVisitHandled: true });
+    const second = await service.update(T1, { firstVisitHandled: true });
     expect(repository.rows.get(T1)?.firstVisitHandledAt).toBe(stamp);
+    expect(second.firstVisitHandled).toBe(false);
   });
 
   it('dismisses and restores the banner without touching the steps', async () => {

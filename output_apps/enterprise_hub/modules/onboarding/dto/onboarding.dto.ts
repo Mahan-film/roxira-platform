@@ -78,6 +78,9 @@ export class OnboardingStateDto {
   @ApiProperty({ description: 'The first-login redirect has not been handled yet' })
   firstVisit: boolean;
 
+  @ApiPropertyOptional({ description: 'Whether this update call was the one that handled first visit' })
+  firstVisitHandled?: boolean;
+
   @ApiProperty({ example: 'شرکت نمونه' })
   companyName: string;
 

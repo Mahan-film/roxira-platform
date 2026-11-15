@@ -48,7 +48,7 @@ export function OnboardingBanner() {
       // Record the visit before leaving, so the redirect happens once even if the wizard is abandoned.
       const recorded = await updateOnboarding({ firstVisitHandled: true });
       if (controller.signal.aborted) return;
-      if (redirect) router.replace(ONBOARDING_HREF);
+      if (redirect && recorded.firstVisitHandled) router.replace(ONBOARDING_HREF);
       else setState(recorded);
     })().catch(() => {
       /* optional banner: a failed read just hides it */
