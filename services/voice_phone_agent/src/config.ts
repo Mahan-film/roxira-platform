@@ -32,7 +32,8 @@ export const cfg = {
   sttProvider: str('STT_PROVIDER', 'groq') as 'groq' | 'openai' | 'smartjudge',
   // all Groq keys from the pool, rotated on 429/5xx
   groqKeys: ['GROQ_API_KEY', 'GROQ_API_KEY_2', 'GROQ_API_KEY_3', 'GROQ_API_KEY_4'].map((k) => str(k)).filter(Boolean),
-  groqSttModel: str('GROQ_STT_MODEL', 'whisper-large-v3-turbo'),
+  // whisper-large-v3 beat -turbo on simulated Persian phone audio (CER 0.046 vs 0.058, +60 ms), 2026-11-15
+  groqSttModel: str('GROQ_STT_MODEL', 'whisper-large-v3'),
   openaiKey: str('OPENAI_API_KEY'),
   openaiSttModel: str('OPENAI_STT_MODEL', 'whisper-1'),
   // Whisper vocabulary hint (keep under ~220 tokens). Terms come from real phone-call misrecognitions.
@@ -61,6 +62,19 @@ export const cfg = {
   vadEnergyRatio: num('VAD_ENERGY_RATIO', 3.0),
   vadMinRms: num('VAD_MIN_RMS', 350),
   bargeInMs: num('BARGE_IN_MS', 300),
+  // Semantic end of turn: when the transcript looks unfinished ("... که", "... در مورد"),
+  // wait this much longer for the caller to go on before answering.
+  turnHoldMs: num('TURN_HOLD_MS', 1200),
+  // Short "one moment" only if no answer audio has started by then (never right at end of speech).
+  fillerDelayMs: num('FILLER_DELAY_MS', 1800),
+  // Whisper confidence floor (duration-weighted avg_logprob). Below it the caller is asked to
+  // repeat instead of the brain answering a guess. Calibrated 2026-11-15 on noisy phone clips:
+  // usable transcripts -0.05..-0.45, garbage -0.83..-0.92.
+  sttMinLogprob: num('STT_MIN_LOGPROB', -0.7),
+  // Testing only: caller identities (comma list, e.g. sip_+98912...) whose turns are saved as WAV
+  // under DEBUG_RECORD_DIR for STT tuning; files older than 48 h are deleted. Empty = never record.
+  debugRecordCallers: str('DEBUG_RECORD_CALLERS').split(',').map((s) => s.trim()).filter(Boolean),
+  debugRecordDir: path.resolve(ROOT, str('DEBUG_RECORD_DIR', 'debug-audio')),
 
   maxConcurrentCalls: num('MAX_CONCURRENT_CALLS', 3),
   maxCallSeconds: num('MAX_CALL_SECONDS', 900),
@@ -69,8 +83,8 @@ export const cfg = {
 
   greetingText: str('GREETING_TEXT',
     'سلام، به سامانه هوشمند قاضی هوشمند خوش آمدید. لطفاً توجه داشته باشید که این پاسخ‌ها مشاوره اولیه است و جایگزین وکیل نیست. بفرمایید سوالتان چیست؟'),
-  fillerText: str('FILLER_TEXT', 'سؤال‌تان را بررسی می‌کنم، لطفاً چند لحظه گوشی دستتان باشد.'),
-  repeatText: str('REPEAT_TEXT', 'متوجه نشدم، لطفاً دوباره بفرمایید.'),
+  fillerText: str('FILLER_TEXT', 'بله، یک لحظه.'),
+  repeatText: str('REPEAT_TEXT', 'ببخشید، صدایتان واضح نرسید. لطفاً سؤالتان را کامل بفرمایید.'),
   errorText: str('ERROR_TEXT', 'متأسفانه الان پاسخ آماده نشد. لطفاً سؤال‌تان را دوباره بپرسید.'),
   busyText: str('BUSY_TEXT', 'همه خطوط مشغول است. لطفاً چند دقیقه دیگر دوباره تماس بگیرید. خدانگهدار.'),
   goodbyeText: str('GOODBYE_TEXT', 'از تماس شما سپاسگزاریم. خدانگهدار.'),

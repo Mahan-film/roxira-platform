@@ -66,8 +66,10 @@ export class EnergyVad {
     if (this.silenceMs >= cfg.vadEndSilenceMs || this.uttMs >= cfg.vadMaxUtteranceMs) {
       const pcm = concat(this.chunks);
       const voicedMs = this.speechMs;
+      const barged = this.bargeFired;
       this.reset();
-      if (voicedMs >= cfg.vadMinUtteranceMs) this.ev.onUtterance(pcm, voicedMs);
+      // after a barge-in the session waits for this utterance (merge), so never drop it
+      if (voicedMs >= cfg.vadMinUtteranceMs || barged) this.ev.onUtterance(pcm, voicedMs);
     }
   }
 
