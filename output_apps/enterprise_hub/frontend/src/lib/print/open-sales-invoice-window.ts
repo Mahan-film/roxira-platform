@@ -49,7 +49,7 @@ export function buildDynamicTableHtml(
       case "quantity":
         return `<td class="n">${formatNumber(item.quantity)}</td>`;
       case "unit":
-        return `<td class="c">${escapeHtml((item as any).unit ?? "")}</td>`;
+        return `<td class="c">${escapeHtml((item as { unit?: unknown }).unit ?? "")}</td>`;
       case "unitPrice":
         return `<td class="n">${formatNumber(item.unitPrice)}</td>`;
       case "discount":
@@ -90,8 +90,11 @@ export function buildDynamicTableHtml(
 
   const tableHeaderHtml = visibleCols
     .map(
-      (c) =>
-        `<th${c.widthPercent ? ` style="width:${c.widthPercent}%;"` : ""}>${escapeHtml(c.label)}</th>`,
+      (c) => {
+        const width = Number(c.widthPercent);
+        const widthAttr = Number.isFinite(width) && width > 0 && width <= 100 ? ` style="width:${width}%;"` : "";
+        return `<th${widthAttr}>${escapeHtml(c.label)}</th>`;
+      },
     )
     .join("");
   const tableRowsHtml = invoice.items
@@ -102,7 +105,7 @@ export function buildDynamicTableHtml(
     .join("\n");
   const tableFooterHtml = `<tr>${visibleCols.map((c) => getFooterCell(c.key)).join("")}</tr>`;
 
-  return `<table>
+  return `<table id="invoice-items-table">
     <thead><tr>${tableHeaderHtml}</tr></thead>
     <tbody>\n${tableRowsHtml}\n</tbody>
     <tfoot>${tableFooterHtml}</tfoot>
@@ -131,13 +134,14 @@ export function buildSalesInvoiceHtml(
     columnsConfig: template.columnsConfig,
   };
 
-  const isA5 = template.paperSize === "A5";
-  const isThermal = template.paperSize === "THERMAL_80MM";
+  const paperSize = String(template.paperSize ?? "").toUpperCase();
+  const isA5 = paperSize === "A5";
+  const isThermal = paperSize === "THERMAL_80MM";
   let html = isA5
-    ? renderTemplate(SALES_INVOICE_A5_TEMPLATE, {
-        ...mapInvoiceToSalesInvoiceA5Data(invoice, statusLabel),
-        ...(options.docTitle ? { docTitle: options.docTitle } : {}),
-      })
+    ? renderTemplate(
+        SALES_INVOICE_A5_TEMPLATE,
+        mapInvoiceToSalesInvoiceA5Data(invoice, statusLabel, options),
+      )
     : renderTemplate(
         SALES_INVOICE_A4_TEMPLATE,
         mapInvoiceToSalesInvoiceA4Data(invoice, statusLabel, options),
@@ -150,7 +154,7 @@ export function buildSalesInvoiceHtml(
   ) {
     const dynamicTable = buildDynamicTableHtml(invoice, options.columnsConfig);
     if (dynamicTable) {
-      html = html.replace(/<table>[\s\S]*?<\/table>/, () => dynamicTable);
+      html = html.replace(/<table id="invoice-items-table"[\s\S]*?<\/table>/, () => dynamicTable);
     }
   }
 

@@ -306,6 +306,9 @@ describe('PrintTemplateService & Repository', () => {
       const res = generateBarcodeSvg('6260000000011'); // check digit should be 9
       expect(res.symbology).toBe('Code128');
       expect(res.encodedText).toBe('6260000000011');
+
+      // Direct call throws rather than silently rewriting the stored value
+      expect(() => encodeEan13Svg('6260000000011')).toThrow('Invalid EAN-13 check digit');
     });
 
     it('refuses non-ASCII characters in Code128 encoding to prevent corrupt barcodes', () => {
@@ -329,6 +332,49 @@ describe('PrintTemplateService & Repository', () => {
       expect(html).not.toContain('<img src=x');
       expect(html).not.toContain('"onerror=');
       expect(html).toContain('&lt;script&gt;');
+    });
+
+    it('formats barcode label consumer price for both string and numeric rials input identically', () => {
+      const htmlStringPrice = service.renderBarcodeLabelSheetHtml({
+        columns: 4,
+        items: [{ sku: 'SKU-1', title: 'کالا ۱', price: '450000000', count: 1 }],
+      } as never);
+      expect(htmlStringPrice).toContain('۴۵۰٬۰۰۰٬۰۰۰ ریال');
+
+      const htmlNumberPrice = service.renderBarcodeLabelSheetHtml({
+        columns: 4,
+        items: [{ sku: 'SKU-2', title: 'کالا ۲', price: 450000000 as never, count: 1 }],
+      } as never);
+      expect(htmlNumberPrice).toContain('۴۵۰٬۰۰۰٬۰۰۰ ریال');
+    });
+
+    it('clamps item label counts and rejects non-positive counts against the 500-label cap', () => {
+      // count < 1 throws BadRequestException
+      expect(() =>
+        service.renderBarcodeLabelSheetHtml({
+          columns: 4,
+          items: [{ sku: 'SKU-0', title: 'Zero count', count: 0 }],
+        } as never),
+      ).toThrow(BadRequestException);
+
+      expect(() =>
+        service.renderBarcodeLabelSheetHtml({
+          columns: 4,
+          items: [{ sku: 'SKU-NEG', title: 'Neg count', count: -5 }],
+        } as never),
+      ).toThrow(BadRequestException);
+
+      // 6 items with count: 100 = 600 total labels > 500 cap -> throws BadRequestException
+      expect(() =>
+        service.renderBarcodeLabelSheetHtml({
+          columns: 4,
+          items: Array.from({ length: 6 }, (_, i) => ({
+            sku: `SKU-${i}`,
+            title: `Item ${i}`,
+            count: 100,
+          })),
+        } as never),
+      ).toThrow(BadRequestException);
     });
   });
 });

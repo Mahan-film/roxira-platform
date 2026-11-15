@@ -294,17 +294,21 @@ export class BarcodeLabelItemDto {
 
   @ApiPropertyOptional({ description: 'قیمت فروش به ریال', example: '450000000' })
   @IsOptional()
-  @Transform(({ value }) => (value !== undefined && value !== null ? String(value) : undefined))
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return undefined;
+    if (typeof value === 'number') return Number.isFinite(value) ? String(Math.round(value)) : undefined;
+    return String(value).trim();
+  })
   @IsString()
   @MaxLength(18, { message: 'قیمت نمی‌تواند بیشتر از ۱۸ رقم باشد' })
-  @Matches(/^[0-9]+$/, { message: 'قیمت باید مقدار عدد صحیح به ریال باشد' })
+  @Matches(/^\d{1,18}$/, { message: 'قیمت باید مقدار عدد صحیح به ریال باشد' })
   price?: string;
 
   @ApiPropertyOptional({ description: 'تعداد برچسب مورد نیاز از این کالا (حداکثر ۱۰۰)', default: 1 })
   @IsOptional()
-  @IsInt()
-  @Min(1)
-  @Max(100)
+  @IsInt({ message: 'تعداد برچسب باید عدد صحیح باشد' })
+  @Min(1, { message: 'تعداد برچسب از هر قلم باید حداقل ۱ باشد' })
+  @Max(100, { message: 'تعداد برچسب از هر قلم حداکثر ۱۰۰ عدد است' })
   @Type(() => Number)
   count?: number;
 }

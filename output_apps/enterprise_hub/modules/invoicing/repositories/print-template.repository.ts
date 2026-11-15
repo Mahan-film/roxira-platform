@@ -31,6 +31,20 @@ export class PrintTemplateRepository {
     return this.scope.within(tenantId, undefined, async (manager) => {
       const repo = manager.getRepository(PrintTemplateEntity);
       if (isDefault) {
+        await manager.query(
+          `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+          [`print_template_default:${tenantId}:${data.docType}:${data.paperSize}`],
+        );
+        await repo
+          .createQueryBuilder('pt')
+          .setLock('pessimistic_write')
+          .where('pt.tenant_id = :tenantId AND pt.doc_type = :docType AND pt.paper_size = :paperSize', {
+            tenantId,
+            docType: data.docType,
+            paperSize: data.paperSize,
+          })
+          .getMany();
+
         const qb = repo
           .createQueryBuilder()
           .update(PrintTemplateEntity)

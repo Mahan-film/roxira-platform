@@ -6,7 +6,6 @@ import {
   ArrowDown,
   ArrowUp,
   Barcode,
-  Check,
   Eye,
   EyeOff,
   FileText,
@@ -72,7 +71,8 @@ function PrintFormBuilderPage() {
 
   const { user } = useAuth();
   const role = (user?.role || "").toLowerCase();
-  const canWrite = ["owner", "admin", "accountant", "sales"].includes(role);
+  // Fail closed on tenant-wide layout settings: owner & admin only
+  const canWrite = ["owner", "admin"].includes(role);
 
   // Barcode sheet state
   const [barcodeCols, setBarcodeCols] = useState<4 | 5>(4);
@@ -106,20 +106,49 @@ function PrintFormBuilderPage() {
         setColumns(def.columnsConfig ?? []);
         setEditingTemplateId(def.id > 0 ? def.id : null);
       }
-    } catch (err: any) {
-      setError(err?.message ?? "خطا در دریافت قالب‌های چاپ");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "خطا در دریافت قالب‌های چاپ");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchTemplates(true);
-  }, [docType]);
+    let cancelled = false;
+    void Promise.resolve().then(async () => {
+      if (cancelled) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const list = await listPrintTemplates({ docType });
+        if (cancelled) return;
+        setTemplates(list);
 
-  useEffect(() => {
-    fetchTemplates(false);
-  }, [paperSize]);
+        const def =
+          (await getDefaultPrintTemplate(docType, paperSize)) ??
+          (await getPrintTemplatePreset(docType, paperSize));
+        if (cancelled) return;
+        setTitle(def.title);
+        setIsDefault(def.isDefault);
+        setShowLogo(def.showLogo);
+        setLogoUrl(def.logoUrl ?? "");
+        setFooterNote(def.options?.footerNote ?? "");
+        setColumns(def.columnsConfig ?? []);
+        setEditingTemplateId(def.id > 0 ? def.id : null);
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "خطا در دریافت قالب‌های چاپ");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [docType, paperSize]);
 
   const handleSelectTemplate = (t: PrintTemplateDto) => {
     setEditingTemplateId(t.id);
@@ -145,8 +174,8 @@ function PrintFormBuilderPage() {
       setColumns(def.columnsConfig);
       setEditingTemplateId(null);
       setSuccessMsg("تنظیمات ستون‌ها و گزینه‌ها به حالت پیش‌فرض بازگشت.");
-    } catch (err: any) {
-      setError(err?.message ?? "خطا در بازنشانی");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "خطا در بازنشانی");
     } finally {
       setLoading(false);
     }
@@ -190,8 +219,8 @@ function PrintFormBuilderPage() {
         setSuccessMsg(`قالب جدید «${created.title}» با موفقیت ذخیره شد.`);
       }
       await fetchTemplates();
-    } catch (err: any) {
-      setError(err?.message ?? "خطا در ذخیره قالب");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "خطا در ذخیره قالب");
     } finally {
       setLoading(false);
     }
@@ -211,8 +240,8 @@ function PrintFormBuilderPage() {
       }
       setSuccessMsg("قالب با موفقیت حذف شد.");
       await fetchTemplates();
-    } catch (err: any) {
-      setError(err?.message ?? "خطا در حذف قالب");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "خطا در حذف قالب");
     } finally {
       setLoading(false);
     }
@@ -285,8 +314,8 @@ function PrintFormBuilderPage() {
         showSku: barcodeShowSku,
         items: barcodeItems,
       });
-    } catch (err: any) {
-      setError(err?.message ?? "خطا در آماده‌سازی شیت بارکد");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "خطا در آماده‌سازی شیت بارکد");
     } finally {
       setBarcodePrinting(false);
     }

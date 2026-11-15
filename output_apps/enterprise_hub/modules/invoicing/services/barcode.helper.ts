@@ -113,7 +113,7 @@ export function encodeEan13Svg(digitsStr: string, height = 24): { svg: string; e
   } else if (clean.length === 13) {
     const expectedCheck = computeEan13CheckDigit(clean.slice(0, 12));
     if (Number(clean[12]) !== expectedCheck) {
-      clean = clean.slice(0, 12) + String(expectedCheck);
+      throw new Error(`Invalid EAN-13 check digit: expected ${expectedCheck}, got ${clean[12]}`);
     }
   }
   const digits = clean.split('').map(Number);

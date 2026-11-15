@@ -181,7 +181,7 @@ export class PrintTemplateService {
           ...(dto.logoUrl !== undefined ? { logoUrl: dto.logoUrl } : {}),
           ...(dto.columnsConfig !== undefined ? { columnsConfig: dto.columnsConfig } : {}),
           ...(dto.options !== undefined
-            ? { options: sanitizeOptions({ ...existing.options, ...dto.options }) }
+            ? { options: { ...existing.options, ...sanitizeOptions(dto.options) } }
             : {}),
         },
         dto.isDefault !== undefined ? Boolean(dto.isDefault) : existing.isDefault,
@@ -284,22 +284,30 @@ export class PrintTemplateService {
 
     let totalCount = 0;
     for (const item of dto.items) {
-      totalCount += item.count ?? 1;
+      const rawCount = item.count ?? 1;
+      if (rawCount < 1) {
+        throw new BadRequestException('تعداد برچسب باید حداقل ۱ باشد.');
+      }
+      totalCount += rawCount;
     }
     if (totalCount > 500) {
       throw new BadRequestException('حداکثر ۵۰۰ برچسب در یک درخواست مجاز است.');
     }
 
-    const formatPriceRials = (amount?: string): string => {
-      if (!amount) return '';
-      const minor = toMinor(amount);
+    const formatPriceRials = (amount?: string | number): string => {
+      if (amount === undefined || amount === null || amount === '') return '';
+      const digits = typeof amount === 'number'
+        ? (Number.isFinite(amount) ? String(Math.round(amount)) : '')
+        : String(amount).trim();
+      if (!/^\d{1,18}$/.test(digits)) return '';
+      const minor = BigInt(digits) * 100n;
       return `${formatMoney(minor)} ریال`;
     };
 
     // Flatten items according to their requested count
     const labelItems: BarcodeLabelItemDto[] = [];
     for (const item of dto.items) {
-      const count = Math.max(1, Math.min(100, item.count ?? 1));
+      const count = Math.max(1, Math.min(100, Math.floor(item.count ?? 1)));
       for (let i = 0; i < count; i++) {
         labelItems.push(item);
       }
@@ -456,15 +464,25 @@ export class PrintTemplateService {
 
 function sanitizeOptions(opts?: Partial<PrintTemplateOptions>): PrintTemplateOptions {
   if (!opts) return {};
-  return {
-    headerTitle: typeof opts.headerTitle === 'string' && opts.headerTitle.trim().length > 0 ? opts.headerTitle.trim().slice(0, 128) : undefined,
-    footerNote: typeof opts.footerNote === 'string' && opts.footerNote.trim().length > 0 ? opts.footerNote.trim().slice(0, 500) : undefined,
-    barcodeColumns: opts.barcodeColumns === 5 ? 5 : opts.barcodeColumns === 4 ? 4 : undefined,
-    showPrice: opts.showPrice !== undefined ? Boolean(opts.showPrice) : undefined,
-    showSku: opts.showSku !== undefined ? Boolean(opts.showSku) : undefined,
-    showSignatures: opts.showSignatures !== undefined ? Boolean(opts.showSignatures) : undefined,
-    signatures: Array.isArray(opts.signatures) ? opts.signatures.map((s) => String(s).slice(0, 64)) : undefined,
-  };
+  const res: PrintTemplateOptions = {};
+  if (typeof opts.headerTitle === 'string') {
+    const trimmed = opts.headerTitle.trim();
+    if (trimmed.length > 0) res.headerTitle = trimmed.slice(0, 128);
+  }
+  if (typeof opts.footerNote === 'string') {
+    const trimmed = opts.footerNote.trim();
+    if (trimmed.length > 0) res.footerNote = trimmed.slice(0, 500);
+  }
+  if (opts.barcodeColumns === 5 || opts.barcodeColumns === 4) {
+    res.barcodeColumns = opts.barcodeColumns;
+  }
+  if (opts.showPrice !== undefined) res.showPrice = Boolean(opts.showPrice);
+  if (opts.showSku !== undefined) res.showSku = Boolean(opts.showSku);
+  if (opts.showSignatures !== undefined) res.showSignatures = Boolean(opts.showSignatures);
+  if (Array.isArray(opts.signatures)) {
+    res.signatures = opts.signatures.map((s) => String(s).slice(0, 64));
+  }
+  return res;
 }
 
 function escapeXml(unsafe: string): string {

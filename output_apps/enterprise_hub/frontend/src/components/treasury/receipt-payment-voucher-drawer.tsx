@@ -40,12 +40,20 @@ export function ReceiptPaymentPrintButton({
       variant={variant}
       className={className}
       onClick={async () => {
-        // null (none saved, or lookup failed) prints the original layout, once.
-        const tpl = await getDefaultPrintTemplateOrNull(
-          PrintDocType.RECEIPT_PAYMENT_VOUCHER,
-          PrintPaperSize.A5,
-        );
-        printReceiptPaymentVoucher(doc, companyName, tpl ?? undefined);
+        // Open window synchronously in the user gesture to avoid popup blockers
+        const printWindow = typeof window !== "undefined" ? window.open("", "_blank") : null;
+        if (printWindow) {
+          printWindow.opener = null;
+        }
+        try {
+          const tpl = await getDefaultPrintTemplateOrNull(
+            PrintDocType.RECEIPT_PAYMENT_VOUCHER,
+            PrintPaperSize.A5,
+          );
+          printReceiptPaymentVoucher(doc, companyName, tpl ?? undefined, printWindow);
+        } catch {
+          printReceiptPaymentVoucher(doc, companyName, undefined, printWindow);
+        }
       }}
     >
       <Printer className="size-4 ml-1.5" />

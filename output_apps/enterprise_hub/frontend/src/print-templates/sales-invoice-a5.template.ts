@@ -52,7 +52,7 @@ thead { display:table-header-group; } tr { page-break-inside:avoid; }
 <div class="watermark">پیش‌نویس</div>
 <div class="sheet">
   <div class="row" style="align-items:center">
-    <div><b>{{seller.name}}</b><br><span class="muted">شماره اقتصادی: <span class="num">{{seller.economicCode}}</span> — شناسه ملی: <span class="num">{{seller.nationalId}}</span></span><br><span class="muted">{{seller.address}} — <span class="num">{{seller.phone}}</span></span></div>
+    <div>{{#if logoUrl}}<img src="{{logoUrl}}" alt="" style="max-height:14mm"><br>{{/if}}<b>{{seller.name}}</b><br><span class="muted">شماره اقتصادی: <span class="num">{{seller.economicCode}}</span> — شناسه ملی: <span class="num">{{seller.nationalId}}</span></span><br><span class="muted">{{seller.address}} — <span class="num">{{seller.phone}}</span></span></div>
     <div><h1>{{docTitle}}</h1></div>
     <div><dl class="kv"><dt>شماره</dt><dd class="num">{{invoiceNumber}}</dd><dt>تاریخ</dt><dd class="num">{{issueDateJalali}}</dd></dl></div>
   </div>
@@ -61,7 +61,7 @@ thead { display:table-header-group; } tr { page-break-inside:avoid; }
   <div class="box" style="margin-top:2mm"><b>خریدار:</b> {{buyer.name}}
     — شماره اقتصادی / ملی: <span class="num">{{buyer.economicCode}} {{buyer.nationalId}}</span>
     — کد پستی: <span class="num">{{buyer.postalCode}}</span> — {{buyer.address}}</div>
-  <table>
+  <table id="invoice-items-table">
     <thead><tr><th>ردیف</th><th>شناسه</th><th>شرح</th><th>تعداد</th><th>واحد</th><th>مبلغ واحد</th><th>تخفیف</th><th>مالیات</th><th>جمع کل</th></tr></thead>
     <tbody>{{#each lines}}
       <tr><td class="c">{{row}}</td><td class="n">{{itemId}}</td><td>{{description}}</td><td class="n">{{quantity}}</td><td class="c">{{unit}}</td>
@@ -71,6 +71,7 @@ thead { display:table-header-group; } tr { page-break-inside:avoid; }
   </table>
   <div>به حروف: {{totals.grandInWords}} {{currencyLabel}} — تسویه: {{settlementMethod}}</div>
   <div class="sign"><div>مهر و امضای فروشنده</div><div>مهر و امضای خریدار</div></div>
+  {{#if footerText}}<div class="footer-note">{{footerText}}</div>{{/if}}
 </div>
 </body>
 </html>

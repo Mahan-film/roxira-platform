@@ -10,6 +10,7 @@ export function printReceiptPaymentVoucher(
   doc: TreasuryDocumentDetail,
   companyName = "",
   template?: Partial<PrintTemplateDto>,
+  targetWindow?: Window | null,
 ): void {
   const data = mapTreasuryDocToPrintData(doc, companyName);
   if (template?.options?.headerTitle?.trim()) {
@@ -25,8 +26,9 @@ export function printReceiptPaymentVoucher(
     RECEIPT_PAYMENT_VOUCHER_A5_TEMPLATE,
     data,
   );
-  const printWindow = window.open("", "_blank");
+  const printWindow = targetWindow || window.open("", "_blank");
   if (!printWindow) return;
+  printWindow.document.open();
   printWindow.document.write(html);
   printWindow.document.close();
   printWindow.onafterprint = () => printWindow.close();

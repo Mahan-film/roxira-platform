@@ -6,6 +6,8 @@ import {
   InvoiceStatus,
   type InvoiceResponseDto,
 } from "../../types/invoicing.ts";
+import { safeLogoUrl } from "./safe-url.ts";
+import type { SalesInvoicePrintCustomOptions } from "./sales-invoice.ts";
 
 /** The Moadian e-invoice types; any other value (there is no "none" member) is not an e-invoice. */
 const MOADIAN_TYPES: readonly EInvoiceType[] = [
@@ -23,11 +25,15 @@ const MOADIAN_TYPES: readonly EInvoiceType[] = [
 export function mapInvoiceToSalesInvoiceA5Data(
   invoice: InvoiceResponseDto,
   statusLabel: string,
+  options?: SalesInvoicePrintCustomOptions,
 ): Record<string, unknown> {
   const isEinvoice = MOADIAN_TYPES.includes(invoice.einvoiceType);
+  const logo = options?.showLogo === false ? "" : safeLogoUrl(options?.logoUrl);
 
   return {
-    docTitle: "فاکتور فروش",
+    docTitle: options?.docTitle || "فاکتور فروش",
+    logoUrl: logo,
+    footerText: options?.footerText ?? "",
     invoiceNumber: invoice.taxInvoiceNumber,
     issueDateJalali: formatJalaliDate(invoice.issuedAt ?? invoice.createdAt),
     statusLabel,
