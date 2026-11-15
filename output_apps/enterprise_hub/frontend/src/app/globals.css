@@ -50,6 +50,8 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  /* رنگ سطوح پیش‌نویس هوش مصنوعی (R1 §6 / T115) */
+  --color-ai-surface: var(--ai-surface);
   /* طراحی شیشه‌ای (W21b): رنگ سطح، لبه و ارتفاع‌ها */
   --color-glass-surface: var(--glass-surface);
   --color-glass-raised: var(--glass-raised);
@@ -99,12 +101,13 @@
   --sidebar-ring: oklch(0.708 0 0);
 
   /* سیستم طراحی شیشه‌ای (W21b): سه ارتفاع — surface / raised / overlay.
-     سطح شفاف + سایه نرم؛ مقدار blur/saturate داخل utility اعمال می‌شود. */
-  --glass-surface: oklch(1 0 0 / 62%);
-  --glass-raised: oklch(1 0 0 / 74%);
-  --glass-overlay: oklch(1 0 0 / 88%);
-  --glass-border: oklch(0 0 0 / 10%);
-  --glass-solid: oklch(0.99 0 0);
+     نگاشت روی توکن‌های معنایی (T115) */
+  --ai-surface: oklch(0.975 0.015 250);
+  --glass-surface: color-mix(in oklch, var(--card) 65%, transparent);
+  --glass-raised: color-mix(in oklch, var(--card) 75%, transparent);
+  --glass-overlay: color-mix(in oklch, var(--popover) 88%, transparent);
+  --glass-border: var(--border);
+  --glass-solid: var(--card);
   --glass-shadow-surface: 0 1px 2px oklch(0 0 0 / 6%), 0 8px 24px oklch(0 0 0 / 6%);
   --glass-shadow-raised: 0 2px 4px oklch(0 0 0 / 8%), 0 12px 32px oklch(0 0 0 / 10%);
   --glass-shadow-overlay: 0 8px 16px oklch(0 0 0 / 12%), 0 24px 56px oklch(0 0 0 / 18%);
@@ -156,12 +159,13 @@
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 
-  /* سیستم طراحی شیشه‌ای (W21b): مقادیر تم تاریک پوسته اپ */
-  --glass-surface: oklch(1 0 0 / 6%);
-  --glass-raised: oklch(1 0 0 / 10%);
-  --glass-overlay: oklch(1 0 0 / 16%);
-  --glass-border: oklch(1 0 0 / 12%);
-  --glass-solid: oklch(0.2 0.015 260);
+  /* سیستم طراحی شیشه‌ای (W21b): مقادیر تم تاریک پوسته اپ نگاشت روی توکن‌های معنایی (T115) */
+  --ai-surface: oklch(0.22 0.03 250);
+  --glass-surface: color-mix(in oklch, var(--card) 30%, transparent);
+  --glass-raised: color-mix(in oklch, var(--card) 50%, transparent);
+  --glass-overlay: color-mix(in oklch, var(--popover) 75%, transparent);
+  --glass-border: var(--border);
+  --glass-solid: var(--card);
   --glass-shadow-surface: 0 1px 2px oklch(0 0 0 / 40%), 0 8px 24px oklch(0 0 0 / 30%);
   --glass-shadow-raised: 0 2px 6px oklch(0 0 0 / 45%), 0 14px 36px oklch(0 0 0 / 38%);
   --glass-shadow-overlay: 0 8px 18px oklch(0 0 0 / 50%), 0 28px 64px oklch(0 0 0 / 45%);
@@ -203,7 +207,8 @@
 }
 
 @layer utilities {
-  /* اعداد با عرض یکنواخت (ستون‌های مالی، تاریخ‌ها) حتی خارج از جدول */
+  /* اعداد با عرض یکنواخت (ستون‌های مالی، تاریخ‌ها) حتی خارج از جدول (T115) */
+  .tabular-nums,
   .num {
     font-variant-numeric: tabular-nums;
   }
@@ -302,18 +307,26 @@
 /* these variables to restyle every surface that uses `ap-*` classes.   */
 /* ------------------------------------------------------------------ */
 .ap-theme {
-  --ap-bg: #000000;
-  --ap-surface: #161617;
-  --ap-surface-2: #1d1d1f;
-  --ap-text: #f5f5f7;
-  --ap-text-muted: #a1a1a6;
-  --ap-accent: #0071e3;
-  --ap-accent-text: #ffffff;
-  --ap-line: rgb(255 255 255 / 0.12);
-  --ap-warn: #ff9f0a;
-  --ap-danger: #ff453a;
-  --ap-ok: #30d158;
-  --ap-nav-bg: rgb(22 22 23 / 0.8);
+  /* نگاشت توکن‌های ap-* روی توکن‌های معنایی هسته (T115) */
+  --ap-bg: var(--background);
+  --ap-surface: var(--card);
+  --ap-surface-2: var(--muted);
+  --ap-text: var(--foreground);
+  --ap-text-muted: var(--muted-foreground);
+  --ap-accent: var(--primary);
+  --ap-accent-text: var(--primary-foreground);
+  --ap-line: var(--border);
+  --ap-warn: var(--warning);
+  --ap-danger: var(--destructive);
+  --ap-ok: var(--success);
+  --ap-nav-bg: color-mix(in oklch, var(--background) 80%, transparent);
+  --ap-link: var(--info);
+  --ap-hover: color-mix(in oklch, var(--foreground) 8%, transparent);
+  --ap-accent-soft: color-mix(in oklch, var(--primary) 15%, transparent);
+  --ap-menu-bg: var(--popover);
+  --ap-menu-shadow: 0 12px 40px rgb(0 0 0 / 0.5);
+  --ap-field-border: var(--border);
+
   --ap-font: var(--font-vazirmatn), "Vazirmatn", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   --ap-hero-size: clamp(2.5rem, 7vw, 5rem);
   --ap-hero-weight: 600;
@@ -328,17 +341,11 @@
   /* Shell tokens (chat + header). Edit here to restyle them from a reference image. */
   --ap-touch: 44px;
   --ap-radius-input: 14px;
-  --ap-link: #2997ff;
-  --ap-hover: rgb(255 255 255 / 0.08);
-  --ap-accent-soft: rgb(0 113 227 / 0.18);
-  --ap-menu-bg: #232326;
-  --ap-menu-shadow: 0 12px 40px rgb(0 0 0 / 0.5);
   --ap-header-h: 56px;
   --ap-content-max: 880px;
   --ap-gap: 16px;
   --ap-small-size: 14px;
   --ap-tiny-size: 13px;
-  --ap-field-border: rgb(255 255 255 / 0.5);
   background: var(--ap-bg);
   color: var(--ap-text);
   font-family: var(--ap-font);
@@ -554,30 +561,58 @@
 .ghazi-theme .ap-theme,
 .ap-theme.ghazi-theme {
   color-scheme: dark;
-  --gh-bg: #05080f;
-  --gh-bg-2: #0a0f1a;
-  --gh-surface: rgb(255 255 255 / 0.04);
-  --gh-surface-2: rgb(255 255 255 / 0.07);
-  --gh-border: rgb(255 255 255 / 0.1);
-  --gh-border-strong: rgb(255 255 255 / 0.28);
-  --gh-text: #e2e8f0;
-  --gh-muted: #94a3b8;
-  --gh-gold: #fbbf24;
-  --gh-gold-strong: #f59e0b;
-  --gh-on-gold: #0b1020;
-  --gh-cyan: #38bdf8;
-  --gh-cyan-soft: rgb(56 189 248 / 0.12);
-  --gh-danger: #fb7185;
-  /* مبلغ منفی در پوسته غازی: از --gh-danger مشتق شده (کنتراست کافی روی #05080f) */
-  --money-negative: var(--gh-danger);
-  --gh-ok: #34d399;
-  --gh-ring: #38bdf8;
-  --gh-modal: #0a0f1a;
 
-  /* map the brand tokens onto the shared ap-* tokens */
+  /* توکن‌های معنایی اختصاصی پوسته غازی (T115) */
+  --background: #05080f;
+  --foreground: #e2e8f0;
+  --card: #0a0f1a;
+  --card-foreground: #e2e8f0;
+  --popover: #0a0f1a;
+  --popover-foreground: #e2e8f0;
+  --primary: #fbbf24;
+  --primary-foreground: #0b1020;
+  --secondary: rgb(255 255 255 / 0.07);
+  --secondary-foreground: #e2e8f0;
+  --muted: rgb(255 255 255 / 0.06);
+  --muted-foreground: #94a3b8;
+  --accent: rgb(255 255 255 / 0.08);
+  --accent-foreground: #e2e8f0;
+  --destructive: #fb7185;
+  --destructive-foreground: #0b1020;
+  --border: rgb(255 255 255 / 0.1);
+  --input: rgb(255 255 255 / 0.14);
+  --ring: #38bdf8;
+  --info: #38bdf8;
+  --info-foreground: #0b1020;
+  --success: #34d399;
+  --success-foreground: #0b1020;
+  --warning: #fbbf24;
+  --warning-foreground: #0b1020;
+  --money-negative: var(--destructive);
+
+  /* نگاشت نام‌های قبلی gh-* روی توکن‌های معنایی (T115) */
+  --gh-bg: var(--background);
+  --gh-bg-2: var(--card);
+  --gh-surface: var(--glass-surface);
+  --gh-surface-2: var(--glass-raised);
+  --gh-border: var(--border);
+  --gh-border-strong: rgb(255 255 255 / 0.28);
+  --gh-text: var(--foreground);
+  --gh-muted: var(--muted-foreground);
+  --gh-gold: var(--primary);
+  --gh-gold-strong: #f59e0b;
+  --gh-on-gold: var(--primary-foreground);
+  --gh-cyan: var(--info);
+  --gh-cyan-soft: rgb(56 189 248 / 0.12);
+  --gh-danger: var(--destructive);
+  --gh-ok: var(--success);
+  --gh-ring: var(--ring);
+  --gh-modal: var(--card);
+
+  /* نگاشت نام‌های قبلی ap-* درون پوسته غازی (T115) */
   --ap-bg: var(--gh-bg);
   --ap-surface: #0b111d;
-  --ap-surface-2: rgb(255 255 255 / 0.07);
+  --ap-surface-2: var(--secondary);
   --ap-text: var(--gh-text);
   --ap-text-muted: var(--gh-muted);
   --ap-accent: var(--gh-gold);
@@ -594,30 +629,12 @@
   --ap-menu-shadow: 0 12px 40px rgb(0 0 0 / 0.6);
   --ap-field-border: rgb(255 255 255 / 0.45);
 
-  /* map onto the shadcn tokens so shared UI (Input, Label, Button, ...) is dark too */
-  --background: var(--gh-bg);
-  --foreground: var(--gh-text);
-  --card: var(--gh-bg-2);
-  --card-foreground: var(--gh-text);
-  --popover: var(--gh-bg-2);
-  --popover-foreground: var(--gh-text);
-  --primary: var(--gh-gold);
-  --primary-foreground: var(--gh-on-gold);
-  --secondary: rgb(255 255 255 / 0.07);
-  --secondary-foreground: var(--gh-text);
-  --muted: rgb(255 255 255 / 0.06);
-  --muted-foreground: var(--gh-muted);
-  --accent: rgb(255 255 255 / 0.08);
-  --accent-foreground: var(--gh-text);
-  --destructive: var(--gh-danger);
-  --border: var(--gh-border);
-  --input: rgb(255 255 255 / 0.14);
-  --ring: var(--gh-ring);
-  --glass-surface: var(--gh-surface);
-  --glass-raised: var(--gh-surface-2);
+  /* نگاشت سیستم شیشه‌ای روی توکن‌های معنایی پوسته غازی (T115) */
+  --glass-surface: rgb(255 255 255 / 0.04);
+  --glass-raised: rgb(255 255 255 / 0.07);
   --glass-overlay: rgb(10 15 26 / 0.96);
-  --glass-solid: var(--gh-bg-2);
-  --glass-border: var(--gh-border);
+  --glass-solid: var(--card);
+  --glass-border: var(--border);
 }
 
 /* primary = gold */
