@@ -307,7 +307,8 @@ export class WooCommerceSyncService {
           if (line.price !== undefined && line.price !== null) {
             unitPriceMinor = parseWooAmount(String(line.price));
           } else {
-            unitPriceMinor = BigInt(Math.round(Number(lineSubtotalMinor) / rawQty));
+            const scaledQty = BigInt(Math.round(rawQty * 10000));
+            unitPriceMinor = scaledQty > 0n ? (lineSubtotalMinor * 10000n) / scaledQty : lineSubtotalMinor;
           }
 
           const vatRate =
