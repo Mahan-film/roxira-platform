@@ -46,6 +46,56 @@ const SUPPORTED_ORDER_CURRENCIES = new Set<string>(Object.values(Currency));
 const TOMAN_TO_RIAL = 10;
 const RATIO_SCALE = 1_000_000;
 
+const DNS_CACHE_TTL_MS = 5 * 60 * 1000;
+const dnsValidationCache = new Map<string, { valid: boolean; expiresAt: number }>();
+
+/**
+ * Safely converts minor units (cents) to a number for the Invoicing API.
+ * Throws if the amount exceeds safe integer range, preventing silent precision loss.
+ */
+function minorToNumber(minor: bigint): number {
+  const decStr = minorToDecimal(minor);
+  const n = Number(decStr);
+  if (!Number.isFinite(n)) {
+    throw new Error(`Amount ${decStr} cannot be safely converted to number`);
+  }
+  if (Math.abs(n) > Number.MAX_SAFE_INTEGER) {
+    throw new Error(`Amount ${decStr} exceeds Number.MAX_SAFE_INTEGER precision`);
+  }
+  return n;
+}
+
+function parseLineQuantity(raw: unknown): { qty: number; scaledQty: bigint } {
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
+    const str = raw.toString();
+    try {
+      const scaled = parseScaled(str, 4);
+      return { qty: raw, scaledQty: scaled };
+    } catch {
+      const whole = Math.max(1, Math.floor(raw));
+      return { qty: whole, scaledQty: BigInt(whole) * 10000n };
+    }
+  }
+  const str = String(raw || '1').trim();
+  try {
+    const scaled = parseScaled(str, 4);
+    const num = Number(str);
+    return {
+      qty: Number.isFinite(num) && num > 0 ? num : 1,
+      scaledQty: scaled > 0n ? scaled : 10000n,
+    };
+  } catch {
+    return { qty: 1, scaledQty: 10000n };
+  }
+}
+
+function vatRateOf(amountMinor: bigint, vatMinor: bigint): number {
+  if (amountMinor <= 0n || vatMinor <= 0n) return 0;
+  const RATE_FACTOR = 1_000_000n; // scale 6
+  const scaled = (vatMinor * RATE_FACTOR) / amountMinor;
+  return Number(scaled) / 1_000_000;
+}
+
 function parseWooAmount(val?: string | number | null): bigint {
   if (val === undefined || val === null || val === '') return 0n;
   const str = String(val).trim();
@@ -277,66 +327,62 @@ export class WooCommerceSyncService {
         };
 
         const orderTotalMinor = parseWooAmount(order.total);
-        const totalTaxMinor = parseWooAmount(order.total_tax);
+        const orderTaxMinor = parseWooAmount(order.total_tax);
         const orderDiscountMinor = parseWooAmount(order.discount_total);
+        const shippingMinor = parseWooAmount(order.shipping_total);
+        const shippingTaxMinor = parseWooAmount(order.shipping_tax);
 
         let sumLineDiscountsMinor = 0n;
+        let sumLineTaxMinor = 0n;
         const items: InvoiceItem[] = (order.line_items || []).map((line) => {
-          const numQty =
-            typeof line.quantity === 'number'
-              ? line.quantity
-              : parseFloat(String(line.quantity || 1));
-          const rawQty = Number.isFinite(numQty) && numQty > 0 ? numQty : 1;
+          const { qty, scaledQty } = parseLineQuantity(line.quantity);
           const lineTotalMinor = parseWooAmount(line.total || line.subtotal);
           const lineSubtotalMinor = parseWooAmount(line.subtotal || line.total);
           const lineTaxMinor = parseWooAmount(line.total_tax);
+          sumLineTaxMinor += lineTaxMinor;
           const lineDiscountMinor =
             lineSubtotalMinor > lineTotalMinor ? lineSubtotalMinor - lineTotalMinor : 0n;
           sumLineDiscountsMinor += lineDiscountMinor;
 
-          let qty = rawQty;
           let unitPriceMinor: bigint;
           if (line.price !== undefined && line.price !== null) {
             unitPriceMinor = parseWooAmount(String(line.price));
           } else {
-            const scaledQty = BigInt(Math.round(rawQty * 10000));
             unitPriceMinor = scaledQty > 0n ? (lineSubtotalMinor * 10000n) / scaledQty : lineSubtotalMinor;
           }
 
-          const vatRate =
-            lineTotalMinor > 0n && lineTaxMinor > 0n
-              ? Number((lineTaxMinor * 10000n) / lineTotalMinor) / 10000
-              : 0;
+          const vatRate = vatRateOf(lineTotalMinor, lineTaxMinor);
 
           return {
             sku: line.sku || `WOO-${line.product_id}`,
             description:
-              qty === rawQty
+              qty === Math.floor(qty)
                 ? line.name || `کالای ووکامرس #${line.product_id}`
-                : `${line.name || `کالای ووکامرس #${line.product_id}`} (×${rawQty})`,
+                : `${line.name || `کالای ووکامرس #${line.product_id}`} (×${qty})`,
             quantity: qty,
-            unitPrice: minorToDecimal(unitPriceMinor) as unknown as number,
-            discount: minorToDecimal(lineDiscountMinor) as unknown as number,
+            unitPrice: minorToNumber(unitPriceMinor),
+            discount: minorToNumber(lineDiscountMinor),
             vatRate,
-            tax: minorToDecimal(lineTaxMinor) as unknown as number,
-            total: minorToDecimal(lineTotalMinor + lineTaxMinor) as unknown as number,
+            tax: minorToNumber(lineTaxMinor),
+            total: minorToNumber(lineTotalMinor + lineTaxMinor),
           };
         });
 
-        const shippingMinor = parseWooAmount(order.shipping_total);
-        if (shippingMinor > 0n) {
+        if (shippingMinor > 0n || shippingTaxMinor > 0n) {
           items.push({
             sku: 'SHIPPING',
             description: 'هزینه ارسال سفارش',
             quantity: 1,
-            unitPrice: minorToDecimal(shippingMinor) as unknown as number,
+            unitPrice: minorToNumber(shippingMinor),
             discount: 0,
-            vatRate: 0,
-            tax: 0,
-            total: minorToDecimal(shippingMinor) as unknown as number,
+            vatRate: vatRateOf(shippingMinor, shippingTaxMinor),
+            tax: minorToNumber(shippingTaxMinor),
+            total: minorToNumber(shippingMinor + shippingTaxMinor),
           });
         }
 
+        const totalTaxMinor =
+          orderTaxMinor > 0n ? orderTaxMinor : sumLineTaxMinor + shippingTaxMinor;
         const totalDiscountMinor =
           orderDiscountMinor > 0n ? orderDiscountMinor : sumLineDiscountsMinor;
         // Net merchandise/shipping before tax and before discount so totalAmount - totalDiscount + totalTax === finalPayable
@@ -365,20 +411,20 @@ export class WooCommerceSyncService {
             jurisdiction,
             exchangeRate,
             fxRate,
-            amountFx: minorToDecimal(orderTotalMinor) as unknown as number,
+            amountFx: minorToNumber(orderTotalMinor),
             baseCurrency: BASE_CURRENCY,
-            baseTotalAmount: minorToDecimal(baseTotalAmountMinor) as unknown as number,
-            baseTotalTax: minorToDecimal(baseTotalTaxMinor) as unknown as number,
-            baseFinalPayable: minorToDecimal(baseFinalPayableMinor) as unknown as number,
+            baseTotalAmount: minorToNumber(baseTotalAmountMinor),
+            baseTotalTax: minorToNumber(baseTotalTaxMinor),
+            baseFinalPayable: minorToNumber(baseFinalPayableMinor),
             einvoiceType,
             subject: InvoiceSubject.ORIGINAL,
             sellerInfo,
             buyerInfo,
             items,
-            totalAmount: minorToDecimal(totalAmountMinor) as unknown as number,
-            totalDiscount: minorToDecimal(totalDiscountMinor) as unknown as number,
-            totalTax: minorToDecimal(totalTaxMinor) as unknown as number,
-            finalPayable: minorToDecimal(orderTotalMinor) as unknown as number,
+            totalAmount: minorToNumber(totalAmountMinor),
+            totalDiscount: minorToNumber(totalDiscountMinor),
+            totalTax: minorToNumber(totalTaxMinor),
+            finalPayable: minorToNumber(orderTotalMinor),
           },
           manager,
         );
@@ -465,17 +511,31 @@ export class WooCommerceSyncService {
 
     const host = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase();
     const verifyHostNotPrivate = async () => {
-      if (!net.isIP(host)) {
-        try {
-          const resolved = await dns.lookup(host, { all: true });
-          for (const addr of resolved) {
-            if (PRIVATE_BLOCKLIST.check(addr.address, addr.family === 4 ? 'ipv4' : 'ipv6')) {
-              throw new BadRequestException('WooCommerce storeUrl resolves to a private or loopback address');
-            }
-          }
-        } catch (err: any) {
-          if (err instanceof BadRequestException) throw err;
+      if (net.isIP(host)) {
+        if (PRIVATE_BLOCKLIST.check(host, net.isIP(host) === 4 ? 'ipv4' : 'ipv6')) {
+          throw new BadRequestException('WooCommerce storeUrl resolves to a private or loopback address');
         }
+        return;
+      }
+      const now = Date.now();
+      const cached = dnsValidationCache.get(host);
+      if (cached && cached.expiresAt > now) {
+        if (!cached.valid) {
+          throw new BadRequestException('WooCommerce storeUrl resolves to a private or loopback address');
+        }
+        return;
+      }
+      try {
+        const resolved = await dns.lookup(host, { all: true });
+        for (const addr of resolved) {
+          if (PRIVATE_BLOCKLIST.check(addr.address, addr.family === 4 ? 'ipv4' : 'ipv6')) {
+            dnsValidationCache.set(host, { valid: false, expiresAt: now + DNS_CACHE_TTL_MS });
+            throw new BadRequestException('WooCommerce storeUrl resolves to a private or loopback address');
+          }
+        }
+        dnsValidationCache.set(host, { valid: true, expiresAt: now + DNS_CACHE_TTL_MS });
+      } catch (err: any) {
+        if (err instanceof BadRequestException) throw err;
       }
     };
 

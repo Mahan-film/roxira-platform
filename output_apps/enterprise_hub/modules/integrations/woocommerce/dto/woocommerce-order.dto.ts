@@ -74,6 +74,11 @@ export class WooCommerceOrderWebhookDto {
   @IsString()
   shipping_total?: string;
 
+  @ApiPropertyOptional({ description: 'مالیات هزینه ارسال', default: '0' })
+  @IsOptional()
+  @IsString()
+  shipping_tax?: string;
+
   @ApiPropertyOptional({ description: 'اطلاعات خریدار' })
   @IsOptional()
   @ValidateNested()
