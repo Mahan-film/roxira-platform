@@ -4,7 +4,9 @@ import { AccessModule } from '../access/access.module';
 import { TenantScope } from '../access/services/tenant-scope';
 import { AccountingModule } from '../accounting/accounting.module';
 import { PostingRulesModule } from '../posting_rules/posting-rules.module';
+import { DailyAttendanceController } from './controllers/daily-attendance.controller';
 import { HrController } from './controllers/hr.controller';
+import { AttendanceEventEntity } from './entities/attendance-event.entity';
 import { ContractAllowanceEntity } from './entities/contract-allowance.entity';
 import { EmployeeEntity } from './entities/employee.entity';
 import { EmploymentContractEntity } from './entities/employment-contract.entity';
@@ -14,7 +16,9 @@ import { EmployeeAttendanceEntity } from './entities/employee-attendance.entity'
 import { EmployeeLeaveEntity } from './entities/employee-leave.entity';
 import { StaffLoanEntity } from './entities/staff-loan.entity';
 import { StaffLoanDeductionEntity } from './entities/staff-loan-deduction.entity';
+import { AttendanceEventsRepository } from './repositories/attendance-events.repository';
 import { HrRepository } from './repositories/hr.repository';
+import { DailyAttendanceService } from './services/daily-attendance.service';
 import { HrService } from './services/hr.service';
 import { PayrollRunService } from './services/payroll-run.service';
 import { StatutoryController } from './statutory/statutory.controller';
@@ -31,8 +35,8 @@ import { StatutoryService } from './statutory/statutory.service';
  *   فیش و هماهنگی ثبت سند خودکار).
  * - Repository: تنها لایه با دسترسی مستقیم به جداول HR.
  *
- * جداول متصل: `hr_employees`، `hr_employment_contracts`، `hr_payslips` و
- * `hr_payroll_runs` (اجرای ماهانه حقوق).
+ * جداول متصل: `hr_employees`، `hr_employment_contracts`، `hr_payslips`،
+ * `hr_payroll_runs` و `attendance_events`.
  * برای ثبت سند هزینه حقوق در دفتر روزنامه، `AccountingModule` (که
  * `AccountingService` را export می‌کند) import می‌شود؛ این وابستگی یک‌طرفه
  * است و هیچ چرخه‌ای ایجاد نمی‌کند (Rule #1 - AGENTS.md).
@@ -50,20 +54,23 @@ import { StatutoryService } from './statutory/statutory.service';
       EmployeeLeaveEntity,
       StaffLoanEntity,
       StaffLoanDeductionEntity,
+      AttendanceEventEntity,
     ]),
     AccessModule,
     AccountingModule,
     PostingRulesModule,
   ],
-  controllers: [HrController, StatutoryController],
+  controllers: [HrController, DailyAttendanceController, StatutoryController],
   providers: [
     HrService,
+    DailyAttendanceService,
     PayrollRunService,
     HrRepository,
+    AttendanceEventsRepository,
     StatutoryService,
     StatutoryRepository,
     TenantScope,
   ],
-  exports: [HrService, PayrollRunService, StatutoryService],
+  exports: [HrService, DailyAttendanceService, PayrollRunService, StatutoryService],
 })
 export class HrModule {}
