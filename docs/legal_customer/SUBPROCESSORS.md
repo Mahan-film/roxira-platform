@@ -15,13 +15,13 @@ To deliver the Roxira enterprise cloud accounting, payroll, retail point-of-sale
 Roxira exercises stringent due diligence prior to engaging any sub-processor, executing binding Data Processing Agreements that enforce:
 - Strict technical and organizational security measures (TOMs);
 - Geographic and cross-border transfer restrictions aligned with the Malaysia Personal Data Protection Act (PDPA 2024) and GDPR Standard Contractual Clauses (SCCs);
-- **Absolute prohibition against using Customer Data to train, fine-tune, or benchmark public foundation models.**
+- **Clear separation between standard plans** (where customer data may be used to run and improve the service, including AI models) **and the paid private data option** (where data is never used beyond the customer’s own service and inference routes strictly to paid endpoints with `data_collection = deny`).
 
 ---
 
 ## 2. Artificial Intelligence & Machine Learning Sub-processors
 
-All AI inference processing is governed by Roxira’s production data classification matrix (`docs/ops/AI_DATA_POLICY.md`). In commercial production mode (`ROXIRA_AI_DATA_MODE=production`), Customer business and personal records are **strictly routed to paid, enterprise-grade endpoints with data collection explicitly denied (`data_collection = deny`)**. Free or training-enabled models are strictly confined to public crawl summaries and internal developer tools.
+Under standard plans, Customer data may be used to run and improve the Services, including AI models, and AI inference routes free-tier first with paid fallback. Customers who purchase the paid **private data option** are routed exclusively to paid model endpoints with data collection denied (`data_collection = deny`) and no use beyond the Customer’s own service.
 
 | Sub-processor Entity | Jurisdiction / Hosting Location | Service / Model Scope | Data Processed | Data Safeguards & Terms |
 |---|---|---|---|---|

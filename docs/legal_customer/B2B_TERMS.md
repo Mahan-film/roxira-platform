@@ -72,7 +72,7 @@
 
 5.1. **Customer Ownership.** As between the parties, Customer exclusively retains all right, title, and interest (including all intellectual property rights) in and to Customer Data. Roxira acquires no ownership interest in Customer Data.
 
-5.2. **Limited Processing License.** Customer grants Roxira a limited, non-exclusive license to host, process, transmit, and display Customer Data solely to the extent necessary to provide, maintain, and support the Services in accordance with this Agreement and the DPA.
+5.2. **Service & Improvement License.** Customer grants Roxira a non-exclusive, worldwide license to host, process, transmit, display, and use Customer Data to provide, maintain, support, and improve the Services, including artificial intelligence models, unless Customer has purchased the paid **private data option** (under which Customer Data is not used beyond Customer’s own service).
 
 5.3. **Platform Intellectual Property.** Roxira retains all intellectual property rights in and to the platform software, user interface designs, APIs, documentation, algorithmic models, and system telemetry.
 
@@ -86,7 +86,9 @@
 
 6.2. **Technical Safeguards.** Roxira maintains rigorous technical and organizational measures (TOMs), including TLS 1.3 encryption in transit, AES-256 encryption at rest, automated off-site immutable backups, database write-guards against modifying posted journal entries, and automated vulnerability scanning.
 
-6.3. **AI Data Governance.** Customer Data processed through platform AI assistants is strictly governed by Roxira’s production AI data policy. **Customer Data is never utilized to train third-party foundation models, and prompt data collection is explicitly denied (`data_collection=deny`) across all production inference endpoints.**
+6.3. **AI Data Governance & Private Data Option.** Under standard plans, Customer Data may be used to run and improve the Services, including AI models (and inference may route through free or standard model tiers). Customers requiring strict isolation may purchase the paid **private data option**, under which Customer Data is never used beyond Customer’s own service and AI requests are routed exclusively to paid model endpoints with data collection denied (`data_collection=deny`).
+
+6.4. **Attendance Device Logs Only.** Where Customer uses hardware attendance terminals, the Services store device event logs (such as timestamps, terminal identifiers, and employee identifiers) only, and **never store biometric templates** (no fingerprint, facial, or voiceprint templates or raw biometric images).
 
 ---
 

@@ -34,7 +34,7 @@ This Data Processing Agreement ("**DPA**") supplements the B2B Software-as-a-Ser
 2.2. **Types of Personal Data:**
 - **Identity & Contact Details:** Full legal name, national identity number, tax identification number, postal address, business email address, telephone numbers;
 - **Financial & Payroll Data:** Bank account numbers, IBANs, salary figures, attendance time stamps, deduction allowances, invoice transaction amounts;
-- **Biometric & Attendance Data:** Facial or fingerprint biometric verification hash tokens recorded by attendance terminals (never stored as raw biometric images);
+- **Attendance Device Logs:** Clock-in/clock-out device event logs (timestamps, terminal IDs, employee IDs) only; **Roxira never stores biometric templates** (no facial, fingerprint, or voiceprint templates or raw biometric images);
 - **Voice & Telephony Data:** Spoken audio call recordings, caller metadata, and speech-to-text transcriptions generated through the telephone customer service agent.
 
 2.3. **Duration of Processing.** Processing continues for the duration of the Subscription Term until all Customer Personal Data is returned or permanently deleted in accordance with Section 8 of this DPA.
@@ -77,10 +77,7 @@ This Data Processing Agreement ("**DPA**") supplements the B2B Software-as-a-Ser
 
 5.2. **Contractual Equivalence.** Processor shall impose contractual data protection obligations upon each sub-processor that are no less protective than those set out in this DPA. Processor remains fully responsible to Customer for the performance of its sub-processors’ data protection obligations.
 
-5.3. **AI Provider Data Safety.** In production mode (`ROXIRA_AI_DATA_MODE=production`), Processor strictly routes tenant business and personal data to paid, non-logging model endpoints that explicitly guarantee:
-- Zero retention of prompts or completions for foundation model training;
-- Explicit transmission of `provider.data_collection = deny` headers;
-- Exclusion of free or public-logging endpoints from customer data pipelines.
+5.3. **AI Provider Routing & Private Data Option.** Under standard plans, Customer Data may be used to run and improve the Services, including AI models, and AI inference may route through free-tier or standard model endpoints. Where Customer purchases the paid **private data option**, Processor strictly routes Customer’s AI inference to paid model endpoints with `provider.data_collection = deny` and ensures Customer Data is not used beyond Customer’s own service.
 
 5.4. **Notification of Changes.** Processor shall provide Customer with at least fourteen (14) calendar days prior written notice of any intended appointment of a new sub-processor or substitution of an existing sub-processor. Customer may object on reasonable data protection grounds within ten (10) days of notification. If the parties cannot resolve the objection, Customer may terminate the affected Services without penalty.
 
