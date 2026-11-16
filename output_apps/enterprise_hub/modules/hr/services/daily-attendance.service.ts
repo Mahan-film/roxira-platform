@@ -129,9 +129,17 @@ export class DailyAttendanceService {
       let tardinessMinutes = 0;
 
       if (firstIn) {
-        // Standard start threshold: 08:30 Tehran time (05:00 UTC)
-        // If hour > 8 or (hour === 8 and minute > 30) in local Tehran time (UTC+3.5)
-        const tehranMinutes = (firstIn.getUTCHours() * 60 + firstIn.getUTCMinutes() + 210) % 1440;
+        // Standard start threshold: 08:30 Tehran time (Asia/Tehran)
+        // Resolves official Asia/Tehran timezone correctly accounting for historical DST and current non-DST
+        const parts = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'Asia/Tehran',
+          hour: 'numeric',
+          minute: 'numeric',
+          hour12: false,
+        }).formatToParts(firstIn);
+        const hour = parseInt(parts.find((p) => p.type === 'hour')?.value ?? '0', 10);
+        const minute = parseInt(parts.find((p) => p.type === 'minute')?.value ?? '0', 10);
+        const tehranMinutes = (hour === 24 ? 0 : hour) * 60 + minute;
         const shiftStartMinutes = 8 * 60 + 30; // 08:30
 
         if (tehranMinutes > shiftStartMinutes) {

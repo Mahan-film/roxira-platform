@@ -257,7 +257,10 @@ export default function SuiteAttendanceLeaveLoanPage() {
       let occurredAt: string | undefined = undefined;
       if (clockDate) {
         const timePart = clockTime || "08:00";
-        occurredAt = `${clockDate}T${timePart}:00.000Z`;
+        const localDate = new Date(`${clockDate}T${timePart}`);
+        occurredAt = Number.isNaN(localDate.getTime())
+          ? new Date().toISOString()
+          : localDate.toISOString();
       }
       await recordAttendanceEvent({
         employeeId: Number(clockEmployeeId),
