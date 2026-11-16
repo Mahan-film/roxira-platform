@@ -2,10 +2,12 @@ import { InvoiceResponseDto } from '../../invoicing/dto/invoice-response.dto';
 import { Currency } from '../../currency/enums/currency.enum';
 import {
   computeLineMath,
+  divRoundHalfUp,
   LINE_PRICE_EXTRA_DECIMALS,
   LINE_QUANTITY_DECIMALS,
   LINE_RATE_DECIMALS,
   LineMathResult,
+  numberToScaled,
   sumGrossMinor,
 } from '../../invoicing/services/invoice-line-math';
 
@@ -148,33 +150,44 @@ export function getJalaliYear(date: Date | string | null | undefined): number | 
 }
 
 /**
- * Validates that VAT rate corresponds to the statutory rate for the fiscal year.
- * When expectedRate is provided, matches against it (or 0 for exempt).
- * When expectedRate is omitted, accepts any valid rate between 0 and 1.
+ * Validates that VAT rate (in bigint basis points, where 1000n = 10.00%) corresponds to the
+ * statutory rate for the fiscal year.
+ * When expectedBp is provided, matches against it (or 0n for exempt).
+ * When expectedBp is omitted, accepts any valid rate between 0n and 10000n (0% to 100%).
  */
 export function validateVatRateForYear(
-  vatRate: number,
-  expectedRate?: number | null,
-): { valid: boolean; expected: number; isExempt: boolean } {
-  const rateBp = Math.round(Number(vatRate) * 10000);
-
+  rateBp: bigint,
+  expectedBp?: bigint | null,
+): { valid: boolean; expectedBp: bigint; isExempt: boolean } {
   // Zero-rated / exempt is always permissible
-  if (rateBp === 0) {
-    return { valid: true, expected: 0, isExempt: true };
+  if (rateBp === 0n) {
+    return { valid: true, expectedBp: 0n, isExempt: true };
   }
 
-  if (expectedRate !== undefined && expectedRate !== null) {
-    const expectedBp = Math.round(Number(expectedRate) * 10000);
-    const valid = rateBp === expectedBp;
-    return { valid, expected: expectedRate, isExempt: false };
+  if (expectedBp !== undefined && expectedBp !== null) {
+    return { valid: rateBp === expectedBp, expectedBp, isExempt: false };
   }
 
-  // Without a specific expected rate, accept any valid rate between 0 and 1
-  if (rateBp >= 0 && rateBp <= 10000) {
-    return { valid: true, expected: rateBp / 10000, isExempt: false };
+  // Without a specific expected rate, accept any valid rate between 0% and 100%
+  if (rateBp >= 0n && rateBp <= 10000n) {
+    return { valid: true, expectedBp: rateBp, isExempt: false };
   }
 
-  return { valid: false, expected: 0, isExempt: false };
+  return { valid: false, expectedBp: 0n, isExempt: false };
+}
+
+/** Formats bigint basis points (e.g. 1000n -> "10", 1050n -> "10.5") without float arithmetic. */
+function formatBasisPointsPercent(bp: bigint): string {
+  const negative = bp < 0n;
+  const abs = negative ? -bp : bp;
+  const whole = abs / 100n;
+  const frac = abs % 100n;
+  const sign = negative && abs !== 0n ? '-' : '';
+  if (frac === 0n) {
+    return `${sign}${whole.toString()}`;
+  }
+  const fracStr = frac.toString().padStart(2, '0').replace(/0+$/, '');
+  return `${sign}${whole.toString()}.${fracStr}`;
 }
 
 /**
@@ -190,7 +203,7 @@ export interface MoadianPreFlightOptions {
   buyerPostalCode?: string | null;
   defaultSstid?: string | null;
   itemSstids?: Array<string | null>;
-  expectedVatRate?: number | null;
+  expectedVatRate?: number | string | bigint | null;
   /** شناسه حافظه مالیاتی ۶ کاراکتری (برای خطای مودیان 0301). */
   memoryId?: string | null;
   /** شناسه یکتای مالیاتی (taxid) در صورت وجود؛ ۶ نویسه اول باید با memoryId برابر باشد (0301). */
@@ -467,6 +480,13 @@ export function runMoadianPreFlightValidation(
 
   const scale = getCurrencyScale(invoice.currency);
 
+  const expectedVatRateBp: bigint | null =
+    options?.expectedVatRate === undefined || options?.expectedVatRate === null
+      ? null
+      : typeof options.expectedVatRate === 'bigint'
+        ? options.expectedVatRate
+        : numberToScaled(options.expectedVatRate, 4);
+
   const lineMaths: LineMathResult[] = [];
   let calculatedTotalDiscountUnits = 0n;
   let calculatedTotalTaxUnits = 0n;
@@ -496,15 +516,16 @@ export function runMoadianPreFlightValidation(
 
     // Tax rate for fiscal year & exact minor-unit line math
     const vatRateUnits = amount(item.vatRate ?? 0, LINE_RATE_DECIMALS, `${fieldPrefix}.vatRate`);
-    const vatRate = vatRateUnits !== null ? Number(vatRateUnits) / 10 ** LINE_RATE_DECIMALS : 0;
     if (vatRateUnits !== null) {
-      const vatCheck = validateVatRateForYear(vatRate, options?.expectedVatRate);
+      const vatRateBp = divRoundHalfUp(vatRateUnits, 100n);
+      const vatCheck = validateVatRateForYear(vatRateBp, expectedVatRateBp);
       if (!vatCheck.valid) {
         const displayYear = jalaliYear ? toPersianDigits(jalaliYear.toString()) : '';
-        const displayExpected = toPersianDigits(Math.round(vatCheck.expected * 100).toString());
+        const displayExpected = toPersianDigits(formatBasisPointsPercent(vatCheck.expectedBp));
+        const displayActual = toPersianDigits(formatBasisPointsPercent(vatRateBp));
         errors.push({
           field: `${fieldPrefix}.vatRate`,
-          message: `سطر ${index + 1}: نرخ مالیات بر ارزش افزوده برای سال مالی ${displayYear} باید ${displayExpected}٪ (یا ۰٪ برای اقلام معاف) باشد؛ مقدار فعلی ${toPersianDigits(Math.round(vatRate * 100).toString())}٪ است.`,
+          message: `سطر ${index + 1}: نرخ مالیات بر ارزش افزوده برای سال مالی ${displayYear} باید ${displayExpected}٪ (یا ۰٪ برای اقلام معاف) باشد؛ مقدار فعلی ${displayActual}٪ است.`,
           code: 'ITEM_VAT_RATE_MISMATCH_FISCAL_YEAR',
         });
       }
@@ -539,8 +560,8 @@ export function runMoadianPreFlightValidation(
     const expectedLineTotalUnits = math.total;
 
     calculatedTotalDiscountUnits += discountUnits;
-    calculatedTotalTaxUnits += actualTaxUnits ?? expectedTaxUnits;
-    calculatedFinalPayableUnits += actualTotalUnits ?? expectedLineTotalUnits;
+    calculatedTotalTaxUnits += expectedTaxUnits;
+    calculatedFinalPayableUnits += expectedLineTotalUnits;
 
     if (actualTaxUnits !== null && actualTaxUnits !== expectedTaxUnits) {
       errors.push({
