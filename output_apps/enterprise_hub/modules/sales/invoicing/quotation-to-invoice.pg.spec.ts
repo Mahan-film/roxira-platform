@@ -1,6 +1,6 @@
 /**
  * Quotation to Sales Invoice conversion on a REAL PostgreSQL as a non-superuser role (T104):
- * - Runs migration 1789900004500 with FORCE RLS
+ * - Runs migration 1789900007500 with FORCE RLS
  * - Connects as non-superuser NOSUPERUSER NOBYPASSRLS role
  * - Enforces tenant isolation (Tenant A cannot see Tenant B's quotations)
  * - Tests 1-click conversion into sales invoice as roxira_app

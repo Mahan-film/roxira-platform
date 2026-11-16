@@ -7,8 +7,8 @@ import { enableTenantRls } from './data/tenant-rls';
  * - Expands `status` check constraint to support 'EXPIRED'
  * - Ensures FORCE RLS on `erp_sales_quotations` and `erp_sales_quotation_lines`
  */
-export class AddQuotationInvoiceConversion1789900004500 implements MigrationInterface {
-  name = 'AddQuotationInvoiceConversion1789900004500';
+export class AddQuotationInvoiceConversion1789900007500 implements MigrationInterface {
+  name = 'AddQuotationInvoiceConversion1789900007500';
 
   public async up(q: QueryRunner): Promise<void> {
     await q.query(
