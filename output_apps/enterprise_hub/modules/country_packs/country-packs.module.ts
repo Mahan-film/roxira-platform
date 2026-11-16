@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { CalendarModule } from '../calendar/calendar.module';
 import { HrModule } from '../hr/hr.module';
 import { StatutoryService } from '../hr/statutory/statutory.service';
+import { PostingRulesModule } from '../posting_rules/posting-rules.module';
 import { TenantsModule } from '../tenants/tenants.module';
 import { CURRENT_COUNTRY_PACK } from './country-pack.context';
 import { CountryPackInterceptor } from './country-pack.interceptor';
@@ -9,6 +10,7 @@ import { CountryPackRegistry } from './country-pack.registry';
 import { CountryPackResolver } from './country-pack.resolver';
 import { createIranPack } from './ir/ir.pack';
 import { createMalaysiaPack } from './my/my.pack';
+import { RailSettlementService } from './payment_rails/rail-settlement.service';
 
 export const DEFAULT_COUNTRY = 'IR';
 
@@ -20,7 +22,7 @@ export const DEFAULT_COUNTRY = 'IR';
  * The test pack is never registered here.
  */
 @Module({
-  imports: [CalendarModule, HrModule, TenantsModule],
+  imports: [CalendarModule, HrModule, TenantsModule, PostingRulesModule],
   providers: [
     {
       provide: CountryPackRegistry,
@@ -46,12 +48,14 @@ export const DEFAULT_COUNTRY = 'IR';
           },
         }),
     },
+    RailSettlementService,
   ],
   exports: [
     CountryPackRegistry,
     CountryPackResolver,
     CountryPackInterceptor,
     CURRENT_COUNTRY_PACK,
+    RailSettlementService,
   ],
 })
 export class CountryPacksModule {}

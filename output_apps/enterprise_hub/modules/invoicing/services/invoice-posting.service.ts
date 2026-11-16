@@ -17,6 +17,9 @@ import { InventoryService } from '../../inventory/services/inventory.service';
 import {
   CASH_BANK_ACCOUNT,
   COGS_ACCOUNT,
+  DUITNOW_CLEARING_ACCOUNT,
+  EWALLET_CLEARING_ACCOUNT,
+  GRABFOOD_CLEARING_ACCOUNT,
   INVENTORY_ACCOUNT,
   InvoiceAccountSpec,
   MAX_POSTING_ERROR_LENGTH,
@@ -25,7 +28,9 @@ import {
   PURCHASES_ACCOUNT,
   RECEIVABLE_ACCOUNT,
   SALES_ACCOUNT,
+  SHOPEE_CLEARING_ACCOUNT,
   SuiteInvoiceStatusEvent,
+  TIKTOK_CLEARING_ACCOUNT,
   VAT_ACCOUNT,
   VAT_RECEIVABLE_ACCOUNT,
 } from '../constants/suite-events.constants';
@@ -796,14 +801,30 @@ export class InvoicePostingService {
     stockMoves: boolean,
   ): Promise<AccountPlan> {
     const sale = this.directionOf(invoice) === InvoiceDirection.SALE;
+    const paymentMethods = (invoice.payments ?? []).map((p) => (p.method ?? '').trim().toUpperCase());
     const wanted: Array<[keyof AccountMap, InvoiceAccountSpec]> =
       phase === 'payment'
         ? [
-            ...(!invoice.payments?.length || invoice.payments.some((p) => p.method !== 'CARD')
+            ...(!paymentMethods.length || paymentMethods.some((m) => !['CARD', 'POS', 'VISA', 'MASTERCARD', 'DUITNOW', 'DUITNOW_QR', 'QR', 'EWALLET', 'TNG', 'GRABPAY', 'BOOST', 'SHOPEE', 'SHOPEEPAY', 'TIKTOK', 'TIKTOK_SHOP', 'GRABFOOD', 'GRAB'].includes(m))
               ? ([['cash', CASH_BANK_ACCOUNT]] as Array<[keyof AccountMap, InvoiceAccountSpec]>)
               : []),
-            ...(invoice.payments?.some((p) => p.method === 'CARD')
+            ...(paymentMethods.some((m) => ['CARD', 'POS', 'VISA', 'MASTERCARD'].includes(m))
               ? ([['posClearing', POS_CLEARING_ACCOUNT]] as Array<[keyof AccountMap, InvoiceAccountSpec]>)
+              : []),
+            ...(paymentMethods.some((m) => ['DUITNOW', 'DUITNOW_QR', 'QR'].includes(m))
+              ? ([['clearingDuitnow', DUITNOW_CLEARING_ACCOUNT]] as Array<[keyof AccountMap, InvoiceAccountSpec]>)
+              : []),
+            ...(paymentMethods.some((m) => ['EWALLET', 'TNG', 'GRABPAY', 'BOOST'].includes(m))
+              ? ([['clearingEwallet', EWALLET_CLEARING_ACCOUNT]] as Array<[keyof AccountMap, InvoiceAccountSpec]>)
+              : []),
+            ...(paymentMethods.some((m) => ['SHOPEE', 'SHOPEEPAY'].includes(m))
+              ? ([['clearingShopee', SHOPEE_CLEARING_ACCOUNT]] as Array<[keyof AccountMap, InvoiceAccountSpec]>)
+              : []),
+            ...(paymentMethods.some((m) => ['TIKTOK', 'TIKTOK_SHOP'].includes(m))
+              ? ([['clearingTiktok', TIKTOK_CLEARING_ACCOUNT]] as Array<[keyof AccountMap, InvoiceAccountSpec]>)
+              : []),
+            ...(paymentMethods.some((m) => ['GRABFOOD', 'GRAB'].includes(m))
+              ? ([['clearingGrabfood', GRABFOOD_CLEARING_ACCOUNT]] as Array<[keyof AccountMap, InvoiceAccountSpec]>)
               : []),
             sale ? ['receivable', RECEIVABLE_ACCOUNT] : ['payable', PAYABLE_ACCOUNT],
           ]
@@ -861,6 +882,11 @@ export class InvoicePostingService {
       purchases: ['purchases'],
       cash: ['cash'],
       posClearing: ['card'],
+      clearingDuitnow: ['duitnow'],
+      clearingEwallet: ['ewallet'],
+      clearingShopee: ['shopee'],
+      clearingTiktok: ['tiktok'],
+      clearingGrabfood: ['grabfood'],
     };
     const nonZero = (name: string) => (amounts[`${name}Dr`] ?? 0n) !== 0n || (amounts[`${name}Cr`] ?? 0n) !== 0n;
     const neededKeys: Array<keyof AccountMap> = [];
@@ -999,6 +1025,11 @@ const ROLE_LINKS: ReadonlyArray<[keyof AccountMap, PostingRole]> = [
   ['vatReceivable', 'vat_input'],
   ['cash', 'cash'],
   ['posClearing', 'pos_clearing'],
+  ['clearingDuitnow', 'clearing_duitnow'],
+  ['clearingEwallet', 'clearing_ewallet'],
+  ['clearingShopee', 'clearing_shopee'],
+  ['clearingTiktok', 'clearing_tiktok'],
+  ['clearingGrabfood', 'clearing_grabfood'],
 ];
 
 /** The planned accounts per role; `pending` ones do not exist yet and are created on first use. */
@@ -1018,4 +1049,9 @@ interface AccountMap {
   payable: string;
   vatReceivable: string;
   posClearing: string;
+  clearingDuitnow: string;
+  clearingEwallet: string;
+  clearingShopee: string;
+  clearingTiktok: string;
+  clearingGrabfood: string;
 }

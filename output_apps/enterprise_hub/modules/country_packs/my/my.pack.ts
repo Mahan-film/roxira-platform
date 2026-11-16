@@ -2,6 +2,7 @@ import {
   COUNTRY_PACK_INTERFACE_VERSION,
   ChartTemplateInfo,
   CountryPack,
+  PaymentRailConfig,
   ReportPackEntry,
   StatutoryPort,
   StatutoryValueInfo,
@@ -47,6 +48,13 @@ const chartTemplates: readonly ChartTemplateInfo[] = [
       { code: '11000', name: 'Cash and Bank Balances', accountType: 'ASSET', level: 'MOEIN', parentCode: '10000', reportLine: 'assets.current.cash' },
       { code: '11100', name: 'Petty Cash', accountType: 'ASSET', level: 'TAFSILI', parentCode: '11000', reportLine: 'assets.current.cash' },
       { code: '11200', name: 'Cash at Bank - MYR', accountType: 'ASSET', level: 'TAFSILI', parentCode: '11000', reportLine: 'assets.current.cash' },
+      { code: '11300', name: 'Payment Clearing Accounts', accountType: 'ASSET', level: 'MOEIN', parentCode: '10000', reportLine: 'assets.current.cash' },
+      { code: '11310', name: 'Card Clearing', accountType: 'ASSET', level: 'TAFSILI', parentCode: '11300', reportLine: 'assets.current.cash' },
+      { code: '11320', name: 'DuitNow QR Clearing', accountType: 'ASSET', level: 'TAFSILI', parentCode: '11300', reportLine: 'assets.current.cash' },
+      { code: '11330', name: 'eWallet Clearing', accountType: 'ASSET', level: 'TAFSILI', parentCode: '11300', reportLine: 'assets.current.cash' },
+      { code: '11340', name: 'Marketplace Clearing - Shopee', accountType: 'ASSET', level: 'TAFSILI', parentCode: '11300', reportLine: 'assets.current.cash' },
+      { code: '11350', name: 'Marketplace Clearing - TikTok Shop', accountType: 'ASSET', level: 'TAFSILI', parentCode: '11300', reportLine: 'assets.current.cash' },
+      { code: '11360', name: 'Delivery Clearing - GrabFood', accountType: 'ASSET', level: 'TAFSILI', parentCode: '11300', reportLine: 'assets.current.cash' },
       { code: '12000', name: 'Trade and Other Receivables', accountType: 'ASSET', level: 'MOEIN', parentCode: '10000', reportLine: 'assets.current.receivables' },
       { code: '12100', name: 'Trade Debtors (Accounts Receivable)', accountType: 'ASSET', level: 'TAFSILI', parentCode: '12000', reportLine: 'assets.current.receivables' },
       { code: '12200', name: 'Other Debtors & Deposits', accountType: 'ASSET', level: 'TAFSILI', parentCode: '12000', reportLine: 'assets.current.receivables' },
@@ -120,6 +128,8 @@ const chartTemplates: readonly ChartTemplateInfo[] = [
       { code: '62300', name: 'Telephone and Internet', accountType: 'EXPENSE', level: 'TAFSILI', parentCode: '62000', reportLine: 'expenses.admin' },
       { code: '62400', name: 'Depreciation Expense', accountType: 'EXPENSE', level: 'TAFSILI', parentCode: '62000', reportLine: 'expenses.admin' },
       { code: '62500', name: 'Bank Charges and Commission', accountType: 'EXPENSE', level: 'TAFSILI', parentCode: '62000', reportLine: 'expenses.admin' },
+      { code: '62510', name: 'Payment Gateway & Card Merchant Fees', accountType: 'EXPENSE', level: 'TAFSILI', parentCode: '62000', reportLine: 'expenses.admin' },
+      { code: '62520', name: 'Marketplace & Platform Commissions', accountType: 'EXPENSE', level: 'TAFSILI', parentCode: '62000', reportLine: 'expenses.admin' },
       { code: '62600', name: 'Professional and Legal Fees', accountType: 'EXPENSE', level: 'TAFSILI', parentCode: '62000', reportLine: 'expenses.admin' },
       { code: '63000', name: 'Selling and Marketing Expenses', accountType: 'EXPENSE', level: 'MOEIN', parentCode: '60000', reportLine: 'expenses.marketing' },
       { code: '63100', name: 'Advertising and Promotion', accountType: 'EXPENSE', level: 'TAFSILI', parentCode: '63000', reportLine: 'expenses.marketing' },
@@ -171,6 +181,72 @@ const reportPack: readonly ReportPackEntry[] = [
 ];
 
 /**
+ * Malaysian Payment Rails (T156):
+ * Configures the standard payment rails (Card/POS, DuitNow QR, eWallets, Shopee, TikTok Shop, GrabFood)
+ * and routes them to their dedicated clearing accounts and fee/commission accounts in the MPERS chart.
+ */
+export const MALAYSIA_PAYMENT_RAILS: readonly PaymentRailConfig[] = [
+  {
+    id: 'card',
+    name: 'Card / POS Terminal',
+    methods: ['CARD', 'VISA', 'MASTERCARD'],
+    clearingRole: 'clearing_card',
+    defaultAccountCode: '11310',
+    feeRole: 'payment_fee',
+    commissionRole: 'platform_commission',
+    taxRole: 'vat_input',
+  },
+  {
+    id: 'duitnow',
+    name: 'DuitNow QR',
+    methods: ['DUITNOW', 'DUITNOW_QR', 'QR'],
+    clearingRole: 'clearing_duitnow',
+    defaultAccountCode: '11320',
+    feeRole: 'payment_fee',
+    taxRole: 'vat_input',
+  },
+  {
+    id: 'ewallet',
+    name: 'eWallet (Touch n Go / GrabPay / Boost)',
+    methods: ['EWALLET', 'TNG', 'GRABPAY', 'BOOST'],
+    clearingRole: 'clearing_ewallet',
+    defaultAccountCode: '11330',
+    feeRole: 'payment_fee',
+    taxRole: 'vat_input',
+  },
+  {
+    id: 'shopee',
+    name: 'Shopee Marketplace',
+    methods: ['SHOPEE', 'SHOPEEPAY'],
+    clearingRole: 'clearing_shopee',
+    defaultAccountCode: '11340',
+    feeRole: 'payment_fee',
+    commissionRole: 'platform_commission',
+    taxRole: 'vat_input',
+  },
+  {
+    id: 'tiktok',
+    name: 'TikTok Shop',
+    methods: ['TIKTOK', 'TIKTOK_SHOP'],
+    clearingRole: 'clearing_tiktok',
+    defaultAccountCode: '11350',
+    feeRole: 'payment_fee',
+    commissionRole: 'platform_commission',
+    taxRole: 'vat_input',
+  },
+  {
+    id: 'grabfood',
+    name: 'GrabFood Delivery',
+    methods: ['GRABFOOD', 'GRAB'],
+    clearingRole: 'clearing_grabfood',
+    defaultAccountCode: '11360',
+    feeRole: 'payment_fee',
+    commissionRole: 'platform_commission',
+    taxRole: 'vat_input',
+  },
+];
+
+/**
  * Malaysian Country Pack Skeleton (docs/strategy/research/R4_COUNTRY_PACKS.md).
  *
  * Implements the standard metadata, Gregorian calendar, MPERS-compliant SME chart,
@@ -214,6 +290,7 @@ export function createMalaysiaPack(): CountryPack {
     chartTemplates,
     taxRules,
     statutory,
+    paymentRails: MALAYSIA_PAYMENT_RAILS,
     // eInvoice and payroll adapters are undefined until network adapters land in WAVE 16+
     eInvoice: undefined,
     payroll: undefined,
