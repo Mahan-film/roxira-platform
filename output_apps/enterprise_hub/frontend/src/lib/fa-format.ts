@@ -118,8 +118,11 @@ function toPersianDigits(text: string): string {
  * Hundredths of a rial of a number or a decimal string, exact for strings beyond the safe number range.
  * Returns null for anything that is not a finite amount.
  */
-function toCents(value: number | string | null | undefined): bigint | null {
+function toCents(value: number | string | bigint | null | undefined): bigint | null {
   if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "bigint") {
+    return value;
+  }
   if (typeof value === "number") {
     if (!Number.isFinite(value)) return null;
     return BigInt(Math.round(value * 100));
@@ -156,7 +159,7 @@ export interface AmountOptions {
  * `unit` is the display unit the viewer chose. Missing or invalid values show «—».
  */
 export function formatAmount(
-  value: number | string | null | undefined,
+  value: number | string | bigint | null | undefined,
   unit: MoneyUnit = "rial",
   options: AmountOptions = {},
 ): string {
@@ -187,7 +190,7 @@ export function formatAmount(
  * Accounting style: negatives in brackets, no unit word (the report header names the unit).
  */
 export function formatReportMoney(
-  value: number | string | null | undefined,
+  value: number | string | bigint | null | undefined,
   unit: MoneyUnit = "rial",
 ): string {
   return formatAmount(value, unit, { suffix: false, brackets: true });

@@ -20,7 +20,7 @@ import {
 import { ErrorNotice, LoadingLine, PageHeader } from "@/components/app/app-ui";
 import { EnterpriseRouteGuard } from "@/components/auth/enterprise-route-guard";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { JalaliDateInput } from "@/components/ui/jalali-date-input";
@@ -246,6 +246,10 @@ export default function TreasurySettlementPage() {
         icon={<Receipt className="size-6 text-blue-600" />}
         actions={
           <div className="flex items-center gap-2">
+            <Link href="/app/money" className={buttonVariants({ variant: "outline", size: "sm" })}>
+              <Landmark className="size-4 ml-1.5" />
+              مرکز نقد و بانک
+            </Link>
             {mode === "list" ? (
               <Button size="sm" onClick={() => setMode("create")}>
                 <Plus className="size-4 ml-1.5" />

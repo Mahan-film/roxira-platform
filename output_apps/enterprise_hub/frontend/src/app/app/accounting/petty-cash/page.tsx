@@ -7,12 +7,12 @@ export default function AccountingPettyCashRedirect() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace("/app/treasury/petty-cash");
+    router.replace("/app/money?tab=petty-cash");
   }, [router]);
 
   return (
     <div className="flex h-64 items-center justify-center text-muted-foreground text-sm">
-      در حال انتقال به صفحه صندوق و تنخواه در خزانه‌داری...
+      در حال انتقال به مرکز نقد و بانک (تنخواه‌گردان)...
     </div>
   );
 }
