@@ -35,6 +35,13 @@ export const MENU_GROUPS: MenuGroup[] = [
     items: [
       { href: "/app", label: "پیشخوان", icon: "LayoutDashboard" },
       {
+        href: "/app/onboarding",
+        label: "راه‌اندازی شرکت",
+        icon: "ClipboardList",
+        module: "members",
+        keywords: ["onboarding", "setup", "wizard", "شروع", "راه‌اندازی", "سال مالی", "سرفصل"],
+      },
+      {
         href: "/app/assistant",
         label: "دستیار هوشمند",
         icon: "MessageSquareText",
