@@ -8,8 +8,8 @@ import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
  * tenant_id is mandatory and the table has FORCE RLS (AGENTS.md section 4).
  * Retention is governed by expires_at (90 days from creation) and cleaned up via periodic purge.
  */
-export class CreateAiInteractions1789900005500 implements MigrationInterface {
-  name = 'CreateAiInteractions1789900005500';
+export class CreateAiInteractions1789900009100 implements MigrationInterface {
+  name = 'CreateAiInteractions1789900009100';
 
   public async up(q: QueryRunner): Promise<void> {
     await q.query(`
