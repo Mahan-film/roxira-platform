@@ -76,88 +76,99 @@ export class QuotationToInvoiceService {
     dto?: ConvertQuotationToInvoiceDto,
     userId?: string,
   ): Promise<ConvertQuotationToInvoiceResponseDto> {
-    return this.salesRepository.runInTransaction(tenantId, async (manager) => {
-      const quotationRepo = manager.getRepository(SalesQuotationEntity);
-      const quotationLineRepo = manager.getRepository(SalesQuotationLineEntity);
+    let expiredTarget = false;
+    try {
+      return await this.salesRepository.runInTransaction(tenantId, async (manager) => {
+        const quotationRepo = manager.getRepository(SalesQuotationEntity);
+        const quotationLineRepo = manager.getRepository(SalesQuotationLineEntity);
 
-      // Lock quotation FOR UPDATE
-      const quotation = await quotationRepo.findOne({
-        where: { tenantId, id: quotationId },
-        lock: { mode: 'pessimistic_write' },
-      });
+        // Lock quotation FOR UPDATE
+        const quotation = await quotationRepo.findOne({
+          where: { tenantId, id: quotationId },
+          lock: { mode: 'pessimistic_write' },
+        });
 
-      if (!quotation) {
-        throw new NotFoundException(QUOTATION_NOT_FOUND);
-      }
+        if (!quotation) {
+          throw new NotFoundException(QUOTATION_NOT_FOUND);
+        }
 
-      // Request fingerprint for idempotency check (Rule 18)
-      const requestPayload = {
-        quotationId,
-        partyCode: quotation.partyCode,
-        invoiceDate: dto?.invoiceDate ?? null,
-        status: dto?.status ?? null,
-        taxInvoiceNumber: dto?.taxInvoiceNumber ?? null,
-        warehouseId: dto?.warehouseId ?? null,
-      };
-      const requestHash = crypto
-        .createHash('sha256')
-        .update(JSON.stringify(requestPayload))
-        .digest('hex');
+        // Request fingerprint for idempotency check (Rule 18)
+        const requestPayload = {
+          quotationId,
+          partyCode: quotation.partyCode,
+          invoiceDate: dto?.invoiceDate ?? null,
+          status: dto?.status ?? null,
+          taxInvoiceNumber: dto?.taxInvoiceNumber ?? null,
+          warehouseId: dto?.warehouseId ?? null,
+        };
+        const requestHash = crypto
+          .createHash('sha256')
+          .update(JSON.stringify(requestPayload))
+          .digest('hex');
 
-      // Check if already converted (idempotency guard)
-      if (
-        quotation.status === SalesQuotationStatus.CONVERTED ||
-        quotation.convertedInvoiceId !== null
-      ) {
-        if (dto?.idempotencyKey && quotation.convertedInvoiceId) {
-          const invoice = await this.invoicingRepository.findById(
-            tenantId,
-            quotation.convertedInvoiceId,
-          );
-          if (!invoice) {
-            throw new NotFoundException(INVOICE_NOT_FOUND);
-          }
-          if (invoice.requestHash && invoice.requestHash !== requestHash) {
-            throw new ConflictException(
-              `Idempotency-Key "${dto.idempotencyKey}" was already used with a different conversion payload.`,
+        // Check if already converted (idempotency guard)
+        if (
+          quotation.status === SalesQuotationStatus.CONVERTED ||
+          quotation.convertedInvoiceId !== null
+        ) {
+          if (dto?.idempotencyKey && quotation.convertedInvoiceId) {
+            const invoice = await this.invoicingRepository.findById(
+              tenantId,
+              quotation.convertedInvoiceId,
+            );
+            if (!invoice) {
+              throw new NotFoundException(INVOICE_NOT_FOUND);
+            }
+            if (invoice.requestHash && invoice.requestHash !== requestHash) {
+              throw new ConflictException(
+                `Idempotency-Key "${dto.idempotencyKey}" was already used with a different conversion payload.`,
+              );
+            }
+            return this.replayConvertedInvoice(
+              tenantId,
+              quotation,
+              invoice,
             );
           }
-          return this.replayConvertedInvoice(
-            tenantId,
-            quotation,
-            invoice,
-          );
+          throw new ConflictException(ALREADY_CONVERTED);
         }
-        throw new ConflictException(ALREADY_CONVERTED);
-      }
 
-      // Check terminal or invalid states
-      if (quotation.status === SalesQuotationStatus.REJECTED) {
-        throw new BadRequestException(QUOTATION_REJECTED);
-      }
-      if (quotation.status === SalesQuotationStatus.EXPIRED) {
-        throw new BadRequestException(QUOTATION_EXPIRED);
-      }
-      if (!QUOTATION_INVOICE_CONVERTIBLE.includes(quotation.status)) {
-        throw new BadRequestException(QUOTATION_NOT_CONVERTIBLE);
-      }
+        // Check terminal or invalid states
+        if (quotation.status === SalesQuotationStatus.REJECTED) {
+          throw new BadRequestException(QUOTATION_REJECTED);
+        }
+        if (quotation.status === SalesQuotationStatus.EXPIRED) {
+          throw new BadRequestException(QUOTATION_EXPIRED);
+        }
+        if (!QUOTATION_INVOICE_CONVERTIBLE.includes(quotation.status)) {
+          throw new BadRequestException(QUOTATION_NOT_CONVERTIBLE);
+        }
 
-      // Check validity / expiry date and bounds
-      const today = tehranIsoDate(new Date());
-      const effectiveDate = dto?.invoiceDate ?? today;
-      if (effectiveDate < quotation.quoteDate) {
-        throw new BadRequestException('تاریخ صدور صورتحساب نمی‌تواند قبل از تاریخ پیش‌فاکتور باشد.');
-      }
-      if (effectiveDate > today) {
-        throw new BadRequestException('تاریخ صدور صورتحساب نمی‌تواند در آینده باشد.');
-      }
-      if (quotation.validUntil && quotation.validUntil < effectiveDate) {
-        await quotationRepo.update(
-          { tenantId, id: quotationId },
-          { status: SalesQuotationStatus.EXPIRED },
-        );
-        throw new BadRequestException(QUOTATION_EXPIRED);
-      }
+        // Check validity / expiry date and bounds
+        const today = tehranIsoDate(new Date());
+        const effectiveDate = dto?.invoiceDate ?? today;
+        const quoteDateRaw = quotation.quoteDate as unknown;
+        const validUntilRaw = quotation.validUntil as unknown;
+        const quoteDateIso =
+          quoteDateRaw instanceof Date
+            ? tehranIsoDate(quoteDateRaw)
+            : String(quotation.quoteDate).slice(0, 10);
+        const validUntilIso = quotation.validUntil
+          ? validUntilRaw instanceof Date
+            ? tehranIsoDate(validUntilRaw)
+            : String(quotation.validUntil).slice(0, 10)
+          : null;
+
+        if (effectiveDate < quoteDateIso) {
+          throw new BadRequestException('تاریخ صدور صورتحساب نمی‌تواند قبل از تاریخ پیش‌فاکتور باشد.');
+        }
+        if (effectiveDate > today) {
+          throw new BadRequestException('تاریخ صدور صورتحساب نمی‌تواند در آینده باشد.');
+        }
+        if (validUntilIso && validUntilIso < effectiveDate) {
+          expiredTarget = true;
+          throw new BadRequestException(QUOTATION_EXPIRED);
+        }
 
       // Load quotation lines
       const quotationLines = await quotationLineRepo.find({
@@ -196,16 +207,18 @@ export class QuotationToInvoiceService {
         throw new BadRequestException('سرویس محاسبه نرخ مالیات بر ارزش افزوده در دسترس نیست.');
       }
 
-      // Prepare invoice items with exact minor conversion (Rule 8)
+      // Prepare invoice items with exact minor conversion for InvoicingService
       const invoiceItems = quotationLines.map((line) => {
         const unitPriceMinor = toMinor(line.unitPrice);
         const discountMinor = line.discount ? toMinor(line.discount) : 0n;
+        const unitPriceVal = fromMinor(unitPriceMinor);
+        const discountVal = discountMinor > 0n ? fromMinor(discountMinor) : 0;
         return {
           itemId: line.itemId > 0 ? line.itemId : undefined,
           description: line.description?.trim() || `کالای ردیف ${line.lineNo}`,
           quantity: Number(line.quantity),
-          unitPrice: fromMinor(unitPriceMinor) as number,
-          discount: discountMinor > 0n ? (fromMinor(discountMinor) as number) : 0,
+          unitPrice: typeof unitPriceVal === 'number' ? unitPriceVal : Number(unitPriceVal),
+          discount: typeof discountVal === 'number' ? discountVal : Number(discountVal),
           vatRate,
         };
       });
@@ -260,6 +273,17 @@ export class QuotationToInvoiceService {
         invoice: createdInvoice,
       };
     });
+    } catch (err) {
+      if (expiredTarget) {
+        await this.salesRepository.runInTransaction(tenantId, async (m) => {
+          await m.getRepository(SalesQuotationEntity).update(
+            { tenantId, id: quotationId },
+            { status: SalesQuotationStatus.EXPIRED },
+          );
+        });
+      }
+      throw err;
+    }
   }
 
   private async replayConvertedInvoice(
