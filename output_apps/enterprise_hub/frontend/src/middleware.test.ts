@@ -1,7 +1,7 @@
 // Run: npx tsx --test src/middleware.test.ts
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { NextRequest } from "next/server";
+import { NextRequest } from "next/server.js";
 
 import { middleware } from "./middleware.ts";
 
@@ -32,3 +32,14 @@ test("roxira.ir keeps serving /app; the Smart Judge domain sends /app to roxira.
   assert.equal(location(call("roxira.ir", "/app")), null);
   assert.equal(location(call("ghazihoushmand.ir", "/app")), "https://roxira.ir/app");
 });
+
+test("roxira.ir redirects legacy pre-shell routes to /app/...", () => {
+  assert.equal(location(call("roxira.ir", "/accounting")), "https://roxira.ir/app/accounting");
+  assert.equal(location(call("roxira.ir", "/inventory")), "https://roxira.ir/app/inventory");
+  assert.equal(location(call("roxira.ir", "/crm")), "https://roxira.ir/app/crm");
+  assert.equal(location(call("roxira.ir", "/crm/import")), "https://roxira.ir/app/import");
+  assert.equal(location(call("roxira.ir", "/hr")), "https://roxira.ir/app/hr");
+  assert.equal(location(call("roxira.ir", "/invoicing")), "https://roxira.ir/app/invoicing");
+  assert.equal(location(call("roxira.ir", "/invoicing/pos")), "https://roxira.ir/app/invoicing/pos");
+});
+

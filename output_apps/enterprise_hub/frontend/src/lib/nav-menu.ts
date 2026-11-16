@@ -15,46 +15,37 @@ export interface MenuGroup {
   items: MenuLeaf[];
 }
 
+/**
+ * Seven-hub architecture (WAVE 14 / R1 Product UX Reset):
+ * 1. خانه (Home)
+ * 2. فروش (Sales)
+ * 3. خرید و انبار (Purchases & Stock)
+ * 4. پول (Money - /app/money)
+ * 5. کارکنان (People)
+ * 6. حسابداری و مالیات (Accounting & Tax)
+ * 7. گزارش‌ها (Reports)
+ *
+ * Footer: تنظیمات (Settings - /app/settings)
+ */
 export const MENU_GROUPS: MenuGroup[] = [
   {
-    id: "dashboard",
-    label: "پیشخوان",
-    icon: "LayoutDashboard",
+    id: "home",
+    label: "خانه",
+    icon: "Home",
     items: [
-      { href: "/app", label: "داشبورد", icon: "LayoutDashboard" },
+      { href: "/app", label: "پیشخوان", icon: "LayoutDashboard" },
       {
         href: "/app/assistant",
         label: "دستیار هوشمند",
         icon: "MessageSquareText",
         module: "assistant",
-        keywords: ["ai", "دستیار"],
-      },
-    ],
-  },
-  {
-    id: "parties",
-    label: "طرف‌حساب‌ها و کالاها",
-    icon: "Contact",
-    items: [
-      {
-        href: "/app/crm",
-        label: "مشتریان و طرف‌حساب‌ها",
-        icon: "Contact",
-        module: "crm",
-        keywords: ["customer", "lead", "مشتری", "سرنخ"],
-      },
-      {
-        href: "/app/import",
-        label: "ورود اطلاعات",
-        icon: "FileUp",
-        module: "data_import",
-        keywords: ["import", "excel", "csv", "pdf", "sql", "اکسل", "ورود", "انتقال"],
+        keywords: ["ai", "دستیار", "chat", "هوش مصنوعی"],
       },
     ],
   },
   {
     id: "sales",
-    label: "فروش و پایانه فروشگاهی",
+    label: "فروش",
     icon: "ShoppingCart",
     items: [
       {
@@ -62,7 +53,7 @@ export const MENU_GROUPS: MenuGroup[] = [
         label: "صورتحساب‌ها",
         icon: "ReceiptText",
         module: "invoicing",
-        keywords: ["invoice", "فاکتور"],
+        keywords: ["invoice", "فاکتور", "پیش‌فاکتور", "quotes", "مرجوعی", "returns", "صورتحساب"],
       },
       {
         href: "/app/invoicing/pos",
@@ -71,29 +62,30 @@ export const MENU_GROUPS: MenuGroup[] = [
         module: "invoicing",
         keywords: ["pos", "صندوق", "فروش سریع", "آفلاین"],
       },
+      {
+        href: "/app/crm",
+        label: "مشتریان و طرف‌حساب‌ها",
+        icon: "Contact",
+        module: "crm",
+        keywords: ["customer", "lead", "مشتری", "سرنخ", "crm"],
+      },
     ],
   },
   {
-    id: "purchase",
-    label: "خرید و هزینه‌ها",
-    icon: "Wallet",
-    items: [],
-  },
-  {
-    id: "stock",
-    label: "انبارداری",
+    id: "purchase-stock",
+    label: "خرید و انبار",
     icon: "Boxes",
     items: [
       {
         href: "/app/inventory",
-        label: "کالا و موجودی",
+        label: "کالا و انبارداری",
         icon: "Warehouse",
         module: "inventory",
-        keywords: ["stock", "warehouse", "کالا", "انبار", "موجودی"],
+        keywords: ["stock", "warehouse", "کالا", "انبار", "موجودی", "رسید", "خرید", "هزینه"],
       },
       {
         href: "/app/inventory/production",
-        label: "فرمول ساخت و تولید (BOM)",
+        label: "فرمول ساخت و تولید",
         icon: "Factory",
         module: "inventory",
         keywords: ["bom", "production", "تولید", "فرمول ساخت", "ضایعات"],
@@ -101,41 +93,57 @@ export const MENU_GROUPS: MenuGroup[] = [
     ],
   },
   {
-    id: "treasury",
-    label: "خزانه‌داری",
+    id: "money",
+    label: "پول",
     icon: "Landmark",
     items: [
       {
-        href: "/app/accounting/bank",
-        label: "حساب‌های بانکی",
-        icon: "Building2",
+        href: "/app/money",
+        label: "مدیریت وجوه و خزانه‌داری",
+        icon: "Landmark",
         module: "banking",
-      },
-      { href: "/app/cheques", label: "چک‌ها", icon: "Banknote", module: "cheques" },
-      {
-        href: "/app/damages",
-        label: "خسارت تاخیر تادیه",
-        icon: "ShieldAlert",
-        module: "damages",
-        keywords: ["damages", "late payment", "خسارت", "تاخیر", "تأخیر", "ماده ۵۲۲"],
-      },
-      {
-        href: "/app/treasury/petty-cash",
-        label: "صندوق و تنخواه",
-        icon: "Wallet",
-        module: "accounting",
-      },
-      {
-        href: "/app/treasury/sms",
-        label: "پیامک‌های بانکی",
-        icon: "MessageSquareText",
-        module: "banking",
+        keywords: ["money", "بانک", "چک", "صندوق", "تنخواه", "خسارت", "پول", "خزانه‌داری"],
       },
     ],
   },
   {
-    id: "accounting",
-    label: "حسابداری و اموال",
+    id: "people",
+    label: "کارکنان",
+    icon: "UsersRound",
+    items: [
+      {
+        href: "/app/hr",
+        label: "پرسنل و احکام",
+        icon: "UsersRound",
+        module: "hr",
+        keywords: ["پرسنل", "کارمند", "استخدام", "قرارداد", "احکام", "مرخصی"],
+      },
+      {
+        href: "/app/hr/attendance",
+        label: "کارکرد و تردد",
+        icon: "CalendarCheck",
+        module: "hr",
+        keywords: ["کارکرد", "تردد", "حضور و غیاب", "ساعت کار", "شیفت"],
+      },
+      {
+        href: "/app/hr/payroll",
+        label: "حقوق ماهانه",
+        icon: "Calculator",
+        module: "hr",
+        keywords: ["حقوق", "دستمزد", "فیش", "payroll"],
+      },
+      {
+        href: "/app/hr/statutory",
+        label: "بیمه و مالیات حقوق",
+        icon: "ClipboardList",
+        module: "hr",
+        keywords: ["بیمه", "مالیات حقوق", "تامین اجتماعی"],
+      },
+    ],
+  },
+  {
+    id: "accounting-tax",
+    label: "حسابداری و مالیات",
     icon: "BookOpenCheck",
     items: [
       {
@@ -146,13 +154,6 @@ export const MENU_GROUPS: MenuGroup[] = [
         keywords: ["voucher", "journal", "سند", "دفتر روزنامه"],
       },
       {
-        href: "/app/accounting/review",
-        label: "مرور حساب‌ها",
-        icon: "ListTree",
-        module: "accounting",
-        keywords: ["review", "drilldown", "مرور", "تراز", "معین", "تفصیلی", "دفتر کل"],
-      },
-      {
         href: "/app/accounting/chart",
         label: "درخت حساب‌ها",
         icon: "BookOpenCheck",
@@ -160,142 +161,96 @@ export const MENU_GROUPS: MenuGroup[] = [
         keywords: ["chart", "ledger", "tree", "سرفصل", "کدینگ", "تراز"],
       },
       {
-        href: "/app/accounting/dashboard",
-        label: "داشبورد مدیریتی",
-        icon: "ChartColumn",
-        module: "accounting",
-      },
-      {
         href: "/app/accounting/fiscal-years",
-        label: "سال مالی و سرفصل",
-        icon: "CalendarRange",
+        label: "سال‌های مالی",
+        icon: "Calendar",
         module: "accounting",
+        keywords: ["fiscal", "year", "سال مالی", "دوره مالی", "بستن حساب"],
       },
       {
         href: "/app/accounting/recurring-vouchers",
-        label: "اسناد دوره‌ای",
-        icon: "ReceiptText",
+        label: "اسناد مکرر",
+        icon: "RotateCcw",
         module: "accounting",
+        keywords: ["recurring", "اسناد مکرر", "الگوی سند", "خودکار"],
       },
       {
         href: "/app/accounting/fixed-assets",
-        label: "دارایی‌های ثابت",
-        icon: "Building2",
+        label: "اموال و دارایی‌های ثابت",
+        icon: "Building",
         module: "accounting",
+        keywords: ["assets", "اموال", "دارایی", "استهلاک", "پلاک"],
+      },
+      {
+        href: "/app/accounting/dimensions",
+        label: "تفصیلی شناور و مراکز",
+        icon: "Layers",
+        module: "accounting",
+        keywords: ["dimension", "مرکز هزینه", "پروژه", "تفصیلی شناور"],
       },
       {
         href: "/app/contracting",
-        label: "قراردادها و پروژه‌ها",
-        icon: "ClipboardList",
+        label: "پروژه‌ها و قراردادها",
+        icon: "Briefcase",
         module: "accounting",
-      },
-    ],
-  },
-  {
-    id: "payroll",
-    label: "حقوق و دستمزد",
-    icon: "UsersRound",
-    items: [
-      { href: "/app/hr", label: "کارکنان", icon: "UsersRound", module: "hr", keywords: ["employee", "کارمند", "پرسنل"] },
-      {
-        href: "/app/hr/attendance",
-        label: "کارکرد، مرخصی و وام",
-        icon: "CalendarCheck",
-        module: "hr",
-        keywords: ["attendance", "leave", "loan", "کارکرد", "مرخصی", "وام", "مساعده"],
+        keywords: ["contract", "پیمانکاری", "قرارداد", "پروژه"],
       },
       {
-        href: "/app/hr/payroll",
-        label: "حقوق ماهانه",
-        icon: "Calculator",
-        module: "hr",
+        href: "/app/tax",
+        label: "مالیات و مودیان",
+        icon: "Landmark",
+        module: "tax",
+        keywords: ["سامانه مودیان", "مالیات", "ارزش افزوده", "صورتحساب الکترونیکی"],
       },
-      {
-        href: "/app/hr/statutory",
-        label: "بیمه و مالیات حقوق",
-        icon: "ClipboardList",
-        module: "hr",
-      },
-    ],
-  },
-  {
-    id: "tax",
-    label: "مالیات",
-    icon: "Landmark",
-    items: [
-      { href: "/app/tax", label: "مالیات و مودیان", icon: "Landmark", module: "tax" },
       {
         href: "/app/tax/electronic-books",
         label: "دفاتر تجاری الکترونیکی",
-        icon: "BookOpenCheck",
+        icon: "FileSpreadsheet",
         module: "tax",
+        keywords: ["دفاتر الکترونیک", "دفتر کل", "دفتر روزنامه", "سامانه ثبت دفاتر"],
       },
-      { href: "/app/tax/kartable", label: "تطبیق کارپوشه مودیان", icon: "ClipboardList", module: "tax" },
     ],
   },
   {
-    id: "reports-settings",
-    label: "گزارش‌ها و تنظیمات",
-    icon: "Settings",
+    id: "reports",
+    label: "گزارش‌ها",
+    icon: "ChartColumn",
     items: [
       {
         href: "/app/reports",
-        label: "گزارش‌ها",
+        label: "مرکز گزارش‌ها",
         icon: "ChartColumn",
         module: "accounting",
+        keywords: [
+          "reports",
+          "صورت‌های مالی",
+          "ترازنامه",
+          "سود و زیان",
+          "دفاتر",
+          "تلفیقی",
+          "مراکز هزینه",
+          "بودجه",
+          "پژوهش حقوقی",
+        ],
       },
       {
         href: "/app/accounting/report-builder",
         label: "گزارش‌ساز",
-        icon: "ChartColumn",
+        icon: "FileSpreadsheet",
         module: "accounting",
-        keywords: ["report builder", "custom report", "گزارش سفارشی", "تلفیقی"],
-      },
-      {
-        href: "/app/settings/members",
-        label: "اعضا و نقش‌ها",
-        icon: "Settings",
-        module: "members",
-      },
-      {
-        href: "/app/settings/modules",
-        label: "ماژول‌ها",
-        icon: "Puzzle",
-        module: "members",
-      },
-      {
-        href: "/app/settings/posting-rules",
-        label: "ثبت خودکار سند",
-        icon: "Workflow",
-        module: "accounting",
-      },
-      {
-        href: "/app/settings/policies",
-        label: "قواعد سازمان",
-        icon: "Settings",
-        module: "members",
-      },
-      {
-        href: "/app/settings/integrations/receipt-bot",
-        label: "بات دریافت رسید",
-        icon: "Bot",
-        module: "accounting",
-        keywords: ["telegram", "bot", "تلگرام", "رسید", "بات"],
-      },
-      {
-        href: "/app/settings/audit",
-        label: "گزارش رخدادها",
-        icon: "ClipboardList",
-        module: "audit",
-      },
-      {
-        href: "/app/settings/security",
-        label: "امنیت حساب",
-        icon: "ShieldCheck",
+        keywords: ["builder", "custom report", "گزارش سفارشی", "گزارش‌ساز"],
       },
     ],
   },
 ];
+
+/** Pinned settings hub in the shell footer. */
+export const SETTINGS_ITEM: MenuLeaf = {
+  href: "/app/settings",
+  label: "تنظیمات",
+  icon: "Settings",
+  keywords: ["تنظیمات", "اعضا", "نقش‌ها", "امنیت", "settings", "ماژول‌ها", "ورود اطلاعات"],
+};
 
 export const OPERATOR_ITEMS: MenuLeaf[] = [
   { href: "/app/admin/entitlements", label: "ماژول‌های مشتریان", icon: "KeyRound" },
@@ -313,15 +268,6 @@ export interface QuickCreate {
 
 export const QUICK_CREATE: QuickCreate[] = [
   {
-    id: "new-lead",
-    label: "سرنخ جدید",
-    href: "/app/crm?new=1",
-    module: "crm",
-    action: "create",
-    keywords: ["مشتری جدید", "سرنخ", "new customer", "crm", "lead"],
-    icon: "UserPlus",
-  },
-  {
     id: "new-invoice",
     label: "صورتحساب جدید",
     href: "/app/invoicing?new=1",
@@ -329,6 +275,24 @@ export const QUICK_CREATE: QuickCreate[] = [
     action: "create",
     keywords: ["فاکتور جدید", "صدور", "new bill", "invoice"],
     icon: "Plus",
+  },
+  {
+    id: "new-voucher",
+    label: "سند حسابداری جدید",
+    href: "/app/accounting/vouchers?new=1",
+    module: "accounting",
+    action: "create",
+    keywords: ["سند جدید", "ثبت سند", "voucher", "journal"],
+    icon: "ReceiptText",
+  },
+  {
+    id: "new-lead",
+    label: "سرنخ جدید",
+    href: "/app/crm?new=1",
+    module: "crm",
+    action: "create",
+    keywords: ["مشتری جدید", "سرنخ", "new customer", "crm", "lead"],
+    icon: "UserPlus",
   },
   {
     id: "new-employee",

@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server.js";
 
 /**
  * تفکیک دامنه‌ای لایه UI/UX:
@@ -152,6 +152,26 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // هدایت مسیرهای قدیمی پیش از اپ‌شل به مسیرهای مدرن /app/... (WAVE 13 / T106)
+  if (hasPrefix(pathname, "/crm/import")) {
+    const url = request.nextUrl.clone();
+    url.pathname = pathname.replace(/^\/crm\/import/, "/app/import");
+    return NextResponse.redirect(url);
+  }
+  for (const [legacy, target] of Object.entries({
+    "/accounting": "/app/accounting",
+    "/inventory": "/app/inventory",
+    "/crm": "/app/crm",
+    "/hr": "/app/hr",
+    "/invoicing": "/app/invoicing",
+  })) {
+    if (hasPrefix(pathname, legacy)) {
+      const url = request.nextUrl.clone();
+      url.pathname = pathname.replace(new RegExp(`^${legacy}`), target);
+      return NextResponse.redirect(url);
+    }
+  }
+
   // roxira.ir و IP: پورتال فارسی سازمانی
   return NextResponse.next();
 }
@@ -168,9 +188,13 @@ export const config = {
     "/draft-indictment",
     "/damages",
     "/invoicing",
+    "/invoicing/:path*",
     "/accounting",
+    "/accounting/:path*",
     "/inventory",
+    "/inventory/:path*",
     "/crm",
+    "/crm/:path*",
     "/team",
     "/about/:path*",
     "/terms",
@@ -179,6 +203,7 @@ export const config = {
     "/technology/:path*",
     "/contact/:path*",
     "/docs",
+    "/hr",
     "/hr/:path*",
     "/radar/:path*",
     "/admin/:path*",
