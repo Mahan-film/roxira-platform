@@ -135,10 +135,15 @@ export function exportTableToCsv<TData extends RowData>(
   });
 
   const escapeCsvCell = (val: string) => {
-    if (val.includes('"') || val.includes(",") || val.includes("\n") || val.includes("\r")) {
-      return `"${val.replace(/"/g, '""')}"`;
+    let sanitized = val;
+    // Rule #9: Neutralize formula injection in Excel/Calc (=, +, -, @)
+    if (/^[=@+\-]/.test(sanitized)) {
+      sanitized = "'" + sanitized;
     }
-    return val;
+    if (sanitized.includes('"') || sanitized.includes(",") || sanitized.includes("\n") || sanitized.includes("\r")) {
+      return `"${sanitized.replace(/"/g, '""')}"`;
+    }
+    return sanitized;
   };
 
   const csvRows = [
@@ -341,13 +346,26 @@ export function DataTable<TData extends RowData>({
 
   const columnSums = useMemo(() => {
     if (!hasSummableColumn) return {};
-    const sums: Record<string, number> = {};
+    const sums: Record<string, bigint> = {};
     for (const col of columns) {
       if (col.meta?.isSummable && col.id) {
         sums[col.id] = targetRowsForSum.reduce((acc, row) => {
-          const v = Number(row.getValue(col.id as string)) || 0;
-          return acc + v;
-        }, 0);
+          const raw = row.getValue(col.id as string);
+          if (raw === null || raw === undefined || raw === "") return acc;
+          try {
+            if (typeof raw === "bigint") return acc + raw;
+            if (typeof raw === "number") return acc + BigInt(Math.trunc(raw));
+            if (typeof raw === "string") {
+              const cleaned = raw.replace(/,/g, "").trim();
+              if (cleaned && /^-?\d+$/.test(cleaned)) {
+                return acc + BigInt(cleaned);
+              }
+            }
+          } catch {
+            // ignore non-convertible
+          }
+          return acc;
+        }, 0n);
       }
     }
     return sums;
@@ -614,8 +632,8 @@ export function DataTable<TData extends RowData>({
                   }
 
                   if (meta?.isSummable && col.id) {
-                    const sum = columnSums[col.id] || 0;
-                    const formatted = meta.formatValue ? meta.formatValue(sum) : formatNumber(sum);
+                    const sum = columnSums[col.id] ?? 0n;
+                    const formatted = meta.formatValue ? meta.formatValue(sum) : formatNumber(Number(sum));
                     return (
                       <TableCell
                         key={col.id}

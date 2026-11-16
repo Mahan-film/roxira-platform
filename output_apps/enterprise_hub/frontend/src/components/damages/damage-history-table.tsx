@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import { RefreshCwIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -30,6 +31,8 @@ const PAGE_SIZE = 10;
  */
 export function DamageHistoryTable() {
   const [page, setPage] = useState(1);
+  const [contractReferenceNumber, setContractReferenceNumber] = useState("");
+  const [searchInput, setSearchInput] = useState("");
   const [response, setResponse] =
     useState<PaginatedDamageCalculationResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -42,6 +45,7 @@ export function DamageHistoryTable() {
           {
             page,
             limit: PAGE_SIZE,
+            contractReferenceNumber: contractReferenceNumber || undefined,
           },
           signal,
         );
@@ -57,7 +61,7 @@ export function DamageHistoryTable() {
         }
       }
     },
-    [page],
+    [page, contractReferenceNumber],
   );
 
   const refresh = useCallback(
@@ -98,7 +102,14 @@ export function DamageHistoryTable() {
           title: "اصل مبلغ",
           isNumeric: true,
           isSummable: true,
-          formatValue: (val) => formatRial(Number(val) || 0),
+          formatValue: (val) =>
+            formatRial(
+              typeof val === "bigint"
+                ? val
+                : typeof val === "string"
+                  ? val
+                  : (val as number) ?? 0,
+            ),
         },
       },
       {
@@ -133,7 +144,14 @@ export function DamageHistoryTable() {
           title: "مبلغ خسارت",
           isNumeric: true,
           isSummable: true,
-          formatValue: (val) => formatRial(Number(val) || 0),
+          formatValue: (val) =>
+            formatRial(
+              typeof val === "bigint"
+                ? val
+                : typeof val === "string"
+                  ? val
+                  : (val as number) ?? 0,
+            ),
         },
       },
       {
@@ -148,7 +166,14 @@ export function DamageHistoryTable() {
           title: "مبلغ کل قابل پرداخت",
           isNumeric: true,
           isSummable: true,
-          formatValue: (val) => formatRial(Number(val) || 0),
+          formatValue: (val) =>
+            formatRial(
+              typeof val === "bigint"
+                ? val
+                : typeof val === "string"
+                  ? val
+                  : (val as number) ?? 0,
+            ),
         },
       },
       {
@@ -183,17 +208,37 @@ export function DamageHistoryTable() {
         exportFilename="damage-history"
         filterPlaceholder="جستجو در سوابق محاسبات..."
         toolbarActions={
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => refresh()}
-            disabled={isLoading}
-            className="gap-1.5 text-xs h-9"
-          >
-            <RefreshCwIcon className={cn("size-3.5", isLoading && "animate-spin")} />
-            <span>بروزرسانی</span>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                setPage(1);
+                setContractReferenceNumber(searchInput.trim());
+              }}
+              className="flex items-center gap-1.5"
+            >
+              <Input
+                placeholder="شماره مرجع قرارداد..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="w-44 text-xs h-9"
+              />
+              <Button type="submit" variant="secondary" size="sm" className="text-xs h-9">
+                فیلتر سرور
+              </Button>
+            </form>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => refresh()}
+              disabled={isLoading}
+              className="gap-1.5 text-xs h-9"
+            >
+              <RefreshCwIcon className={cn("size-3.5", isLoading && "animate-spin")} />
+              <span>بروزرسانی</span>
+            </Button>
+          </div>
         }
       />
 

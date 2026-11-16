@@ -4,31 +4,48 @@ import assert from "node:assert/strict";
 interface TestRow extends Record<string, unknown> {
   id: string;
   name: string;
-  amount: number;
+  amount: bigint | string | number;
   category: string;
 }
 
-// Helper simulating data-table sum aggregation
+// Helper simulating data-table bigint sum aggregation (Rule 8)
 function calculateColumnSums<T extends Record<string, unknown>>(
   rows: T[],
   summableColumns: string[],
-): Record<string, number> {
-  const sums: Record<string, number> = {};
+): Record<string, bigint> {
+  const sums: Record<string, bigint> = {};
   for (const colId of summableColumns) {
     sums[colId] = rows.reduce((acc, row) => {
-      const v = Number(row[colId]) || 0;
-      return acc + v;
-    }, 0);
+      const raw = row[colId];
+      if (raw === null || raw === undefined || raw === "") return acc;
+      try {
+        if (typeof raw === "bigint") return acc + raw;
+        if (typeof raw === "number") return acc + BigInt(Math.trunc(raw));
+        if (typeof raw === "string") {
+          const cleaned = raw.replace(/,/g, "").trim();
+          if (cleaned && /^-?\d+$/.test(cleaned)) {
+            return acc + BigInt(cleaned);
+          }
+        }
+      } catch {
+        // ignore non-convertible
+      }
+      return acc;
+    }, 0n);
   }
   return sums;
 }
 
-// Helper simulating CSV row escaping
+// Helper simulating CSV row escaping with formula-injection neutralization (Rule 9)
 function escapeCsvCell(val: string): string {
-  if (val.includes('"') || val.includes(",") || val.includes("\n") || val.includes("\r")) {
-    return `"${val.replace(/"/g, '""')}"`;
+  let sanitized = val;
+  if (/^[=@+\-]/.test(sanitized)) {
+    sanitized = "'" + sanitized;
   }
-  return val;
+  if (sanitized.includes('"') || sanitized.includes(",") || sanitized.includes("\n") || sanitized.includes("\r")) {
+    return `"${sanitized.replace(/"/g, '""')}"`;
+  }
+  return sanitized;
 }
 
 // Helper simulating CSV generation
@@ -54,26 +71,33 @@ function filterRowsByGlobalQuery<T extends Record<string, unknown>>(
   );
 }
 
-test("DataTable: sum calculation correctly aggregates numeric rows", () => {
+test("DataTable: sum calculation correctly aggregates bigint and numeric rows without precision loss", () => {
   const sampleData: TestRow[] = [
-    { id: "1", name: "قرارداد الف", amount: 1000000, category: "خدمات" },
-    { id: "2", name: "قرارداد ب", amount: 2500000, category: "کالا" },
-    { id: "3", name: "قرارداد ج", amount: 500000, category: "خدمات" },
+    { id: "1", name: "قرارداد الف", amount: 10000000000000000n, category: "خدمات" },
+    { id: "2", name: "قرارداد ب", amount: 25000000000000000n, category: "کالا" },
+    { id: "3", name: "قرارداد ج", amount: "5000000000000000", category: "خدمات" },
   ];
 
   const sums = calculateColumnSums(sampleData, ["amount"]);
-  assert.equal(sums["amount"], 4000000);
+  assert.equal(sums["amount"], 40000000000000000n);
 });
 
 test("DataTable: sum calculation updates when subset of rows is selected", () => {
   const sampleData: TestRow[] = [
-    { id: "1", name: "قرارداد الف", amount: 1000000, category: "خدمات" },
-    { id: "2", name: "قرارداد ب", amount: 2500000, category: "کالا" },
+    { id: "1", name: "قرارداد الف", amount: 1000000n, category: "خدمات" },
+    { id: "2", name: "قرارداد ب", amount: 2500000n, category: "کالا" },
   ];
 
   const selectedRows = [sampleData[0]];
   const sums = calculateColumnSums(selectedRows, ["amount"]);
-  assert.equal(sums["amount"], 1000000);
+  assert.equal(sums["amount"], 1000000n);
+});
+
+test("DataTable: CSV escaping neutralizes formula injection (=, +, -, @)", () => {
+  assert.equal(escapeCsvCell("=SUM(A1:A10)"), "'=SUM(A1:A10)");
+  assert.equal(escapeCsvCell("@cmd"), "'@cmd");
+  assert.equal(escapeCsvCell("+12345"), "'+12345");
+  assert.equal(escapeCsvCell("-9876"), "'-9876");
 });
 
 test("DataTable: CSV escaping handles commas, quotes, and Persian text", () => {
@@ -81,6 +105,8 @@ test("DataTable: CSV escaping handles commas, quotes, and Persian text", () => {
   assert.equal(escapeCsvCell('فاکتور "ویژه"'), '"فاکتور ""ویژه"""');
   assert.equal(escapeCsvCell("مبلغ, با ویرگول"), '"مبلغ, با ویرگول"');
   assert.equal(escapeCsvCell("خط اول\nخط دوم"), '"خط اول\nخط دوم"');
+  // Formula injection with comma should prefix and quote
+  assert.equal(escapeCsvCell("=cmd|' /C calc'!A0,test"), "\"'=cmd|' /C calc'!A0,test\"");
 });
 
 test("DataTable: CSV export content prepends UTF-8 BOM", () => {
@@ -88,19 +114,21 @@ test("DataTable: CSV export content prepends UTF-8 BOM", () => {
   const rows = [
     ["1", "شرکت آزمایشی", "1,500,000"],
     ["2", 'فاکتور "نهایی"', "2,000,000"],
+    ["3", "=DANGEROUS()", "500,000"],
   ];
 
   const csv = buildCsvContent(headers, rows);
   assert.ok(csv.startsWith("\uFEFF"));
   assert.ok(csv.includes("شرکت آزمایشی"));
   assert.ok(csv.includes('"فاکتور ""نهایی"""'));
+  assert.ok(csv.includes("'\=DANGEROUS()"));
 });
 
 test("DataTable: global filter matches across Persian text and numbers", () => {
   const sampleData: TestRow[] = [
-    { id: "1", name: "فروش قطعات تهران", amount: 1200000, category: "صنعتی" },
-    { id: "2", name: "پیمانکاری شیراز", amount: 8500000, category: "عمرانی" },
-    { id: "3", name: "تعمیرات اصفهان", amount: 450000, category: "صنعتی" },
+    { id: "1", name: "فروش قطعات تهران", amount: 1200000n, category: "صنعتی" },
+    { id: "2", name: "پیمانکاری شیراز", amount: 8500000n, category: "عمرانی" },
+    { id: "3", name: "تعمیرات اصفهان", amount: 450000n, category: "صنعتی" },
   ];
 
   const matchesTehran = filterRowsByGlobalQuery(sampleData, "تهران");
