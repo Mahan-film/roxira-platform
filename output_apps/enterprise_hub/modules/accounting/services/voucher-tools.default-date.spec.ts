@@ -1,4 +1,4 @@
-import { tehranIsoDate } from '../../hr/services/jalali-period';
+import { tehranIsoDate } from '../../calendar';
 import { VoucherToolsService } from './voucher-tools.service';
 
 describe('VoucherToolsService.copyVoucher default date', () => {

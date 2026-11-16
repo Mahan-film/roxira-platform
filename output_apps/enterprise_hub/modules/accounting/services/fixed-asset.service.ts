@@ -8,7 +8,7 @@ import { fromDb, minorToDecimal, MoneyFormatError, toMinor } from '../money';
 import { AccountingRepository } from '../repositories/accounting.repository';
 import { FixedAssetRepository } from '../repositories/fixed-asset.repository';
 import { LockedPeriodError, PeriodLockedException } from '../exceptions/ledger.exceptions';
-import { gregorianToJalali, isoDate, jalaliMonthEnd } from '../../hr/services/jalali-period';
+import { jalaliMonthRange, parseToJalali } from '../../calendar';
 import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
 import { PolicyService } from '../../tenants/policy/policy.service';
 
@@ -98,7 +98,7 @@ export class FixedAssetService {
     if (dto.method === 'DECLINING_BALANCE' && (!dto.annualRate || Number(dto.annualRate) <= 0)) {
       throw new BadRequestException('برای روش نزولی، نرخ سالانه لازم است.');
     }
-    const jalali = gregorianToJalali(dto.acquisitionDate);
+    const jalali = parseToJalali(dto.acquisitionDate);
     if (!jalali) {
       throw new BadRequestException('تاریخ خرید معتبر نیست.');
     }
@@ -135,7 +135,7 @@ export class FixedAssetService {
           assetAccountCode: dto.assetAccountCode,
           accumulatedAccountCode: dto.accumulatedAccountCode,
           expenseAccountCode: dto.expenseAccountCode,
-          nextPeriodIndex: periodIndex(jalali.jy, jalali.jm),
+          nextPeriodIndex: periodIndex(jalali.year, jalali.month),
           createdBy: actor,
         },
         manager,
@@ -150,7 +150,7 @@ export class FixedAssetService {
    */
   async runMonth(tenantId: string, dto: DepreciationRunDto): Promise<DepreciationRunResult> {
     const target = periodIndex(dto.year, dto.month);
-    const date = isoDate(jalaliMonthEnd(dto.year, dto.month));
+    const date = jalaliMonthRange(dto.year, dto.month).endDate;
     return this.assets.scoped(tenantId, async (manager) => {
       const active = await this.assets.lockActive(tenantId, manager);
       const result: DepreciationRunResult = {
@@ -166,10 +166,11 @@ export class FixedAssetService {
       const todo: Array<{ asset: FixedAssetEntity; charge: bigint }> = [];
       for (const asset of active) {
         if (target < asset.nextPeriodIndex) {
-          const acquired = gregorianToJalali(asset.acquisitionDate)!;
+          const acquired = parseToJalali(asset.acquisitionDate);
+          const acqPeriod = acquired ? periodIndex(acquired.year, acquired.month) : 0;
           result.skipped.push({
             code: asset.code,
-            reason: target < periodIndex(acquired.jy, acquired.jm) ? 'NOT_ACQUIRED_YET' : 'ALREADY_DONE',
+            reason: target < acqPeriod ? 'NOT_ACQUIRED_YET' : 'ALREADY_DONE',
           });
         } else if (target > asset.nextPeriodIndex) {
           result.skipped.push({ code: asset.code, reason: 'PREVIOUS_MONTH_MISSING' });

@@ -1,3 +1,4 @@
+import { CalendarService } from '../calendar';
 import 'reflect-metadata';
 import { CurrencyService } from '../currency/services/currency.service';
 import { AccountingRepository } from './repositories/accounting.repository';
@@ -31,7 +32,7 @@ describePg('Budget vs Actual report on PostgreSQL (T52)', () => {
     accounting = new AccountingService(repo, currency);
     const fiscal = new FiscalYearRepository(testDb.app);
     const ledger = new LedgerReportRepository(testDb.scope);
-    years = new FiscalYearService(repo, fiscal, ledger, accounting);
+    years = new FiscalYearService(repo, fiscal, ledger, accounting, new CalendarService());
     const budgetRepo = new AccountBudgetRepository(testDb.scope);
     budgetService = new BudgetVsActualService(testDb.scope, budgetRepo, fiscal);
 

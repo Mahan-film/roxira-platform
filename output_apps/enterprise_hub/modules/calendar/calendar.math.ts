@@ -252,3 +252,203 @@ export function parseDate(calendar: CalendarId, text: string): CalendarDate {
   assertValid(date);
   return date;
 }
+
+/**
+ * Converts an instant (Date, timestamp, or ISO string) to a Gregorian ISO string (`YYYY-MM-DD`)
+ * in the given IANA timezone (default 'Asia/Tehran').
+ */
+export function instantToGregorianIso(
+  instant: Date | string | number = new Date(),
+  timeZone = 'Asia/Tehran',
+): string {
+  const d = typeof instant === 'string' || typeof instant === 'number' ? new Date(instant) : instant;
+  if (Number.isNaN(d.getTime())) {
+    throw new CalendarError(`Invalid instant: ${instant}`);
+  }
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(d);
+  const pick = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${pick('year')}-${pick('month')}-${pick('day')}`;
+}
+
+/**
+ * Returns a Gregorian ISO date string (`YYYY-MM-DD`) for an instant in the 'Asia/Tehran' timezone.
+ */
+export function tehranIsoDate(instant: Date | string | number = new Date()): string {
+  return instantToGregorianIso(instant, 'Asia/Tehran');
+}
+
+/**
+ * Converts an instant to a CalendarDate in the target calendar and timezone.
+ */
+export function instantToDate(
+  instant: Date | string | number = new Date(),
+  calendar: CalendarId = 'gregorian',
+  timeZone = 'Asia/Tehran',
+): CalendarDate {
+  const iso = instantToGregorianIso(instant, timeZone);
+  const greg = parseDate('gregorian', iso);
+  return calendar === 'gregorian' ? greg : convert(greg, 'jalali');
+}
+
+/**
+ * Converts an instant to an ISO string (`YYYY-MM-DD`) in the target calendar and timezone.
+ */
+export function instantToIso(
+  instant: Date | string | number = new Date(),
+  calendar: CalendarId = 'jalali',
+  timeZone = 'Asia/Tehran',
+): string {
+  return formatDate(instantToDate(instant, calendar, timeZone));
+}
+
+/**
+ * Returns today's CalendarDate in the target calendar and timezone.
+ */
+export function today(calendar: CalendarId = 'gregorian', timeZone = 'Asia/Tehran'): CalendarDate {
+  return instantToDate(new Date(), calendar, timeZone);
+}
+
+/**
+ * Returns today's ISO string (`YYYY-MM-DD`) in the target calendar and timezone.
+ */
+export function todayIso(calendar: CalendarId = 'gregorian', timeZone = 'Asia/Tehran'): string {
+  return formatDate(today(calendar, timeZone));
+}
+
+/**
+ * Formats a Gregorian ISO date string or CalendarDate into Jalali string `YYYY/MM/DD` or `YYYY-MM-DD`.
+ */
+export function formatJalali(dateOrIso: CalendarDate | string, separator: '/' | '-' = '/'): string {
+  let jDate: CalendarDate;
+  if (typeof dateOrIso === 'string') {
+    const trimmed = dateOrIso.trim();
+    const m = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/.exec(trimmed);
+    if (!m) throw new CalendarError(`Invalid date string "${dateOrIso}"`);
+    const y = Number(m[1]);
+    const month = Number(m[2]);
+    const day = Number(m[3]);
+    if (y >= JALALI_MIN_YEAR && y <= JALALI_MAX_YEAR) {
+      jDate = { calendar: 'jalali', year: y, month, day };
+    } else {
+      const greg: CalendarDate = { calendar: 'gregorian', year: y, month, day };
+      jDate = convert(greg, 'jalali');
+    }
+  } else {
+    jDate = dateOrIso.calendar === 'jalali' ? dateOrIso : convert(dateOrIso, 'jalali');
+  }
+  const p = (n: number, w: number) => String(n).padStart(w, '0');
+  return `${p(jDate.year, 4)}${separator}${p(jDate.month, 2)}${separator}${p(jDate.day, 2)}`;
+}
+
+/**
+ * Parses a date string (Jalali `YYYY/MM/DD` or Gregorian ISO `YYYY-MM-DD`) into a Jalali CalendarDate.
+ */
+export function parseToJalali(dateStr: string | null | undefined): CalendarDate | null {
+  if (!dateStr) return null;
+  const trimmed = dateStr.trim();
+  const m = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/.exec(trimmed);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  try {
+    if (y >= JALALI_MIN_YEAR && y <= JALALI_MAX_YEAR) {
+      const candidate: CalendarDate = { calendar: 'jalali', year: y, month, day };
+      assertValid(candidate);
+      return candidate;
+    }
+    if (y >= GREGORIAN_MIN_YEAR && y <= GREGORIAN_MAX_YEAR) {
+      const greg: CalendarDate = { calendar: 'gregorian', year: y, month, day };
+      assertValid(greg);
+      return convert(greg, 'jalali');
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/**
+ * Closed date range for a Jalali month with Gregorian ISO start and end strings and day count.
+ */
+export function jalaliMonthRange(year: number, month: number): {
+  start: CalendarDate;
+  end: CalendarDate;
+  startDate: string;
+  endDate: string;
+  days: number;
+} {
+  assertInt(year, 'year');
+  assertInt(month, 'month');
+  const days = daysInMonth('jalali', year, month);
+  const start: CalendarDate = { calendar: 'jalali', year, month, day: 1 };
+  const end: CalendarDate = { calendar: 'jalali', year, month, day: days };
+  const gregStart = convert(start, 'gregorian');
+  const gregEnd = convert(end, 'gregorian');
+  return {
+    start,
+    end,
+    startDate: formatDate(gregStart),
+    endDate: formatDate(gregEnd),
+    days,
+  };
+}
+
+/**
+ * Adds whole Jalali calendar months to a Gregorian ISO day, keeping the day clamped.
+ */
+export function advanceJalaliMonths(iso: string, months: number): string {
+  const greg = parseDate('gregorian', iso);
+  const j = convert(greg, 'jalali');
+  const advanced = addMonths(j, months);
+  return formatDate(convert(advanced, 'gregorian'));
+}
+
+/**
+ * First day of the Jalali month following the one `iso` falls in, as Gregorian ISO.
+ */
+export function firstDayOfNextJalaliMonth(iso: string): string {
+  const greg = parseDate('gregorian', iso);
+  const j = convert(greg, 'jalali');
+  const nextMonth = addMonths({ ...j, day: 1 }, 1);
+  return formatDate(convert(nextMonth, 'gregorian'));
+}
+
+/**
+ * Closed date range for a Jalali quarter (1..4) in a given Jalali year.
+ */
+export function jalaliQuarterRange(year: number, quarter: number): {
+  year: number;
+  quarter: number;
+  startDate: string;
+  endDate: string;
+  label: string;
+} {
+  if (!Number.isInteger(year) || year < JALALI_MIN_YEAR || year > JALALI_MAX_YEAR) {
+    throw new CalendarError(`سال شمسی نامعتبر است: ${year}`);
+  }
+  if (!Number.isInteger(quarter) || quarter < 1 || quarter > 4) {
+    throw new CalendarError(`فصل باید عددی از ۱ تا ۴ باشد: ${quarter}`);
+  }
+  const startMonth = (quarter - 1) * 3 + 1;
+  const endMonth = startMonth + 2;
+  const start: CalendarDate = { calendar: 'jalali', year, month: startMonth, day: 1 };
+  const endDay = daysInMonth('jalali', year, endMonth);
+  const end: CalendarDate = { calendar: 'jalali', year, month: endMonth, day: endDay };
+  const gregStart = convert(start, 'gregorian');
+  const gregEnd = convert(end, 'gregorian');
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return {
+    year,
+    quarter,
+    startDate: formatDate(gregStart),
+    endDate: formatDate(gregEnd),
+    label: `${year}/${pad(startMonth)}/01 تا ${year}/${pad(endMonth)}/${pad(endDay)}`,
+  };
+}
+

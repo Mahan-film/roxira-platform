@@ -6,7 +6,7 @@
  * (assets/depreciation.ts) for the next charge on the running totals. It returns 0 once nothing is
  * left to depreciate, which ends the plan.
  */
-import { isoDate, jalaliMonthEnd } from '../../hr/services/jalali-period';
+import { jalaliMonthRange } from '../../calendar';
 import { fromDb } from '../money';
 import { ReportColumn, ReportTable } from '../reports/report-table';
 import { DepreciationMethod, nextMonthCharge } from './depreciation';
@@ -106,7 +106,7 @@ export interface DepreciationSchedule {
 const monthEndDay = (index: number): string => {
   const year = Math.floor(index / 12);
   const month = (index % 12) + 1;
-  return isoDate(jalaliMonthEnd(year, month));
+  return jalaliMonthRange(year, month).endDate;
 };
 
 /**

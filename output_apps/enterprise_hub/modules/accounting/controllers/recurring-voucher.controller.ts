@@ -16,7 +16,7 @@ import {
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
 import { requireTenantId } from '../../tenants/tenant-context';
-import { tehranIsoDate } from '../../hr/services/jalali-period';
+import { tehranIsoDate } from '../../calendar';
 import {
   CreateRecurringVoucherDto,
   RecurringVoucherResponseDto,
