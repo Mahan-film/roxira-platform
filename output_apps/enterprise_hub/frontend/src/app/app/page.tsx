@@ -192,7 +192,8 @@ export default function SuiteDashboardPage() {
   const salesToday = dashboard.data?.sales ?? 0;
   const profitThisMonth = dashboard.data?.netProfit ?? 0;
   const overdueReceivables = dashboard.data?.receivables ?? 0;
-  const isProfitConfidential = !isProfitVisibleForUser(showAccounting, roleKey);
+  const hasMarginPermission = Boolean(org?.fieldVisibility?.margin);
+  const isProfitConfidential = !isProfitVisibleForUser(hasMarginPermission, roleKey);
 
   const homeAlerts = buildHomeAlerts({
     chequesDueCount: dueCheques.data?.items?.length ?? 0,
