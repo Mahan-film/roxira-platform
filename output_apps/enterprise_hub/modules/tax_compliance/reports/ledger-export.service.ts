@@ -145,8 +145,13 @@ export class LedgerExportService {
   /** Resolves upload periodicity (months) from statutory settings without swallowing repository failures. */
   async resolvePeriodicityMonths(tenantId: string, year: number, countryCode?: string): Promise<number> {
     const fallback = this.defaultPeriodicityMonths(year);
-    const pack = this.packRegistry?.resolve(countryCode) ?? CountryPackCls.current();
+    const pack = countryCode && this.packRegistry
+      ? this.packRegistry.resolve(countryCode)
+      : CountryPackCls.current() ?? this.packRegistry?.resolve(countryCode);
     const country = pack?.country ?? countryCode ?? IRAN;
+    if (country !== IRAN && (!pack || pack.country !== country)) {
+      throw new BadRequestException(`No country pack found for country ${country}`);
+    }
     const rows = await this.statutory.findForYear(tenantId, country, year);
     const resolved = resolveParameters(rows, isoDate(jalaliMonthEnd(year, 12)));
     const param = resolved.get('commercial_books_periodicity');

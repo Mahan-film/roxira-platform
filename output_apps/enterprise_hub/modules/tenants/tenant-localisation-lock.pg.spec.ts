@@ -33,7 +33,7 @@ const options = (database: string, username = OWNER, password = OWNER_PW) => ({
   password,
   database,
   entities: [path.join(__dirname, '../../**/*.entity.ts')],
-  migrations: [path.join(__dirname, '../../../migrations/*.ts')],
+  migrations: [path.join(__dirname, '../../migrations/*.ts')],
   migrationsTransactionMode: 'each' as const,
   synchronize: false,
   logging: false,

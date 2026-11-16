@@ -64,7 +64,12 @@ export class CorporateTaxService {
     fiscalYear: number,
     countryCode?: string,
   ): Promise<CorporateTaxParameterUse[]> {
-    const pack = this.packRegistry?.resolve(countryCode) ?? CountryPackCls.current();
+    const pack = countryCode && this.packRegistry
+      ? this.packRegistry.resolve(countryCode)
+      : CountryPackCls.current() ?? this.packRegistry?.resolve(countryCode);
+    if (!pack && countryCode && countryCode !== IRAN) {
+      throw new BadRequestException(`No country pack found for country ${countryCode}`);
+    }
     const country = pack?.country ?? countryCode ?? IRAN;
     const rule = pack?.taxRules?.find((r) => r.kind === 'corporate_income_tax');
     const keys = (rule?.statutoryKeys as readonly string[] | undefined) ?? KEYS;

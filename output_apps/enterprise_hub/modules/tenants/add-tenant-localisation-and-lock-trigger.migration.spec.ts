@@ -55,8 +55,8 @@ describe('AddTenantLocalisationAndLockTrigger migration', () => {
 
     const sql = queries.join('\n');
     expect(sql).toContain('CREATE OR REPLACE FUNCTION tenant_guard_localisation_lock()');
-    expect(sql).toContain('NEW.country_code IS DISTINCT FROM OLD.country_code');
-    expect(sql).toContain('NEW.book_currency_code IS DISTINCT FROM OLD.book_currency_code');
+    expect(sql).toContain('UPPER(NEW.country_code) IS DISTINCT FROM UPPER(OLD.country_code)');
+    expect(sql).toContain('UPPER(NEW.book_currency_code) IS DISTINCT FROM UPPER(OLD.book_currency_code)');
     expect(sql).toContain('SELECT 1 FROM "fin_journal_entries"');
     expect(sql).toContain('"tenant_id" = OLD.id AND "status" = \'POSTED\'');
     expect(sql).toContain('ERRCODE = \'RX003\'');
@@ -78,5 +78,6 @@ describe('AddTenantLocalisationAndLockTrigger migration', () => {
     expect(sql).toContain('DROP COLUMN IF EXISTS "default_calendar"');
     expect(sql).toContain('DROP COLUMN IF EXISTS "book_currency_code"');
     expect(sql).toContain('DROP COLUMN IF EXISTS "pack_version"');
+    expect(sql).toContain('DROP COLUMN IF EXISTS "country_code"');
   });
 });

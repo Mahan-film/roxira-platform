@@ -65,7 +65,7 @@ export class AddTenantLocalisationAndLockTrigger1789900005500
     await queryRunner.query(`
       CREATE OR REPLACE FUNCTION tenant_guard_localisation_lock() RETURNS trigger AS $$
       BEGIN
-        IF (NEW.country_code IS DISTINCT FROM OLD.country_code) OR (NEW.book_currency_code IS DISTINCT FROM OLD.book_currency_code) THEN
+        IF (UPPER(NEW.country_code) IS DISTINCT FROM UPPER(OLD.country_code)) OR (UPPER(NEW.book_currency_code) IS DISTINCT FROM UPPER(OLD.book_currency_code)) THEN
           IF EXISTS (
             SELECT 1 FROM "fin_journal_entries"
             WHERE "tenant_id" = OLD.id AND "status" = 'POSTED'
@@ -117,7 +117,8 @@ export class AddTenantLocalisationAndLockTrigger1789900005500
         DROP COLUMN IF EXISTS "timezone",
         DROP COLUMN IF EXISTS "default_calendar",
         DROP COLUMN IF EXISTS "book_currency_code",
-        DROP COLUMN IF EXISTS "pack_version"
+        DROP COLUMN IF EXISTS "pack_version",
+        DROP COLUMN IF EXISTS "country_code"
     `);
   }
 }

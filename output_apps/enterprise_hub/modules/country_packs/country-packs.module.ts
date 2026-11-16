@@ -34,7 +34,14 @@ export const DEFAULT_COUNTRY = 'IR';
     {
       provide: CURRENT_COUNTRY_PACK,
       inject: [CountryPackResolver],
-      useFactory: (resolver: CountryPackResolver) => resolver.currentPack(),
+      useFactory: (resolver: CountryPackResolver) =>
+        new Proxy({} as any, {
+          get(_target, prop) {
+            const pack = resolver.currentPack();
+            const val = (pack as any)?.[prop];
+            return typeof val === 'function' ? val.bind(pack) : val;
+          },
+        }),
     },
   ],
   exports: [

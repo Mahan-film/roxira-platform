@@ -164,12 +164,20 @@ export class StatutoryService {
   ) {}
 
   private resolveCountry(explicitCountry?: string): string {
-    return (
-      explicitCountry ??
-      this.packRegistry?.resolve().country ??
-      CountryPackCls.current()?.country ??
-      IRAN
-    );
+    if (explicitCountry) {
+      if (this.packRegistry && !this.packRegistry.has(explicitCountry)) {
+        throw new BadRequestException(`Unknown country code: ${explicitCountry}`);
+      }
+      return explicitCountry.toUpperCase();
+    }
+    const clsCountry = CountryPackCls.current()?.country;
+    if (clsCountry) {
+      return clsCountry.toUpperCase();
+    }
+    if (this.packRegistry) {
+      return this.packRegistry.defaultCountry.toUpperCase();
+    }
+    return IRAN;
   }
 
   /** Parameters in force at the end of a Jalali month (or year end when `month` is omitted). */

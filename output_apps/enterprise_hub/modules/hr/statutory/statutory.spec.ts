@@ -221,7 +221,7 @@ describe('StatutoryService.setValue', () => {
     const service = new StatutoryService(repository as never, audit as never, registry);
 
     await CountryPackCls.run(xxPack, async () => {
-      await service.ratesFor(TENANT, 1405, 12, TEST_COUNTRY);
+      await service.ratesFor(TENANT, 1405);
     });
 
     expect(repository.findForYear).toHaveBeenCalledWith(TENANT, TEST_COUNTRY, 1405);
