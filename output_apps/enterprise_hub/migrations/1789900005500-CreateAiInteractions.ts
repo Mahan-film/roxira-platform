@@ -38,6 +38,7 @@ export class CreateAiInteractions1789900005500 implements MigrationInterface {
       `CREATE INDEX IF NOT EXISTS "IDX_ai_interactions_expires_at" ON "ai_interactions" ("expires_at")`,
     );
     await enableTenantRls(q, 'ai_interactions');
+    await q.query(`ALTER TABLE "ai_interactions" FORCE ROW LEVEL SECURITY`);
   }
 
   public async down(q: QueryRunner): Promise<void> {

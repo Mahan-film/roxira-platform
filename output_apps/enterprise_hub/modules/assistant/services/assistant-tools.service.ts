@@ -574,7 +574,9 @@ export class AssistantToolsService {
     const opProfit = fromMinor(statement.operatingProfit);
     const netProfit = fromMinor(statement.netProfit);
 
-    // Compute toman via exact BigInt minor units division (Rule 8: money via modules/accounting/money.ts)
+    // statement.* are Rial minor units (scale 2, 100 minor units = 1 Rial).
+    // 1 Toman = 10 Rials = 1000 Rial minor units = 100 Toman minor units.
+    // Dividing Rial minor units by 10n yields Toman minor units (scale 2), which fromMinor() converts to exact Toman units.
     const grossToman = fromMinor(statement.grossProfit / 10n);
     const opProfitToman = fromMinor(statement.operatingProfit / 10n);
     const netProfitToman = fromMinor(statement.netProfit / 10n);
