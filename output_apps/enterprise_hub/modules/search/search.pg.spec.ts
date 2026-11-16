@@ -31,7 +31,7 @@ describePg('Universal search on PostgreSQL with RLS and pg_trgm (T147)', () => {
       // 1. Party
       await manager.query(`
         INSERT INTO "erp_parties" ("tenant_id", "code", "name", "role", "national_id", "economic_code", "phone", "active", "created_at", "updated_at")
-        VALUES ($1, 'C-ALF-101', 'شرکت تجارت هوشمند آلفا', 'CUSTOMER', '10103456789', '4111222333', '02188889999', true, NOW(), NOW())
+        VALUES ($1, 'C-ALF-101', 'شرکت تجارت هوشمند آلفا', 'customer', '10103456789', '4111222333', '02188889999', true, NOW(), NOW())
       `, [T1]);
 
       // 2. Stock Item
@@ -78,7 +78,7 @@ describePg('Universal search on PostgreSQL with RLS and pg_trgm (T147)', () => {
     await testDb.scope.run(T2, async (manager) => {
       await manager.query(`
         INSERT INTO "erp_parties" ("tenant_id", "code", "name", "role", "national_id", "active", "created_at", "updated_at")
-        VALUES ($1, 'C-T2-ALF', 'شرکت آلفا مستاجر دوم', 'CUSTOMER', '10999999999', true, NOW(), NOW())
+        VALUES ($1, 'C-T2-ALF', 'شرکت آلفا مستاجر دوم', 'customer', '10999999999', true, NOW(), NOW())
       `, [T2]);
     });
   }, 120000);
