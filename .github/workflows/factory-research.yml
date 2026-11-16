@@ -30,7 +30,6 @@ concurrency:
 
 permissions:
   contents: read
-  issues: write
 
 env:
   ISSUE_NUMBER: ${{ github.event.issue.number || github.event.inputs.issue_number }}
@@ -40,6 +39,9 @@ jobs:
     name: Research technology stack
     runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
     if: >
       vars.FACTORY_ENABLED == 'true' &&
       (
@@ -51,12 +53,12 @@ jobs:
       )
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.13"
 
@@ -196,7 +198,7 @@ jobs:
 
       - name: Upload full research report as an artifact
         if: steps.preflight.outputs.ok == 'true' && always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: factory-research-${{ env.ISSUE_NUMBER }}-${{ github.run_id }}
           path: |
@@ -207,7 +209,7 @@ jobs:
 
       - name: Upload run ledger artifact
         if: steps.preflight.outputs.ok == 'true' && always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: factory-ledger-${{ env.ISSUE_NUMBER }}
           path: ${{ runner.temp }}/ledger.jsonl

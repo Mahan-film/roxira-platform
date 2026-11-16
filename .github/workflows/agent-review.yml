@@ -45,9 +45,6 @@ concurrency:
 
 permissions:
   contents: read
-  pull-requests: write
-  statuses: write
-  actions: read
 
 env:
   MAX_DIFF_BYTES: "60000"
@@ -58,6 +55,9 @@ jobs:
   resolve-pr:
     name: Resolve review eligibility
     runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       number: ${{ steps.pr.outputs.number }}
       branch: ${{ steps.pr.outputs.branch }}
@@ -100,18 +100,23 @@ jobs:
     if: needs.resolve-pr.outputs.eligible == 'true'
     runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+      statuses: write
+      actions: read
     steps:
       # Only `main` is ever checked out in this job -- see the module
       # docstring above. review_gate.py/cost_ledger.py always run from here,
       # never from the PR's own tree.
       - name: Checkout default branch (trusted code only, never the PR head)
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
