@@ -1,10 +1,12 @@
-# Standing Antigravity prompt (v5, 2026-11-17)
+# Standing Antigravity prompt (v6, 2026-11-17)
 
 Paste the same text into each of the 4 chats. Change only "L1" (every occurrence) to L2, L3 or L4.
 It works the same on the Windows laptop and on the MacBook: the first step checks that machine's setup.
 Run each lane in only one chat on one machine. When a chat gets long or slow, the lane posts its REPORT and stops; paste this same prompt into a fresh chat.
 
-v5 adds the WIP limit: a lane with 3 or more of its own PRs unmerged takes no new row; it fixes, rebases and stops. It replaces "never idle / Filler" while over the limit.
+v6 (R15) adds: WIP counted by the T ids the lane took (all lanes share one GitHub account); at most 2 CI fix rounds per PR, then a hand-off; hands off PRs the WAVE marks "hub"; any review comment with a "Verdict:" line counts; hotspot files get append-only edits; a slow push is never killed or bypassed.
+
+v5 added the WIP limit: a lane with 3 or more of its own PRs unmerged takes no new row; it fixes, rebases and stops. It replaces "never idle / Filler" while over the limit.
 
 v4 added: the lanes carry the volume (batches of ≤40 files, one PR per folder), slice ownership, the package.json owner rule, npm version checks, "after T<n>" gating, Filler work, and the fresh-chat rule.
 
@@ -26,12 +28,16 @@ v4 added: the lanes carry the volume (batches of ≤40 files, one PR per folder)
 - نسخهٔ هر کتابخانه را با npm view <pkg> version چک کن. به نسخه‌هایی که در اسناد تحقیق نوشته شده اعتماد نکن و هیچ نسخه‌ای را پایین نیاور.
 - ردیفی که نوشته «after T<n>» فقط وقتی شروع می‌شود که PR آن T در main merge شده باشد. تا آن موقع سراغ ردیف بعدی برو.
 - اگر زیر سقف WIP هستی و ردیف‌هایت تمام شد، کار Filler همان WAVE را بردار. اگر بالای سقف هستی، فقط اصلاح و rebase.
-- **سقف کار باز (WIP) = ۳:** قبل از برداشتن هر ردیف، تعداد PRهای باز خودت را بشمار (gh pr list --author @me --state open). اگر ۳ یا بیشتر بود، **هیچ ردیف جدیدی برندار**. فقط blocker و CI قرمز همان PRها را درست کن و PRهای CONFLICTING را rebase کن. بعد REPORT بگذار و بایست. کار Filler هم در این حالت ممنوع است.
+- **سقف کار باز (WIP) = ۳:** قبل از برداشتن هر ردیف، PRهای باز خودت را بشمار: PRهای بازی که T آن‌ها را خودت در issue 592 با «taking T<n> (L1)» برداشته‌ای (همهٔ laneها با یک حساب GitHub کار می‌کنند، پس gh pr list --author کافی نیست). اگر ۳ یا بیشتر بود، **هیچ ردیف جدیدی برندار**. فقط blocker و CI قرمز همان PRها را درست کن و PRهای CONFLICTING را rebase کن. بعد REPORT بگذار و بایست. کار Filler هم در این حالت ممنوع است.
+- PRهایی که WAVE کنارشان «hub» نوشته مال hub است. به آن‌ها دست نزن، حتی اگر T آن‌ها را قبلاً خودت برداشته بودی.
+- **حداکثر ۲ دور اصلاح CI:** اگر CI یک PR بعد از ۲ بار push اصلاحی هنوز قرمز است، دیگر push نکن. زیر همان PR بلوک Handoff را از .github/pull_request_template.md بگذار (خطای دقیق و آنچه امتحان کردی)، در REPORT آن را BLOCKED بنویس و سراغ کار بعدی برو.
+- فایل‌های مشترک (ماتریس دسترسی، app.module.ts، منوی ناوبری) را فقط با افزودن خط در جای الفبایی خودش تغییر بده. ترتیب خط‌های دیگر را عوض نکن و آن‌ها را بازنویسی نکن.
+- push به‌خاطر بررسی پایگاه دادهٔ تازه تا ۲۰ دقیقه طول می‌کشد، مخصوصاً وقتی چند lane هم‌زمان push می‌کنند. آن را قطع نکن و هم‌زمان دوباره اجرایش نکن.
 - هنگام rebase، اگر migration داری، timestamp آن را بزرگ‌تر از جدیدترین فایل migration روی origin/main کن.
 - اگر این گفتگو خیلی طولانی یا کند شد، برای کارهای تمام‌شده REPORT بگذار و بایست. مالک همین پرامپت را در یک چت تازه می‌گذارد و تو از روی issue 592 و PRهای باز خودت ادامه می‌دهی.
 
 قبل از هر تسک:
-۱. روی PRهای باز خودت آخرین کامنتی را که با «Cross-family review» شروع می‌شود بخوان.
+۱. روی PRهای باز خودت آخرین کامنت بازبینی را بخوان (هر کامنتی که خط «Verdict:» دارد، از review desk یا از hub).
    - اگر برای head فعلی «Verdict: blocker» بود، اول همان را درست کن.
    - اگر آن review برای head قدیمی‌تری است، PR منتظر بازبینی است. به آن دست نزن و سراغ تسک بعدی برو. بازبین خودکار هر ۲ ساعت روی GitHub اجرا می‌شود؛ منتظرش نمان.
 ۲. اگر یقین داری یک blocker اشتباه است (مثلاً می‌گوید یک نسخه وجود ندارد ولی CI روی main با همان نسخه سبز است)، زیر PR فقط یک خط بنویس: «false positive: <دلیل با مسیر فایل>» و ادامه بده. تصمیم با هماهنگ‌کننده است.
