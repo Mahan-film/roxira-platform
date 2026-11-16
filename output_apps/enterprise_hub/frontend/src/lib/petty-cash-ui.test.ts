@@ -5,6 +5,7 @@ import {
   lastSettlementDate,
   minorToMajorString,
   normalizeAmount,
+  parseIntegerRial,
   sumMinorUnits,
 } from "./petty-cash-ui.ts";
 
@@ -67,4 +68,19 @@ test("minorToMajorString formats BigInt minor units back to decimal string", () 
   assert.equal(minorToMajorString(BigInt(200000075)), "2000000.75");
   assert.equal(minorToMajorString(BigInt(10000000000000000003n)), "100000000000000000.03");
   assert.equal(minorToMajorString(BigInt(-5000)), "-50");
+});
+
+test("sumMinorUnits handles fractional rounding on 3rd digit correctly", () => {
+  // Input 1,500,000.505 rounds to 1,500,000.51 (51 cents)
+  assert.equal(sumMinorUnits([{ amount: "1,500,000.505" }]), BigInt(150000051));
+  // Input 1,500,000.504 rounds to 1,500,000.50 (50 cents)
+  assert.equal(sumMinorUnits([{ amount: "1,500,000.504" }]), BigInt(150000050));
+});
+
+test("parseIntegerRial extracts exact BigInt for Rial values without float loss", () => {
+  assert.equal(parseIntegerRial("1500000"), BigInt(1500000));
+  assert.equal(parseIntegerRial("۱,۵۰۰,۰۰۰"), BigInt(1500000));
+  assert.equal(parseIntegerRial(""), BigInt(0));
+  assert.equal(parseIntegerRial("abc"), BigInt(0));
+  assert.equal(parseIntegerRial("100.50"), BigInt(0));
 });

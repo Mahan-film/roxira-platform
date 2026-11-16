@@ -20,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatJalaliDate, formatMoneyRial } from "@/lib/fa-format";
+import { parseIntegerRial } from "@/lib/petty-cash-ui";
 import {
   createCashBox,
   listBankAccounts,
@@ -109,13 +110,14 @@ export function CashBoxesView() {
       setError("لطفاً نام، کد صندوق و شناسه حساب معین را وارد کنید.");
       return;
     }
+    const opening = parseIntegerRial(newBoxOpening || "0");
     setActionLoading(true);
     try {
       await createCashBox({
         name: newBoxName,
         code: newBoxCode,
         ledgerAccountId: Number(newBoxAccountId),
-        openingBalance: newBoxOpening?.trim() || "0",
+        openingBalance: opening.toString(),
       });
       setSuccessMsg("صندوق جدید با موفقیت ایجاد شد.");
       setCreateDialogOpen(false);
@@ -134,12 +136,17 @@ export function CashBoxesView() {
       setError("لطفاً تمام اطلاعات انتقال وجه را تکمیل کنید.");
       return;
     }
+    const amt = parseIntegerRial(transferAmount);
+    if (amt <= BigInt(0)) {
+      setError("مبلغ انتقال باید یک عدد صحیح مثبت (ریال) باشد.");
+      return;
+    }
     setActionLoading(true);
     try {
       const res = await transferCashBank({
         cashBoxId: Number(transferBoxId),
         bankAccountId: Number(transferBankId),
-        amount: transferAmount.trim(),
+        amount: amt.toString(),
         direction: transferDirection,
         date: transferDate,
         description: transferDesc || undefined,
@@ -160,14 +167,20 @@ export function CashBoxesView() {
       setError("لطفاً حساب بانک، شماره پایانه، مبلغ ناخالص و تاریخ را وارد کنید.");
       return;
     }
+    const gross = parseIntegerRial(posGross);
+    if (gross <= BigInt(0)) {
+      setError("مبلغ ناخالص تراکنش‌های کارت‌خوان باید یک عدد صحیح مثبت (ریال) باشد.");
+      return;
+    }
+    const fee = parseIntegerRial(posFee || "0");
     setActionLoading(true);
     try {
       const res = await settlePos({
         bankAccountId: Number(posBankId),
         terminalNumber: posTerminal,
         date: posDate,
-        grossAmount: posGross,
-        feeAmount: posFee || "0",
+        grossAmount: gross.toString(),
+        feeAmount: fee.toString(),
         referenceNumber: posRef || undefined,
       });
       setSuccessMsg(`تسویه کارت‌خوان ثبت شد و سند حسابداری شماره ${res.voucher.entryNumber} صادر شد.`);
@@ -332,6 +345,8 @@ export function CashBoxesView() {
             <Input
               id="box-opening"
               type="number"
+              step="1"
+              min="0"
               value={newBoxOpening}
               onChange={(e) => setNewBoxOpening(e.target.value)}
             />
@@ -404,6 +419,8 @@ export function CashBoxesView() {
             <Input
               id="transfer-amount"
               type="number"
+              step="1"
+              min="0"
               value={transferAmount}
               onChange={(e) => setTransferAmount(e.target.value)}
               placeholder="10000000"
@@ -474,6 +491,8 @@ export function CashBoxesView() {
             <Input
               id="pos-gross"
               type="number"
+              step="1"
+              min="0"
               value={posGross}
               onChange={(e) => setPosGross(e.target.value)}
               placeholder="10000000"
@@ -484,6 +503,8 @@ export function CashBoxesView() {
             <Input
               id="pos-fee"
               type="number"
+              step="1"
+              min="0"
               value={posFee}
               onChange={(e) => setPosFee(e.target.value)}
               placeholder="12000"
@@ -494,13 +515,9 @@ export function CashBoxesView() {
               <span>واریز خالص به بانک:</span>
               <span className="font-mono font-bold text-blue-600">
                 {(() => {
-                  try {
-                    const g = BigInt((posGross || "0").split(".")[0] || "0");
-                    const f = BigInt((posFee || "0").split(".")[0] || "0");
-                    return formatMoneyRial(g > f ? (g - f).toString() : "0");
-                  } catch {
-                    return "۰";
-                  }
+                  const g = parseIntegerRial(posGross || "0");
+                  const f = parseIntegerRial(posFee || "0");
+                  return formatMoneyRial(g > f ? (g - f).toString() : "0");
                 })()}
               </span>
             </div>

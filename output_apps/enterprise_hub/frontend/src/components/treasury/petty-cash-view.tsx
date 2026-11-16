@@ -270,9 +270,7 @@ export function PettyCashView() {
                     <div>
                       <span className="text-xs text-muted-foreground">رسیدهای در انتظار تسویه:</span>
                       <p className="font-mono text-base font-bold text-amber-600">
-                        {formatReportMoney(
-                          minorToMajorString(sumMinorUnits(pending))
-                        )}
+                        {formatReportMoney(sumMinorUnits(pending))}
                       </p>
                     </div>
                     <div>
@@ -654,7 +652,7 @@ export function PettyCashView() {
           <p className="text-sm text-muted-foreground">
             تعداد {pending.length} سند هزینه به ارزش کل{" "}
             <span className="font-mono font-bold text-foreground">
-              {formatReportMoney(minorToMajorString(sumMinorUnits(pending)))}
+              {formatReportMoney(sumMinorUnits(pending))}
             </span>{" "}
             تسویه شده و سند حسابداری صادر خواهد شد.
           </p>
