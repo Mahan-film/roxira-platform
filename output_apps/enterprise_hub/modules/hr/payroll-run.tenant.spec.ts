@@ -26,7 +26,7 @@ import { HrRepository } from './repositories/hr.repository';
 import { HrService } from './services/hr.service';
 import { PayrollRunService } from './services/payroll-run.service';
 import { reconcilePayrollRun } from './services/payroll-reconciliation';
-import { fakeStatutory } from './statutory/__fixtures__/seeded-rates';
+import { fakeStatutory, seededRates } from './statutory/__fixtures__/seeded-rates';
 import { fakePostingRules } from './__fixtures__/fake-posting-rules';
 import { isLeaveInPeriod } from './services/jalali-period';
 
@@ -495,6 +495,32 @@ const workshop = {
 };
 
 describe('PayrollRunService — calculation and posting', () => {
+  it('resolves statutory rates through the country pack payroll adapter when registry is provided', async () => {
+    const { repo, hrService, accounting } = setup();
+    const ratesForMock = jest.fn(async (_t: string, y: number, _m?: number) => seededRates(y));
+    const fakePack = {
+      country: 'IR',
+      payroll: {
+        ratesFor: ratesForMock,
+      },
+    };
+    const packRegistry = {
+      resolve: jest.fn(() => fakePack),
+    };
+    const serviceWithPack = new PayrollRunService(
+      repo as unknown as HrRepository,
+      hrService,
+      accounting as unknown as AccountingService,
+      fakeStatutory(),
+      fakePostingRules(accounting as unknown as AccountingService),
+      packRegistry as never,
+    );
+    const rates = await serviceWithPack.getRates('tenant-a', 1405);
+    expect(packRegistry.resolve).toHaveBeenCalled();
+    expect(ratesForMock).toHaveBeenCalledWith('tenant-a', 1405, undefined);
+    expect(rates.year).toBe(1405);
+  });
+
   it('calculates a draft run for the tenant active employees only', async () => {
     const { repo, service } = setup();
     const a1 = repo.seedEmployee('tenant-a');

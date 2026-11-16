@@ -49,8 +49,9 @@ export async function readStatutory(
   tenantId: string,
   fiscalYear: number,
   keys: readonly StatutoryKey[],
+  country: string = IRAN,
 ): Promise<Map<StatutoryKey, StatutoryUse>> {
-  const rows = await repository.findForYear(tenantId, IRAN, fiscalYear);
+  const rows = await repository.findForYear(tenantId, country, fiscalYear);
   const resolved = resolveParameters(rows, isoDate(jalaliMonthEnd(fiscalYear, 12)));
   const out = new Map<StatutoryKey, StatutoryUse>();
   for (const key of keys) {

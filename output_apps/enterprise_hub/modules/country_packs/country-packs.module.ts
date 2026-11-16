@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { CalendarModule } from '../calendar/calendar.module';
 import { HrModule } from '../hr/hr.module';
 import { StatutoryService } from '../hr/statutory/statutory.service';
@@ -22,6 +22,7 @@ export const DEFAULT_COUNTRY = 'IR';
  * and provides access to country-scoped localisation, statutory, tax and calendar adapters.
  * The test pack is never registered here.
  */
+@Global()
 @Module({
   imports: [CalendarModule, HrModule, TenantsModule, PostingRulesModule],
   providers: [

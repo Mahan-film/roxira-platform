@@ -41,6 +41,7 @@ import {
 import { MoadianRepository } from './repositories/moadian.repository';
 import { FetchLike, MoadianApiClient } from './services/moadian-api.client';
 import { MoadianService } from './services/moadian.service';
+import { CountryPackRegistry } from '../country_packs/country-pack.registry';
 import {
   decryptMoadianJwe,
   encryptMoadianJwe,
@@ -599,6 +600,7 @@ function buildMoadian(
     enabled?: boolean;
     invoices?: InvoiceResponseDto[];
     activeSigningKeyPem?: string | null;
+    packRegistry?: CountryPackRegistry;
   } = {},
 ) {
   const env: Record<string, string> = {
@@ -651,6 +653,7 @@ function buildMoadian(
     config,
     queue,
     taxComplianceRepository,
+    options.packRegistry,
   );
   return { service, repository, state, jobs, env, taxComplianceRepository };
 }
@@ -744,6 +747,25 @@ describe('MoadianService — every pattern through the send path', () => {
     await ctx.service.submitInvoice(TENANT_A, INVOICE_A, { cashPortion: 1_000_000 });
     await ctx.service.processSend(ctx.jobs[0].data as never, false);
     expect(sentHeader(ctx.state)).toMatchObject({ setm: 3, cap: 1_000_000 });
+  });
+
+  it('delegates invoice mapping to the country pack e-invoice adapter when registry is provided', async () => {
+    const mapMock = jest.fn((inv, ctx) => mapInvoiceToMoadianPacket(inv, ctx));
+    const fakePack = {
+      country: 'IR',
+      eInvoice: {
+        scheme: 'moadian',
+        map: mapMock,
+      },
+    };
+    const packRegistry = {
+      resolve: jest.fn(() => fakePack),
+    } as unknown as CountryPackRegistry;
+    const ctx = buildMoadian({ packRegistry });
+    await ctx.service.putCredential(TENANT_A, credentialDto());
+    await ctx.service.submitInvoice(TENANT_A, INVOICE_A);
+    expect(packRegistry.resolve).toHaveBeenCalled();
+    expect(mapMock).toHaveBeenCalled();
   });
 });
 
