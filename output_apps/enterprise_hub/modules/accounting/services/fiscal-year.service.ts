@@ -61,7 +61,7 @@ export class FiscalYearService {
     private readonly fiscalYears: FiscalYearRepository,
     private readonly reports: LedgerReportRepository,
     private readonly accounting: AccountingService,
-    private readonly calendar: CalendarService = new CalendarService(),
+    private readonly calendar: CalendarService,
   ) {}
 
   private toDto(entity: FiscalYearEntity): FiscalYearResponseDto {

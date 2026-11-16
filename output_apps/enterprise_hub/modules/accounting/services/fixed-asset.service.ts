@@ -166,10 +166,11 @@ export class FixedAssetService {
       const todo: Array<{ asset: FixedAssetEntity; charge: bigint }> = [];
       for (const asset of active) {
         if (target < asset.nextPeriodIndex) {
-          const acquired = parseToJalali(asset.acquisitionDate)!;
+          const acquired = parseToJalali(asset.acquisitionDate);
+          const acqPeriod = acquired ? periodIndex(acquired.year, acquired.month) : 0;
           result.skipped.push({
             code: asset.code,
-            reason: target < periodIndex(acquired.year, acquired.month) ? 'NOT_ACQUIRED_YET' : 'ALREADY_DONE',
+            reason: target < acqPeriod ? 'NOT_ACQUIRED_YET' : 'ALREADY_DONE',
           });
         } else if (target > asset.nextPeriodIndex) {
           result.skipped.push({ code: asset.code, reason: 'PREVIOUS_MONTH_MISSING' });
