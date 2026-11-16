@@ -83,4 +83,130 @@ export class CalendarService {
   fiscalMonthIndex(spec: FiscalYearSpec, date: CalendarDate): number {
     return fiscalMonthIndex(spec, date);
   }
+
+  /**
+   * Gregorian ISO date (`YYYY-MM-DD`) of an instant in the Iran calendar day (Asia/Tehran).
+   * Safe across UTC midnight boundaries (e.g. 00:30 Tehran time).
+   */
+  tehranIsoDate(instant: Date | string | number = new Date()): string {
+    return math.tehranIsoDate(instant);
+  }
+
+  /**
+   * Converts an instant to a Gregorian ISO string (`YYYY-MM-DD`) in the given timezone (default 'Asia/Tehran').
+   */
+  instantToGregorianIso(instant: Date | string | number, timeZone = 'Asia/Tehran'): string {
+    return math.instantToGregorianIso(instant, timeZone);
+  }
+
+  /**
+   * Converts an instant to an ISO string (`YYYY-MM-DD`) in the target calendar and timezone.
+   */
+  instantToIso(
+    instant: Date | string | number,
+    calendar: CalendarId = 'jalali',
+    timeZone = 'Asia/Tehran',
+  ): string {
+    return math.instantToIso(instant, calendar, timeZone);
+  }
+
+  /**
+   * Returns today's ISO date string in the target calendar and timezone.
+   */
+  todayIso(calendar: CalendarId = 'gregorian', timeZone = 'Asia/Tehran'): string {
+    return math.todayIso(calendar, timeZone);
+  }
+
+  /**
+   * Returns today's CalendarDate in the target calendar and timezone.
+   */
+  today(calendar: CalendarId = 'gregorian', timeZone = 'Asia/Tehran'): CalendarDate {
+    return math.today(calendar, timeZone);
+  }
+
+  /**
+   * Converts an instant (Date, timestamp, or string) to a CalendarDate in the target calendar and timezone.
+   */
+  instantToDate(
+    instant: Date | string | number,
+    calendar: CalendarId = 'gregorian',
+    timeZone = 'Asia/Tehran',
+  ): CalendarDate {
+    return math.instantToDate(instant, calendar, timeZone);
+  }
+
+  /**
+   * Formats a date or Gregorian ISO string into Jalali display text, e.g. "1405/01/15" or "1405-01-15".
+   */
+  formatJalali(dateOrIso: CalendarDate | string, separator: '/' | '-' = '/'): string {
+    return math.formatJalali(dateOrIso, separator);
+  }
+
+  /**
+   * Parse a date string (Jalali `YYYY/MM/DD` or Gregorian ISO `YYYY-MM-DD`) into Jalali CalendarDate.
+   */
+  parseToJalali(dateStr: string | null | undefined): CalendarDate | null {
+    return math.parseToJalali(dateStr);
+  }
+
+  /**
+   * Closed date range for a Jalali month with Gregorian ISO start and end strings and day count.
+   */
+  jalaliMonthRange(year: number, month: number): {
+    start: CalendarDate;
+    end: CalendarDate;
+    startDate: string;
+    endDate: string;
+    days: number;
+  } {
+    return math.jalaliMonthRange(year, month);
+  }
+
+  /**
+   * Number of days in a Jalali month.
+   */
+  jalaliMonthDays(year: number, month: number): number {
+    return math.daysInMonth('jalali', year, month);
+  }
+
+  /**
+   * First day of a Jalali month as a CalendarDate.
+   */
+  jalaliMonthStart(year: number, month: number): CalendarDate {
+    return { calendar: 'jalali', year, month, day: 1 };
+  }
+
+  /**
+   * Last day of a Jalali month as a CalendarDate.
+   */
+  jalaliMonthEnd(year: number, month: number): CalendarDate {
+    return math.endOfMonth('jalali', year, month);
+  }
+
+  /**
+   * Adds whole Jalali calendar months to a Gregorian ISO date string, keeping the day clamped.
+   */
+  advanceJalaliMonths(iso: string, months: number): string {
+    return math.advanceJalaliMonths(iso, months);
+  }
+
+  /**
+   * First day of the Jalali month following the one `iso` falls in, as Gregorian ISO.
+   */
+  firstDayOfNextJalaliMonth(iso: string): string {
+    return math.firstDayOfNextJalaliMonth(iso);
+  }
+
+  /**
+   * Closed date range for a Jalali quarter (1..4) in a given Jalali year.
+   */
+  jalaliQuarterRange(year: number, quarter: number): {
+    year: number;
+    quarter: number;
+    startDate: string;
+    endDate: string;
+    label: string;
+  } {
+    return math.jalaliQuarterRange(year, quarter);
+  }
 }

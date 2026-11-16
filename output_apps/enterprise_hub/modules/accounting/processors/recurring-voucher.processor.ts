@@ -1,7 +1,7 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
-import { tehranIsoDate } from '../../hr/services/jalali-period';
+import { tehranIsoDate } from '../../calendar';
 import {
   RECURRING_VOUCHERS_QUEUE,
   RECURRING_VOUCHER_RUN_JOB,

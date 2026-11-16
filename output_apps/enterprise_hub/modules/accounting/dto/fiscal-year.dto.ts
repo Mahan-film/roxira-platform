@@ -40,6 +40,14 @@ export class ReopenFiscalYearDto {
   reason: string;
 }
 
+export class FiscalPeriodDto {
+  @ApiProperty({ example: 1 }) index: number;
+  @ApiProperty({ example: 'دوره ۱' }) name: string;
+  @ApiProperty({ example: '2026-03-21' }) startDate: string;
+  @ApiProperty({ example: '2026-04-20' }) endDate: string;
+  @ApiProperty({ example: '2026-04-21' }) endDateExclusive: string;
+}
+
 export class FiscalYearResponseDto {
   @ApiProperty() id: number;
   @ApiProperty() name: string;
@@ -48,6 +56,7 @@ export class FiscalYearResponseDto {
   @ApiProperty({ enum: FiscalYearStatus }) status: FiscalYearStatus;
   @ApiProperty({ nullable: true }) closedAt: Date | null;
   @ApiProperty({ nullable: true }) closedBy: string | null;
+  @ApiPropertyOptional({ type: [FiscalPeriodDto] }) periods?: FiscalPeriodDto[];
 }
 
 export class CloseResultDto {

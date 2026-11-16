@@ -1,4 +1,4 @@
-import { isoDate, jalaliMonthEnd } from '../../hr/services/jalali-period';
+import { jalaliMonthRange } from '../../calendar';
 import {
   assetRegister,
   assetRegisterTable,
@@ -92,7 +92,7 @@ describe('depreciationSchedule', () => {
     expect(schedule.rows).toHaveLength(12);
     expect(schedule.rows.every((row) => row.chargeMinor === 10000n)).toBe(true);
     expect(schedule.rows[0].period).toBe(1);
-    expect(schedule.rows[0].day).toBe(isoDate(jalaliMonthEnd(1405, 1)));
+    expect(schedule.rows[0].day).toBe(jalaliMonthRange(1405, 1).endDate);
     expect(schedule.rows[11].accumulatedMinor).toBe(120000n);
     expect(schedule.rows[11].bookValueMinor).toBe(0n);
     expect(schedule.closingBookValueMinor).toBe(0n);

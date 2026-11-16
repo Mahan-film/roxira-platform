@@ -1,4 +1,4 @@
-import { addDays, addMonths, compare, convert, toEpochDay } from './calendar.math';
+import { addDays, addMonths, compare, convert, formatDate, toEpochDay } from './calendar.math';
 import {
   CALENDAR_IDS,
   CalendarDate,
@@ -42,7 +42,18 @@ function startYearOf(spec: FiscalYearSpec, label: number): number {
 }
 
 function range(start: CalendarDate, endExclusive: CalendarDate): DateRange {
-  return { start, end: addDays(endExclusive, -1), endExclusive };
+  const end = addDays(endExclusive, -1);
+  const gregStart = convert(start, 'gregorian');
+  const gregEnd = convert(end, 'gregorian');
+  const gregEndExclusive = convert(endExclusive, 'gregorian');
+  return {
+    start,
+    end,
+    endExclusive,
+    startDate: formatDate(gregStart),
+    endDate: formatDate(gregEnd),
+    endDateExclusive: formatDate(gregEndExclusive),
+  };
 }
 
 export function fiscalYearRange(spec: FiscalYearSpec, label: number): DateRange {
@@ -84,7 +95,15 @@ function fiscalPeriods(spec: FiscalYearSpec, label: number, months: number): Fis
   const result: FiscalPeriod[] = [];
   for (let i = 0; i < count; i++) {
     const from = addMonths(start, i * months);
-    result.push({ index: i + 1, ...range(from, addMonths(start, (i + 1) * months)) });
+    const toExclusive = addMonths(start, (i + 1) * months);
+    const r = range(from, toExclusive);
+    result.push({
+      index: i + 1,
+      ...r,
+      startDate: r.startDate!,
+      endDate: r.endDate!,
+      endDateExclusive: r.endDateExclusive!,
+    });
   }
   return result;
 }

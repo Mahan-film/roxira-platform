@@ -11,6 +11,7 @@ import {
   CloseFiscalYearDto,
   CloseResultDto,
   CreateFiscalYearDto,
+  FiscalPeriodDto,
   FiscalYearResponseDto,
   ReopenFiscalYearDto,
 } from '../dto/fiscal-year.dto';
@@ -26,6 +27,7 @@ import { AccountingRepository } from '../repositories/accounting.repository';
 import { FiscalYearRepository } from '../repositories/fiscal-year.repository';
 import { LedgerReportRepository } from '../repositories/ledger-report.repository';
 import { AccountingService } from './accounting.service';
+import { CalendarService, convert, parseDate } from '../../calendar';
 
 const realDay = (day: string): boolean => {
   const parsed = new Date(`${day}T00:00:00.000Z`);
@@ -34,9 +36,6 @@ const realDay = (day: string): boolean => {
 
 /** Mid-day UTC keeps the calendar day whatever the database session time zone is. */
 const entryDate = (day: string): string => `${day}T12:00:00.000Z`;
-
-const addDays = (day: string, days: number): string =>
-  new Date(Date.parse(`${day}T00:00:00.000Z`) + days * 86_400_000).toISOString().slice(0, 10);
 
 interface CloseLine {
   accountCode: string;
@@ -62,9 +61,25 @@ export class FiscalYearService {
     private readonly fiscalYears: FiscalYearRepository,
     private readonly reports: LedgerReportRepository,
     private readonly accounting: AccountingService,
+    private readonly calendar: CalendarService = new CalendarService(),
   ) {}
 
   private toDto(entity: FiscalYearEntity): FiscalYearResponseDto {
+    let periods: FiscalPeriodDto[] | undefined;
+    try {
+      const gregStart = parseDate('gregorian', entity.startDate);
+      const jStart = convert(gregStart, 'jalali');
+      const fiscalMonths = this.calendar.fiscalMonths(this.calendar.iranFiscalYear, jStart.year);
+      periods = fiscalMonths.map((p) => ({
+        index: p.index,
+        name: `دوره ${p.index}`,
+        startDate: p.startDate,
+        endDate: p.endDate,
+        endDateExclusive: p.endDateExclusive,
+      }));
+    } catch {
+      periods = undefined;
+    }
     return {
       id: entity.id,
       name: entity.name,
@@ -73,7 +88,17 @@ export class FiscalYearService {
       status: entity.status,
       closedAt: entity.closedAt,
       closedBy: entity.closedBy,
+      periods,
     };
+  }
+
+  async getPeriods(tenantId: string, id: number): Promise<FiscalPeriodDto[]> {
+    const year = await this.fiscalYears.find(tenantId, id);
+    if (!year) {
+      throw new NotFoundException(`سال مالی با شناسه ${id} یافت نشد.`);
+    }
+    const dto = this.toDto(year);
+    return dto.periods ?? [];
   }
 
   async list(tenantId: string): Promise<FiscalYearResponseDto[]> {
@@ -190,7 +215,9 @@ export class FiscalYearService {
         throw new ConflictException(`ابتدا سال مالی ${earlier.name} را ببندید.`);
       }
 
-      const nextStart = addDays(year.endDate, 1);
+      const nextStart = this.calendar.format(
+        this.calendar.addDays(this.calendar.parse('gregorian', year.endDate), 1),
+      );
       let next = years.find((candidate) => candidate.startDate === nextStart);
       if (!next) {
         if (!dto.nextYear) {

@@ -24,6 +24,7 @@ import { RecurringVoucherService } from './services/recurring-voucher.service';
 import { TenantScope } from '../access/services/tenant-scope';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { CalendarModule } from '../calendar/calendar.module';
 import { CurrencyModule } from '../currency/currency.module';
 import { AccountingController } from './controllers/accounting.controller';
 import { VoucherAttachmentController } from './controllers/voucher-attachment.controller';
@@ -88,6 +89,7 @@ import { BudgetVsActualService } from './services/budget-vs-actual.service';
       AccountBudgetEntity,
     ]),
     CurrencyModule,
+    CalendarModule,
     AccessModule,
     TenantPolicyModule,
     BullModule.registerQueue({ name: RECURRING_VOUCHERS_QUEUE }),

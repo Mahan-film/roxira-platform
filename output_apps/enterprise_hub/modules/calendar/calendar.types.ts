@@ -27,11 +27,25 @@ export interface DateRange {
   start: CalendarDate;
   end: CalendarDate;
   endExclusive: CalendarDate;
+  /** Gregorian ISO 'YYYY-MM-DD' */
+  startDate?: string;
+  /** Gregorian ISO 'YYYY-MM-DD' */
+  endDate?: string;
+  /** Gregorian ISO 'YYYY-MM-DD' */
+  endDateExclusive?: string;
 }
 
 export interface FiscalPeriod extends DateRange {
   /** 1-based index inside the fiscal year. */
   index: number;
+  /** Optional display name, e.g. "دوره ۱" */
+  name?: string;
+  /** Explicit Gregorian start date 'YYYY-MM-DD' */
+  startDate: string;
+  /** Explicit Gregorian end date 'YYYY-MM-DD' */
+  endDate: string;
+  /** Explicit Gregorian end exclusive date 'YYYY-MM-DD' */
+  endDateExclusive: string;
 }
 
 export class CalendarError extends Error {}
