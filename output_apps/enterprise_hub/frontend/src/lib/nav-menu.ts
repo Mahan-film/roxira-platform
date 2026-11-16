@@ -76,6 +76,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         module: "crm",
         keywords: ["customer", "lead", "مشتری", "سرنخ", "crm"],
       },
+      {
+        href: "/app/quotations",
+        label: "پیش‌فاکتورها",
+        icon: "FileSpreadsheet",
+        module: "invoicing",
+        keywords: ["quotation", "proforma", "پیش‌فاکتور"],
+      },
     ],
   },
   {

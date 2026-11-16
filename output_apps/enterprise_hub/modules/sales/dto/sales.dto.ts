@@ -260,6 +260,7 @@ export class SalesQuotationResponseDto {
   @ApiPropertyOptional({ nullable: true }) validUntil: string | null;
   @ApiProperty({ enum: SalesQuotationStatus }) status: SalesQuotationStatus;
   @ApiPropertyOptional({ nullable: true }) note: string | null;
+  @ApiPropertyOptional({ nullable: true, description: 'شناسه صورتحساب فروش تبدیل‌شده' }) convertedInvoiceId?: string | null;
   @ApiProperty({ ...MONEY }) totalAmount: Money;
   @ApiPropertyOptional({ nullable: true }) createdBy: string | null;
   @ApiPropertyOptional({ description: 'هشدار خط‌مشی' }) warning?: string;
@@ -288,6 +289,7 @@ export class SalesOrderResponseDto {
   @ApiPropertyOptional({ nullable: true }) promisedDate: string | null;
   @ApiProperty({ enum: SalesOrderStatus }) status: SalesOrderStatus;
   @ApiPropertyOptional({ nullable: true }) note: string | null;
+  @ApiPropertyOptional({ nullable: true, description: 'شناسه صورتحساب فروش تبدیل‌شده' }) convertedInvoiceId?: string | null;
   @ApiProperty({ ...MONEY }) totalAmount: Money;
   @ApiPropertyOptional({ nullable: true }) createdBy: string | null;
   @ApiPropertyOptional({ description: 'هشدار خط‌مشی' }) warning?: string;
