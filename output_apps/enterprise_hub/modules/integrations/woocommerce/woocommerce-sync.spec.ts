@@ -179,7 +179,7 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
       const secondSave = mockWooRepo.saveConfig.mock.calls[1][1];
       expect(secondSave.consumerKeyEncrypted).toBe(stored.consumerKeyEncrypted);
       expect(secondSave.consumerSecretEncrypted).toBe(stored.consumerSecretEncrypted);
-      expect(secondSave.webhookSecret).toBe(stored.webhookSecret);
+      expect(secondSave.webhookSecretEncrypted).toBe(stored.webhookSecretEncrypted);
     });
 
     it('imports USD/EUR orders cleanly with money.ts decimal strings and real FX rates/base totals', async () => {
@@ -320,7 +320,7 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
         storeUrl: 'https://shop.example.com',
         consumerKeyEncrypted: sealSecret('ck_test_1', tenantId),
         consumerSecretEncrypted: sealSecret('cs_test_1', tenantId),
-        webhookSecret: sealSecret('wh_1', tenantId),
+        webhookSecretEncrypted: sealSecret('wh_1', tenantId),
         autoSyncStock: true,
       });
 

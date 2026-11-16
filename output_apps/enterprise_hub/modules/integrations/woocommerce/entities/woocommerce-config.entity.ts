@@ -25,8 +25,8 @@ export class WooCommerceConfigEntity {
   @Column({ type: 'text', name: 'consumer_secret_encrypted' })
   consumerSecretEncrypted: string;
 
-  @Column({ type: 'text', name: 'webhook_secret' })
-  webhookSecret: string;
+  @Column({ type: 'text', name: 'webhook_secret_encrypted' })
+  webhookSecretEncrypted: string;
 
   @Column({ type: 'boolean', name: 'auto_sync_orders', default: true })
   autoSyncOrders: boolean;

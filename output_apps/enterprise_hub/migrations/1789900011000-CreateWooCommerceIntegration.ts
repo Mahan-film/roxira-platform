@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateWooCommerceIntegration1789900004300 implements MigrationInterface {
-  name = 'CreateWooCommerceIntegration1789900004300';
+export class CreateWooCommerceIntegration1789900011000 implements MigrationInterface {
+  name = 'CreateWooCommerceIntegration1789900011000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // 1. Create woocommerce_configs table
@@ -12,7 +12,7 @@ export class CreateWooCommerceIntegration1789900004300 implements MigrationInter
         "store_url" varchar(500) NOT NULL,
         "consumer_key_encrypted" text NOT NULL,
         "consumer_secret_encrypted" text NOT NULL,
-        "webhook_secret" text NOT NULL,
+        "webhook_secret_encrypted" text NOT NULL,
         "auto_sync_orders" boolean NOT NULL DEFAULT true,
         "auto_sync_stock" boolean NOT NULL DEFAULT true,
         "last_sync_at" timestamptz,
