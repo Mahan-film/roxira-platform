@@ -20,19 +20,19 @@ Legend: ✅ done · 🟡 partial · ❌ not yet. "Plan" means a WAVE row exists.
 | 12 | Beachhead customer needs (multi-branch retail and F&B) | ✅ R9 | ✅ pilot #1 = our own MY food-retail company; then daytime retail/trading/counter cafés | ✅ W16 T155–T160 | ❌ | Dogfood on our own company |
 | 13 | POS hardware, offline, counter payments | ✅ R9 | ✅ PWA + local print bridge; clearing accounts per rail | ✅ T156, T158 | 🟡 offline queue (T93) | Tested-printer list |
 | 14 | Pricing and plans | ✅ R5, R8 competitor prices | 🟡 owner decides prices | ✅ T145 metering | ❌ | Owner sets prices (per-branch bundle) |
-| 15 | Our own subscription billing and revenue ops | ❌ | ❌ | ❌ | ❌ | **R10** |
-| 16 | Financial model, runway, funding and grants | ❌ | ❌ | ❌ | ❌ | **R10** |
-| 17 | Company entity, bank, trademark, insurance | ✅ R5, R8 | ✅ owner's existing MY Sdn Bhd (food retail) adds software/AI; Paddle only outside MY; no Labuan | ❌ | ❌ | Owner: SSM nature-of-business change; R10 for bank, trademark, insurance |
+| 15 | Our own subscription billing and revenue ops | ✅ R10 | ✅ HitPay via own Sdn Bhd; Paddle dropped (AUP); plans/entitlements in our ledger | 🟡 T145 | ❌ | Owner: open HitPay merchant account |
+| 16 | Financial model, runway, funding and grants | ✅ R10 | ✅ lowest cost; grants/MD incentive only after revenue | ❌ | ❌ | Owner: company ownership % (24% vs MSME tax) |
+| 17 | Company entity, bank, trademark, insurance | ✅ R5, R8, R10 | ✅ existing MY Sdn Bhd adds software/AI; no Paddle, no Labuan | ❌ | ❌ | Owner: SSM nature change; MyIPO search + classes 9/42; accountant owns WHT/SST |
 | 18 | Customer legal documents (terms, DPA, privacy) | ✅ R5 | ✅ | ✅ W15 T144 drafts | ❌ | Lawyer review |
-| 19 | Growth channels, website, SEO | 🟡 R5 channels only | ❌ | ❌ | 🟡 public site exists | **R11** |
-| 20 | Messaging (WhatsApp, Telegram, SMS, email) | ❌ | ❌ | ❌ | 🟡 | **R11** |
-| 21 | Support and customer success, migration service | ❌ | ❌ | ❌ | 🟡 importers exist | **R11** |
-| 22 | Accountant partner programme and practice portal | 🟡 R5/R7 | 🟡 | 🟡 W16 | ❌ | **R11** |
+| 19 | Growth channels, website, SEO | ✅ R11 | ✅ partners → trigger outreach → 3-language comparison pages + free tools → clinics; ads wait | ❌ | 🟡 public site exists | WAVE row for free e-invoice checker + comparison pages |
+| 20 | Messaging (WhatsApp, Telegram, SMS, email) | ✅ R11 | ✅ WhatsApp Cloud API, customer-owned number (Embedded Signup v4); SMS OTP only via local gateway; own SMTP + signed links | ❌ | 🟡 | Owner: Meta business verification under the Sdn Bhd |
+| 21 | Support and customer success, migration service | ✅ R11 | ✅ AI first line 24/7, human P1 9–21 MYT; free smart cutover | 🟡 T100 | 🟡 importers exist | One inbox; Chatwoot only at volume |
+| 22 | Accountant partner programme and practice portal | ✅ R5/R7/R11 | 🟡 owner sets % | 🟡 W16 | ❌ | Owner: partner commission % |
 | 23 | Portfolio roadmap (next modules) | ✅ R7 | ✅ | 🟡 W16+ | 🟡 | Feature-gap audit (T143) first |
-| 24 | Open-source licence compliance | ❌ | ❌ | ❌ | ❌ | **R12**, then a CI licence check |
-| 25 | Dependency and AI-model lifecycle | 🟡 R2/R3 | 🟡 | ❌ | 🟡 models.yaml | **R12** |
-| 26 | Vendor exit and fallback per component | 🟡 R2 | ✅ fallback rule | 🟡 | 🟡 | **R12** vendor-exit table |
-| 27 | Scale, load testing, cost per tenant | 🟡 R2 | ❌ | ❌ | ❌ | **R12** |
+| 24 | Open-source licence compliance | ✅ R12 | ✅ gate shipped deps; internal AGPL tools OK | ✅ T163 | ❌ | — |
+| 25 | Dependency and AI-model lifecycle | ✅ R12 | ✅ retired-id list + CI; Node 24 by Mar 2027 | ✅ T161, T162, PR #857 | 🟡 models.yaml | Owner: approve PR #857 |
+| 26 | Vendor exit and fallback per component | ✅ R2, R12 | ✅ fallback rule; LiteLLM pinned, no enterprise features | 🟡 | 🟡 | — |
+| 27 | Scale, load testing, cost per tenant | 🟡 R2, R12 (model only) | 🟡 | ✅ T164 restore drill | ❌ | Load test before tenant 20 |
 | 28 | Product metrics and private telemetry | ✅ R7 | ✅ | 🟡 W16 | ❌ | Telemetry events table |
 
 ## Things research cannot answer (we must measure them ourselves)
@@ -50,8 +50,8 @@ The owner has the prompts in `Desktop/Roxira/deep_research_round2.html` (copy bu
 |---|---|
 | R8 fact-check — **received, `research/R8_FACT_CHECK.md`** | 9, 11, 14, 17 |
 | R9 first-customer field requirements — **received, `research/R9_FIRST_CUSTOMER.md`** | 3, 12, 13 |
-| R10 our own business (billing, finance, funding, entity, trademark) | 15, 16, 17 |
-| R11 growth and customer operations | 19, 20, 21, 22 |
-| R12 technical future-proofing | 13, 24–27 |
+| R10 our own business (billing, finance, funding, entity, trademark) — **received, `research/R10_R11_R12_BUSINESS_GROWTH_TECH.md`** | 15, 16, 17 |
+| R11 growth and customer operations — **received, `research/R10_R11_R12_BUSINESS_GROWTH_TECH.md`** | 19, 20, 21, 22 |
+| R12 technical future-proofing — **received, `research/R10_R11_R12_BUSINESS_GROWTH_TECH.md`** | 13, 24–27 |
 
 When the answers arrive, they are digested like R1–R7, and this table is updated.

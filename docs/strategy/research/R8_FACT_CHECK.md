@@ -90,7 +90,7 @@ Unverified numbers may go into pack config only with `verified: false`, and a pa
 1. **Spend:** as little as possible. Use the API keys we already have (key pool, free first); the owner tops up an account only when a free tier runs out.
 2. **Entity:** the owner **already has a Malaysian Sdn Bhd** (food retail). Its nature of business will be changed to add software and AI services. SSM: a board resolution, then a notice within 14 days (Practice Directive 2/2017, revised 5 Aug 2026), filed by the company secretary.
    - This replaces decision 3 above. We sell in Malaysia through our own Sdn Bhd with local gateways (Billplz/HitPay) and use it as the MyInvois intermediary (R9).
-   - Paddle remains an option for buyers outside Malaysia only.
+   - ~~Paddle remains an option for buyers outside Malaysia only.~~ Dropped 2026-11-16: its acceptable-use policy excludes phone services and messaging (R10).
    - The resident-director question is closed.
 3. **Privacy:** no special promise. Customer data may be used to run and improve the service, including AI models, as large platforms do. This must be **stated in the terms and privacy policy**: PDPA and GDPR require telling people the purposes, though not asking permission for each one. A customer who wants it gets a **private data option** (no use beyond their own service, paid models with data collection denied) as a paid add-on. This replaces decision "strict ZDR" and question 3.
 4. **Authority:** the hub plans and runs the work end to end, and uses the web for missing facts.
