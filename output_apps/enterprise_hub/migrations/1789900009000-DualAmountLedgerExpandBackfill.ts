@@ -39,34 +39,74 @@ export class DualAmountLedgerExpandBackfill1789900009000 implements MigrationInt
         ADD COLUMN IF NOT EXISTS "is_rounding" boolean NOT NULL DEFAULT false
     `);
 
-    // 2. Backfill existing journal entry lines
+    // 2. Backfill existing journal entry lines (temporarily bypass posted-line immutability trigger)
     await q.query(`
-      UPDATE "${this.tableLines}"
-         SET "tx_currency_code" = COALESCE("currency", 'IRR'),
-             "fx_rate_applied" = COALESCE("fx_rate", 1.0),
-             "tx_debit" = "debit",
-             "tx_credit" = "credit",
-             "book_debit" = "debit",
-             "book_credit" = "credit",
-             "is_rounding" = false
-       WHERE "book_debit" IS NULL
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM pg_trigger
+           WHERE tgname = 'TRG_fin_journal_entry_lines_guard_posted'
+             AND tgrelid = '${this.tableLines}'::regclass
+        ) THEN
+          ALTER TABLE "${this.tableLines}" DISABLE TRIGGER "TRG_fin_journal_entry_lines_guard_posted";
+        END IF;
+      END $$;
     `);
+    try {
+      await q.query(`
+        UPDATE "${this.tableLines}"
+           SET "tx_currency_code" = COALESCE("currency", 'IRR'),
+               "fx_rate_applied" = COALESCE("fx_rate", 1.0),
+               "tx_debit" = "debit",
+               "tx_credit" = "credit",
+               "book_debit" = "debit",
+               "book_credit" = "credit",
+               "is_rounding" = false
+         WHERE "book_debit" IS NULL
+      `);
+    } finally {
+      await q.query(`
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM pg_trigger
+             WHERE tgname = 'TRG_fin_journal_entry_lines_guard_posted'
+               AND tgrelid = '${this.tableLines}'::regclass
+          ) THEN
+            ALTER TABLE "${this.tableLines}" ENABLE TRIGGER "TRG_fin_journal_entry_lines_guard_posted";
+          END IF;
+        END $$;
+      `);
+    }
 
     // 3. Sync trigger for backward-compatibility during expand phase
     await q.query(`
       CREATE OR REPLACE FUNCTION fin_sync_journal_entry_line_dual_amounts() RETURNS trigger AS $$
       BEGIN
-        IF NEW.book_debit IS NULL AND NEW.debit IS NOT NULL THEN
-          NEW.book_debit := NEW.debit;
-        END IF;
-        IF NEW.book_credit IS NULL AND NEW.credit IS NOT NULL THEN
-          NEW.book_credit := NEW.credit;
-        END IF;
-        IF NEW.debit IS NULL AND NEW.book_debit IS NOT NULL THEN
-          NEW.debit := NEW.book_debit;
-        END IF;
-        IF NEW.credit IS NULL AND NEW.book_credit IS NOT NULL THEN
-          NEW.credit := NEW.book_credit;
+        IF TG_OP = 'INSERT' THEN
+          IF (NEW.debit IS NULL OR NEW.debit = 0) AND COALESCE(NEW.book_debit, 0) <> 0 THEN
+            NEW.debit := NEW.book_debit;
+          END IF;
+          IF (NEW.credit IS NULL OR NEW.credit = 0) AND COALESCE(NEW.book_credit, 0) <> 0 THEN
+            NEW.credit := NEW.book_credit;
+          END IF;
+          IF NEW.book_debit IS NULL AND NEW.debit IS NOT NULL THEN
+            NEW.book_debit := NEW.debit;
+          END IF;
+          IF NEW.book_credit IS NULL AND NEW.credit IS NOT NULL THEN
+            NEW.book_credit := NEW.credit;
+          END IF;
+        ELSE
+          IF NEW.book_debit IS DISTINCT FROM OLD.book_debit AND NEW.debit IS NOT DISTINCT FROM OLD.debit THEN
+            NEW.debit := NEW.book_debit;
+          ELSIF NEW.debit IS DISTINCT FROM OLD.debit AND NEW.book_debit IS NOT DISTINCT FROM OLD.book_debit THEN
+            NEW.book_debit := NEW.debit;
+          END IF;
+          IF NEW.book_credit IS DISTINCT FROM OLD.book_credit AND NEW.credit IS NOT DISTINCT FROM OLD.credit THEN
+            NEW.credit := NEW.book_credit;
+          ELSIF NEW.credit IS DISTINCT FROM OLD.credit AND NEW.book_credit IS NOT DISTINCT FROM OLD.book_credit THEN
+            NEW.book_credit := NEW.credit;
+          END IF;
         END IF;
 
         IF NEW.tx_debit IS NULL THEN
@@ -79,15 +119,35 @@ export class DualAmountLedgerExpandBackfill1789900009000 implements MigrationInt
         IF NEW.tx_currency_code IS NULL THEN
           NEW.tx_currency_code := COALESCE(NEW.currency, 'IRR');
         END IF;
-        IF NEW.currency IS NULL THEN
-          NEW.currency := NEW.tx_currency_code;
+        IF TG_OP = 'INSERT' THEN
+          IF (NEW.currency IS NULL OR NEW.currency = 'IRR') AND NEW.tx_currency_code IS NOT NULL AND NEW.tx_currency_code <> 'IRR' THEN
+            NEW.currency := NEW.tx_currency_code;
+          ELSIF NEW.currency IS NULL THEN
+            NEW.currency := NEW.tx_currency_code;
+          END IF;
+        ELSE
+          IF NEW.tx_currency_code IS DISTINCT FROM OLD.tx_currency_code AND NEW.currency IS NOT DISTINCT FROM OLD.currency THEN
+            NEW.currency := NEW.tx_currency_code;
+          ELSIF NEW.currency IS DISTINCT FROM OLD.currency AND NEW.tx_currency_code IS NOT DISTINCT FROM OLD.tx_currency_code THEN
+            NEW.tx_currency_code := NEW.currency;
+          END IF;
         END IF;
 
         IF NEW.fx_rate_applied IS NULL THEN
           NEW.fx_rate_applied := COALESCE(NEW.fx_rate, 1.0);
         END IF;
-        IF NEW.fx_rate IS NULL THEN
-          NEW.fx_rate := NEW.fx_rate_applied;
+        IF TG_OP = 'INSERT' THEN
+          IF (NEW.fx_rate IS NULL OR NEW.fx_rate = 1) AND NEW.fx_rate_applied IS NOT NULL AND NEW.fx_rate_applied <> 1 THEN
+            NEW.fx_rate := NEW.fx_rate_applied;
+          ELSIF NEW.fx_rate IS NULL THEN
+            NEW.fx_rate := NEW.fx_rate_applied;
+          END IF;
+        ELSE
+          IF NEW.fx_rate_applied IS DISTINCT FROM OLD.fx_rate_applied AND NEW.fx_rate IS NOT DISTINCT FROM OLD.fx_rate THEN
+            NEW.fx_rate := NEW.fx_rate_applied;
+          ELSIF NEW.fx_rate IS DISTINCT FROM OLD.fx_rate AND NEW.fx_rate_applied IS NOT DISTINCT FROM OLD.fx_rate_applied THEN
+            NEW.fx_rate_applied := NEW.fx_rate;
+          END IF;
         END IF;
 
         IF NEW.is_rounding IS NULL THEN

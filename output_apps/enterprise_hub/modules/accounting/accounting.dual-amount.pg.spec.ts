@@ -199,7 +199,7 @@ describePg('Dual-Amount Ledger & FX Rates on PostgreSQL (T138)', () => {
             [draft.id],
           );
         }),
-      ).rejects.toThrow(/RX004/);
+      ).rejects.toThrow(/cannot leave DRAFT.*balances/);
     });
 
     it('rejects database write if single transaction currency does not balance on POSTED entry', async () => {
@@ -233,7 +233,7 @@ describePg('Dual-Amount Ledger & FX Rates on PostgreSQL (T138)', () => {
             [draft.id],
           );
         }),
-      ).rejects.toThrow(/RX004/);
+      ).rejects.toThrow(/not balanced in transaction currency/);
     });
 
     it('allows rounding line (is_rounding = true) to balance book residual in database', async () => {
