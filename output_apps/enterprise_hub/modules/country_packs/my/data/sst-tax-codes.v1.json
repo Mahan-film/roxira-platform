@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "jurisdiction": "MY",
+  "description": "Malaysian Sales Tax and Service Tax (SST) codes under the Sales Tax Act 2018 and Service Tax Act 2018",
+  "source": "Royal Malaysian Customs Department (JKDM), https://mysst.customs.gov.my",
+  "taxCodes": [
+    {
+      "code": "MY-ST-STD",
+      "name": "Sales Tax - Standard Rate (10%)",
+      "category": "sales_tax",
+      "rate": "0.10",
+      "effectiveFrom": "2018-09-01",
+      "sourceUrl": "https://mysst.customs.gov.my",
+      "description": "Standard rate of 10% on manufactured taxable goods under Sales Tax (Rate of Tax) Order 2018"
+    },
+    {
+      "code": "MY-ST-RED",
+      "name": "Sales Tax - Reduced Rate (5%)",
+      "category": "sales_tax",
+      "rate": "0.05",
+      "effectiveFrom": "2018-09-01",
+      "sourceUrl": "https://mysst.customs.gov.my",
+      "description": "Reduced rate of 5% on selected goods (e.g. basic foodstuffs, building materials, petroleum oils)"
+    },
+    {
+      "code": "MY-ST-EXE",
+      "name": "Sales Tax - Exempt (0%)",
+      "category": "sales_tax",
+      "rate": "0.00",
+      "effectiveFrom": "2018-09-01",
+      "sourceUrl": "https://mysst.customs.gov.my",
+      "description": "Exempt goods under Schedule A of Sales Tax (Goods Exempted From Sales Tax) Order 2018"
+    },
+    {
+      "code": "MY-VT-GEN",
+      "name": "Service Tax - General Rate (8%)",
+      "category": "service_tax",
+      "rate": "0.08",
+      "effectiveFrom": "2024-03-01",
+      "sourceUrl": "https://mysst.customs.gov.my",
+      "description": "General rate of 8% on taxable services effective 1 March 2024 (Service Tax (Rate of Tax) (Amendment) Regulations 2024)"
+    },
+    {
+      "code": "MY-VT-FNB",
+      "name": "Service Tax - Food and Beverage (6%)",
+      "category": "service_tax",
+      "rate": "0.06",
+      "effectiveFrom": "2018-09-01",
+      "sourceUrl": "https://mysst.customs.gov.my",
+      "description": "Preserved 6% rate for food and beverage operators (Group B) after 1 March 2024 reform"
+    },
+    {
+      "code": "MY-VT-TEL",
+      "name": "Service Tax - Telecommunications (6%)",
+      "category": "service_tax",
+      "rate": "0.06",
+      "effectiveFrom": "2018-09-01",
+      "sourceUrl": "https://mysst.customs.gov.my",
+      "description": "Preserved 6% rate for telecommunications services (Group I) after 1 March 2024 reform"
+    },
+    {
+      "code": "MY-VT-CRD",
+      "name": "Service Tax - Credit Card Specific (RM 25/card)",
+      "category": "service_tax",
+      "rate": "25.00",
+      "effectiveFrom": "2018-09-01",
+      "sourceUrl": "https://mysst.customs.gov.my",
+      "description": "Specific fixed service tax of RM 25 per year on each principal or supplementary credit/charge card"
+    },
+    {
+      "code": "MY-VT-EXE",
+      "name": "Service Tax - Non-taxable / Exempt (0%)",
+      "category": "service_tax",
+      "rate": "0.00",
+      "effectiveFrom": "2018-09-01",
+      "sourceUrl": "https://mysst.customs.gov.my",
+      "description": "Non-taxable services or services eligible for B2B service tax exemption under Schedule 1"
+    }
+  ]
+}

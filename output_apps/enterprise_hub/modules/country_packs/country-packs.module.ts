@@ -8,6 +8,7 @@ import { CountryPackInterceptor } from './country-pack.interceptor';
 import { CountryPackRegistry } from './country-pack.registry';
 import { CountryPackResolver } from './country-pack.resolver';
 import { createIranPack } from './ir/ir.pack';
+import { createMalaysiaPack } from './my/my.pack';
 
 export const DEFAULT_COUNTRY = 'IR';
 
@@ -16,6 +17,7 @@ export const DEFAULT_COUNTRY = 'IR';
  *
  * Builds the registry with the production packs, wires the CLS and per-request resolver,
  * and provides access to country-scoped localisation, statutory, tax and calendar adapters.
+ * The test pack is never registered here.
  */
 @Module({
   imports: [CalendarModule, HrModule, TenantsModule],
@@ -26,6 +28,7 @@ export const DEFAULT_COUNTRY = 'IR';
       useFactory: (statutory: StatutoryService): CountryPackRegistry => {
         const registry = new CountryPackRegistry(DEFAULT_COUNTRY);
         registry.register(createIranPack({ statutory }));
+        registry.register(createMalaysiaPack());
         return registry;
       },
     },
