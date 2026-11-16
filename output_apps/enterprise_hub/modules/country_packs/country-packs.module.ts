@@ -2,17 +2,23 @@ import { Module } from '@nestjs/common';
 import { CalendarModule } from '../calendar/calendar.module';
 import { HrModule } from '../hr/hr.module';
 import { StatutoryService } from '../hr/statutory/statutory.service';
+import { TenantsModule } from '../tenants/tenants.module';
+import { CURRENT_COUNTRY_PACK } from './country-pack.context';
+import { CountryPackInterceptor } from './country-pack.interceptor';
 import { CountryPackRegistry } from './country-pack.registry';
+import { CountryPackResolver } from './country-pack.resolver';
 import { createIranPack } from './ir/ir.pack';
 
 export const DEFAULT_COUNTRY = 'IR';
 
 /**
- * Builds the registry with the production packs. The test pack is never registered here. Nothing in
- * the product reads the registry yet: callers switch over one module at a time (see the ADR).
+ * Country Packs Module.
+ *
+ * Builds the registry with the production packs, wires the CLS and per-request resolver,
+ * and provides access to country-scoped localisation, statutory, tax and calendar adapters.
  */
 @Module({
-  imports: [CalendarModule, HrModule],
+  imports: [CalendarModule, HrModule, TenantsModule],
   providers: [
     {
       provide: CountryPackRegistry,
@@ -23,7 +29,26 @@ export const DEFAULT_COUNTRY = 'IR';
         return registry;
       },
     },
+    CountryPackResolver,
+    CountryPackInterceptor,
+    {
+      provide: CURRENT_COUNTRY_PACK,
+      inject: [CountryPackResolver],
+      useFactory: (resolver: CountryPackResolver) =>
+        new Proxy({} as any, {
+          get(_target, prop) {
+            const pack = resolver.currentPack();
+            const val = (pack as any)?.[prop];
+            return typeof val === 'function' ? val.bind(pack) : val;
+          },
+        }),
+    },
   ],
-  exports: [CountryPackRegistry],
+  exports: [
+    CountryPackRegistry,
+    CountryPackResolver,
+    CountryPackInterceptor,
+    CURRENT_COUNTRY_PACK,
+  ],
 })
 export class CountryPacksModule {}

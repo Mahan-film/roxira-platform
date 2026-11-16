@@ -48,10 +48,33 @@ export class TenantEntity {
   })
   defaultVatRate: number;
 
-  /** When true, members must sign in with a second factor (TOTP or passkey) to use the suite. */
-  /** ISO 3166-1 alpha-2 country of the organisation; selects the invoice rules. */
+  /** ISO 3166-1 alpha-2 country of the organisation; selects the country pack. */
   @Column({ type: 'varchar', length: 2, name: 'country_code', default: 'IR' })
   countryCode: string;
+
+  /** Semantic version of the country pack configured for this tenant. */
+  @Column({ type: 'varchar', length: 20, name: 'pack_version', default: '1.0.0' })
+  packVersion: string;
+
+  /** ISO 4217 book currency code. Locked once a posted entry exists. */
+  @Column({ type: 'varchar', length: 3, name: 'book_currency_code', default: 'IRR' })
+  bookCurrencyCode: string;
+
+  /** Presentation and fiscal calendar identifier ('jalali' | 'gregorian'). */
+  @Column({ type: 'varchar', length: 20, name: 'default_calendar', default: 'jalali' })
+  defaultCalendar: string;
+
+  /** IANA time zone used to turn instants into civil dates. */
+  @Column({ type: 'varchar', length: 50, name: 'timezone', default: 'Asia/Tehran' })
+  timezone: string;
+
+  /** BCP 47 primary locale code. */
+  @Column({ type: 'varchar', length: 20, name: 'locale', default: 'fa-IR' })
+  locale: string;
+
+  /** Month (1..12) when the organisation's fiscal year begins. */
+  @Column({ type: 'smallint', name: 'fiscal_year_start_month', default: 1 })
+  fiscalYearStartMonth: number;
 
   @Column({ type: 'boolean', default: false, name: 'require_2fa' })
   require2fa: boolean;

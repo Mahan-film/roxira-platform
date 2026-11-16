@@ -1,5 +1,8 @@
 import 'reflect-metadata';
 import { BadRequestException } from '@nestjs/common';
+import { CountryPackCls } from '../country_packs/country-pack.context';
+import { CountryPackRegistry } from '../country_packs/country-pack.registry';
+import { createTestPack, TEST_COUNTRY } from '../country_packs/xx/xx.pack';
 import { isValidStatutoryValue, STATUTORY_KEYS } from '../hr/statutory/statutory-catalogue';
 import { StatutoryRepository } from '../hr/statutory/statutory.repository';
 import { CorporateTaxController } from './controllers/corporate-tax.controller';
@@ -106,5 +109,44 @@ describe('corporate tax provision preview (DTX-01)', () => {
     const request = { user: { tenantId: 'tenant-a', tenantRole: 'ADMIN', role: 'ADMIN' } } as never;
     await controller.preview(request, { ...dto(), tenantId: 'tenant-b' } as never);
     expect(preview.mock.calls[0][0]).toBe('tenant-a');
+  });
+
+  it('queries statutory store using CountryPackRegistry country', async () => {
+    const registry = new CountryPackRegistry('IR');
+    const irPack = {
+      interfaceVersion: 1,
+      version: '1.0.0',
+      country: 'IR',
+      name: 'Iran',
+      status: 'production' as const,
+      locale: { languages: ['fa-IR'], direction: 'rtl' as const, displayDigits: 'arabext', currency: { code: 'IRR', minorUnits: 0 }, timeZone: 'Asia/Tehran' },
+      calendars: { primary: 'jalali' as const, fiscalYear: { calendar: 'jalali' as const, startMonth: 1, startDay: 1, labelBy: 'start' as const }, weekendDays: [5] },
+      chartTemplates: [],
+      taxRules: [{ kind: 'corporate_income_tax', label: 'Tax', statutoryKeys: ['corporate_tax_rate', 'corporate_tax_effective_floor'] }],
+      statutory: { knownKeys: () => ['corporate_tax_rate', 'corporate_tax_effective_floor'], valuesFor: jest.fn(async () => []) },
+      reportPack: [],
+    };
+    registry.register(irPack);
+
+    const findForYear = jest.fn().mockResolvedValue(RATES);
+    const service = new CorporateTaxService({ findForYear } as unknown as StatutoryRepository, registry);
+
+    await service.preview('tenant-a', dto());
+    expect(findForYear).toHaveBeenCalledWith('tenant-a', 'IR', 1405);
+  });
+
+  it('queries statutory store using active CLS country pack when non-default', async () => {
+    const registry = new CountryPackRegistry('IR');
+    const xxPack = createTestPack();
+    registry.register(xxPack);
+
+    const findForYear = jest.fn().mockResolvedValue(RATES);
+    const service = new CorporateTaxService({ findForYear } as unknown as StatutoryRepository, registry);
+
+    await CountryPackCls.run(xxPack, async () => {
+      await service.preview('tenant-xx', dto(), TEST_COUNTRY);
+    });
+
+    expect(findForYear).toHaveBeenCalledWith('tenant-xx', TEST_COUNTRY, 1405);
   });
 });

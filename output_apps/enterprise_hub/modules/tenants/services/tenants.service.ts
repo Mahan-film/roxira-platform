@@ -39,15 +39,21 @@ export class TenantsService {
     return this.tenantsRepository.findById(tenantId);
   }
 
-  /** به‌روزرسانی تنظیمات سازمان (فعلاً نرخ پیش‌فرض VAT). */
+  /** به‌روزرسانی تنظیمات سازمان (نرخ پیش‌فرض VAT و بومی‌سازی شرکت). */
   async updateSettings(
     tenantId: string,
     dto: UpdateTenantSettingsDto,
   ): Promise<TenantEntity> {
-    const tenant = await this.tenantsRepository.updateDefaultVatRate(
-      tenantId,
-      dto.defaultVatRate,
-    );
+    const fields: Partial<TenantEntity> = {};
+    if (dto.defaultVatRate !== undefined) fields.defaultVatRate = dto.defaultVatRate;
+    if (dto.countryCode !== undefined) fields.countryCode = dto.countryCode.toUpperCase();
+    if (dto.bookCurrencyCode !== undefined) fields.bookCurrencyCode = dto.bookCurrencyCode.toUpperCase();
+    if (dto.defaultCalendar !== undefined) fields.defaultCalendar = dto.defaultCalendar;
+    if (dto.timezone !== undefined) fields.timezone = dto.timezone;
+    if (dto.locale !== undefined) fields.locale = dto.locale;
+    if (dto.fiscalYearStartMonth !== undefined) fields.fiscalYearStartMonth = dto.fiscalYearStartMonth;
+
+    const tenant = await this.tenantsRepository.updateSettings(tenantId, fields);
     if (!tenant) {
       throw new NotFoundException('سازمانی برای حساب شما یافت نشد.');
     }

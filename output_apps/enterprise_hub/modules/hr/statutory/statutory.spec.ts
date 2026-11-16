@@ -1,6 +1,9 @@
 import 'reflect-metadata';
 import { BadRequestException } from '@nestjs/common';
 import { AuditService } from '../../access/services/audit.service';
+import { CountryPackCls } from '../../country_packs/country-pack.context';
+import { CountryPackRegistry } from '../../country_packs/country-pack.registry';
+import { createTestPack, TEST_COUNTRY } from '../../country_packs/xx/xx.pack';
 import { seededRates, seededRows } from './__fixtures__/seeded-rates';
 import { isValidStatutoryValue } from './statutory-catalogue';
 import {
@@ -175,5 +178,52 @@ describe('StatutoryService.setValue', () => {
       service.setValue(TENANT, 'u', { ...input, effectiveFrom: '2030-01-01' }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(repository.insertVersion).not.toHaveBeenCalled();
+  });
+
+  it('calls StatutoryRepository with country resolved from CountryPackRegistry', async () => {
+    const registry = new CountryPackRegistry('IR');
+    const irPack = {
+      interfaceVersion: 1,
+      version: '1.0.0',
+      country: 'IR',
+      name: 'Iran',
+      status: 'production' as const,
+      locale: { languages: ['fa-IR'], direction: 'rtl' as const, displayDigits: 'arabext', currency: { code: 'IRR', minorUnits: 0 }, timeZone: 'Asia/Tehran' },
+      calendars: { primary: 'jalali' as const, fiscalYear: { calendar: 'jalali' as const, startMonth: 1, startDay: 1, labelBy: 'start' as const }, weekendDays: [5] },
+      chartTemplates: [],
+      taxRules: [],
+      statutory: { knownKeys: () => [], valuesFor: jest.fn(async () => []) },
+      reportPack: [],
+    };
+    registry.register(irPack);
+
+    const repository = {
+      findForYear: jest.fn(async () => seededRows(1405)),
+      configuredYears: jest.fn(async () => [1405]),
+    };
+    const audit = { record: jest.fn() };
+    const service = new StatutoryService(repository as never, audit as never, registry);
+
+    await service.ratesFor(TENANT, 1405);
+    expect(repository.findForYear).toHaveBeenCalledWith(TENANT, 'IR', 1405);
+  });
+
+  it('calls StatutoryRepository with non-default country from active CLS context', async () => {
+    const registry = new CountryPackRegistry('IR');
+    const xxPack = createTestPack();
+    registry.register(xxPack);
+
+    const repository = {
+      findForYear: jest.fn(async () => seededRows(1405)),
+      configuredYears: jest.fn(async () => [1405]),
+    };
+    const audit = { record: jest.fn() };
+    const service = new StatutoryService(repository as never, audit as never, registry);
+
+    await CountryPackCls.run(xxPack, async () => {
+      await service.ratesFor(TENANT, 1405);
+    });
+
+    expect(repository.findForYear).toHaveBeenCalledWith(TENANT, TEST_COUNTRY, 1405);
   });
 });
