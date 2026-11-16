@@ -25,7 +25,7 @@ describe('Sepidar Migration Pipeline Part 2 (#231 / T79)', () => {
           SayadNumber: '1234567890123456',
           Direction: 'received',
           State: 'in_hand',
-          Amount: 10000000,
+          Amount: '10000000',
           IssueDate: '2026-10-01',
           DueDate: '2026-11-01',
           PartyCode: 'P-1',
@@ -48,7 +48,7 @@ describe('Sepidar Migration Pipeline Part 2 (#231 / T79)', () => {
           SayadNumber: persianSayad,
           Direction: 'received',
           State: 'in_hand',
-          Amount: 20000000,
+          Amount: '20000000',
           IssueDate: '2026-10-01',
           DueDate: '2026-11-01',
           PartyCode: 'P-2',
@@ -70,7 +70,7 @@ describe('Sepidar Migration Pipeline Part 2 (#231 / T79)', () => {
           SayadNumber: '12345678', // only 8 digits
           Direction: 'received',
           State: 'in_hand',
-          Amount: 10000000,
+          Amount: '10000000',
           IssueDate: '2026-10-01',
           DueDate: '2026-11-01',
           PartyCode: 'P-1',
@@ -83,7 +83,7 @@ describe('Sepidar Migration Pipeline Part 2 (#231 / T79)', () => {
           SayadNumber: '0000000000000000', // 16 zeroes (repeating placeholder)
           Direction: 'received',
           State: 'in_hand',
-          Amount: 10000000,
+          Amount: '10000000',
           IssueDate: '2026-10-01',
           DueDate: '2026-11-01',
           PartyCode: 'P-1',
@@ -123,7 +123,7 @@ describe('Sepidar Migration Pipeline Part 2 (#231 / T79)', () => {
           SayadNumber: '1234567890123456',
           Direction: 'received',
           State: 'in_hand',
-          Amount: 0,
+          Amount: '0',
           IssueDate: '2026-10-01',
           DueDate: '2026-11-01',
           PartyCode: 'P-1',
@@ -135,6 +135,30 @@ describe('Sepidar Migration Pipeline Part 2 (#231 / T79)', () => {
       expect(validCheques).toHaveLength(0);
       expect(errors).toHaveLength(1);
       expect(errors[0].reason).toContain('must be positive');
+    });
+
+    it('preserves exact BigInt precision for amounts exceeding 2^53 without float rounding', () => {
+      const hugeAmountStr = '9007199254740993'; // 2^53 + 1
+      const { validCheques, errors } = adapter.mapCheques([
+        {
+          ChequeId: 100,
+          ChequeNumber: 'CHQ-HUGE',
+          SayadNumber: '1234567890123456',
+          Direction: 'received',
+          State: 'in_hand',
+          Amount: hugeAmountStr,
+          IssueDate: '2026-10-01',
+          DueDate: '2026-11-01',
+          PartyCode: 'P-1',
+          PartyName: 'طرف حساب',
+          BankName: 'بانک ملت',
+        },
+      ]);
+
+      expect(errors).toHaveLength(0);
+      expect(validCheques).toHaveLength(1);
+      expect(validCheques[0].amountMinor).toBe(9007199254740993n);
+      expect(validCheques[0].amountFormatted).toBe(hugeAmountStr);
     });
   });
 

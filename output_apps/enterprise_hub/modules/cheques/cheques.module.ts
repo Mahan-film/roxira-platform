@@ -23,6 +23,6 @@ import { ChequeMaturityReportService } from './services/cheque-maturity-report.s
   imports: [TypeOrmModule.forFeature([ChequeEntity, ChequeEventEntity]), AccountingModule, BankingModule, PostingRulesModule],
   controllers: [ChequesController],
   providers: [ChequesService, ChequeReconService, ChequesRepository, ChequeMaturityReportService, TenantScope],
-  exports: [ChequesService, ChequeMaturityReportService],
+  exports: [ChequesService, ChequeMaturityReportService, ChequesRepository],
 })
 export class ChequesModule {}

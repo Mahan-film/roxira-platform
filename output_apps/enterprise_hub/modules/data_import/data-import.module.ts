@@ -13,6 +13,7 @@ import { CrmModule } from '../crm/crm.module';
 import { HrModule } from '../hr/hr.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { InvoicingModule } from '../invoicing/invoicing.module';
+import { ChequesModule } from '../cheques/cheques.module';
 import { PACKAGE_QUEUE_NAME } from './constants/package-import.constants';
 import { DataImportController } from './controllers/data-import.controller';
 import { ImportMappingMemoryEntity } from './entities/import-mapping-memory.entity';
@@ -58,6 +59,7 @@ import { SepidarMappingAdapter } from './migration/bak/sepidar-mapping.adapter';
 import { HolooMappingAdapter } from './migration/bak/holoo-mapping.adapter';
 import { ImportDryRunController } from './controllers/import-dry-run.controller';
 import { ImportDryRunService } from './services/import-dry-run.service';
+import { SepidarPersistenceService } from './services/sepidar-persistence.service';
 import { TenantScope } from '../access/services/tenant-scope';
 import { BulkImportController } from './bulk/bulk-import.controller';
 import { BulkImportProcessor } from './bulk/bulk-import.processor';
@@ -92,6 +94,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     InvoicingModule,
     BankingModule,
     PartiesModule,
+    ChequesModule,
     BullModule.registerQueue({ name: PACKAGE_QUEUE_NAME }, { name: BULK_QUEUE_NAME }),
     TypeOrmModule.forFeature([
       DataImportBatchEntity,
@@ -185,6 +188,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     SepidarChequesFifoAdapter,
     SepidarMappingAdapter,
     HolooMappingAdapter,
+    SepidarPersistenceService,
     JwtAuthGuard,
     TenantScope,
     BulkImportRepository,
@@ -210,6 +214,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     ImportDryRunService, // Re-exported for external module injection (single provider instance registered above)
     SepidarMappingAdapter,
     HolooMappingAdapter,
+    SepidarPersistenceService,
   ],
 })
 export class DataImportModule {}

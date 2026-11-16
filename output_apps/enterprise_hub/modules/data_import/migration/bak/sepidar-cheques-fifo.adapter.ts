@@ -132,8 +132,24 @@ export class SepidarChequesFifoAdapter {
         }
       }
 
-      // 5. Amount validation (non-negative integer minor units)
-      if (raw.Amount <= 0) {
+      // 5. Amount validation (non-negative integer minor units, BigInt only without Number/Math.round)
+      const rawAmountStr =
+        typeof raw.Amount === 'string' ? raw.Amount.trim() : String(raw.Amount).trim();
+      if (!/^\d+$/.test(rawAmountStr)) {
+        errors.push({
+          chequeId: raw.ChequeId,
+          chequeNumber: raw.ChequeNumber,
+          reason: `Cheque amount must be positive integer Rial string, got ${raw.Amount}`,
+        });
+        continue;
+      }
+      let amountMinor: bigint;
+      try {
+        amountMinor = BigInt(rawAmountStr);
+        if (amountMinor <= 0n) {
+          throw new Error('Must be positive');
+        }
+      } catch {
         errors.push({
           chequeId: raw.ChequeId,
           chequeNumber: raw.ChequeNumber,
@@ -142,15 +158,13 @@ export class SepidarChequesFifoAdapter {
         continue;
       }
 
-      const amountMinor = BigInt(Math.round(raw.Amount));
-
       validCheques.push({
         chequeNumber: raw.ChequeNumber,
         sayadNumber: sanitizedSayad,
         direction,
         status,
         amountMinor,
-        amountFormatted: raw.Amount.toString(),
+        amountFormatted: rawAmountStr,
         issueDate: raw.IssueDate,
         dueDate: raw.DueDate,
         partyName: raw.PartyName,
