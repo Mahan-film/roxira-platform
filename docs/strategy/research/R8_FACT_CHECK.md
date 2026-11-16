@@ -85,3 +85,12 @@ Unverified numbers may go into pack config only with `verified: false`, and a pa
 | L1 | **T154 Breach-notice runbook** | `docs/security/INCIDENT_BREACH_NOTICE.md`: 24 h triage; the 72 h JPDP notice from confirmation; 30-day follow-up; the GDPR 72 h path for EU users; the customer notice within 24 h per the DPA draft; who does what; a form-field checklist. Docs only. |
 | L3 | **T152 MyInvois mode in the MY pack** (*after #852 merges*) | The MY pack config holds effective-dated entries with a source URL and a `verified` flag for: the RM 3M exemption, the four modes, the RM 10k individual-invoice rule, the 72 h cancellation window, the consolidation limits and the FX-rate-required rule. A company setting selects the mode. Specs cover each rule. No network calls. |
 | L3 | **T153 Vector-store tenant audit** | `docs/security/VECTOR_STORE_TENANCY.md` lists every Qdrant collection and every writer and reader, and whether it holds tenant or user data. For each such collection, queries go through a wrapper that requires a tenant or user filter, with a spec proving that a query without one is rejected. |
+
+## Owner answers (2026-11-16)
+1. **Spend:** as little as possible. Use the API keys we already have (key pool, free first); the owner tops up an account only when a free tier runs out.
+2. **Entity:** the owner **already has a Malaysian Sdn Bhd** (food retail). Its nature of business will be changed to add software and AI services. SSM: a board resolution, then a notice within 14 days (Practice Directive 2/2017, revised 5 Aug 2026), filed by the company secretary.
+   - This replaces decision 3 above. We sell in Malaysia through our own Sdn Bhd with local gateways (Billplz/HitPay) and use it as the MyInvois intermediary (R9).
+   - Paddle remains an option for buyers outside Malaysia only.
+   - The resident-director question is closed.
+3. **Privacy:** no special promise. Customer data may be used to run and improve the service, including AI models, as large platforms do. This must be **stated in the terms and privacy policy**: PDPA and GDPR require telling people the purposes, though not asking permission for each one. A customer who wants it gets a **private data option** (no use beyond their own service, paid models with data collection denied) as a paid add-on. This replaces decision "strict ZDR" and question 3.
+4. **Authority:** the hub plans and runs the work end to end, and uses the web for missing facts.
