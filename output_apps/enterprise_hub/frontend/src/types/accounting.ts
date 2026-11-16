@@ -67,6 +67,7 @@ export interface JournalEntryLine {
 export interface JournalEntryResponse {
   id: number;
   entryNumber: string;
+  entryType?: string;
   /** «شمارهٔ قطعی» (bigint as string); null until the voucher is POSTED. */
   permanentNumber?: string | null;
   permanentFiscalYearId?: number | null;
