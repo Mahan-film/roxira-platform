@@ -67,7 +67,7 @@ const REPORT_HUB_TABS: HubTab[] = [
     id: "legal",
     label: "پژوهش حقوقی",
     description: "جست‌وجو در قوانین مالیاتی، تجارت، آرای وحدت رویه و بخشنامه‌ها",
-    href: "/laws",
+    href: "https://ghazihoushmand.ir/laws",
     icon: Scale,
   },
 ];
@@ -147,12 +147,21 @@ function ReportsHubContent() {
               </div>
             </div>
             {activeTab.href && (
-              <Link href={activeTab.href}>
-                <Button size="sm" className="gap-2">
-                  <span>مشاهده {activeTab.label}</span>
-                  <ArrowLeft className="size-4" aria-hidden="true" />
-                </Button>
-              </Link>
+              activeTab.href.startsWith("http") ? (
+                <a href={activeTab.href} target="_blank" rel="noopener noreferrer">
+                  <Button size="sm" className="gap-2">
+                    <span>مشاهده {activeTab.label}</span>
+                    <ArrowLeft className="size-4" aria-hidden="true" />
+                  </Button>
+                </a>
+              ) : (
+                <Link href={activeTab.href} prefetch={false}>
+                  <Button size="sm" className="gap-2">
+                    <span>مشاهده {activeTab.label}</span>
+                    <ArrowLeft className="size-4" aria-hidden="true" />
+                  </Button>
+                </Link>
+              )
             )}
           </CardHeader>
           <CardContent>

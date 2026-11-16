@@ -55,6 +55,7 @@ function SidebarContent({
     <div className="flex h-full min-h-0 flex-col gap-4 [&_select]:focus-visible:outline-none [&_select]:focus-visible:ring-2 [&_select]:focus-visible:ring-ring">
       <Link
         href="/app"
+        prefetch={false}
         onClick={onNavigate}
         className="flex items-center gap-2.5 rounded-xl px-2 pt-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
@@ -106,6 +107,7 @@ function SidebarContent({
                     <li key={item.href}>
                       <Link
                         href={item.href}
+                        prefetch={false}
                         onClick={onNavigate}
                         aria-current={itemActive ? "page" : undefined}
                         className={cn(
@@ -138,6 +140,7 @@ function SidebarContent({
                   <li key={item.href}>
                     <Link
                       href={item.href}
+                      prefetch={false}
                       onClick={onNavigate}
                       aria-current={itemActive ? "page" : undefined}
                       className={cn(
@@ -161,6 +164,7 @@ function SidebarContent({
       <div className="flex shrink-0 flex-col gap-2 border-t border-border pt-3">
         <Link
           href={SETTINGS_ITEM.href}
+          prefetch={false}
           onClick={onNavigate}
           aria-current={active === SETTINGS_ITEM.href ? "page" : undefined}
           className={cn(
