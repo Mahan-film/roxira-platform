@@ -1,3 +1,4 @@
+import { CalendarService } from '../calendar';
 import 'reflect-metadata';
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -47,7 +48,7 @@ describePg('Consolidated multi-company report on PostgreSQL (T53 / #713)', () =>
     accounting = new AccountingService(repo, currency);
     const fiscal = new FiscalYearRepository(testDb.app);
     const ledger = new LedgerReportRepository(testDb.scope);
-    years = new FiscalYearService(repo, fiscal, ledger, accounting);
+    years = new FiscalYearService(repo, fiscal, ledger, accounting, new CalendarService());
     const reports = new FinancialReportsService(repo, fiscal, ledger);
 
     const membershipsRepo = new MembershipsRepository(testDb.app.getRepository(MembershipEntity));

@@ -1,3 +1,4 @@
+import { CalendarService } from '../calendar';
 import 'reflect-metadata';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -51,7 +52,7 @@ describePg('Financial reports on PostgreSQL', () => {
     const ledger = new LedgerReportRepository(testDb.scope);
     reports = new FinancialReportsService(repo, fiscal, ledger);
     exporter = new ReportExportService(reports);
-    years = new FiscalYearService(repo, fiscal, ledger, accounting);
+    years = new FiscalYearService(repo, fiscal, ledger, accounting, new CalendarService());
 
     await new ChartTemplateService(repo).apply(COMPANY, 'iran-trading');
     yearId = (await years.create(COMPANY, { name: '1405', startDate: '2026-03-21', endDate: '2027-03-20' })).id;

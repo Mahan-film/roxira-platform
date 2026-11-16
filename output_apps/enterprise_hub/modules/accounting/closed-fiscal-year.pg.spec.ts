@@ -1,3 +1,4 @@
+import { CalendarService } from '../calendar';
 import 'reflect-metadata';
 import { BadRequestException } from '@nestjs/common';
 import { CurrencyService } from '../currency/services/currency.service';
@@ -56,7 +57,7 @@ describePg('Closed fiscal year is read-only on PostgreSQL', () => {
     const currency = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
     const repo = new AccountingRepository(testDb.scope);
     accounting = new AccountingService(repo, currency);
-    years = new FiscalYearService(repo, new FiscalYearRepository(testDb.app), new LedgerReportRepository(testDb.scope), accounting);
+    years = new FiscalYearService(repo, new FiscalYearRepository(testDb.app), new LedgerReportRepository(testDb.scope), accounting, new CalendarService());
     const engine = new PostingRulesService(new PostingRulesRepository(testDb.scope), accounting);
     petty = new PettyCashService(new PettyCashRepository(testDb.app), repo, accounting, engine);
     assets = new FixedAssetService(new FixedAssetRepository(testDb.app), repo, engine, { get: async () => 'refuse' } as never);

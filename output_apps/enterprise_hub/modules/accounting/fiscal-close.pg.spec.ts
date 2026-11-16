@@ -1,3 +1,4 @@
+import { CalendarService } from '../calendar';
 import 'reflect-metadata';
 import { BadRequestException } from '@nestjs/common';
 import { CurrencyService } from '../currency/services/currency.service';
@@ -37,7 +38,7 @@ describePg('Fiscal close on PostgreSQL', () => {
     const repo = new AccountingRepository(testDb.scope);
     accounting = new AccountingService(repo, currency);
     templates = new ChartTemplateService(repo);
-    years = new FiscalYearService(repo, new FiscalYearRepository(testDb.app), new LedgerReportRepository(testDb.scope), accounting);
+    years = new FiscalYearService(repo, new FiscalYearRepository(testDb.app), new LedgerReportRepository(testDb.scope), accounting, new CalendarService());
   }, 120000);
 
   afterAll(async () => {

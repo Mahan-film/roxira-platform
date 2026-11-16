@@ -3,7 +3,6 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
-  Optional,
 } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
 import { Currency } from '../../currency/enums/currency.enum';
@@ -57,17 +56,13 @@ interface CloseLine {
  */
 @Injectable()
 export class FiscalYearService {
-  private readonly calendar: CalendarService;
-
   constructor(
     private readonly accountingRepository: AccountingRepository,
     private readonly fiscalYears: FiscalYearRepository,
     private readonly reports: LedgerReportRepository,
     private readonly accounting: AccountingService,
-    @Optional() calendar?: CalendarService,
-  ) {
-    this.calendar = calendar ?? new CalendarService();
-  }
+    private readonly calendar: CalendarService,
+  ) {}
 
   private toDto(entity: FiscalYearEntity): FiscalYearResponseDto {
     let periods: FiscalPeriodDto[] | undefined;
