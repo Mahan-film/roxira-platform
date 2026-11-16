@@ -372,7 +372,7 @@ export class MoadianService implements OnModuleInit {
           lateRegistrationAt: options.lateRegistrationAt,
           extras: options.extras,
         };
-        const eInvoiceAdapter = this.countryPackRegistry?.resolve().eInvoice;
+        const eInvoiceAdapter = this.countryPackRegistry?.resolve()?.eInvoice;
         if (eInvoiceAdapter) {
           return eInvoiceAdapter.map(invoice, mappingContext) as MoadianInvoicePacket;
         }
