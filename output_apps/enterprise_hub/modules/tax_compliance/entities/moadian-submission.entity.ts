@@ -18,7 +18,8 @@ export interface MoadianMessage {
  * هر مستأجر). `packet` بستهٔ امضانشده (برای ممیزی) است؛ JWS/JWE ذخیره نمی‌شود.
  */
 @Entity({ name: 'moadian_submissions' })
-@Index('IDX_moadian_submissions_tenant_invoice', ['tenantId', 'invoiceId'], { unique: true })
+@Index('IDX_moadian_submissions_tenant_invoice_ins', ['tenantId', 'invoiceId', 'ins'], { unique: true })
+@Index('IDX_moadian_submissions_tenant_root', ['tenantId', 'rootInvoiceId'])
 @Index('IDX_moadian_submissions_tenant_status', ['tenantId', 'status'])
 @Index('IDX_moadian_submissions_tenant_tax_id', ['tenantId', 'taxId'], { unique: true })
 export class MoadianSubmissionEntity {
@@ -68,6 +69,29 @@ export class MoadianSubmissionEntity {
 
   @Column({ type: 'jsonb', name: 'packet' })
   packet: Record<string, unknown>;
+
+  /** موضوع صورتحساب (ins): ۱ اصلی، ۲ اصلاحی، ۳ ابطالی، ۴ برگشتی. */
+  @Column({ type: 'smallint', name: 'ins', default: 1 })
+  ins: number;
+
+  /** صورتحساب اصلیِ زنجیره (برای اصلی = خودش). null در ردیف‌های قدیمی. */
+  @Column({ type: 'uuid', name: 'root_invoice_id', nullable: true })
+  rootInvoiceId: string | null;
+
+  /** irtaxid استفاده‌شده در بسته (آخرین taxid تأییدشده زنجیره هنگام صف‌شدن). */
+  @Column({ type: 'varchar', length: 22, name: 'reference_tax_id', nullable: true })
+  referenceTaxId: string | null;
+
+  /** فقط روی ردیف اصلی: taxid مرجع فعلی زنجیره؛ با تأیید هر اصلاحی/برگشتی جلو می‌رود. */
+  @Column({ type: 'varchar', length: 22, name: 'active_reference_tax_id', nullable: true })
+  activeReferenceTaxId: string | null;
+
+  @Column({ type: 'uuid', name: 'profile_id', nullable: true })
+  profileId: string | null;
+
+  /** تعداد دفعاتی که ارسال شبکه‌ای شروع شده است (پیش از تماس ثبت می‌شود). */
+  @Column({ type: 'integer', name: 'attempt_count', default: 0 })
+  attemptCount: number;
 
   @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt: Date;

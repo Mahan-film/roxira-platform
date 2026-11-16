@@ -24,6 +24,7 @@ import { SeasonalReportController } from './controllers/seasonal-report.controll
 import { TaxComplianceController } from './controllers/tax-compliance.controller';
 import { MoadianCredentialEntity } from './entities/moadian-credential.entity';
 import { MoadianSubmissionEntity } from './entities/moadian-submission.entity';
+import { FiscalMemoryProfileEntity } from './entities/fiscal-memory-profile.entity';
 import { TaxInvoiceSignatureEntity } from './entities/tax-invoice-signature.entity';
 import { TaxSigningKeyEntity } from './entities/tax-signing-key.entity';
 import { MoadianProcessor } from './processors/moadian.processor';
@@ -41,6 +42,11 @@ import { YearEndTaxRolloverService } from './reports/year-end-tax-rollover.servi
 import { MoadianRepository } from './repositories/moadian.repository';
 import { TaxComplianceRepository } from './repositories/tax-compliance.repository';
 import { MoadianApiClient } from './services/moadian-api.client';
+import { FiscalMemoryProfileRepository } from './repositories/fiscal-memory-profile.repository';
+import { TaxTransmissionRepository } from './repositories/tax-transmission.repository';
+import { DirectAdapter } from './transmission/direct.adapter';
+import { TaxTransmissionAdapterFactory } from './transmission/tax-transmission-adapter.factory';
+import { TaxTransmissionService } from './services/tax-transmission.service';
 import { MoadianService } from './services/moadian.service';
 import { TaxComplianceService } from './services/tax-compliance.service';
 import { MoadianCompliancePolicyService } from './services/moadian-compliance-policy.service';
@@ -66,6 +72,7 @@ import { AccessModule } from '../access/access.module';
       TaxInvoiceSignatureEntity,
       MoadianCredentialEntity,
       MoadianSubmissionEntity,
+      FiscalMemoryProfileEntity,
       InvoiceEntity,
       CaptureDocumentEntity,
       StatutoryParameterEntity,
@@ -82,6 +89,11 @@ import { AccessModule } from '../access/access.module';
     MoadianService,
     MoadianRepository,
     MoadianApiClient,
+    FiscalMemoryProfileRepository,
+    TaxTransmissionRepository,
+    DirectAdapter,
+    TaxTransmissionAdapterFactory,
+    TaxTransmissionService,
     MoadianProcessor,
     SeasonalReportService,
     CorporateTaxService,
@@ -104,6 +116,7 @@ import { AccessModule } from '../access/access.module';
     KartableReconciliationService,
   ],
   exports: [
+    TaxTransmissionService,
     TaxComplianceService,
     VatReturnService,
     MoadianCompliancePolicyService,
