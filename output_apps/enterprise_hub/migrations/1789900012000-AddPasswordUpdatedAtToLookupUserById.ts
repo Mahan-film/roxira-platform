@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddPasswordUpdatedAtToLookupUserById1789900005100 implements MigrationInterface {
-  name = 'AddPasswordUpdatedAtToLookupUserById1789900005100';
+export class AddPasswordUpdatedAtToLookupUserById1789900012000 implements MigrationInterface {
+  name = 'AddPasswordUpdatedAtToLookupUserById1789900012000';
 
   public async up(q: QueryRunner): Promise<void> {
     await q.query(`DROP FUNCTION IF EXISTS public.lookup_user_by_id(uuid);`);
@@ -67,8 +67,15 @@ export class AddPasswordUpdatedAtToLookupUserById1789900005100 implements Migrat
       END;
       $$;
     `);
-    await q.query(`GRANT EXECUTE ON FUNCTION public.lookup_user_by_id(uuid) TO PUBLIC;`);
-    await q.query(`GRANT EXECUTE ON FUNCTION public.lookup_user_by_id(uuid) TO roxira_app;`);
+    await q.query(`REVOKE ALL ON FUNCTION public.lookup_user_by_id(uuid) FROM PUBLIC;`);
+    await q.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'roxira_app') THEN
+          GRANT EXECUTE ON FUNCTION public.lookup_user_by_id(uuid) TO roxira_app;
+        END IF;
+      END $$;
+    `);
   }
 
   public async down(q: QueryRunner): Promise<void> {
@@ -133,7 +140,14 @@ export class AddPasswordUpdatedAtToLookupUserById1789900005100 implements Migrat
       END;
       $$;
     `);
-    await q.query(`GRANT EXECUTE ON FUNCTION public.lookup_user_by_id(uuid) TO PUBLIC;`);
-    await q.query(`GRANT EXECUTE ON FUNCTION public.lookup_user_by_id(uuid) TO roxira_app;`);
+    await q.query(`REVOKE ALL ON FUNCTION public.lookup_user_by_id(uuid) FROM PUBLIC;`);
+    await q.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'roxira_app') THEN
+          GRANT EXECUTE ON FUNCTION public.lookup_user_by_id(uuid) TO roxira_app;
+        END IF;
+      END $$;
+    `);
   }
 }
