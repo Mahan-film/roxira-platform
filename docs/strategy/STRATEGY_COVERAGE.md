@@ -55,3 +55,13 @@ The owner has the prompts in `Desktop/Roxira/deep_research_round2.html` (copy bu
 | R12 technical future-proofing — **received, `research/R10_R11_R12_BUSINESS_GROWTH_TECH.md`** | 13, 24–27 |
 
 When the answers arrive, they are digested like R1–R7, and this table is updated.
+
+## Research round 3
+Prompts: `DEEP_RESEARCH_ROUND3.md`.
+
+| Prompt | Status |
+|---|---|
+| R13 Germany and EU pack | waiting for the owner |
+| R14 Gulf packs | **received 2026-11-17, `research/R14_GULF.md`** (T169, T174–T176) |
+| R15 software factory | **received 2026-11-17, `research/R15_FACTORY.md`** (T168 amended, T170–T173, lane prompt v6) |
+| R16 global accounting core benchmark | waiting for the owner |
