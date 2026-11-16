@@ -1,0 +1,37 @@
+{
+  "defaultPlan": "starter",
+  "plans": {
+    "starter": {
+      "ai_messages": 500,
+      "ocr_pages": 100,
+      "voice_minutes": 60,
+      "branches": 2,
+      "office_users": 5,
+      "payroll_employees": 15
+    },
+    "growth": {
+      "ai_messages": 2500,
+      "ocr_pages": 500,
+      "voice_minutes": 300,
+      "branches": 10,
+      "office_users": 25,
+      "payroll_employees": 75
+    },
+    "scale": {
+      "ai_messages": 10000,
+      "ocr_pages": 2500,
+      "voice_minutes": 1200,
+      "branches": 50,
+      "office_users": 100,
+      "payroll_employees": 300
+    },
+    "enterprise": {
+      "ai_messages": 100000,
+      "ocr_pages": 25000,
+      "voice_minutes": 10000,
+      "branches": 500,
+      "office_users": 1000,
+      "payroll_employees": 5000
+    }
+  }
+}
