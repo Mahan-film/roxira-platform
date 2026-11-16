@@ -1,10 +1,12 @@
-# Standing Antigravity prompt (v4, 2026-11-15)
+# Standing Antigravity prompt (v5, 2026-11-17)
 
 Paste the same text into each of the 4 chats. Change only "L1" (every occurrence) to L2, L3 or L4.
 It works the same on the Windows laptop and on the MacBook: the first step checks that machine's setup.
 Run each lane in only one chat on one machine. When a chat gets long or slow, the lane posts its REPORT and stops; paste this same prompt into a fresh chat.
 
-v4 adds: the lanes carry the volume (batches of ≤40 files, one PR per folder), slice ownership, the package.json owner rule, npm version checks, "after T<n>" gating, Filler work, and the fresh-chat rule.
+v5 adds the WIP limit: a lane with 3 or more of its own PRs unmerged takes no new row; it fixes, rebases and stops. It replaces "never idle / Filler" while over the limit.
+
+v4 added: the lanes carry the volume (batches of ≤40 files, one PR per folder), slice ownership, the package.json owner rule, npm version checks, "after T<n>" gating, Filler work, and the fresh-chat rule.
 
 ---
 
@@ -23,7 +25,9 @@ v4 adds: the lanes carry the volume (batches of ≤40 files, one PR per folder),
 - package.json و package-lock.json را فقط lane صاحب همان تسک زیرساخت تغییر می‌دهد که WAVE نام برده.
 - نسخهٔ هر کتابخانه را با npm view <pkg> version چک کن. به نسخه‌هایی که در اسناد تحقیق نوشته شده اعتماد نکن و هیچ نسخه‌ای را پایین نیاور.
 - ردیفی که نوشته «after T<n>» فقط وقتی شروع می‌شود که PR آن T در main merge شده باشد. تا آن موقع سراغ ردیف بعدی برو.
-- هیچ‌وقت بیکار نمان. اگر ردیف‌هایت تمام شد یا همه منتظر merge هستند، کار Filler همان WAVE را بردار.
+- اگر زیر سقف WIP هستی و ردیف‌هایت تمام شد، کار Filler همان WAVE را بردار. اگر بالای سقف هستی، فقط اصلاح و rebase.
+- **سقف کار باز (WIP) = ۳:** قبل از برداشتن هر ردیف، تعداد PRهای باز خودت را بشمار (gh pr list --author @me --state open). اگر ۳ یا بیشتر بود، **هیچ ردیف جدیدی برندار**. فقط blocker و CI قرمز همان PRها را درست کن و PRهای CONFLICTING را rebase کن. بعد REPORT بگذار و بایست. کار Filler هم در این حالت ممنوع است.
+- هنگام rebase، اگر migration داری، timestamp آن را بزرگ‌تر از جدیدترین فایل migration روی origin/main کن.
 - اگر این گفتگو خیلی طولانی یا کند شد، برای کارهای تمام‌شده REPORT بگذار و بایست. مالک همین پرامپت را در یک چت تازه می‌گذارد و تو از روی issue 592 و PRهای باز خودت ادامه می‌دهی.
 
 قبل از هر تسک:
@@ -43,7 +47,7 @@ v4 adds: the lanes carry the volume (batches of ≤40 files, one PR per folder),
 - برای frontend، در پوشهٔ frontend اول npm run lint و بعد npm run build را اجرا کن.
 - push کن و با gh pr view <n> --json mergeable چک کن که MERGEABLE است.
 - در بدنهٔ PR بخش‌های «Coordinator must add» و «What was NOT checked» را بنویس.
-- منتظر merge نمان (قانون Stacking).
+- منتظر merge نمان (قانون Stacking)، به شرط اینکه زیر سقف WIP باشی.
 - اگر یکی از PRهایت CONFLICTING شد، rebase کن، تست‌ها را دوباره اجرا کن و push کن.
 
 قانون‌ها:
@@ -54,7 +58,7 @@ v4 adds: the lanes carry the volume (batches of ≤40 files, one PR per folder),
 - --no-verify ممنوع است.
 - pytest را روی src/ یا ریشهٔ مخزن اجرا نکن.
 - به سرور production یا دیتابیس آن دست نزن.
-- تا وقتی تسک آزاد هست ادامه بده.
+- تا وقتی تسک آزاد هست و زیر سقف WIP هستی ادامه بده.
 
 قبل از فرستادن گزارش:
 ۱. گزارش را در یک فایل ذخیره کن.
