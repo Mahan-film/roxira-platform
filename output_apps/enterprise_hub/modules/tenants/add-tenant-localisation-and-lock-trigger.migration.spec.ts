@@ -1,4 +1,4 @@
-import { AddTenantLocalisationAndLockTrigger1789900005500 } from '../../migrations/1789900005500-AddTenantLocalisationAndLockTrigger';
+import { AddTenantLocalisationAndLockTrigger1789900010000 } from '../../migrations/1789900010000-AddTenantLocalisationAndLockTrigger';
 
 const createRunner = () => {
   const queries: string[] = [];
@@ -13,15 +13,15 @@ const createRunner = () => {
 
 describe('AddTenantLocalisationAndLockTrigger migration', () => {
   it('exports a class exposing up() and down()', () => {
-    const migration = new AddTenantLocalisationAndLockTrigger1789900005500();
-    expect(migration.name).toBe('AddTenantLocalisationAndLockTrigger1789900005500');
+    const migration = new AddTenantLocalisationAndLockTrigger1789900010000();
+    expect(migration.name).toBe('AddTenantLocalisationAndLockTrigger1789900010000');
     expect(typeof migration.up).toBe('function');
     expect(typeof migration.down).toBe('function');
   });
 
   it('adds localisation columns to tenants with safe defaults', async () => {
     const { runner, queries } = createRunner();
-    await new AddTenantLocalisationAndLockTrigger1789900005500().up(runner as never);
+    await new AddTenantLocalisationAndLockTrigger1789900010000().up(runner as never);
 
     const sql = queries.join('\n');
     expect(sql).toContain('ALTER TABLE "tenants"');
@@ -36,7 +36,7 @@ describe('AddTenantLocalisationAndLockTrigger migration', () => {
 
   it('backfills existing tenants with default pack values', async () => {
     const { runner, queries } = createRunner();
-    await new AddTenantLocalisationAndLockTrigger1789900005500().up(runner as never);
+    await new AddTenantLocalisationAndLockTrigger1789900010000().up(runner as never);
 
     const sql = queries.join('\n');
     expect(sql).toContain('UPDATE "tenants"');
@@ -51,7 +51,7 @@ describe('AddTenantLocalisationAndLockTrigger migration', () => {
 
   it('creates the localisation lock trigger function protecting posted entries', async () => {
     const { runner, queries } = createRunner();
-    await new AddTenantLocalisationAndLockTrigger1789900005500().up(runner as never);
+    await new AddTenantLocalisationAndLockTrigger1789900010000().up(runner as never);
 
     const sql = queries.join('\n');
     expect(sql).toContain('CREATE OR REPLACE FUNCTION tenant_guard_localisation_lock()');
@@ -67,7 +67,7 @@ describe('AddTenantLocalisationAndLockTrigger migration', () => {
 
   it('down() drops triggers, functions and columns cleanly', async () => {
     const { runner, queries } = createRunner();
-    await new AddTenantLocalisationAndLockTrigger1789900005500().down(runner as never);
+    await new AddTenantLocalisationAndLockTrigger1789900010000().down(runner as never);
 
     const sql = queries.join('\n');
     expect(sql).toContain('DROP TRIGGER IF EXISTS "TRG_tenants_guard_localisation_lock" ON "tenants"');

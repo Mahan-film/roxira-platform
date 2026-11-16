@@ -21,10 +21,10 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  *
  *   4. Reversible `down()` drops triggers, functions, and columns cleanly.
  */
-export class AddTenantLocalisationAndLockTrigger1789900005500
+export class AddTenantLocalisationAndLockTrigger1789900010000
   implements MigrationInterface
 {
-  name = 'AddTenantLocalisationAndLockTrigger1789900005500';
+  name = 'AddTenantLocalisationAndLockTrigger1789900010000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // 1. Add localisation columns to tenants

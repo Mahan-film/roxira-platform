@@ -48,8 +48,6 @@ export class TenantsRepository {
     await this.repository.update({ id }, fields);
     return this.findById(id);
   }
-    return this.findById(id);
-  }
 
   async updateRequire2fa(id: string, require2fa: boolean): Promise<void> {
     await this.repository.update({ id }, { require2fa });
