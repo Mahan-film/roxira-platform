@@ -574,6 +574,11 @@ export class AssistantToolsService {
     const opProfit = fromMinor(statement.operatingProfit);
     const netProfit = fromMinor(statement.netProfit);
 
+    // Compute toman via exact BigInt minor units division (Rule 8: money via modules/accounting/money.ts)
+    const grossToman = fromMinor(statement.grossProfit / 10n);
+    const opProfitToman = fromMinor(statement.operatingProfit / 10n);
+    const netProfitToman = fromMinor(statement.netProfit / 10n);
+
     return {
       source_record_id: sourceRecordId,
       period: range.label,
@@ -583,12 +588,12 @@ export class AssistantToolsService {
       revenue: rev,
       costOfSales: cogs,
       grossProfit: gross,
-      grossProfitToman: Number.isFinite(Number(gross)) ? Math.round(Number(gross) / 10) : null,
+      grossProfitToman: grossToman,
       operatingExpenses: opExp,
       operatingProfit: opProfit,
-      operatingProfitToman: Number.isFinite(Number(opProfit)) ? Math.round(Number(opProfit) / 10) : null,
+      operatingProfitToman: opProfitToman,
       netProfit: netProfit,
-      netProfitToman: Number.isFinite(Number(netProfit)) ? Math.round(Number(netProfit) / 10) : null,
+      netProfitToman: netProfitToman,
       source_fields: {
         revenue: { source_record_id: sourceRecordId, field_path: 'revenue', value: rev },
         costOfSales: { source_record_id: sourceRecordId, field_path: 'costOfSales', value: cogs },

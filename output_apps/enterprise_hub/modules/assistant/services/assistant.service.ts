@@ -108,11 +108,11 @@ export class AssistantService {
     await this.rateLimiter.consume(tenantId);
 
     const rawMessage = dto.message ?? '';
-    const questionHash = createHash('sha256').update(rawMessage).digest('hex');
     const sanitizedUserMessage = sanitizeAssistantInput(rawMessage).slice(
       0,
       ASSISTANT_MAX_MESSAGE_CHARS,
     );
+    const questionHash = createHash('sha256').update(sanitizedUserMessage).digest('hex');
 
     const messages: LlmMessage[] = [
       { role: 'system', content: buildSystemPrompt(now) },
