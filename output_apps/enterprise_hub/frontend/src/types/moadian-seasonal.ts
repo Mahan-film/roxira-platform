@@ -8,6 +8,43 @@ export interface MoadianStatusResponse {
   configured: boolean;
 }
 
+/**
+ * منطبق بر `MoadianSettlementMethod` در `modules/tax_compliance/enums/moadian.enum.ts`:
+ * 1 = نقدی، 2 = نسیه، 3 = نقدی/نسیه
+ */
+export type MoadianSettlementMethod = 1 | 2 | 3;
+
+export const MOADIAN_SETTLEMENT_LABELS: Record<MoadianSettlementMethod, string> = {
+  1: "نقدی (۱)",
+  2: "نسیه (۲)",
+  3: "نقدی و نسیه (۳)",
+};
+
+export interface PutMoadianCredentialDto {
+  memoryId: string;
+  economicCode: string;
+  certificatePem: string;
+  privateKeyPem?: string;
+  useActiveSigningKey?: boolean;
+  defaultSstid?: string;
+  defaultMeasurementUnit?: string;
+  settlementMethod?: MoadianSettlementMethod;
+}
+
+export interface MoadianCredentialResponseDto {
+  memoryId: string;
+  economicCode: string;
+  keyFingerprint: string;
+  certificateSubject: string | null;
+  certificateValidTo: string | null;
+  defaultSstid: string | null;
+  defaultMeasurementUnit: string | null;
+  settlementMethod: MoadianSettlementMethod;
+  enabled: boolean;
+  baseUrl: string;
+  updatedAt: string;
+}
+
 export type MoadianSubmissionStatus =
   | "QUEUED"
   | "SENT"

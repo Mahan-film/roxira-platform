@@ -2101,6 +2101,17 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/tax-compliance/moadian/submissions (MoadianController.listSubmissions)": {
+    "policy": "tax:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/tax-compliance/reports/commercial-books.csv (LedgerExportController.commercialBooksCsv)": {
     "policy": "tax:export",
     "owner": true,

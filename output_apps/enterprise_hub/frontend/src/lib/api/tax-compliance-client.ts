@@ -1,6 +1,7 @@
 import {
   GenerateCsrDto,
   GenerateCsrResponse,
+  GenerateKeyPairDto,
   PaginatedTaxSignaturesResponse,
   QueryTaxSignatureDto,
   SignInvoiceDto,
@@ -117,6 +118,22 @@ export async function verifyTaxSignature(
     `${TAX_COMPLIANCE_ENDPOINT}/signatures/${id}/verify`,
     { method: "GET", signal },
   );
+}
+
+/**
+ * تولید زوج‌کلید RSA مالیاتی.
+ * منطبق با `TaxComplianceController.generateKeyPair`
+ * (POST /enterprise-hub/tax-compliance/keys).
+ */
+export async function generateKeyPair(
+  payload: GenerateKeyPairDto = {},
+  signal?: AbortSignal,
+): Promise<SigningKeyResponseDto> {
+  return apiRequest<SigningKeyResponseDto>(`${TAX_COMPLIANCE_ENDPOINT}/keys`, {
+    method: "POST",
+    body: payload,
+    signal,
+  });
 }
 
 /**

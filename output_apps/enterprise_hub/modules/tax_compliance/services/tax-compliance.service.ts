@@ -3,7 +3,9 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   createHash,
   createPrivateKey,
@@ -13,6 +15,7 @@ import {
 import { FindOptionsWhere, ILike, IsNull, Not } from 'typeorm';
 import { InvoiceResponseDto } from '../../invoicing/dto/invoice-response.dto';
 import { InvoicingService } from '../../invoicing/services/invoicing.service';
+import { MOADIAN_ENV } from '../constants/moadian.constants';
 import {
   HASH_ALGORITHM,
   JWS_SIGNATURE_ALGORITHM,
@@ -43,6 +46,11 @@ import { TaxSubmissionStatus } from '../enums/tax-compliance.enum';
 import { TaxComplianceRepository } from '../repositories/tax-compliance.repository';
 import { CsrSubject, createCertificateRequest } from '../utils/csr.util';
 import { signJws, verifyJws } from '../utils/jws.util';
+import {
+  openStoredPrivateKey,
+  parseMasterKey,
+  sealSecret,
+} from '../utils/secret-box.util';
 
 /** خروجی داخلی تولید زوج‌کلید RSA */
 interface GeneratedRsaKeyPair {
@@ -67,7 +75,29 @@ export class TaxComplianceService {
   constructor(
     private readonly taxComplianceRepository: TaxComplianceRepository,
     private readonly invoicingService: InvoicingService,
+    private readonly config: ConfigService,
   ) {}
+
+  private masterKey(): Buffer {
+    try {
+      return parseMasterKey(this.config.get<string>(MOADIAN_ENV.KEY_ENCRYPTION_KEY));
+    } catch (error) {
+      throw new ServiceUnavailableException(
+        `Moadian key storage is not configured: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  private unsealActivePrivateKey(tenantId: string, stored: string): string {
+    const masterKey = this.masterKey();
+    try {
+      return openStoredPrivateKey(stored, masterKey, tenantId, true);
+    } catch {
+      throw new ServiceUnavailableException(
+        'کلید خصوصی فعال سازمان قابل رمزگشایی نیست.',
+      );
+    }
+  }
 
   // ---------------------------------------------------------------------------
   // ابزارهای رمزنگاری
@@ -128,6 +158,7 @@ export class TaxComplianceService {
     modulusLength: number,
     subject?: CsrSubject,
   ): Promise<TaxSigningKeyEntity> {
+    const masterKey = this.masterKey();
     const { publicKey, privateKey } = await this.generateRsaKeyPair(modulusLength);
     const keyFingerprint = this.computeKeyFingerprint(publicKey);
     const keyId = this.buildKeyId(keyFingerprint);
@@ -136,12 +167,14 @@ export class TaxComplianceService {
       ? createCertificateRequest(subject, publicKey, privateKey)
       : null;
 
+    const privateKeySealed = sealSecret(privateKey, masterKey, tenantId);
+
     await this.taxComplianceRepository.deactivateAllKeys(tenantId);
 
     return this.taxComplianceRepository.createKey(tenantId, {
       keyId,
       publicKeyPem: publicKey,
-      privateKeyPem: privateKey,
+      privateKeyPem: privateKeySealed,
       certificateRequestPem,
       algorithm: JWS_SIGNATURE_ALGORITHM,
       modulusLength,
@@ -230,10 +263,14 @@ export class TaxComplianceService {
     }
 
     const activeKey = await this.getActiveKeyWithPrivate(tenantId);
+    const activePrivateKeyPem = this.unsealActivePrivateKey(
+      tenantId,
+      activeKey.privateKeyPem,
+    );
     const certificateRequestPem = createCertificateRequest(
       dto.subject as CsrSubject,
       activeKey.publicKeyPem,
-      activeKey.privateKeyPem,
+      activePrivateKeyPem,
     );
 
     activeKey.certificateRequestPem = certificateRequestPem;
@@ -341,7 +378,10 @@ export class TaxComplianceService {
       privateKeyPem = dto.privateKeyPem;
     } else {
       const activeKey = await this.getActiveKeyWithPrivate(tenantId);
-      privateKeyPem = activeKey.privateKeyPem;
+      privateKeyPem = this.unsealActivePrivateKey(
+        tenantId,
+        activeKey.privateKeyPem,
+      );
       publicKeyPem = activeKey.publicKeyPem;
       keyId = activeKey.keyId;
     }

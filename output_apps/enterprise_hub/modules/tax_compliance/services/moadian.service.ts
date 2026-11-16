@@ -6,6 +6,7 @@ import {
   Logger,
   NotFoundException,
   OnModuleInit,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -47,6 +48,7 @@ import {
   MoadianSubmissionStatus,
 } from '../enums/moadian.enum';
 import { MoadianRepository } from '../repositories/moadian.repository';
+import { TaxComplianceRepository } from '../repositories/tax-compliance.repository';
 import { choosePattern, MoadianPatternSelectionError } from '../utils/moadian-pattern-select';
 import {
   validateCounterpartyAgainstInvoiceType,
@@ -54,7 +56,12 @@ import {
 } from '../utils/moadian-payload.transformer';
 import { SubmitMoadianInvoiceDto } from '../dto/submit-moadian-invoice.dto';
 import { MoadianMappingError, mapInvoiceToMoadianPacket } from '../utils/moadian-packet.mapper';
-import { openSecret, parseMasterKey, sealSecret } from '../utils/secret-box.util';
+import {
+  openSecret,
+  openStoredPrivateKey,
+  parseMasterKey,
+  sealSecret,
+} from '../utils/secret-box.util';
 import { MoadianApiClient, MoadianApiError, MoadianAuthContext } from './moadian-api.client';
 
 /** payload کارهای صف `moadian` — فقط شناسه‌ها؛ هیچ کلید یا بسته‌ای در Redis نمی‌رود. */
@@ -82,6 +89,7 @@ export class MoadianService implements OnModuleInit {
     private readonly client: MoadianApiClient,
     private readonly config: ConfigService,
     @InjectQueue(MOADIAN_QUEUE) private readonly queue: Queue<MoadianJobData>,
+    private readonly taxComplianceRepository: TaxComplianceRepository,
   ) {}
 
   /** ثبت جاب دوره‌ای همگام‌سازی وضعیت صورتحساب‌های معوق با سامانه مودیان. */
@@ -144,11 +152,42 @@ export class MoadianService implements OnModuleInit {
     tenantId: string,
     dto: PutMoadianCredentialDto,
   ): Promise<MoadianCredentialResponseDto> {
+    let privateKeyPem = dto.privateKeyPem?.trim() || undefined;
+    if (!privateKeyPem && dto.useActiveSigningKey) {
+      if (!this.taxComplianceRepository) {
+        throw new BadRequestException(
+          'امکان خواندن کلید فعال سازمان وجود ندارد؛ کلید خصوصی را به‌صورت دستی وارد نمایید.',
+        );
+      }
+      const activeKey = await this.taxComplianceRepository.findActiveKeyWithPrivate(tenantId);
+      if (!activeKey?.privateKeyPem) {
+        throw new BadRequestException(
+          'کلید فعال امضای مالیاتی برای این سازمان یافت نشد؛ ابتدا زوج‌کلید تولید کنید یا کلید خصوصی را وارد نمایید.',
+        );
+      }
+      const key = this.masterKey();
+      try {
+        privateKeyPem = openStoredPrivateKey(
+          activeKey.privateKeyPem,
+          key,
+          tenantId,
+          true,
+        );
+      } catch {
+        throw new BadRequestException(
+          'کلید خصوصی فعال سازمان قابل رمزگشایی نیست.',
+        );
+      }
+    }
+    if (!privateKeyPem) {
+      throw new BadRequestException('کلید خصوصی (PEM) یا گزینه استفاده از کلید فعال الزامی است.');
+    }
+
     let certificate: X509Certificate;
     let privateKey: ReturnType<typeof createPrivateKey>;
     try {
       certificate = new X509Certificate(dto.certificatePem);
-      privateKey = createPrivateKey(dto.privateKeyPem);
+      privateKey = createPrivateKey(privateKeyPem);
     } catch {
       throw new BadRequestException('گواهی یا کلید خصوصی قابل خواندن نیست.');
     }
@@ -386,6 +425,11 @@ export class MoadianService implements OnModuleInit {
       throw new NotFoundException('این صورتحساب هنوز به سامانه مودیان ارسال نشده است.');
     }
     return this.toSubmissionResponse(submission);
+  }
+
+  async listSubmissions(tenantId: string): Promise<MoadianSubmissionResponseDto[]> {
+    const submissions = await this.repository.listSubmissions(tenantId);
+    return submissions.map((s) => this.toSubmissionResponse(s));
   }
 
   private toSubmissionResponse(entity: MoadianSubmissionEntity): MoadianSubmissionResponseDto {

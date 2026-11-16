@@ -87,6 +87,11 @@ export interface CertificateSubjectDto {
   emailAddress?: string;
 }
 
+export interface GenerateKeyPairDto {
+  modulusLength?: 2048 | 3072 | 4096;
+  subject?: CertificateSubjectDto;
+}
+
 export interface GenerateCsrDto {
   subject: CertificateSubjectDto;
   privateKeyPem?: string;

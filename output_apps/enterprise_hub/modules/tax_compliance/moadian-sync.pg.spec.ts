@@ -8,14 +8,22 @@
 import 'reflect-metadata';
 import * as crypto from 'crypto';
 import * as path from 'path';
+import { ConfigService } from '@nestjs/config';
 import { DataSource } from 'typeorm';
 import { TenantScope } from '../access/services/tenant-scope';
 import { InvoicingRepository } from '../invoicing/repositories/invoicing.repository';
+import { InvoicingService } from '../invoicing/services/invoicing.service';
 import { InvoiceEntity } from '../invoicing/entities/invoice.entity';
+import { MOADIAN_ENV } from './constants/moadian.constants';
 import { MoadianCredentialEntity } from './entities/moadian-credential.entity';
 import { MoadianSubmissionEntity } from './entities/moadian-submission.entity';
+import { TaxInvoiceSignatureEntity } from './entities/tax-invoice-signature.entity';
+import { TaxSigningKeyEntity } from './entities/tax-signing-key.entity';
 import { MoadianSubmissionStatus } from './enums/moadian.enum';
 import { MoadianRepository } from './repositories/moadian.repository';
+import { TaxComplianceRepository } from './repositories/tax-compliance.repository';
+import { TaxComplianceService } from './services/tax-compliance.service';
+import { isSealedSecret, openSecret, parseMasterKey } from './utils/secret-box.util';
 
 const HOST = process.env.ROXIRA_TEST_PG_HOST ?? (process.env.CI ? '127.0.0.1' : undefined);
 const describePg = HOST ? describe : describe.skip;
@@ -53,6 +61,9 @@ describePg('T82 Moadian sync repositories on PostgreSQL (NOSUPERUSER, FORCE RLS)
   let tenantScope: TenantScope;
   let moadianRepo: MoadianRepository;
   let invoicingRepo: InvoicingRepository;
+  let taxRepo: TaxComplianceRepository;
+  let taxService: TaxComplianceService;
+  const masterKeyB64 = crypto.randomBytes(32).toString('base64');
 
   beforeAll(async () => {
     admin = await new DataSource({ ...options(ADMIN_DB), entities: [], migrations: [] }).initialize();
@@ -80,6 +91,20 @@ describePg('T82 Moadian sync repositories on PostgreSQL (NOSUPERUSER, FORCE RLS)
       appDs.getRepository(InvoiceEntity),
       appDs,
       tenantScope,
+    );
+    taxRepo = new TaxComplianceRepository(
+      appDs.getRepository(TaxSigningKeyEntity),
+      appDs.getRepository(TaxInvoiceSignatureEntity),
+      tenantScope,
+    );
+    const configService = {
+      get: (key: string) =>
+        key === MOADIAN_ENV.KEY_ENCRYPTION_KEY ? masterKeyB64 : undefined,
+    } as unknown as ConfigService;
+    taxService = new TaxComplianceService(
+      taxRepo,
+      {} as unknown as InvoicingService,
+      configService,
     );
 
     await ownerDs.query(
@@ -126,15 +151,15 @@ describePg('T82 Moadian sync repositories on PostgreSQL (NOSUPERUSER, FORCE RLS)
     }
   });
 
-  it('enforces FORCE RLS on moadian_submissions and invoices', async () => {
+  it('enforces FORCE RLS on moadian_submissions, moadian_credentials, tax_signing_keys, and invoices', async () => {
     const rlsRows: Array<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean }> =
       await ownerDs.query(`
         SELECT relname, relrowsecurity, relforcerowsecurity
           FROM pg_class
-         WHERE relname IN ('moadian_submissions', 'moadian_credentials', 'invoices')
+         WHERE relname IN ('moadian_submissions', 'moadian_credentials', 'tax_signing_keys', 'invoices')
          ORDER BY relname
       `);
-    expect(rlsRows).toHaveLength(3);
+    expect(rlsRows).toHaveLength(4);
     for (const row of rlsRows) {
       expect(row.relrowsecurity).toBe(true);
       expect(row.relforcerowsecurity).toBe(true);
@@ -161,5 +186,40 @@ describePg('T82 Moadian sync repositories on PostgreSQL (NOSUPERUSER, FORCE RLS)
       taxId: 'TAX-A-1',
     });
     expect(mapA.has(INV_B)).toBe(false);
+  });
+
+  it('listSubmissions returns only the scoped tenant rows under FORCE RLS', async () => {
+    const subsA = await moadianRepo.listSubmissions(TENANT_A);
+    expect(subsA.map((s) => s.invoiceId)).toEqual([INV_A]);
+
+    const subsB = await moadianRepo.listSubmissions(TENANT_B);
+    expect(subsB.map((s) => s.invoiceId)).toEqual([INV_B]);
+  });
+
+  it('persists encrypted v1 active signing key in tax_signing_keys and isolates findActiveKeyWithPrivate per tenant', async () => {
+    const generated = await taxService.generateKeyPair(TENANT_A, {
+      modulusLength: 2048,
+      subject: { commonName: 'PG Sealed Tenant A' },
+    });
+    expect(generated.keyId).toBeTruthy();
+
+    const rawRows: Array<{ tenant_id: string; private_key_pem: string }> =
+      await ownerDs.query(
+        `SELECT tenant_id, private_key_pem FROM tax_signing_keys WHERE tenant_id = $1`,
+        [TENANT_A],
+      );
+    expect(rawRows).toHaveLength(1);
+    expect(isSealedSecret(rawRows[0].private_key_pem)).toBe(true);
+    expect(rawRows[0].private_key_pem).not.toContain('BEGIN PRIVATE KEY');
+    expect(
+      openSecret(rawRows[0].private_key_pem, parseMasterKey(masterKeyB64), TENANT_A),
+    ).toContain('BEGIN PRIVATE KEY');
+
+    const activeA = await taxRepo.findActiveKeyWithPrivate(TENANT_A);
+    expect(activeA?.keyId).toBe(generated.keyId);
+    expect(isSealedSecret(activeA!.privateKeyPem)).toBe(true);
+
+    const activeB = await taxRepo.findActiveKeyWithPrivate(TENANT_B);
+    expect(activeB).toBeNull();
   });
 });
