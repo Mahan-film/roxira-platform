@@ -73,21 +73,36 @@ export function CashBoxesView() {
       .then(([boxes, banks]) => {
         setCashBoxes(boxes);
         setBankAccounts(banks);
-        if (boxes.length > 0 && transferBoxId === "") {
-          setTransferBoxId(boxes[0].id);
-        }
-        if (banks.length > 0 && transferBankId === "") {
-          setTransferBankId(banks[0].id);
-          setPosBankId(banks[0].id);
-        }
       })
       .catch((err) => setError(err.message || "خطا در بارگذاری صندوق‌ها و بانک‌ها"))
       .finally(() => setLoading(false));
-  }, [transferBoxId, transferBankId]);
+  }, []);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    let cancelled = false;
+    Promise.all([listCashBoxes(), listBankAccounts()])
+      .then(([boxes, banks]) => {
+        if (cancelled) return;
+        setCashBoxes(boxes);
+        setBankAccounts(banks);
+        if (boxes.length > 0) {
+          setTransferBoxId((prev) => (prev === "" ? boxes[0].id : prev));
+        }
+        if (banks.length > 0) {
+          setTransferBankId((prev) => (prev === "" ? banks[0].id : prev));
+          setPosBankId((prev) => (prev === "" ? banks[0].id : prev));
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message || "خطا در بارگذاری صندوق‌ها و بانک‌ها");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleCreateCashBox = async () => {
     if (!newBoxName || !newBoxCode || !newBoxAccountId) {

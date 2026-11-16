@@ -23,7 +23,12 @@ import {
   voidPettyCashExpense,
 } from "@/lib/api/accounting-reports-client";
 import { formatJalaliDate, formatReportMoney } from "@/lib/fa-format";
-import { lastSettlementDate, normalizeAmount } from "@/lib/petty-cash-ui";
+import {
+  lastSettlementDate,
+  minorToMajorString,
+  normalizeAmount,
+  sumMinorUnits,
+} from "@/lib/petty-cash-ui";
 import type { PettyCashFund, PettyCashStatement, PettyCashTransaction } from "@/types/accounting-reports";
 
 const KIND_LABELS: Record<PettyCashTransaction["kind"], string> = {
@@ -54,7 +59,7 @@ export function PettyCashView() {
   const [newFund, setNewFund] = useState({ name: "", custodianName: "", imprestAmount: "" });
   const [movement, setMovement] = useState({ amount: "", date: today(), accountCode: "" });
   const [expense, setExpense] = useState({ amount: "", date: today(), accountCode: "", description: "", receiptNumber: "" });
-  const [settlement, setSettlement] = useState({ date: today(), replenish: "" });
+  const [settlement, setSettlement] = useState({ date: today(), replenish: false, replenishFromAccountCode: "" });
   const [newFundOpen, setNewFundOpen] = useState(false);
   const [chargeOpen, setChargeOpen] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
@@ -68,17 +73,25 @@ export function PettyCashView() {
   };
 
   const loadSettlements = (list: PettyCashFund[], signal: AbortSignal) => {
-    void Promise.allSettled(list.map((fund) => getPettyCashStatement(fund.id, signal))).then((results) => {
+    void (async () => {
       const next: Record<number, SettlementCell> = {};
-      results.forEach((result, index) => {
-        const fundId = list[index].id;
-        next[fundId] =
-          result.status === "fulfilled"
-            ? { date: lastSettlementDate(result.value.transactions), error: false }
-            : { date: null, error: true };
-      });
-      setSettlements(next);
-    });
+      const chunkSize = 5;
+      for (let i = 0; i < list.length; i += chunkSize) {
+        if (signal.aborted) return;
+        const chunk = list.slice(i, i + chunkSize);
+        const results = await Promise.allSettled(chunk.map((fund) => getPettyCashStatement(fund.id, signal)));
+        results.forEach((result, index) => {
+          const fundId = chunk[index].id;
+          next[fundId] =
+            result.status === "fulfilled"
+              ? { date: lastSettlementDate(result.value.transactions), error: false }
+              : { date: null, error: true };
+        });
+      }
+      if (!signal.aborted) {
+        setSettlements((prev) => ({ ...prev, ...next }));
+      }
+    })();
   };
 
   useEffect(() => {
@@ -133,7 +146,6 @@ export function PettyCashView() {
   const fund = statement?.fund;
   const active = fund?.status === "ACTIVE";
   const pending = statement?.transactions.filter((row) => row.status === "PENDING") ?? [];
-  const validMovement = normalizeAmount(movement.amount) !== null && movement.date && movement.accountCode.trim();
 
   const settlementCell = (row: PettyCashFund): string => {
     const cell = settlements[row.id];
@@ -259,7 +271,7 @@ export function PettyCashView() {
                       <span className="text-xs text-muted-foreground">رسیدهای در انتظار تسویه:</span>
                       <p className="font-mono text-base font-bold text-amber-600">
                         {formatReportMoney(
-                          pending.reduce((sum, r) => sum + Number(r.amount), 0)
+                          minorToMajorString(sumMinorUnits(pending))
                         )}
                       </p>
                     </div>
@@ -421,16 +433,17 @@ export function PettyCashView() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (!fund || !validMovement) {
-              setError("لطفاً مبلغ، تاریخ و کد حساب بانکی را وارد کنید.");
+            const amt = normalizeAmount(movement.amount);
+            if (!fund || amt === null || !movement.date || !movement.accountCode.trim()) {
+              setError("لطفاً مبلغ معتبر، تاریخ و کد حساب بانکی را وارد کنید.");
               return;
             }
             setChargeOpen(false);
             void run(() =>
               chargePettyCash(fund.id, {
-                amount: normalizeAmount(movement.amount) ?? "0",
+                amount: amt,
                 date: movement.date,
-                bankAccountCode: movement.accountCode.trim(),
+                accountCode: movement.accountCode.trim(),
               })
             );
           }}
@@ -481,16 +494,17 @@ export function PettyCashView() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (!fund || !validMovement) {
-              setError("لطفاً مبلغ، تاریخ و کد حساب بانکی را وارد کنید.");
+            const amt = normalizeAmount(movement.amount);
+            if (!fund || amt === null || !movement.date || !movement.accountCode.trim()) {
+              setError("لطفاً مبلغ معتبر، تاریخ و کد حساب بانکی را وارد کنید.");
               return;
             }
             setReturnOpen(false);
             void run(() =>
               returnPettyCash(fund.id, {
-                amount: normalizeAmount(movement.amount) ?? "0",
+                amount: amt,
                 date: movement.date,
-                bankAccountCode: movement.accountCode.trim(),
+                accountCode: movement.accountCode.trim(),
               })
             );
           }}
@@ -551,8 +565,8 @@ export function PettyCashView() {
               addPettyCashExpense(fund.id, {
                 amount: amt,
                 date: expense.date,
-                expenseAccountCode: expense.accountCode.trim(),
-                description: expense.description.trim() || undefined,
+                accountCode: expense.accountCode.trim(),
+                description: expense.description.trim() || "هزینه تنخواه",
                 receiptNumber: expense.receiptNumber.trim() || undefined,
               })
             );
@@ -627,8 +641,11 @@ export function PettyCashView() {
             void run(() =>
               settlePettyCash(fund.id, {
                 date: settlement.date,
-                transactionIds: pending.map((tx) => tx.id),
-                replenish: settlement.replenish === "true",
+                expenseIds: pending.map((tx) => tx.id),
+                replenishFromAccountCode:
+                  settlement.replenish && settlement.replenishFromAccountCode.trim()
+                    ? settlement.replenishFromAccountCode.trim()
+                    : undefined,
               })
             );
           }}
@@ -637,7 +654,7 @@ export function PettyCashView() {
           <p className="text-sm text-muted-foreground">
             تعداد {pending.length} سند هزینه به ارزش کل{" "}
             <span className="font-mono font-bold text-foreground">
-              {formatReportMoney(pending.reduce((sum, r) => sum + Number(r.amount), 0))}
+              {formatReportMoney(minorToMajorString(sumMinorUnits(pending)))}
             </span>{" "}
             تسویه شده و سند حسابداری صادر خواهد شد.
           </p>
@@ -649,17 +666,30 @@ export function PettyCashView() {
               onChange={(val) => setSettlement({ ...settlement, date: val || today() })}
             />
           </div>
-          <div className="flex items-center gap-2 pt-2">
-            <input
-              type="checkbox"
-              id="settle-replenish"
-              checked={settlement.replenish === "true"}
-              onChange={(e) => setSettlement({ ...settlement, replenish: e.target.checked ? "true" : "false" })}
-              className="size-4 rounded border-input"
-            />
-            <Label htmlFor="settle-replenish" className="cursor-pointer text-sm">
-              شارژ مجدد خودکار تنخواه پس از تسویه
-            </Label>
+          <div className="space-y-2 pt-2">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="settle-replenish"
+                checked={settlement.replenish}
+                onChange={(e) => setSettlement({ ...settlement, replenish: e.target.checked })}
+                className="size-4 rounded border-input"
+              />
+              <Label htmlFor="settle-replenish" className="cursor-pointer text-sm">
+                شارژ مجدد خودکار تنخواه پس از تسویه
+              </Label>
+            </div>
+            {settlement.replenish && (
+              <div>
+                <Label htmlFor="settle-replenish-account">کد حساب بانکی جهت شارژ مجدد</Label>
+                <Input
+                  id="settle-replenish-account"
+                  value={settlement.replenishFromAccountCode}
+                  onChange={(e) => setSettlement({ ...settlement, replenishFromAccountCode: e.target.value })}
+                  placeholder="1021"
+                />
+              </div>
+            )}
           </div>
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="ghost" onClick={() => setSettleOpen(false)}>

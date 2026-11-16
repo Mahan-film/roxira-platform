@@ -29,3 +29,39 @@ export function normalizeAmount(text: string): string | null {
   if (!/^\d{1,16}(\.\d{1,2})?$/.test(t)) return null;
   return /[1-9]/.test(t) ? t : null;
 }
+
+const ZERO = BigInt(0);
+const HUNDRED = BigInt(100);
+
+/**
+ * Exact sum in minor units (hundredths of a rial) across items with an amount field.
+ * Avoids any float arithmetic or Number() precision loss (Rule 8).
+ */
+export function sumMinorUnits(
+  items: ReadonlyArray<{ amount?: number | string | null }>,
+): bigint {
+  let total = ZERO;
+  for (const item of items) {
+    if (item.amount === null || item.amount === undefined || item.amount === "") continue;
+    const t = String(item.amount).replace(/[,٬\s]/g, "");
+    const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(t);
+    if (!match) continue;
+    const [, sign, intPart, fracPart = ""] = match;
+    const minor = BigInt(intPart) * HUNDRED + BigInt(fracPart.slice(0, 2).padEnd(2, "0"));
+    total += sign === "-" ? -minor : minor;
+  }
+  return total;
+}
+
+/**
+ * Format exact minor units (BigInt) as a decimal string suitable for formatReportMoney.
+ */
+export function minorToMajorString(minor: bigint): string {
+  const isNeg = minor < ZERO;
+  const abs = isNeg ? -minor : minor;
+  const integer = abs / HUNDRED;
+  const frac = abs % HUNDRED;
+  const fracStr = frac === ZERO ? "" : `.${frac.toString().padStart(2, "0").replace(/0+$/, "")}`;
+  return `${isNeg ? "-" : ""}${integer}${fracStr}`;
+}
+
