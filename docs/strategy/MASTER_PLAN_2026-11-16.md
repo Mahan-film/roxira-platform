@@ -1,5 +1,13 @@
 # Master plan — 2026-11-16
 
+> **Update later on 2026-11-16 (owner): product first.** All work goes to finishing the product: CRM, ERP, accounting and tax, built to be usable worldwide (Germany and the EU, the Gulf states, others; Iran is live). **No company, market, pricing or pilot-customer decisions until the product is complete.**
+>
+> So:
+> - Track B below (Malaysian dogfood and pilots) is **paused**. The MY pack rows already queued stay, because they test the country-pack framework.
+> - Owner asks about the company are paused in `docs/owner/OWNER_ASKS_FA.md`.
+> - Foreign pack order and the factory changes (WIP limit, merge pass, faster M1 gate) are in `ARCHITECTURE_DECISIONS_2026-11-16.md`.
+> - Research prompts R13–R16 are in `DEEP_RESEARCH_ROUND3.md`.
+
 This plan orders the work after research R1–R9. It replaces nothing. `MASTER_PLAN_2026-10-31.md` (Iran first) and the R digests in `research/` stay valid, and this file says what comes first. Status per area: `STRATEGY_COVERAGE.md`.
 
 ## Owner decisions behind this plan (2026-11-16)
