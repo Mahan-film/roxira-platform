@@ -1,0 +1,7 @@
+{
+  "route": "/contact",
+  "totalViolations": 4,
+  "rules": {
+    "color-contrast": 4
+  }
+}

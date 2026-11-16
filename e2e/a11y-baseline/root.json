@@ -1,0 +1,7 @@
+{
+  "route": "/",
+  "totalViolations": 3,
+  "rules": {
+    "color-contrast": 3
+  }
+}
