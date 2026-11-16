@@ -53,7 +53,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatNumber } from "@/lib/fa-format";
+import { formatNumber, formatMoneyRial } from "@/lib/fa-format";
 import { cn } from "@/lib/utils";
 
 export interface DataTableColumnMeta {
@@ -633,7 +633,7 @@ export function DataTable<TData extends RowData>({
 
                   if (meta?.isSummable && col.id) {
                     const sum = columnSums[col.id] ?? 0n;
-                    const formatted = meta.formatValue ? meta.formatValue(sum) : formatNumber(Number(sum));
+                    const formatted = meta.formatValue ? meta.formatValue(sum) : formatMoneyRial(sum.toString());
                     return (
                       <TableCell
                         key={col.id}
