@@ -100,11 +100,21 @@ describe('Iran pack is adapters over existing code (behaviour unchanged)', () =>
     for (const rule of pack.taxRules) {
       for (const key of rule.statutoryKeys) expect(Object.keys(STATUTORY_KEYS)).toContain(key);
     }
-    expect(pack.taxRules.map((r) => r.kind)).toEqual(['vat', 'corporate_income_tax', 'wage_tax', 'social_insurance']);
+    expect(pack.taxRules.map((r) => r.kind)).toEqual([
+      'vat',
+      'corporate_income_tax',
+      'wage_tax',
+      'social_insurance',
+      'business_income_tax',
+      'doctor_withholding',
+      'rental_tax',
+    ]);
   });
 
   it('holds no legal figure: tax rules contain keys only', () => {
-    expect(JSON.stringify(pack.taxRules)).not.toMatch(/\d\.\d|\d{2,}/);
+    // Strip statutory article references in key names (e.g. art131, art57, art101) to verify no rate or monetary figure is in the rules
+    const stripped = JSON.stringify(pack.taxRules).replace(/art\d+/g, '');
+    expect(stripped).not.toMatch(/\d\.\d|\d{2,}/);
   });
 
   it('payroll adapter returns what StatutoryService.ratesFor returns', async () => {

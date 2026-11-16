@@ -149,4 +149,40 @@ describe('corporate tax provision preview (DTX-01)', () => {
 
     expect(findForYear).toHaveBeenCalledWith('tenant-xx', TEST_COUNTRY, 1405);
   });
+
+  it('reads corporate tax rule keys and country from the pack registry when provided', async () => {
+    const findForYear = jest.fn().mockResolvedValue([
+      row('corporate_tax_rate', '0.25'),
+      row('corporate_tax_effective_floor', '0.10'),
+    ]);
+    const fakePack = {
+      country: 'IR',
+      taxRules: [
+        {
+          kind: 'corporate_income_tax',
+          label: 'مالیات شرکت‌ها',
+          statutoryKeys: ['corporate_tax_rate', 'corporate_tax_effective_floor'],
+        },
+      ],
+    };
+    const packRegistry = {
+      resolve: jest.fn(() => fakePack),
+    };
+    const service = new CorporateTaxService(
+      { findForYear } as unknown as StatutoryRepository,
+      packRegistry as never,
+    );
+    const result = await service.preview('tenant-1', dto({ accountingProfit: '1000000000.00' }));
+    expect(packRegistry.resolve).toHaveBeenCalled();
+    expect(findForYear).toHaveBeenCalledWith('tenant-1', 'IR', 1405);
+    expect(result.provision).toBe('250000000.00');
+  });
+
+  it('falls back to default statutory keys and IR when no pack registry is provided', async () => {
+    const findForYear = jest.fn().mockResolvedValue(RATES);
+    const service = new CorporateTaxService({ findForYear } as unknown as StatutoryRepository);
+    const result = await service.preview('tenant-1', dto({ accountingProfit: '1000000000.00' }));
+    expect(findForYear).toHaveBeenCalledWith('tenant-1', 'IR', 1405);
+    expect(result.provision).toBe('250000000.00');
+  });
 });

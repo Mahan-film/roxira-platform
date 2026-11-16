@@ -11,6 +11,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
 import { fromMinor, toMinor } from '../../accounting/money';
@@ -26,6 +27,7 @@ import {
   PAYROLL_RUN_ENTRY_PREFIX,
   PAYSLIP_NUMBER_PREFIX,
 } from '../constants/hr.constants';
+import { CountryPackRegistry } from '../../country_packs/country-pack.registry';
 import {
   CreatePayrollRunDto,
   InsuranceListQueryDto,
@@ -137,6 +139,7 @@ export class PayrollRunService {
     private readonly accountingService: AccountingService,
     private readonly statutory: StatutoryService,
     private readonly postingRules: PostingRulesService,
+    @Optional() private readonly countryPackRegistry?: CountryPackRegistry,
   ) {}
 
   private async requireRates(
@@ -148,6 +151,10 @@ export class PayrollRunService {
       throw new BadRequestException(
         `نرخ‌های قانونی حقوق برای سال ${year} تعریف نشده است.`,
       );
+    }
+    const pack = this.countryPackRegistry?.resolve();
+    if (pack?.payroll) {
+      return (await pack.payroll.ratesFor(tenantId, year, month)) as PayrollYearRates;
     }
     return this.statutory.ratesFor(tenantId, year, month);
   }

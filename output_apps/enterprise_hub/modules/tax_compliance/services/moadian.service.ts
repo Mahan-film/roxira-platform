@@ -56,7 +56,11 @@ import {
   MoadianCounterpartyValidationError,
 } from '../utils/moadian-payload.transformer';
 import { SubmitMoadianInvoiceDto } from '../dto/submit-moadian-invoice.dto';
-import { MoadianMappingError, mapInvoiceToMoadianPacket } from '../utils/moadian-packet.mapper';
+import {
+  MoadianInvoicePacket,
+  MoadianMappingError,
+  mapInvoiceToMoadianPacket,
+} from '../utils/moadian-packet.mapper';
 import {
   openSecret,
   openStoredPrivateKey,
@@ -64,6 +68,7 @@ import {
   sealSecret,
 } from '../utils/secret-box.util';
 import { MoadianApiClient, MoadianApiError, MoadianAuthContext } from './moadian-api.client';
+import { CountryPackRegistry } from '../../country_packs/country-pack.registry';
 
 /** payload کارهای صف `moadian` — فقط شناسه‌ها؛ هیچ کلید یا بسته‌ای در Redis نمی‌رود. */
 export interface MoadianJobData {
@@ -91,6 +96,7 @@ export class MoadianService implements OnModuleInit {
     private readonly config: ConfigService,
     @InjectQueue(MOADIAN_QUEUE) private readonly queue: Queue<MoadianJobData>,
     private readonly taxComplianceRepository: TaxComplianceRepository,
+    @Optional() private readonly countryPackRegistry?: CountryPackRegistry,
   ) {}
 
   /** ثبت جاب دوره‌ای همگام‌سازی وضعیت صورتحساب‌های معوق با سامانه مودیان. */
@@ -352,7 +358,7 @@ export class MoadianService implements OnModuleInit {
 
     const mapWith = (serial: number) => {
       try {
-        return mapInvoiceToMoadianPacket(invoice, {
+        const mappingContext = {
           memoryId: credential.memoryId,
           sellerEconomicCode: credential.economicCode,
           serial,
@@ -365,7 +371,12 @@ export class MoadianService implements OnModuleInit {
           cashPortion: options.cashPortion,
           lateRegistrationAt: options.lateRegistrationAt,
           extras: options.extras,
-        });
+        };
+        const eInvoiceAdapter = this.countryPackRegistry?.resolve().eInvoice;
+        if (eInvoiceAdapter) {
+          return eInvoiceAdapter.map(invoice, mappingContext) as MoadianInvoicePacket;
+        }
+        return mapInvoiceToMoadianPacket(invoice, mappingContext);
       } catch (error) {
         if (error instanceof MoadianMappingError) {
           throw new BadRequestException(error.message);

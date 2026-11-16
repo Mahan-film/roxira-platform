@@ -1,6 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { minorToDecimal, parseMinor } from '../../accounting/money';
 import { StatutoryRepository } from '../../hr/statutory/statutory.repository';
+import { StatutoryKey } from '../../hr/statutory/statutory-catalogue';
+import { CountryPackRegistry } from '../../country_packs/country-pack.registry';
 import { BusinessTaxPreviewDto } from '../dto/business-tax-preview.dto';
 import { Bracket, bracketTax, readStatutory, StatutoryUse } from '../utils/progressive-tax';
 
@@ -48,10 +50,17 @@ export function splitByShares(total: bigint, shares: number[]): bigint[] {
 /** Income tax preview for a business owner (Art. 101) or a civil partnership (Art. 101 note 1). Preview only. */
 @Injectable()
 export class BusinessTaxService {
-  constructor(private readonly statutory: StatutoryRepository) {}
+  constructor(
+    private readonly statutory: StatutoryRepository,
+    @Optional() private readonly countryPackRegistry?: CountryPackRegistry,
+  ) {}
 
   async preview(tenantId: string, dto: BusinessTaxPreviewDto): Promise<BusinessTaxPreview> {
-    const used = await readStatutory(this.statutory, tenantId, dto.fiscalYear, KEYS);
+    const pack = this.countryPackRegistry?.resolve();
+    const rule = pack?.taxRules.find((r) => r.kind === 'business_income_tax');
+    const keys = rule ? (rule.statutoryKeys as readonly StatutoryKey[]) : KEYS;
+    const country = pack?.country;
+    const used = await readStatutory(this.statutory, tenantId, dto.fiscalYear, keys, country);
     const brackets = used.get('income_tax_art131_brackets')!.value as Bracket[];
     // The store holds whole rials (money kind); the computation works in minor units (rial x 100).
     const ceiling = BigInt(used.get('income_exemption_ceiling_art57_art101')!.value as number) * 100n;
