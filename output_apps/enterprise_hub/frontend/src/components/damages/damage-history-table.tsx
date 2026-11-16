@@ -1,35 +1,33 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
-import { RefreshCwIcon, SearchIcon } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { RefreshCwIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  DataTable,
+  DataTableColumnHeader,
+  type DataTableColumnDef,
+} from "@/components/ui/data-table";
 
 import { listDamageCalculations } from "@/lib/api/damages-client";
 import { ApiClientError } from "@/lib/api/http-client";
 import { formatPersianDate, formatRial } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import {
   DAMAGE_CALCULATION_METHOD_LABELS,
+  type DamageCalculationResponseDto,
   type PaginatedDamageCalculationResponse,
 } from "@/types/damages";
 
 const PAGE_SIZE = 10;
 
 /**
- * جدول تاریخچه محاسبات، متصل به `GET /enterprise-hub/damages`
- * (DamagesController.findAll -> QueryDamageCalculationDto).
+ * جدول تاریخچه محاسبات خسارت تاخیر تادیه، پیاده‌سازی شده با کامپوننت مشترک DataTable
+ * همراه با مرتب‌سازی، فیلتر سراسری، انتخاب سطرها، مخفی‌سازی ستون‌ها و خروجی CSV.
  */
 export function DamageHistoryTable() {
   const [page, setPage] = useState(1);
@@ -82,41 +80,118 @@ export function DamageHistoryTable() {
   }, [refresh]);
 
   const isLoading = isPending;
-
   const totalPages = response ? Math.max(1, Math.ceil(response.total / response.limit)) : 1;
+
+  const columns = useMemo<DataTableColumnDef<DamageCalculationResponseDto>[]>(
+    () => [
+      {
+        accessorKey: "createdAt",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="تاریخ ثبت" />
+        ),
+        cell: ({ row }) => formatPersianDate(row.original.createdAt),
+        meta: { title: "تاریخ ثبت" },
+      },
+      {
+        accessorKey: "principalAmount",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="اصل مبلغ" />
+        ),
+        cell: ({ row }) => formatRial(row.original.principalAmount),
+        meta: {
+          title: "اصل مبلغ",
+          isNumeric: true,
+          isSummable: true,
+          formatValue: (val) =>
+            formatRial(
+              typeof val === "bigint"
+                ? val
+                : typeof val === "string"
+                  ? val
+                  : (val as number) ?? 0,
+            ),
+        },
+      },
+      {
+        accessorKey: "delayedDays",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="روزهای تاخیر" />
+        ),
+        cell: ({ row }) => row.original.delayedDays.toLocaleString("fa-IR"),
+        meta: { title: "روزهای تاخیر", isNumeric: true },
+      },
+      {
+        accessorKey: "calculationMethod",
+        header: "روش محاسبه",
+        cell: ({ row }) => (
+          <Badge variant="secondary">
+            {DAMAGE_CALCULATION_METHOD_LABELS[row.original.calculationMethod]}
+          </Badge>
+        ),
+        meta: { title: "روش محاسبه" },
+      },
+      {
+        accessorKey: "damageAmount",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="مبلغ خسارت" />
+        ),
+        cell: ({ row }) => (
+          <span className="font-medium text-primary">
+            {formatRial(row.original.damageAmount)}
+          </span>
+        ),
+        meta: {
+          title: "مبلغ خسارت",
+          isNumeric: true,
+          isSummable: true,
+          formatValue: (val) =>
+            formatRial(
+              typeof val === "bigint"
+                ? val
+                : typeof val === "string"
+                  ? val
+                  : (val as number) ?? 0,
+            ),
+        },
+      },
+      {
+        accessorKey: "totalPayable",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="مبلغ کل قابل پرداخت" />
+        ),
+        cell: ({ row }) => (
+          <span className="font-medium">{formatRial(row.original.totalPayable)}</span>
+        ),
+        meta: {
+          title: "مبلغ کل قابل پرداخت",
+          isNumeric: true,
+          isSummable: true,
+          formatValue: (val) =>
+            formatRial(
+              typeof val === "bigint"
+                ? val
+                : typeof val === "string"
+                  ? val
+                  : (val as number) ?? 0,
+            ),
+        },
+      },
+      {
+        accessorKey: "contractReferenceNumber",
+        header: "شماره مرجع",
+        cell: ({ row }) => (
+          <span className="font-mono text-xs">
+            {row.original.contractReferenceNumber ?? "—"}
+          </span>
+        ),
+        meta: { title: "شماره مرجع" },
+      },
+    ],
+    [],
+  );
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <form
-          className="flex w-full items-center gap-2 sm:max-w-sm"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setPage(1);
-            setContractReferenceNumber(searchInput.trim());
-          }}
-        >
-          <Input
-            placeholder="فیلتر بر اساس شماره قرارداد/فاکتور"
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-          />
-          <Button type="submit" variant="outline" size="icon">
-            <SearchIcon />
-          </Button>
-        </form>
-
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => refresh()}
-          disabled={isLoading}
-        >
-          <RefreshCwIcon className={isLoading ? "animate-spin" : undefined} />
-          بروزرسانی
-        </Button>
-      </div>
-
       {errorMessage && (
         <Alert variant="destructive">
           <AlertTitle>خطا در دریافت اطلاعات</AlertTitle>
@@ -124,70 +199,52 @@ export function DamageHistoryTable() {
         </Alert>
       )}
 
-      <div className="overflow-x-auto rounded-lg border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>تاریخ ثبت</TableHead>
-              <TableHead>اصل مبلغ</TableHead>
-              <TableHead>روزهای تاخیر</TableHead>
-              <TableHead>روش محاسبه</TableHead>
-              <TableHead>مبلغ خسارت</TableHead>
-              <TableHead>مبلغ کل قابل پرداخت</TableHead>
-              <TableHead>شماره مرجع</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              Array.from({ length: 5 }).map((_, index) => (
-                <TableRow key={`skeleton-${index}`}>
-                  {Array.from({ length: 7 }).map((__, cellIndex) => (
-                    <TableCell key={cellIndex}>
-                      <Skeleton className="h-4 w-full" />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : response && response.data.length > 0 ? (
-              response.data.map((record) => (
-                <TableRow key={record.id}>
-                  <TableCell className="whitespace-nowrap">
-                    {formatPersianDate(record.createdAt)}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap">
-                    {formatRial(record.principalAmount)}
-                  </TableCell>
-                  <TableCell>{record.delayedDays.toLocaleString("fa-IR")}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">
-                      {DAMAGE_CALCULATION_METHOD_LABELS[record.calculationMethod]}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap font-medium text-primary">
-                    {formatRial(record.damageAmount)}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap font-medium">
-                    {formatRial(record.totalPayable)}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs">
-                    {record.contractReferenceNumber ?? "—"}
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
-                  هیچ رکوردی یافت نشد.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <DataTable
+        columns={columns}
+        data={response?.data ?? []}
+        isLoading={isLoading}
+        enableRowSelection
+        enableCsvExport
+        exportFilename="damage-history"
+        filterPlaceholder="جستجو در سوابق محاسبات..."
+        toolbarActions={
+          <div className="flex flex-wrap items-center gap-2">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                setPage(1);
+                setContractReferenceNumber(searchInput.trim());
+              }}
+              className="flex items-center gap-1.5"
+            >
+              <Input
+                placeholder="شماره مرجع قرارداد..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="w-44 text-xs h-9"
+              />
+              <Button type="submit" variant="secondary" size="sm" className="text-xs h-9">
+                فیلتر سرور
+              </Button>
+            </form>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => refresh()}
+              disabled={isLoading}
+              className="gap-1.5 text-xs h-9"
+            >
+              <RefreshCwIcon className={cn("size-3.5", isLoading && "animate-spin")} />
+              <span>بروزرسانی</span>
+            </Button>
+          </div>
+        }
+      />
 
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
+      <div className="flex items-center justify-between text-sm text-muted-foreground pt-1">
         <span>
-          {response ? `مجموع ${response.total.toLocaleString("fa-IR")} رکورد` : ""}
+          {response ? `مجموع ${response.total.toLocaleString("fa-IR")} رکورد در سرور` : ""}
         </span>
         <div className="flex items-center gap-2">
           <Button

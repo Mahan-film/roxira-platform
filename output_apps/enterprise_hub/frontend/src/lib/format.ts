@@ -4,8 +4,8 @@
  */
 import { formatJalaliNumericDate, formatMoneyRial } from "@/lib/fa-format";
 
-export function formatRial(amount: number): string {
-  return formatMoneyRial(amount);
+export function formatRial(amount: number | string | bigint): string {
+  return formatMoneyRial(typeof amount === "bigint" ? amount.toString() : amount);
 }
 
 export function formatPersianDate(isoDate?: string | null): string {
