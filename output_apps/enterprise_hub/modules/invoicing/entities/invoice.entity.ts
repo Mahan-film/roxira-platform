@@ -96,7 +96,7 @@ export class InvoiceEntity {
 
   /** شناسه شعبه صادرکننده صورتحساب (Task T122). */
   @Column({ type: 'uuid', name: 'branch_id', nullable: true })
-  branchId: string | null;
+  branchId?: string | null;
 
   @Column({ type: 'varchar', length: 64 })
   taxInvoiceNumber: string;

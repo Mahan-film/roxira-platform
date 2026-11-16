@@ -132,7 +132,7 @@ export class InvoiceResponseDto {
   warehouseId: number | null;
 
   @ApiProperty({ description: 'شناسه شعبه صادرکننده صورتحساب', nullable: true })
-  branchId: string | null;
+  branchId?: string | null;
 
   @ApiProperty({ description: 'وضعیت ارسال به سامانه مودیان', nullable: true })
   moadianStatus?: string | null;
