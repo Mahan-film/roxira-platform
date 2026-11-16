@@ -53,6 +53,7 @@ import {
   rollupMonthlyAttendance,
 } from "@/lib/api/attendance-events-client";
 import { formatMoneyRial, formatNumber } from "@/lib/fa-format";
+import { tehranWallTimeToIso } from "@/lib/tehran-time";
 import {
   LEAVE_STATUS_LABELS,
   LEAVE_TYPE_LABELS,
@@ -257,10 +258,8 @@ export default function SuiteAttendanceLeaveLoanPage() {
       let occurredAt: string | undefined = undefined;
       if (clockDate) {
         const timePart = clockTime || "08:00";
-        const localDate = new Date(`${clockDate}T${timePart}`);
-        occurredAt = Number.isNaN(localDate.getTime())
-          ? new Date().toISOString()
-          : localDate.toISOString();
+        // Wall time is Asia/Tehran regardless of the browser time zone.
+        occurredAt = tehranWallTimeToIso(clockDate, timePart) ?? new Date().toISOString();
       }
       await recordAttendanceEvent({
         employeeId: Number(clockEmployeeId),
