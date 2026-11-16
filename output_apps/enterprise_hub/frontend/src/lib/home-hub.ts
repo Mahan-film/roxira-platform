@@ -30,15 +30,25 @@ export interface HomeKpiData {
 }
 
 /**
- * Safely sums cash and bank amounts without precision loss on large Rial numbers.
+ * Safely sums cash and bank amounts without precision loss on large Rial numbers (> 2^53).
+ * Parses amounts directly as BigInt minor units without Number() or parseFloat().
  */
 export function computeCashNow(
   cash: string | number | null | undefined,
   bank: string | number | null | undefined,
 ): string {
-  const c = BigInt(Math.round(Number(cash || 0)));
-  const b = BigInt(Math.round(Number(bank || 0)));
-  return (c + b).toString();
+  const parseSafe = (v: string | number | null | undefined): bigint => {
+    if (v === null || v === undefined) return 0n;
+    const str = String(v).trim();
+    if (!str) return 0n;
+    const intPart = str.includes(".") ? str.split(".")[0] : str;
+    try {
+      return BigInt(intPart || "0");
+    } catch {
+      return 0n;
+    }
+  };
+  return (parseSafe(cash) + parseSafe(bank)).toString();
 }
 
 /**

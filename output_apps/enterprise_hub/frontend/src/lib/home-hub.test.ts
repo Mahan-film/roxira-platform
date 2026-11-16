@@ -13,6 +13,10 @@ test("computeCashNow sums cash and bank correctly without precision loss", () =>
   assert.equal(computeCashNow(0, 0), "0");
   assert.equal(computeCashNow(null, undefined), "0");
   assert.equal(computeCashNow("50000000000", "50000000000"), "100000000000");
+  // Precision check on amounts > 2^53 (Iranian Rial amounts > 9 quadrillion)
+  const huge1 = "9007199254740993"; // 2^53 + 1
+  const huge2 = "10000000000000005";
+  assert.equal(computeCashNow(huge1, huge2), "19007199254740998");
 });
 
 test("isProfitVisibleForUser checks role and explicit permission", () => {
