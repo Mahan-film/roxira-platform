@@ -1,7 +1,28 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
+import { fromDb } from '../../accounting/money';
 import { SearchEntityType, SearchItemDto, SearchResponseDto } from '../dto/search.dto';
+
+/**
+ * Exact Persian currency formatter for database numeric values via money.ts.
+ * Never converts to IEEE 754 float / Number(), preventing precision loss.
+ */
+function formatMoneyRialsFromDb(value: string | number | bigint | null | undefined): string {
+  if (value === null || value === undefined) return '۰';
+  const minor = typeof value === 'bigint' ? value : fromDb(value);
+  const isNeg = minor < 0n;
+  const abs = isNeg ? -minor : minor;
+  const rials = abs / 100n;
+  const remainder = abs % 100n;
+  const s = rials.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '،');
+  const faDigits = s.replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
+  if (remainder > 0n) {
+    const remStr = remainder.toString().padStart(2, '0').replace(/0+$/, '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
+    return isNeg ? `-${faDigits}.${remStr}` : `${faDigits}.${remStr}`;
+  }
+  return isNeg ? `-${faDigits}` : faDigits;
+}
 
 interface StaticPage {
   title: string;
@@ -145,6 +166,8 @@ export function normalizeSearchQuery(text: string): string {
 
 @Injectable()
 export class SearchService {
+  private readonly logger = new Logger(SearchService.name);
+
   constructor(
     private readonly tenantScope: TenantScope,
     private readonly dataSource: DataSource,
@@ -225,7 +248,7 @@ export class SearchService {
             )
             .then((rows: any[]) =>
               rows.map((row): SearchItemDto => {
-                const isSupplier = row.role === 'SUPPLIER';
+                const isSupplier = String(row.role).toLowerCase() === 'supplier';
                 const type: SearchEntityType = isSupplier ? 'supplier' : 'customer';
                 const parts: string[] = [`کد: ${row.code}`];
                 if (row.national_id) parts.push(`شناسه ملی: ${row.national_id}`);
@@ -241,7 +264,10 @@ export class SearchService {
                 };
               }),
             )
-            .catch(() => []),
+            .catch((err) => {
+              this.logger.warn(`Failed searching erp_parties for tenant ${tenantId}: ${err?.message || err}`);
+              return [];
+            }),
         );
       }
 
@@ -277,7 +303,10 @@ export class SearchService {
                 };
               }),
             )
-            .catch(() => []),
+            .catch((err) => {
+              this.logger.warn(`Failed searching erp_stock_items for tenant ${tenantId}: ${err?.message || err}`);
+              return [];
+            }),
         );
       }
 
@@ -304,7 +333,7 @@ export class SearchService {
                 const partyName = isBill
                   ? row.seller_info?.name || 'تأمین‌کننده'
                   : row.buyer_info?.name || 'خریدار';
-                const formattedAmount = Number(row.final_payable || 0).toLocaleString('fa-IR');
+                const formattedAmount = formatMoneyRialsFromDb(row.final_payable);
                 return {
                   id: String(row.id),
                   type: isBill ? 'bill' : 'invoice',
@@ -316,7 +345,10 @@ export class SearchService {
                 };
               }),
             )
-            .catch(() => []),
+            .catch((err) => {
+              this.logger.warn(`Failed searching invoices for tenant ${tenantId}: ${err?.message || err}`);
+              return [];
+            }),
         );
       }
 
@@ -337,7 +369,7 @@ export class SearchService {
             )
             .then((rows: any[]) =>
               rows.map((row): SearchItemDto => {
-                const formattedAmount = Number(row.amount || 0).toLocaleString('fa-IR');
+                const formattedAmount = formatMoneyRialsFromDb(row.amount);
                 const parts: string[] = [
                   `طرف‌حساب: ${row.party_name}`,
                   `سررسید: ${row.due_date}`,
@@ -355,7 +387,10 @@ export class SearchService {
                 };
               }),
             )
-            .catch(() => []),
+            .catch((err) => {
+              this.logger.warn(`Failed searching fin_cheques for tenant ${tenantId}: ${err?.message || err}`);
+              return [];
+            }),
         );
       }
 
@@ -384,7 +419,10 @@ export class SearchService {
                 score: Number(row.sim ?? 0.5),
               })),
             )
-            .catch(() => []),
+            .catch((err) => {
+              this.logger.warn(`Failed searching fin_chart_of_accounts for tenant ${tenantId}: ${err?.message || err}`);
+              return [];
+            }),
         );
       }
 

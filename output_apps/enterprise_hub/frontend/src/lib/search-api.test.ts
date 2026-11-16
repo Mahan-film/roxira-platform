@@ -12,7 +12,7 @@ describe('searchUniversal client', () => {
     globalThis.fetch = (async () => {
       called = true;
       return new Response('{}');
-    }) as any;
+    }) as unknown as typeof fetch;
 
     const res1 = await searchUniversal('');
     const res2 = await searchUniversal('   ');
@@ -34,8 +34,8 @@ describe('searchUniversal client', () => {
       },
     ];
 
-    globalThis.fetch = (async (url: string) => {
-      requestedUrl = url;
+    globalThis.fetch = (async (url: string | URL | Request) => {
+      requestedUrl = String(url);
       return new Response(
         JSON.stringify({
           query: 'آلفا',
@@ -45,7 +45,7 @@ describe('searchUniversal client', () => {
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
-    }) as any;
+    }) as unknown as typeof fetch;
 
     const res = await searchUniversal('آلفا', { limit: 15 });
 
@@ -58,7 +58,7 @@ describe('searchUniversal client', () => {
   test('handles HTTP error gracefully without throwing', async () => {
     globalThis.fetch = (async () => {
       return new Response('Internal Server Error', { status: 500 });
-    }) as any;
+    }) as unknown as typeof fetch;
 
     const res = await searchUniversal('تست');
     assert.deepStrictEqual(res, []);
@@ -67,7 +67,7 @@ describe('searchUniversal client', () => {
   test('handles network failure gracefully without throwing', async () => {
     globalThis.fetch = (async () => {
       throw new Error('Network failure');
-    }) as any;
+    }) as unknown as typeof fetch;
 
     const res = await searchUniversal('تست');
     assert.deepStrictEqual(res, []);

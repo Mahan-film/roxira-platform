@@ -59,8 +59,8 @@ describePg('Universal search on PostgreSQL with RLS and pg_trgm (T147)', () => {
           "tenant_id", "direction", "cheque_number", "sayad_number", "bank_name",
           "amount", "issue_date", "due_date", "party_name", "status", "created_at", "updated_at"
         ) VALUES (
-          $1, 'RECEIVED', 'CHQ-778899', '1403001234567890', 'بانک تجارت',
-          25000000, '2026-04-01', '2026-05-01', 'شرکت تجارت هوشمند آلفا', 'REGISTERED', NOW(), NOW()
+          $1, 'received', 'CHQ-778899', '1403001234567890', 'بانک تجارت',
+          25000000, '2026-04-01', '2026-05-01', 'شرکت تجارت هوشمند آلفا', 'registered', NOW(), NOW()
         )
       `, [T1]);
 
@@ -69,7 +69,7 @@ describePg('Universal search on PostgreSQL with RLS and pg_trgm (T147)', () => {
         INSERT INTO "fin_chart_of_accounts" (
           "tenant_id", "code", "name", "account_type", "currency", "balance", "level"
         ) VALUES (
-          $1, '101009', 'صندوق مرکزی فروشگاه آلفا', 'ASSET', 'IRR', 1000000, 'معین'
+          $1, '101009', 'صندوق مرکزی فروشگاه آلفا', 'ASSET', 'IRR', 1000000, 'MOEIN'
         )
       `, [T1]);
     });

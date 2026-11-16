@@ -3,6 +3,9 @@
  * Connects command palette and search inputs to backend /search endpoint.
  */
 
+import { apiRequest } from '@/lib/api/http-client';
+import { API_PROXY_BASE_PATH } from '@/lib/api/config';
+
 export type SearchEntityType =
   | 'customer'
   | 'supplier'
@@ -45,35 +48,24 @@ export async function searchUniversal(
   const q = query.trim();
   if (!q) return [];
 
-  const baseUrl = options?.baseUrl ?? '';
   const limit = options?.limit ?? 20;
-  const params = new URLSearchParams({ q, limit: String(limit) });
+  const searchParams: Record<string, string | number | undefined> = {
+    q,
+    limit,
+  };
 
-  if (options?.types && options.types.length > 0) {
-    for (const t of options.types) {
-      params.append('types[]', t);
-    }
-  }
+  const endpoint = options?.baseUrl
+    ? `${options.baseUrl}/search`
+    : `${API_PROXY_BASE_PATH}/search`;
 
   try {
-    const res = await fetch(`${baseUrl}/search?${params.toString()}`, {
+    const data = await apiRequest<SearchResponse>(endpoint, {
       method: 'GET',
-      headers: {
-        Accept: 'application/json',
-      },
+      searchParams,
       signal: options?.signal,
     });
-
-    if (!res.ok) {
-      return [];
-    }
-
-    const data = (await res.json()) as SearchResponse;
-    return data.items || [];
-  } catch (err: unknown) {
-    if (err instanceof Error && err.name === 'AbortError') {
-      return [];
-    }
+    return data?.items || [];
+  } catch {
     return [];
   }
 }
