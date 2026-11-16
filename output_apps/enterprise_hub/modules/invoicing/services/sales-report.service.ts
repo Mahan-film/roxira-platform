@@ -16,7 +16,7 @@ export class SalesReportService {
     if (query.from && query.to && query.from > query.to) {
       throw new BadRequestException('تاریخ شروع باید پیش از تاریخ پایان باشد.');
     }
-    const docs = await this.invoices.findSalesBetween(tenantId, query.from, query.to);
+    const docs = await this.invoices.findSalesBetween(tenantId, query.from, query.to, query.branchId);
     const groups = salesReport(docs, query.groupBy);
     const subtitle = `${query.from ? `از ${jalali(query.from)} ` : ''}${query.to ? `تا ${jalali(query.to)} ` : ''}(مبالغ به ریال)`;
     return {
@@ -25,6 +25,7 @@ export class SalesReportService {
         groupBy: query.groupBy,
         from: query.from ?? null,
         to: query.to ?? null,
+        branchId: query.branchId ?? null,
         groups: groups.map((group) => ({
           key: group.key,
           quantity: quantityText(group.quantityMilli),

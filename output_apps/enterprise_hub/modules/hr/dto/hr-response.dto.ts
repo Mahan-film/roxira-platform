@@ -31,6 +31,8 @@ export class EmployeeResponseDto {
   @ApiProperty({ nullable: true }) bankAccountNumber: string | null;
   @ApiProperty({ nullable: true, description: 'شماره بیمه تأمین اجتماعی' })
   insuranceNumber: string | null;
+  @ApiProperty({ nullable: true, description: 'شناسه شعبه محل خدمت' })
+  branchId?: string | null;
   @ApiProperty() createdAt: string;
   @ApiProperty() updatedAt: string;
 }

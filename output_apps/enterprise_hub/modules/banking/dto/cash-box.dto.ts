@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Matches, MaxLength, Min } from 'class-validator';
+import { IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength, Min } from 'class-validator';
 
 const STRICT_DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const DECIMAL_AMOUNT = /^\d+(\.\d{1,2})?$/;
@@ -117,4 +117,9 @@ export class PosSettlementDto {
   @IsString()
   @MaxLength(64)
   idempotencyKey?: string;
+
+  @ApiPropertyOptional({ description: 'شناسه شعبه محل پایانه', example: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' })
+  @IsOptional()
+  @IsUUID()
+  branchId?: string;
 }

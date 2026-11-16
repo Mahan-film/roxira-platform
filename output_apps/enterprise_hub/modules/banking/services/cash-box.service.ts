@@ -288,6 +288,7 @@ export class CashBoxService {
             grossAmount: grossMinor.toString(),
             feeAmount: feeMinor.toString(),
             referenceNumber: dto.referenceNumber?.trim() || null,
+            branchId: dto.branchId ?? null,
           }),
         )
         .digest('hex');
@@ -358,6 +359,7 @@ export class CashBoxService {
         feeAmount: minorToDecimal(feeMinor),
         netAmount: minorToDecimal(netMinor),
         referenceNumber: dto.referenceNumber?.trim() || null,
+        branchId: dto.branchId ?? null,
         journalEntryId: voucher.entryId,
         idempotencyKey,
         idempotencyFingerprint: fingerprint,

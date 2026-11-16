@@ -158,6 +158,7 @@ export class HrRepository {
           terminationDate: entity.terminationDate,
           bankAccountNumber: entity.bankAccountNumber,
           insuranceNumber: entity.insuranceNumber,
+          branchId: entity.branchId ?? null,
           updatedAt: entity.updatedAt,
         },
       );

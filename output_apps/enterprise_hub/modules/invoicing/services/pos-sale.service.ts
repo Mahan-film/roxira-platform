@@ -115,6 +115,7 @@ export class PosSaleService {
       currency: dto.currency,
       fxRate: dto.fxRate,
       warehouseId: dto.warehouseId,
+      branchId: dto.branchId,
       // Anonymous sales name no customer: the invoice service attaches the walk-in customer and
       // picks the country's anonymous type. A known customer is passed by id.
       ...(identity.level === 'anonymous' ? {} : { customerId: identity.lead.id }),
@@ -234,6 +235,7 @@ export class PosSaleService {
         jurisdiction: sale.jurisdiction,
         fxRate,
         warehouseId: sale.warehouseId ?? undefined,
+        branchId: dto.branchId ?? sale.branchId ?? undefined,
         items,
         // Refunded now: issued and settled at once. On credit: issued only, the receivable stays credited.
         status: returnOf.refund === 'ORIGINAL' ? InvoiceStatus.PAID : InvoiceStatus.ISSUED,

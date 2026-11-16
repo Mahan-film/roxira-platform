@@ -107,6 +107,7 @@ export interface HrImportEmployeeInput {
   dependants?: number;
   hireDate?: string;
   bankAccountNumber?: string;
+  branchId?: string | null;
 }
 
 /**
@@ -176,6 +177,7 @@ export class HrService {
       terminationDate: this.toIso(entity.terminationDate),
       bankAccountNumber: entity.bankAccountNumber,
       insuranceNumber: entity.insuranceNumber ?? null,
+      branchId: entity.branchId ?? null,
       createdAt: this.toIso(entity.createdAt) ?? '',
       updatedAt: this.toIso(entity.updatedAt) ?? '',
     };
@@ -318,6 +320,7 @@ export class HrService {
       terminationDate: null,
       bankAccountNumber: dto.bankAccountNumber ?? null,
       insuranceNumber: dto.insuranceNumber ?? null,
+      branchId: dto.branchId ?? null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -360,6 +363,7 @@ export class HrService {
         hireDate: input.hireDate ?? new Date().toISOString().slice(0, 10),
         terminationDate: null,
         bankAccountNumber: input.bankAccountNumber ?? null,
+        branchId: input.branchId ?? null,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -412,6 +416,7 @@ export class HrService {
       ...condition,
       ...(status ? { status } : {}),
       ...(department ? { department } : {}),
+      ...(query.branchId ? { branchId: query.branchId } : {}),
     }));
 
     const [entities, total] = await this.hrRepository.findAndCountEmployees(
@@ -559,6 +564,7 @@ export class HrService {
       ...(dto.insuranceNumber !== undefined
         ? { insuranceNumber: dto.insuranceNumber }
         : {}),
+      ...(dto.branchId !== undefined ? { branchId: dto.branchId ?? null } : {}),
       updatedAt: new Date(),
     });
 

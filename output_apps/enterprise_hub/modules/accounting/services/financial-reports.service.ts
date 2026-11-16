@@ -43,6 +43,7 @@ export interface ResolvedPeriod {
   yearStart: string;
   from: string;
   to: string;
+  branchId?: string;
 }
 
 export interface InferredAccount {
@@ -163,7 +164,12 @@ export class FinancialReportsService {
       throw new BadRequestException('شروع دوره نباید بعد از پایان آن باشد.');
     }
     // A range that starts before the year reports as its own period.
-    return { yearStart: from < yearStart ? from : yearStart, from, to };
+    return {
+      yearStart: from < yearStart ? from : yearStart,
+      from,
+      to,
+      branchId: query.branchId,
+    };
   }
 
   async accounts(tenantId: string): Promise<ReportAccount[]> {

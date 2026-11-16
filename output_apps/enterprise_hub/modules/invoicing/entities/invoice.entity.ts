@@ -85,6 +85,7 @@ export interface InvoicePostingMeta {
 })
 @Index('IDX_invoices_tenant_createdAt', ['tenantId', 'createdAt'])
 @Index('IDX_invoices_tenant_status', ['tenantId', 'status'])
+@Index('IDX_invoices_tenant_branch', ['tenantId', 'branchId'])
 export class InvoiceEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -92,6 +93,10 @@ export class InvoiceEntity {
   /** شناسه سازمان مالک صورتحساب (تنها از توکن تأییدشده JWT). */
   @Column({ type: 'uuid', name: 'tenant_id' })
   tenantId: string;
+
+  /** شناسه شعبه صادرکننده صورتحساب (Task T122). */
+  @Column({ type: 'uuid', name: 'branch_id', nullable: true })
+  branchId?: string | null;
 
   @Column({ type: 'varchar', length: 64 })
   taxInvoiceNumber: string;

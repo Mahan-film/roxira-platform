@@ -47,6 +47,7 @@ export interface JournalLineInput {
   detailCode?: string | null;
   costCenterCode?: string | null;
   projectCode?: string | null;
+  branchId?: string | null;
 }
 
 /**
@@ -633,6 +634,7 @@ export class AccountingRepository {
       fxRate: line.fxRate ?? null,
       partyCode: line.partyCode ?? null,
       description: line.description ?? null,
+      branchId: line.branchId ?? null,
     }));
     for (let offset = 0; offset < lineRows.length; offset += 200) {
       await manager

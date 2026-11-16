@@ -191,6 +191,11 @@ export class CreatePosSaleDto {
   @IsNumber({ maxDecimalPlaces: 6 })
   @IsPositive()
   fxRate?: number;
+
+  @ApiPropertyOptional({ description: 'شناسه شعبه فروش' })
+  @IsOptional()
+  @IsUUID()
+  branchId?: string;
 }
 
 export class PosSaleResponseDto {
