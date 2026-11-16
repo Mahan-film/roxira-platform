@@ -7,8 +7,10 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { EntitlementService } from '../../access/services/entitlement.service';
 import { AccountingService } from '../../accounting/services/accounting.service';
 import { assertNotAiIdentity, isAiActor } from '../../access/access-context';
 import { imageMimeType, sniffFileKind } from '../../data_import/parsers/file-kind';
@@ -84,6 +86,7 @@ export class CaptureService {
     private readonly repo: CaptureRepository,
     private readonly llm: CaptureLlmService,
     private readonly accounting: AccountingService,
+    @Optional() private readonly entitlements?: EntitlementService,
   ) {}
 
   // ---------------------------------------------------------------- settings / rules
@@ -167,6 +170,9 @@ export class CaptureService {
     await this.assertWithinCaps(tenantId);
 
     const input = await this.prepareInput(file, userText);
+    if (this.entitlements) {
+      await this.entitlements.consume(tenantId, 'ocr_pages', Math.max(1, input.images.length));
+    }
     const outcome = await this.runExtraction(input);
 
     const sha = createHash('sha256')
