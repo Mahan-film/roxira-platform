@@ -137,7 +137,7 @@ export class WooCommerceSyncService {
       throw new NotFoundException('WooCommerce configuration not found for tenant');
     }
     const openKey = openSecret(config.consumerKeyEncrypted, tenantId);
-    const plainWebhookSecret = openSecret(config.webhookSecret, tenantId);
+    const plainWebhookSecret = openSecret(config.webhookSecretEncrypted, tenantId);
 
     return {
       storeUrl: config.storeUrl,
@@ -184,8 +184,8 @@ export class WooCommerceSyncService {
     let generatedWebhookSecret: string | undefined;
     if (!isMaskedSecretInput(dto.webhookSecret)) {
       webhookSecretEncrypted = sealSecret(dto.webhookSecret!.trim(), tenantId);
-    } else if (existing?.webhookSecret) {
-      webhookSecretEncrypted = existing.webhookSecret;
+    } else if (existing?.webhookSecretEncrypted) {
+      webhookSecretEncrypted = existing.webhookSecretEncrypted;
     } else {
       generatedWebhookSecret = randomBytes(24).toString('hex');
       webhookSecretEncrypted = sealSecret(generatedWebhookSecret, tenantId);
@@ -195,7 +195,7 @@ export class WooCommerceSyncService {
       storeUrl: dto.storeUrl.trim(),
       consumerKeyEncrypted: keyEncrypted,
       consumerSecretEncrypted: secretEncrypted,
-      webhookSecret: webhookSecretEncrypted,
+      webhookSecretEncrypted,
       autoSyncOrders:
         dto.autoSyncOrders !== undefined
           ? dto.autoSyncOrders
@@ -207,7 +207,7 @@ export class WooCommerceSyncService {
     });
 
     const plainKey = openSecret(saved.consumerKeyEncrypted, tenantId);
-    const plainWebhook = openSecret(saved.webhookSecret, tenantId);
+    const plainWebhook = openSecret(saved.webhookSecretEncrypted, tenantId);
 
     return {
       storeUrl: saved.storeUrl,
@@ -226,7 +226,7 @@ export class WooCommerceSyncService {
   async getWebhookSecret(tenantId: string): Promise<string | null> {
     const config = await this.wooRepo.findConfig(tenantId);
     if (!config) return null;
-    return openSecret(config.webhookSecret, tenantId);
+    return openSecret(config.webhookSecretEncrypted, tenantId);
   }
 
   async importOrder(

@@ -15,7 +15,7 @@ import { InvoiceEntity } from '../../invoicing/entities/invoice.entity';
 import { InvoicingRepository } from '../../invoicing/repositories/invoicing.repository';
 import { TenantEntity } from '../../tenants/entities/tenant.entity';
 import { TenantsRepository } from '../../tenants/repositories/tenants.repository';
-import { CreateWooCommerceIntegration1789900004300 } from '../../../migrations/1789900004300-CreateWooCommerceIntegration';
+import { CreateWooCommerceIntegration1789900011000 } from '../../../migrations/1789900011000-CreateWooCommerceIntegration';
 import {
   createTestDatabase,
   describePg,
@@ -117,12 +117,12 @@ describePg('WooCommerce Integration on PostgreSQL (NOSUPERUSER NOBYPASSRLS) (T85
     expect(await syncService.getWebhookSecret(T1)).toBe('sample_webhook_secret_1234');
 
     // Raw DB row has encrypted webhook secret (not plaintext)
-    const [rawCfg] = await testDb.rawQuery<{ webhook_secret: string }>(
-      `SELECT webhook_secret FROM woocommerce_configs WHERE tenant_id = $1`,
+    const [rawCfg] = await testDb.rawQuery<{ webhook_secret_encrypted: string }>(
+      `SELECT webhook_secret_encrypted FROM woocommerce_configs WHERE tenant_id = $1`,
       [T1],
     );
-    expect(rawCfg.webhook_secret).toMatch(/^v1\./);
-    expect(rawCfg.webhook_secret).not.toContain('sample_webhook_secret_1234');
+    expect(rawCfg.webhook_secret_encrypted).toMatch(/^v1\./);
+    expect(rawCfg.webhook_secret_encrypted).not.toContain('sample_webhook_secret_1234');
 
     // Tenant 2 cannot see Tenant 1's config
     await expect(syncService.getConfig(T2)).rejects.toThrow(/not found/);
@@ -212,7 +212,7 @@ describePg('WooCommerce Integration on PostgreSQL (NOSUPERUSER NOBYPASSRLS) (T85
   });
 
   it('reversibility: migration down() and up() succeed', async () => {
-    const migration = new CreateWooCommerceIntegration1789900004300();
+    const migration = new CreateWooCommerceIntegration1789900011000();
     const qr = testDb.owner.createQueryRunner();
 
     try {
