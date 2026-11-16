@@ -234,9 +234,22 @@ export function ChatResultView({ result }: { result: ChatResult }) {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[12px] font-semibold text-slate-100">{law.title}</span>
-                    <span className="rounded-md bg-white/5 px-2 py-0.5 text-[10px] text-slate-400">
-                      {law.category}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {law.source_tier && (
+                        <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium border ${
+                          law.source_tier === "official"
+                            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                            : law.source_tier === "secondary"
+                            ? "border-blue-500/40 bg-blue-500/10 text-blue-300"
+                            : "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                        }`}>
+                          {law.source_tier === "official" ? "رسمی" : law.source_tier === "secondary" ? "ثانویه" : "غیررسمی"}
+                        </span>
+                      )}
+                      <span className="rounded-md bg-white/5 px-2 py-0.5 text-[10px] text-slate-400">
+                        {law.category}
+                      </span>
+                    </div>
                   </div>
                   <p className="mt-1 text-[11px] leading-relaxed text-slate-400">{law.text}</p>
                 </div>
@@ -373,9 +386,22 @@ export function ChatResultView({ result }: { result: ChatResult }) {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[12px] font-semibold text-slate-100">{law.title}</span>
-                    <span className="rounded-md bg-white/5 px-2 py-0.5 text-[10px] text-slate-400">
-                      {law.category}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {law.source_tier && (
+                        <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium border ${
+                          law.source_tier === "official"
+                            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                            : law.source_tier === "secondary"
+                            ? "border-blue-500/40 bg-blue-500/10 text-blue-300"
+                            : "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                        }`}>
+                          {law.source_tier === "official" ? "رسمی" : law.source_tier === "secondary" ? "ثانویه" : "غیررسمی"}
+                        </span>
+                      )}
+                      <span className="rounded-md bg-white/5 px-2 py-0.5 text-[10px] text-slate-400">
+                        {law.category}
+                      </span>
+                    </div>
                   </div>
                   <p className="mt-1 text-[11px] leading-relaxed text-slate-400">{law.text}</p>
                   {law.relevance && (

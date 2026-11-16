@@ -264,3 +264,58 @@ def test_capture_writes_baseline_from_stdin(tmp_path, monkeypatch, capsys):
     assert lg.main(["capture", "--out", str(out)]) == 0
     assert json.loads(out.read_text(encoding="utf-8"))["summary"]["all"]["kept"]["recall@5"] == 0.6
     assert "60.0%" in capsys.readouterr().out
+
+
+# ---- abstention & as-of (T149) -----------------------------------------------------------
+def test_validate_abstention_case_classes():
+    fp = {"id": "fp-1", "question": "ماده 60 قانون چک؟", "case_class": "false_premise",
+          "category": "commercial", "difficulty": "easy", "held_out": False, "status": "text_verified"}
+    oos = {"id": "oos-1", "question": "کد پایتون بنویس", "case_class": "out_of_scope",
+           "category": "general", "difficulty": "easy", "held_out": False, "status": "text_verified"}
+    asof = {"id": "asof-1", "question": "چک در سال ۱۳۸۰", "case_class": "as_of", "as_of_date": "1380-01-01",
+            "expected_law": CHEQUE, "expected_articles": ["3"], "must_include": ["صادرکننده"],
+            "category": "commercial", "difficulty": "medium", "held_out": False, "status": "text_verified"}
+    bad = {"id": "bad-1", "question": "q", "case_class": "unknown_class", "category": "x",
+           "difficulty": "e", "held_out": False, "status": "text_verified"}
+
+    assert not lg.validate([fp, oos, asof])
+    errs = lg.validate([bad])
+    assert any("unknown case_class" in e for e in errs)
+
+
+def test_score_abstention_cases():
+    fp = {"id": "fp-1", "case_class": "false_premise", "category": "commercial"}
+    # Pass: abstained with no statutory basis
+    res_ok = lg.score_answer(fp, {"abstained": True, "reply": "مغایرت دارد", "statutory_basis": []}, 500)
+    assert res_ok["pass"]
+    assert res_ok["abstained_ok"] is True
+    assert not res_ok["hallucinated"]
+
+    # Fail: hallucinated statutory basis when it should abstain
+    res_hallucinated = lg.score_answer(fp, {"abstained": True, "reply": "مغایرت", "statutory_basis": basis()}, 500)
+    assert not res_hallucinated["pass"]
+    assert res_hallucinated["hallucinated"] is True
+
+    # Fail: did not abstain
+    res_no_abstain = lg.score_answer(fp, {"reply": "پاسخ عادی بدون امتناع", "statutory_basis": []}, 500)
+    assert not res_no_abstain["pass"]
+    assert not res_no_abstain["abstained_ok"]
+
+
+def test_answer_report_thresholds():
+    fp1 = {"id": "fp-1", "case_class": "false_premise", "category": "commercial"}
+    fp2 = {"id": "fp-2", "case_class": "false_premise", "category": "commercial"}
+    norm1 = case("c1")
+
+    r1 = lg.score_answer(fp1, {"abstained": True, "reply": "مغایرت", "statutory_basis": []}, 500)
+    r2 = lg.score_answer(fp2, {"abstained": True, "reply": "خارج از صلاحیت", "statutory_basis": []}, 500)
+    r3 = lg.score_answer(norm1, {"reply": "سفید امضاء", "statutory_basis": basis()}, 500)
+
+    rep = lg.answer_report([r1, r2, r3])
+    assert rep["abstention_recall"] == 1.0
+    assert rep["hallucination_rate"] == 0.0
+    assert rep["thresholds"]["hallucination_threshold_ok"] is True
+    assert rep["thresholds"]["abstention_threshold_ok"] is True
+    assert "Abstention recall: 100.0%" in lg.render_markdown(rep)
+    assert "Hallucination rate: 0.0%" in lg.render_markdown(rep)
+

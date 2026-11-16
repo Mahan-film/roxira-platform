@@ -256,6 +256,8 @@ export interface StrategyStatutoryBasis {
   category: string;
   text: string;
   relevance: string;
+  source_tier?: "official" | "secondary" | "unofficial" | string;
+  tier?: string;
 }
 
 /** یک رأی وحدت رویه حاکم در استراتژی چهارگانه. */

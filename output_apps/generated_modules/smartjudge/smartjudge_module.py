@@ -34,6 +34,7 @@ from output_apps.generated_modules.smartjudge import catalog_intent as _catalog_
 from output_apps.generated_modules.smartjudge import regulations_retrieval as _regs
 from output_apps.generated_modules.smartjudge import laws_public as _laws_public
 from output_apps.generated_modules.smartjudge import regulations_public as _regulations_public
+from output_apps.generated_modules.smartjudge import abstention_gate as _abstention_gate
 from output_apps.ecosystem_core.src.billing import payment_orders
 from output_apps.ecosystem_core.src.billing import payment_service
 from output_apps.ecosystem_core.src.billing import crypto_payment_service, router_crypto
@@ -2201,7 +2202,9 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
             "unified_precedents": [],
             "model_assigned": cfg["primary_model"],
             "tier": selected_tier,
-            "latency_ms": round((time.time() - t0) * 1000, 2)
+            "latency_ms": round((time.time() - t0) * 1000, 2),
+            "abstained": True,
+            "abstention_reason": "out_of_scope",
         }
     
     court_suggestion, court_missing = _court_suggestion_for_chat(user_text, payload)
@@ -2326,6 +2329,36 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
     # ground the model or reach the client.
     laws = _source_filter.filter_relevant(laws)
     precedents = _source_filter.filter_relevant(precedents)
+
+    as_of = payload.get("as_of_date") or payload.get("as_of")
+    if as_of:
+        laws = _abstention_gate.filter_by_as_of(laws, as_of)
+        precedents = _abstention_gate.filter_by_as_of(precedents, as_of)
+
+    # Abstention gate (R6 Decision 3): version conflict, out of scope, false premise, or missing as-of
+    if not review_mode and not case_records:
+        gate_decision = _abstention_gate.evaluate_abstention_gate(
+            user_text,
+            retrieved_chunks=list(laws) + list(precedents),
+            as_of_date=as_of,
+            require_grounding=False,
+        )
+        if gate_decision.should_abstain:
+            return _consult_body(
+                conv_id=conv_id or str(uuid.uuid4()),
+                reply=_chat_safety.to_latin_digits(gate_decision.message or "اطلاعات حقوقی معتبر برای پاسخ قطعی یافت نشد."),
+                prob=None,
+                draft=None,
+                laws=[],
+                precedents=[],
+                court_suggestion=None,
+                case_file_refs=[],
+                model=cfg["primary_model"],
+                tier=selected_tier,
+                t0=t0,
+                abstained=True,
+                abstention_reason=gate_decision.reason,
+            )
 
     _timing_set("retrieval_ms", _t_retrieval)
 

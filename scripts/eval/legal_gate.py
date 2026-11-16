@@ -57,6 +57,9 @@ CHAT_PATH = "/api/v1/apps/judge/chat"
 # needs_lawyer: depends on interpretation, validity or adjustable figures (needs_lawyer_reason).
 # lawyer_verified: the lawyer answered (field lawyer_answer is required); lawyer_rejected: case dropped from scoring.
 STATUSES = ("draft_needs_lawyer", "text_verified", "needs_lawyer", "lawyer_verified", "lawyer_rejected")
+CASE_CLASSES = ("exact_recall", "as_of", "false_premise", "out_of_scope")
+BETA_MAX_HALLUCINATION_RATE = 0.10
+BETA_MIN_ABSTENTION_RECALL = 0.85
 
 
 def _load_chat_golden():
@@ -156,12 +159,18 @@ def validate(cases: Sequence[dict]) -> List[str]:
         if not cid or cid in ids:
             errs.append(f"bad/duplicate id: {cid}")
         ids.add(cid)
-        for key in ("question", "expected_law", "category", "difficulty", "status"):
+        c_class = c.get("case_class", "exact_recall")
+        if c_class not in CASE_CLASSES:
+            errs.append(f"{cid}: unknown case_class {c_class}")
+        req_keys = ["question", "category", "difficulty", "status"]
+        if c_class not in ("false_premise", "out_of_scope"):
+            req_keys.append("expected_law")
+        for key in req_keys:
             if not str(c.get(key) or "").strip():
                 errs.append(f"{cid}: empty {key}")
-        if not c.get("expected_articles"):
+        if c_class not in ("false_premise", "out_of_scope") and not c.get("expected_articles"):
             errs.append(f"{cid}: no expected_articles")
-        if not c.get("must_include"):
+        if not c.get("must_include") and c_class not in ("false_premise", "out_of_scope"):
             errs.append(f"{cid}: no must_include")
         if not isinstance(c.get("held_out"), bool):
             errs.append(f"{cid}: held_out must be a bool")
@@ -311,17 +320,62 @@ def basis_cites(case: dict, basis: Iterable[Any]) -> bool:
 
 def score_answer(case: dict, resp: dict, latency_ms: float, max_latency_ms: float = 45000.0) -> dict:
     reply = norm(resp.get("reply") or "")
-    missing = [p for p in case["must_include"] if norm(p) not in reply]
-    forbidden = [p for p in case.get("must_not_include", []) if norm(p) and norm(p) in reply]
-    cited = basis_cites(case, resp.get("statutory_basis"))
+    c_class = case.get("case_class", "exact_recall")
     in_time = latency_ms <= max_latency_ms
+    forbidden = [p for p in case.get("must_not_include", []) if norm(p) and norm(p) in reply]
+    exclude_ok = not forbidden
+
+    if c_class in ("false_premise", "out_of_scope"):
+        abstained = bool(
+            resp.get("abstained")
+            or "دستیار حقوقی" in reply
+            or "خارج از" in reply
+            or "یافت نشد" in reply
+            or "مغایرت" in reply
+            or "صلاحیت" in reply
+        )
+        stat_basis = resp.get("statutory_basis") or []
+        hallucinated = bool(stat_basis)
+        passed = abstained and not hallucinated and exclude_ok and in_time
+        return {
+            "id": case["id"],
+            "case_class": c_class,
+            "category": case.get("category", "abstention"),
+            "law": case.get("expected_law", ""),
+            "held_out": bool(case.get("held_out")),
+            "latency_ms": round(latency_ms, 1),
+            "include_ok": abstained,
+            "missing": [] if abstained else ["abstention"],
+            "exclude_ok": exclude_ok,
+            "forbidden": forbidden,
+            "cited_ok": not hallucinated,
+            "abstained_ok": abstained,
+            "hallucinated": hallucinated,
+            "latency_ok": in_time,
+            "pass": passed,
+            "model": str(resp.get("model_assigned") or ""),
+        }
+
+    # Standard / as_of
+    missing = [p for p in case.get("must_include", []) if norm(p) not in reply]
+    cited = basis_cites(case, resp.get("statutory_basis"))
+    passed = not missing and exclude_ok and cited and in_time
     return {
-        "id": case["id"], "category": case["category"], "law": case["expected_law"],
-        "held_out": bool(case.get("held_out")), "latency_ms": round(latency_ms, 1),
-        "include_ok": not missing, "missing": missing,
-        "exclude_ok": not forbidden, "forbidden": forbidden,
-        "cited_ok": cited, "latency_ok": in_time,
-        "pass": not missing and not forbidden and cited and in_time,
+        "id": case["id"],
+        "case_class": c_class,
+        "category": case["category"],
+        "law": case["expected_law"],
+        "held_out": bool(case.get("held_out")),
+        "latency_ms": round(latency_ms, 1),
+        "include_ok": not missing,
+        "missing": missing,
+        "exclude_ok": exclude_ok,
+        "forbidden": forbidden,
+        "cited_ok": cited,
+        "abstained_ok": None,
+        "hallucinated": not cited,
+        "latency_ok": in_time,
+        "pass": passed,
         "model": str(resp.get("model_assigned") or ""),
     }
 
@@ -331,12 +385,15 @@ def _is_gemini_pro(model: str) -> bool:
     return "gemini" in m and "pro" in m
 
 
-def http_chat(base_url: str, question: str, token: str, timeout: int = 90) -> Tuple[dict, float]:
+def http_chat(base_url: str, question: str, token: str, timeout: int = 90, as_of_date: Optional[str] = None) -> Tuple[dict, float]:
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
+    data = {"message": question, "tier": "FREE"}
+    if as_of_date:
+        data["as_of_date"] = as_of_date
     req = urllib.request.Request(
-        base_url.rstrip("/") + CHAT_PATH, data=json.dumps({"message": question, "tier": "FREE"}).encode(),
+        base_url.rstrip("/") + CHAT_PATH, data=json.dumps(data).encode(),
         headers=headers, method="POST")
     t0 = time.time()
     with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -358,12 +415,15 @@ def run_answer(cases: Sequence[dict], chat: Chat, *, max_cost_usd: float = HARD_
             skipped.append(c["id"])
             continue
         try:
-            resp, latency = chat(c["question"])
+            try:
+                resp, latency = chat(c["question"], as_of_date=c.get("as_of_date"))
+            except TypeError:
+                resp, latency = chat(c["question"])
         except (urllib.error.URLError, OSError, ValueError) as exc:
-            results.append({"id": c["id"], "category": c["category"], "law": c["expected_law"],
+            results.append({"id": c["id"], "category": c["category"], "law": c.get("expected_law", ""),
                             "held_out": bool(c.get("held_out")), "pass": False, "error": type(exc).__name__,
                             "include_ok": False, "exclude_ok": True, "cited_ok": False, "latency_ok": False,
-                            "latency_ms": None, "missing": list(c["must_include"]), "forbidden": [], "model": ""})
+                            "latency_ms": None, "missing": list(c.get("must_include", [])), "forbidden": [], "model": ""})
             spent += est_cost_per_call  # count the attempt: it may have reached the model
             continue
         cost = resp.get("cost_usd")
@@ -398,11 +458,25 @@ def answer_report(results: Sequence[dict], info: Optional[dict] = None) -> dict:
                 "exclude_ok": _pass_rate(sub, "exclude_ok"), "cited_ok": _pass_rate(sub, "cited_ok"),
                 "latency_ok": _pass_rate(sub, "latency_ok")}
 
+    abstention_cases = [r for r in results if r.get("case_class") in ("false_premise", "out_of_scope")]
+    abstention_recall = _rate(sum(1 for r in abstention_cases if r.get("abstained_ok")), len(abstention_cases)) if abstention_cases else None
+
+    hallucination_cases = sum(1 for r in results if r.get("hallucinated"))
+    hallucination_rate = _rate(hallucination_cases, len(results)) if results else 0.0
+
     return {
         "mode": "answer", "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "run": info or {}, "n": len(results),
         "latency_ms": {"p50": round(statistics.median(lat), 1) if lat else None,
                        "p95": round(lat[min(len(lat) - 1, math.ceil(0.95 * len(lat)) - 1)], 1) if lat else None},
+        "abstention_recall": abstention_recall,
+        "hallucination_rate": hallucination_rate,
+        "thresholds": {
+            "beta_max_hallucination_rate": BETA_MAX_HALLUCINATION_RATE,
+            "beta_min_abstention_recall": BETA_MIN_ABSTENTION_RECALL,
+            "hallucination_threshold_ok": (hallucination_rate <= BETA_MAX_HALLUCINATION_RATE) if hallucination_rate is not None else True,
+            "abstention_threshold_ok": (abstention_recall >= BETA_MIN_ABSTENTION_RECALL) if abstention_recall is not None else True,
+        },
         "summary": {"all": block(results), "dev": block([r for r in results if not r["held_out"]]),
                     "held_out": block([r for r in results if r["held_out"]])},
         "by_category": grouped("category"), "by_law": grouped("law"), "cases": list(results),
@@ -455,6 +529,10 @@ def render_markdown(report: dict) -> str:
               f"asked {run.get('asked')}, skipped for cost {len(run.get('skipped_for_cost') or [])}."]
         if run.get("aborted"):
             L.append(f"ABORTED: {run['aborted']}")
+        if report.get("abstention_recall") is not None:
+            L.append(f"Abstention recall: {_pct(report['abstention_recall'])} (target >= {_pct(BETA_MIN_ABSTENTION_RECALL)})")
+        if report.get("hallucination_rate") is not None:
+            L.append(f"Hallucination rate: {_pct(report['hallucination_rate'])} (target <= {_pct(BETA_MAX_HALLUCINATION_RATE)})")
         lat = report["latency_ms"]
         L += ["", f"Latency p50={lat['p50']} ms, p95={lat['p95']} ms.", "",
               "## Summary", "", "| split | n | pass | must_include | no forbidden | cited | latency |",
@@ -578,11 +656,16 @@ def cmd_answer(args: argparse.Namespace) -> int:
     if not token:
         print("warning: ROXIRA_EVAL_TOKEN is not set; the chat endpoint requires a login token", file=sys.stderr)
     cases = _select(args)
-    results, info = run_answer(cases, lambda q: http_chat(args.base_url, q, token), max_cost_usd=args.max_cost_usd,
+    results, info = run_answer(cases, lambda q, as_of_date=None: http_chat(args.base_url, q, token, as_of_date=as_of_date), max_cost_usd=args.max_cost_usd,
                                est_cost_per_call=args.est_cost_per_call, max_latency_ms=args.max_latency_ms,
                                sleep_s=args.sleep)
     report = answer_report(results, info)
     _emit(report, args)
+    if getattr(args, "check_thresholds", False):
+        th = report.get("thresholds", {})
+        if not th.get("hallucination_threshold_ok") or not th.get("abstention_threshold_ok"):
+            print("ERROR: beta accuracy thresholds not met!", file=sys.stderr)
+            return 1
     return 1 if info["aborted"] else 0
 
 
@@ -645,6 +728,8 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--est-cost-per-call", type=float, default=0.003)
     a.add_argument("--max-latency-ms", type=float, default=45000.0)
     a.add_argument("--sleep", type=float, default=0.0)
+    a.add_argument("--check-thresholds", action="store_true",
+                   help="enforce beta thresholds: hallucination_rate <= 10% and abstention_recall >= 85%")
     a.set_defaults(fn=cmd_answer)
     c = sub.add_parser("compare", help="warn when retrieval@5 drops against a baseline")
     c.add_argument("--baseline", default=str(DEFAULT_BASELINE))
