@@ -14,6 +14,41 @@ const num = (k: string, d: number) => {
   return Number.isFinite(v) && process.env[k] !== '' && process.env[k] !== undefined ? v : d;
 };
 
+/** Reads the primary model ID for a role from config/models.yaml without external YAML dependencies (T161). */
+export function loadRoleModel(role: string, fallback: string): string {
+  try {
+    const yamlPath = path.resolve(ROOT, '../../config/models.yaml');
+    if (fs.existsSync(yamlPath)) {
+      const text = fs.readFileSync(yamlPath, 'utf8');
+      const lines = text.split(/\r?\n/);
+      let inRole = false;
+      for (const raw of lines) {
+        const withoutComment = raw.replace(/#.*$/, '');
+        if (!withoutComment.trim()) continue;
+        const indent = withoutComment.match(/^\s*/)?.[0].length ?? 0;
+        const trimmed = withoutComment.trim();
+        const roleMatch = /^([A-Za-z0-9_]+):\s*$/.exec(trimmed);
+        if (roleMatch && indent === 2) {
+          inRole = roleMatch[1] === role;
+          continue;
+        }
+        if (inRole) {
+          const idMatch = /^-\s*id:\s*(\S+)\s*$/.exec(trimmed);
+          if (idMatch) {
+            return idMatch[1].replace(/^['"]|['"]$/g, '');
+          }
+        }
+      }
+    }
+  } catch {
+    // best-effort
+  }
+  return fallback;
+}
+
+const defaultOpenaiSttModel = (loadRoleModel('stt_openai', '') || loadRoleModel('stt', 'whisper-large-v3')).replace(/^openai\//, '');
+const defaultOpenaiTtsModel = (loadRoleModel('tts_openai', '') || loadRoleModel('tts', 'gpt-4o-audio-preview')).replace(/^openai\//, '');
+
 export const cfg = {
   root: ROOT,
   cacheDir: path.resolve(ROOT, str('CACHE_DIR', 'cache')),
@@ -52,7 +87,7 @@ export const cfg = {
     + 'مهریه، چک برگشتی، دیوان عالی کشور، قانون مدنی، ماده، تبصره. Write what was said, do not correct or '
     + 'complete it. Output only the transcript. If there is no clearly intelligible speech, output nothing.'),
   openaiKey: str('OPENAI_API_KEY'),
-  openaiSttModel: str('OPENAI_STT_MODEL', 'whisper-1'),
+  openaiSttModel: str('OPENAI_STT_MODEL', defaultOpenaiSttModel),
   // Whisper vocabulary hint (keep under ~220 tokens). Terms come from real phone-call misrecognitions.
   sttPrompt: str('STT_PROMPT', 'پرسش حقوقی تلفنی: مهلت تجدیدنظرخواهی، آرای وحدت رویه، دادنامه، واخواهی، فرجام‌خواهی، '
     + 'دادخواست، دادسرا، بازپرس، شورای حل اختلاف، دیوان عالی کشور، دیوان عدالت اداری، اجرای احکام، '
@@ -63,7 +98,7 @@ export const cfg = {
   edgeTtsUrl: str('EDGE_TTS_URL', 'http://127.0.0.1:5055'),
   ttsVoice: str('TTS_VOICE', 'fa-IR-FaridNeural'),
   ttsRate: str('TTS_RATE', '+8%'),
-  openaiTtsModel: str('OPENAI_TTS_MODEL', 'tts-1'),
+  openaiTtsModel: str('OPENAI_TTS_MODEL', defaultOpenaiTtsModel),
   openaiTtsVoice: str('OPENAI_TTS_VOICE', 'nova'),
 
   judgeBase: str('SMARTJUDGE_BASE', 'https://ghazihoushmand.ir/api/v1/apps/judge').replace(/\/$/, ''),

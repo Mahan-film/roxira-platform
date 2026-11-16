@@ -356,3 +356,79 @@ def test_drafting_role_ladder_shape():
     assert len(ids) == 3
     # sensitive callers using the generic registry helper still never see the :free id
     assert model_registry.models_for("drafting", True, real_path) == ids[:2]
+
+
+# ---- T161: retiring model ids & voice agent defaults ----------------------------------------
+
+def test_models_yaml_retired_list_present():
+    real_path = Path(__file__).resolve().parents[1] / "config" / "models.yaml"
+    retired = model_registry.retired_models(real_path)
+    assert len(retired) >= 10, f"expected at least 10 retired models, got {len(retired)}"
+    ids = {r["id"] for r in retired}
+    # OpenAI deprecations (6 Jan 2027, 26 Feb 2027, Dec 2026, Jan 2027)
+    for expected in ("tts-1", "tts-1-hd", "whisper-1", "gpt-4o", "gpt-4.1", "gpt-5", "o3"):
+        assert expected in ids, f"expected {expected} in retired list"
+    # Anthropic & Google deprecations
+    for expected in ("claude-sonnet-4-5", "gemini-2.5-pro", "gemini-2.5-flash", "text-embedding-004"):
+        assert expected in ids, f"expected {expected} in retired list"
+
+
+def test_no_role_in_models_yaml_uses_retired_or_expiring_models():
+    real_path = Path(__file__).resolve().parents[1] / "config" / "models.yaml"
+    errs = model_registry.validate_registry_retirements(real_path)
+    assert not errs, f"roles in config/models.yaml use retired/expiring models: {errs}"
+
+
+def test_voice_phone_agent_defaults_not_retired():
+    repo_root = Path(__file__).resolve().parents[1]
+    errs = model_registry.validate_code_defaults(repo_root)
+    assert not errs, f"code defaults in voice_phone_agent use retired/expiring models: {errs}"
+
+    cfg_text = (repo_root / "services" / "voice_phone_agent" / "src" / "config.ts").read_text(encoding="utf-8")
+    assert "str('OPENAI_STT_MODEL', 'whisper-1')" not in cfg_text, "hardcoded whisper-1 default found in config.ts"
+    assert "str('OPENAI_TTS_MODEL', 'tts-1')" not in cfg_text, "hardcoded tts-1 default found in config.ts"
+    assert "defaultOpenaiSttModel" in cfg_text
+    assert "defaultOpenaiTtsModel" in cfg_text
+
+
+def test_retirement_check_fails_on_retired_or_expiring_model(tmp_path):
+    path = tmp_path / "models.yaml"
+    path.write_text(
+        textwrap.dedent(
+            """\
+            schema_version: 1
+            retired:
+              - id: old-tts-model
+                shutdown_date: "2026-01-01"
+                reason: "past shutdown"
+              - id: expiring-soon-model
+                shutdown_date: "2026-11-25"
+                reason: "expiring in 9 days"
+              - id: safe-model-for-now
+                shutdown_date: "2028-01-01"
+                reason: "far future"
+            roles:
+              bad_role:
+                description: role using expiring model
+                data_policy: standard
+                models:
+                  - id: expiring-soon-model
+              another_bad_role:
+                description: role using past retired model
+                data_policy: standard
+                models:
+                  - id: old-tts-model
+              ok_role:
+                description: role using unretired model
+                data_policy: standard
+                models:
+                  - id: active-model-xyz
+            """
+        ),
+        encoding="utf-8",
+    )
+    errs = model_registry.validate_registry_retirements(path, as_of_date="2026-11-16", days_threshold=30)
+    assert len(errs) == 2, f"expected 2 errors, got: {errs}"
+    assert any("expiring-soon-model" in e for e in errs)
+    assert any("old-tts-model" in e for e in errs)
+
