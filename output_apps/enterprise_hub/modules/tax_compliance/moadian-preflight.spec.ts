@@ -95,37 +95,37 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
       expect(getJalaliYear('2026-11-10T00:00:00Z')).toBe(1405);
     });
 
-    it('accepts rate equal to provided expectedVatRate (0.10)', () => {
-      const res1404 = validateVatRateForYear(0.1, 0.1);
+    it('accepts rate equal to provided expectedVatRate (1000n bp = 10%)', () => {
+      const res1404 = validateVatRateForYear(1000n, 1000n);
       expect(res1404.valid).toBe(true);
-      expect(res1404.expected).toBe(0.1);
+      expect(res1404.expectedBp).toBe(1000n);
 
-      const res1405 = validateVatRateForYear(0.1, 0.1);
+      const res1405 = validateVatRateForYear(1000n, 1000n);
       expect(res1405.valid).toBe(true);
-      expect(res1405.expected).toBe(0.1);
+      expect(res1405.expectedBp).toBe(1000n);
     });
 
     it('accepts 0% for exempt items in 1404 and 1405', () => {
-      const res = validateVatRateForYear(0, 0.1);
+      const res = validateVatRateForYear(0n, 1000n);
       expect(res.valid).toBe(true);
       expect(res.isExempt).toBe(true);
     });
 
     it('rejects mismatch when expectedRate is specified', () => {
-      const res = validateVatRateForYear(0.09, 0.1);
+      const res = validateVatRateForYear(900n, 1000n);
       expect(res.valid).toBe(false);
-      expect(res.expected).toBe(0.1);
+      expect(res.expectedBp).toBe(1000n);
     });
 
     it('accepts explicit line rate when expectedRate is omitted', () => {
-      const res = validateVatRateForYear(0.09);
+      const res = validateVatRateForYear(900n);
       expect(res.valid).toBe(true);
-      expect(res.expected).toBe(0.09);
+      expect(res.expectedBp).toBe(900n);
 
-      const invalidNegative = validateVatRateForYear(-0.05);
+      const invalidNegative = validateVatRateForYear(-500n);
       expect(invalidNegative.valid).toBe(false);
 
-      const invalidTooHigh = validateVatRateForYear(1.5);
+      const invalidTooHigh = validateVatRateForYear(15000n);
       expect(invalidTooHigh.valid).toBe(false);
     });
   });
@@ -480,16 +480,16 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
   describe('Server Pre-Flight Integration & VatRateResolver', () => {
     it('validateVatRateForYear respects expectedRate across any year', () => {
       // 1402 with 9% statutory rate
-      const res1402 = validateVatRateForYear(0.09, 0.09);
+      const res1402 = validateVatRateForYear(900n, 900n);
       expect(res1402.valid).toBe(true);
-      expect(res1402.expected).toBe(0.09);
+      expect(res1402.expectedBp).toBe(900n);
 
       // 1403 with 10% statutory rate
-      const res1403 = validateVatRateForYear(0.10, 0.10);
+      const res1403 = validateVatRateForYear(1000n, 1000n);
       expect(res1403.valid).toBe(true);
 
       // Mismatch against resolved rate
-      const resMismatch = validateVatRateForYear(0.09, 0.10);
+      const resMismatch = validateVatRateForYear(900n, 1000n);
       expect(resMismatch.valid).toBe(false);
     });
 

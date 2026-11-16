@@ -217,5 +217,4 @@ export function numberToScaled(value: number | string, decimals: number): bigint
   }
   return sign === '-' && units !== 0n ? -units : units;
 }
-}
 
