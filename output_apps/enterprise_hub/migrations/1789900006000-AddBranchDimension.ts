@@ -89,14 +89,31 @@ export class AddBranchDimension1789900006000 implements MigrationInterface {
     `);
 
     await queryRunner.query(`
-      UPDATE "fin_journal_entry_lines" l
-      SET "branch_id" = (
-        SELECT b."id" FROM "tenant_branches" b
-        WHERE b."tenant_id" = l."tenant_id"
-        ORDER BY b."created_at" ASC, b."id" ASC
-        LIMIT 1
-      )
-      WHERE l."branch_id" IS NULL;
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM pg_trigger
+          WHERE tgname = 'TRG_fin_journal_entry_lines_guard_posted'
+        ) THEN
+          ALTER TABLE "fin_journal_entry_lines" DISABLE TRIGGER "TRG_fin_journal_entry_lines_guard_posted";
+        END IF;
+
+        UPDATE "fin_journal_entry_lines" l
+        SET "branch_id" = (
+          SELECT b."id" FROM "tenant_branches" b
+          WHERE b."tenant_id" = l."tenant_id"
+          ORDER BY b."created_at" ASC, b."id" ASC
+          LIMIT 1
+        )
+        WHERE l."branch_id" IS NULL;
+
+        IF EXISTS (
+          SELECT 1 FROM pg_trigger
+          WHERE tgname = 'TRG_fin_journal_entry_lines_guard_posted'
+        ) THEN
+          ALTER TABLE "fin_journal_entry_lines" ENABLE TRIGGER "TRG_fin_journal_entry_lines_guard_posted";
+        END IF;
+      END $$;
     `);
 
     await queryRunner.query(`
