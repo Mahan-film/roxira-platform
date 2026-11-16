@@ -11,7 +11,18 @@ describe('TenantCancellationService', () => {
   let purgeQueue: any;
   let queryRunner: any;
 
+  let mockTenantScope: any;
+  let mockManager: any;
+
   beforeEach(() => {
+    mockManager = {
+      query: jest.fn(),
+    };
+
+    mockTenantScope = {
+      run: jest.fn(async (_id: string, fn: any) => fn(mockManager)),
+    };
+
     queryRunner = {
       connect: jest.fn(),
       startTransaction: jest.fn(),
@@ -23,6 +34,7 @@ describe('TenantCancellationService', () => {
 
     dataSource = {
       createQueryRunner: jest.fn().mockReturnValue(queryRunner),
+      query: jest.fn(),
     };
 
     tenantsRepo = {
@@ -43,6 +55,7 @@ describe('TenantCancellationService', () => {
     service = new TenantCancellationService(
       tenantsRepo,
       dataSource,
+      mockTenantScope,
       exportQueue,
       purgeQueue,
     );
@@ -144,7 +157,7 @@ describe('TenantCancellationService', () => {
     it('deletes tenant data across discovered tables and updates status to PURGED', async () => {
       tenantsRepo.findById.mockResolvedValue({ id: 't1', status: TenantStatus.CANCELLED_READONLY });
 
-      queryRunner.query.mockImplementation(async (sql: string) => {
+      mockManager.query.mockImplementation(async (sql: string) => {
         if (sql.includes('information_schema.columns')) {
           return [{ table_name: 'fin_journal_entry_lines' }, { table_name: 'crm_contacts' }];
         }
@@ -153,28 +166,22 @@ describe('TenantCancellationService', () => {
 
       const res = await service.purgeTenant('t1');
 
-      expect(queryRunner.connect).toHaveBeenCalled();
-      expect(queryRunner.startTransaction).toHaveBeenCalled();
-      expect(queryRunner.commitTransaction).toHaveBeenCalled();
-      expect(queryRunner.release).toHaveBeenCalled();
+      expect(mockTenantScope.run).toHaveBeenCalledWith('t1', expect.any(Function));
+      expect(dataSource.query).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE "tenants" SET "status" = $1'),
+        [TenantStatus.PURGED, 't1'],
+      );
       expect(res.success).toBe(true);
       expect(res.tenantId).toBe('t1');
       expect(res.purgedTables).toContain('fin_journal_entry_lines');
       expect(res.purgedTables).toContain('crm_contacts');
     });
 
-    it('rolls back transaction on error and releases runner', async () => {
+    it('propagates error if tenantScope.run fails', async () => {
       tenantsRepo.findById.mockResolvedValue({ id: 't1', status: TenantStatus.CANCELLED_READONLY });
-      queryRunner.query.mockImplementation(async (sql: string) => {
-        if (sql.includes('information_schema.columns')) {
-          throw new Error('Database error');
-        }
-        return [];
-      });
+      mockTenantScope.run.mockRejectedValueOnce(new Error('Database error'));
 
       await expect(service.purgeTenant('t1')).rejects.toThrow('Database error');
-      expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
-      expect(queryRunner.release).toHaveBeenCalled();
     });
   });
 
