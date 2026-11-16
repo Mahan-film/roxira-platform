@@ -39,4 +39,40 @@ export class TenantExportRepository {
       return result;
     });
   }
+
+  /**
+   * Fetches records across ALL tenant tables by dynamically discovering every public table
+   * with a tenant_id column (Task T148).
+   */
+  async fetchAllTenantData(tenantId: string): Promise<Record<string, any[]>> {
+    return this.tenantScope.within(tenantId, undefined, async (em: EntityManager) => {
+      const result: Record<string, any[]> = {};
+
+      const tableRows: { table_name: string }[] = await em.query(`
+        SELECT DISTINCT table_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND column_name = 'tenant_id'
+          AND table_name NOT IN ('tenants', 'users')
+        ORDER BY table_name ASC
+      `);
+
+      const tables = (tableRows || []).map((r) => r.table_name);
+      const targetTables = tables.length > 0 ? tables : [...CORE_TENANT_TABLES];
+
+      for (const table of targetTables) {
+        try {
+          const rows = await em.query(
+            `SELECT * FROM "${table}" WHERE "tenant_id" = $1 ORDER BY 1 ASC`,
+            [tenantId],
+          );
+          result[table] = Array.isArray(rows) ? rows : [];
+        } catch {
+          result[table] = [];
+        }
+      }
+
+      return result;
+    });
+  }
 }

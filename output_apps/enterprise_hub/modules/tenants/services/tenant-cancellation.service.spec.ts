@@ -1,0 +1,200 @@
+import 'reflect-metadata';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { TenantStatus } from '../enums/tenant-status.enum';
+import { TenantCancellationService } from './tenant-cancellation.service';
+
+describe('TenantCancellationService', () => {
+  let service: TenantCancellationService;
+  let tenantsRepo: any;
+  let dataSource: any;
+  let exportQueue: any;
+  let purgeQueue: any;
+  let queryRunner: any;
+
+  beforeEach(() => {
+    queryRunner = {
+      connect: jest.fn(),
+      startTransaction: jest.fn(),
+      commitTransaction: jest.fn(),
+      rollbackTransaction: jest.fn(),
+      release: jest.fn(),
+      query: jest.fn(),
+    };
+
+    dataSource = {
+      createQueryRunner: jest.fn().mockReturnValue(queryRunner),
+    };
+
+    tenantsRepo = {
+      findById: jest.fn(),
+      updateCancellation: jest.fn(),
+      findExpiredCancelledTenants: jest.fn(),
+      markPurged: jest.fn(),
+    };
+
+    exportQueue = {
+      add: jest.fn(),
+    };
+
+    purgeQueue = {
+      add: jest.fn(),
+    };
+
+    service = new TenantCancellationService(
+      tenantsRepo,
+      dataSource,
+      exportQueue,
+      purgeQueue,
+    );
+  });
+
+  describe('cancelTenant', () => {
+    it('throws BadRequestException if gracePeriodDays is outside 30..90', async () => {
+      await expect(service.cancelTenant('t1', 'reason', 15)).rejects.toThrow(BadRequestException);
+      await expect(service.cancelTenant('t1', 'reason', 95)).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws NotFoundException if tenant does not exist', async () => {
+      tenantsRepo.findById.mockResolvedValue(null);
+      await expect(service.cancelTenant('t1', 'reason', 30)).rejects.toThrow(NotFoundException);
+    });
+
+    it('returns existing status without error if already cancelled_readonly', async () => {
+      const tenant = {
+        id: 't1',
+        status: TenantStatus.CANCELLED_READONLY,
+        deleteAfter: new Date(Date.now() + 10 * 86400000),
+        cancelledAt: new Date(),
+        cancellationReason: 'Already cancelled',
+      };
+      tenantsRepo.findById.mockResolvedValue(tenant);
+
+      const res = await service.cancelTenant('t1', 'reason', 30);
+      expect(res.status).toBe(TenantStatus.CANCELLED_READONLY);
+      expect(res.isReadonly).toBe(true);
+      expect(res.cancellationReason).toBe('Already cancelled');
+    });
+
+    it('throws BadRequestException if tenant is already purged', async () => {
+      tenantsRepo.findById.mockResolvedValue({ id: 't1', status: TenantStatus.PURGED });
+      await expect(service.cancelTenant('t1', 'reason', 30)).rejects.toThrow(BadRequestException);
+    });
+
+    it('updates tenant status to cancelled_readonly, sets deleteAfter, and enqueues export job', async () => {
+      const activeTenant = { id: 't1', status: TenantStatus.ACTIVE };
+      tenantsRepo.findById.mockResolvedValue(activeTenant);
+
+      const futureDate = new Date(Date.now() + 45 * 86400000);
+      const updatedTenant = {
+        id: 't1',
+        status: TenantStatus.CANCELLED_READONLY,
+        deleteAfter: futureDate,
+        cancelledAt: new Date(),
+        cancellationReason: 'Moving away',
+      };
+      tenantsRepo.updateCancellation.mockResolvedValue(updatedTenant);
+
+      const res = await service.cancelTenant('t1', 'Moving away', 45);
+
+      expect(tenantsRepo.updateCancellation).toHaveBeenCalledWith(
+        't1',
+        TenantStatus.CANCELLED_READONLY,
+        expect.any(Date),
+        expect.any(Date),
+        'Moving away',
+      );
+      expect(exportQueue.add).toHaveBeenCalledWith(
+        'export-tenant-archive',
+        expect.objectContaining({ tenantId: 't1', reason: 'Moving away' }),
+        expect.any(Object),
+      );
+      expect(res.status).toBe(TenantStatus.CANCELLED_READONLY);
+      expect(res.isReadonly).toBe(true);
+      expect(res.daysRemaining).toBeGreaterThanOrEqual(44);
+    });
+  });
+
+  describe('getCancellationStatus', () => {
+    it('throws NotFoundException if tenant not found', async () => {
+      tenantsRepo.findById.mockResolvedValue(null);
+      await expect(service.getCancellationStatus('t1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('returns status with null daysRemaining when deleteAfter is unset', async () => {
+      tenantsRepo.findById.mockResolvedValue({
+        id: 't1',
+        status: TenantStatus.ACTIVE,
+        deleteAfter: null,
+        cancelledAt: null,
+      });
+
+      const res = await service.getCancellationStatus('t1');
+      expect(res.status).toBe(TenantStatus.ACTIVE);
+      expect(res.isReadonly).toBe(false);
+      expect(res.daysRemaining).toBeNull();
+    });
+  });
+
+  describe('purgeTenant', () => {
+    it('throws NotFoundException if tenant does not exist', async () => {
+      tenantsRepo.findById.mockResolvedValue(null);
+      await expect(service.purgeTenant('t1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('deletes tenant data across discovered tables and updates status to PURGED', async () => {
+      tenantsRepo.findById.mockResolvedValue({ id: 't1', status: TenantStatus.CANCELLED_READONLY });
+
+      queryRunner.query.mockImplementation(async (sql: string) => {
+        if (sql.includes('information_schema.columns')) {
+          return [{ table_name: 'fin_journal_entry_lines' }, { table_name: 'crm_contacts' }];
+        }
+        return [];
+      });
+
+      const res = await service.purgeTenant('t1');
+
+      expect(queryRunner.connect).toHaveBeenCalled();
+      expect(queryRunner.startTransaction).toHaveBeenCalled();
+      expect(queryRunner.commitTransaction).toHaveBeenCalled();
+      expect(queryRunner.release).toHaveBeenCalled();
+      expect(res.success).toBe(true);
+      expect(res.tenantId).toBe('t1');
+      expect(res.purgedTables).toContain('fin_journal_entry_lines');
+      expect(res.purgedTables).toContain('crm_contacts');
+    });
+
+    it('rolls back transaction on error and releases runner', async () => {
+      tenantsRepo.findById.mockResolvedValue({ id: 't1', status: TenantStatus.CANCELLED_READONLY });
+      queryRunner.query.mockImplementation(async (sql: string) => {
+        if (sql.includes('information_schema.columns')) {
+          throw new Error('Database error');
+        }
+        return [];
+      });
+
+      await expect(service.purgeTenant('t1')).rejects.toThrow('Database error');
+      expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
+      expect(queryRunner.release).toHaveBeenCalled();
+    });
+  });
+
+  describe('purgeExpiredTenants', () => {
+    it('finds expired tenants and purges each one', async () => {
+      tenantsRepo.findExpiredCancelledTenants.mockResolvedValue([
+        { id: 'exp1' },
+        { id: 'exp2' },
+      ]);
+
+      const purgeSpy = jest.spyOn(service, 'purgeTenant').mockResolvedValue({
+        success: true,
+        tenantId: 'exp',
+        purgedTables: ['t'],
+      });
+
+      const res = await service.purgeExpiredTenants();
+      expect(res.purgedCount).toBe(2);
+      expect(res.tenantIds).toEqual(['exp1', 'exp2']);
+      expect(purgeSpy).toHaveBeenCalledTimes(2);
+    });
+  });
+});

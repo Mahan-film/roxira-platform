@@ -154,6 +154,20 @@ describe('Tenant Data Export / Customer Owns the Data (#230 / T77)', () => {
     });
   });
 
+  describe('Full ZIP Archive Export (T148)', () => {
+    it('generates full ZIP archive containing CSVs, JSONs, and metadata.json with SHA-256', async () => {
+      mockExportRepo.fetchAllTenantData = jest.fn().mockResolvedValue(sampleTenantData);
+
+      const res = await exportService.generateFullExportZip(mockTenantId);
+
+      expect(mockExportRepo.fetchAllTenantData).toHaveBeenCalledWith(mockTenantId);
+      expect(res.buffer).toBeInstanceOf(Buffer);
+      expect(res.filename).toContain(`tenant-export-${mockTenantId.slice(0, 8)}-`);
+      expect(res.metadata.checksum).toHaveLength(64);
+      expect(Object.keys(res.metadata.tableCounts).length).toBeGreaterThan(0);
+    });
+  });
+
   describe('TenantExportController', () => {
     it('exportJson delegates to service with authenticated tenant id', async () => {
       const req = { user: { tenantId: mockTenantId, sub: 'user-owner' } } as any;
@@ -169,6 +183,31 @@ describe('Tenant Data Export / Customer Owns the Data (#230 / T77)', () => {
 
       expect(mockExportRepo.fetchTenantData).toHaveBeenCalledWith(mockTenantId);
       expect(res.tables.fin_chart_of_accounts).toBeDefined();
+    });
+
+    it('downloadFullArchive sets headers and returns streamable zip file', async () => {
+      mockExportRepo.fetchAllTenantData = jest.fn().mockResolvedValue(sampleTenantData);
+
+      const req = { user: { tenantId: mockTenantId, sub: 'user-admin' } } as any;
+      const res = { set: jest.fn() } as any;
+
+      const file = await controller.downloadFullArchive(req, res);
+
+      expect(res.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          'Content-Type': 'application/zip',
+          'Content-Disposition': expect.stringContaining('attachment; filename='),
+        }),
+      );
+      expect(file).toBeDefined();
+    });
+
+    it('queueFullExport returns enqueued status', async () => {
+      const req = { user: { tenantId: mockTenantId, sub: 'user-admin' } } as any;
+      const res = await controller.queueFullExport(req);
+
+      expect(res.enqueued).toBe(true);
+      expect(res.tenantId).toBe(mockTenantId);
     });
   });
 });

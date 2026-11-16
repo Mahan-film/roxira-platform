@@ -1201,6 +1201,17 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/data-import/export/full-archive (TenantExportController.downloadFullArchive)": {
+    "policy": "data_import:export",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/data-import/export/json (TenantExportController.exportJson)": {
     "policy": "data_import:export",
     "owner": true,
@@ -2688,6 +2699,17 @@
     "read_only": true,
     "legacy_member": true
   },
+  "GET /tenants/me/cancellation-status (TenantsController.getCancellationStatus)": {
+    "policy": "anyMember",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": true,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": true
+  },
   "GET /tenants/me/onboarding/ (OnboardingController.get)": {
     "policy": "anyMember",
     "owner": true,
@@ -4024,6 +4046,17 @@
     "read_only": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/data-import/export/full-archive (TenantExportController.queueFullExport)": {
+    "policy": "data_import:export",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/data-import/packages (DataImportController.createPackage)": {
     "policy": "data_import:create",
     "owner": true,
@@ -5147,6 +5180,17 @@
     "owner": true,
     "admin": true,
     "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /tenants/me/cancel (TenantsController.cancelTenant)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
     "sales": false,
     "cheque_reviewer": false,
     "hr": false,
