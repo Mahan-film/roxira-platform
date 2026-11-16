@@ -213,12 +213,17 @@ export class QuotationToInvoiceService {
         const discountMinor = line.discount ? toMinor(line.discount) : 0n;
         const unitPriceVal = fromMinor(unitPriceMinor);
         const discountVal = discountMinor > 0n ? fromMinor(discountMinor) : 0;
+        if (typeof unitPriceVal === 'string' || typeof discountVal === 'string') {
+          throw new BadRequestException(
+            'مبلغ واحد یا تخفیف سطر بیش از حد مجاز برای صدور صورتحساب است.',
+          );
+        }
         return {
           itemId: line.itemId > 0 ? line.itemId : undefined,
           description: line.description?.trim() || `کالای ردیف ${line.lineNo}`,
           quantity: Number(line.quantity),
-          unitPrice: typeof unitPriceVal === 'number' ? unitPriceVal : Number(unitPriceVal),
-          discount: typeof discountVal === 'number' ? discountVal : Number(discountVal),
+          unitPrice: unitPriceVal,
+          discount: discountVal,
           vatRate,
         };
       });
