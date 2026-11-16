@@ -60,7 +60,9 @@ export class TenantExportRepository {
       const tables = (tableRows || []).map((r) => r.table_name);
       const targetTables = tables.length > 0 ? tables : [...CORE_TENANT_TABLES];
 
+      const TABLE_NAME_PATTERN = /^[a-zA-Z0-9_]{1,63}$/;
       for (const table of targetTables) {
+        if (!TABLE_NAME_PATTERN.test(table)) continue;
         try {
           const rows = await em.query(
             `SELECT * FROM "${table}" WHERE "tenant_id" = $1 ORDER BY 1 ASC`,

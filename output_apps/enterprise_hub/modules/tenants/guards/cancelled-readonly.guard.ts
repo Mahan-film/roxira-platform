@@ -43,12 +43,12 @@ export class CancelledReadonlyGuard implements CanActivate {
 
     const tenantId = request.user?.tenantId || request.access?.tenantId;
     if (!tenantId) {
-      return true;
+      throw new ForbiddenException('شناسه سازمان در درخواست مشخص نیست.');
     }
 
     const tenant = await this.tenantsRepo.findById(tenantId);
     if (!tenant) {
-      return true;
+      throw new ForbiddenException('سازمان مورد نظر یافت نشد.');
     }
 
     if (tenant.status === TenantStatus.CANCELLED_READONLY) {

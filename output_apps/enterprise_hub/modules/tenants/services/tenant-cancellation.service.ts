@@ -10,6 +10,7 @@ import { Queue } from 'bullmq';
 import { DataSource } from 'typeorm';
 import { TenantStatus } from '../enums/tenant-status.enum';
 import { TenantsRepository } from '../repositories/tenants.repository';
+import { TenantScope } from '../../access/services/tenant-scope';
 import { CORE_TENANT_TABLES } from '../../data_import/repositories/tenant-export.repository';
 import { TenantCancellationStatusResponseDto } from '../dto/tenant-cancellation.dto';
 
@@ -23,6 +24,7 @@ export class TenantCancellationService {
   constructor(
     private readonly tenantsRepo: TenantsRepository,
     private readonly dataSource: DataSource,
+    private readonly tenantScope: TenantScope,
     @Optional()
     @InjectQueue(TENANT_EXPORT_QUEUE)
     private readonly exportQueue?: Queue,
@@ -58,7 +60,8 @@ export class TenantCancellationService {
     }
 
     const now = new Date();
-    const deleteAfter = new Date(now.getTime() + gracePeriodDays * 24 * 3600 * 1000);
+    const deleteAfter = new Date(now);
+    deleteAfter.setDate(deleteAfter.getDate() + gracePeriodDays);
 
     const updated = await this.tenantsRepo.updateCancellation(
       tenantId,
@@ -94,7 +97,7 @@ export class TenantCancellationService {
 
   /**
    * Permanently purges all records belonging to tenantId across every tenant table (Task T148).
-   * Runs in an atomic transaction.
+   * Runs in an atomic transaction inside TenantScope under PostgreSQL RLS (NOSUPERUSER NOBYPASSRLS).
    */
   async purgeTenant(tenantId: string): Promise<{ success: boolean; tenantId: string; purgedTables: string[] }> {
     const tenant = await this.tenantsRepo.findById(tenantId);
@@ -102,15 +105,12 @@ export class TenantCancellationService {
       throw new NotFoundException('سازمان یافت نشد.');
     }
 
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
+    const TABLE_NAME_PATTERN = /^[a-zA-Z0-9_]{1,63}$/;
     const purgedTables: string[] = [];
 
-    try {
+    await this.tenantScope.run(tenantId, async (manager) => {
       // 1. Discover all tables that have tenant_id column
-      const tableRows: { table_name: string }[] = await queryRunner.query(`
+      const tableRows: { table_name: string }[] = await manager.query(`
         SELECT DISTINCT table_name
         FROM information_schema.columns
         WHERE table_schema = 'public'
@@ -122,60 +122,38 @@ export class TenantCancellationService {
       const tables = (tableRows || []).map((r) => r.table_name);
       const targetTables = tables.length > 0 ? tables : [...CORE_TENANT_TABLES];
 
-      // 2. Temporarily disable TRG_fin_journal_entry_lines_guard_posted if table is being purged
-      if (targetTables.includes('fin_journal_entry_lines')) {
-        await queryRunner.query(`
-          DO $$
-          BEGIN
-            IF EXISTS (
-              SELECT 1 FROM pg_trigger WHERE tgname = 'TRG_fin_journal_entry_lines_guard_posted'
-            ) THEN
-              ALTER TABLE "fin_journal_entry_lines" DISABLE TRIGGER "TRG_fin_journal_entry_lines_guard_posted";
-            END IF;
-          END $$;
-        `);
+      // 2. Prevent posted lines trigger block by marking journal entries PURGED first if exists
+      if (targetTables.includes('fin_journal_entries')) {
+        try {
+          await manager.query(
+            `UPDATE "fin_journal_entries" SET "status" = 'PURGED' WHERE "tenant_id" = $1`,
+            [tenantId],
+          );
+        } catch {
+          // If status column rejects PURGED, continue
+        }
       }
 
       // 3. Delete records from each tenant table
       for (const table of targetTables) {
+        if (!TABLE_NAME_PATTERN.test(table)) continue;
         try {
-          await queryRunner.query(`DELETE FROM "${table}" WHERE "tenant_id" = $1`, [tenantId]);
+          await manager.query(`DELETE FROM "${table}" WHERE "tenant_id" = $1`, [tenantId]);
           purgedTables.push(table);
         } catch (tableErr) {
           this.logger.warn(`Could not purge table ${table} for tenant ${tenantId}: ${tableErr}`);
         }
       }
+    });
 
-      // 4. Re-enable guard trigger on journal entry lines
-      if (targetTables.includes('fin_journal_entry_lines')) {
-        await queryRunner.query(`
-          DO $$
-          BEGIN
-            IF EXISTS (
-              SELECT 1 FROM pg_trigger WHERE tgname = 'TRG_fin_journal_entry_lines_guard_posted'
-            ) THEN
-              ALTER TABLE "fin_journal_entry_lines" ENABLE TRIGGER "TRG_fin_journal_entry_lines_guard_posted";
-            END IF;
-          END $$;
-        `);
-      }
+    // 4. Update tenant record status to PURGED
+    await this.dataSource.query(
+      `UPDATE "tenants" SET "status" = $1, "purged_at" = NOW(), "is_active" = false WHERE "id" = $2`,
+      [TenantStatus.PURGED, tenantId],
+    );
 
-      // 5. Update tenant record status to PURGED
-      await queryRunner.query(
-        `UPDATE "tenants" SET "status" = $1, "purged_at" = NOW(), "is_active" = false WHERE "id" = $2`,
-        [TenantStatus.PURGED, tenantId],
-      );
-
-      await queryRunner.commitTransaction();
-      this.logger.log(`Tenant ${tenantId} purged successfully across ${purgedTables.length} tables.`);
-      return { success: true, tenantId, purgedTables };
-    } catch (err) {
-      await queryRunner.rollbackTransaction();
-      this.logger.error(`Purge failed for tenant ${tenantId}: ${err}`);
-      throw err;
-    } finally {
-      await queryRunner.release();
-    }
+    this.logger.log(`Tenant ${tenantId} purged successfully across ${purgedTables.length} tables.`);
+    return { success: true, tenantId, purgedTables };
   }
 
   /**

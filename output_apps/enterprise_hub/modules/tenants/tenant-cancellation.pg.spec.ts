@@ -62,25 +62,25 @@ describePg('Tenant cancellation, export, and purge on PostgreSQL (non-superuser,
     app = await new DataSource({ ...options(db, role, APP_PW), extra: { max: 8 } }).initialize();
 
     tenantsRepo = new TenantsRepository(app.getRepository(TenantEntity));
-    cancellationService = new TenantCancellationService(tenantsRepo, app);
     const tenantScope = new TenantScope(app);
+    cancellationService = new TenantCancellationService(tenantsRepo, app, tenantScope);
     const exportRepo = new TenantExportRepository(tenantScope);
     exportService = new TenantExportService(exportRepo);
 
     // Seed test tenants directly via owner
     await owner.query(
-      `INSERT INTO "tenants" ("id", "name", "slug", "status", "created_at", "updated_at")
-       VALUES ($1, 'Tenant One', 't1', 'active', NOW(), NOW()),
-              ($2, 'Tenant Two', 't2', 'active', NOW(), NOW())
+      `INSERT INTO "tenants" ("id", "name", "slug", "status", "created_at")
+       VALUES ($1, 'Tenant One', 't1', 'active', NOW()),
+              ($2, 'Tenant Two', 't2', 'active', NOW())
        ON CONFLICT ("id") DO NOTHING`,
       [T1, T2],
     );
 
     // Seed some test data under T1 and T2
     await owner.query(
-      `INSERT INTO "erp_parties" ("tenant_id", "code", "name", "created_at", "updated_at")
-       VALUES ($1, 'P1', 'Party 1', NOW(), NOW()),
-              ($2, 'P2', 'Party 2', NOW(), NOW())`,
+      `INSERT INTO "erp_parties" ("tenant_id", "code", "name", "role", "created_at", "updated_at")
+       VALUES ($1, 'P1', 'Party 1', 'customer', NOW(), NOW()),
+              ($2, 'P2', 'Party 2', 'customer', NOW(), NOW())`,
       [T1, T2],
     );
   }, 120000);
