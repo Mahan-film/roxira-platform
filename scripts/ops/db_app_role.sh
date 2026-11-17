@@ -87,6 +87,7 @@ SELECT c.relname, CASE WHEN a.attname IS NULL THEN 'no-tenant-col' ELSE 'tenant-
 SQL
 }
 
+# PostgreSQL supports transactional CREATE ROLE / ALTER ROLE DDL, so BEGIN ... ROLLBACK leaves pg_roles and grants unchanged.
 cmd_plan() {
   log "dry run: role and grants are applied in a transaction, then rolled back"
   { grants_sql no_pw; echo 'ROLLBACK;'; } | admin_psql -qtAX

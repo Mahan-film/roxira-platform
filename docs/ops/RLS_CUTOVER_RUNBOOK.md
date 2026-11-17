@@ -45,7 +45,7 @@ Inspect the current RLS status of all tables in the database:
 bash scripts/ops/db_app_role.sh audit
 ```
 *Verification criteria*:
-- All pre-tenant tables (`users`, `auth_refresh_tokens`, `tenant_memberships`, `tenant_invitations`, `tenant_module_entitlements`, `tenant_module_requests`, `contact_messages`, `enterprise_inquiries`) report `rls | force`.
+- All pre-tenant tables (`users`, `auth_refresh_tokens`, `tenant_memberships`, `tenant_invitations`, `tenant_module_entitlements`, `tenant_module_requests`, `contact_messages`, `enterprise_inquiries`) report `rls | force` using their dedicated pre-tenant/self-or-tenant policies (defined in `output_apps/enterprise_hub/migrations/1789900004100-EnableRlsPreTenantTables.ts` and `SECURITY DEFINER` helpers like `lookup_user_by_id`), **not** naive `tenant_id = current_setting(...)` equality policies.
 - Completed module tables (`audit_log`, `tenant_branches`, `tenant_departments`, `tenant_roles`, `invoices`, etc.) report `rls | force`.
 
 ### Step 2.3: Dry Run (Plan)
@@ -134,7 +134,7 @@ COMMIT;
 ### 4.4 Verify Superuser Credential Sanitization
 Ensure the superuser password is no longer accessible inside the backend container:
 ```bash
-docker exec roxira_enterprise_backend sh -c 'echo "owner=[$POSTGRES_PASSWORD]"'
+docker exec roxira_enterprise_backend sh -c 'echo "owner=[${POSTGRES_PASSWORD:-}]"'
 ```
 *Expected output*: `owner=[]` (empty string).
 
