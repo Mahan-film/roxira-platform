@@ -29,6 +29,7 @@
 #   REHEARSAL_PG_PORT (55710) REHEARSAL_QDRANT_PORT (55711) REHEARSAL_COUNT_TOL_PCT (5)
 #   REHEARSAL_PG_IMAGE (postgres:18-alpine) REHEARSAL_QDRANT_IMAGE (qdrant/qdrant:v1.19.0)
 #   REHEARSAL_NODE_IMAGE (node:22-bookworm-slim) REHEARSAL_DB (enterprise_db: the database the migrations run on)
+#   REHEARSAL_HUB_PATH (output_apps/enterprise_hub: repo path of the TypeORM app)
 #   REHEARSAL_REQUIRE_MANIFEST (0) REHEARSAL_REQUIRE_QDRANT (0) REHEARSAL_BASE_DIR (~/Backups/roxira-dr)
 #   REHEARSAL_MAX_RTO_S (0 = no limit; above it the run is reported as SLOW, still exit 0 unless FAIL)
 # Exit 0 = PASS (or SLOW), 1 = FAIL. Needs: docker, age, python3, git, curl.
@@ -49,7 +50,7 @@ while [ "$#" -gt 0 ]; do
     --dry-run) DRY_RUN=1 ;;
     --skip-migrations) SKIP_MIG=1 ;;
     --skip-qdrant) SKIP_QD=1 ;;
-    -h | --help) sed -n '2,38p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,39p' "$0"; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
   shift
@@ -281,9 +282,13 @@ if [ "$SKIP_MIG" != 1 ]; then
   mig_sname="$(printf '%s' "$DB_LIST" | awk -F'|' -v d="$MIG_DB" '$1==d {print $3; exit}')"
   git -C "$REPO_ROOT" fetch -q origin main || fail_step "git fetch origin main failed"
   HEAD_SHA="$(git -C "$REPO_ROOT" rev-parse --short origin/main)"
+  HUB_PATH="${REHEARSAL_HUB_PATH:-output_apps/enterprise_hub}"
+  { [[ "$HUB_PATH" =~ ^[A-Za-z0-9_./-]+$ ]] && [[ "$HUB_PATH" != /* ]] && [[ "$HUB_PATH" != *..* ]]; } || fail_step "bad REHEARSAL_HUB_PATH"
+  [ -n "$(git -C "$REPO_ROOT" ls-tree origin/main -- "$HUB_PATH/package.json")" ] \
+    || fail_step "origin/main has no $HUB_PATH/package.json (set REHEARSAL_HUB_PATH); migrations NOT rehearsed"
   mkdir -p "$WORK/src"
-  git -C "$REPO_ROOT" archive origin/main output_apps/enterprise_hub | tar -x -C "$WORK/src" || fail_step "git archive of origin/main failed"
-  hub="/app/output_apps/enterprise_hub"
+  git -C "$REPO_ROOT" archive origin/main "$HUB_PATH" | tar -x -C "$WORK/src" || fail_step "git archive of origin/main failed"
+  hub="/app/$HUB_PATH"
   # DATABASE_PASSWORD is passed by name so it never shows in the process list
   export DATABASE_PASSWORD="$PGPW"
   node_run() {
@@ -293,12 +298,12 @@ if [ "$SKIP_MIG" != 1 ]; then
   }
   node_run "npm ci --no-audit --no-fund >/dev/null 2>&1 && npm run -s typeorm -- migration:show" >"$WORK/show1.log" 2>&1 \
     || { tail -n 5 "$WORK/show1.log" | redact >&2; fail_step "npm ci / migration:show failed"; }
-  PENDING_BEFORE="$(grep -cE '^ *\[ \]' "$WORK/show1.log" || true)"
+  PENDING_BEFORE="$(python3 -I "$SCRIPT_DIR/offsite_tools.py" migration-pending <"$WORK/show1.log")" || fail_step "cannot parse migration:show output"
   log "origin/main $HEAD_SHA: $PENDING_BEFORE pending migration(s) on the restored data"
   node_run "npm run -s typeorm -- migration:run" >"$WORK/run.log" 2>&1 \
     || { tail -n 8 "$WORK/run.log" | redact >&2; fail_step "migration:run failed on restored data (origin/main $HEAD_SHA)"; }
   node_run "npm run -s typeorm -- migration:show" >"$WORK/show2.log" 2>&1 || fail_step "migration:show after run failed"
-  PENDING_AFTER="$(grep -cE '^ *\[ \]' "$WORK/show2.log" || true)"
+  PENDING_AFTER="$(python3 -I "$SCRIPT_DIR/offsite_tools.py" migration-pending <"$WORK/show2.log")" || fail_step "cannot parse migration:show output after run"
   [ "$PENDING_AFTER" = 0 ] || fail_step "$PENDING_AFTER migration(s) still pending after migration:run"
   MIG_RESULT="ok(${PENDING_BEFORE}->0,main@${HEAD_SHA})"
 fi

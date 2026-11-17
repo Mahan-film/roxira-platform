@@ -150,16 +150,31 @@ alert() { # subject, message
 container_running() { docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null | grep -q true; }
 
 # dump_counts CONTAINER DB FILE: manifest of exact row counts (schema.table|rows) for the biggest user tables,
-# taken right after the dump. mac_restore_rehearsal.sh compares the restored counts with it (T198). Read-only,
-# 60 s statement timeout, never fatal: a missing manifest only means the rehearsal has nothing to compare.
+# taken right after the dump. mac_restore_rehearsal.sh compares the restored counts with it (T198).
+# Portable: list the tables (pg_stat_user_tables), build one `SELECT 'tbl', count(*) ... UNION ALL ...` with
+# offsite_tools.py count-sql (identifiers quoted), run it. Read-only, 60 s statement timeout. With
+# BACKUP_MANIFEST_TABLES > 0 a missing or empty manifest is a FAIL (the rehearsal would have nothing to compare);
+# BACKUP_MANIFEST_TABLES=0 turns the manifest off.
 dump_counts() {
-  local c="$1" db="$2" f="$3"
-  docker exec -i "$c" sh -c "psql -U \"\$POSTGRES_USER\" -d '$db' -Atq -F '|' -v ON_ERROR_STOP=1" >"$f" 2>/dev/null <<SQL || { rm -f "$f"; WARNS+=("row-count manifest failed for $c/$db"); return 0; }
-SET statement_timeout = '60s';
-SELECT schemaname || '.' || relname,
-       (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I.%I', schemaname, relname), false, true, '')))[1]::text
-FROM pg_stat_user_tables ORDER BY pg_total_relation_size(relid) DESC LIMIT ${BACKUP_MANIFEST_TABLES:-10};
+  local c="$1" db="$2" f="$3" n="${BACKUP_MANIFEST_TABLES:-10}" sql
+  [ "$n" -gt 0 ] 2>/dev/null || return 0
+  if ! docker exec -i "$c" sh -c "psql -U \"\$POSTGRES_USER\" -d '$db' -Atq -F '|' -v ON_ERROR_STOP=1" >"$f.tables" 2>/dev/null <<SQL
+SELECT schemaname || '|' || relname FROM pg_stat_user_tables ORDER BY pg_total_relation_size(relid) DESC LIMIT $n;
 SQL
+  then
+    rm -f "$f" "$f.tables"; FAILS+=("row-count manifest: table list failed for $c/$db"); return 0
+  fi
+  sql="$(python3 -I "$SCRIPT_DIR/offsite_tools.py" count-sql <"$f.tables")" || sql=""
+  rm -f "$f.tables"
+  if [ -z "$sql" ]; then FAILS+=("row-count manifest: no user tables listed for $c/$db"); return 0; fi
+  if ! docker exec -i "$c" sh -c "psql -U \"\$POSTGRES_USER\" -d '$db' -Atq -F '|' -v ON_ERROR_STOP=1" >"$f" 2>/dev/null <<SQL
+SET statement_timeout = '60s';
+$sql
+SQL
+  then
+    rm -f "$f"; FAILS+=("row-count manifest: count query failed for $c/$db"); return 0
+  fi
+  [ -s "$f" ] || FAILS+=("row-count manifest empty for $c/$db")
   return 0
 }
 
@@ -273,19 +288,21 @@ dump_meta() {
 # Local-only mode has no restic run to pick up configs, so the set carries them: one root-only tarball
 # (contains .env files; it never leaves the server unencrypted: the Mac stores it inside a restic repo).
 # $REPO_DIR/data is not included (can be large); it is only covered when a restic repository exists.
+# dump_configs [DIR]: writes DIR/configs/configs.tar.gz (default: the stage).
 dump_configs() {
-  if [ "$DRY_RUN" = "1" ]; then echo "[dry-run] configs: tar .env/compose/nginx/crontabs/systemd/ufw/letsencrypt -> $STAGE/configs/configs.tar.gz"; return; fi
+  local dest="${1:-$STAGE}"
+  if [ "$DRY_RUN" = "1" ]; then echo "[dry-run] configs: tar .env/compose/nginx/crontabs/systemd/ufw/letsencrypt -> $dest/configs/configs.tar.gz"; return; fi
   local list=() p
   while IFS= read -r p; do
     [ "$p" = "$STAGE" ] && continue
     [ "$p" = "$REPO_DIR/data" ] && continue
     list+=("$p")
   done < <(backup_paths)
-  mkdir -p "$STAGE/configs"
+  mkdir -p "$dest/configs"
   # tar exit 1 = "file changed while reading": acceptable for configs
-  tar -czf "$STAGE/configs/configs.tar.gz" --warning=no-file-changed "${list[@]}" 2>/dev/null || [ $? -eq 1 ] \
+  tar -czf "$dest/configs/configs.tar.gz" --warning=no-file-changed "${list[@]}" 2>/dev/null || [ $? -eq 1 ] \
     || FAILS+=("config tarball failed")
-  [ -s "$STAGE/configs/configs.tar.gz" ] || FAILS+=("config tarball empty")
+  [ -s "$dest/configs/configs.tar.gz" ] || FAILS+=("config tarball empty")
 }
 
 # ---- restic path set -------------------------------------------------------------------------
@@ -401,10 +418,10 @@ offsite_extras() {
   if [ -s "$STAGE/configs/configs.tar.gz" ]; then
     offsite_artifact configs "$STAGE"
   else
-    # restic mode does not stage the tarball: build it in a scratch dir (dump_configs writes under $STAGE/configs)
-    local work saved="$STAGE"
+    # restic mode does not stage the tarball: build it in a scratch dir
+    local work
     work="$(mktemp -d "$STATE_DIR/extras.XXXXXX")" && chmod 700 "$work"
-    STAGE="$work"; dump_configs; STAGE="$saved"
+    dump_configs "$work"
     [ -s "$work/configs/configs.tar.gz" ] && offsite_artifact configs "$work"
     [[ "$work" == "$STATE_DIR"/extras.* ]] && rm -rf -- "$work"
   fi

@@ -83,6 +83,18 @@ class PrunePrefix(unittest.TestCase):
         self.assertEqual(r2.cmd_prune(f, False, "qdrant", None, 7), 0)
         self.assertEqual(f.deleted, [old])  # newest daily (mid) is kept, pgcfg is not touched
 
+    def test_empty_prefix_rejected(self):
+        for bad in ("", "/", "//", "a b", "../x"):
+            f = self.Fake(["pgcfg/daily/20200101T000000Z.tar.age"])
+            f.deleted = []
+            with self.assertRaises(SystemExit):
+                r2.cmd_prune(f, False, bad)
+            self.assertEqual(f.deleted, [])
+        f = self.Fake([])
+        f.prefix = ""
+        with self.assertRaises(SystemExit):
+            r2.cmd_prune(f, True, None)
+
 
 if __name__ == "__main__":
     unittest.main()

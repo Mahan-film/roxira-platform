@@ -206,7 +206,10 @@ def cmd_latest(r: R2, prefix: str) -> int:
 
 def cmd_prune(r: R2, dry: bool, prefix: str | None = None, hourly_days: int | None = None,
               daily_days: int | None = None) -> int:
-    prefix = (prefix or r.prefix).strip("/")
+    prefix = (r.prefix if prefix is None else prefix).strip("/")
+    if (not prefix or ".." in prefix or not re.fullmatch(r"[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*", prefix)):
+        # an empty prefix would list (and prune) the whole bucket
+        raise SystemExit("r2_tools: refusing to prune with an empty or invalid prefix")
     keys = r.list_keys(prefix + "/")
     victims = select_prune(keys, datetime.now(timezone.utc),
                            r.hourly_days if hourly_days is None else hourly_days,

@@ -22,7 +22,6 @@ case "$*" in
   *"pg_dump -U"*) printf 'PGDMPfake-%s' "$(date +%s)" ;;
   *"pg_restore -l"*) cat >/dev/null ;;
   *"pg_restore -U"*) cat >/dev/null ;;
-  *pg_stat_user_tables*) ;;
   run*|rm*|*pg_isready*|*createdb*) ;;
   *psql*) if grep -q pg_stat_user_tables; then echo "public|users"; else echo "public.users|5"; fi ;;
 esac

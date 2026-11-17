@@ -29,7 +29,7 @@
 #
 # Extra artifacts (T197): `telegram_offsite.sh --send-file FILE --label NAME` skips the pg_dump and sends
 # an ALREADY age-encrypted file (Qdrant snapshots, config set) through the same split + sendDocument path.
-# It refuses a file without the age header, waits up to TELEGRAM_LOCK_WAIT s (default 900) for the 6-hourly run,
+# It refuses a file without the age header, uses its own lock (never waits on the 6-hourly run),
 # and SKIPS (exit 10, logged, no alert) when the file is above TELEGRAM_MAX_TOTAL_MB (default 150): the Bot API
 # cap is 50 MB per file, so a big snapshot would be dozens of parts. Exit 0 = sent, 10 = skipped, 1 = failed.
 #
@@ -37,7 +37,7 @@
 # Env (names only; values never printed): NOTIFY_BOT_TOKEN, NOTIFY_CHAT_ID, NOTIFY_BOT_API,
 #   TELEGRAM_BACKUP_CHAT_ID, TELEGRAM_BACKUP_DBS, TELEGRAM_PG_CONTAINER (roxira_postgres_prod),
 #   TELEGRAM_AGE_RECIPIENTS_FILE (/etc/roxira-backup-age.pub), TELEGRAM_PART_MB (45),
-#   TELEGRAM_BACKUP_LOG (/root/deploy-state/telegram-backup.log), TELEGRAM_MAX_TOTAL_MB (150), TELEGRAM_LOCK_WAIT (900)
+#   TELEGRAM_BACKUP_LOG (/root/deploy-state/telegram-backup.log), TELEGRAM_MAX_TOTAL_MB (150)
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -67,7 +67,6 @@ AGE_FILE="${TELEGRAM_AGE_RECIPIENTS_FILE:-/etc/roxira-backup-age.pub}"
 LOG_FILE="${TELEGRAM_BACKUP_LOG:-/root/deploy-state/telegram-backup.log}"
 PART_MB="${TELEGRAM_PART_MB:-45}"
 MAX_TOTAL_MB="${TELEGRAM_MAX_TOTAL_MB:-150}"
-LOCK_WAIT="${TELEGRAM_LOCK_WAIT:-900}"
 API="${NOTIFY_BOT_API:-https://api.telegram.org}"
 CHAT="${TELEGRAM_BACKUP_CHAT_ID:-${NOTIFY_CHAT_ID:-}}"
 STAMP="$(date -u '+%Y%m%dT%H%M%SZ')"
@@ -126,10 +125,13 @@ for tool in $NEED_TOOLS; do command -v "$tool" >/dev/null 2>&1 || die "$tool not
 [ -n "$CHAT" ] || die "TELEGRAM_BACKUP_CHAT_ID / NOTIFY_CHAT_ID is not set"
 
 mkdir -p "$OFFSITE_STATE_DIR" && chmod 700 "$OFFSITE_STATE_DIR" 2>/dev/null || true
-exec 9>"$OFFSITE_STATE_DIR/telegram.lock"
+# --send-file uses its OWN lock, so it never waits on (or blocks) the 6-hourly dump; two --send-file runs
+# still exclude each other, non-blocking: the second one logs and exits 10, the next daily run retries.
 if [ -n "$SEND_FILE" ]; then
-  flock -w "$LOCK_WAIT" 9 || die "another telegram_offsite.sh run is still in progress after ${LOCK_WAIT}s"
+  exec 9>"$OFFSITE_STATE_DIR/telegram-sendfile.lock"
+  flock -n 9 || { log "another --send-file run is in progress; $LABEL not sent this time (next run retries)"; record "skipped $LABEL: send-file lock busy"; exit 10; }
 else
+  exec 9>"$OFFSITE_STATE_DIR/telegram.lock"
   flock -n 9 || die "another telegram_offsite.sh run is in progress"
 fi
 
