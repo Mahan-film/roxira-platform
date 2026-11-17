@@ -61,6 +61,16 @@ describe('DailyAttendanceService Asia/Tehran day handling (T129)', () => {
     expect(rows[0].occurredAt.toISOString()).toBe('2026-11-17T04:45:00.000Z');
   });
 
+  it('accepts an explicit Z or offset timestamp as an absolute instant', async () => {
+    const { service, attendanceRepo } = makeService({});
+    const csv = 'E1,2026-11-16T08:10:00Z,in\nE1,2026-11-16T12:00:00+03:30,out';
+    const res = await service.importCsv(TENANT, csv);
+    expect(res.inserted).toBe(2);
+    const rows = attendanceRepo.bulkCreateEvents.mock.calls[0][1] as Array<{ occurredAt: Date }>;
+    expect(rows[0].occurredAt.toISOString()).toBe('2026-11-16T08:10:00.000Z');
+    expect(rows[1].occurredAt.toISOString()).toBe('2026-11-16T08:30:00.000Z');
+  });
+
   it('rejects a CSV with more than the row cap', async () => {
     const { service } = makeService({});
     const csv = Array.from({ length: 10_001 }, () => 'E1,2026-11-17 08:15,in').join('\n');

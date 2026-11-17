@@ -71,7 +71,15 @@ export function tehranDayWindow(dateStr: string): { start: Date; end: Date } | n
  * Returns null when malformed or not a real date/time.
  */
 export function parseTehranWallTime(raw: string): Date | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(raw.trim());
+  const text = raw.trim();
+  // An explicit trailing Z or UTC offset marks an absolute instant: parse it as-is.
+  if (
+    /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:?\d{2})$/i.test(text)
+  ) {
+    const instant = new Date(text.replace(' ', 'T'));
+    return Number.isNaN(instant.getTime()) ? null : instant;
+  }
+  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(text);
   if (!m) return null;
   const [y, mo, d, h, mi, s] = [m[1], m[2], m[3], m[4], m[5], m[6] ?? '0'].map(Number);
   if (h > 23 || mi > 59 || s > 59) return null;
