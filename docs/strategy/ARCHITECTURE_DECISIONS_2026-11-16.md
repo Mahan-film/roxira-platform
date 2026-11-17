@@ -126,3 +126,6 @@ Rows the hub runs with Claude agents (lanes: do not take them):
 | **T200 Restricted database role** (*after #831*) | Production connects as the restricted application role; the superuser login is used only for migrations. Cross-tenant smoke test after the switch. |
 
 Lane PRs keep their own rows. T194–T196 may go to lanes instead if a lane drops below its WIP limit first.
+
+## Update 2026-11-17 (3): rows from R19
+Digest: `research/R19_REUSE_MAP.md` (stages 1 and 2). Hub-owned rows: **T202** fast toolchain (oxlint, TS 7 check), **T203** feature flags (OpenFeature + flagd), **T204** WAL-G point-in-time recovery (enable needs a Postgres restart), **T205** memory limits and OOM protection, **T207** diff-scoped CI guards (money math, tenant scope, model ids, secrets). **T206** (personal data out of the hash chain, crypto-shredding) is a prerequisite of T178.
