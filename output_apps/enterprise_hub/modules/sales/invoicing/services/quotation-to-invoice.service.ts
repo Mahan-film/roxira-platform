@@ -211,20 +211,15 @@ export class QuotationToInvoiceService {
         throw new BadRequestException('سرویس محاسبه نرخ مالیات بر ارزش افزوده در دسترس نیست.');
       }
 
-      // Prepare invoice items with exact minor conversion for InvoicingService
+      // Prepare invoice items: quantity is a plain decimal, prices/discounts use exact minor units
       const invoiceItems = quotationLines.map((line) => {
         const rawQty = String(line.quantity ?? '').trim();
         const normalizedQty = rawQty.includes('.') ? rawQty.replace(/\.?0+$/, '') : rawQty;
-        let qtyVal: number | string;
-        try {
-          qtyVal = fromMinor(toMinor(normalizedQty));
-        } catch (err) {
-          if (err instanceof MoneyFormatError) {
-            throw new BadRequestException('مقدار سطر پیش‌فاکتور معتبر نیست یا بیش از ۲ رقم اعشار دارد.');
-          }
-          throw err;
+        if (!/^\d+(?:\.\d+)?$/.test(normalizedQty)) {
+          throw new BadRequestException('مقدار سطر پیش‌فاکتور معتبر نیست.');
         }
-        if (typeof qtyVal === 'string' || qtyVal <= 0) {
+        const qtyVal = Number(normalizedQty);
+        if (!Number.isFinite(qtyVal) || qtyVal <= 0) {
           throw new BadRequestException('مقدار سطر پیش‌فاکتور معتبر نیست.');
         }
         const unitPriceMinor = toMinor(line.unitPrice);
