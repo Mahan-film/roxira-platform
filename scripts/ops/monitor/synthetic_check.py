@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synthetic production monitor: HTTP, judge health, real chat round-trip, TLS, domain expiry, disk.
+"""Synthetic production monitor: HTTP, judge health, real chat round-trip, TLS, domain expiry, disk, host RAM, container restarts.
 
 Stdlib only. Alerts go to the digest queue (scripts/ops/notify/notify.py); never mailed one by one.
 
@@ -7,7 +7,8 @@ Usage: synthetic_check.py [--once] [--dry-run] [--force-chat] [--state PATH]
 Env (names only): MONITOR_DOMAINS, MONITOR_CHAT_BASE, MONITOR_CHAT_INTERVAL_MIN,
 MONITOR_CHAT_TIMEOUT_S, MONITOR_CERT_WARN_DAYS, MONITOR_DISK_WARN_PCT, MONITOR_PATHS,
 MONITOR_DOMAIN_WARN_DAYS, MONITOR_WHOIS_INTERVAL_H,
-MONITOR_CHECK_DISK, MONITOR_STATE_FILE, MONITOR_SILENCE, MONITOR_BYPASS_TOKEN,
+MONITOR_CHECK_DISK (also enables the RAM and container-restart checks), MONITOR_RAM_WARN_PCT,
+MONITOR_RESTART_WINDOW_MIN, MONITOR_STATE_FILE, MONITOR_SILENCE, MONITOR_BYPASS_TOKEN,
 BACKUP_SMTP_USER, BACKUP_SMTP_PASS, BACKUP_NOTIFY_TO.
 """
 
@@ -19,6 +20,7 @@ import os
 import shutil
 import socket
 import ssl
+import subprocess
 import sys
 import time
 import urllib.error
@@ -169,6 +171,63 @@ def check_disk(warn_pct: float):
     return pct <= warn_pct, f"{pct:.0f}% used"
 
 
+def parse_meminfo(text: str) -> float:
+    """Used-RAM percent from /proc/meminfo text: 100 * (1 - MemAvailable / MemTotal). Pure, unit-tested."""
+    vals = {}
+    for line in text.splitlines():
+        name, _, rest = line.partition(":")
+        parts = rest.split()
+        if parts and parts[0].isdigit():
+            vals[name.strip()] = int(parts[0])
+    total, avail = vals.get("MemTotal", 0), vals.get("MemAvailable")
+    if not total or avail is None:
+        raise ValueError("MemTotal/MemAvailable missing")
+    return (total - avail) * 100 / total
+
+
+def check_ram(warn_pct: float, meminfo_path: str = "/proc/meminfo"):
+    with open(meminfo_path, encoding="utf-8") as fh:
+        pct = parse_meminfo(fh.read())
+    return pct <= warn_pct, f"{pct:.0f}% used"
+
+
+def restarted_containers(inspect_lines: list[str], now: float, window_s: float) -> list[str]:
+    """Names of containers that restarted (RestartCount > 0) or were OOM-killed within the window.
+
+    Each line: "<name> <RestartCount> <StartedAt RFC3339> <OOMKilled>". A container recreated by
+    `compose up` has RestartCount 0 and is not reported. Pure, unit-tested.
+    """
+    from datetime import datetime
+    hits = []
+    for line in inspect_lines:
+        parts = line.split()
+        if len(parts) != 4:
+            continue
+        name, count, started, oom = parts
+        try:
+            ts = datetime.fromisoformat(started.rstrip("Z").split(".")[0] + "+00:00").timestamp()
+            count_i = int(count)
+        except ValueError:
+            continue
+        if now - ts <= window_s and (count_i > 0 or oom == "true"):
+            hits.append(name.lstrip("/"))
+    return sorted(hits)
+
+
+def check_restarts(window_min: float):
+    try:
+        ids = subprocess.run(["docker", "ps", "-q"], capture_output=True, text=True, timeout=15, check=True).stdout.split()
+        if not ids:
+            return True, "no running containers listed"
+        fmt = "{{.Name}} {{.RestartCount}} {{.State.StartedAt}} {{.State.OOMKilled}}"
+        out = subprocess.run(["docker", "inspect", "-f", fmt, *ids], capture_output=True, text=True,
+                             timeout=30, check=True).stdout.splitlines()
+    except (OSError, subprocess.SubprocessError):
+        return True, "docker not available, skipped"
+    hits = restarted_containers(out, time.time(), window_min * 60)
+    return not hits, ("restarted/OOM-killed in last %.0f min: %s" % (window_min, ", ".join(hits))) if hits else "none"
+
+
 def chat_due(state: dict, now: float, interval_min: float, force: bool) -> bool:
     return force or now - state.get("last_chat_ts", 0) >= interval_min * 60 - 30
 
@@ -201,6 +260,8 @@ def run(args) -> int:
             state["last_chat_ts"] = now
         if os.environ.get("MONITOR_CHECK_DISK") == "1":
             results["disk:/"] = _guard(check_disk, env_f("MONITOR_DISK_WARN_PCT", 85))
+            results["ram:host"] = _guard(check_ram, env_f("MONITOR_RAM_WARN_PCT", 85))
+            results["containers:restarts"] = _guard(check_restarts, env_f("MONITOR_RESTART_WINDOW_MIN", 60))
 
         checks, alerts = mc.evaluate(state.get("checks", {}), results, now)
         state["checks"], state["last_run"] = checks, now

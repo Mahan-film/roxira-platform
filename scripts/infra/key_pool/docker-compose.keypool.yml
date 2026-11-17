@@ -22,10 +22,15 @@ services:
       timeout: 5s
       retries: 10
     mem_limit: 256m
+    mem_reservation: 64m
   keypool:
     image: ${KEYPOOL_IMAGE:?set by install.sh}
     container_name: roxira_keypool
     restart: unless-stopped
+    # T205: measured 245 MB idle, 645 MB after the 2026-11-17 reboot under use. Disposable: dies before Postgres/Redis on host OOM.
+    mem_limit: 1024m
+    mem_reservation: 400m
+    oom_score_adj: 500
     depends_on:
       keypool_db:
         condition: service_healthy

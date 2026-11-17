@@ -15,6 +15,8 @@ No secrets in the repo; e-mail reuses `BACKUP_SMTP_USER`, `BACKUP_SMTP_PASS`, `B
 | `site:<host/path>` extra pages, opt-in via `MONITOR_PATHS` (empty by default; e.g. `roxira.ir/app` once confirmed to return 200 from srv1) | synthetic_check | 5 min | not 200 or >= 5 s (one retry) |
 | `domain:<domain>` registration expiry via WHOIS (`domain_expiry.py`, .ir/.net/.com) | synthetic_check | 6 h (`MONITOR_WHOIS_INTERVAL_H`) | < 30 days left (`MONITOR_DOMAIN_WARN_DAYS`) or not registered; no WHOIS answer = skipped, never an alert |
 | `disk:/` (server only, `MONITOR_CHECK_DISK=1`) | synthetic_check | 5 min | > 85 % (`MONITOR_DISK_WARN_PCT`) |
+| `ram:host` (same switch) | synthetic_check | 5 min | used RAM > 85 % of `MemTotal` via `MemAvailable` (`MONITOR_RAM_WARN_PCT`) |
+| `containers:restarts` (same switch) | synthetic_check | 5 min | a running container with `RestartCount` > 0 started, or was OOM-killed, in the last 60 min (`MONITOR_RESTART_WINDOW_MIN`); a container recreated by `compose up` is not reported |
 | `logs:api-5xx` (app and nginx logs) | log_watch | 5 min, 10 min window | > 3 5xx on `/api/` (`MONITOR_5XX_MAX`) |
 | `logs:client-errors` (`[CLIENT-ERROR]`) | log_watch | same | > 10 (`MONITOR_CLIENT_ERR_MAX`) |
 | `logs:chat-p95` (`[CHAT-TIMING] total_ms=`) | log_watch | same | p95 > 40 s (`MONITOR_P95_MAX_S`) |
