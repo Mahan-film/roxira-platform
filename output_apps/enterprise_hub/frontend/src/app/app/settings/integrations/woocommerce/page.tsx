@@ -35,12 +35,10 @@ export default function WooCommerceSettingsPage() {
   const [autoSyncOrders, setAutoSyncOrders] = useState(true);
   const [autoSyncStock, setAutoSyncStock] = useState(true);
 
-  const loadData = async () => {
-    setLoading(true);
-    setError(null);
+  const fetchWooCommerceData = async (isActive?: () => boolean) => {
     try {
       const cfg = await getWooCommerceConfig().catch(() => null);
-      if (cfg) {
+      if ((!isActive || isActive()) && cfg) {
         setConfig(cfg);
         setStoreUrl(cfg.storeUrl || "");
         setWebhookSecret("");
@@ -48,40 +46,29 @@ export default function WooCommerceSettingsPage() {
         setAutoSyncStock(cfg.autoSyncStock);
       }
       const logRes = await getWooCommerceLogs({ limit: 20 }).catch(() => ({ items: [], total: 0 }));
-      setLogs(logRes.items);
+      if (!isActive || isActive()) {
+        setLogs(logRes.items);
+      }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "خطا در بارگذاری اطلاعات");
+      if (!isActive || isActive()) {
+        setError(err instanceof Error ? err.message : "خطا در بارگذاری اطلاعات");
+      }
     } finally {
-      setLoading(false);
+      if (!isActive || isActive()) {
+        setLoading(false);
+      }
     }
+  };
+
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
+    await fetchWooCommerceData();
   };
 
   useEffect(() => {
     let active = true;
-    (async () => {
-      try {
-        const cfg = await getWooCommerceConfig().catch(() => null);
-        if (active && cfg) {
-          setConfig(cfg);
-          setStoreUrl(cfg.storeUrl || "");
-          setWebhookSecret("");
-          setAutoSyncOrders(cfg.autoSyncOrders);
-          setAutoSyncStock(cfg.autoSyncStock);
-        }
-        const logRes = await getWooCommerceLogs({ limit: 20 }).catch(() => ({ items: [], total: 0 }));
-        if (active) {
-          setLogs(logRes.items);
-        }
-      } catch (err: unknown) {
-        if (active) {
-          setError(err instanceof Error ? err.message : "خطا در بارگذاری اطلاعات");
-        }
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    })();
+    void Promise.resolve().then(() => fetchWooCommerceData(() => active));
     return () => {
       active = false;
     };

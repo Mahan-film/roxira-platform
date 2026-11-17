@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, createHmac, createHash, randomBytes, timingSafeEqual } from 'crypto';
+import * as dns from 'dns/promises';
 import * as net from 'net';
 
 const PRIVATE_BLOCKLIST = new net.BlockList();
@@ -63,6 +64,10 @@ function getMasterKey(customKey?: Buffer): Buffer {
   return createHash('sha256').update(envKey.trim()).digest();
 }
 
+/**
+ * Validates scheme (HTTPS) and rejects literal private/loopback IPs and internal hostnames.
+ * Call `assertSafeStoreUrlWithDns` (or `WooCommerceSyncService.verifyHostNotPrivate`) before outbound requests.
+ */
 export function assertSafeStoreUrl(rawUrl: string): URL {
   let parsed: URL;
   try {
@@ -78,6 +83,23 @@ export function assertSafeStoreUrl(rawUrl: string): URL {
     throw new Error('WooCommerce storeUrl cannot point to a private or loopback address');
   }
   return parsed;
+}
+
+/**
+ * Validates `rawUrl` and resolves DNS A/AAAA records, rejecting any private/loopback IP.
+ */
+export async function assertSafeStoreUrlWithDns(rawUrl: string): Promise<{ parsed: URL; resolvedIps: string[] }> {
+  const parsed = assertSafeStoreUrl(rawUrl);
+  const host = normalizeHost(parsed.hostname);
+  if (net.isIP(host)) {
+    return { parsed, resolvedIps: [host] };
+  }
+  const records = await dns.lookup(host, { all: true });
+  const resolvedIps = records.map((r) => r.address);
+  if (resolvedIps.length === 0 || resolvedIps.some((ip) => isPrivateIp(ip))) {
+    throw new Error('WooCommerce storeUrl resolves to a private or loopback address');
+  }
+  return { parsed, resolvedIps };
 }
 
 export function sealSecret(plaintext: string, tenantId: string, customKey?: Buffer): string {
