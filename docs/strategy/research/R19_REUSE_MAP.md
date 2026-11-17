@@ -27,3 +27,23 @@ Source: the owner's deep-research run R19, stage 1, received 2026-11-17 (stage 2
 - **T202 Fast toolchain:** oxlint in CI and pre-push for backend and frontend; a TS 7 `--noEmit` job; measured before/after times in the PR. Then switch the main type-check to TS 7 once it passes on both apps.
 - **T203 Feature flags:** flagd sidecar (pinned image, <64 MB limit), OpenFeature SDK in NestJS and the Python core, flag file in the repo, tenant and country-pack targeting, a kill-switch convention for new modules.
 - **T204 WAL-G:** archive_command to the existing object storage, age/libsodium encryption, a retention policy, a restore-to-time script added to the T198 Mac drill. Enabling it in production needs the owner's go-ahead (Postgres restart).
+
+## Stage 2 (received 2026-11-17)
+Stage 2 ran without network access, so its verification column is mostly "unverifiable", and several of its corrections are wrong. Hub checks the same day: Squawk is **Apache-2.0** (not GPL-3.0); Mustangproject **core-2.26.0, 2026-08-25** and ZUGFeRD 2.5.2 (ferd-net.de, see R13) are real; Unleash **is** AGPL-3.0 on main; pgBackRest is active (stage 2 agrees). Facts in the table above stand.
+
+Its list of misses is useful. Status against our code:
+
+| Miss | Our state | Action |
+|---|---|---|
+| OOM on an 8 GB host as sidecars are added | no per-container memory limits | **T205** limits, OOM priority for Postgres/Redis, RAM alert; bigger server only when RAM > 70% for 7 days |
+| tenant vs legal entity | company group (T155) and multi-entity rows exist | gapless numbering and periods per legal entity, not per tenant (T178, T182) |
+| period lifecycle, opening balances | fiscal close exists | soft lock, adjustment period, hard close, carry-forward (T178) |
+| control accounts posted by hand | not enforced everywhere | `system_posted_only` on AR/AP/inventory/asset control accounts (T178, T195) |
+| GDPR erasure vs immutable hash chain | not designed yet | **T206**: no names/IBANs in hash-chained fields; party ids only; personal data in master tables with per-party keys (erasure = destroy the key). Must land before T178's hash chain |
+| RLS with PgBouncer transaction mode | verified OK: tenant context uses `set_config(..., true)` (transaction-local) | keep; T207 enforces it |
+| AI agents reintroducing float money / missing tenant scope | review desk catches it late | **T207** diff-scoped blocking guards in CI |
+| backup keys on the same server | verified OK: the server holds only the age public recipient | keep |
+| synchronous sidecar calls holding DB locks | not built yet | e-invoice, ERiC and XBRL calls go through the outbox + BullMQ, never inside a request transaction (T187, T190) |
+| ERiC native library thread safety | not built yet | one single-threaded worker container (T190) |
+
+Not taken: a bigger server now (current use about 4 of 7.7 GB; decide on the trigger above, it is the owner's spend), Grafana Cloud.
