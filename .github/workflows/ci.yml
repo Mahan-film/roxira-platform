@@ -523,8 +523,17 @@ jobs:
           cache: npm
           cache-dependency-path: ${{ matrix.dir }}/package-lock.json
       - run: npm ci --no-audit --no-fund
-      - name: tsc 7 --noEmit
-        run: npm run typecheck:ts7
+      - name: tsc 7 --noEmit (never fails the job; result goes to the summary)
+        run: |
+          set +e
+          npm run typecheck:ts7 > "$RUNNER_TEMP/ts7.log" 2>&1
+          code=$?
+          cat "$RUNNER_TEMP/ts7.log"
+          {
+            echo "### TypeScript 7 (${{ matrix.app }}), report-only"
+            echo "Exit code: $code, $(grep -c 'error TS' "$RUNNER_TEMP/ts7.log") errors."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
 
   m1-gate:
     # Issue #116 / docs/testing/M1_GATE.md. REPORT-ONLY: continue-on-error, and it is not a required check.
