@@ -39,10 +39,12 @@ def split(path: str) -> tuple[str, str] | None:
 
 
 def added_files(base: str, mig_dir: str, cwd: str | None = None) -> list[str]:
-    """Migration files added relative to the merge base (committed or staged/working tree)."""
+    """Migration files added, renamed or copied relative to the merge base (committed or staged/working tree)."""
     mb = git("merge-base", base, "HEAD", cwd=cwd).strip()
-    out = git("diff", "--name-status", "--no-renames", "--diff-filter=A", mb, "--", mig_dir, cwd=cwd)
-    files = [ln.split("\t", 1)[1] for ln in out.splitlines() if "\t" in ln]
+    # A (added), R and C (renamed/copied: lanes renumber migrations this way). The destination
+    # path is the last tab-separated column.
+    out = git("diff", "--name-status", "-M", "-C", "--diff-filter=ARC", mb, "--", mig_dir, cwd=cwd)
+    files = [ln.split("\t")[-1] for ln in out.splitlines() if "\t" in ln]
     return sorted(f for f in files if split(f))
 
 

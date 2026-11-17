@@ -35,7 +35,6 @@ env:
   NODE_VERSION: "22"
   SEMGREP_VERSION: "1.178.0"
   TRIVY_VERSION: "0.75.0"
-  SQUAWK_VERSION: "2.73.0"
 
 jobs:
   changes:
@@ -97,6 +96,7 @@ jobs:
               - "output_apps/enterprise_hub/migrations/**"
               - "scripts/dev/check_migration_ids.py"
               - "scripts/dev/lint_migrations_squawk.py"
+              - "scripts/dev/install_squawk.sh"
               - ".github/workflows/ci.yml"
             e2e:
               - "e2e/**"
@@ -388,9 +388,6 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
       - name: Migration id check (blocking)
         run: |
           # The id must be above the newest id on main's tip, not above the merge base.
@@ -398,8 +395,10 @@ jobs:
           python3 scripts/dev/check_migration_ids.py --base origin/main
       - name: Squawk on new migrations (not-null and robust-stmts rules block)
         run: |
-          npm install --no-audit --no-fund --prefix "$RUNNER_TEMP/squawk" "squawk-cli@${SQUAWK_VERSION}"
-          SQUAWK="$RUNNER_TEMP/squawk/node_modules/.bin/squawk" python3 scripts/dev/lint_migrations_squawk.py --base origin/main
+          # Official release binary; the pinned version and SHA-256 live in install_squawk.sh.
+          SQUAWK="$(bash scripts/dev/install_squawk.sh "$RUNNER_TEMP/squawk")"
+          export SQUAWK
+          python3 scripts/dev/lint_migrations_squawk.py --base origin/main
 
   frontend:
     name: Frontend lint + build

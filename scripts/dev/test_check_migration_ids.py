@@ -127,3 +127,35 @@ def test_open_prs_detects_clash(repo, monkeypatch):
     commit(repo)
     monkeypatch.setattr(m, "open_pr_ids", lambda cwd, own: ({"1789200000000": ["PR #9 (x)"]}, ""))
     assert any("PR #9" in p for p in m.check("origin/main", MIG, True, str(repo)))
+
+
+def rename(repo, old, new_id, name):
+    """Renumber like a lane does: git mv, then fix the class and name suffix."""
+    src = Path(repo, MIG, old)
+    dst = Path(repo, MIG, f"{new_id}-{name}.ts")
+    git(repo, "mv", str(src), str(dst))
+    dst.write_text(dst.read_text().replace(old[:13], new_id))
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "renumber")
+
+
+def test_rename_to_too_low_id_fails(repo):
+    write(repo, "1789200000000", "Mine")
+    commit(repo)
+    rename(repo, "1789200000000-Mine.ts", "1789050000000", "Mine")
+    code, out = run(repo)
+    assert code == 1 and "1789050000000-Mine.ts" in out
+
+
+def test_rename_to_duplicate_id_fails(repo):
+    write(repo, "1789200000000", "One")
+    write(repo, "1789300000000", "Two")
+    commit(repo)
+    rename(repo, "1789300000000-Two.ts", "1789200000000", "Two")
+    code, out = run(repo)
+    assert code == 1 and "duplicate id 1789200000000" in out
+
+
+def test_rename_of_existing_migration_to_valid_id_passes(repo):
+    rename(repo, "1789000000000-A.ts", "1789400000000", "A")
+    assert run(repo)[0] == 0

@@ -205,15 +205,16 @@ step_migration_ids() {
   python3 scripts/dev/check_migration_ids.py --base "$BASE_REF"
 }
 step_migration_squawk() {
+  # SHA-256-verified official release binary (pinned in install_squawk.sh) unless $SQUAWK is set.
+  if [ -z "${SQUAWK:-}" ]; then
+    SQUAWK="$(bash scripts/dev/install_squawk.sh)" || return 1
+    export SQUAWK
+  fi
   python3 scripts/dev/lint_migrations_squawk.py --base "$BASE_REF"
 }
-if changed_matches '^output_apps/enterprise_hub/migrations/|^scripts/dev/(check_migration_ids|lint_migrations_squawk)\.py$'; then
+if changed_matches '^output_apps/enterprise_hub/migrations/|^scripts/dev/(check_migration_ids|lint_migrations_squawk)\.py|^scripts/dev/install_squawk\.sh$'; then
   run_step "migration ids above origin/main" step_migration_ids
-  if have squawk || [ -n "${SQUAWK:-}" ] || have npx; then
-    run_step "Squawk on new migrations" step_migration_squawk
-  else
-    skip_step "Squawk on new migrations" "needs npx (npm i -g squawk-cli) or \$SQUAWK"
-  fi
+  run_step "Squawk on new migrations" step_migration_squawk
 else
   skip_step "migration lint" "no changes under enterprise_hub/migrations"
 fi

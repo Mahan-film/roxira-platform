@@ -13,7 +13,8 @@ deploy-time connection), so enforcing it today would fail almost every new migra
 finding is printed and does not fail. Files are linted with --assume-in-transaction (TypeORM wraps
 each migration run in a transaction), otherwise prefer-robust-stmts flags every ALTER/CREATE INDEX.
 
-Squawk is taken from $SQUAWK, then `squawk` on PATH, then `npx --yes squawk-cli@<pinned>`.
+Squawk is taken from $SQUAWK, then `squawk` on PATH. Get the checksum-verified pinned binary with
+`SQUAWK=$(bash scripts/dev/install_squawk.sh)`.
 Usage: python3 scripts/dev/lint_migrations_squawk.py [--base origin/main] [--dir DIR] [FILE.ts ...]
 """
 from __future__ import annotations
@@ -30,7 +31,6 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from check_migration_ids import MIGRATION_DIR, added_files  # noqa: E402
 
-SQUAWK_VERSION = "2.73.0"
 BLOCKING = {"adding-required-field", "adding-not-nullable-field", "prefer-robust-stmts"}
 QUERY_RE = re.compile(r"\.query\s*\(\s*")
 
@@ -78,8 +78,6 @@ def squawk_cmd() -> list[str] | None:
         return [os.environ["SQUAWK"]]
     if shutil.which("squawk"):
         return ["squawk"]
-    if shutil.which("npx"):
-        return ["npx", "--yes", f"squawk-cli@{SQUAWK_VERSION}"]
     return None
 
 
@@ -132,7 +130,7 @@ def main() -> int:
         return 0
     cmd = squawk_cmd()
     if cmd is None:
-        print("error: need squawk, $SQUAWK or npx (squawk-cli@%s)" % SQUAWK_VERSION, file=sys.stderr)
+        print("error: need $SQUAWK or squawk on PATH (bash scripts/dev/install_squawk.sh)", file=sys.stderr)
         return 2
     rules = BLOCKING | ({"require-lock-timeout"} if a.enforce_lock_timeout else set())
     n = lint(files, cmd, rules)
