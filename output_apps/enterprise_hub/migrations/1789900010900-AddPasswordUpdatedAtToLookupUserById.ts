@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddPasswordUpdatedAtToLookupUserById1789900012000 implements MigrationInterface {
-  name = 'AddPasswordUpdatedAtToLookupUserById1789900012000';
+export class AddPasswordUpdatedAtToLookupUserById1789900010900 implements MigrationInterface {
+  name = 'AddPasswordUpdatedAtToLookupUserById1789900010900';
 
   public async up(q: QueryRunner): Promise<void> {
     await q.query(`DROP FUNCTION IF EXISTS public.lookup_user_by_id(uuid);`);

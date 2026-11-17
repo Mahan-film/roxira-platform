@@ -47,13 +47,17 @@ secret() {
   sed -n 's/^APP_DB_PASSWORD=//p' "$SECRET_FILE" | head -n1
 }
 
-grants_sql() {  # the password arrives as psql variable :pw, on stdin only
+grants_sql() {  # the password arrives as psql variable :pw, on stdin only (omitted in plan mode)
+  local pw_clause=""
+  if [ "${1:-with_pw}" = "with_pw" ]; then
+    pw_clause=" PASSWORD :'pw'"
+  fi
   cat <<SQL
 \set ON_ERROR_STOP on
 BEGIN;
 SET LOCAL log_statement = 'none';
 SELECT 'CREATE ROLE $ROLE LOGIN' WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '$ROLE') \gexec
-ALTER ROLE $ROLE LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOREPLICATION PASSWORD :'pw';
+ALTER ROLE $ROLE LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOREPLICATION${pw_clause};
 GRANT CONNECT ON DATABASE "$DB" TO $ROLE;
 GRANT USAGE ON SCHEMA public TO $ROLE;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO $ROLE;
@@ -85,15 +89,7 @@ SQL
 
 cmd_plan() {
   log "dry run: role and grants are applied in a transaction, then rolled back"
-  local existed canlogin
-  existed="$(admin_psql -qtAX -c "SELECT count(*) FROM pg_roles WHERE rolname = '$ROLE'")"
-  canlogin="$(admin_psql -qtAX -c "SELECT coalesce((SELECT rolcanlogin FROM pg_roles WHERE rolname = '$ROLE'), false)")"
-  { printf '\\set pw %s\n' "'$(openssl rand -hex 32)'"; grants_sql; echo 'ROLLBACK;'; } | admin_psql -qtAX
-  if [ "$existed" = "0" ]; then
-    admin_psql -q -c "DROP ROLE IF EXISTS $ROLE"
-  elif [ "$canlogin" = "f" ]; then
-    admin_psql -q -c "ALTER ROLE $ROLE NOLOGIN"
-  fi
+  { grants_sql no_pw; echo 'ROLLBACK;'; } | admin_psql -qtAX
   local n; n="$(admin_psql -qtAX -c "SELECT count(*) FROM pg_roles WHERE rolname = '$ROLE' AND rolcanlogin")"
   log "dry run finished; nothing changed (login role exists now: $n)"
 }
