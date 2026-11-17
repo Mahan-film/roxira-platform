@@ -35,7 +35,7 @@ const T1 = '11111111-1111-4111-8111-111111111111';
 const T2 = '22222222-2222-4222-8222-222222222222';
 const USER = '99999999-9999-4999-8999-999999999999';
 const IBAN = 'DE89370400440532013000';
-const TABLES = ['fin_bank_stmt_imports', 'fin_bank_stmt_lines', 'fin_bank_stmt_matches', 'fin_bank_stmt_match_allocations'];
+const TABLES = ['fin_bank_stmt_settings', 'fin_bank_stmt_imports', 'fin_bank_stmt_lines', 'fin_bank_stmt_matches', 'fin_bank_stmt_match_allocations'];
 
 const fixture = (name: string) => fs.readFileSync(path.join(__dirname, 'statement', '__fixtures__', name), 'utf8');
 const CAMT = fixture('camt053-test9.xml');
@@ -157,6 +157,10 @@ describePg('Bank statement import on PostgreSQL (non-superuser, FORCE RLS)', () 
       );
       bankAccountId[tenantId] = acct.id;
     }
+    // Only tenant 1 maps the posting roles; tenant 2 stays unmapped (no engine default may be used).
+    for (const [r, code] of [['receivable', '1020'], ['bank_fee', '5210']]) {
+      await owner.query(`INSERT INTO fin_posting_role_maps (tenant_id, doc_type, role, account_code) VALUES ($1, '*', $2, $3)`, [T1, r, code]);
+    }
 
     const banking = {
       listAccounts: async (tenantId: string) => [
@@ -196,15 +200,24 @@ describePg('Bank statement import on PostgreSQL (non-superuser, FORCE RLS)', () 
 
   let tx2LineId: string;
 
-  it('Test 9: TX-1 auto-matches INV-101; TX-2 waits with a suggestion of 600 + 400 and a 30.00 fee', async () => {
+  it('Test 9: an import posts nothing by itself; TX-1 is a pre-selected suggestion a user confirms; TX-2 suggests 600 + 400 and a 30.00 fee', async () => {
+    expect(await service.getSettings(T1)).toEqual({ autoPostExactMatches: false });
     const result = await service.importStatement(T1, USER, { bankAccountId: bankAccountId[T1], content: CAMT });
-    expect(result).toMatchObject({ format: 'camt053', totalLines: 2, newLines: 2, duplicateLines: 0, autoMatched: 1 });
+    expect(result).toMatchObject({ format: 'camt053', totalLines: 2, newLines: 2, duplicateLines: 0, autoMatched: 0 });
+    expect(await counts(T1)).toEqual({ lines: 2, matches: 0, entries: 0 });
+
+    const first = await service.listLines(T1, { bankAccountId: bankAccountId[T1] });
+    const pending = first.find((l) => l.bankTxnId === 'TX-1');
+    expect(pending).toMatchObject({ status: 'unmatched', match: null });
+    expect(pending?.suggestion).toMatchObject({ rule: 'reference', preselected: true, fee: '0.00' });
+    expect(first.find((l) => l.bankTxnId === 'TX-2')?.suggestion).toMatchObject({ preselected: false });
+    await service.confirmMatch(T1, USER, pending?.id as string, {});
 
     const lines = await service.listLines(T1, { bankAccountId: bankAccountId[T1] });
     const tx1 = lines.find((l) => l.bankTxnId === 'TX-1');
     const tx2 = lines.find((l) => l.bankTxnId === 'TX-2');
     expect(tx1).toMatchObject({ status: 'matched', amount: '1190.00', direction: 'credit', bookingDate: '2026-11-02' });
-    expect(tx1?.match).toMatchObject({ rule: 'reference', auto: true, fee: '0.00' });
+    expect(tx1?.match).toMatchObject({ rule: 'reference', auto: false, fee: '0.00' });
     expect(tx1?.match?.allocations).toEqual([{ invoiceId: ID101, invoiceNumber: 'INV-101', amount: '1190.00' }]);
     expect(await voucher(T1, `BSM-${tx1?.id}`)).toEqual([
       ['1012', '1190.00', '0.00', null],
@@ -269,7 +282,6 @@ describePg('Bank statement import on PostgreSQL (non-superuser, FORCE RLS)', () 
     INV[ID104] = { id: ID104, number: 'INV-104', payable: 500, partyCode: 'C3', status: InvoiceStatus.ISSUED };
     await service.importStatement(T1, USER, {
       bankAccountId: bankAccountId[T1],
-      autoMatch: false,
       content: mt940(':61:2611050105C490,00NTRFNONREF//TX-10\n:86:remittance without a number'),
     });
     const line = (await service.listLines(T1, { bankAccountId: bankAccountId[T1], status: 'unmatched' })).find((l) => l.bankTxnId === 'TX-10');
@@ -303,7 +315,6 @@ describePg('Bank statement import on PostgreSQL (non-superuser, FORCE RLS)', () 
   it('two concurrent confirms of one line post exactly once', async () => {
     await service.importStatement(T1, USER, {
       bankAccountId: bankAccountId[T1],
-      autoMatch: false,
       content: mt940(':61:2611060106C100,00NTRFNONREF//TX-11\n:86:x'),
     });
     INV['a0000000-0000-4000-8000-000000000105'] = { id: 'a0000000-0000-4000-8000-000000000105', number: 'INV-105', payable: 100, partyCode: 'C4', status: InvoiceStatus.ISSUED };
@@ -313,6 +324,28 @@ describePg('Bank statement import on PostgreSQL (non-superuser, FORCE RLS)', () 
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     expect((results.find((r) => r.status === 'rejected') as PromiseRejectedResult).reason).toBeInstanceOf(ConflictException);
     expect(await voucher(T1, `BSM-${id}`)).toHaveLength(2);
+  });
+
+  it('with the tenant setting ON, an exact reference + equal amount posts at import; anything else still waits', async () => {
+    INV['a0000000-0000-4000-8000-000000000106'] = { id: 'a0000000-0000-4000-8000-000000000106', number: 'INV-106', payable: 70, partyCode: 'C5', status: InvoiceStatus.ISSUED };
+    expect(await service.setSettings(T1, true)).toEqual({ autoPostExactMatches: true });
+    const r = await service.importStatement(T1, USER, {
+      bankAccountId: bankAccountId[T1],
+      content: mt940(':61:2611080108C70,00NTRFNONREF//TX-12\n:86:pay INV-106\n:61:2611080108C5,00NTRFNONREF//TX-13\n:86:nothing'),
+    });
+    expect(r).toMatchObject({ newLines: 2, autoMatched: 1 });
+    const lines = await service.listLines(T1, { bankAccountId: bankAccountId[T1] });
+    expect(lines.find((l) => l.bankTxnId === 'TX-12')?.match).toMatchObject({ auto: true, rule: 'reference' });
+    expect(lines.find((l) => l.bankTxnId === 'TX-13')?.status).toBe('unmatched');
+    expect(await service.setSettings(T1, false)).toEqual({ autoPostExactMatches: false });
+  });
+
+  it('an unmapped posting role is a clear error, never a default account; nothing is posted', async () => {
+    await service.importStatement(T2, USER, { bankAccountId: bankAccountId[T2], content: CAMT });
+    const id = (await service.listLines(T2, { bankAccountId: bankAccountId[T2] })).find((l) => l.bankTxnId === 'TX-1')?.id as string;
+    await expect(service.confirmMatch(T2, USER, id, {})).rejects.toThrow(/receivable/);
+    expect((await counts(T2)).matches).toBe(0);
+    expect((await service.listLines(T2, { bankAccountId: bankAccountId[T2], status: 'unmatched' })).some((l) => l.id === id)).toBe(true);
   });
 
   it('refuses a statement for another account, another currency, or malformed content', async () => {
@@ -326,7 +359,7 @@ describePg('Bank statement import on PostgreSQL (non-superuser, FORCE RLS)', () 
 
   it('RLS: tenant 2 sees none of tenant 1 lines, matches or allocations, cannot confirm them, and imports the same bank ids on its own', async () => {
     for (const table of TABLES) {
-      expect(await asApp<unknown[]>(T2, `SELECT * FROM ${table}`)).toHaveLength(0);
+      expect(await asApp<unknown[]>(T2, `SELECT * FROM ${table} WHERE tenant_id <> $1`, [T2])).toHaveLength(0);
       expect((await asApp<Array<{ n: string }>>(T1, `SELECT count(*) AS n FROM ${table}`))[0].n).not.toBe('0');
     }
     expect(await service.listLines(T2, { bankAccountId: bankAccountId[T1] })).toEqual([]);
@@ -343,8 +376,8 @@ describePg('Bank statement import on PostgreSQL (non-superuser, FORCE RLS)', () 
     ).rejects.toThrow(/row-level security/);
 
     // same bank transaction ids in another tenant are separate rows (the unique key includes tenant_id)
-    const own = await service.importStatement(T2, USER, { bankAccountId: bankAccountId[T2], content: CAMT, autoMatch: false });
-    expect(own).toMatchObject({ newLines: 2, duplicateLines: 0 });
+    // tenant 2 imported the same CAMT file in the unmapped-role test: own rows with the same bank ids, nothing shared
     expect((await counts(T2)).lines).toBe(2);
+    expect(await service.importStatement(T2, USER, { bankAccountId: bankAccountId[T2], content: CAMT })).toMatchObject({ newLines: 0, duplicateLines: 2 });
   });
 });

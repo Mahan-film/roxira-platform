@@ -5,6 +5,7 @@ import {
   ImportBankStatementDto,
   MAX_STATEMENT_CHARS,
   QueryBankStatementLinesDto,
+  UpdateStatementSettingsDto,
 } from './dto/bank-statement.dto';
 
 // the same options as main.ts uses globally
@@ -12,9 +13,15 @@ const pipe = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, t
 const run = (type: new () => object, value: unknown) => pipe.transform(value, { type: 'body', metatype: type });
 
 describe('bank statement DTOs', () => {
-  it('accepts a valid import and keeps autoMatch false as false (no implicit string coercion)', async () => {
-    await expect(run(ImportBankStatementDto, { bankAccountId: 3, content: '<Document/>', autoMatch: false })).resolves.toMatchObject({ autoMatch: false });
-    await expect(run(ImportBankStatementDto, { bankAccountId: 3, content: '<Document/>', autoMatch: 'false' })).rejects.toBeDefined();
+  it('accepts a valid import; the old per-request autoMatch flag is gone (an import never posts by itself)', async () => {
+    await expect(run(ImportBankStatementDto, { bankAccountId: 3, content: '<Document/>' })).resolves.toBeDefined();
+    await expect(run(ImportBankStatementDto, { bankAccountId: 3, content: '<Document/>', autoMatch: true })).rejects.toBeDefined();
+  });
+
+  it('settings: a real boolean is required, "false" is not coerced to true', async () => {
+    await expect(run(UpdateStatementSettingsDto, { autoPostExactMatches: false })).resolves.toMatchObject({ autoPostExactMatches: false });
+    await expect(run(UpdateStatementSettingsDto, { autoPostExactMatches: 'false' })).rejects.toBeDefined();
+    await expect(run(UpdateStatementSettingsDto, {})).rejects.toBeDefined();
   });
 
   it('refuses a bad account id, an empty or oversized file, an unknown format and unknown fields', async () => {

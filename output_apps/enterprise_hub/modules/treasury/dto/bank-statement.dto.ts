@@ -42,12 +42,6 @@ export class ImportBankStatementDto {
   @IsOptional()
   @IsIn(['camt053', 'mt940'])
   format?: 'camt053' | 'mt940';
-
-  @ApiPropertyOptional({ default: true, description: 'تطبیق خودکار فقط برای ارجاع دقیق به شماره صورتحساب با مبلغ برابر' })
-  @IsOptional()
-  @rawBoolean()
-  @IsBoolean()
-  autoMatch?: boolean;
 }
 
 export class QueryBankStatementLinesDto {
@@ -119,6 +113,7 @@ export class ConfirmStatementMatchDto {
 export class StatementSuggestionResponseDto {
   @ApiProperty({ enum: ['reference', 'amount_date'] }) rule: string;
   @ApiProperty() auto: boolean;
+  @ApiProperty({ description: 'ارجاع دقیق با مبلغ برابر: در رابط کاربری از پیش انتخاب می‌شود؛ ثبت فقط با تأیید کاربر (مگر تنظیم ثبت خودکار روشن باشد)' }) preselected: boolean;
   @ApiProperty({ description: 'کارمزد پیشنهادی (رشتهٔ اعشاری)' }) fee: string;
   @ApiProperty({ type: [Object] }) allocations: Array<{ invoiceId: string; invoiceNumber: string; amount: string }>;
   @ApiProperty() explanation: string;
@@ -157,4 +152,15 @@ export class ImportBankStatementResponseDto {
   @ApiProperty() newLines: number;
   @ApiProperty({ description: 'سطرهایی که قبلاً وارد شده بودند و دوباره ساخته نشدند' }) duplicateLines: number;
   @ApiProperty({ description: 'سطرهایی که هنگام ورود خودکار تطبیق و ثبت شدند' }) autoMatched: number;
+}
+
+export class UpdateStatementSettingsDto {
+  @ApiProperty({ description: 'ثبت خودکار سند برای ارجاع دقیق با مبلغ برابر هنگام ورود صورتحساب (پیش‌فرض: خاموش)' })
+  @rawBoolean()
+  @IsBoolean()
+  autoPostExactMatches: boolean;
+}
+
+export class StatementSettingsResponseDto {
+  @ApiProperty() autoPostExactMatches: boolean;
 }

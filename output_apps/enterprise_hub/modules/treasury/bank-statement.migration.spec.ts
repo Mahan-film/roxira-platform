@@ -1,4 +1,5 @@
 import { CreateBankStatementImport1789900011500 } from '../../migrations/1789900011500-CreateBankStatementImport';
+import { CreateBankStatementSettings1789900011520 } from '../../migrations/1789900011520-CreateBankStatementSettings';
 import { CreateBankStatementMatches1789900011510 } from '../../migrations/1789900011510-CreateBankStatementMatches';
 
 const runner = () => {
@@ -30,6 +31,18 @@ describe('T184 bank statement migrations', () => {
       expect(sql).toContain(`CREATE POLICY "${table}_tenant"`);
     }
     expect(sql).toContain('CONSTRAINT "UQ_fin_bank_stmt_matches_line" UNIQUE ("line_id")');
+  });
+
+  it('11520: settings table is tenant-scoped, FORCE RLS, auto-post defaults to off', async () => {
+    const { q, queries } = runner();
+    await new CreateBankStatementSettings1789900011520().up(q as never);
+    const sql = queries.join('\n');
+    expect(sql).toContain('"tenant_id" uuid NOT NULL');
+    expect(sql).toContain('"auto_post_exact" boolean NOT NULL DEFAULT false');
+    expect(sql).toContain('ALTER TABLE "fin_bank_stmt_settings" FORCE ROW LEVEL SECURITY');
+    const down = runner();
+    await new CreateBankStatementSettings1789900011520().down(down.q as never);
+    expect(down.queries.join('\n')).toContain('DROP TABLE IF EXISTS "fin_bank_stmt_settings"');
   });
 
   it('down() removes policies and drops the tables in reverse order', async () => {

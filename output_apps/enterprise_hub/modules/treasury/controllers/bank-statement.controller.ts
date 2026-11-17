@@ -7,6 +7,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Put,
   Query,
   Req,
   UnauthorizedException,
@@ -23,6 +24,8 @@ import {
   ImportBankStatementResponseDto,
   QueryBankStatementLinesDto,
   StatementMatchResponseDto,
+  StatementSettingsResponseDto,
+  UpdateStatementSettingsDto,
 } from '../dto/bank-statement.dto';
 import { BankStatementService } from '../services/bank-statement.service';
 
@@ -60,6 +63,22 @@ export class BankStatementController {
     @Body() dto: ConfirmStatementMatchDto,
   ): Promise<StatementMatchResponseDto> {
     return this.service.confirmMatch(requireTenantId(request), this.requireUserId(request), id, dto);
+  }
+
+  @Get('settings')
+  @RequireAction(AccessAction.READ)
+  @ApiOperation({ summary: 'تنظیم ثبت خودکار تطبیق‌های دقیق صورتحساب بانکی' })
+  @ApiResponse({ status: HttpStatus.OK, type: StatementSettingsResponseDto })
+  settings(@Req() request: AuthenticatedRequest): Promise<StatementSettingsResponseDto> {
+    return this.service.getSettings(requireTenantId(request));
+  }
+
+  @Put('settings')
+  @RequireAction(AccessAction.POST)
+  @ApiOperation({ summary: 'روشن/خاموش کردن ثبت خودکار تطبیق‌های دقیق (پیش‌فرض خاموش)' })
+  @ApiResponse({ status: HttpStatus.OK, type: StatementSettingsResponseDto })
+  updateSettings(@Req() request: AuthenticatedRequest, @Body() dto: UpdateStatementSettingsDto): Promise<StatementSettingsResponseDto> {
+    return this.service.setSettings(requireTenantId(request), dto.autoPostExactMatches);
   }
 
   private requireUserId(request: AuthenticatedRequest): string {

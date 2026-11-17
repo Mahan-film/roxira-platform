@@ -15,6 +15,7 @@ import {
   ImportBankStatementResponseDto,
   QueryBankStatementLinesDto,
   StatementMatchResponseDto,
+  StatementSettingsResponseDto,
   StatementSuggestionResponseDto,
 } from '../dto/bank-statement.dto';
 import {
@@ -119,7 +120,8 @@ export class BankStatementService {
     });
 
     let autoMatched = 0;
-    if (dto.autoMatch !== false) {
+    // an import never posts by itself unless the tenant switched exact-match auto-posting on (default off)
+    if (await this.repository.getAutoPost(tenantId)) {
       const credits = inserted.rows.filter((r) => r.direction === 'credit');
       if (credits.length > 0) {
         const open = await this.loadOpenInvoices(tenantId);
@@ -148,6 +150,17 @@ export class BankStatementService {
       duplicateLines: parsed.lines.length - inserted.rows.length,
       autoMatched,
     };
+  }
+
+  // ------------------------------------------------------------------ settings
+
+  async getSettings(tenantId: string): Promise<StatementSettingsResponseDto> {
+    return { autoPostExactMatches: await this.repository.getAutoPost(tenantId) };
+  }
+
+  async setSettings(tenantId: string, autoPostExactMatches: boolean): Promise<StatementSettingsResponseDto> {
+    await this.repository.setAutoPost(tenantId, autoPostExactMatches);
+    return this.getSettings(tenantId);
   }
 
   // ------------------------------------------------------------------ list
@@ -275,10 +288,14 @@ export class BankStatementService {
         }
       }
 
-      const receivable = await this.postingRules.accountForRole(tenantId, 'receivable', manager);
-      const fee = plan.feeMinor > 0n ? await this.postingRules.accountForRole(tenantId, 'bank_fee', manager) : null;
-      if (!receivable || (plan.feeMinor > 0n && !fee)) {
-        throw new BadRequestException('نقش حساب دریافتنی یا کارمزد بانکی در تنظیمات ثبت خودکار نگاشت نشده است.');
+      // Roles only, no engine defaults: an unmapped role is a clear error, never a guessed account code.
+      const receivable = await this.postingRules.mappedAccountForRole(tenantId, 'receivable', manager);
+      if (!receivable) {
+        throw new BadRequestException('نقش «حساب‌های دریافتنی» (receivable) در تنظیمات ثبت خودکار به حسابی نگاشت نشده است؛ ابتدا آن را نگاشت کنید.');
+      }
+      const fee = plan.feeMinor > 0n ? await this.postingRules.mappedAccountForRole(tenantId, 'bank_fee', manager) : null;
+      if (plan.feeMinor > 0n && !fee) {
+        throw new BadRequestException('نقش «کارمزد خدمات بانکی» (bank_fee) در تنظیمات ثبت خودکار به حسابی نگاشت نشده است؛ ابتدا آن را نگاشت کنید.');
       }
 
       const entry = await this.accounting.createJournalEntry(
@@ -401,6 +418,7 @@ export class BankStatementService {
     return {
       rule: s.rule,
       auto: s.auto,
+      preselected: s.auto,
       fee: minorToDecimal(s.feeMinor),
       allocations: s.allocations.map((a) => ({ invoiceId: a.invoiceId, invoiceNumber: a.invoiceNumber, amount: minorToDecimal(a.amountMinor) })),
       explanation: s.explanation,

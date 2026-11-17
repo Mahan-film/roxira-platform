@@ -50,6 +50,26 @@ export class BankStatementRepository {
     return this.scope.run(tenantId, work);
   }
 
+  async getAutoPost(tenantId: string, manager?: EntityManager): Promise<boolean> {
+    return this.scope.within(tenantId, manager, async (m) => {
+      const rows: Array<{ v: boolean }> = await m.query(
+        `SELECT "auto_post_exact" AS v FROM "fin_bank_stmt_settings" WHERE "tenant_id" = $1`,
+        [tenantId],
+      );
+      return rows[0]?.v === true;
+    });
+  }
+
+  async setAutoPost(tenantId: string, value: boolean): Promise<void> {
+    await this.scope.run(tenantId, (m) =>
+      m.query(
+        `INSERT INTO "fin_bank_stmt_settings" ("tenant_id", "auto_post_exact") VALUES ($1, $2)
+         ON CONFLICT ("tenant_id") DO UPDATE SET "auto_post_exact" = EXCLUDED."auto_post_exact", "updated_at" = now()`,
+        [tenantId, value],
+      ),
+    );
+  }
+
   async createImport(
     tenantId: string,
     input: {
