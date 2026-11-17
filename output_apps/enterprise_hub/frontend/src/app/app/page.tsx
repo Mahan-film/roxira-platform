@@ -221,6 +221,11 @@ export default function SuiteDashboardPage() {
                 {SYSTEM_ROLE_LABELS[roleKey] ?? roleKey}
               </strong>
             </Badge>
+            {org?.branchScoped && org.branchId && (
+              <Badge variant="outline" className="text-xs">
+                شعبه: {org.branchId}
+              </Badge>
+            )}
           </div>
         }
       />
