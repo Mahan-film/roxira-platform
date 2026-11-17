@@ -143,7 +143,7 @@ describePg('Ledger on PostgreSQL', () => {
         ds.getRepository(WarehouseEntity),
         ds.getRepository(StockItemEntity),
         ds.getRepository(FifoBatchEntity),
-        ds,
+        ds, new TenantScope(ds),
       ),
     );
     invoicing = new InvoicingRepository(ds.getRepository(InvoiceEntity), ds);
