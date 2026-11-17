@@ -147,14 +147,21 @@ export class PayrollRunService {
     year: number,
     month?: number,
   ): Promise<PayrollYearRates> {
+    const pack = this.countryPackRegistry?.resolve();
+    if (pack?.payroll) {
+      const packRates = (await pack.payroll.ratesFor(
+        tenantId,
+        year,
+        month,
+      )) as PayrollYearRates | null | undefined;
+      if (packRates) {
+        return packRates;
+      }
+    }
     if (!(await this.statutory.hasYear(tenantId, year))) {
       throw new BadRequestException(
         `نرخ‌های قانونی حقوق برای سال ${year} تعریف نشده است.`,
       );
-    }
-    const pack = this.countryPackRegistry?.resolve();
-    if (pack?.payroll) {
-      return (await pack.payroll.ratesFor(tenantId, year, month)) as PayrollYearRates;
     }
     return this.statutory.ratesFor(tenantId, year, month);
   }

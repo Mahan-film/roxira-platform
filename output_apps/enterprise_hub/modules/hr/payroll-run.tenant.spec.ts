@@ -495,9 +495,14 @@ const workshop = {
 };
 
 describe('PayrollRunService — calculation and posting', () => {
-  it('resolves statutory rates through the country pack payroll adapter when registry is provided', async () => {
+  it('resolves statutory rates through the country pack payroll adapter before statutory fallback', async () => {
     const { repo, hrService, accounting } = setup();
     const ratesForMock = jest.fn(async (_t: string, y: number, _m?: number) => seededRates(y));
+    const hasYearMock = jest.fn(async () => false);
+    const statutory = {
+      ...fakeStatutory(),
+      hasYear: hasYearMock,
+    };
     const fakePack = {
       country: 'IR',
       payroll: {
@@ -511,13 +516,14 @@ describe('PayrollRunService — calculation and posting', () => {
       repo as unknown as HrRepository,
       hrService,
       accounting as unknown as AccountingService,
-      fakeStatutory(),
+      statutory as never,
       fakePostingRules(accounting as unknown as AccountingService),
       packRegistry as never,
     );
     const rates = await serviceWithPack.getRates('tenant-a', 1405);
     expect(packRegistry.resolve).toHaveBeenCalled();
     expect(ratesForMock).toHaveBeenCalledWith('tenant-a', 1405, undefined);
+    expect(hasYearMock).not.toHaveBeenCalled();
     expect(rates.year).toBe(1405);
   });
 
