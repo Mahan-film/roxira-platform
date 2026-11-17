@@ -89,7 +89,8 @@ function setup(output: string = goodModelOutput()) {
     }),
     transcribe: jest.fn(),
   };
-  const service = new CaptureService(repo as never, llm as never, accounting as never);
+  const entitlements = { consume: jest.fn(), release: jest.fn() };
+  const service = new CaptureService(repo as never, llm as never, accounting as never, entitlements as never);
   return { repo, accounting, llm, service, journal };
 }
 

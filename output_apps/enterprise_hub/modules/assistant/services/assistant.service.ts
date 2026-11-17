@@ -96,8 +96,8 @@ export class AssistantService {
     private readonly llm: AssistantLlmService,
     private readonly tools: AssistantToolsService,
     private readonly rateLimiter: AssistantRateLimiterService,
-    @Optional() private readonly interactionRepo?: AiInteractionRepository,
-    @Optional() private readonly entitlements?: EntitlementService,
+    @Optional() private readonly interactionRepo: AiInteractionRepository | undefined,
+    private readonly entitlements: EntitlementService,
   ) {}
 
   async chat(
@@ -108,9 +108,7 @@ export class AssistantService {
     const startTime = Date.now();
     const tenantId = requireTenantId(request);
     await this.rateLimiter.consume(tenantId);
-    if (this.entitlements) {
-      await this.entitlements.consume(tenantId, 'ai_messages', 1, now);
-    }
+    await this.entitlements.consume(tenantId, 'ai_messages', 1, now);
 
     const rawMessage = dto.message ?? '';
     const sanitizedUserMessage = sanitizeAssistantInput(rawMessage).slice(

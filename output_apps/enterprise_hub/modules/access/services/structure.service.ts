@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { AccessContext } from '../access-context';
 import { BranchEntity } from '../entities/branch.entity';
 import { DepartmentEntity } from '../entities/department.entity';
@@ -13,7 +13,7 @@ export class StructureService {
   constructor(
     private readonly repo: StructureRepository,
     private readonly audit: AuditService,
-    @Optional() private readonly entitlements?: EntitlementService,
+    private readonly entitlements: EntitlementService,
   ) {}
 
   listBranches(ctx: AccessContext): Promise<BranchEntity[]> {
@@ -27,9 +27,7 @@ export class StructureService {
     if (dto.parentId && !(await this.repo.findBranch(ctx.tenantId, dto.parentId))) {
       throw new BadRequestException('Parent branch does not belong to this organisation.');
     }
-    if (this.entitlements) {
-      await this.entitlements.consume(ctx.tenantId, 'branches', 1);
-    }
+    await this.entitlements.consume(ctx.tenantId, 'branches', 1);
     const b = await this.repo.createBranch({ tenantId: ctx.tenantId, name: dto.name.trim(), code: dto.code ?? null, parentId: dto.parentId ?? null });
     await this.audit.record({ tenantId: ctx.tenantId, actorUserId: ctx.userId, action: 'branch.create', resourceType: 'branch', resourceId: b.id, request });
     return b;
@@ -48,9 +46,7 @@ export class StructureService {
   async deleteBranch(ctx: AccessContext, id: string, request?: Req): Promise<void> {
     if (!(await this.repo.findBranch(ctx.tenantId, id))) throw new NotFoundException('Branch not found.');
     await this.repo.deleteBranch(ctx.tenantId, id);
-    if (this.entitlements) {
-      await this.entitlements.release(ctx.tenantId, 'branches', 1);
-    }
+    await this.entitlements.release(ctx.tenantId, 'branches', 1);
     await this.audit.record({ tenantId: ctx.tenantId, actorUserId: ctx.userId, action: 'branch.delete', resourceType: 'branch', resourceId: id, request });
   }
 

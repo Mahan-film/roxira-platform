@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { BadRequestException, ForbiddenException, HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, HttpException, HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { TenantScope } from './tenant-scope';
 
 export const USAGE_METERS = [
@@ -74,11 +74,21 @@ function loadPlanConfig(): PlanConfig {
  * Enforces per-tenant monthly and capacity limits backed by tenant_plans and usage_counters.
  */
 @Injectable()
-export class EntitlementService {
-  private readonly planConfig: PlanConfig;
+export class EntitlementService implements OnModuleInit {
+  private readonly logger = new Logger(EntitlementService.name);
+  private planConfig: PlanConfig | null = null;
 
-  constructor(private readonly scope: TenantScope) {
-    this.planConfig = loadPlanConfig();
+  constructor(private readonly scope: TenantScope) {}
+
+  onModuleInit(): void {
+    this.getPlanConfig();
+  }
+
+  private getPlanConfig(): PlanConfig {
+    if (!this.planConfig) {
+      this.planConfig = loadPlanConfig();
+    }
+    return this.planConfig;
   }
 
   private assertMeter(meter: string): asserts meter is UsageMeter {
@@ -88,7 +98,7 @@ export class EntitlementService {
   }
 
   private resolveLimit(planKey: string, overrides: Record<string, unknown> | null, meter: UsageMeter): number {
-    const planLimits = this.planConfig.plans[planKey];
+    const planLimits = this.getPlanConfig().plans[planKey];
     if (!planLimits) {
       throw new ForbiddenException(`Unknown tenant plan "${planKey}"; access denied.`);
     }
@@ -106,7 +116,7 @@ export class EntitlementService {
     limits: Partial<Record<UsageMeter, number>> = {},
     rolloverDay = 1,
   ): Promise<void> {
-    if (!this.planConfig.plans[planKey]) {
+    if (!this.getPlanConfig().plans[planKey]) {
       throw new BadRequestException(`Unknown plan key: ${planKey}`);
     }
     if (!Number.isInteger(rolloverDay) || rolloverDay < 1 || rolloverDay > 28) {
@@ -143,7 +153,7 @@ export class EntitlementService {
         [tenantId],
       )) as Array<{ plan_key: string; limits: Record<string, unknown>; rollover_day: number }>;
 
-      const planKey = planRows[0]?.plan_key ?? this.planConfig.defaultPlan;
+      const planKey = planRows[0]?.plan_key ?? this.getPlanConfig().defaultPlan;
       const overrides = planRows[0]?.limits ?? null;
       const rolloverDay = planRows[0]?.rollover_day ?? 1;
       const limit = this.resolveLimit(planKey, overrides, meter);
@@ -184,7 +194,7 @@ export class EntitlementService {
         [tenantId],
       )) as Array<{ plan_key: string; limits: Record<string, unknown>; rollover_day: number }>;
 
-      const planKey = planRows[0]?.plan_key ?? this.planConfig.defaultPlan;
+      const planKey = planRows[0]?.plan_key ?? this.getPlanConfig().defaultPlan;
       const overrides = planRows[0]?.limits ?? null;
       const rolloverDay = planRows[0]?.rollover_day ?? 1;
       const limit = this.resolveLimit(planKey, overrides, meter);
@@ -244,12 +254,19 @@ export class EntitlementService {
         [tenantId],
       )) as Array<{ rollover_day: number }>;
       const periodKey = computePeriodKey(meter, now, planRows[0]?.rollover_day ?? 1);
-      await manager.query(
+      const rawReleased = await manager.query(
         `UPDATE usage_counters
             SET used = GREATEST(0, used - $4), updated_at = now()
-          WHERE tenant_id = $1 AND meter = $2 AND period_key = $3`,
+          WHERE tenant_id = $1 AND meter = $2 AND period_key = $3
+          RETURNING meter`,
         [tenantId, meter, periodKey, n],
       );
+      const released = Array.isArray(rawReleased) && Array.isArray(rawReleased[0])
+        ? (rawReleased[0] as Array<{ meter: string }>)
+        : (rawReleased as Array<{ meter: string }>);
+      if (released.length === 0) {
+        this.logger.warn(`release(${meter}) for tenant ${tenantId} period ${periodKey} affected 0 usage_counters rows`);
+      }
     });
   }
 }
