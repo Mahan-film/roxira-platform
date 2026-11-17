@@ -249,4 +249,17 @@ describe('CaptureService', () => {
     await expect(service.create(TENANT_A, 'u', undefined, {})).rejects.toMatchObject({ status: 400 });
     await expect(service.create(TENANT_A, 'u', { buffer: Buffer.from('MZ not supported') }, {})).rejects.toMatchObject({ status: 400 });
   });
+
+  it('includes AI-generated draft label and source citations on CaptureView and blocks AI actors from posting', async () => {
+    const { service, accounting } = setup();
+    const view = await service.create(TENANT_A, 'ai:assistant', undefined, text);
+    expect(view.aiGenerated).toBe(true);
+    expect(view.aiLabel).toBe('AI-generated draft');
+    expect(view.sourceCitations.length).toBeGreaterThanOrEqual(2);
+    expect(view.sourceCitations.some((c) => c.kind === 'document')).toBe(true);
+    expect(view.sourceCitations.some((c) => c.kind === 'model')).toBe(true);
+
+    await expect(service.post(TENANT_A, 'ai:assistant', view.id)).rejects.toMatchObject({ status: 403 });
+    expect(accounting.createJournalEntry).not.toHaveBeenCalled();
+  });
 });

@@ -1,5 +1,5 @@
 import { parseMinor, toMinor } from '../accounting/money';
-import { AccessContext } from './access-context';
+import { AccessContext, isAiIdentityContext } from './access-context';
 import { AccessDeniedCode, denied } from './access-errors';
 import {
   AccessAction,
@@ -75,6 +75,18 @@ export function legacyEvaluateAccess(
   also: readonly AccessModule[] = [],
 ): AccessDecision {
   const candidates = [module, ...also];
+  if (
+    isAiIdentityContext(ctx) &&
+    (action === AccessAction.POST ||
+      (candidates.some((m) => m === AccessModule.ACCOUNTING || m === AccessModule.TAX) &&
+        (action === AccessAction.APPROVE || action === AccessAction.ADMIN)))
+  ) {
+    return {
+      allowed: false,
+      code: 'AI_IDENTITY_FORBIDDEN',
+      message: 'AI identities cannot post, lock a period, or file a tax return.',
+    };
+  }
   const anyEntitled = candidates.some((m) => CORE_MODULES.includes(m) || ctx.entitledModules.has(m));
   if (!anyEntitled) {
     return {
