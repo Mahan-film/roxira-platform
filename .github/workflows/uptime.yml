@@ -7,23 +7,24 @@ on:
   workflow_dispatch:
     inputs:
       base_url:
-        description: "Base URL to check"
+        description: "Single base URL to check (leave empty to check all production domains)"
         required: false
-        default: "https://ghazihoushmand.ir"
+        default: ""
 
 permissions:
   contents: read
 
-env:
-  BASE_URL: ${{ inputs.base_url || 'https://ghazihoushmand.ir' }}
-
 jobs:
   check:
-    name: External uptime probe
+    name: External uptime probe (${{ matrix.base_url }})
     runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 5
-    outputs:
-      failed: ${{ steps.summary.outputs.failed }}
+    strategy:
+      fail-fast: false
+      matrix:
+        base_url: ${{ fromJSON(inputs.base_url && format('["{0}"]', inputs.base_url) || '["https://ghazihoushmand.ir","https://roxira.ir","https://roxira.net"]') }}
+    env:
+      BASE_URL: ${{ matrix.base_url }}
     steps:
       - name: GET /
         id: home
@@ -67,7 +68,7 @@ jobs:
   report-incident:
     name: Open/update incident issue
     needs: check
-    if: always() && needs.check.outputs.failed == 'true'
+    if: always() && needs.check.result == 'failure'
     runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 5
     permissions:
@@ -79,15 +80,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          BASE_URL: ${{ env.BASE_URL }}
         run: |
           set -euo pipefail
           TITLE="Uptime check: production probes failing"
           BODY_FILE="$(mktemp)"
           {
-            echo "The 15-minute uptime check against \`$BASE_URL\` failed (GET / or the payments create-invoice probe)."
+            echo "The 15-minute uptime check failed for at least one production domain (ghazihoushmand.ir, roxira.ir, roxira.net): GET / or the payments create-invoice probe."
             echo
-            echo "Run: $RUN_URL"
+            echo "Run (see the check job matrix for which domain failed): $RUN_URL"
             echo
             echo "See docs/ops/RESILIENCE.md for the runbook (what to check first, how to roll back)."
           } > "$BODY_FILE"
