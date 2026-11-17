@@ -468,4 +468,79 @@ describe('QuotationToInvoiceService (T104)', () => {
       service.convertQuotationToInvoice(tenantId, 9999),
     ).rejects.toThrow(NotFoundException);
   });
+
+  it('fails closed when seller organisation name is missing', async () => {
+    quotationsStore.push({
+      id: 5,
+      tenantId,
+      number: 'QT-105',
+      partyCode: 'CUST-001',
+      quoteDate: '2026-11-01',
+      validUntil: '2026-12-01',
+      status: SalesQuotationStatus.DRAFT,
+      note: null,
+      totalAmount: '1000000.00',
+      convertedInvoiceId: null,
+      createdBy: 'user-1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    quotationLinesStore.push({
+      id: 5,
+      tenantId,
+      quotationId: 5,
+      lineNo: 1,
+      itemId: 42,
+      description: 'سرور ابری',
+      quantity: '2.00',
+      unitPrice: '500000.00',
+      discount: '0.00',
+      lineTotal: '1000000.00',
+    });
+    (mockTenantsRepo.findById as jest.Mock).mockResolvedValueOnce({ id: tenantId, name: '   ' });
+    await expect(
+      service.convertQuotationToInvoice(tenantId, 5),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('converts fractional decimal quantity strings like 1.500 cleanly', async () => {
+    quotationsStore.push({
+      id: 6,
+      tenantId,
+      number: 'QT-106',
+      partyCode: 'CUST-001',
+      quoteDate: '2026-11-01',
+      validUntil: '2026-12-01',
+      status: SalesQuotationStatus.DRAFT,
+      note: null,
+      totalAmount: '750000.00',
+      convertedInvoiceId: null,
+      createdBy: 'user-1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    quotationLinesStore.push({
+      id: 6,
+      tenantId,
+      quotationId: 6,
+      lineNo: 1,
+      itemId: 42,
+      description: 'سرور ابری',
+      quantity: '1.500',
+      unitPrice: '500000.00',
+      discount: '0.00',
+      lineTotal: '750000.00',
+    });
+    const res = await service.convertQuotationToInvoice(tenantId, 6);
+    expect(res.quotationId).toBe(6);
+    expect(mockInvoicingService.create).toHaveBeenCalledWith(
+      tenantId,
+      expect.objectContaining({
+        items: expect.arrayContaining([
+          expect.objectContaining({ quantity: 1.5 }),
+        ]),
+      }),
+      expect.anything(),
+    );
+  });
 });
