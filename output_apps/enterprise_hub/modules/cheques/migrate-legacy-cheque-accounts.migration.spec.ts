@@ -32,6 +32,25 @@ describe('MigrateLegacyChequeAccounts migration (T98)', () => {
     expect(sql).toContain("WHERE a.\"code\" IN ('1021', '1023', '2011')");
   });
 
+  it('up() never deletes accounts and matches legacy accounts by code AND legacy name', async () => {
+    const { runner: r, queries } = runner();
+    await new Migration().up(r as never);
+    const sql = queries.join('\n');
+    expect(sql).not.toMatch(/DELETE\s+FROM/i);
+    expect(sql).toContain("a.\"name\" = 'اسناد دریافتنی نزد صندوق'");
+    expect(sql).toContain("a.\"name\" = 'اسناد دریافتنی در جریان وصول'");
+    expect(sql).toContain("a.\"name\" = 'اسناد پرداختنی'");
+  });
+
+  it('down() never overwrites a renamed account', async () => {
+    const { runner: r, queries } = runner();
+    await new Migration().down(r as never);
+    const sql = queries.join('\n');
+    expect(sql).not.toContain('DO UPDATE');
+    expect(sql).not.toContain('EXCLUDED."name"');
+    expect(sql).toContain('DO NOTHING');
+  });
+
   it('down() recreates legacy accounts with ON CONFLICT, re-points lines, updates role maps and recalculates balances', async () => {
     const { runner: r, queries } = runner();
     await new Migration().down(r as never);
