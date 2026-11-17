@@ -11,7 +11,7 @@ import { DataSource } from 'typeorm';
 import { TenantStatus } from '../enums/tenant-status.enum';
 import { TenantsRepository } from '../repositories/tenants.repository';
 import { TenantScope } from '../../access/services/tenant-scope';
-import { CORE_TENANT_TABLES } from '../../data_import/repositories/tenant-export.repository';
+import { CORE_TENANT_TABLES } from '../constants/core-tenant-tables';
 import { TenantCancellationStatusResponseDto } from '../dto/tenant-cancellation.dto';
 
 export const TENANT_EXPORT_QUEUE = 'tenant-export';
@@ -143,15 +143,13 @@ export class TenantCancellationService {
         );
       }
 
-      // 3. Delete records from each tenant table
+      // 3. Delete records from each tenant table.
+      // Do not swallow DELETE errors: any failure must abort and roll back the
+      // transaction so a tenant is never marked PURGED with orphaned data.
       for (const table of targetTables) {
         if (!TABLE_NAME_PATTERN.test(table)) continue;
-        try {
-          await manager.query(`DELETE FROM "${table}" WHERE "tenant_id" = $1`, [tenantId]);
-          purgedTables.push(table);
-        } catch (tableErr) {
-          this.logger.warn(`Could not purge table ${table} for tenant ${tenantId}: ${tableErr}`);
-        }
+        await manager.query(`DELETE FROM "${table}" WHERE "tenant_id" = $1`, [tenantId]);
+        purgedTables.push(table);
       }
 
       // 4. Update tenant record status to PURGED atomically inside the same transaction

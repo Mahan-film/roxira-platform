@@ -211,6 +211,28 @@ describe('TenantCancellationService', () => {
       await expect(service.purgeTenant('t1')).rejects.toThrow('trigger rejected PURGED');
     });
 
+    it('aborts and does not mark PURGED when a table DELETE fails', async () => {
+      tenantsRepo.findById.mockResolvedValue({ id: 't1', status: TenantStatus.CANCELLED_READONLY });
+      mockManager.query.mockImplementation(async (sql: string) => {
+        if (sql.includes('FOR UPDATE SKIP LOCKED')) {
+          return [{ id: 't1' }];
+        }
+        if (sql.includes('information_schema.columns')) {
+          return [{ table_name: 'crm_contacts' }];
+        }
+        if (sql.includes('DELETE FROM "crm_contacts"')) {
+          throw new Error('FK constraint prevented delete');
+        }
+        return [];
+      });
+
+      await expect(service.purgeTenant('t1')).rejects.toThrow('FK constraint prevented delete');
+      expect(mockManager.query).not.toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE "tenants" SET "status" = $1'),
+        expect.anything(),
+      );
+    });
+
     it('propagates error if tenantScope.run fails', async () => {
       tenantsRepo.findById.mockResolvedValue({ id: 't1', status: TenantStatus.CANCELLED_READONLY });
       mockTenantScope.run.mockRejectedValueOnce(new Error('Database error'));
