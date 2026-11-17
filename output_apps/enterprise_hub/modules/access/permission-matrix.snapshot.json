@@ -1278,6 +1278,17 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/hr/attendance/daily (DailyAttendanceController.getDailySummary)": {
+    "policy": "hr:read",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/hr/contracts (HrController.listContracts)": {
     "policy": "hr:read+field:salary",
     "owner": true,
@@ -4080,6 +4091,39 @@
     "legacy_member": false
   },
   "POST /enterprise-hub/hr/attendance (HrController.recordAttendance)": {
+    "policy": "hr:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/hr/attendance/events (DailyAttendanceController.recordEvent)": {
+    "policy": "hr:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/hr/attendance/import-csv (DailyAttendanceController.importCsv)": {
+    "policy": "hr:create",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": true,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/hr/attendance/rollup (DailyAttendanceController.rollupMonthly)": {
     "policy": "hr:create",
     "owner": true,
     "admin": true,
