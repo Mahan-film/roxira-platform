@@ -7,7 +7,7 @@
  */
 import { proposeMatches } from '../../banking/matching/reconciliation-matcher';
 import { nextMonthCharge } from '../assets/depreciation';
-import { roundMinorHalfUp } from '../money';
+import { fromMinor, roundMinorHalfUp } from '../money';
 import {
   m,
   R16_T1_CONSOLIDATION as T1,
@@ -74,9 +74,9 @@ describe('R16 T6 budgets and encumbrance', () => {
     expect(((T6.po88 + T6.po89) * 100n) / T6.october).toBe(BigInt(T6.expected.po89Percent));
     expect(T6.revisedBudget - T6.po88 - T6.po89).toBe(T6.expected.remainingAfterRevision);
   });
-  it.skip('PO-88 passes with an 84% warning — needs a budget encumbrance row (none of T178-T191 covers it; BudgetControlService has no PO commitments or warn/block percentages)', () => undefined);
-  it.skip('PO-89 (104%) is blocked — needs a budget encumbrance row (not yet assigned)', () => undefined);
-  it.skip('after revision to 5,500.00 PO-89 passes leaving 300.00 — needs a budget encumbrance row (not yet assigned)', () => undefined);
+  it.skip('PO-88 passes with an 84% warning — needs T194 (budget encumbrance; BudgetControlService has no PO commitments or warn/block percentages)', () => undefined);
+  it.skip('PO-89 (104%) is blocked — needs T194', () => undefined);
+  it.skip('after revision to 5,500.00 PO-89 passes leaving 300.00 — needs T194', () => undefined);
 });
 
 describe('R16 T7 multi-book fixed assets', () => {
@@ -115,6 +115,13 @@ describe('R16 T7 multi-book fixed assets', () => {
   it.skip('sale posts output VAT 4,180.00 and a gain per book — needs T183 (disposal per book)', () => undefined);
 });
 
+/** The matcher takes plain numbers; fromMinor is exact for these amounts and never divides by hand. */
+const rial = (minor: bigint): number => {
+  const value = fromMinor(minor);
+  if (typeof value !== 'number') throw new Error('amount too large for the matcher');
+  return value;
+};
+
 describe('R16 T9 bank import and reconciliation', () => {
   const book = (id: number, amount: number, entryNumber: string) => ({
     id,
@@ -130,8 +137,8 @@ describe('R16 T9 bank import and reconciliation', () => {
     const [tx1, tx2] = T9.statement;
     const proposal = proposeMatches(
       [
-        { id: 1, txnDate: '2026-11-05', withdrawal: 0, deposit: Number(tx1.amount) / 100, reference: tx1.reference },
-        { id: 2, txnDate: '2026-11-05', withdrawal: 0, deposit: Number(tx2.amount) / 100, reference: tx2.reference },
+        { id: 1, txnDate: '2026-11-05', withdrawal: 0, deposit: rial(tx1.amount), reference: tx1.reference },
+        { id: 2, txnDate: '2026-11-05', withdrawal: 0, deposit: rial(tx2.amount), reference: tx2.reference },
       ],
       books,
     );
@@ -159,15 +166,15 @@ describe('R16 T10 tax engine (T180)', () => {
 });
 
 describe('R16 T11 e-invoice adapters', () => {
-  it.skip('rejected KSA B2B stays CLEARANCE_REJECTED, ICV 104 retired, resubmission gets ICV 105 — needs T186 (e-invoice adapters; row not yet assigned: confirm with coordinator)', () => undefined);
-  it.skip('KSA B2C issued offline with QR and reported within 24 h — needs T186 (not yet assigned)', () => undefined);
-  it.skip('UAE XML carries free-zone and continuous-supply flags without using dimensions — needs T181 (dimensions v2)', () => undefined);
+  it.skip('rejected KSA B2B stays CLEARANCE_REJECTED, ICV 104 retired, resubmission gets ICV 105 — needs T174/T175 (Gulf e-invoice adapters)', () => undefined);
+  it.skip('KSA B2C issued offline with QR and reported within 24 h — needs T174/T175', () => undefined);
+  it.skip('UAE XML carries free-zone and continuous-supply flags without using dimensions — needs T174/T175 (UAE adapter) and T181 (dimensions v2)', () => undefined);
 });
 
 describe('R16 T12 accountant access', () => {
-  it.skip('partner adviser adjustment journal is tagged PARTNER_ADJUSTMENT with the firm user id — needs T178 (adjustment period) and an accountant-firm access row (not yet assigned)', () => undefined);
-  it.skip('IBAN edit returns 403 for the partner role — needs an accountant-firm access row (not yet assigned)', () => undefined);
-  it.skip('revoking the firm user ends sessions on all three tenants within 60 s with a security audit entry — needs an accountant-firm access row (not yet assigned)', () => undefined);
+  it.skip('partner adviser adjustment journal is tagged PARTNER_ADJUSTMENT with the firm user id — needs T178 (adjustment period) and T196 (accountant-firm access)', () => undefined);
+  it.skip('IBAN edit returns 403 for the partner role — needs T196 (accountant-firm access)', () => undefined);
+  it.skip('revoking the firm user ends sessions on all three tenants within 60 s with a security audit entry — needs T196 (accountant-firm access)', () => undefined);
 });
 
 describe('R16 T13 API idempotency and webhooks (T185)', () => {

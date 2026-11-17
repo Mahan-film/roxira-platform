@@ -17,7 +17,7 @@ import { WarehouseEntity } from '../../inventory/entities/warehouse.entity';
 import { PostingRulesRepository } from '../../posting_rules/repositories/posting-rules.repository';
 import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
 import { DimensionKind, JournalEntryStatus } from '../enums/accounting.enum';
-import { fromDb } from '../money';
+import { fromDb, minorToDecimal, toMinor } from '../money';
 import { AccountingRepository } from '../repositories/accounting.repository';
 import { DimensionRepository } from '../repositories/dimension.repository';
 import { FiscalYearRepository } from '../repositories/fiscal-year.repository';
@@ -27,7 +27,7 @@ import { ChartTemplateService } from '../services/chart-template.service';
 import { CostCentreReportService } from '../services/cost-centre-report.service';
 import { DimensionService } from '../services/dimension.service';
 import { FinancialReportsService } from '../services/financial-reports.service';
-import { createTestDatabase, describePg, TestDatabaseContext, TEST_T1 as T1 } from '../../../test/support/test-pg';
+import { createTestDatabase, describePg, TestDatabaseContext, TEST_T1 as T1, TEST_T2 as T2 } from '../../../test/support/test-pg';
 import {
   R16_T3_PERIODS as T3,
   R16_T4_AUDIT as T4,
@@ -36,7 +36,7 @@ import {
 } from './r16-fixtures';
 
 const noon = (day: string) => `${day}T12:00:00.000Z`;
-const decimal = (minor: bigint): string => `${minor / 100n}.${(minor % 100n).toString().padStart(2, '0')}`;
+const decimal = minorToDecimal;
 
 describePg('R16 core acceptance on PostgreSQL', () => {
   let testDb: TestDatabaseContext;
@@ -66,10 +66,11 @@ describePg('R16 core acceptance on PostgreSQL', () => {
         testDb.app.getRepository(StockItemEntity),
         testDb.app.getRepository(FifoBatchEntity),
         testDb.app,
+        testDb.scope,
       ),
     );
     documents = new StockDocumentsService(
-      new StockDocumentsRepository(testDb.app),
+      new StockDocumentsRepository(testDb.app, testDb.scope),
       inventory,
       accounting,
       new PostingRulesService(new PostingRulesRepository(testDb.scope), accounting),
@@ -232,12 +233,22 @@ describePg('R16 core acceptance on PostgreSQL', () => {
         fromWarehouseId: wh,
         lines: [{ sku: 'SKU-FIFO', quantity: T8.deliveredQty }],
       });
-      expect(BigInt(Math.round(delivery.totalValue * 100))).toBe(T8.expected.fifo.cogs);
+      expect(toMinor(delivery.totalValue)).toBe(T8.expected.fifo.cogs);
       const [ending] = await testDb.rawQuery<{ value: string }>(
         `SELECT COALESCE(SUM(quantity_remaining * unit_purchase_cost), 0) AS value FROM inventory_fifo_batches WHERE tenant_id = $1 AND sku = 'SKU-FIFO'`,
         [T1],
       );
       expect(fromDb(ending.value)).toBe(T8.expected.fifo.ending);
+    });
+
+    it('tenant B sees none of tenant A inventory under RLS as roxira_app', async () => {
+      const count = (tenant: string) =>
+        testDb.scope.within(tenant, undefined, async (manager) => {
+          const [row] = (await manager.query(`SELECT count(*)::int AS n FROM inventory_fifo_batches`)) as Array<{ n: number }>;
+          return row.n;
+        });
+      expect(await count(T1)).toBeGreaterThan(0);
+      expect(await count(T2)).toBe(0);
     });
 
     it('issuing more units than are on hand is refused and leaves no document (negative stock disabled)', async () => {
@@ -248,9 +259,9 @@ describePg('R16 core acceptance on PostgreSQL', () => {
       expect((await documents.list(T1, { page: 1, limit: 100 })).total).toBe(before);
     });
 
-    it.skip('AVCO: COGS 132.00, ending 88.00 — needs a costing-method row (not assigned to T178-T191: only FIFO layers exist per item)', () => undefined);
-    it.skip('STD cost 11.00: PPV +10.00 day 1, -10.00 day 2, COGS 132.00, ending 88.00 — needs a costing-method row (not yet assigned)', () => undefined);
-    it.skip('GL inventory 272.00 equals the subledger across the three SKUs — needs a costing-method row (not yet assigned)', () => undefined);
+    it.skip('AVCO: COGS 132.00, ending 88.00 — needs T195 (AVCO and standard costing; only FIFO layers exist)', () => undefined);
+    it.skip('STD cost 11.00: PPV +10.00 day 1, -10.00 day 2, COGS 132.00, ending 88.00 — needs T195', () => undefined);
+    it.skip('GL inventory 272.00 equals the subledger across the three SKUs — needs T195', () => undefined);
     it.skip('a manual journal into the inventory control account is rejected — needs T178 (control-account guard)', () => undefined);
   });
 });
