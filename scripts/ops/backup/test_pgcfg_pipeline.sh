@@ -23,7 +23,13 @@ case "$*" in
   *"pg_restore -l"*) cat >/dev/null ;;
   *"pg_restore -U"*) cat >/dev/null ;;
   run*|rm*|*pg_isready*|*createdb*) ;;
-  *psql*) if grep -q pg_stat_user_tables; then echo "public|users"; else echo "public.users|5"; fi ;;
+  # manifest: dump_counts sends the table-list query (pg_stat_user_tables) on stdin, then the generated count SQL.
+  # FAKE_PSQL_EMPTY=1 simulates a database with no listable tables.
+  *psql*) q="$(cat)"
+    case "$q" in
+      *pg_stat_user_tables*) [ -n "${FAKE_PSQL_EMPTY:-}" ] || printf 'public|users\npublic|orders\n' ;;
+      *count*) printf 'public.users|5\npublic.orders|12\n' ;;
+    esac ;;
 esac
 exit 0
 EOS
@@ -82,12 +88,19 @@ check "keygen failure: no drill dir leaked" "! ls -d '$T'/state/drill.?????? >/d
 cat >"$T/fake_r2.py" <<'EOS'
 import os, sys
 open(os.environ["R2_CALLS"], "a").write(" ".join(sys.argv[1:]) + "\n")
+if sys.argv[1] == "put":
+    import shutil
+    shutil.copyfile(sys.argv[2], os.environ["R2_LAST_PUT"])
 EOS
-export BACKUP_R2_TOOLS="$T/fake_r2.py" R2_CALLS="$T/r2calls" BACKUP_R2_ENDPOINT="https://x.r2.cloudflarestorage.com"
+export BACKUP_R2_TOOLS="$T/fake_r2.py" R2_CALLS="$T/r2calls" R2_LAST_PUT="$T/last.tar.age" BACKUP_R2_ENDPOINT="https://x.r2.cloudflarestorage.com"
 : >"$T/r2calls"
 rc=0; bash "$HERE/server_backup.sh" pgcfg >"$T/o.txt" 2>&1 || rc=$?
 check "pgcfg with R2 passes" "[ $rc = 0 ]"
+check "payload carries the row-count manifest" "age -d -i '$KEY' '$T/last.tar.age' | tar -x -O -f - pg/roxira_postgres_prod/app.counts 2>/dev/null | grep -qx 'public.users|5'"
+check "manifest lists both tables" "[ \$(age -d -i '$KEY' '$T/last.tar.age' | tar -x -O -f - pg/roxira_postgres_prod/app.counts 2>/dev/null | wc -l | tr -d ' ') = 2 ]"
 check "first run of the day writes hourly + daily + prune" "[ \$(grep -c 'put .*hourly/' '$T/r2calls') = 1 ] && [ \$(grep -c 'put .*daily/' '$T/r2calls') = 1 ] && grep -qx prune '$T/r2calls'"
+rc=0; FAKE_PSQL_EMPTY=1 bash "$HERE/server_backup.sh" pgcfg >"$T/o.txt" 2>&1 || rc=$?
+check "empty manifest makes the payload FAIL" "[ $rc != 0 ] && grep -q \"R2_LAST_RESULT='FAIL'\" '$T/state/r2.env' && grep -q 'row-count manifest' '$T/state/r2.env'"
 rc=0; bash "$HERE/server_backup.sh" pgcfg >"$T/o.txt" 2>&1 || rc=$?
 check "second run the same day writes only hourly" "[ \$(grep -c 'put .*hourly/' '$T/r2calls') = 2 ] && [ \$(grep -c 'put .*daily/' '$T/r2calls') = 1 ] && [ \$(grep -cx prune '$T/r2calls') = 1 ]"
 echo 2000-01-01 >"$T/state/r2_daily_day"; echo 2000-01-01 >"$T/state/r2_prune_day"

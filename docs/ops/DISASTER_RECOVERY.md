@@ -178,8 +178,8 @@ Off-site copies it restores (all age-encrypted on the server before upload, neve
 
 `server_backup.sh` records `QDRANT_LAST_RESULT` / `CONFIGS_LAST_RESULT` (OK, FAIL, NOT_CONFIGURED) plus `*_R2_RESULT`,
 `*_TG_RESULT` (OK, SKIPPED_TOO_BIG, FAIL, DISABLED) and `*_BYTES` in `/var/lib/roxira-backup/status.env`. An R2 failure also makes
-`LAST_RESULT=FAIL`, so the existing alert and the daily report cover it. Turn the whole step off with `BACKUP_OFFSITE_EXTRAS=0`
-and the Telegram part with `BACKUP_OFFSITE_TELEGRAM=0` in `/etc/roxira/backup.env`.
+`LAST_RESULT=FAIL`, so the existing alert and the daily report cover it. The whole step is fail-closed: it runs only when `BACKUP_OFFSITE_EXTRAS=1` is set
+in `/etc/roxira/backup.env`. Turn the Telegram part with `BACKUP_OFFSITE_TELEGRAM=0` in `/etc/roxira/backup.env`.
 
 Run it (Docker Desktop running; R2 and Telegram values come from `~/Secrets/roxira/roxira.env`, the key path from
 `ROXIRA_AGE_IDENTITY`, default `~/Secrets/roxira/backup-age.key`; nothing is printed):

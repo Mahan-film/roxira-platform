@@ -407,9 +407,9 @@ offsite_artifact() {
 }
 
 # offsite_extras: Qdrant snapshots and the config set, encrypted, to R2 + Telegram, after the daily set was staged.
-# BACKUP_OFFSITE_EXTRAS=0 turns it off. Runs only when the stage is complete (no dump failure).
+# Fail-closed: runs only with BACKUP_OFFSITE_EXTRAS=1 in the env file. Runs only when the stage is complete (no dump failure).
 offsite_extras() {
-  [ "${BACKUP_OFFSITE_EXTRAS:-1}" = "1" ] || return 0
+  [ "${BACKUP_OFFSITE_EXTRAS:-0}" = "1" ] || return 0
   if [ "${#FAILS[@]}" -gt 0 ]; then warn "dump failures present; off-site Qdrant/configs skipped"; return 0; fi
   if [ "$DRY_RUN" = "1" ]; then
     offsite_artifact qdrant "$STAGE"; offsite_artifact configs "$STAGE"; return 0
