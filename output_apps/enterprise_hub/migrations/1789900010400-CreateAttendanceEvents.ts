@@ -5,8 +5,8 @@ import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
  * Creates attendance_events table for daily attendance and biometric/clock event tracking (T129).
  * Mandatory tenant_id with FORCE RLS (AGENTS.md section 4).
  */
-export class CreateAttendanceEvents1789900006500 implements MigrationInterface {
-  name = 'CreateAttendanceEvents1789900006500';
+export class CreateAttendanceEvents1789900010400 implements MigrationInterface {
+  name = 'CreateAttendanceEvents1789900010400';
 
   public async up(q: QueryRunner): Promise<void> {
     await q.query(`
