@@ -39,6 +39,7 @@ Owner speaks Persian: reply in Persian; code, commits and docs in English. The o
 - Rotate the Gemini key, `POSTGRES_PASSWORD` and the Umami secret with `set_secret.sh` (printed by an agent on 2026-11-17).
 - Paste the v6b prompts into fresh Antigravity chats (L1–L4 here; L5–L6 on the colleague's machine).
 - Set up the HP laptop as the Linux CI box: `docs/ops/LINUX_CI_BOX.md` (workflow part: #947 T227, lane L1).
+- Private repo: choose plan A (Free, USD 0, no protected main) or B (Team, USD 8/month, hub recommends) in `docs/strategy/PRIVATE_REPO_PLAN_2026-11-17.md`; flip visibility only after #947 and #949.
 - R18 (Smart Judge) deep-research report; its prompt is in `docs/strategy/DEEP_RESEARCH_ROUND4.md`.
 
 ## Next for the hub
