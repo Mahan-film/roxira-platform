@@ -154,10 +154,13 @@ describe('TenantCancellationService', () => {
       await expect(service.purgeTenant('t1')).rejects.toThrow(NotFoundException);
     });
 
-    it('deletes tenant data across discovered tables and updates status to PURGED', async () => {
+    it('deletes tenant data across discovered tables and updates status to PURGED inside transaction', async () => {
       tenantsRepo.findById.mockResolvedValue({ id: 't1', status: TenantStatus.CANCELLED_READONLY });
 
       mockManager.query.mockImplementation(async (sql: string) => {
+        if (sql.includes('FOR UPDATE SKIP LOCKED')) {
+          return [{ id: 't1' }];
+        }
         if (sql.includes('information_schema.columns')) {
           return [{ table_name: 'fin_journal_entry_lines' }, { table_name: 'crm_contacts' }];
         }
@@ -167,7 +170,11 @@ describe('TenantCancellationService', () => {
       const res = await service.purgeTenant('t1');
 
       expect(mockTenantScope.run).toHaveBeenCalledWith('t1', expect.any(Function));
-      expect(dataSource.query).toHaveBeenCalledWith(
+      expect(mockManager.query).toHaveBeenCalledWith(
+        expect.stringContaining('FOR UPDATE SKIP LOCKED'),
+        ['t1'],
+      );
+      expect(mockManager.query).toHaveBeenCalledWith(
         expect.stringContaining('UPDATE "tenants" SET "status" = $1'),
         [TenantStatus.PURGED, 't1'],
       );
@@ -175,6 +182,33 @@ describe('TenantCancellationService', () => {
       expect(res.tenantId).toBe('t1');
       expect(res.purgedTables).toContain('fin_journal_entry_lines');
       expect(res.purgedTables).toContain('crm_contacts');
+    });
+
+    it('skips purge when FOR UPDATE SKIP LOCKED returns no rows', async () => {
+      tenantsRepo.findById.mockResolvedValue({ id: 't1', status: TenantStatus.CANCELLED_READONLY });
+      mockManager.query.mockResolvedValueOnce([]);
+
+      const res = await service.purgeTenant('t1');
+      expect(res.success).toBe(false);
+      expect(res.purgedTables).toEqual([]);
+    });
+
+    it('fails instead of swallowing fin_journal_entries UPDATE errors', async () => {
+      tenantsRepo.findById.mockResolvedValue({ id: 't1', status: TenantStatus.CANCELLED_READONLY });
+      mockManager.query.mockImplementation(async (sql: string) => {
+        if (sql.includes('FOR UPDATE SKIP LOCKED')) {
+          return [{ id: 't1' }];
+        }
+        if (sql.includes('information_schema.columns')) {
+          return [{ table_name: 'fin_journal_entries' }];
+        }
+        if (sql.includes('UPDATE "fin_journal_entries"')) {
+          throw new Error('trigger rejected PURGED');
+        }
+        return [];
+      });
+
+      await expect(service.purgeTenant('t1')).rejects.toThrow('trigger rejected PURGED');
     });
 
     it('propagates error if tenantScope.run fails', async () => {

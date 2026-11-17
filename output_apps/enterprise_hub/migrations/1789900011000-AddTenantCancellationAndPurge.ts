@@ -11,7 +11,9 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  *
  * Adds index on (status, delete_after) for efficient purge job scheduling.
  */
-export class AddTenantCancellationAndPurge1789900008000 implements MigrationInterface {
+export class AddTenantCancellationAndPurge1789900011000 implements MigrationInterface {
+  name = 'AddTenantCancellationAndPurge1789900011000';
+
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE "tenants"

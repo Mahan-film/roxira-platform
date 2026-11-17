@@ -107,8 +107,20 @@ export class TenantCancellationService {
 
     const TABLE_NAME_PATTERN = /^[a-zA-Z0-9_]{1,63}$/;
     const purgedTables: string[] = [];
+    let skipped = false;
 
     await this.tenantScope.run(tenantId, async (manager) => {
+      // 0. Acquire row lock on tenant to prevent concurrent purge workers colliding
+      const lockedRows: { id: string }[] = await manager.query(
+        `SELECT "id" FROM "tenants" WHERE "id" = $1 FOR UPDATE SKIP LOCKED`,
+        [tenantId],
+      );
+      if (!lockedRows || lockedRows.length === 0) {
+        this.logger.warn(`Purge skipped for tenant ${tenantId}: lock held by another worker or tenant missing.`);
+        skipped = true;
+        return;
+      }
+
       // 1. Discover all tables that have tenant_id column
       const tableRows: { table_name: string }[] = await manager.query(`
         SELECT DISTINCT table_name
@@ -122,16 +134,13 @@ export class TenantCancellationService {
       const tables = (tableRows || []).map((r) => r.table_name);
       const targetTables = tables.length > 0 ? tables : [...CORE_TENANT_TABLES];
 
-      // 2. Prevent posted lines trigger block by marking journal entries PURGED first if exists
+      // 2. Prevent posted lines trigger block by marking journal entries PURGED first if exists.
+      // Do not swallow errors: if this UPDATE fails, abort and roll back the purge transaction.
       if (targetTables.includes('fin_journal_entries')) {
-        try {
-          await manager.query(
-            `UPDATE "fin_journal_entries" SET "status" = 'PURGED' WHERE "tenant_id" = $1`,
-            [tenantId],
-          );
-        } catch {
-          // If status column rejects PURGED, continue
-        }
+        await manager.query(
+          `UPDATE "fin_journal_entries" SET "status" = 'PURGED' WHERE "tenant_id" = $1`,
+          [tenantId],
+        );
       }
 
       // 3. Delete records from each tenant table
@@ -144,13 +153,17 @@ export class TenantCancellationService {
           this.logger.warn(`Could not purge table ${table} for tenant ${tenantId}: ${tableErr}`);
         }
       }
+
+      // 4. Update tenant record status to PURGED atomically inside the same transaction
+      await manager.query(
+        `UPDATE "tenants" SET "status" = $1, "purged_at" = NOW(), "is_active" = false WHERE "id" = $2`,
+        [TenantStatus.PURGED, tenantId],
+      );
     });
 
-    // 4. Update tenant record status to PURGED
-    await this.dataSource.query(
-      `UPDATE "tenants" SET "status" = $1, "purged_at" = NOW(), "is_active" = false WHERE "id" = $2`,
-      [TenantStatus.PURGED, tenantId],
-    );
+    if (skipped) {
+      return { success: false, tenantId, purgedTables: [] };
+    }
 
     this.logger.log(`Tenant ${tenantId} purged successfully across ${purgedTables.length} tables.`);
     return { success: true, tenantId, purgedTables };
@@ -165,8 +178,10 @@ export class TenantCancellationService {
 
     for (const tenant of expiredTenants) {
       try {
-        await this.purgeTenant(tenant.id);
-        purgedIds.push(tenant.id);
+        const res = await this.purgeTenant(tenant.id);
+        if (res.success) {
+          purgedIds.push(tenant.id);
+        }
       } catch (err) {
         this.logger.error(`Failed to purge expired tenant ${tenant.id}: ${err}`);
       }
