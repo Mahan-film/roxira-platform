@@ -1,0 +1,54 @@
+{
+  "$schema": "https://flagd.dev/schema/v0/flags.json",
+  "metadata": {
+    "owner": "roxira-platform",
+    "doc": "docs/ops/FEATURE_FLAGS.md",
+    "contextKeys": "targetingKey and tenantId (tenant uuid), countryPack (ISO alpha-2: IR, MY, DE)"
+  },
+  "flags": {
+    "country-pack.de.enabled": {
+      "state": "ENABLED",
+      "variants": { "on": true, "off": false },
+      "defaultVariant": "off",
+      "metadata": { "kind": "release", "failMode": "closed" },
+      "targeting": {
+        "if": [
+          {
+            "and": [
+              { "==": [{ "var": "countryPack" }, "DE"] },
+              { "in": [{ "var": "tenantId" }, ["00000000-0000-0000-0000-00000000de01"]] }
+            ]
+          },
+          "on",
+          "off"
+        ]
+      }
+    },
+    "assistant.ai-drafts": {
+      "state": "ENABLED",
+      "variants": { "on": true, "off": false },
+      "defaultVariant": "on",
+      "metadata": { "kind": "kill-switch", "failMode": "open" },
+      "targeting": {
+        "if": [
+          { "in": [{ "var": "tenantId" }, ["00000000-0000-0000-0000-00000000dead"]] },
+          "off",
+          "on"
+        ]
+      }
+    },
+    "invoicing.new-pdf-renderer": {
+      "state": "ENABLED",
+      "variants": { "on": true, "off": false },
+      "defaultVariant": "off",
+      "metadata": { "kind": "rollout", "failMode": "closed" },
+      "targeting": {
+        "fractional": [
+          { "var": "targetingKey" },
+          ["on", 10],
+          ["off", 90]
+        ]
+      }
+    }
+  }
+}
