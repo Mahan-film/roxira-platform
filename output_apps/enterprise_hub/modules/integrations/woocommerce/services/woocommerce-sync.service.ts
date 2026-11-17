@@ -6,8 +6,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
-import * as dns from 'dns/promises';
-import * as net from 'net';
 import { fromDb, minorToDecimal, parseScaled, toMinor } from '../../../accounting/money';
 import { BASE_CURRENCY } from '../../../currency/constants/currency.constants';
 import { Currency } from '../../../currency/enums/currency.enum';
@@ -36,9 +34,8 @@ import {
 import { WooCommerceRepository } from '../repositories/woocommerce.repository';
 import {
   assertSafeStoreUrl,
-  isPrivateIp,
+  assertSafeStoreUrlWithDns,
   maskApiKey,
-  normalizeHost,
   openSecret,
   sealSecret,
 } from '../utils/woocommerce-crypto.util';
@@ -46,37 +43,6 @@ import {
 const SUPPORTED_ORDER_CURRENCIES = new Set<string>(Object.values(Currency));
 const TOMAN_TO_RIAL = 10;
 const RATIO_SCALE = 1_000_000;
-
-const DNS_CACHE_TTL_MS = 5 * 60 * 1000;
-const DNS_CACHE_MAX_SIZE = 500;
-const dnsValidationCache = new Map<string, { valid: boolean; expiresAt: number }>();
-
-function getDnsCache(host: string, now: number): { valid: boolean; expiresAt: number } | undefined {
-  const entry = dnsValidationCache.get(host);
-  if (!entry) return undefined;
-  if (entry.expiresAt <= now) {
-    dnsValidationCache.delete(host);
-    return undefined;
-  }
-  return entry;
-}
-
-function setDnsCache(host: string, valid: boolean, now: number): void {
-  for (const [k, v] of dnsValidationCache) {
-    if (v.expiresAt <= now) {
-      dnsValidationCache.delete(k);
-    }
-  }
-  if (dnsValidationCache.has(host)) {
-    dnsValidationCache.delete(host);
-  }
-  while (dnsValidationCache.size >= DNS_CACHE_MAX_SIZE) {
-    const oldestKey = dnsValidationCache.keys().next().value;
-    if (oldestKey === undefined) break;
-    dnsValidationCache.delete(oldestKey);
-  }
-  dnsValidationCache.set(host, { valid, expiresAt: now + DNS_CACHE_TTL_MS });
-}
 
 /**
  * Safely converts minor units (cents) to a number for the Invoicing API.
@@ -538,33 +504,19 @@ export class WooCommerceSyncService {
     const basePath = parsed.pathname.replace(/\/+$/, '');
     const origin = parsed.origin;
 
-    const host = normalizeHost(parsed.hostname);
     const verifyHostNotPrivate = async () => {
-      if (net.isIP(host)) {
-        if (isPrivateIp(host)) {
-          throw new BadRequestException('WooCommerce storeUrl resolves to a private or loopback address');
-        }
-        return;
-      }
-      const now = Date.now();
-      const cached = getDnsCache(host, now);
-      if (cached) {
-        if (!cached.valid) {
-          throw new BadRequestException('WooCommerce storeUrl resolves to a private or loopback address');
-        }
-        return;
-      }
       try {
-        const resolved = await dns.lookup(host, { all: true });
-        for (const addr of resolved) {
-          if (isPrivateIp(addr.address)) {
-            setDnsCache(host, false, now);
-            throw new BadRequestException('WooCommerce storeUrl resolves to a private or loopback address');
-          }
-        }
-        setDnsCache(host, true, now);
+        await assertSafeStoreUrlWithDns(config.storeUrl);
       } catch (err: any) {
-        if (err instanceof BadRequestException) throw err;
+        if (
+          err?.message?.includes('private') ||
+          err?.message?.includes('loopback') ||
+          err?.message?.includes('HTTPS') ||
+          err?.message?.includes('Invalid') ||
+          err?.message?.includes('internal')
+        ) {
+          throw new BadRequestException(err.message);
+        }
       }
     };
 
