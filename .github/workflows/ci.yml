@@ -474,6 +474,14 @@ jobs:
         run: npx tsc --noEmit
       - name: Fresh migrations on an empty database
         run: npm run migration:run
+      - name: RLS coverage gate (T192)
+        # Every tenant_id table needs ENABLE + FORCE RLS and a tenant policy; global tables are in scripts/dev/rls_allowlist.txt.
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: "5432"
+          PGUSER: postgres
+          PGDATABASE: rxfresh
+        run: bash ../../scripts/dev/rls_coverage.sh
       - name: Jest unit specs
         # *.pg.spec.ts skip themselves without ROXIRA_TEST_PG_HOST; they run in the next step.
         run: npx jest --testPathIgnorePatterns '/node_modules/' '/frontend/' '/dist/' '\.pg\.spec\.ts$'

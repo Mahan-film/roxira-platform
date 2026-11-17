@@ -228,7 +228,7 @@ step_fresh_db() {
   bash scripts/dev/fresh_db_migrate.sh
 }
 
-if changed_matches '^output_apps/enterprise_hub/(migrations/|data-source\.ts$)|^scripts/dev/fresh_db_migrate\.sh$'; then
+if changed_matches '^output_apps/enterprise_hub/(migrations/|data-source\.ts$)|^scripts/dev/(fresh_db_migrate|rls_coverage)\.sh$|^scripts/dev/rls_allowlist\.txt$'; then
   if ! have docker || ! docker info >/dev/null 2>&1; then
     skip_step "fresh DB migrations" "docker not available (start docker, then run scripts/dev/fresh_db_migrate.sh)"
   elif ! have npm; then
