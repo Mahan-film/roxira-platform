@@ -255,7 +255,19 @@ export class RailSettlementService {
       throw new BadRequestException('برای ثبت تسویه درگاه، شناسه یکتا (idempotencyKey) یا شماره مرجع تسویه (reference) الزامی است.');
     }
 
-    const overrides = resolveSettlementOverrides(pack, rail, dto, {}, amounts);
+    const mutableMapping: Partial<Record<PostingRole, string>> = {};
+    if (typeof this.postingRules.describe === 'function') {
+      const describedList = await this.postingRules.describe(tenantId);
+      const described = describedList?.find((t) => t.docType === 'treasury.rail_settlement');
+      for (const entry of described?.roles ?? []) {
+        if (entry.source !== 'default' && entry.accountCode) {
+          mutableMapping[entry.role as PostingRole] = entry.accountCode;
+        }
+      }
+    }
+    const tenantMapping: RoleAccounts = mutableMapping;
+
+    const overrides = resolveSettlementOverrides(pack, rail, dto, tenantMapping, amounts);
 
     const voucher = await this.postingRules.post(
       tenantId,
@@ -277,7 +289,7 @@ export class RailSettlementService {
       manager,
     );
 
-    const proposal = buildRailSettlementProposal(pack, dto);
+    const proposal = buildRailSettlementProposal(pack, dto, tenantMapping);
 
     return {
       voucherId: String(voucher.entryId),
