@@ -72,17 +72,14 @@ export function tehranDayWindow(dateStr: string): { start: Date; end: Date } | n
  */
 export function parseTehranWallTime(raw: string): Date | null {
   const text = raw.trim();
-  // An explicit trailing Z or UTC offset marks an absolute instant: parse it as-is.
-  if (
-    /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:?\d{2})$/i.test(text)
-  ) {
-    const instant = new Date(text.replace(' ', 'T'));
-    return Number.isNaN(instant.getTime()) ? null : instant;
-  }
-  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(text);
+  const m =
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,3})?)?(Z|[+-]\d{2}:?\d{2})?$/i.exec(
+      text,
+    );
   if (!m) return null;
   const [y, mo, d, h, mi, s] = [m[1], m[2], m[3], m[4], m[5], m[6] ?? '0'].map(Number);
   if (h > 23 || mi > 59 || s > 59) return null;
+  // Calendar check shared by both paths: rejects e.g. 2026-02-30 instead of rolling it over.
   const probe = new Date(Date.UTC(y, mo - 1, d, h, mi, s));
   if (
     probe.getUTCFullYear() !== y ||
@@ -90,6 +87,21 @@ export function parseTehranWallTime(raw: string): Date | null {
     probe.getUTCDate() !== d
   ) {
     return null;
+  }
+  const zone = m[7];
+  if (zone) {
+    // Explicit Z / UTC offset marks an absolute instant: parse it as-is (fields already validated).
+    let offsetMs = 0;
+    if (zone.toUpperCase() !== 'Z') {
+      const digits = zone.slice(1).replace(':', '');
+      const oh = Number(digits.slice(0, 2));
+      const om = Number(digits.slice(2, 4));
+      if (oh > 23 || om > 59) return null;
+      offsetMs = (zone[0] === '-' ? -1 : 1) * (oh * 60 + om) * 60_000;
+    }
+    const fraction = /\.(\d{1,3})/.exec(text);
+    const ms = fraction ? Number(fraction[1].padEnd(3, '0')) : 0;
+    return new Date(probe.getTime() + ms - offsetMs);
   }
   return new Date(wallUtcMsToInstant(probe.getTime()));
 }

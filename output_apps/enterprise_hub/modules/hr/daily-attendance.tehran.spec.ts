@@ -71,6 +71,15 @@ describe('DailyAttendanceService Asia/Tehran day handling (T129)', () => {
     expect(rows[1].occurredAt.toISOString()).toBe('2026-11-16T08:30:00.000Z');
   });
 
+  it('rejects impossible calendar dates even with an explicit Z or offset', async () => {
+    const { service, attendanceRepo } = makeService({});
+    const csv = 'E1,2026-02-30T08:00:00Z,in\nE1,2026-02-30 08:00,in\nE1,2026-04-31T08:00:00+03:30,in';
+    const res = await service.importCsv(TENANT, csv);
+    expect(res.inserted).toBe(0);
+    expect(res.skipped).toBe(3);
+    expect(attendanceRepo.bulkCreateEvents.mock.calls[0][1]).toHaveLength(0);
+  });
+
   it('rejects a CSV with more than the row cap', async () => {
     const { service } = makeService({});
     const csv = Array.from({ length: 10_001 }, () => 'E1,2026-11-17 08:15,in').join('\n');
