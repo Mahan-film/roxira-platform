@@ -12,7 +12,7 @@ import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
  *    - book_debit (numeric(18, 2))
  *    - book_credit (numeric(18, 2))
  *    - is_rounding (boolean)
- * 2. Backfill existing lines: book = tx = current amounts, rate = 1.0.
+ * 2. Backfill existing lines: book = current amounts, tx = amount_fx (or book / fx_rate) for non-IRR, rate = COALESCE(fx_rate, 1.0).
  * 3. Bi-directional sync trigger on fin_journal_entry_lines so legacy and new writers stay synchronized.
  * 4. Create fx_rates table keyed by (tenant, base, quote, date, rate_type) with FORCE RLS.
  * 5. Update posting triggers (fin_assert_entry_consistent, fin_guard_voucher_transition):
@@ -20,8 +20,8 @@ import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
  *    - Enforce SUM(tx) balance when entry has a single transaction currency.
  *    - Exclude is_rounding line from tx currency balance.
  */
-export class DualAmountLedgerExpandBackfill1789900009000 implements MigrationInterface {
-  name = 'DualAmountLedgerExpandBackfill1789900009000';
+export class DualAmountLedgerExpandBackfill1789900010500 implements MigrationInterface {
+  name = 'DualAmountLedgerExpandBackfill1789900010500';
 
   private readonly tableLines = 'fin_journal_entry_lines';
   private readonly tableFxRates = 'fx_rates';
@@ -57,8 +57,18 @@ export class DualAmountLedgerExpandBackfill1789900009000 implements MigrationInt
         UPDATE "${this.tableLines}"
            SET "tx_currency_code" = COALESCE("currency", 'IRR'),
                "fx_rate_applied" = COALESCE("fx_rate", 1.0),
-               "tx_debit" = "debit",
-               "tx_credit" = "credit",
+               "tx_debit" = CASE
+                 WHEN COALESCE("currency", 'IRR') <> 'IRR' AND COALESCE("debit", 0) > 0 THEN
+                   ROUND(COALESCE("amount_fx", "debit" / COALESCE(NULLIF("fx_rate", 0), 1.0)), 2)
+                 WHEN COALESCE("currency", 'IRR') <> 'IRR' THEN 0
+                 ELSE "debit"
+               END,
+               "tx_credit" = CASE
+                 WHEN COALESCE("currency", 'IRR') <> 'IRR' AND COALESCE("credit", 0) > 0 THEN
+                   ROUND(COALESCE("amount_fx", "credit" / COALESCE(NULLIF("fx_rate", 0), 1.0)), 2)
+                 WHEN COALESCE("currency", 'IRR') <> 'IRR' THEN 0
+                 ELSE "credit"
+               END,
                "book_debit" = "debit",
                "book_credit" = "credit",
                "is_rounding" = false
@@ -109,13 +119,6 @@ export class DualAmountLedgerExpandBackfill1789900009000 implements MigrationInt
           END IF;
         END IF;
 
-        IF NEW.tx_debit IS NULL THEN
-          NEW.tx_debit := COALESCE(NEW.book_debit, NEW.debit, 0);
-        END IF;
-        IF NEW.tx_credit IS NULL THEN
-          NEW.tx_credit := COALESCE(NEW.book_credit, NEW.credit, 0);
-        END IF;
-
         IF NEW.tx_currency_code IS NULL THEN
           NEW.tx_currency_code := COALESCE(NEW.currency, 'IRR');
         END IF;
@@ -147,6 +150,31 @@ export class DualAmountLedgerExpandBackfill1789900009000 implements MigrationInt
             NEW.fx_rate := NEW.fx_rate_applied;
           ELSIF NEW.fx_rate IS DISTINCT FROM OLD.fx_rate AND NEW.fx_rate_applied IS NOT DISTINCT FROM OLD.fx_rate_applied THEN
             NEW.fx_rate_applied := NEW.fx_rate;
+          END IF;
+        END IF;
+
+        IF NEW.tx_debit IS NULL THEN
+          IF COALESCE(NEW.tx_currency_code, 'IRR') <> 'IRR' AND COALESCE(NEW.book_debit, NEW.debit, 0) > 0 THEN
+            NEW.tx_debit := ROUND(
+              COALESCE(NEW.amount_fx, COALESCE(NEW.book_debit, NEW.debit, 0) / COALESCE(NULLIF(NEW.fx_rate_applied, 0), 1.0)),
+              2
+            );
+          ELSIF COALESCE(NEW.tx_currency_code, 'IRR') <> 'IRR' THEN
+            NEW.tx_debit := 0;
+          ELSE
+            NEW.tx_debit := COALESCE(NEW.book_debit, NEW.debit, 0);
+          END IF;
+        END IF;
+        IF NEW.tx_credit IS NULL THEN
+          IF COALESCE(NEW.tx_currency_code, 'IRR') <> 'IRR' AND COALESCE(NEW.book_credit, NEW.credit, 0) > 0 THEN
+            NEW.tx_credit := ROUND(
+              COALESCE(NEW.amount_fx, COALESCE(NEW.book_credit, NEW.credit, 0) / COALESCE(NULLIF(NEW.fx_rate_applied, 0), 1.0)),
+              2
+            );
+          ELSIF COALESCE(NEW.tx_currency_code, 'IRR') <> 'IRR' THEN
+            NEW.tx_credit := 0;
+          ELSE
+            NEW.tx_credit := COALESCE(NEW.book_credit, NEW.credit, 0);
           END IF;
         END IF;
 

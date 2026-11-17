@@ -112,10 +112,73 @@ describePg('Dual-Amount Ledger & FX Rates on PostgreSQL (T138)', () => {
 
       expect(Number(legacyRow.book_debit)).toBe(50);
       expect(Number(legacyRow.book_credit)).toBe(0);
-      expect(Number(legacyRow.tx_debit)).toBe(50);
+      expect(Number(legacyRow.tx_debit)).toBe(46.3);
       expect(legacyRow.tx_currency_code).toBe('EUR');
       expect(Number(legacyRow.fx_rate_applied)).toBe(1.08);
       expect(legacyRow.is_rounding).toBe(false);
+
+      // 1b. Insert legacy USD line with amount_fx and verify tx_debit = amount_fx (not IRR book_debit)
+      const [legacyUsdRow] = await testDb.scope.within(T1, undefined, async (manager) => {
+        return manager.query(
+          `INSERT INTO fin_journal_entry_lines
+             (tenant_id, journal_entry_id, account_id, debit, credit, currency, fx_rate, amount_fx)
+           VALUES
+             ($1, $2, (SELECT id FROM fin_chart_of_accounts WHERE tenant_id=$1 AND code='1010'), 92000000.00, 0.00, 'USD', 920000, 100.00)
+           RETURNING *`,
+          [T1, draft.id],
+        );
+      });
+      expect(Number(legacyUsdRow.book_debit)).toBe(92000000);
+      expect(Number(legacyUsdRow.tx_debit)).toBe(100);
+      expect(Number(legacyUsdRow.tx_credit)).toBe(0);
+      expect(legacyUsdRow.tx_currency_code).toBe('USD');
+
+      // 1c. Verify backfill query sets tx_debit = amount_fx for pre-existing USD legacy lines
+      await testDb.owner.query(
+        `ALTER TABLE fin_journal_entry_lines DISABLE TRIGGER "TRG_fin_journal_entry_lines_dual_sync"`,
+      );
+      let backfilledUsdRow: any;
+      try {
+        await testDb.owner.query(
+          `UPDATE fin_journal_entry_lines
+              SET book_debit = NULL, book_credit = NULL, tx_debit = NULL, tx_credit = NULL
+            WHERE id = $1`,
+          [legacyUsdRow.id],
+        );
+        await testDb.owner.query(
+          `UPDATE fin_journal_entry_lines
+              SET tx_currency_code = COALESCE(currency, 'IRR'),
+                  fx_rate_applied = COALESCE(fx_rate, 1.0),
+                  tx_debit = CASE
+                    WHEN COALESCE(currency, 'IRR') <> 'IRR' AND COALESCE(debit, 0) > 0 THEN
+                      ROUND(COALESCE(amount_fx, debit / COALESCE(NULLIF(fx_rate, 0), 1.0)), 2)
+                    WHEN COALESCE(currency, 'IRR') <> 'IRR' THEN 0
+                    ELSE debit
+                  END,
+                  tx_credit = CASE
+                    WHEN COALESCE(currency, 'IRR') <> 'IRR' AND COALESCE(credit, 0) > 0 THEN
+                      ROUND(COALESCE(amount_fx, credit / COALESCE(NULLIF(fx_rate, 0), 1.0)), 2)
+                    WHEN COALESCE(currency, 'IRR') <> 'IRR' THEN 0
+                    ELSE credit
+                  END,
+                  book_debit = debit,
+                  book_credit = credit,
+                  is_rounding = false
+            WHERE id = $1 AND book_debit IS NULL`,
+          [legacyUsdRow.id],
+        );
+        [backfilledUsdRow] = await testDb.owner.query(
+          `SELECT * FROM fin_journal_entry_lines WHERE id = $1`,
+          [legacyUsdRow.id],
+        );
+      } finally {
+        await testDb.owner.query(
+          `ALTER TABLE fin_journal_entry_lines ENABLE TRIGGER "TRG_fin_journal_entry_lines_dual_sync"`,
+        );
+      }
+      expect(Number(backfilledUsdRow.book_debit)).toBe(92000000);
+      expect(Number(backfilledUsdRow.tx_debit)).toBe(100);
+      expect(Number(backfilledUsdRow.tx_credit)).toBe(0);
 
       // 2. Insert line using dual-amount columns directly
       const [dualRow] = await testDb.scope.within(T1, undefined, async (manager) => {
