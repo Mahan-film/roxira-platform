@@ -107,3 +107,22 @@ Digests: `research/R16_GLOBAL_CORE.md`, `research/R13_GERMANY.md`. Order: the co
 | **T191 AI transparency labels** | Every AI draft shows an "AI-generated draft" label and its source citations; AI identities can never post, lock a period or file a return. EU AI Act Art. 50 applies since 2 Aug 2026. |
 
 POS (cloud TSE, DSFinV-K) and payroll (certified partner) get rows after phase 1 is merged.
+
+## Update 2026-11-17 (2): infrastructure audit and hub-owned rows
+A read-only production audit (2026-11-17) found: backups healthy (hourly encrypted Postgres off-site, a second off-site copy, an encrypted Telegram copy, weekly drill), but vector-store snapshots only on the same disk and no timed full restore; no error tracking; no staging; the app's database login bypasses RLS (the cutover to the restricted role, PR #831, is not applied yet); 20 of 151 tables without RLS and no CI gate; pending OS updates. The owner approved fixing all of it. Cost rule: no new paid services and no heavy containers; reuse what we run (object storage free tier, Telegram bot, email, the owner's Mac).
+
+Rows the hub runs with Claude agents (lanes: do not take them):
+
+| Task | Done when |
+|---|---|
+| **T192 RLS coverage gate** | CI fails when a table with a tenant column lacks ENABLE + FORCE RLS and a tenant policy; global tables are listed with a reason; missing policies added. |
+| **T193 Scanning and uptime** | Dependabot for npm and Docker, weekly CodeQL, uptime probes for all three domains. |
+| **T194 Budget encumbrance** | A PO checks the budget (warn at 80%, block at 100%, revision unblocks). R16 Test 6 passes. |
+| **T195 AVCO and standard costing** | Moving average and standard cost with price variance and GR/IR clearing. R16 Test 8 passes in full. |
+| **T196 Accountant-firm access** | A firm user serves many tenants with a scoped role (view, request documents, adjustment-period journals; no bank-detail edits or payments); revoking the user ends all sessions within 60 s. R16 Test 12 passes. |
+| **T197 Off-site vector and config backups** | Vector-store snapshots and configs encrypted and copied off-site and to Telegram with the existing jobs; the same-disk copy shrinks. |
+| **T198 Restore drill and migration rehearsal** | A weekly job on the owner's Mac restores the newest encrypted backup into throwaway containers, runs main's pending migrations against it, checks row counts, records the real restore time and reports to Telegram. This doubles as our staging and migration rehearsal at zero cost. |
+| **T199 Error capture** | Unhandled errors from the backend and the AI core are fingerprinted into one small table; new or spiking errors go to Telegram (max 10/hour) and a daily digest to Telegram and email. No new container. |
+| **T200 Restricted database role** (*after #831*) | Production connects as the restricted application role; the superuser login is used only for migrations. Cross-tenant smoke test after the switch. |
+
+Lane PRs keep their own rows. T194–T196 may go to lanes instead if a lane drops below its WIP limit first.
