@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, IsUrl, MaxLength } from 'class-validator';
+import { IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, IsUrl, MaxLength, Min } from 'class-validator';
 
 export class UpdateWooCommerceConfigDto {
   @ApiProperty({ description: 'URL فروشگاه ووکامرس (HTTPS)', example: 'https://shop.example.com' })
@@ -77,6 +77,7 @@ export class PushWooCommerceStockDto {
 
   @ApiProperty({ description: 'موجودی جدید قابل فروش' })
   @IsInt()
+  @Min(0)
   quantity: number;
 
   @ApiPropertyOptional({ description: 'قیمت فروش جدید به فرمت رشته اعشاری (اختیاری)' })
