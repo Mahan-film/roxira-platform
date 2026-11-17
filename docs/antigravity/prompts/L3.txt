@@ -1,9 +1,11 @@
-کار این دور (WAVE 17، ۱۷ نوامبر) برای L3، به همین ترتیب (متن کامل در آخرین کامنت «## WAVE 17» در issue 592):
-1. #728: خطای نحوی money.ts خط ۲۲۰، نرخ مالیات به‌صورت bigint basis points، شمارهٔ migration.
-2. #854: rebase؛ گارد cancelled-readonly باید fail closed باشد؛ پاک‌سازی از طریق TenantScope.
-3. #860: blockerهای آخرین بازبینی را اگر هست درست کن.
-4. T173: تست‌های property برای دفتر کل با fast-check و گزارش Stryker.
-به این PRها دست نزن: صف ادغام #842 #833 #836 #846 #851 #852؛ مال hub: #844 #849 #850 #853 #847 #779 #796 #857.
+کار این دور (WAVE 18، ۱۷ نوامبر) برای L3، به همین ترتیب (متن کامل در آخرین کامنت «## WAVE 18» در issue 592).
+این دور دور اصلاح است: سقف WIP همهٔ laneها پر است. ردیف جدید فقط وقتی برمی‌داری که PRهای بازت زیر ۳ برود.
+شمارهٔ migration هر PR را دقیقاً همانی بگذار که این‌جا نوشته شده (چند PR الان یک شماره دارند).
+1. #728 (T71): rebase کن و migration را 1789900010800 کن. validateVatRateForYear بدون expectedBp باید رد کند (fail closed)، نه هر نرخی را بپذیرد. نام migration را در بدنهٔ PR درست کن.
+2. #854 (T148): migration را 1789900011000 کن. صف tenant-export فقط در یک ماژول ثبت و export شود (الان هم در TenantsModule و هم در DataImportModule است). sanitizeCellForSpreadsheet باید واقعاً تعریف شده باشد. تغییر وضعیت tenant به PURGED در همان تراکنش پاک‌سازی باشد. purge قفل داشته باشد (FOR UPDATE SKIP LOCKED یا advisory lock). خطای UPDATE روی fin_journal_entries را نخور؛ کار شکست بخورد. منطق read-only در AccessGuard و CancelledReadonlyGuard یکی شود.
+3. #860 (T153): _REPO_ROOT در output_apps/ecosystem_core/src/learning/self_learning_agent.py:20 یک «..» زیادی دارد. لینک‌های file:///Users/... را از docs/security/VECTOR_STORE_TENANCY.md بردار و مسیر نسبی بگذار. همهٔ فراخوانی‌های retrieve_past_experience باید tenant_id یا user_id بدهند.
+4. فقط اگر زیر سقف WIP رفتی: T173.
+به این PR دست نزن (مال hub): #857. hub بعد از اصلاح #861 آن را ادغام می‌کند.
 
 تو lane L3 هستی. /boost
 

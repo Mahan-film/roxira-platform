@@ -1,10 +1,11 @@
-کار این دور (WAVE 17، ۱۷ نوامبر) برای L1، به همین ترتیب (متن کامل در آخرین کامنت «## WAVE 17» در issue 592):
-1. #831: اجرای lookup_user_by_id را از PUBLIC بگیر و فقط به نقش اپ بده.
-2. #771: webhook_secret را رمزشده ذخیره کن (webhook_secret_encrypted + openSecret) و migration را بالاتر از جدیدترین origin/main شماره‌گذاری کن.
-3. T170: بررسی migration با Squawk و چک شمارهٔ migration در CI و local_ci.
-4. T168: گیت سریع‌تر M1 با ۴ shard برای Playwright در merge_group.
-5. T171: فایل‌های مشترک تولیدی (بعد از T170).
-به این PRها دست نزن: صف ادغام #842 #833 #836 #846 #851 #852؛ مال hub: #844 #849 #850 #853 #847 #779 #796 #857.
+کار این دور (WAVE 18، ۱۷ نوامبر) برای L1، به همین ترتیب (متن کامل در آخرین کامنت «## WAVE 18» در issue 592).
+این دور دور اصلاح است: سقف WIP همهٔ laneها پر است. ردیف جدید فقط وقتی برمی‌داری که PRهای بازت زیر ۳ برود.
+شمارهٔ migration هر PR را دقیقاً همانی بگذار که این‌جا نوشته شده (چند PR الان یک شماره دارند).
+1. #831 (T105): migration را 1789900010900 کن و نام فایل را در بدنهٔ PR درست کن. «plan» در scripts/ops/db_app_role.sh نباید رمز نقش را عوض کند (یا همه‌چیز در یک تراکنش که کامل برمی‌گردد). فرمان audit که runbook از آن نام می‌برد باید واقعاً در اسکریپت باشد. شرط همیشه‌false در test/access-control.e2e-spec.ts:609 را درست کن.
+2. #771 (T85): rebase کن و migration را 1789900010700 کن. در فهرست SSRF بازهٔ ::ffff:0:0/96 (IPv4 داخل IPv6) را ببند و آدرس را قبل از چک نرمال کن. price فقط string باشد. فیلد webhookSecret در پاسخ را maskedWebhookSecret بنام. کش DNS سقف اندازه و پاک‌سازی داشته باشد.
+3. #850 (T141، از hub به تو برگشت): روی origin/main و resolver جدید (#842) rebase کن. conflict در country-packs.module.ts، corporate-tax.service.ts، moadian.service.ts و specهای آن‌هاست. resolve()?.eInvoice بماند و برای مسیر بدون registry هم تست بگذار.
+4. فقط اگر زیر سقف WIP رفتی: T170 (Squawk روی migrationهای جدید + چک یکتایی شمارهٔ migration بین main و PRهای باز)، بعد T168.
+به این PR دست نزن (مال hub): #857. hub بعد از اصلاح #861 آن را ادغام می‌کند.
 
 تو lane L1 هستی. /boost
 
