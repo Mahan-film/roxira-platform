@@ -2,7 +2,7 @@
 # Self-hosted deep-research API (roxira-research). PUBLIC research questions only.
 # verify: the base tag is pinned exactly on purpose — confirm it still exists on
 # Docker Hub before building (python:3.12-slim-bookworm drift); do not silently bump.
-FROM python:3.12.11-slim-bookworm
+FROM python:3.15.2-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
