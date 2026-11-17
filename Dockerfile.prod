@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # ---- builder: compilers + pip install into an isolated venv ----------------
-FROM python:3.11-slim AS builder
+FROM python:3.15-slim AS builder
 
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -35,7 +35,7 @@ RUN python -c "import torch; assert torch.version.cuda is None, torch.version.cu
     && ! pip list 2>/dev/null | grep -i '^nvidia-'
 
 # ---- runtime: no compilers, only the venv + app code -----------------------
-FROM python:3.11-slim
+FROM python:3.15-slim
 
 WORKDIR /app
 
