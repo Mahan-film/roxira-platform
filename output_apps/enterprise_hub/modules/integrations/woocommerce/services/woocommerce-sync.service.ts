@@ -35,9 +35,10 @@ import {
 } from '../entities/woocommerce-sync-log.entity';
 import { WooCommerceRepository } from '../repositories/woocommerce.repository';
 import {
-  PRIVATE_BLOCKLIST,
   assertSafeStoreUrl,
+  isPrivateIp,
   maskApiKey,
+  normalizeHost,
   openSecret,
   sealSecret,
 } from '../utils/woocommerce-crypto.util';
@@ -47,7 +48,35 @@ const TOMAN_TO_RIAL = 10;
 const RATIO_SCALE = 1_000_000;
 
 const DNS_CACHE_TTL_MS = 5 * 60 * 1000;
+const DNS_CACHE_MAX_SIZE = 500;
 const dnsValidationCache = new Map<string, { valid: boolean; expiresAt: number }>();
+
+function getDnsCache(host: string, now: number): { valid: boolean; expiresAt: number } | undefined {
+  const entry = dnsValidationCache.get(host);
+  if (!entry) return undefined;
+  if (entry.expiresAt <= now) {
+    dnsValidationCache.delete(host);
+    return undefined;
+  }
+  return entry;
+}
+
+function setDnsCache(host: string, valid: boolean, now: number): void {
+  for (const [k, v] of dnsValidationCache) {
+    if (v.expiresAt <= now) {
+      dnsValidationCache.delete(k);
+    }
+  }
+  if (dnsValidationCache.has(host)) {
+    dnsValidationCache.delete(host);
+  }
+  while (dnsValidationCache.size >= DNS_CACHE_MAX_SIZE) {
+    const oldestKey = dnsValidationCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    dnsValidationCache.delete(oldestKey);
+  }
+  dnsValidationCache.set(host, { valid, expiresAt: now + DNS_CACHE_TTL_MS });
+}
 
 /**
  * Safely converts minor units (cents) to a number for the Invoicing API.
@@ -143,7 +172,7 @@ export class WooCommerceSyncService {
       storeUrl: config.storeUrl,
       maskedConsumerKey: maskApiKey(openKey),
       hasConsumerSecret: Boolean(config.consumerSecretEncrypted),
-      webhookSecret: maskApiKey(plainWebhookSecret),
+      maskedWebhookSecret: maskApiKey(plainWebhookSecret),
       webhookUrl: `/api/backend/enterprise-hub/integrations/woocommerce/webhook/${tenantId}`,
       autoSyncOrders: config.autoSyncOrders,
       autoSyncStock: config.autoSyncStock,
@@ -213,7 +242,7 @@ export class WooCommerceSyncService {
       storeUrl: saved.storeUrl,
       maskedConsumerKey: maskApiKey(plainKey),
       hasConsumerSecret: Boolean(saved.consumerSecretEncrypted),
-      webhookSecret: maskApiKey(plainWebhook),
+      maskedWebhookSecret: maskApiKey(plainWebhook),
       webhookUrl: `/api/backend/enterprise-hub/integrations/woocommerce/webhook/${tenantId}`,
       autoSyncOrders: saved.autoSyncOrders,
       autoSyncStock: saved.autoSyncStock,
@@ -509,17 +538,17 @@ export class WooCommerceSyncService {
     const basePath = parsed.pathname.replace(/\/+$/, '');
     const origin = parsed.origin;
 
-    const host = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+    const host = normalizeHost(parsed.hostname);
     const verifyHostNotPrivate = async () => {
       if (net.isIP(host)) {
-        if (PRIVATE_BLOCKLIST.check(host, net.isIP(host) === 4 ? 'ipv4' : 'ipv6')) {
+        if (isPrivateIp(host)) {
           throw new BadRequestException('WooCommerce storeUrl resolves to a private or loopback address');
         }
         return;
       }
       const now = Date.now();
-      const cached = dnsValidationCache.get(host);
-      if (cached && cached.expiresAt > now) {
+      const cached = getDnsCache(host, now);
+      if (cached) {
         if (!cached.valid) {
           throw new BadRequestException('WooCommerce storeUrl resolves to a private or loopback address');
         }
@@ -528,12 +557,12 @@ export class WooCommerceSyncService {
       try {
         const resolved = await dns.lookup(host, { all: true });
         for (const addr of resolved) {
-          if (PRIVATE_BLOCKLIST.check(addr.address, addr.family === 4 ? 'ipv4' : 'ipv6')) {
-            dnsValidationCache.set(host, { valid: false, expiresAt: now + DNS_CACHE_TTL_MS });
+          if (isPrivateIp(addr.address)) {
+            setDnsCache(host, false, now);
             throw new BadRequestException('WooCommerce storeUrl resolves to a private or loopback address');
           }
         }
-        dnsValidationCache.set(host, { valid: true, expiresAt: now + DNS_CACHE_TTL_MS });
+        setDnsCache(host, true, now);
       } catch (err: any) {
         if (err instanceof BadRequestException) throw err;
       }

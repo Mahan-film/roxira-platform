@@ -123,7 +123,7 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
         consumerSecret: 'cs_real_secret_5678',
       });
       expect(autoSaved.generatedWebhookSecret).toMatch(/^[0-9a-f]{48}$/);
-      expect(autoSaved.webhookSecret).toBe(`...${autoSaved.generatedWebhookSecret!.slice(-4)}`);
+      expect(autoSaved.maskedWebhookSecret).toBe(`...${autoSaved.generatedWebhookSecret!.slice(-4)}`);
 
       const stored = mockWooRepo.saveConfig.mock.calls[0][1];
       mockWooRepo.findConfig.mockResolvedValue({
@@ -158,7 +158,7 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
         consumerSecret: 'cs_real_secret_5678',
         webhookSecret: 'sample_wh_test_secret_9999',
       });
-      expect(initial.webhookSecret).toBe('...9999');
+      expect(initial.maskedWebhookSecret).toBe('...9999');
 
       const stored = mockWooRepo.saveConfig.mock.calls[0][1];
       mockWooRepo.findConfig.mockResolvedValue({
@@ -200,7 +200,7 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
             subtotal: '52.50',
             total: '50.00',
             total_tax: '5.00',
-            price: 25,
+            price: '25',
           },
         ],
       } as any);

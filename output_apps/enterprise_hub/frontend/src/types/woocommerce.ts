@@ -2,7 +2,7 @@ export interface WooCommerceConfig {
   storeUrl: string;
   maskedConsumerKey: string;
   hasConsumerSecret: boolean;
-  webhookSecret: string;
+  maskedWebhookSecret: string;
   webhookUrl: string;
   autoSyncOrders: boolean;
   autoSyncStock: boolean;
