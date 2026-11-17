@@ -35,6 +35,7 @@ env:
   NODE_VERSION: "22"
   SEMGREP_VERSION: "1.178.0"
   TRIVY_VERSION: "0.75.0"
+  SQUAWK_VERSION: "2.73.0"
 
 jobs:
   changes:
@@ -52,6 +53,7 @@ jobs:
       projects: ${{ steps.filter.outputs.projects }}
       templates: ${{ steps.filter.outputs.templates }}
       e2e: ${{ steps.filter.outputs.e2e }}
+      migrations: ${{ steps.filter.outputs.migrations }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
@@ -90,6 +92,11 @@ jobs:
               - ".github/workflows/ci.yml"
             templates:
               - "templates/**"
+              - ".github/workflows/ci.yml"
+            migrations:
+              - "output_apps/enterprise_hub/migrations/**"
+              - "scripts/dev/check_migration_ids.py"
+              - "scripts/dev/lint_migrations_squawk.py"
               - ".github/workflows/ci.yml"
             e2e:
               - "e2e/**"
@@ -367,6 +374,32 @@ jobs:
         run: |
           cp ci/compose.env .env
           docker compose --env-file ci/compose.env -f docker-compose.prod.yml config -q
+
+  migration-lint:
+    name: Migration ids + Squawk (new migrations only)
+    needs: changes
+    if: needs.changes.outputs.migrations == 'true' && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Migration id check (blocking)
+        run: |
+          # The id must be above the newest id on main's tip, not above the merge base.
+          git fetch --no-tags origin main
+          python3 scripts/dev/check_migration_ids.py --base origin/main
+      - name: Squawk on new migrations (not-null and robust-stmts rules block)
+        run: |
+          npm install --no-audit --no-fund --prefix "$RUNNER_TEMP/squawk" "squawk-cli@${SQUAWK_VERSION}"
+          SQUAWK="$RUNNER_TEMP/squawk/node_modules/.bin/squawk" python3 scripts/dev/lint_migrations_squawk.py --base origin/main
 
   frontend:
     name: Frontend lint + build

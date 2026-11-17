@@ -199,6 +199,25 @@ else
   skip_step "frontend" "no changes under output_apps/enterprise_hub/frontend"
 fi
 
+# migration lint (T170): ids above origin/main's newest and unique (blocking), then Squawk on the
+# added migrations (blocking: not-null and prefer-robust-stmts; the rest report-only).
+step_migration_ids() {
+  python3 scripts/dev/check_migration_ids.py --base "$BASE_REF"
+}
+step_migration_squawk() {
+  python3 scripts/dev/lint_migrations_squawk.py --base "$BASE_REF"
+}
+if changed_matches '^output_apps/enterprise_hub/migrations/|^scripts/dev/(check_migration_ids|lint_migrations_squawk)\.py$'; then
+  run_step "migration ids above origin/main" step_migration_ids
+  if have squawk || [ -n "${SQUAWK:-}" ] || have npx; then
+    run_step "Squawk on new migrations" step_migration_squawk
+  else
+    skip_step "Squawk on new migrations" "needs npx (npm i -g squawk-cli) or \$SQUAWK"
+  fi
+else
+  skip_step "migration lint" "no changes under enterprise_hub/migrations"
+fi
+
 # fresh DB migrations: build the hub DB from zero on a throwaway Postgres 17 container
 # (scripts/dev/fresh_db_migrate.sh). Only when migrations or the data source changed.
 step_fresh_db() {
