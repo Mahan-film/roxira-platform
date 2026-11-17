@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        base_url: ${{ fromJSON(inputs.base_url && format('["{0}"]', inputs.base_url) || '["https://ghazihoushmand.ir","https://roxira.ir","https://roxira.net"]') }}
+        base_url: ${{ fromJSON(inputs.base_url && format('[{0}]', toJSON(inputs.base_url)) || '["https://ghazihoushmand.ir","https://roxira.ir","https://roxira.net"]') }}
     env:
       BASE_URL: ${{ matrix.base_url }}
     steps:
