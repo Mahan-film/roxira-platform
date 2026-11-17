@@ -1,0 +1,10 @@
+[Unit]
+Description=Roxira nightly WAL-G base backup (02:20 UTC)
+
+[Timer]
+OnCalendar=*-*-* 02:20:00 UTC
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target
