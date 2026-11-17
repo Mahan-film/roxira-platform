@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": null,
+    "moduleResolution": "bundler",
+    "strict": false,
+    "noEmit": true,
+    "incremental": false
+  }
+}
