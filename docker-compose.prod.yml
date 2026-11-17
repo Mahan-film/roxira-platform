@@ -430,6 +430,7 @@ services:
     restart: always
     mem_limit: 64m
     mem_reservation: 24m
+    oom_score_adj: 300  # T205 convention: stateless, backend falls back safely when flagd is gone
     command:
       - start
       - --uri
