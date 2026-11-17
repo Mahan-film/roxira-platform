@@ -277,7 +277,7 @@ export default function SuiteDashboardPage() {
         </div>
       </div>
 
-      {can("admin", "read") && (
+      {can("data_import", "create") && (
         <Link
           href="/app/import"
           className="flex items-center gap-4 rounded-2xl border-2 border-dashed border-primary/30 bg-primary/5 p-4 transition-colors hover:border-primary/50 hover:bg-primary/10"
