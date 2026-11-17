@@ -17,6 +17,13 @@ import {
   RollupAttendanceResultDto,
 } from '../dto/attendance-event.dto';
 import { jalaliMonthEnd, jalaliMonthStart } from './jalali-period';
+import {
+  parseTehranWallTime,
+  tehranDateOf,
+  tehranDayWindow,
+} from './tehran-time';
+
+export const MAX_IMPORT_ROWS = 10_000;
 
 @Injectable()
 export class DailyAttendanceService {
@@ -75,11 +82,14 @@ export class DailyAttendanceService {
     dateStr: string,
     branchId?: number,
   ): Promise<DailyAttendanceSummaryDto> {
-    const startOfDay = new Date(`${dateStr}T00:00:00.000Z`);
-    const endOfDay = new Date(`${dateStr}T23:59:59.999Z`);
-    if (isNaN(startOfDay.getTime())) {
+    // The day is the Asia/Tehran calendar day, not the UTC day.
+    const window = tehranDayWindow(dateStr);
+    if (!window) {
       throw new BadRequestException(`تاریخ نامعتبر است: ${dateStr}`);
     }
+    const startOfDay = window.start;
+    // listEventsForDay is inclusive on the upper bound, so step back 1 ms from the next midnight.
+    const endOfDay = new Date(window.end.getTime() - 1);
 
     // 1. Fetch active employees
     const employees = await this.hrRepo.findActiveEmployees(tenantId);
@@ -206,6 +216,12 @@ export class DailyAttendanceService {
       .map((l) => l.trim())
       .filter((l) => l.length > 0);
 
+    if (lines.length > MAX_IMPORT_ROWS) {
+      throw new BadRequestException(
+        `حداکثر ${MAX_IMPORT_ROWS} ردیف در هر بار درون‌ریزی مجاز است.`,
+      );
+    }
+
     if (lines.length === 0) {
       return { totalRows: 0, inserted: 0, skipped: 0, errors: ['فایل خالی است.'] };
     }
@@ -264,9 +280,9 @@ export class DailyAttendanceService {
         continue;
       }
 
-      // Parse timestamp
-      const parsedDate = new Date(rawDateTime.replace(' ', 'T'));
-      if (isNaN(parsedDate.getTime())) {
+      // Parse timestamp: device logs carry Asia/Tehran wall time
+      const parsedDate = parseTehranWallTime(rawDateTime);
+      if (!parsedDate) {
         skipped++;
         errors.push(`خط ${i + 1}: تاریخ یا زمان نامعتبر است: ${rawDateTime}`);
         continue;
@@ -311,11 +327,16 @@ export class DailyAttendanceService {
     const startPeriod = jalaliMonthStart(periodYear, periodMonth);
     const endPeriod = jalaliMonthEnd(periodYear, periodMonth);
 
-    // 1. Fetch all attendance events in the month
+    // 1. Fetch all attendance events in the month (Asia/Tehran days, last day included)
+    const rangeStart = tehranDayWindow(startPeriod.toISOString().slice(0, 10));
+    const rangeEnd = tehranDayWindow(endPeriod.toISOString().slice(0, 10));
+    if (!rangeStart || !rangeEnd) {
+      throw new BadRequestException('دوره نامعتبر است.');
+    }
     const events = await this.attendanceRepo.listEventsForRange(
       tenantId,
-      startPeriod.toISOString(),
-      endPeriod.toISOString(),
+      rangeStart.start.toISOString(),
+      new Date(rangeEnd.end.getTime() - 1).toISOString(),
       employeeId,
     );
 
@@ -328,7 +349,7 @@ export class DailyAttendanceService {
     // Group events by employee and by day (YYYY-MM-DD)
     const empDayMap = new Map<number, Map<string, AttendanceEventEntity[]>>();
     for (const ev of events) {
-      const dayKey = ev.occurredAt.toISOString().slice(0, 10);
+      const dayKey = tehranDateOf(ev.occurredAt);
       let dayMap = empDayMap.get(ev.employeeId);
       if (!dayMap) {
         dayMap = new Map();
@@ -341,8 +362,19 @@ export class DailyAttendanceService {
 
     let updatedRecords = 0;
 
+    // Existing monthly rows: the rollup merges into them and never touches fields it does not compute.
+    const existingRows = await this.hrRepo.findAttendanceByPeriod(
+      tenantId,
+      periodYear,
+      periodMonth,
+    );
+    const existingByEmp = new Map(existingRows.map((r) => [r.employeeId, r]));
+
     for (const emp of targetEmployees) {
-      const dayMap = empDayMap.get(emp.id) ?? new Map<string, AttendanceEventEntity[]>();
+      const dayMap = empDayMap.get(emp.id);
+      // Employees without events in the month are left untouched.
+      if (!dayMap || dayMap.size === 0) continue;
+
       let workDays = 0;
       let totalOvertimeHours = 0;
 
@@ -364,21 +396,22 @@ export class DailyAttendanceService {
         }
       }
 
-      // Standard work days in month (typically 30)
-      const standardMonthDays = 30;
-      const absenceDays = Math.max(0, standardMonthDays - workDays);
-
+      // Only workDays and overtimeHours are derived from events. Night/holiday hours, absence and
+      // unpaid leave have no event-based source here, so existing (manual) values are carried over.
+      const existing = existingByEmp.get(emp.id);
       await this.hrRepo.saveAttendance(tenantId, {
         employeeId: emp.id,
         periodYear,
         periodMonth,
         workDays,
         overtimeHours: parseFloat(totalOvertimeHours.toFixed(2)),
-        absenceDays,
-        nightHours: 0,
-        holidayHours: 0,
-        unpaidLeaveDays: 0,
-        notes: `محاسبه خودکار کارکرد از رخدادهای تردد ماه ${periodMonth}/${periodYear}`,
+        nightHours: existing?.nightHours ?? 0,
+        holidayHours: existing?.holidayHours ?? 0,
+        absenceDays: existing?.absenceDays ?? 0,
+        unpaidLeaveDays: existing?.unpaidLeaveDays ?? 0,
+        notes:
+          existing?.notes ??
+          `محاسبه خودکار کارکرد از رخدادهای تردد ماه ${periodMonth}/${periodYear}`,
       });
       updatedRecords++;
     }

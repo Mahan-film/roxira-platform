@@ -53,7 +53,7 @@ import {
   rollupMonthlyAttendance,
 } from "@/lib/api/attendance-events-client";
 import { formatMoneyRial, formatNumber } from "@/lib/fa-format";
-import { tehranWallTimeToIso } from "@/lib/tehran-time";
+import { formatTehranTime, tehranDateIso, tehranWallTimeToIso } from "@/lib/tehran-time";
 import {
   LEAVE_STATUS_LABELS,
   LEAVE_TYPE_LABELS,
@@ -94,12 +94,7 @@ function formatMinutes(mins: number): string {
 function formatTimeString(isoString: string | null): string {
   if (!isoString) return "—";
   try {
-    const parts = isoString.split("T");
-    if (parts.length > 1) {
-      return parts[1].substring(0, 5);
-    }
-    const d = new Date(isoString);
-    return isNaN(d.getTime()) ? isoString : d.toLocaleTimeString("fa-IR", { hour: "2-digit", minute: "2-digit" });
+    return formatTehranTime(isoString) ?? isoString;
   } catch {
     return isoString;
   }
@@ -117,7 +112,7 @@ export default function SuiteAttendanceLeaveLoanPage() {
   const [error, setError] = useState<string | null>(null);
 
   // Daily attendance state (T129)
-  const [dailyDate, setDailyDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
+  const [dailyDate, setDailyDate] = useState<string>(() => tehranDateIso());
   const [dailyBranchId, setDailyBranchId] = useState<string>("all");
   const [dailySummary, setDailySummary] = useState<DailyAttendanceSummaryDto | null>(null);
   const [dailyLoading, setDailyLoading] = useState<boolean>(false);
@@ -128,7 +123,7 @@ export default function SuiteAttendanceLeaveLoanPage() {
   const [clockEmployeeId, setClockEmployeeId] = useState<number>(0);
   const [clockKind, setClockKind] = useState<AttendanceEventKind>(AttendanceEventKind.IN);
   const [clockTime, setClockTime] = useState<string>("");
-  const [clockDate, setClockDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
+  const [clockDate, setClockDate] = useState<string>(() => tehranDateIso());
   const [clockBranchId, setClockBranchId] = useState<number | undefined>(undefined);
   const [clockNotes, setClockNotes] = useState<string>("");
   const [clockSubmitting, setClockSubmitting] = useState<boolean>(false);

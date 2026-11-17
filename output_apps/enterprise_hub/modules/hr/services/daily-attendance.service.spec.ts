@@ -33,8 +33,10 @@ describe('DailyAttendanceService (T129)', () => {
       listEventsForDay: jest.fn(async () => []),
       listEventsForRange: jest.fn(async () => []),
     };
+    // (mockHrRepo is created below; findAttendanceByPeriod is added there)
 
     mockHrRepo = {
+      findAttendanceByPeriod: jest.fn(async () => []),
       findEmployeeById: jest.fn(async (tId: string, id: number) => {
         if (id === 1) {
           return {

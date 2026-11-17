@@ -7,7 +7,9 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Matches,
   Max,
+  MaxLength,
   Min,
 } from 'class-validator';
 import {
@@ -66,6 +68,7 @@ export class QueryDailyAttendanceDto {
   })
   @IsNotEmpty()
   @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'date must be YYYY-MM-DD' })
   date: string;
 
   @ApiPropertyOptional({ description: 'فیلتر بر اساس شناسه شعبه', example: 1 })
@@ -79,6 +82,7 @@ export class ImportAttendanceCsvDto {
   @ApiProperty({ description: 'محتوای متنی فایل لاگ یا CSV دستگاه حضور و غیاب' })
   @IsNotEmpty()
   @IsString()
+  @MaxLength(2_000_000)
   csvData: string;
 
   @ApiPropertyOptional({ description: 'شناسه شعبه پیش‌فرض', example: 1 })

@@ -32,3 +32,27 @@ export function tehranWallTimeToIso(date: string, time: string): string | null {
   instant = wall - tehranOffsetMs(instant);
   return new Date(instant).toISOString();
 }
+
+/** Asia/Tehran calendar date (YYYY-MM-DD) of an instant (default: now). */
+export function tehranDateIso(instant: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TEHRAN_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(instant);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+/** Asia/Tehran wall time (HH:mm, Latin digits) of an ISO instant; null when unparsable. */
+export function formatTehranTime(iso: string): string | null {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: TEHRAN_TZ,
+    hourCycle: "h23",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(d);
+}
