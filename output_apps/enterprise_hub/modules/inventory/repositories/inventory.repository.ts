@@ -249,13 +249,11 @@ export class InventoryRepository {
 
   /** A store of this tenant, or null (used to validate a warehouse's `storeId`). */
   async findStoreById(tenantId: string, id: number): Promise<StoreEntity | null> {
-    const scope = this.tenantScope;
-    if (scope) {
-      return scope.run(tenantId, (m) =>
-        m.getRepository(StoreEntity).findOne({ where: { id, tenantId } }),
-      );
-    }
-    return this.dataSource.getRepository(StoreEntity).findOne({ where: { id, tenantId } });
+    // Always tenant-scoped (sets app.tenant_id for RLS); never fall back to the bare DataSource.
+    const scope = this.tenantScope ?? new TenantScope(this.dataSource);
+    return scope.run(tenantId, (m) =>
+      m.getRepository(StoreEntity).findOne({ where: { id, tenantId } }),
+    );
   }
 
   /** Updates the editable warehouse fields, scoped by tenant. */
