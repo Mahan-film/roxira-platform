@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateInvoiceOnlinePaymentLinks1789900004500 implements MigrationInterface {
-  name = 'CreateInvoiceOnlinePaymentLinks1789900004500';
+export class CreateInvoiceOnlinePaymentLinks1789900010100 implements MigrationInterface {
+  name = 'CreateInvoiceOnlinePaymentLinks1789900010100';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // 1. Table: invoice_payment_gateway_configs

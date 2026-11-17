@@ -1,6 +1,8 @@
 import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from 'crypto';
 
 const VERSION = 'v1';
+/** OWASP minimum for PBKDF2-HMAC-SHA256 (>= 600,000 iterations). */
+export const PBKDF2_ITERATIONS = 600_000;
 
 function getMasterKey(): Buffer {
   const envKey = process.env.PAYMENT_GATEWAY_ENCRYPTION_KEY;
@@ -19,7 +21,7 @@ function getMasterKey(): Buffer {
   if (!salt || salt.trim().length === 0) {
     throw new Error('PAYMENT_GATEWAY_ENCRYPTION_SALT is required when deriving key from passphrase (fail closed)');
   }
-  return pbkdf2Sync(trimmed, salt.trim(), 100_000, 32, 'sha256');
+  return pbkdf2Sync(trimmed, salt.trim(), PBKDF2_ITERATIONS, 32, 'sha256');
 }
 
 /**
