@@ -87,3 +87,8 @@ Do not edit past entries — add a new one instead.
 - Why: review/fix was the bottleneck; Claude quota ran out mid-day, so Gemini lanes own all building and fixing again.
 - Follow-up: docs/HANDOFF_2026-11-12.md "Open for the next hub"; make the M1 gate blocking; #663 nginx -t.
 
+
+## 2026-11-17 — hub (Opus 5.5) — WAVE 19/19b: research rows as GitHub issues, two-machine split, Linux CI box plan
+- What changed: merged #870–#874 #884 #885 #887 #888 #893 #857 #896 #897 (target infrastructure T211–T218, team split L1–L6); 44 research-row issues #898–#940 and #947 (T166–T227) with lane/prio labels and Done-when specs, older issues labelled per lane; WAVE 19b on #592; prompts v6b (#941); STATE.md rewritten under 100 lines; `docs/ops/LINUX_CI_BOX.md` for the owner's HP laptop as CI box.
+- Why: owner wants Antigravity to carry far more work, a colleague's machine working in parallel, and the hub spending tokens only on strategy and review.
+- Follow-up: review-desk verdicts on hub PRs #883 #886 #889 #891 #892 #894 #895; production steps in STATE.md; owner rotates three secrets and installs the CI box; R18 digest when it arrives.
