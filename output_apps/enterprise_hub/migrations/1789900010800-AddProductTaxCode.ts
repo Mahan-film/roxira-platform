@@ -12,9 +12,8 @@ export class AddProductTaxCode1789900010800 implements MigrationInterface {
     );
   }
 
-  public async down(q: QueryRunner): Promise<void> {
-    await q.query(
-      `ALTER TABLE "erp_stock_items" DROP COLUMN IF EXISTS "tax_code"`,
-    );
+  public async down(_q: QueryRunner): Promise<void> {
+    // Deliberate no-op: dropping erp_stock_items.tax_code would silently delete
+    // stored 13-digit SSTID values. Rollback requires manual data backup/restore.
   }
 }
