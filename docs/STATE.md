@@ -147,7 +147,7 @@ payroll 178927…, bank 178928…, RBAC 178930…, Moadian 178931….
 - Team tier $99 (#759): SJ_TEAM_*, 200/day, 20 answers/day on vip-team (Opus 5 -> Kimi K3 -> vip-pro); contract review for team + premium; sessions expire after 3 days (JWT_TTL_SECONDS=259200).
 - Legal strategy (#760): multi-track case plan (criminal / civil-arbitration / disciplinary / other) with per-track retrieval and citation guard; chat chip + intake form.
 - USDT panel opens as an overlay (#752); single draft payable in USDT. Next.js 16.4.2 (#754).
-- Off-site: nightly Neon restore + hourly Codeberg mirror installed (#758), active once NEON_BACKUP_URL / CODEBERG_TOKEN are set.
+- Off-site: nightly Neon restore installed (#758), active once NEON_BACKUP_URL is set. The hourly Codeberg mirror is stopped (T210).
 
 ## Shipped 2026-10-16..20 (all merged to main and deployed unless noted)
 - **Pricing**: 4 tiers Free / Basic $4 / Pro $10 / Premium $29; annual = 10x monthly; toman = USD x max(live Tetherland rate, floor 280,000) (+ optional margin %). Daily chat caps: guest 3, free 8, basic 40, pro 60, premium 100, of which 5 Opus answers/day, then pro models (`CHAT_PREMIUM_TOP_DAILY_LIMIT=5`).

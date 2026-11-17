@@ -86,13 +86,13 @@ services:
       - VIP_PHONE_ALLOWLIST=${VIP_PHONE_ALLOWLIST:-}
     depends_on:
       postgres_prod:
-        condition: service_started
+        condition: service_healthy
       redis_prod:
-        condition: service_started
+        condition: service_healthy
       qdrant_prod:
-        condition: service_started
+        condition: service_healthy
       pgbouncer_prod:
-        condition: service_started
+        condition: service_healthy
       roxira_embeddings:
         condition: service_healthy
     healthcheck:
@@ -345,11 +345,16 @@ services:
       - /var/lib/roxira/import-spool:/import-spool
     ports:
       - "127.0.0.1:3000:3000"
+    # T210: wait for healthy redis/postgres/pgbouncer, else ioredis logs ECONNREFUSED after a reboot.
     depends_on:
-      - postgres_prod
-      - redis_prod
-      - pgbouncer_prod
-      - docker-socket-proxy
+      postgres_prod:
+        condition: service_healthy
+      redis_prod:
+        condition: service_healthy
+      pgbouncer_prod:
+        condition: service_healthy
+      docker-socket-proxy:
+        condition: service_started
     # Healthcheck comes from output_apps/enterprise_hub/Dockerfile (curl /docs);
     # not redefined here so it stays in sync with the image.
     logging:

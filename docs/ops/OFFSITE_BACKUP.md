@@ -69,6 +69,11 @@ values of `NEON_BACKUP_URL[_2..4]` / `CODEBERG_TOKEN` are masked), and the URLs 
 
 ## 2. Codeberg code mirror
 
+**STOPPED (T210, see PUBLIC_REPO_MIGRATION.md).** The Codeberg pre-receive hook rejects the mirror's refs, so
+`install_offsite.sh` no longer installs or enables it and `--apply` / `--disable` switch the timer off. On the
+server: `systemctl disable --now roxira-codeberg-mirror.timer roxira-codeberg-mirror.service; systemctl reset-failed roxira-codeberg-mirror.service`.
+The files below stay for a later restart.
+
 `scripts/ops/backup/codeberg_mirror.sh` (units `roxira-codeberg-mirror.service|timer`, hourly):
 
 - Keeps a bare repo in `/var/lib/roxira-mirror/roxira-platform.git`, fetched from the same remote URL
