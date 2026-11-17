@@ -6,7 +6,6 @@ import { isoDate, jalaliMonthEnd } from '../../hr/services/jalali-period';
 import { isValidStatutoryValue, StatutoryKey } from '../../hr/statutory/statutory-catalogue';
 import { StatutoryRepository } from '../../hr/statutory/statutory.repository';
 import { IRAN, resolveParameters } from '../../hr/statutory/statutory.service';
-import { CountryPackRegistry } from '../../country_packs/country-pack.registry';
 import { CorporateTaxPreviewDto } from '../dto/corporate-tax-preview.dto';
 
 export const CORPORATE_TAX_NOTES: readonly string[] = [
