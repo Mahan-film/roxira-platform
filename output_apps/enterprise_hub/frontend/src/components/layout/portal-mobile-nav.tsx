@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 export interface PortalNavLink {
   href: string;
@@ -11,6 +12,7 @@ export interface PortalNavLink {
 
 /** Hamburger menu for the roxira.ir portal headers (the desktop nav is hidden below xl). */
 export function PortalMobileNav({ links }: { links: PortalNavLink[] }) {
+    const t = useTranslations('layout');
   const [open, setOpen] = useState(false);
   return (
     <div className="xl:hidden">
@@ -27,7 +29,7 @@ export function PortalMobileNav({ links }: { links: PortalNavLink[] }) {
       {open && (
         <nav
           id="portal-mobile-menu"
-          aria-label="منوی اصلی"
+          aria-label={t('portal-mobile-nav.d30a6794')}
           className="absolute inset-x-0 top-full border-b border-white/10 bg-slate-950 px-4 py-3"
         >
           <ul className="mx-auto max-w-6xl space-y-1">

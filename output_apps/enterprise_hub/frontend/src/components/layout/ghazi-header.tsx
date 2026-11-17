@@ -12,6 +12,7 @@ import {
 import { GhaziMark } from "@/components/brand/GhaziMark";
 import { useAuth } from "@/components/auth/auth-provider";
 import { ApDropdown } from "@/components/layout/ap-dropdown";
+import { useTranslations } from "next-intl";
 
 interface NavDest {
   href: string;
@@ -38,6 +39,7 @@ function DestLink({
   role?: "menuitem";
   onNavigate?: () => void;
 }) {
+    const t = useTranslations('layout');
   const common = {
     className,
     role,
@@ -52,6 +54,7 @@ function DestLink({
 }
 
 export function GhaziHeader() {
+    const t = useTranslations('layout');
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const { isAuthenticated, openLogin, logout, user } = useAuth();
@@ -87,7 +90,7 @@ export function GhaziHeader() {
           }}
         >
           <LogOut className="size-4" aria-hidden="true" />
-          <span>خروج از حساب کاربری</span>
+          <span>{t('ghazi-header.f449b26d')}</span>
         </button>
       )}
       <div className="ap-menu-sep" role="separator" />
@@ -105,22 +108,22 @@ export function GhaziHeader() {
             <span className="ap-brand-mark" aria-hidden="true">
               <GhaziMark className="size-9" />
             </span>
-            <span>قاضی هوشمند</span>
+            <span>{t('ghazi-header.cbe734a6')}</span>
           </Link>
 
           {/* Desktop primary navigation */}
-          <nav className="ap-nav-list" aria-label="ناوبری اصلی">
+          <nav className="ap-nav-list" aria-label={t('ghazi-header.c0d4475e')}>
             <DestLink dest={{ href: "/chat", label: "گفتگوی حقوقی" }} className="ap-navlink" current={pathname === "/chat"} />
             <DestLink dest={{ href: "/plans", label: "اشتراک" }} className="ap-navlink" current={pathname === "/plans"} />
           </nav>
 
           <div className="ap-header-end">
-            <Link href="/guide" className="ap-iconbtn" aria-label="راهنمای استفاده" title="راهنمای استفاده">
+            <Link href="/guide" className="ap-iconbtn" aria-label={t('ghazi-header.bcfdf90c')} title={t('ghazi-header.bcfdf90c')}>
               <CircleHelp className="size-5" aria-hidden="true" />
             </Link>
             {!isAuthenticated && (
               <button type="button" className="ap-btn" onClick={handleOpenAuth}>
-                <span>ورود</span>
+                <span>{t('ghazi-header.1a55098b')}</span>
               </button>
             )}
             <span className="ap-only-desktop">
@@ -158,7 +161,7 @@ export function GhaziHeader() {
               onClick={() => setAccountOpen((v) => !v)}
             >
               <User className="size-4" aria-hidden="true" />
-              <span>حساب</span>
+              <span>{t('ghazi-header.c28daebc')}</span>
               <span className="ap-muted ms-auto text-[13px]">{isAuthenticated ? "وارد شده‌اید" : "مهمان"}</span>
             </button>
             {accountOpen && accountSection(closeMobile)}

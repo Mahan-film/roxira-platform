@@ -4,6 +4,8 @@ import Script from "next/script";
 import { headers } from "next/headers";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth/auth-provider";
+import { NextIntlClientProvider } from "next-intl";
+import { getMessages } from "@/lib/i18n/messages";
 import { JsonLd } from "@/components/seo/json-ld";
 import { PwaRegister } from "@/components/pwa/pwa-register";
 import { ClientErrorReporter } from "@/components/observability/client-error-reporter";
@@ -73,6 +75,8 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const { isEnglish, isGhazi } = await getHostInfo();
+  const locale = isEnglish ? "en" : "fa";
+  const messages = getMessages(locale);
   // Umami tracker only when a website id is configured for this host (see lib/analytics/umami.ts).
   const umami = umamiScriptConfig(isGhazi);
 
@@ -95,7 +99,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           />
         ) : null}
         <AuthProvider>
-          {children}
+          <NextIntlClientProvider locale={locale} messages={messages}>
+            {children}
+          </NextIntlClientProvider>
         </AuthProvider>
       </body>
     </html>
