@@ -149,7 +149,7 @@ export class MembersService {
       action: 'member.create_managed',
       resourceType: 'membership',
       resourceId: member.id,
-      metadata: { role: grant.roleKey, username },
+      metadata: { role: grant.roleKey, userId: user.id },
       request,
     });
     return { id: member.id, userId: user.id, username };
