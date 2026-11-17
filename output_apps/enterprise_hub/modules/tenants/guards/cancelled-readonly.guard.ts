@@ -7,8 +7,8 @@ import {
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from '../../auth/decorators/public.decorator';
 import { ALLOW_DURING_CANCELLATION_KEY } from '../decorators/allow-during-cancellation.decorator';
-import { TenantStatus } from '../enums/tenant-status.enum';
 import { TenantsRepository } from '../repositories/tenants.repository';
+import { assertTenantCancellationAccess } from '../utils/cancellation-readonly.util';
 
 @Injectable()
 export class CancelledReadonlyGuard implements CanActivate {
@@ -25,21 +25,15 @@ export class CancelledReadonlyGuard implements CanActivate {
       return true;
     }
 
-    // Routes explicitly marked as permitted during cancellation (e.g. data export)
-    if (
+    const allowDuringCancellation = Boolean(
       this.reflector.getAllAndOverride<boolean | undefined>(
         ALLOW_DURING_CANCELLATION_KEY,
         targets,
-      )
-    ) {
-      return true;
-    }
+      ),
+    );
 
     const request = context.switchToHttp().getRequest();
     const method = String(request.method || '').toUpperCase();
-
-    // Safe read methods are always permitted in cancelled_readonly state
-    const isSafeRead = method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
 
     const tenantId = request.user?.tenantId || request.access?.tenantId;
     if (!tenantId) {
@@ -51,20 +45,12 @@ export class CancelledReadonlyGuard implements CanActivate {
       throw new ForbiddenException('سازمان مورد نظر یافت نشد.');
     }
 
-    if (tenant.status === TenantStatus.CANCELLED_READONLY) {
-      if (!isSafeRead) {
-        const deleteDate = tenant.deleteAfter
-          ? new Date(tenant.deleteAfter).toISOString()
-          : 'retention expiry';
-        throw new ForbiddenException(
-          `سازمان در وضعیت «فقط خواندنی به دلیل لغو اشتراک» قرار دارد (تا تاریخ ${deleteDate}). امکان ثبت یا تغییر داده‌ها وجود ندارد؛ استخراج کامل داده‌ها در دسترس است.`,
-        );
-      }
-    }
-
-    if (tenant.status === TenantStatus.PURGED) {
-      throw new ForbiddenException('سازمان پاکسازی شده و دسترسی به آن مسدود است.');
-    }
+    assertTenantCancellationAccess({
+      status: tenant.status,
+      deleteAfter: tenant.deleteAfter,
+      method,
+      allowDuringCancellation,
+    });
 
     return true;
   }

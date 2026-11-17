@@ -12,6 +12,7 @@ import { IS_PUBLIC_KEY } from '../auth/decorators/public.decorator';
 import { ROLES_KEY } from '../auth/decorators/roles.decorator';
 import { ALLOW_DURING_CANCELLATION_KEY } from '../tenants/decorators/allow-during-cancellation.decorator';
 import { TenantRole } from '../tenants/enums/tenant-role.enum';
+import { assertTenantCancellationAccess } from '../tenants/utils/cancellation-readonly.util';
 import { AccessContext, AccessRequest, AI_ASSISTANT_ROLE } from './access-context';
 import { denied } from './access-errors';
 import {
@@ -108,22 +109,18 @@ export class AccessGuard implements CanActivate {
 
     await this.loginWindow.assertAllowed(ctx.tenantId, ctx.userId, undefined, ctx.roleKey);
 
-    if (ctx.tenantStatus === 'cancelled_readonly') {
-      const isSafeRead =
-        request.method === 'GET' || request.method === 'HEAD' || request.method === 'OPTIONS';
-      const allowCancellation = this.reflector.getAllAndOverride<boolean | undefined>(
+    const allowCancellation = Boolean(
+      this.reflector.getAllAndOverride<boolean | undefined>(
         ALLOW_DURING_CANCELLATION_KEY,
         targets,
-      );
-      if (!isSafeRead && !allowCancellation) {
-        const deleteDate = ctx.deleteAfter
-          ? new Date(ctx.deleteAfter).toISOString()
-          : 'retention expiry';
-        throw new ForbiddenException(
-          `سازمان در وضعیت «فقط خواندنی به دلیل لغو اشتراک» قرار دارد (تا تاریخ ${deleteDate}). امکان ثبت یا تغییر داده‌ها وجود ندارد؛ استخراج کامل داده‌ها در دسترس است.`,
-        );
-      }
-    }
+      ),
+    );
+    assertTenantCancellationAccess({
+      status: ctx.tenantStatus,
+      deleteAfter: ctx.deleteAfter,
+      method: request.method,
+      allowDuringCancellation: allowCancellation,
+    });
 
     if (module && !anyMember) {
       const handler = context.getHandler();

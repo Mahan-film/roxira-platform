@@ -71,7 +71,7 @@ import { BULK_QUEUE_NAME, localStorageRoot, storageDriver } from './bulk/bulk.co
 import { LocalObjectStore } from './bulk/storage/local-object-store';
 import { OBJECT_STORE } from './bulk/storage/object-store';
 import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store';
-import { TENANT_EXPORT_QUEUE } from '../tenants/services/tenant-cancellation.service';
+import { TenantsModule } from '../tenants/tenants.module';
 import { TenantFullExportProcessor } from './processors/tenant-full-export.processor';
 
 /**
@@ -97,10 +97,10 @@ import { TenantFullExportProcessor } from './processors/tenant-full-export.proce
     BankingModule,
     PartiesModule,
     ChequesModule,
+    TenantsModule,
     BullModule.registerQueue(
       { name: PACKAGE_QUEUE_NAME },
       { name: BULK_QUEUE_NAME },
-      { name: TENANT_EXPORT_QUEUE },
     ),
     TypeOrmModule.forFeature([
       DataImportBatchEntity,

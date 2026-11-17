@@ -73,6 +73,7 @@ import { TenantsService } from './services/tenants.service';
     CancelledReadonlyGuard,
   ],
   exports: [
+    BullModule,
     TenantsService,
     TenantsRepository,
     LegalEntitiesService,
