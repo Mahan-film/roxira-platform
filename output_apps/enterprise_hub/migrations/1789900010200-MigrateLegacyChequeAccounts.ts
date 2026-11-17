@@ -112,9 +112,15 @@ export class MigrateLegacyChequeAccounts1789900010200 implements MigrationInterf
           AND target."code" = '${m.legacy}'
           AND target."name" = '${m.legacyName}';
 
-        UPDATE "fin_posting_role_maps"
+        UPDATE "fin_posting_role_maps" m
         SET "account_code" = '${m.legacy}'
-        WHERE "role" = '${m.role}' AND "account_code" = '${m.target}';
+        WHERE m."role" = '${m.role}' AND m."account_code" = '${m.target}'
+          AND EXISTS (
+            SELECT 1 FROM "fin_chart_of_accounts" a
+            WHERE a."tenant_id" = m."tenant_id"
+              AND a."code" = '${m.legacy}'
+              AND a."name" = '${m.legacyName}'
+          );
       `);
     }
 

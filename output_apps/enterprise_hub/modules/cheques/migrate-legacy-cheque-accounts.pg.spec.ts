@@ -71,12 +71,27 @@ describePg('MigrateLegacyChequeAccounts on PostgreSQL (T98)', () => {
     const collLine = await line(T2, legacyColl, '40', '0');
     const outLine = await line(T2, legacyOut, '0', '60');
 
-    const runner = testDb.owner.createQueryRunner();
-    try {
-      await new Migration().up(runner);
-    } finally {
-      await runner.release();
-    }
+    // role maps: T1 explicitly maps cheques_receivable to its land account and cheques_in_collection
+    // to the new code; T2 maps cheques_receivable to its legacy cheque account
+    const insertMap = (t: string, docType: string, role: string, code: string) =>
+      q(`INSERT INTO fin_posting_role_maps (tenant_id, doc_type, role, account_code) VALUES ($1, $2, $3, $4)`, [t, docType, role, code]);
+    await insertMap(T1, 'cheque', 'cheques_receivable', '1110');
+    await insertMap(T1, 'cheque', 'cheques_in_collection', '1023');
+    await insertMap(T2, 'cheque', 'cheques_receivable', '1110');
+    const roleOf = async (t: string, role: string) =>
+      (await q<{ account_code: string }>(`SELECT account_code FROM fin_posting_role_maps WHERE tenant_id = $1 AND role = $2`, [t, role]))[0].account_code;
+    const t1Snapshot = async () =>
+      (await q<{ id: number; code: string; name: string }>(`SELECT id, code, name FROM fin_chart_of_accounts WHERE tenant_id = $1 AND id = ANY($2) ORDER BY id`, [T1, [land, accDep, loan]]));
+
+    const run = async (dir: 'up' | 'down') => {
+      const runner = testDb.owner.createQueryRunner();
+      try {
+        await new Migration()[dir](runner);
+      } finally {
+        await runner.release();
+      }
+    };
+    await run('up');
 
     // T1 untouched: accounts, names and lines
     const t1 = await q<{ code: string; name: string }>(
@@ -112,5 +127,21 @@ describePg('MigrateLegacyChequeAccounts on PostgreSQL (T98)', () => {
       [T2, [legacyIn, legacyColl, legacyOut]],
     );
     expect(left[0].n).toBe('3');
+    expect(await roleOf(T1, 'cheques_receivable')).toBe('1110');
+    expect(await roleOf(T2, 'cheques_receivable')).toBe('1021');
+
+    // down(): the land tenant's role maps, accounts and lines stay untouched; the legacy tenant is restored
+    const t1Before = await t1Snapshot();
+    await run('down');
+    expect(await t1Snapshot()).toEqual(t1Before);
+    expect(await roleOf(T1, 'cheques_receivable')).toBe('1110');
+    expect(await roleOf(T1, 'cheques_in_collection')).toBe('1023');
+    expect(await lineAccountCode(landLine)).toBe('1110');
+    expect(await lineAccountCode(depLine)).toBe('1120');
+    expect(await lineAccountCode(loanLine)).toBe('2110');
+    expect(await roleOf(T2, 'cheques_receivable')).toBe('1110');
+    expect(await lineAccountCode(inLine)).toBe('1110');
+    expect(await lineAccountCode(collLine)).toBe('1120');
+    expect(await lineAccountCode(outLine)).toBe('2110');
   });
 });
