@@ -148,7 +148,7 @@ services:
   # ------------------------------------------------------------------
   pgbouncer_prod:
     # pinned 2026-11-07 to the running version v1.25.2-p0; bump deliberately
-    image: edoburu/pgbouncer:v1.25.2-p0
+    image: edoburu/pgbouncer:v1.26.1-p0
     container_name: roxira_pgbouncer
     restart: always
     mem_limit: 128m
