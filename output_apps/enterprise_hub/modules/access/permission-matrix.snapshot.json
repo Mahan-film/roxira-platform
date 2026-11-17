@@ -2633,6 +2633,17 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /search/ (SearchController.search)": {
+    "policy": "anyMember",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": true,
+    "hr": true,
+    "read_only": true,
+    "legacy_member": true
+  },
   "GET /tenants/me (TenantsController.me)": {
     "policy": "anyMember",
     "owner": true,
