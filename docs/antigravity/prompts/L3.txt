@@ -1,11 +1,13 @@
-کار این دور (WAVE 18، ۱۷ نوامبر) برای L3، به همین ترتیب (متن کامل در آخرین کامنت «## WAVE 18» در issue 592).
-این دور دور اصلاح است: سقف WIP همهٔ laneها پر است. ردیف جدید فقط وقتی برمی‌داری که PRهای بازت زیر ۳ برود.
-شمارهٔ migration هر PR را دقیقاً همانی بگذار که این‌جا نوشته شده (چند PR الان یک شماره دارند).
-1. #728 (T71): rebase کن و migration را 1789900010800 کن. validateVatRateForYear بدون expectedBp باید رد کند (fail closed)، نه هر نرخی را بپذیرد. نام migration را در بدنهٔ PR درست کن.
-2. #854 (T148): migration را 1789900011000 کن. صف tenant-export فقط در یک ماژول ثبت و export شود (الان هم در TenantsModule و هم در DataImportModule است). sanitizeCellForSpreadsheet باید واقعاً تعریف شده باشد. تغییر وضعیت tenant به PURGED در همان تراکنش پاک‌سازی باشد. purge قفل داشته باشد (FOR UPDATE SKIP LOCKED یا advisory lock). خطای UPDATE روی fin_journal_entries را نخور؛ کار شکست بخورد. منطق read-only در AccessGuard و CancelledReadonlyGuard یکی شود.
-3. #860 (T153): _REPO_ROOT در output_apps/ecosystem_core/src/learning/self_learning_agent.py:20 یک «..» زیادی دارد. لینک‌های file:///Users/... را از docs/security/VECTOR_STORE_TENANCY.md بردار و مسیر نسبی بگذار. همهٔ فراخوانی‌های retrieve_past_experience باید tenant_id یا user_id بدهند.
-4. فقط اگر زیر سقف WIP رفتی: T173.
-به این PR دست نزن (مال hub): #857. hub بعد از اصلاح #861 آن را ادغام می‌کند.
+کار این دور (WAVE 19، ۱۷ نوامبر) برای L3، به همین ترتیب (متن کامل در آخرین کامنت «## WAVE 19» در issue 592).
+از این دور دو کامپیوتر موازی کار می‌کنند: L1 تا L4 روی کامپیوتر مالک، L5 و L6 روی کامپیوتر همکار (docs/TEAM_SPLIT_2026-11-17.md).
+شرح کامل ردیف‌ها: docs/strategy/INFRA_TARGET_2026-11-17.md و ARCHITECTURE_DECISIONS_2026-11-16.md.
+1. اصلاحات WAVE 18 خودت (#728، #854، #860).
+2. T215: RLS بر اساس کاربر برای جدول‌های قاضی هوشمند + فهرست بازبینی‌شدهٔ جدول‌های خالی قدیمی برای حذف.
+3. T213: اسکریپت پاک‌سازی Qdrant (snapshot، کپی بیرون، بررسی، حذف؛ پیش‌فرض dry-run). اجرا نکن؛ hub اجرا می‌کند.
+4. رفع بدهی محاسبهٔ پول که #891 پیدا کرده (۱۳۱ مورد)، ماژول به ماژول، اول hr/.
+PRهای hub (۸۸۳ ۸۸۶ ۸۸۹ ۸۹۱ ۸۹۲ ۸۹۴ ۸۹۵) مال hub هستند؛ فقط اگر بازبینی blocker داد و hub تا ۱۲ ساعت رفعش نکرد، lane نام‌برده در WAVE 19 آن را برمی‌دارد.
+شمارهٔ migration بالاتر از جدیدترین main و همهٔ PRهای باز؛ CI این را چک می‌کند.
+هرگز متغیرهای محیطی یا رمزها را چاپ نکن.
 
 تو lane L3 هستی. /boost
 
