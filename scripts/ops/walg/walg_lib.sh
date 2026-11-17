@@ -56,4 +56,11 @@ alert() {
 }
 
 # walg_exec <args...>: run wal-g inside the postgres container as the postgres user (env comes from env_file).
-walg_exec() { docker exec -u postgres "$WALG_CONTAINER" wal-g "$@"; }
+# Only these subcommands may run; anything else is refused.
+walg_exec() {
+  case "${1:-}" in
+    backup-push | backup-list | delete | wal-push | wal-fetch | backup-fetch | st) ;;
+    *) die "wal-g subcommand not allowed: ${1:-<none>}" ;;
+  esac
+  docker exec -u postgres "$WALG_CONTAINER" wal-g "$@"
+}

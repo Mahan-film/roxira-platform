@@ -97,8 +97,8 @@ install -m 644 deploy/systemd/roxira-walg-backup.* deploy/systemd/roxira-walg-st
 systemctl daemon-reload && systemctl enable --now roxira-walg-backup.timer roxira-walg-status.timer
 ```
 
-`docker-compose.prod.yml` is not edited; always pass both `-f` files for `postgres_prod` afterwards (the deploy scripts that run
-`docker compose -f docker-compose.prod.yml up` would recreate the container **without** archiving, see "Coordinator must add" in the PR).
+`docker-compose.prod.yml` is not edited. `scripts/ops/deploy.sh` and `rollback.sh` add `-f docker-compose.walg.yml` automatically when
+`/etc/roxira/walg.env` exists; any other manual `docker compose` call for `postgres_prod` must pass both `-f` files or the container is recreated **without** archiving.
 Then run the restore drill (section 6) within the first day and do not retire the hourly `pgcfg` copies before it has passed.
 
 ## 5. Rollback
@@ -138,6 +138,6 @@ Real disaster restore (new server): start an empty `postgres:17-alpine`-based co
 
 ## 8. Not done / not checked
 
-- The image has **not been built and no WAL-G command has run** (the authoring sandbox has no usable Docker). The Alpine/cgo/libsodium build, the Go toolchain download (`GOTOOLCHAIN=auto`, Go 1.25.11 required by WAL-G v3.0.9) and the R2 behaviour are untested: do step 3 and the drill first. `golang:1.25-alpine` is not pinned by digest.
+- The image has **not been built and no WAL-G command has run** (the authoring sandbox has no usable Docker). The Alpine/cgo/libsodium build, the build with the pinned `golang:1.25.11-alpine` digest (`GOTOOLCHAIN=local`, no toolchain download) and the R2 behaviour are untested: do step 3 and the drill first.
 - The daily e-mail report (`email_offsite.py`, edited by open PR #883) does not read `walg.env` yet; Telegram alerts cover failures meanwhile.
 - No Twenty CRM database coverage; no replica; Qdrant/Redis unchanged.

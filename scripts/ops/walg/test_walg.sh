@@ -33,6 +33,17 @@ echo "$out" | grep -q "archive_mode = off" || fail "restore must disable archivi
 bash scripts/ops/walg/restore_to_time.sh --dry-run --target-time "x'; drop" >/dev/null 2>&1 && fail "bad target time accepted"
 bash scripts/ops/walg/restore_to_time.sh --dry-run --latest --port 5432 >/dev/null 2>&1 && fail "reserved port accepted"
 
+# 5b. env-file validation (runs before any docker call; a fake docker on PATH satisfies the command check)
+tmpe="$(mktemp -d "${TMPDIR:-/tmp}/walgenv.XXXXXX")"
+printf '#!/bin/sh\nexit 1\n' >"$tmpe/docker"; chmod +x "$tmpe/docker"
+printf 'AWS_X=1\nEVIL=1\n' >"$tmpe/bad1"
+# shellcheck disable=SC2016
+printf 'WALG_X=$(id)\n' >"$tmpe/bad2"
+for f in bad1 bad2; do
+  PATH="$tmpe:$PATH" bash scripts/ops/walg/restore_to_time.sh --latest --env-file "$tmpe/$f" >/dev/null 2>&1 && fail "env file $f accepted"
+done
+rm -rf "$tmpe"
+
 # 6. Archive wrapper: over the cap in drop mode it exits 0 and flags the broken chain; wal-g is never called.
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/walgtest.XXXXXX")"; trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/data/pg_wal" "$tmp/state" "$tmp/bin"

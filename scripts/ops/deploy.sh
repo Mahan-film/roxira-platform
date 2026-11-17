@@ -38,6 +38,9 @@
 set -euo pipefail
 
 COMPOSE_FILE="docker-compose.prod.yml"
+# WAL-G overlay (T204): postgres_prod must keep archiving when /etc/roxira/walg.env exists, so include the overlay then.
+COMPOSE_ARGS=(-f "$COMPOSE_FILE")
+[ -r /etc/roxira/walg.env ] && [ -f docker-compose.walg.yml ] && COMPOSE_ARGS+=(-f docker-compose.walg.yml)
 PROJECT_DIR="/opt/roxira_platform"
 NGINX_SERVICE="nginx_gateway"
 NGINX_CONTAINER="roxira_nginx_prod"
@@ -80,7 +83,7 @@ if [ "$OLD_HEAD" != "$NEW_HEAD" ] && ! git diff --quiet "$OLD_HEAD" "$NEW_HEAD" 
 fi
 
 log "validating ${COMPOSE_FILE}"
-docker compose -f "$COMPOSE_FILE" config -q || fail "docker compose config -q failed"
+docker compose "${COMPOSE_ARGS[@]}" config -q || fail "docker compose config -q failed"
 
 # ---------------------------------------------------------------------------
 # 1) Tag current images as :prev before touching anything, so rollback.sh has
@@ -88,7 +91,7 @@ docker compose -f "$COMPOSE_FILE" config -q || fail "docker compose config -q fa
 # ---------------------------------------------------------------------------
 declare -A PREV_IMAGE
 for svc in "${SERVICES[@]}"; do
-  cid="$(docker compose -f "$COMPOSE_FILE" ps -q "$svc" || true)"
+  cid="$(docker compose "${COMPOSE_ARGS[@]}" ps -q "$svc" || true)"
   if [ -z "$cid" ]; then
     log "warning: ${svc} has no running container yet; nothing to tag as :prev"
     continue
@@ -104,10 +107,10 @@ done
 # 2) Build and recreate only the named services.
 # ---------------------------------------------------------------------------
 log "building: ${SERVICES[*]}"
-docker compose -f "$COMPOSE_FILE" build "${SERVICES[@]}" || fail "build failed"
+docker compose "${COMPOSE_ARGS[@]}" build "${SERVICES[@]}" || fail "build failed"
 
 log "recreating: ${SERVICES[*]}"
-docker compose -f "$COMPOSE_FILE" up -d --no-deps "${SERVICES[@]}" || fail "up failed"
+docker compose "${COMPOSE_ARGS[@]}" up -d --no-deps "${SERVICES[@]}" || fail "up failed"
 
 # ---------------------------------------------------------------------------
 # 3) Wait for health. Roll back every touched service if any one fails.
@@ -115,7 +118,7 @@ docker compose -f "$COMPOSE_FILE" up -d --no-deps "${SERVICES[@]}" || fail "up f
 wait_for_health() {
   local svc="$1"
   local cid healthy_status elapsed=0
-  cid="$(docker compose -f "$COMPOSE_FILE" ps -q "$svc")"
+  cid="$(docker compose "${COMPOSE_ARGS[@]}" ps -q "$svc")"
   [ -n "$cid" ] || { log "${svc}: no container after up -d"; return 1; }
 
   healthy_status="$(docker inspect --format '{{if .State.Health}}has-check{{else}}no-check{{end}}' "$cid")"
@@ -154,7 +157,7 @@ refresh_nginx() {
   docker exec "$NGINX_CONTAINER" nginx -t -c "$NGINX_CONF_CANDIDATE" || return 1
 
   log "recreating ${NGINX_SERVICE} to remount nginx.conf (new inode)"
-  docker compose -f "$COMPOSE_FILE" up -d --no-deps --force-recreate "$NGINX_SERVICE" || return 1
+  docker compose "${COMPOSE_ARGS[@]}" up -d --no-deps --force-recreate "$NGINX_SERVICE" || return 1
 
   # The incident was diagnosed with `docker exec ... grep` returning zero for
   # the new block; mirror that here for a line this deploy added, and also
