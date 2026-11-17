@@ -76,6 +76,10 @@ total="$(find "$HUB/migrations" -maxdepth 1 -name '*.ts' | wc -l | tr -d ' ')"
 [ "$ran" = "$total" ] || die "ran $ran of $total migrations"
 log "    $ran migrations executed"
 
+log "    RLS coverage gate (T192)"
+RLS_PSQL="docker exec -i $CTR psql -h 127.0.0.1 -p $PORT -U rx -d rxfresh" bash "$ROOT/scripts/dev/rls_coverage.sh" ||
+  die "RLS coverage gate failed (see scripts/dev/rls_coverage.sh)"
+
 log "2/4 migration:run again (must be a no-op)"
 typeorm migration:run || die "second migration:run failed"
 grep -q 'No migrations are pending' "$WORK/out.log" || die "second run executed something: $(cat "$WORK/out.log")"
