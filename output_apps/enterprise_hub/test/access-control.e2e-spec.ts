@@ -606,7 +606,6 @@ suite('Org access control (e2e, real Postgres)', () => {
       await m.query(`ALTER TABLE audit_log FORCE ROW LEVEL SECURITY`);
       await m.query(`ALTER TABLE audit_log ENABLE TRIGGER audit_log_no_change`);
     });
-    if (ownerDb !== db && ownerDb !== adminDb) await ownerDb.destroy();
     const bad = (await call('get', '/v1/org/audit/verify', owner.accessToken).expect(200)).body;
     expect(bad.ok).toBe(false);
     expect(bad.brokenAtId).toBeTruthy();

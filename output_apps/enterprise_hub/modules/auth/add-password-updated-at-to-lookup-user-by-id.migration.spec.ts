@@ -1,4 +1,4 @@
-import { AddPasswordUpdatedAtToLookupUserById1789900012000 } from '../../migrations/1789900012000-AddPasswordUpdatedAtToLookupUserById';
+import { AddPasswordUpdatedAtToLookupUserById1789900010900 } from '../../migrations/1789900010900-AddPasswordUpdatedAtToLookupUserById';
 
 const runner = () => {
   const queries: string[] = [];
@@ -8,7 +8,7 @@ const runner = () => {
 describe('AddPasswordUpdatedAtToLookupUserById migration (T105)', () => {
   it('up() updates lookup_user_by_id to include password_updated_at and grants execute to roxira_app', async () => {
     const { q, queries } = runner();
-    await new AddPasswordUpdatedAtToLookupUserById1789900012000().up(q as never);
+    await new AddPasswordUpdatedAtToLookupUserById1789900010900().up(q as never);
     const sql = queries.join('\n');
 
     expect(sql).toContain('DROP FUNCTION IF EXISTS public.lookup_user_by_id(uuid)');
@@ -21,7 +21,7 @@ describe('AddPasswordUpdatedAtToLookupUserById migration (T105)', () => {
 
   it('down() reverts lookup_user_by_id', async () => {
     const { q, queries } = runner();
-    await new AddPasswordUpdatedAtToLookupUserById1789900012000().down(q as never);
+    await new AddPasswordUpdatedAtToLookupUserById1789900010900().down(q as never);
     const sql = queries.join('\n');
 
     expect(sql).toContain('DROP FUNCTION IF EXISTS public.lookup_user_by_id(uuid)');
