@@ -58,5 +58,31 @@ class Settings(unittest.TestCase):
                    "BACKUP_R2_ACCESS_KEY_ID": "x", "BACKUP_R2_SECRET_ACCESS_KEY": "y"})
 
 
+class PrunePrefix(unittest.TestCase):
+    """T197: prune --prefix qdrant --daily-days 7 touches only qdrant/daily and keeps the newest object."""
+
+    class Fake:
+        prefix, hourly_days, daily_days = "pgcfg", 7, 30
+        deleted: list = []
+
+        def __init__(self, keys):
+            self.keys = keys
+
+        def list_keys(self, prefix):
+            return [k for k in self.keys if k.startswith(prefix)]
+
+        def delete(self, key):
+            self.deleted.append(key)
+
+    def test_prefix_and_days(self):
+        old = "qdrant/daily/20200101T000000Z.tar.age"
+        mid = "qdrant/daily/20200102T000000Z.tar.age"
+        other = "pgcfg/daily/20200101T000000Z.tar.age"
+        f = self.Fake([old, mid, other])
+        f.deleted = []
+        self.assertEqual(r2.cmd_prune(f, False, "qdrant", None, 7), 0)
+        self.assertEqual(f.deleted, [old])  # newest daily (mid) is kept, pgcfg is not touched
+
+
 if __name__ == "__main__":
     unittest.main()

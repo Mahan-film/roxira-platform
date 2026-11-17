@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Weekly restore drill + migration rehearsal (T198), Sunday 11:30 local time.
+     Rendered by scripts/ops/backup/install_mac_rehearsal.sh: __HOME__ and __REPO__ (absolute path of the repo checkout
+     on the Mac, which holds scripts/ops/backup/ and scripts/ops/notify/) are substituted. NOT installed by default.
+     launchd runs a missed StartCalendarInterval job when the Mac wakes. Docker Desktop must be running; the script
+     exits with a FAIL line (and a Telegram message) when it is not. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>ir.roxira.restore-rehearsal</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__REPO__/scripts/ops/backup/mac_restore_rehearsal.sh</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
+  <key>StartCalendarInterval</key>
+  <dict><key>Weekday</key><integer>0</integer><key>Hour</key><integer>11</integer><key>Minute</key><integer>30</integer></dict>
+  <key>StandardOutPath</key><string>__HOME__/Backups/roxira-dr/rehearsal.launchd.out.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/Backups/roxira-dr/rehearsal.launchd.err.log</string>
+  <key>LowPriorityIO</key><true/>
+  <key>Nice</key><integer>10</integer>
+</dict>
+</plist>

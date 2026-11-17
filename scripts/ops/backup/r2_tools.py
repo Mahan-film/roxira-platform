@@ -8,8 +8,9 @@ Sub-commands (credentials come from the environment, never from arguments):
   put FILE KEY        upload FILE (must be age-encrypted) as object KEY
   get KEY FILE        download object KEY to FILE
   latest PREFIX       print the newest object key under PREFIX and its age in seconds ("KEY AGE")
-  prune               apply the retention policy to hourly/ and daily/ and delete the rest
-  plan-prune          print what `prune` would delete, delete nothing
+  prune [--prefix P] [--daily-days N] [--hourly-days N]
+                      apply the retention policy to P/hourly/ and P/daily/ (default P = BACKUP_R2_PREFIX) and delete the rest
+  plan-prune [same options]   print what `prune` would delete, delete nothing
 
 Env (R2 names first, the existing BACKUP_S3_* names are the fallback):
   BACKUP_R2_ENDPOINT / BACKUP_S3_ENDPOINT          https://<account-id>.r2.cloudflarestorage.com
@@ -203,9 +204,13 @@ def cmd_latest(r: R2, prefix: str) -> int:
     return 0
 
 
-def cmd_prune(r: R2, dry: bool) -> int:
-    keys = r.list_keys(r.prefix + "/")
-    victims = select_prune(keys, datetime.now(timezone.utc), r.hourly_days, r.daily_days)
+def cmd_prune(r: R2, dry: bool, prefix: str | None = None, hourly_days: int | None = None,
+              daily_days: int | None = None) -> int:
+    prefix = (prefix or r.prefix).strip("/")
+    keys = r.list_keys(prefix + "/")
+    victims = select_prune(keys, datetime.now(timezone.utc),
+                           r.hourly_days if hourly_days is None else hourly_days,
+                           r.daily_days if daily_days is None else daily_days)
     for k in victims:
         print(("would delete " if dry else "delete ") + k)
         if not dry:
@@ -220,8 +225,11 @@ def main(argv=None) -> int:
     p = sub.add_parser("put"); p.add_argument("file"); p.add_argument("key")
     g = sub.add_parser("get"); g.add_argument("key"); g.add_argument("file")
     l = sub.add_parser("latest"); l.add_argument("prefix")
-    sub.add_parser("prune")
-    sub.add_parser("plan-prune")
+    for name in ("prune", "plan-prune"):
+        q = sub.add_parser(name)
+        q.add_argument("--prefix")
+        q.add_argument("--daily-days", type=int)
+        q.add_argument("--hourly-days", type=int)
     a = ap.parse_args(argv)
     r = R2()
     if a.cmd == "put":
@@ -231,7 +239,7 @@ def main(argv=None) -> int:
     elif a.cmd == "latest":
         return cmd_latest(r, a.prefix)
     else:
-        return cmd_prune(r, a.cmd == "plan-prune")
+        return cmd_prune(r, a.cmd == "plan-prune", a.prefix, a.hourly_days, a.daily_days)
     return 0
 
 

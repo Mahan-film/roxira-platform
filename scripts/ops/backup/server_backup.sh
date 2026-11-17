@@ -149,6 +149,20 @@ alert() { # subject, message
 # ---- dumps -----------------------------------------------------------------------------------
 container_running() { docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null | grep -q true; }
 
+# dump_counts CONTAINER DB FILE: manifest of exact row counts (schema.table|rows) for the biggest user tables,
+# taken right after the dump. mac_restore_rehearsal.sh compares the restored counts with it (T198). Read-only,
+# 60 s statement timeout, never fatal: a missing manifest only means the rehearsal has nothing to compare.
+dump_counts() {
+  local c="$1" db="$2" f="$3"
+  docker exec -i "$c" sh -c "psql -U \"\$POSTGRES_USER\" -d '$db' -Atq -F '|' -v ON_ERROR_STOP=1" >"$f" 2>/dev/null <<SQL || { rm -f "$f"; WARNS+=("row-count manifest failed for $c/$db"); return 0; }
+SET statement_timeout = '60s';
+SELECT schemaname || '.' || relname,
+       (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I.%I', schemaname, relname), false, true, '')))[1]::text
+FROM pg_stat_user_tables ORDER BY pg_total_relation_size(relid) DESC LIMIT ${BACKUP_MANIFEST_TABLES:-10};
+SQL
+  return 0
+}
+
 dump_postgres() {
   local c db out
   for c in $PG_CONTAINERS; do
@@ -170,6 +184,7 @@ dump_postgres() {
       if docker exec "$c" sh -c "pg_dump -U \"\$POSTGRES_USER\" -Fc -d '$db'" >"$out/$db.dump" 2>"$out/$db.err" \
         && docker exec -i "$c" pg_restore -l <"$out/$db.dump" >/dev/null 2>&1; then
         log "pg ok: $c/$db $(human "$(stat -c %s "$out/$db.dump")")"
+        dump_counts "$c" "$db" "$out/$db.counts"
       else
         FAILS+=("pg_dump/verify failed for $c/$db")
       fi
@@ -316,6 +331,85 @@ mode_init() {
   done
 }
 
+# offsite_artifact NAME DIR: age-encrypt "DIR/NAME payload" and send it off-site (T197). NAME is qdrant or configs.
+#   R2:       <BACKUP_R2_PREFIX_<NAME> | NAME>/daily/<ts>.tar.age, retention BACKUP_R2_<NAME>_KEEP_DAYS
+#             (qdrant 7, configs 30), pruned with r2_tools.py prune --prefix (newest object is never deleted).
+#   Telegram: telegram_offsite.sh --send-file (45 MB parts; skipped, logged, above TELEGRAM_MAX_TOTAL_MB).
+# Records <NAME>_LAST_RESULT (OK|FAIL|NOT_CONFIGURED), <NAME>_R2_RESULT, <NAME>_TG_RESULT, <NAME>_BYTES in the
+# status file. An R2 failure is added to FAILS, so the existing LAST_RESULT=FAIL alert fires; Telegram is a warning.
+offsite_artifact() {
+  local name="$1" src="$2" ts enc prefix days r2res=OK tgres=SKIPPED_NOT_BUILT trc=0 keepvar upper pv kv
+  upper="$(printf '%s' "$name" | tr '[:lower:]' '[:upper:]')"
+  ts="$(stamp)"
+  if [ "$DRY_RUN" = "1" ]; then
+    echo "[dry-run] offsite $name: tar $src | age -r \$BACKUP_AGE_RECIPIENT -> R2 <prefix, default $name>/daily/$ts.tar.age (+ prune) and telegram_offsite.sh --send-file --label $name"
+    return 0
+  fi
+  if [ -z "${BACKUP_AGE_RECIPIENT:-}" ] || ! command -v age >/dev/null; then
+    status_set "${upper}_LAST_RESULT" FAIL; status_set "${upper}_R2_RESULT" "FAIL: age or BACKUP_AGE_RECIPIENT missing"
+    FAILS+=("offsite $name: age or BACKUP_AGE_RECIPIENT missing (never uploaded unencrypted)"); return 0
+  fi
+  enc="$STATE_DIR/offsite-$name.tar.age"
+  if ! { tar --warning=no-file-changed -cf - -C "$src" "$name" 2>/dev/null || [ $? -eq 1 ]; } | age -r "$BACKUP_AGE_RECIPIENT" -o "$enc" \
+    || [ ! -s "$enc" ]; then
+    rm -f -- "$enc"
+    status_set "${upper}_LAST_RESULT" FAIL; status_set "${upper}_R2_RESULT" "FAIL: encrypt"
+    FAILS+=("offsite $name: tar/age failed"); return 0
+  fi
+  status_set "${upper}_BYTES" "$(stat -c %s "$enc")"
+  # ---- R2
+  if [ -z "${BACKUP_R2_ENDPOINT:-${BACKUP_S3_ENDPOINT:-}}" ]; then
+    r2res=NOT_CONFIGURED; WARNS+=("offsite $name: R2 not configured")
+  else
+    pv="BACKUP_R2_PREFIX_${upper}"; kv="BACKUP_R2_${upper}_KEEP_DAYS"; prefix="${!pv:-$name}"; keepvar="${!kv:-}"
+    days="${keepvar:-$([ "$name" = qdrant ] && echo 7 || echo 30)}"
+    if python3 -I "$R2_TOOLS" put "$enc" "$prefix/daily/$ts.tar.age"; then
+      log "r2 ok: $prefix/daily/$ts.tar.age $(human "$(stat -c %s "$enc")")"
+      python3 -I "$R2_TOOLS" prune --prefix "$prefix" --daily-days "$days" >/dev/null || WARNS+=("offsite $name: R2 prune failed")
+    else
+      r2res=FAIL; FAILS+=("offsite $name: R2 upload failed")
+    fi
+  fi
+  status_set "${upper}_R2_RESULT" "$r2res"
+  # ---- Telegram (same chunking as the 6-hourly dump); needs the bot env, skipped when absent
+  if [ "${BACKUP_OFFSITE_TELEGRAM:-1}" = "1" ] && [ -f "$SCRIPT_DIR/telegram_offsite.sh" ]; then
+    bash "$SCRIPT_DIR/telegram_offsite.sh" --send-file "$enc" --label "$name" || trc=$?
+    case "$trc" in
+      0) tgres=OK ;;
+      10) tgres=SKIPPED_TOO_BIG ;;
+      *) tgres=FAIL; WARNS+=("offsite $name: Telegram send failed (rc=$trc)") ;;
+    esac
+  else
+    tgres=DISABLED
+  fi
+  status_set "${upper}_TG_RESULT" "$tgres"
+  if [ "$r2res" = FAIL ]; then status_set "${upper}_LAST_RESULT" FAIL
+  elif [ "$r2res" = NOT_CONFIGURED ]; then status_set "${upper}_LAST_RESULT" NOT_CONFIGURED
+  else status_set "${upper}_LAST_RESULT" OK; status_set "${upper}_LAST_OK" "$ts"; fi
+  rm -f -- "$enc"
+}
+
+# offsite_extras: Qdrant snapshots and the config set, encrypted, to R2 + Telegram, after the daily set was staged.
+# BACKUP_OFFSITE_EXTRAS=0 turns it off. Runs only when the stage is complete (no dump failure).
+offsite_extras() {
+  [ "${BACKUP_OFFSITE_EXTRAS:-1}" = "1" ] || return 0
+  if [ "${#FAILS[@]}" -gt 0 ]; then warn "dump failures present; off-site Qdrant/configs skipped"; return 0; fi
+  if [ "$DRY_RUN" = "1" ]; then
+    offsite_artifact qdrant "$STAGE"; offsite_artifact configs "$STAGE"; return 0
+  fi
+  if [ -d "$STAGE/qdrant" ]; then offsite_artifact qdrant "$STAGE"; else WARNS+=("no qdrant dir in the stage; off-site skipped"); fi
+  if [ -s "$STAGE/configs/configs.tar.gz" ]; then
+    offsite_artifact configs "$STAGE"
+  else
+    # restic mode does not stage the tarball: build it in a scratch dir (dump_configs writes under $STAGE/configs)
+    local work saved="$STAGE"
+    work="$(mktemp -d "$STATE_DIR/extras.XXXXXX")" && chmod 700 "$work"
+    STAGE="$work"; dump_configs; STAGE="$saved"
+    [ -s "$work/configs/configs.tar.gz" ] && offsite_artifact configs "$work"
+    [[ "$work" == "$STATE_DIR"/extras.* ]] && rm -rf -- "$work"
+  fi
+}
+
 mode_run() {
   local t0 t_start started
   t0="$(date +%s)"
@@ -445,6 +539,9 @@ mode_run() {
       fi
     fi
   done
+
+  step "5b off-site Qdrant + configs (R2 + Telegram)"
+  offsite_extras
 
   step "6/6 status"
   t_start="$(( $(date +%s) - t0 ))"

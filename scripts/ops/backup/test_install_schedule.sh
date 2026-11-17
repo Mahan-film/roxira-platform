@@ -25,7 +25,7 @@ check "apply installs the cleanup timer" "grep -q '01/2 05:40' '$T/units/roxira-
 check "apply saved the old units" "grep -rq OLD-RUN-TIMER '$T/save'"
 check "apply enabled all five timers" "[ \$(grep -c 'systemctl enable' '$T/calls') = 5 ]"
 
-check "apply writes the 2-set retention to backup.env" "grep -q 'BACKUP_KEEP_HOURLY=2' '$T/backup.env' && grep -q 'BACKUP_KEEP_DAILY=0' '$T/backup.env'"
+check "apply writes the 1-set retention to backup.env" "grep -q 'BACKUP_KEEP_HOURLY=1' '$T/backup.env' && grep -q 'BACKUP_KEEP_DAILY=0' '$T/backup.env'"
 bash "$HERE/install_schedule.sh" --apply >/dev/null 2>&1
 check "a second apply does not duplicate the block" "[ \$(grep -c BACKUP_KEEP_HOURLY '$T/backup.env') = 1 ]"
 
