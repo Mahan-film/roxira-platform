@@ -1,54 +1,87 @@
 # Linux CI box (owner's HP laptop)
 
-Owner decision 2026-11-17: the HP laptop leaves Windows and becomes a headless Linux machine for CI/CD. No production data, no production secrets.
+Owner decision 2026-11-17: the HP laptop leaves Windows and becomes a headless Linux server for CI/CD. No production data, no production secrets. Once the repo goes private (`docs/strategy/PRIVATE_REPO_PLAN_2026-11-17.md`), this box runs **all** CI, because GitHub-hosted minutes on private repos are capped.
 
-## Hardware and what it is good for
+## Hardware and roles
 | Part | Value | Use |
 |---|---|---|
-| CPU | Intel Core i7-8550U, 4 cores / 8 threads, 15 W | one heavy CI job at a time (backend specs + Postgres/Redis containers + Playwright), or two light jobs |
-| RAM | 24 GB DDR4 | Postgres + Redis + NestJS + Next.js build + Chromium fit together; TEI bge-m3 on CPU (~2–3 GB) for offline Smart Judge evals |
-| GPU | Intel UHD 620 + NVIDIA MX130 (2 GB, Maxwell) | none for AI: too little memory and too old for current CUDA LLM stacks. Leave the NVIDIA card unused (no proprietary driver) to save heat and power |
-| Cooling | owner-built | sustained load is fine; still cap the CPU at 90 °C with `thermald` |
+| CPU | Intel Core i7-8550U, 4 cores / 8 threads | one heavy CI job at a time, or two light ones |
+| RAM | 24 GB DDR4 | Postgres + Redis + NestJS + Next.js build + Chromium together; TEI bge-m3 on CPU for offline Smart Judge evals |
+| Internal SSD | 256 GB | Ubuntu, Docker images and volumes, runner work directories (fast I/O) |
+| Internal HDD | 1 TB | `/srv/data`: backup copies, restore-drill dumps, Qdrant snapshot copies, CI artifacts and Playwright traces, caches |
+| External SSD | 1 TB | installer (Ventoy) and spare storage; not needed once installed |
+| GPU | Intel UHD 620 + NVIDIA MX130 (2 GB) | display only. The MX130 is too small and too old for AI work; no NVIDIA driver, to save heat and power |
+| Cooling | owner-built | sustained load OK; `thermald` keeps the CPU below 90 °C |
 
-Not a fit: running LLMs locally, production traffic, anything holding customer data.
+Why Linux: Windows uses 3–4 GB RAM and forces reboots for updates, and Docker on Windows runs inside a VM. On Linux, Docker is native, the GitHub runner is a plain service, and the box behaves like the production server.
 
-## Jobs it takes over (in this order)
-1. **Pre-push local CI off the Mac**: run `scripts/dev/local_ci.sh` on the box over SSH so the Mac stays free (the 20–30 min run moves; the Mac only waits for the result).
-2. **Self-hosted GitHub Actions runner** (labels `self-hosted, linux, x64, hp`) for heavy jobs that today cannot run on free minutes: the nightly full M1 suite and the 4 Playwright shards of T168 (#900) in the merge queue.
-3. **Weekly restore drill** (T198, now on the Mac) and the WAL-G point-in-time restore test (T204).
-4. **Smart Judge offline evals** (T211 #925 replay benchmark, T212 #926 golden set) against a local TEI + Qdrant copy, so evals do not load production.
+Note: production is ARM (arm64) and this box is x86 (amd64). CI catches logic errors; the production image is still built on the server itself.
 
-## Security rules (the repo is public)
-- GitHub warns against self-hosted runners on public repos: a fork's pull request could run code on the machine. So: the runner only serves jobs triggered by `push` to main, `merge_group`, `schedule` and `workflow_dispatch`, never `pull_request` from forks (jobs add `if: github.event.pull_request == null || github.event.pull_request.head.repo.full_name == github.repository`). Keep "Require approval for all outside collaborators" on in repo Settings → Actions.
-- Ephemeral runner: `./config.sh --ephemeral` inside a systemd loop, so every job starts from a clean runner state.
-- The runner runs as user `runner` without sudo. It needs Docker for the test databases; Docker group equals root on this box, which is accepted only because the box holds nothing of value. No production keys, no `~/Secrets`, no SSH key to `roxira-prod` on the box.
-- The runner registration token is created by the owner (repo admin) and pasted only into the box's terminal, never into chat.
+## Jobs it takes over
+1. **Pre-push local CI off the Mac:** `LOCAL_CI_REMOTE=roxira-ci git push` runs `scripts/dev/local_ci.sh` on the box (#947).
+2. **Self-hosted GitHub Actions runner** (labels `self-hosted, linux, x64, hp`): `ci.yml`, the review desk, the nightly full M1 suite, the T168 Playwright shards (#900), and the scheduled jobs (`uptime.yml` etc.).
+3. **Weekly restore drill** (T198) and the WAL-G point-in-time restore test (T204), with dumps on the HDD.
+4. **Smart Judge offline evals** (T211 #925, T212 #926) against a local TEI + Qdrant copy.
 
-## What the owner provides (no purchases needed)
-1. A USB stick of at least 8 GB (it will be erased) and the laptop on AC power permanently.
-2. Battery: on 24/7 AC power a battery can swell. In the BIOS, turn on the HP battery charge limit or care mode if the model has one; otherwise remove the battery if it is removable.
-3. A stable connection to github.com, the same one the Mac uses (Ethernet preferred over Wi-Fi).
-4. SSD size: at least 256 GB free (512 GB is better; Docker images + Playwright browsers + caches take ~60–80 GB).
-5. Optional: a free Tailscale account for SSH from outside the home network; otherwise LAN-only SSH.
+## Part A — before you erase Windows (owner, ~20 min)
+1. **Copy anything you still need** from both internal disks (SSD and HDD). Both will be erased.
+2. **Model name:** Windows Settings → System → About, or the sticker under the laptop (for example "HP ProBook 450 G5" or "HP Pavilion 15"). Tell the hub.
+3. **Update the BIOS while Windows is still there:** run HP Support Assistant → Updates, or download the newest BIOS for your exact model from support.hp.com → Software and Drivers. HP's BIOS updaters are Windows programs; afterwards updating is harder.
+4. **Copy the data on the external SSD elsewhere** (for example to the Mac). Installing Ventoy erases it once. Afterwards the SSD is normal storage again, with the Ubuntu ISO sitting as one file on it.
+5. **Make the installer on the external SSD** (from Windows on this laptop):
+   - Download Ventoy for Windows from its official GitHub releases page (github.com/ventoy/Ventoy/releases, file `ventoy-x.y.z-windows.zip`), unzip it, run `Ventoy2Disk.exe`.
+   - Options → **Show All Devices** (an external SSD counts as a hard disk, not a USB stick). Select the external SSD (check its size, 1 TB, so you do not pick an internal disk). Partition style **GPT**. Click Install.
+   - Download **Ubuntu Server 24.04 LTS** (amd64 ISO) from ubuntu.com/download/server and copy the `.iso` file onto the Ventoy drive like any file.
 
-## Install steps (owner, about 30 minutes; the hub guides live)
-1. Download **Ubuntu Server 24.04 LTS** (amd64) from ubuntu.com and write it to the USB with balenaEtcher or Rufus.
-2. BIOS (F10 at power-on): Secure Boot may stay on; set "After power loss" → On; battery care on; boot from USB.
-3. Installer: whole disk with LVM, hostname `roxira-ci`, user of the owner's choice, **install OpenSSH server**, no snaps.
-4. After the first boot, read the IP with `ip -4 addr` and give it to the hub. From there the hub (from the Mac) or the owner pastes the setup commands below.
+## Part B — BIOS settings (owner, ~10 min)
+Turn the laptop off. Press the power button and tap **Esc** repeatedly until the Startup Menu appears. F1 = system information, **F9 = boot device menu**, **F10 = BIOS Setup**. Press F10.
 
-## Setup after install (the hub runs these over SSH once the owner has added the Mac's public key)
-```bash
-sudo apt update && sudo apt -y full-upgrade && sudo apt -y install git curl jq unzip build-essential thermald lm-sensors unattended-upgrades ufw
-sudo sed -i 's/^#\?HandleLidSwitch=.*/HandleLidSwitch=ignore/; s/^#\?HandleLidSwitchExternalPower=.*/HandleLidSwitchExternalPower=ignore/' /etc/systemd/logind.conf && sudo systemctl restart systemd-logind
-sudo ufw allow from 192.168.0.0/16 to any port 22 proto tcp && sudo ufw enable
-curl -fsSL https://get.docker.com | sudo sh   # Docker CE from Docker's own repository
-sudo useradd -m -s /bin/bash runner && sudo usermod -aG docker runner
-```
-Then, as `runner`: Node 22 (nvm), Python 3.12, `npx playwright install --with-deps chromium`, clone the repo, and the GitHub runner per GitHub's "Add a self-hosted runner" page (Settings → Actions → Runners → New, Linux x64), with `--ephemeral --labels hp` and a systemd unit that re-registers after each job.
+Names differ by model family; set whichever of these your BIOS shows:
+
+| Setting | Business models (EliteBook/ProBook: tabs Main, Security, Advanced) | Consumer models (Pavilion/Envy: tabs Main, Security, Configuration, Boot Options) | Value |
+|---|---|---|---|
+| Secure Boot | Advanced → Secure Boot Configuration → "Legacy Support Disable and Secure Boot Disable" | Configuration or Boot Options → Secure Boot | **Off** for the install (Ventoy needs it); turn it back on afterwards |
+| USB/external boot | Advanced → Boot Options → USB Storage Boot | Boot Options → USB Boot | **Enabled** |
+| Fast Boot | Advanced → Boot Options → Fast Boot | Boot Options → Fast Boot | **Off** |
+| Virtualization | Advanced → System Options → Virtualization Technology (VTx) | Configuration → Virtualization Technology | **Enabled** |
+| Fan | Advanced → Built-in Device Options → "Fan Always on while on AC Power" | Configuration → Fan Always On | **Enabled** |
+| Battery | Advanced → Power Management → Battery Health Manager ("Maximize my battery health") if present | Configuration → Battery Care Function (80%) if present | cap at 80% if the option exists |
+| Power on after outage | Advanced → Power-On Options → "After Power Loss" | often missing | **Power On** if present |
+| Wake on LAN | Advanced → Built-in Device Options → Wake on LAN | often missing | Enabled (optional) |
+
+Save with **F10** (or Main → Save Changes and Exit).
+
+If your model has no battery-limit option: Linux cannot cap the charge on most HP laptops. Keep the laptop on AC, and every few months check that the case does not bulge (a swelling battery lifts the touchpad or the bottom cover).
+
+## Part C — install Ubuntu (owner, ~20 min)
+1. Plug in the external SSD and the charger. Power on and tap **Esc**, then **F9**, then choose the external SSD (the UEFI entry). The Ventoy menu appears; choose the Ubuntu ISO, then "Boot in normal mode", then "Try or Install Ubuntu Server".
+2. Language and keyboard: English. Installation type: **Ubuntu Server** (not "minimized").
+3. Network: choose the Wi-Fi adapter (`wl…`), pick your network and enter its password. Ethernet works later without reinstalling.
+4. Proxy: empty. Mirror: default.
+5. **Storage (important):** choose "Use an entire disk" and select the **256 GB SSD** (shown as about 238 GB; the 1 TB HDD is about 931 GB, leave it untouched; the hub formats it later). **Uncheck "Set up this disk as an LVM group"**: with LVM the installer gives Ubuntu only 100 GB of the disk by default. Confirm the summary shows the SSD only, then continue.
+6. Profile: your name, server name **`roxira-ci`**, a username and a strong password. Keep the password yourself; never send it in chat.
+7. Ubuntu Pro: Skip. SSH: **check "Install OpenSSH server"**. Featured snaps: select **none** (Docker comes later from Docker's own repository, not the snap).
+8. When "Reboot now" appears: reboot, unplug the external SSD when asked, and log in.
+9. Type `ip -4 addr` and give the hub the address of the Wi-Fi interface (for example `192.168.1.23`).
+10. Optional: back in the BIOS, turn Secure Boot on again (Ubuntu boots with it).
+
+## Part D — first connection from the Mac (owner, 1 min)
+In the Mac's Terminal (not in chat): `ssh-copy-id <username>@<that IP>`, then type the laptop password when asked. From then on the hub connects with the Mac's key and does the rest.
+
+## Part E — setup (the hub, over SSH)
+- Packages: `git curl jq unzip build-essential thermald lm-sensors unattended-upgrades ufw`; lid switch ignored; firewall allows SSH from the home network only; automatic security updates; no NVIDIA driver.
+- HDD: one GPT partition, ext4, mounted at `/srv/data` via `/etc/fstab` by UUID.
+- Docker CE from Docker's repository; Docker's data on the SSD; a weekly `docker system prune` for images older than 7 days.
+- User `runner` (no sudo, in the `docker` group); Node 22, Python 3.12, Playwright Chromium; GitHub runner as an **ephemeral** systemd service (`--ephemeral --labels hp`). The owner pastes the runner registration token into the box's terminal himself.
+- Ethernet: once the cable is in, netplan prefers it over Wi-Fi (route metric); nothing else changes.
+
+## Security rules
+- Until the repo is private: the runner serves only `push` to main, `merge_group`, `schedule` and `workflow_dispatch`; jobs carry a guard so a fork pull request never reaches it. After going private only collaborators can open PRs, but the guard stays.
+- No production keys, no `~/Secrets`, no SSH key to `roxira-prod` on the box. The `docker` group is root-equivalent, which is accepted only because the box holds nothing of value.
+- Tailscale is not needed: the runner only makes outbound connections to GitHub. Add it later only if SSH from outside the home network is wanted.
 
 ## Done when (workflow part: #947 T227, lane L1)
-- `ssh roxira-ci` works from the Mac; `docker run hello-world` works as `runner`.
-- `LOCAL_CI_REMOTE=roxira-ci git push` runs local CI on the box (new switch in `scripts/dev/local_ci.sh`, lane L1).
-- The runner shows "Idle" in GitHub; the nightly M1 workflow and the T168 shards use `runs-on: [self-hosted, hp]`; a fork PR never reaches it.
+- `ssh roxira-ci` works from the Mac; `docker run hello-world` works as `runner`; `/srv/data` is mounted.
+- `LOCAL_CI_REMOTE=roxira-ci git push` runs local CI on the box.
+- The runner shows "Idle" in GitHub; CI, nightly M1 and T168 shards use `runs-on: [self-hosted, hp]`, with a fallback input to hosted runners when the box is offline.
 - `sensors` stays below 90 °C during a full CI run.
