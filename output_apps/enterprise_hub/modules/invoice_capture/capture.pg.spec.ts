@@ -84,6 +84,7 @@ describePg('Invoice capture on PostgreSQL', () => {
       ),
       llm as never,
       accounting,
+      { consume: async () => ({ meter: 'ocr_pages', periodKey: '2026-11', used: 1, limit: 100, remaining: 99 }), release: async () => undefined } as never,
     );
   }, 180_000);
 
