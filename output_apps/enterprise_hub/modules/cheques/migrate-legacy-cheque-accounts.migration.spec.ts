@@ -1,4 +1,4 @@
-import { MigrateLegacyChequeAccounts1789900004900 as Migration } from '../../migrations/1789900004900-MigrateLegacyChequeAccounts';
+import { MigrateLegacyChequeAccounts1789900010200 as Migration } from '../../migrations/1789900010200-MigrateLegacyChequeAccounts';
 
 const runner = () => {
   const queries: string[] = [];
@@ -12,7 +12,9 @@ describe('MigrateLegacyChequeAccounts migration (T98)', () => {
     const sql = queries.join('\n');
 
     // 1021 target
-    expect(sql).toContain('ON CONFLICT ("tenant_id", "code") DO UPDATE');
+    expect(sql).toContain('ON CONFLICT ("tenant_id", "code") DO NOTHING');
+    // tenant-renamed accounts must keep their names
+    expect(sql).not.toContain('EXCLUDED."name"');
     expect(sql).toContain('target."code" = \'1021\'');
     expect(sql).not.toContain('target."name" = \'اسناد دریافتنی\'');
 

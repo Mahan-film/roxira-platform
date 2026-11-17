@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class MigrateLegacyChequeAccounts1789900004900 implements MigrationInterface {
-  name = 'MigrateLegacyChequeAccounts1789900004900';
+export class MigrateLegacyChequeAccounts1789900010200 implements MigrationInterface {
+  name = 'MigrateLegacyChequeAccounts1789900010200';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // 1. Ensure 1021 ('اسناد دریافتنی') exists for tenants having legacy 1110
@@ -10,8 +10,7 @@ export class MigrateLegacyChequeAccounts1789900004900 implements MigrationInterf
       SELECT DISTINCT a."tenant_id", '1021', 'اسناد دریافتنی', 'ASSET'::accounttype, 'MOEIN', 'IRR', 0
       FROM "fin_chart_of_accounts" a
       WHERE a."code" = '1110'
-      ON CONFLICT ("tenant_id", "code") DO UPDATE
-      SET "name" = EXCLUDED."name";
+      ON CONFLICT ("tenant_id", "code") DO NOTHING
     `);
 
     // 2. Re-point journal entry lines from legacy 1110 to 1021
@@ -42,8 +41,7 @@ export class MigrateLegacyChequeAccounts1789900004900 implements MigrationInterf
       SELECT DISTINCT a."tenant_id", '1023', 'اسناد در جریان وصول', 'ASSET'::accounttype, 'MOEIN', 'IRR', 0
       FROM "fin_chart_of_accounts" a
       WHERE a."code" = '1120'
-      ON CONFLICT ("tenant_id", "code") DO UPDATE
-      SET "name" = EXCLUDED."name";
+      ON CONFLICT ("tenant_id", "code") DO NOTHING
     `);
 
     // 5. Re-point journal entry lines from legacy 1120 to 1023
@@ -74,8 +72,7 @@ export class MigrateLegacyChequeAccounts1789900004900 implements MigrationInterf
       SELECT DISTINCT a."tenant_id", '2011', 'اسناد پرداختنی', 'LIABILITY'::accounttype, 'MOEIN', 'IRR', 0
       FROM "fin_chart_of_accounts" a
       WHERE a."code" = '2110'
-      ON CONFLICT ("tenant_id", "code") DO UPDATE
-      SET "name" = EXCLUDED."name";
+      ON CONFLICT ("tenant_id", "code") DO NOTHING
     `);
 
     // 8. Re-point journal entry lines from legacy 2110 to 2011
