@@ -1,0 +1,14 @@
+# Nightly deterministic legal retrieval gate (no LLM, 0 USD); see scripts/ops/nightly_legal_gate.sh.
+[Unit]
+Description=Roxira nightly legal gate (Recall@1/@5 to Telegram)
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/roxira_platform
+# NOTIFY_* live here (mode 600), never in the repo.
+EnvironmentFile=-/opt/roxira_platform/.env
+ExecStart=/usr/bin/env bash /opt/roxira_platform/scripts/ops/nightly_legal_gate.sh
+TimeoutStartSec=30min
+Nice=10

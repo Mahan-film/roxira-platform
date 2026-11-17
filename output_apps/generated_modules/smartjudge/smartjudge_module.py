@@ -17,6 +17,8 @@ from output_apps.generated_modules.smartjudge.fast_path import (
 )
 from output_apps.generated_modules.smartjudge import chat_safety as _chat_safety
 from output_apps.generated_modules.smartjudge import chat_fast as _chat_fast
+from output_apps.generated_modules.smartjudge import answer_timing as _answer_timing
+from output_apps.generated_modules.smartjudge import served_collection as _served_collection
 from output_apps.generated_modules.smartjudge import chat_auth
 from output_apps.generated_modules.smartjudge import email_auth as _email_auth
 from output_apps.generated_modules.smartjudge import email_sender as _email_sender
@@ -1727,6 +1729,7 @@ async def _run_consult(payload: dict, request, user, stream_cb=None):
               f"retrieval_ms={timing.get('retrieval_ms', 0)} ttft_ms={timing.get('ttft_ms', 0)} "
               f"llm_ms={timing.get('llm_ms', 0)} total_ms={round((time.perf_counter() - t0) * 1000)} "
               f"tier={'VIP' if user.tier == 'VIP' else 'FREE'}", file=sys.stderr)
+        _answer_timing.emit(request_id, timing, round((time.perf_counter() - t0) * 1000), tier="VIP" if user.tier == "VIP" else "FREE", collection=CITATION_QDRANT_COLLECTION)
 
 
 # ---------------------------------------------------------------------------
@@ -2307,9 +2310,11 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
     elif use_prompt_library:
         detected_domains = _prompt_library.detect_domains(user_text)
         extra_queries = list(_prompt_library.expand_competence_queries(user_text))
+        _t_exp = time.perf_counter()
         extra_results = await asyncio.gather(
             *[aquery_knowledge_graph(q, limit=3) for q in extra_queries], return_exceptions=True
         )
+        _timing_set("graph_expansion_ms", _t_exp)
         for extra_res in extra_results:
             if isinstance(extra_res, BaseException):  # boost is best effort
                 print(f"[SMARTJUDGE][COMPETENCE-EXPAND-FAIL] {extra_res}", file=sys.stderr)
@@ -2446,6 +2451,7 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
                 )
                 reply_msg = routed.content
                 routed_model = routed.model or None
+                _answer_timing.note_router_result(routed)
                 if not is_voice and _answer_escalation.enabled() and _llm_gateway.may_use_paid(selected_tier):
                     # B3: flag-gated, one strong-tier re-ask on a deterministic quality trigger.
                     esc = await _answer_escalation.maybe_escalate(
@@ -2474,6 +2480,7 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
                 if _llm_gateway is not None:  # some free models prepend English reasoning text
                     reply_msg = _llm_gateway.strip_leaked_reasoning(reply_msg)
                 routed_model = outcome.model
+                _answer_timing.note_stream_outcome(outcome)
                 bucket = _chat_timing.get()
                 if bucket is not None and outcome.ttft_ms is not None:
                     bucket["ttft_ms"] = outcome.ttft_ms
@@ -5430,13 +5437,12 @@ async def draft_template(
 #   خودکار استناد نامعتبر با متن رسمی مصوب یا درج نشان ``[فاقد تطابق رسمی]``.
 # ==============================================================================
 CITATION_GUARD_VERSION = "1.0"
-CITATION_QDRANT_COLLECTION_DEFAULT = "iran_laws_bge_m3"
 
 
 def _resolve_citation_collection(environ=None) -> str:
-    """Collection name reported by the guard; env ROXIRA_CITATION_QDRANT_COLLECTION, default unchanged."""
-    env = os.environ if environ is None else environ
-    return (env.get("ROXIRA_CITATION_QDRANT_COLLECTION") or "").strip() or CITATION_QDRANT_COLLECTION_DEFAULT
+    """Collection name reported by the guard: env ROXIRA_CITATION_QDRANT_COLLECTION, else the
+    collection the retriever serves from (LIGHTRAG_QDRANT_COLLECTION; see served_collection.py)."""
+    return _served_collection.citation_collection(environ)
 
 
 CITATION_QDRANT_COLLECTION = _resolve_citation_collection()
@@ -6047,12 +6053,13 @@ citation_guard = CitationHallucinationGuard(qdrant_lookup=_qdrant_citation_looku
 async def _guard_citations(text: str, *, use_qdrant: bool = True, extra_precedents: Optional[Sequence[dict]] = None) -> dict:
     """اعتبارسنجی استنادات یک متن و بازگرداندن متن اصلاح‌شده + آمار."""
     try:
-        return await citation_guard.verify_async(
-            text,
-            qdrant_lookup=_qdrant_citation_lookup if use_qdrant else None,
-            use_qdrant=use_qdrant,
-            extra_precedents=extra_precedents,
-        )
+        with _answer_timing.stage("verify_ms"):
+            return await citation_guard.verify_async(
+                text,
+                qdrant_lookup=_qdrant_citation_lookup if use_qdrant else None,
+                use_qdrant=use_qdrant,
+                extra_precedents=extra_precedents,
+            )
     except Exception as exc:  # noqa: BLE001 - هرگز مسیر تولید را نمی‌شکند
         print(f"[SMARTJUDGE][CITATION-GUARD-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
         return {

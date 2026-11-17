@@ -451,6 +451,7 @@ from . import qdrant_cloud as _qcloud  # noqa: E402  (optional read-only cloud r
 from . import retrieval_boost as _rb  # noqa: E402  (pure helpers, no circular import)
 from .. import legal_tokenize as _lt  # noqa: E402  (shared sparse tokenizer, stdlib only)
 from .. import reranker as _reranker  # noqa: E402  (optional cross-encoder, flag-gated, never raises)
+from .. import answer_timing as _answer_timing  # noqa: E402  (T201 per-stage timing, never raises)
 from .. import key_rotation as _kr  # noqa: E402  (key slots + per-key cooldown, stdlib only)
 _ENACTED_DESPITE_TITLE = (
     "لایحه اصلاحی قانون تجارت",
@@ -2015,10 +2016,12 @@ async def qdrant_fallback_laws(
     """Hybrid legal retrieval; with SMARTJUDGE_RERANKER=local the top-N candidates are
     rescored by a cross-encoder and cut to ``limit`` (the single rerank wiring point)."""
     if not _reranker.enabled():
+        _answer_timing.note_rerank_skipped()
         return await _qdrant_fallback_laws_impl(query, limit, active_only)
     want = max(1, int(limit))
     rows = await _qdrant_fallback_laws_impl(query, _reranker.candidate_count(want), active_only)
-    return await _reranker.arerank(query, rows, top_k=want)
+    with _answer_timing.stage("rerank_ms"):
+        return await _reranker.arerank(query, rows, top_k=want)
 
 
 async def _qdrant_fallback_laws_impl(
