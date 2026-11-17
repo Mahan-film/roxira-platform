@@ -2335,13 +2335,21 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         laws = _abstention_gate.filter_by_as_of(laws, as_of)
         precedents = _abstention_gate.filter_by_as_of(precedents, as_of)
 
-    # Abstention gate (R6 Decision 3): version conflict, out of scope, false premise, or missing as-of
+    # Abstention gate (R6 Decision 3): low score / no grounding, version conflict, out of scope, false premise, or missing as-of
     if not review_mode and not case_records:
+        all_chunks = list(laws) + list(precedents)
+        chunk_scores = [
+            float(c.get("rerank_score") if c.get("rerank_score") is not None else c.get("score"))
+            for c in all_chunks
+            if isinstance(c, dict) and (c.get("rerank_score") is not None or c.get("score") is not None)
+        ]
+        top_rerank_score = max(chunk_scores) if chunk_scores else None
         gate_decision = _abstention_gate.evaluate_abstention_gate(
             user_text,
-            retrieved_chunks=list(laws) + list(precedents),
+            retrieved_chunks=all_chunks,
+            rerank_score=top_rerank_score,
             as_of_date=as_of,
-            require_grounding=False,
+            require_grounding=True,
         )
         if gate_decision.should_abstain:
             return _consult_body(

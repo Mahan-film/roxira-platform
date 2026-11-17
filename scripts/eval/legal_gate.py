@@ -475,7 +475,7 @@ def answer_report(results: Sequence[dict], info: Optional[dict] = None) -> dict:
             "beta_max_hallucination_rate": BETA_MAX_HALLUCINATION_RATE,
             "beta_min_abstention_recall": BETA_MIN_ABSTENTION_RECALL,
             "hallucination_threshold_ok": (hallucination_rate <= BETA_MAX_HALLUCINATION_RATE) if hallucination_rate is not None else True,
-            "abstention_threshold_ok": (abstention_recall >= BETA_MIN_ABSTENTION_RECALL) if abstention_recall is not None else True,
+            "abstention_threshold_ok": (abstention_recall >= BETA_MIN_ABSTENTION_RECALL) if abstention_recall is not None else False,
         },
         "summary": {"all": block(results), "dev": block([r for r in results if not r["held_out"]]),
                     "held_out": block([r for r in results if r["held_out"]])},

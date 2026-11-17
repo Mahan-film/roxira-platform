@@ -118,3 +118,35 @@ def test_deterministic_citation_check_unofficial_standing_alone():
     assert len(dropped) == 0
     # An unofficial source never stands alone without official/secondary
     assert unofficial_alone is True
+
+
+def test_out_of_scope_zwnj_patterns():
+    chunks = [{"law_name": "قانون مدنی", "article_no": "10"}]
+    for q in ("آموزش برنامه‌نویسی وب", "قیمت بیت‌کوین امروز چقدر است؟"):
+        decision = evaluate_abstention_gate(q, chunks, rerank_score=0.8)
+        assert decision.should_abstain is True
+        assert decision.reason == "out_of_scope"
+
+
+def test_deterministic_citation_check_uses_chunk_tier_and_drops_empty_or_partial():
+    retrieved = [
+        {"law_name": "بخشنامه مالیاتی", "article_no": "5", "source_tier": "unofficial"},
+    ]
+    # Model self-claims official tier, omits law_name, or uses partial law_name
+    model_citations = [
+        {"law_name": "بخشنامه مالیاتی", "article_no": "5", "source_tier": "official"},
+        {"law_name": "", "article_no": "5", "source_tier": "official"},
+        {"law_name": "بخشنامه", "article_no": "5", "source_tier": "official"},
+    ]
+    valid, dropped, unofficial_alone = deterministic_citation_check(model_citations, retrieved)
+    assert len(valid) == 1
+    assert valid[0]["source_tier"] == "unofficial"
+    assert len(dropped) == 2
+    assert unofficial_alone is True
+
+
+def test_trim_sources_defaults_untagged_to_unofficial():
+    from output_apps.generated_modules.smartjudge.chat_fast import trim_sources
+
+    trimmed = trim_sources([{"title": "ماده ۱", "summary": "متن نمونه"}])
+    assert trimmed[0]["source_tier"] == "unofficial"

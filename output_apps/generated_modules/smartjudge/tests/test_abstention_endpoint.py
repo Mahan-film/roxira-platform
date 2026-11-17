@@ -18,8 +18,8 @@ class _Boom:
 def client(monkeypatch):
     async def fake_kg(query, limit=5, meta_out=None):
         return [
-            {"law_name": "قانون صدور چک", "article_no": "1", "title": "ماده ۱", "valid_from": "1397-01-01", "valid_to": "1405-01-01", "score": 0.9},
-            {"law_name": "قانون صدور چک", "article_no": "2", "title": "ماده ۲", "valid_from": "1397-01-01", "valid_to": "1405-01-01", "score": 0.9},
+            {"law_name": "قانون صدور چک", "article_no": "1", "title": "ماده ۱", "valid_from": "1397-01-01", "valid_to": "1405-01-01", "vector_score": 0.9, "rerank_score": 0.9},
+            {"law_name": "قانون صدور چک", "article_no": "2", "title": "ماده ۲", "valid_from": "1397-01-01", "valid_to": "1405-01-01", "vector_score": 0.9, "rerank_score": 0.9},
         ], []
 
     async def fake_guard(text, *, use_qdrant=True):
@@ -57,3 +57,22 @@ def test_as_of_temporal_filter_abstains_when_no_valid_version(client):
     assert resp.get("abstained") is True
     assert resp.get("abstention_reason") == "no_as_of_version"
     assert "1350-01-01" in resp.get("reply")
+
+
+def test_empty_retrieval_abstains(monkeypatch):
+    async def empty_kg(query, limit=5, meta_out=None):
+        return [], []
+
+    async def fake_guard(text, *, use_qdrant=True):
+        return {"validated_articles": []}
+
+    monkeypatch.setattr(mod, "aquery_knowledge_graph", empty_kg)
+    monkeypatch.setattr(mod, "_guard_citations", fake_guard)
+    monkeypatch.setattr(mod.psycopg, "connect", _Boom)
+    app = FastAPI()
+    app.include_router(mod.router)
+    c = TestClient(app)
+
+    resp = c.post(URL, json={"message": "شرایط فسخ قرارداد چیست؟", "conversation_id": "test-empty"}).json()
+    assert resp.get("abstained") is True
+    assert resp.get("abstention_reason") == "low_score"

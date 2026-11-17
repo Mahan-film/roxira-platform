@@ -117,10 +117,10 @@ def detect_version_conflict(chunks: Sequence[dict], as_of_date: Optional[str] = 
 
 # Out-of-scope intent triggers: non-legal, medical, programming, foreign law without Iran comparative basis
 OUT_OF_SCOPE_PATTERNS = [
-    re.compile(r"\b(?:پایتون|جاوااسکریپت|برنامه‌نویسی|html|css|react|sql query|کد نویسی)\b", re.IGNORECASE),
-    re.compile(r"\b(?:علائم سکته|درمان دارویی|دوز دارو|علت تنگی نفس|پزشک متخصص|کرونا)\b", re.IGNORECASE),
-    re.compile(r"\b(?:پیش‌بینی وضعیت هوا|دمای امروز|قیمت بیت‌کوین|ارز دیجیتال برای ترید)\b", re.IGNORECASE),
-    re.compile(r"\b(?:قانون اساسی آمریکا|دادگاه فدرال آلمان|حقوق فرانسه بدون تطبیق)\b", re.IGNORECASE),
+    re.compile(norm(r"\b(?:پایتون|جاوااسکریپت|برنامه‌نویسی|html|css|react|sql query|کد نویسی)\b"), re.IGNORECASE),
+    re.compile(norm(r"\b(?:علائم سکته|درمان دارویی|دوز دارو|علت تنگی نفس|پزشک متخصص|کرونا)\b"), re.IGNORECASE),
+    re.compile(norm(r"\b(?:پیش‌بینی وضعیت هوا|دمای امروز|قیمت بیت‌کوین|ارز دیجیتال برای ترید)\b"), re.IGNORECASE),
+    re.compile(norm(r"\b(?:قانون اساسی آمریکا|دادگاه فدرال آلمان|حقوق فرانسه بدون تطبیق)\b"), re.IGNORECASE),
 ]
 
 FALSE_PREMISE_PATTERNS = [
@@ -255,34 +255,34 @@ def deterministic_citation_check(
     valid_citations: List[dict] = []
     dropped_citations: List[dict] = []
 
-    # Map available chunks by (law, article_no)
-    available_keys: Set[Tuple[str, str]] = set()
+    # Map available chunks by (law, article_no) -> tier
+    available_chunks: Dict[Tuple[str, str], str] = {}
     has_official_or_secondary = False
 
     for c in retrieved_chunks:
         law_key = norm(c.get("law_name") or c.get("title") or "")
-        art_key = str(c.get("article_no") or c.get("article") or "").strip()
+        art_key = norm(c.get("article_no") or c.get("article") or "")
         tier = str(c.get("source_tier") or c.get("tier") or "unofficial").lower()
         if tier in ("official", "secondary"):
             has_official_or_secondary = True
         if law_key and art_key:
-            available_keys.add((law_key, art_key))
+            prev = available_chunks.get((law_key, art_key))
+            if prev is None or tier in ("official", "secondary"):
+                available_chunks[(law_key, art_key)] = tier
 
     for item in cited_items:
         c_law = norm(item.get("law_name") or item.get("law") or item.get("title") or "")
-        c_art = str(item.get("article_no") or item.get("article") or item.get("number") or "").strip()
-        c_tier = str(item.get("source_tier") or item.get("tier") or "unofficial").lower()
+        c_art = norm(item.get("article_no") or item.get("article") or item.get("number") or "")
+        if not c_law or not c_art:
+            dropped_citations.append(dict(item))
+            continue
 
-        # Match against available chunks
-        matched = False
-        for av_law, av_art in available_keys:
-            if av_art == c_art and (av_law in c_law or c_law in av_law):
-                matched = True
-                break
-
-        if matched:
-            valid_citations.append(dict(item))
-            if c_tier in ("official", "secondary"):
+        matched_tier = available_chunks.get((c_law, c_art))
+        if matched_tier is not None:
+            out_item = dict(item)
+            out_item["source_tier"] = matched_tier
+            valid_citations.append(out_item)
+            if matched_tier in ("official", "secondary"):
                 has_official_or_secondary = True
         else:
             dropped_citations.append(dict(item))

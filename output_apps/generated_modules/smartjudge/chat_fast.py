@@ -91,7 +91,7 @@ def trim_sources(rows: Any, *, excerpt_chars: int = 220, max_rows: int = 6) -> l
             continue
         item = {k: row[k] for k in _KEEP_FIELDS if row.get(k) not in (None, "")}
         if "source_tier" not in item:
-            item["source_tier"] = row.get("tier") or "official"
+            item["source_tier"] = row.get("tier") or "unofficial"
         excerpt = _short(row.get("summary"), excerpt_chars)
         if excerpt:
             item["excerpt"] = excerpt

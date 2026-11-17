@@ -319,3 +319,11 @@ def test_answer_report_thresholds():
     assert "Abstention recall: 100.0%" in lg.render_markdown(rep)
     assert "Hallucination rate: 0.0%" in lg.render_markdown(rep)
 
+
+def test_answer_report_fails_when_zero_abstention_cases():
+    norm1 = case("c1")
+    r1 = lg.score_answer(norm1, {"reply": "سفید امضاء", "statutory_basis": basis()}, 500)
+    rep = lg.answer_report([r1])
+    assert rep["abstention_recall"] is None
+    assert rep["thresholds"]["abstention_threshold_ok"] is False
+
