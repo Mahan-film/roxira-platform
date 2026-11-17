@@ -37,14 +37,30 @@ import { PasswordSettingsCard } from "@/components/auth/password-settings-card";
 import { OnboardingBanner } from "@/components/onboarding/onboarding-banner";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  HomeAlertsFeed,
+  HomeAssistantInput,
+  HomeKpiTiles,
+} from "@/components/home";
 import { getTrialBalance } from "@/lib/api/accounting-client";
+import { getDashboard } from "@/lib/api/accounting-reports-client";
+import { listSessions } from "@/lib/api/bank-recon-client";
+import { listDueCheques } from "@/lib/api/cheques-client";
 import { getLeadStats } from "@/lib/api/crm-client";
 import { getHrStats } from "@/lib/api/hr-client";
 import { getFifoValuation } from "@/lib/api/inventory-client";
 import { formatMoneyRial, formatNumber } from "@/lib/fa-format";
+import {
+  buildHomeAlerts,
+  computeCashNow,
+  isProfitVisibleForUser,
+} from "@/lib/home-hub";
 import { getRoleQuickActionDefs, isSalaryVisibleForRole } from "@/lib/role-home";
 import { SYSTEM_ROLE_LABELS } from "@/types/access";
 import type { TrialBalanceResponse } from "@/types/accounting";
+import type { DashboardReport } from "@/types/accounting-reports";
+import type { ReconSession } from "@/lib/api/bank-recon-client";
+import type { DueCheques } from "@/types/cheques";
 import type { LeadStats } from "@/types/crm";
 import type { HrStats } from "@/types/hr";
 import type { FifoValuationResponse } from "@/types/inventory";
@@ -78,6 +94,10 @@ function useSlice<T>(load: (signal: AbortSignal) => Promise<T>, enabled = true):
   }, [enabled]);
   return slice;
 }
+
+const fetchDashboard = (signal: AbortSignal) => getDashboard({}, signal);
+const fetchDueCheques = (signal: AbortSignal) => listDueCheques(7, signal);
+const fetchBankSessions = () => listSessions();
 
 function Section({
   title,
@@ -153,107 +173,127 @@ export default function SuiteDashboardPage() {
   const quickActions = getRoleQuickActionDefs(roleKey);
   const showSalary = isSalaryVisibleForRole(roleKey);
 
-  const showCrm = can("crm");
-  const showHr = can("hr");
-  const showInventory = can("inventory");
-  const showAccounting = can("accounting");
-  const crm = useSlice<LeadStats>((s) => getLeadStats(s), showCrm);
-  const hr = useSlice<HrStats>((s) => getHrStats(s), showHr);
-  const inventory = useSlice<FifoValuationResponse>((s) => getFifoValuation(s), showInventory);
-  const accounting = useSlice<TrialBalanceResponse>((s) => getTrialBalance(s), showAccounting);
+  const showCrm = can("crm", "read");
+  const showHr = can("hr", "read");
+  const showInventory = can("inventory", "read");
+  const showAccounting = can("accounting", "read");
+  const showCheques = can("cheques", "read");
+  const showBanking = can("banking", "read");
 
-  const allEmpty =
-    can("data_import", "create") &&
-    (!showCrm || !crm.loading) &&
-    (!showHr || !hr.loading) &&
-    (!showInventory || !inventory.loading) &&
-    (!showAccounting || !accounting.loading) &&
-    (crm.data?.totalLeads ?? 0) === 0 &&
-    (hr.data?.totalEmployees ?? 0) === 0 &&
-    (inventory.data?.itemCount ?? 0) === 0 &&
-    (accounting.data?.rows.length ?? 0) === 0;
+  const crm = useSlice<LeadStats>(getLeadStats, showCrm);
+  const hr = useSlice<HrStats>(getHrStats, showHr);
+  const inventory = useSlice<FifoValuationResponse>(getFifoValuation, showInventory);
+  const accounting = useSlice<TrialBalanceResponse>(getTrialBalance, showAccounting);
+  const dashboard = useSlice<DashboardReport>(fetchDashboard, showAccounting);
+  const dueCheques = useSlice<DueCheques>(fetchDueCheques, showCheques);
+  const bankSessions = useSlice<ReconSession[]>(fetchBankSessions, showBanking);
+
+  const cashNow = computeCashNow(dashboard.data?.cash, dashboard.data?.bank);
+  const salesToday = dashboard.data?.sales ?? 0;
+  const profitThisMonth = dashboard.data?.netProfit ?? 0;
+  const overdueReceivables = dashboard.data?.receivables ?? 0;
+  const hasMarginPermission = Boolean(org?.fieldVisibility?.margin);
+  const isProfitConfidential = !isProfitVisibleForUser(hasMarginPermission, roleKey);
+
+  const homeAlerts = buildHomeAlerts({
+    chequesDueCount: dueCheques.data?.items?.length ?? 0,
+    chequesDueAmount: dueCheques.data?.issuedTotal ?? 0,
+    unmatchedBankLinesCount: bankSessions.data?.filter((s) => s.status !== "COMMITTED")?.length ?? 0,
+    lowStockCount: inventory.data?.lowStockCount ?? 0,
+    pendingApprovalsCount: 0,
+    importExceptionsCount: 0,
+  });
+
+  const alertsLoading = dueCheques.loading && bankSessions.loading && inventory.loading;
 
   return (
     <>
       <PageHeader
-        title="داشبورد سازمانی"
-        description="خلاصه‌ای از وضعیت کسب‌وکار و دسترسی‌های متناسب با نقش شما"
-        icon={<LayoutDashboard className="size-6 text-indigo-500" />}
+        title="خانه و دیده‌بان کسب‌وکار"
+        description="خلاصهٔ وضعیت مالی، شاخص‌های کلیدی، خوراک هشدارها و دسترسی سریع."
+        icon={<LayoutDashboard className="size-6 text-primary" />}
         actions={
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">نقش فعال:</span>
-            <Badge variant="outline" className="border-indigo-500/40 bg-indigo-500/10 font-semibold text-indigo-700 dark:text-indigo-400">
-              <Shield className="size-3 me-1 text-indigo-500" />
-              {SYSTEM_ROLE_LABELS[roleKey] ?? roleKey}
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="gap-1 px-3 py-1 text-xs">
+              <Shield className="size-3 text-muted-foreground" />
+              <span>نقش شما:</span>
+              <strong className="font-bold">
+                {SYSTEM_ROLE_LABELS[roleKey] ?? roleKey}
+              </strong>
             </Badge>
+            {org?.branchScoped && org.branchId && (
+              <Badge variant="outline" className="text-xs">
+                شعبه: {org.branchId}
+              </Badge>
+            )}
           </div>
         }
       />
 
       <OnboardingBanner />
 
-      {/* Role-tailored workspace banner */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-gradient-to-l from-indigo-500/10 via-background to-muted/30 p-4">
-        <div className="flex items-center gap-3">
-          <div className="flex size-10 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-500">
-            <Shield className="size-5" />
-          </div>
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-bold">میز کار نقش {SYSTEM_ROLE_LABELS[roleKey] ?? roleKey}</span>
-              <Badge variant="secondary" className="text-xs">
-                {SYSTEM_ROLE_LABELS[roleKey] ?? roleKey}
-              </Badge>
-            </div>
-            <span className="text-xs text-muted-foreground">
-              دسترسی‌های سریع و شاخص‌های متناسب با وظایف شما در سازمان
-            </span>
+      {/* Hero Assistant Input */}
+      <HomeAssistantInput />
+
+      {/* 4 KPI Tiles */}
+      <HomeKpiTiles
+        cashNow={cashNow}
+        salesToday={salesToday}
+        profitThisMonth={profitThisMonth}
+        overdueReceivables={overdueReceivables}
+        isProfitConfidential={isProfitConfidential}
+        loading={dashboard.loading}
+      />
+
+      {/* Alerts Feed and Quick Actions */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <HomeAlertsFeed alerts={homeAlerts} loading={alertsLoading} />
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <h2 className="text-sm font-bold text-muted-foreground">دسترسی سریع</h2>
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-1">
+            {quickActions.map((action) => (
+              <Link
+                key={action.href + action.title}
+                href={action.href}
+                className="group flex items-start gap-3 rounded-xl border border-border/70 bg-card p-3 transition-colors hover:border-primary/40 hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-primary"
+              >
+                <div className="mt-0.5 rounded-lg bg-primary/10 p-2 text-primary">
+                  {renderActionIcon(action.iconName)}
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-sm font-semibold group-hover:text-primary transition-colors">
+                    {action.title}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {action.description}
+                  </span>
+                </div>
+              </Link>
+            ))}
           </div>
         </div>
-        {org?.branchScoped && org.branchId && (
-          <Badge variant="outline" className="text-xs">
-            شعبه: {org.branchId}
-          </Badge>
-        )}
       </div>
 
-      {/* Role-tailored Quick Actions */}
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-bold text-muted-foreground">دسترسی‌های سریع</h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {quickActions.map((action) => (
-            <Link
-              key={action.title}
-              href={action.href}
-              className="flex flex-col items-center gap-2 rounded-xl border bg-card p-3 text-center transition-all hover:-translate-y-0.5 hover:border-indigo-500/50 hover:shadow-sm"
-            >
-              <div className="flex size-8 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500">
-                {renderActionIcon(action.iconName)}
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-bold">{action.title}</span>
-                <span className="text-[10px] text-muted-foreground line-clamp-1">{action.description}</span>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      {allEmpty && (
+      {can("data_import", "create") && (
         <Link
           href="/app/import"
-          className="flex items-center gap-3 rounded-2xl border-2 border-dashed border-indigo-500/40 bg-indigo-500/5 p-5 transition-colors hover:bg-indigo-500/10"
+          className="flex items-center gap-4 rounded-2xl border-2 border-dashed border-primary/30 bg-primary/5 p-4 transition-colors hover:border-primary/50 hover:bg-primary/10"
         >
-          <FileUp className="size-8 shrink-0 text-indigo-400" aria-hidden="true" />
-          <span className="flex flex-col gap-0.5">
-            <span className="text-sm font-bold">
-              با رها کردن یک فایل شروع کنید
+          <div className="rounded-xl bg-primary/10 p-3 text-primary">
+            <FileSpreadsheet className="size-6" />
+          </div>
+          <div className="flex flex-col gap-0.5 text-sm">
+            <span className="font-bold text-foreground">
+              ورود سریع اطلاعات از نرم‌افزارهای قبلی (سپیدار، همکاران، هلو و اکسل)
             </span>
             <span className="text-xs text-muted-foreground">
               فایل اکسل مشتریان، کارکنان، کالاها یا سرفصل حساب‌های قبلی‌تان را
               اینجا رها کنید؛ بقیه کار با ماست.
             </span>
-          </span>
+          </div>
         </Link>
       )}
 
@@ -357,7 +397,7 @@ export default function SuiteDashboardPage() {
         <Section title="حساب‌ها" slice={accounting}>
           <StatCard
             label="حساب‌های دارای گردش"
-            value={formatNumber(accounting.data?.rows.length)}
+            value={formatNumber(accounting.data?.rows?.length)}
             href="/app/accounting"
             hint="درخت حساب‌ها"
           />
