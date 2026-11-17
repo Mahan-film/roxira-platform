@@ -15,7 +15,7 @@ type Rule = {
 };
 
 /**
- * The lines a document type posts with the legacy default accounts (no tenant mapping): used by
+ * The lines a document type posts with the role default accounts (no tenant mapping): used by
  * tests and previews. Real postings go through PostingRulesService so a tenant's mapping applies.
  */
 export function linesFor(docType: string, amount: bigint): PostingLine[] {
@@ -26,20 +26,23 @@ const S = ChequeStatus;
 
 /**
  * Transition table: direction -> from -> to -> rule.
+ * Account resolution happens per tenant through `PostingRulesService` using roles
+ * (`cheques_receivable`, `cheques_in_collection`, `cheques_payable`, `bank`, `receivable`, `payable`),
+ * defaulting to `iran-chart-template.ts` (1021 / 1023 / 2011 / 1012 / 1020 / 2010).
  *
- * Received:  registered Dr 1110 / Cr 1020 (at creation)
- *            deposited  Dr 1120 / Cr 1110
- *            cleared    Dr 1010 / Cr 1120
- *            bounced    Dr 1020 / Cr 1120   (receivable is restored)
+ * Received:  registered Dr cheques_receivable / Cr receivable (at creation)
+ *            deposited  Dr cheques_in_collection / Cr cheques_receivable
+ *            cleared    Dr bank / Cr cheques_in_collection
+ *            bounced    Dr receivable / Cr cheques_in_collection   (receivable is restored)
  *            counter presentation (registered -> cleared / bounced, no deposit step):
- *                       cleared Dr 1010 / Cr 1110; bounced Dr 1020 / Cr 1110
- *            re-deposit Dr 1120 / Cr 1020   (bounced -> deposited)
- *            spent      Dr 2010 / Cr 1110   (endorsed to a supplier)
- *            returned   Dr 1020 / Cr 1110   (from registered); no entry from bounced
- * Issued:    registered Dr 2010 / Cr 2110   (at creation)
+ *                       cleared Dr bank / Cr cheques_receivable; bounced Dr receivable / Cr cheques_receivable
+ *            re-deposit Dr cheques_in_collection / Cr receivable   (bounced -> deposited)
+ *            spent      Dr payable / Cr cheques_receivable   (endorsed to a supplier)
+ *            returned   Dr receivable / Cr cheques_receivable   (from registered); no entry from bounced
+ * Issued:    registered Dr payable / Cr cheques_payable   (at creation)
  *            delivered  status only (handed to the payee; liability unchanged)
- *            cleared    Dr 2110 / Cr 1010   (from registered, delivered or bounced)
- *            returned   Dr 2110 / Cr 2010
+ *            cleared    Dr cheques_payable / Cr bank   (from registered, delivered or bounced)
+ *            returned   Dr cheques_payable / Cr payable
  *            bounced    status only (the bank did not pay, the liability stays)
  */
 const TABLE: Record<ChequeDirection, Partial<Record<ChequeStatus, Partial<Record<ChequeStatus, Rule>>>>> = {

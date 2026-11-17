@@ -1,9 +1,16 @@
-import { CHEQUE_ACCOUNTS } from './constants/cheque.constants';
+import { DEFAULT_ROLE_ACCOUNTS } from '../posting_rules/constants/posting-roles';
 import { ChequeDirection, ChequeStatus } from './enums/cheque.enum';
 import { allowedTargets, creationPosting, findRule, linesFor, partialPaymentPosting } from './lifecycle/cheque-lifecycle';
 
 const ALL = Object.values(ChequeStatus);
-const KNOWN_CODES = new Set<string>(Object.values(CHEQUE_ACCOUNTS));
+const KNOWN_CODES = new Set<string>([
+  DEFAULT_ROLE_ACCOUNTS.bank!,
+  DEFAULT_ROLE_ACCOUNTS.receivable!,
+  DEFAULT_ROLE_ACCOUNTS.payable!,
+  DEFAULT_ROLE_ACCOUNTS.cheques_receivable!,
+  DEFAULT_ROLE_ACCOUNTS.cheques_in_collection!,
+  DEFAULT_ROLE_ACCOUNTS.cheques_payable!,
+]);
 
 describe('cheque lifecycle table', () => {
   it('every posting is balanced, one-sided per line and uses known accounts', () => {
@@ -26,28 +33,28 @@ describe('cheque lifecycle table', () => {
     }
   });
 
-  it('creation postings: received -> notes in hand / receivables; issued -> payables / notes payable', () => {
+  it('creation postings: received -> notes receivable / receivables; issued -> payables / notes payable', () => {
     expect(creationPosting(ChequeDirection.RECEIVED, 100n).lines).toEqual([
-      { accountCode: '1110', debit: 100n, credit: 0n },
+      { accountCode: '1021', debit: 100n, credit: 0n },
       { accountCode: '1020', debit: 0n, credit: 100n },
     ]);
     expect(creationPosting(ChequeDirection.ISSUED, 100n).lines).toEqual([
       { accountCode: '2010', debit: 100n, credit: 0n },
-      { accountCode: '2110', debit: 0n, credit: 100n },
+      { accountCode: '2011', debit: 0n, credit: 100n },
     ]);
   });
 
   it('received cheque happy path posts the expected accounts', () => {
     const post = (to: ChequeStatus, from: ChequeStatus) =>
       linesFor(findRule(ChequeDirection.RECEIVED, from, to)!.docType!, 10n).map((l) => `${l.debit > 0n ? 'Dr' : 'Cr'}${l.accountCode}`);
-    expect(post(ChequeStatus.DEPOSITED, ChequeStatus.REGISTERED)).toEqual(['Dr1120', 'Cr1110']);
-    expect(post(ChequeStatus.CLEARED, ChequeStatus.DEPOSITED)).toEqual(['Dr1010', 'Cr1120']);
-    expect(post(ChequeStatus.BOUNCED, ChequeStatus.DEPOSITED)).toEqual(['Dr1020', 'Cr1120']);
-    expect(post(ChequeStatus.SPENT, ChequeStatus.REGISTERED)).toEqual(['Dr2010', 'Cr1110']);
-    expect(post(ChequeStatus.RETURNED, ChequeStatus.REGISTERED)).toEqual(['Dr1020', 'Cr1110']);
+    expect(post(ChequeStatus.DEPOSITED, ChequeStatus.REGISTERED)).toEqual(['Dr1023', 'Cr1021']);
+    expect(post(ChequeStatus.CLEARED, ChequeStatus.DEPOSITED)).toEqual(['Dr1012', 'Cr1023']);
+    expect(post(ChequeStatus.BOUNCED, ChequeStatus.DEPOSITED)).toEqual(['Dr1020', 'Cr1023']);
+    expect(post(ChequeStatus.SPENT, ChequeStatus.REGISTERED)).toEqual(['Dr2010', 'Cr1021']);
+    expect(post(ChequeStatus.RETURNED, ChequeStatus.REGISTERED)).toEqual(['Dr1020', 'Cr1021']);
     // counter presentation: straight from the safe, no deposit step
-    expect(post(ChequeStatus.CLEARED, ChequeStatus.REGISTERED)).toEqual(['Dr1010', 'Cr1110']);
-    expect(post(ChequeStatus.BOUNCED, ChequeStatus.REGISTERED)).toEqual(['Dr1020', 'Cr1110']);
+    expect(post(ChequeStatus.CLEARED, ChequeStatus.REGISTERED)).toEqual(['Dr1012', 'Cr1021']);
+    expect(post(ChequeStatus.BOUNCED, ChequeStatus.REGISTERED)).toEqual(['Dr1020', 'Cr1021']);
   });
 
   it('a bounced issued cheque and a returned bounced received cheque change status only', () => {
@@ -73,7 +80,7 @@ describe('cheque lifecycle: delivered and partial payment', () => {
   it('issued: registered -> delivered is status only, then delivered -> cleared / bounced / returned', () => {
     expect(findRule(D, ChequeStatus.REGISTERED, ChequeStatus.DELIVERED)!.docType).toBeNull();
     const clear = linesFor(findRule(D, ChequeStatus.DELIVERED, ChequeStatus.CLEARED)!.docType!, 10n);
-    expect(clear.map((l) => `${l.debit > 0n ? 'Dr' : 'Cr'}${l.accountCode}`)).toEqual(['Dr2110', 'Cr1010']);
+    expect(clear.map((l) => `${l.debit > 0n ? 'Dr' : 'Cr'}${l.accountCode}`)).toEqual(['Dr2011', 'Cr1012']);
     expect(findRule(D, ChequeStatus.DELIVERED, ChequeStatus.BOUNCED)!.docType).toBeNull();
     expect(linesFor(findRule(D, ChequeStatus.DELIVERED, ChequeStatus.RETURNED)!.docType!, 10n)).toHaveLength(2);
     expect(findRule(D, ChequeStatus.DELIVERED, ChequeStatus.DEPOSITED)).toBeNull();
@@ -86,10 +93,10 @@ describe('cheque lifecycle: delivered and partial payment', () => {
   it('partial payment is balanced and mirrors the clearing entry of the same state', () => {
     const shape = (p: ReturnType<typeof partialPaymentPosting>) =>
       p!.lines.map((l) => `${l.debit > 0n ? 'Dr' : 'Cr'}${l.accountCode}`);
-    expect(shape(partialPaymentPosting(ChequeDirection.RECEIVED, ChequeStatus.DEPOSITED, 5n))).toEqual(['Dr1010', 'Cr1120']);
-    expect(shape(partialPaymentPosting(ChequeDirection.RECEIVED, ChequeStatus.REGISTERED, 5n))).toEqual(['Dr1010', 'Cr1110']);
+    expect(shape(partialPaymentPosting(ChequeDirection.RECEIVED, ChequeStatus.DEPOSITED, 5n))).toEqual(['Dr1012', 'Cr1023']);
+    expect(shape(partialPaymentPosting(ChequeDirection.RECEIVED, ChequeStatus.REGISTERED, 5n))).toEqual(['Dr1012', 'Cr1021']);
     for (const from of [ChequeStatus.REGISTERED, ChequeStatus.DELIVERED, ChequeStatus.BOUNCED]) {
-      expect(shape(partialPaymentPosting(D, from, 5n))).toEqual(['Dr2110', 'Cr1010']);
+      expect(shape(partialPaymentPosting(D, from, 5n))).toEqual(['Dr2011', 'Cr1012']);
     }
     for (const p of [partialPaymentPosting(D, ChequeStatus.DELIVERED, 7n)!, partialPaymentPosting(ChequeDirection.RECEIVED, ChequeStatus.DEPOSITED, 7n)!]) {
       expect(p.lines.reduce((s, l) => s + l.debit, 0n)).toBe(p.lines.reduce((s, l) => s + l.credit, 0n));

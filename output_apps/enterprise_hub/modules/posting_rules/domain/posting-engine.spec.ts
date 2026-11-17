@@ -1,5 +1,6 @@
+import { ReportLine } from '../../accounting/enums/accounting.enum';
 import { ChartTemplates } from './chart-codes.spec-helper';
-import { DEFAULT_ROLE_ACCOUNTS, POSTING_ROLE_KEYS, POSTING_ROLES } from '../constants/posting-roles';
+import { DEFAULT_ROLE_ACCOUNTS, POSTING_ROLE_KEYS, POSTING_ROLES, PostingRole } from '../constants/posting-roles';
 import { buildProposal, netByAccount, reverseProposal, toJournalLines } from './posting-engine';
 import { PostingRuleError } from './posting-error';
 import { findTemplate, POSTING_TEMPLATES } from './posting-templates';
@@ -17,12 +18,22 @@ describe('posting templates', () => {
     }
   });
 
-  it('every global default account exists as a posting-level account in the Iran trading chart', () => {
-    const codes = ChartTemplates.postingCodes();
+  it('every global default account exists as a posting-level account in the Iran trading chart with expected nature', () => {
+    const accounts = ChartTemplates.postingAccounts();
     for (const [role, code] of Object.entries(DEFAULT_ROLE_ACCOUNTS)) {
-      expect(codes.has(code!)).toBe(true);
-      expect(POSTING_ROLES[role as keyof typeof POSTING_ROLES]).toBeDefined();
+      const def = POSTING_ROLES[role as PostingRole];
+      expect(def).toBeDefined();
+      const account = accounts.get(code!);
+      expect(account).toBeDefined();
+      expect(def.types as readonly string[]).toContain(account!.accountType);
     }
+    for (const role of ['cheques_receivable', 'cheques_in_collection', 'cheques_payable', 'bank', 'receivable', 'payable'] as const) {
+      const account = accounts.get(DEFAULT_ROLE_ACCOUNTS[role]!)!;
+      expect([ReportLine.FIXED_ASSET, ReportLine.ACCUMULATED_DEPRECIATION, ReportLine.LONG_TERM_LOAN]).not.toContain(account.reportLine);
+    }
+    expect(DEFAULT_ROLE_ACCOUNTS.cheques_in_collection).not.toBe(DEFAULT_ROLE_ACCOUNTS.cheques_receivable);
+    expect(DEFAULT_ROLE_ACCOUNTS.cheques_in_collection).toBe('1023');
+    expect(DEFAULT_ROLE_ACCOUNTS.cheques_receivable).toBe('1021');
   });
 
   it('every role used by a template has a default or is documented as tenant-mapped', () => {

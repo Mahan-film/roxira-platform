@@ -57,6 +57,7 @@ const COMMON_MOEINS: readonly Moein[] = [
   ['1020', 'حساب‌های دریافتنی تجاری', ASSET, L.RECEIVABLE],
   ['1021', 'اسناد دریافتنی', ASSET, L.RECEIVABLE],
   ['1022', 'سایر دریافتنی‌ها', ASSET, L.RECEIVABLE],
+  ['1023', 'اسناد در جریان وصول', ASSET, L.RECEIVABLE],
   ['1025', 'ذخیره مطالبات مشکوک‌الوصول', ASSET, L.RECEIVABLE],
   ['1040', 'پیش‌پرداخت‌ها', ASSET, L.PREPAYMENT],
   ['1041', 'سرمایه‌گذاری‌های کوتاه‌مدت', ASSET, L.SHORT_TERM_INVESTMENT],
