@@ -21,8 +21,8 @@ export interface PrintTemplateOptions {
   barcodeColumns?: 4 | 5;
   showPrice?: boolean;
   showSku?: boolean;
-  headerNotes?: string;
-  footerNotes?: string;
+  headerTitle?: string;
+  footerNote?: string;
   showSignatures?: boolean;
   signatures?: string[];
   [key: string]: any;
@@ -35,7 +35,7 @@ export interface PrintTemplateOptions {
  * و برچسب‌های بارکد ۴ و ۵ ستونه را با اعمال RLS برای هر سازمان ذخیره می‌کند.
  */
 @Entity({ name: 'inv_print_templates' })
-@Unique('UQ_inv_print_templates_tenant_title', ['tenantId', 'title'])
+@Unique('UQ_inv_print_templates_tenant_title', ['tenantId', 'docType', 'title'])
 @Index('IDX_inv_print_templates_lookup', ['tenantId', 'docType', 'paperSize'])
 @Index('IDX_inv_print_templates_tenant_default', ['tenantId', 'docType', 'isDefault'])
 @Index('UQ_inv_print_templates_tenant_default', ['tenantId', 'docType', 'paperSize'], {

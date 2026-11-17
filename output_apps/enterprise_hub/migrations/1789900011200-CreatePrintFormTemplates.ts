@@ -11,8 +11,8 @@ import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
  *     column selection, ordering, headers, and options.
  *   - Strict FORCE row-level security enabled.
  */
-export class CreatePrintFormTemplates1789900004700 implements MigrationInterface {
-  name = 'CreatePrintFormTemplates1789900004700';
+export class CreatePrintFormTemplates1789900011200 implements MigrationInterface {
+  name = 'CreatePrintFormTemplates1789900011200';
 
   private static readonly TABLE = 'inv_print_templates';
 
@@ -32,7 +32,7 @@ export class CreatePrintFormTemplates1789900004700 implements MigrationInterface
         "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
         "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
         CONSTRAINT "PK_inv_print_templates_id" PRIMARY KEY ("id"),
-        CONSTRAINT "UQ_inv_print_templates_tenant_title" UNIQUE ("tenant_id", "title"),
+        CONSTRAINT "UQ_inv_print_templates_tenant_title" UNIQUE ("tenant_id", "doc_type", "title"),
         CONSTRAINT "CHK_inv_print_templates_doc_type"
           CHECK ("doc_type" IN ('sales_invoice', 'receipt_payment_voucher', 'stock_document', 'barcode_labels')),
         CONSTRAINT "CHK_inv_print_templates_paper_size"
@@ -56,11 +56,11 @@ export class CreatePrintFormTemplates1789900004700 implements MigrationInterface
         WHERE "is_default" = true
     `);
 
-    await enableTenantRls(queryRunner, CreatePrintFormTemplates1789900004700.TABLE);
+    await enableTenantRls(queryRunner, CreatePrintFormTemplates1789900011200.TABLE);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await disableTenantRls(queryRunner, CreatePrintFormTemplates1789900004700.TABLE);
+    await disableTenantRls(queryRunner, CreatePrintFormTemplates1789900011200.TABLE);
     await queryRunner.query(`DROP TABLE IF EXISTS "inv_print_templates"`);
   }
 }

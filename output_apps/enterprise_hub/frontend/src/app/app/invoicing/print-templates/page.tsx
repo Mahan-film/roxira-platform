@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 import { ErrorNotice, LoadingLine, PageHeader } from "@/components/app/app-ui";
-import { useAuth } from "@/components/auth/auth-provider";
+import { useAccess } from "@/components/app/access-provider";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -69,10 +69,8 @@ function PrintFormBuilderPage() {
   const [columns, setColumns] = useState<PrintColumnConfig[]>([]);
   const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
 
-  const { user } = useAuth();
-  const role = (user?.role || "").toLowerCase();
-  // Fail closed on tenant-wide layout settings: owner & admin only
-  const canWrite = ["owner", "admin"].includes(role);
+  const { can } = useAccess();
+  const canWrite = can("invoicing", "create");
 
   // Barcode sheet state
   const [barcodeCols, setBarcodeCols] = useState<4 | 5>(4);

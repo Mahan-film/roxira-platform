@@ -69,7 +69,9 @@ export function InvoicePrintView({
       .then((tpls) => {
         if (active) setTemplates(tpls);
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error("[InvoicePrintView] Failed to load print templates:", err);
+      });
     return () => {
       active = false;
     };

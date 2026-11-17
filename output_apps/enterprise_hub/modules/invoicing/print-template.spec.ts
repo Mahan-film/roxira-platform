@@ -69,10 +69,13 @@ describe('PrintTemplateService & Repository', () => {
       findById: jest.fn(async (tId: string, id: number) => {
         return templatesStore.find((t) => t.tenantId === tId && t.id === id) ?? null;
       }),
-      findByTitle: jest.fn(async (tId: string, title: string) => {
+      findByTitle: jest.fn(async (tId: string, docType: PrintDocType, title: string) => {
         return (
           templatesStore.find(
-            (t) => t.tenantId === tId && t.title.toLowerCase() === title.toLowerCase(),
+            (t) =>
+              t.tenantId === tId &&
+              t.docType === docType &&
+              t.title.toLowerCase() === title.toLowerCase(),
           ) ?? null
         );
       }),
@@ -172,13 +175,22 @@ describe('PrintTemplateService & Repository', () => {
       await expect(service.findOne(tenantId, created.id)).rejects.toThrow();
     });
 
-    it('rejects duplicate template titles for the same tenant', async () => {
+    it('allows same title across different docTypes and rejects duplicate (tenant, docType, title)', async () => {
       await service.create(tenantId, {
         title: 'قالب تست ۱',
         docType: PrintDocType.STOCK_DOCUMENT,
         paperSize: PrintPaperSize.A4,
       });
 
+      // Same title with a different docType is allowed
+      const salesTpl = await service.create(tenantId, {
+        title: 'قالب تست ۱',
+        docType: PrintDocType.SALES_INVOICE,
+        paperSize: PrintPaperSize.A4,
+      });
+      expect(salesTpl.id).toBeDefined();
+
+      // Same title with the same docType is rejected
       await expect(
         service.create(tenantId, {
           title: 'قالب تست ۱',

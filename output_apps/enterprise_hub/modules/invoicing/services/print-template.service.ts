@@ -77,7 +77,7 @@ export class PrintTemplateService {
     if (!dto.title || typeof dto.title !== 'string' || !dto.title.trim()) {
       throw new BadRequestException('عنوان قالب نمی‌تواند خالی یا تهی باشد.');
     }
-    const existing = await this.repository.findByTitle(tenantId, dto.title.trim());
+    const existing = await this.repository.findByTitle(tenantId, dto.docType, dto.title.trim());
     if (existing) {
       throw new ConflictException(
         `قالب چاپی با عنوان «${dto.title}» قبلاً برای این سازمان تعریف شده است.`,
@@ -154,7 +154,7 @@ export class PrintTemplateService {
         throw new BadRequestException('عنوان قالب نمی‌تواند خالی یا تهی باشد.');
       }
       if (dto.title.trim() !== existing.title) {
-        const duplicate = await this.repository.findByTitle(tenantId, dto.title.trim());
+        const duplicate = await this.repository.findByTitle(tenantId, existing.docType, dto.title.trim());
         if (duplicate && duplicate.id !== id) {
           throw new ConflictException(
             `قالب چاپی دیگری با عنوان «${dto.title}» قبلاً ثبت شده است.`,

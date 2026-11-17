@@ -40,19 +40,15 @@ export function ReceiptPaymentPrintButton({
       variant={variant}
       className={className}
       onClick={async () => {
-        // Open window synchronously in the user gesture to avoid popup blockers
-        const printWindow = typeof window !== "undefined" ? window.open("", "_blank") : null;
-        if (printWindow) {
-          printWindow.opener = null;
-        }
         try {
           const tpl = await getDefaultPrintTemplateOrNull(
             PrintDocType.RECEIPT_PAYMENT_VOUCHER,
             PrintPaperSize.A5,
           );
-          printReceiptPaymentVoucher(doc, companyName, tpl ?? undefined, printWindow);
-        } catch {
-          printReceiptPaymentVoucher(doc, companyName, undefined, printWindow);
+          printReceiptPaymentVoucher(doc, companyName, tpl ?? undefined);
+        } catch (err) {
+          console.error("Failed to load receipt print template:", err);
+          printReceiptPaymentVoucher(doc, companyName, undefined);
         }
       }}
     >
