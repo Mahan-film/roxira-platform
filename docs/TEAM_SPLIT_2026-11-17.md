@@ -8,7 +8,7 @@ Two machines work in parallel on `Mahan-film/roxira-platform`. Both follow AGENT
 | Colleague | L5, L6 | second hub for L5/L6 only | L5 core ledger (T206 → T178 → T180, T194, T195) · L6 Germany pack (T191 → T188 → T189, then T186 after T178) |
 
 ## Rules for both
-- Claim a row on #592 with `taking T<n> (L<k>)` before starting; never take a row another lane or hub claimed.
+- Each lane's queue is the GitHub issues labelled `lane:L<k>` (order in the latest `## WAVE` comment on #592). Claim on the issue with `bash scripts/dev/claim.sh <issue> --agent antigravity` (draft PR = lock); never take an issue labelled `in-progress`. Research rows carry `research-row` and a "Done when" spec; backlog issues are checked on origin/main first and closed with evidence if already done.
 - WIP limit 3 open PRs per lane; at most 2 CI fix rounds, then post the hand-off block.
 - Migration ids: above the newest on `origin/main` **and** every open PR (CI check `check_migration_ids.py --open-prs` enforces it); renumber on rebase.
 - Shared files (permission matrix, `app.module.ts`, nav menu): append-only, alphabetical.

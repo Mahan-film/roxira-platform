@@ -1,15 +1,14 @@
-<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lane prompts v6</title>
+<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lane prompts v6b</title>
 <style>body{font-family:Tahoma,system-ui,sans-serif;margin:0;padding:16px;background:#f6f7f9;color:#111}.tab{padding:8px 14px;margin:0 4px 8px 0;border:1px solid #888;background:#fff;cursor:pointer;font-size:15px}.tab.on{background:#111;color:#fff}.pane{display:none}.pane.on{display:block}pre{white-space:pre-wrap;background:#fff;border:1px solid #ccc;padding:12px;font-size:14px;line-height:1.7}.copy{padding:8px 18px;font-size:15px;margin:6px 0;cursor:pointer}@media (prefers-color-scheme:dark){body{background:#111;color:#eee}pre,.tab{background:#1b1b1b;color:#eee;border-color:#444}.tab.on{background:#eee;color:#111}}</style></head><body>
-<h1>پرامپت‌های آنتی‌گراویتی، نسخهٔ ۶، WAVE 19 (۱۷ نوامبر ۲۰۲۶). L1 تا L4 روی کامپیوتر مالک، L5 و L6 روی کامپیوتر همکار. هر lane در یک چت تازه.</h1>
+<h1>پرامپت‌های آنتی‌گراویتی، نسخهٔ ۶، WAVE 19b (۱۷ نوامبر ۲۰۲۶). L1 تا L4 روی کامپیوتر مالک، L5 و L6 روی کامپیوتر همکار. هر lane در یک چت تازه.</h1>
 <button class="tab" onclick="show('L1')" id="bL1">L1 (مالک)</button><button class="tab" onclick="show('L2')" id="bL2">L2 (مالک)</button><button class="tab" onclick="show('L3')" id="bL3">L3 (مالک)</button><button class="tab" onclick="show('L4')" id="bL4">L4 (مالک)</button><button class="tab" onclick="show('L5')" id="bL5">L5 (همکار)</button><button class="tab" onclick="show('L6')" id="bL6">L6 (همکار)</button>
-<section id="pL1" class="pane"><button class="copy" onclick="cp('tL1')">کپی</button><pre id="tL1">کار این دور (WAVE 19، ۱۷ نوامبر) برای L1، به همین ترتیب (متن کامل در آخرین کامنت «## WAVE 19» در issue 592).
-از این دور دو کامپیوتر موازی کار می‌کنند: L1 تا L4 روی کامپیوتر مالک، L5 و L6 روی کامپیوتر همکار (docs/TEAM_SPLIT_2026-11-17.md).
-شرح کامل ردیف‌ها: docs/strategy/INFRA_TARGET_2026-11-17.md و ARCHITECTURE_DECISIONS_2026-11-16.md.
-1. اصلاحات WAVE 18 خودت (#831، #771، #850).
-2. T214: اندازهٔ pool در PgBouncer به ۴۰ و max_db به ۶۰ + تنظیم Postgres طبق docs/ops/MEMORY_BUDGET.md.
-3. T217: پایداری Redis (AOF برای صف‌ها، سیاست حافظه برای کش).
-4. T218: ایمیل گزارش روزانهٔ پشتیبان زیر سقف ۱۰ ایمیل.
-5. T168 (گیت سریع M1 با ۴ shard)، بعد T171.
+<section id="pL1" class="pane"><button class="copy" onclick="cp('tL1')">کپی</button><pre id="tL1">کار این دور (WAVE 19b، ۱۷ نوامبر) برای L1. صف تو = issueهای گیت‌هاب با برچسب lane:L1، به همین ترتیب (متن کامل در آخرین کامنت «## WAVE 19b» در issue 592).
+هر issue شرط «Done when»، وابستگی‌ها و قوانین را دارد. claim روی خود issue: bash scripts/dev/claim.sh &lt;شماره&gt; --agent antigravity (PR پیش‌نویس = قفل). issue با برچسب in-progress را برندار.
+حداکثر ۳ PR باز. وقتی یکی منتظر بازبینی یا وابستگی است، issue بعدی را شروع کن. تا وقتی issue بازِ بدون مانع در صفت هست، متوقف نشو.
+issueهای backlog (بدون برچسب research-row): اول روی origin/main چک کن؛ اگر انجام شده، با مدرک (لینک commit یا PR) ببندش؛ اگر نیمه‌کاره است، کاملش کن؛ اگر منسوخ است، با دلیل ببند.
+L1 تا L4 روی کامپیوتر مالک، L5 و L6 روی کامپیوتر همکار (docs/TEAM_SPLIT_2026-11-17.md).
+اصلاحات WAVE 18 (#831 #771 #850) ← #928 (T214) ← #931 (T217) ← #932 (T218) ← #937 (T223 به‌روزرسانی‌های Dependabot) ← #900 (T168) ← #902 (T171) ← #903 (T172) ← #939 (T225، بعد از #931) ← #934 (T220، بعد از T178 و T204).
+backlog: #452 #425 #466 #490 #542 #560 #680
 PRهای hub (۸۸۳ ۸۸۶ ۸۸۹ ۸۹۱ ۸۹۲ ۸۹۴ ۸۹۵) مال hub هستند؛ فقط اگر بازبینی blocker داد و hub تا ۱۲ ساعت رفعش نکرد، lane نام‌برده در WAVE 19 آن را برمی‌دارد.
 شمارهٔ migration بالاتر از جدیدترین main و همهٔ PRهای باز؛ CI این را چک می‌کند.
 هرگز متغیرهای محیطی یا رمزها را چاپ نکن.
@@ -42,7 +41,7 @@ PRهای hub (۸۸۳ ۸۸۶ ۸۸۹ ۸۹۱ ۸۹۲ ۸۹۴ ۸۹۵) مال hub هس�
    - اگر برای head فعلی «Verdict: blocker» بود، اول همان را درست کن.
    - اگر آن review برای head قدیمی‌تری است، PR منتظر بازبینی است. به آن دست نزن و سراغ تسک بعدی برو. بازبین خودکار هر ۲ ساعت روی GitHub اجرا می‌شود؛ منتظرش نمان.
 ۲. اگر یقین داری یک blocker اشتباه است (مثلاً می‌گوید یک نسخه وجود ندارد ولی CI روی main با همان نسخه سبز است)، زیر PR فقط یک خط بنویس: «false positive: &lt;دلیل با مسیر فایل&gt;» و ادامه بده. تصمیم با هماهنگ‌کننده است.
-۳. در issue 592 بنویس «taking T&lt;n&gt; (L1)». اگر کس دیگری (یک lane دیگر یا hub) قبلاً همان T را برداشته، آن را برندار.
+۳. issue را روی خودش قفل کن: bash scripts/dev/claim.sh &lt;شمارهٔ issue&gt; --agent antigravity (PR پیش‌نویس = قفل) و برای اطلاع در issue 592 یک خط «taking #&lt;issue&gt; (L1)» بنویس. issue با برچسب in-progress را برندار.
 ۴. اگر مالک مستقیم کاری خارج از WAVE به تو داد:
    - اول در issue 592 بنویس «taking ad-hoc: &lt;عنوان کوتاه&gt; (L1)»؛
    - بعد با همین قانون‌ها انجامش بده، با PR جدا و ردیف جدا در گزارش؛
@@ -91,13 +90,13 @@ NEW LESSONS:
 QUESTIONS:
 &lt;سؤال برای هماهنگ‌کننده، یا none&gt;
 VERIFIER: RESULT: OK
-</pre></section><section id="pL2" class="pane"><button class="copy" onclick="cp('tL2')">کپی</button><pre id="tL2">کار این دور (WAVE 19، ۱۷ نوامبر) برای L2، به همین ترتیب (متن کامل در آخرین کامنت «## WAVE 19» در issue 592).
-از این دور دو کامپیوتر موازی کار می‌کنند: L1 تا L4 روی کامپیوتر مالک، L5 و L6 روی کامپیوتر همکار (docs/TEAM_SPLIT_2026-11-17.md).
-شرح کامل ردیف‌ها: docs/strategy/INFRA_TARGET_2026-11-17.md و ARCHITECTURE_DECISIONS_2026-11-16.md.
-1. اصلاحات WAVE 18 خودت (#861 blocker تبدیل ارزی، #868، #763).
-2. T169 دقت ارز (بعد از ادغام #861).
-3. T216: اجرای واقعی CSP روی هر سه دامنه.
-4. رفع ۳۶ خطای oxlint و ۳۴ خطای TypeScript فرانت که در #895 فهرست شده، دسته‌های حداکثر ۴۰ فایلی.
+</pre></section><section id="pL2" class="pane"><button class="copy" onclick="cp('tL2')">کپی</button><pre id="tL2">کار این دور (WAVE 19b، ۱۷ نوامبر) برای L2. صف تو = issueهای گیت‌هاب با برچسب lane:L2، به همین ترتیب (متن کامل در آخرین کامنت «## WAVE 19b» در issue 592).
+هر issue شرط «Done when»، وابستگی‌ها و قوانین را دارد. claim روی خود issue: bash scripts/dev/claim.sh &lt;شماره&gt; --agent antigravity (PR پیش‌نویس = قفل). issue با برچسب in-progress را برندار.
+حداکثر ۳ PR باز. وقتی یکی منتظر بازبینی یا وابستگی است، issue بعدی را شروع کن. تا وقتی issue بازِ بدون مانع در صفت هست، متوقف نشو.
+issueهای backlog (بدون برچسب research-row): اول روی origin/main چک کن؛ اگر انجام شده، با مدرک (لینک commit یا PR) ببندش؛ اگر نیمه‌کاره است، کاملش کن؛ اگر منسوخ است، با دلیل ببند.
+L1 تا L4 روی کامپیوتر مالک، L5 و L6 روی کامپیوتر همکار (docs/TEAM_SPLIT_2026-11-17.md).
+اصلاحات WAVE 18 (#861 #868 #763) ← #930 (T216 CSP) ← #901 (T169، بعد از ادغام #861) ← #909 (T179) ← رفع ۳۶ خطای oxlint و ۳۴ خطای TypeScript فرانت که در #895 فهرست شده (دسته‌های حداکثر ۴۰ فایلی) ← #899 (T167).
+backlog: #477 #548 #440 #439 #733 #749 #751 #774 #782 #648 #646 #650 #652 #654 #678 #682
 PRهای hub (۸۸۳ ۸۸۶ ۸۸۹ ۸۹۱ ۸۹۲ ۸۹۴ ۸۹۵) مال hub هستند؛ فقط اگر بازبینی blocker داد و hub تا ۱۲ ساعت رفعش نکرد، lane نام‌برده در WAVE 19 آن را برمی‌دارد.
 شمارهٔ migration بالاتر از جدیدترین main و همهٔ PRهای باز؛ CI این را چک می‌کند.
 هرگز متغیرهای محیطی یا رمزها را چاپ نکن.
@@ -130,7 +129,7 @@ PRهای hub (۸۸۳ ۸۸۶ ۸۸۹ ۸۹۱ ۸۹۲ ۸۹۴ ۸۹۵) مال hub هس�
    - اگر برای head فعلی «Verdict: blocker» بود، اول همان را درست کن.
    - اگر آن review برای head قدیمی‌تری است، PR منتظر بازبینی است. به آن دست نزن و سراغ تسک بعدی برو. بازبین خودکار هر ۲ ساعت روی GitHub اجرا می‌شود؛ منتظرش نمان.
 ۲. اگر یقین داری یک blocker اشتباه است (مثلاً می‌گوید یک نسخه وجود ندارد ولی CI روی main با همان نسخه سبز است)، زیر PR فقط یک خط بنویس: «false positive: &lt;دلیل با مسیر فایل&gt;» و ادامه بده. تصمیم با هماهنگ‌کننده است.
-۳. در issue 592 بنویس «taking T&lt;n&gt; (L2)». اگر کس دیگری (یک lane دیگر یا hub) قبلاً همان T را برداشته، آن را برندار.
+۳. issue را روی خودش قفل کن: bash scripts/dev/claim.sh &lt;شمارهٔ issue&gt; --agent antigravity (PR پیش‌نویس = قفل) و برای اطلاع در issue 592 یک خط «taking #&lt;issue&gt; (L2)» بنویس. issue با برچسب in-progress را برندار.
 ۴. اگر مالک مستقیم کاری خارج از WAVE به تو داد:
    - اول در issue 592 بنویس «taking ad-hoc: &lt;عنوان کوتاه&gt; (L2)»؛
    - بعد با همین قانون‌ها انجامش بده، با PR جدا و ردیف جدا در گزارش؛
@@ -179,13 +178,13 @@ NEW LESSONS:
 QUESTIONS:
 &lt;سؤال برای هماهنگ‌کننده، یا none&gt;
 VERIFIER: RESULT: OK
-</pre></section><section id="pL3" class="pane"><button class="copy" onclick="cp('tL3')">کپی</button><pre id="tL3">کار این دور (WAVE 19، ۱۷ نوامبر) برای L3، به همین ترتیب (متن کامل در آخرین کامنت «## WAVE 19» در issue 592).
-از این دور دو کامپیوتر موازی کار می‌کنند: L1 تا L4 روی کامپیوتر مالک، L5 و L6 روی کامپیوتر همکار (docs/TEAM_SPLIT_2026-11-17.md).
-شرح کامل ردیف‌ها: docs/strategy/INFRA_TARGET_2026-11-17.md و ARCHITECTURE_DECISIONS_2026-11-16.md.
-1. اصلاحات WAVE 18 خودت (#728، #854، #860).
-2. T215: RLS بر اساس کاربر برای جدول‌های قاضی هوشمند + فهرست بازبینی‌شدهٔ جدول‌های خالی قدیمی برای حذف.
-3. T213: اسکریپت پاک‌سازی Qdrant (snapshot، کپی بیرون، بررسی، حذف؛ پیش‌فرض dry-run). اجرا نکن؛ hub اجرا می‌کند.
-4. رفع بدهی محاسبهٔ پول که #891 پیدا کرده (۱۳۱ مورد)، ماژول به ماژول، اول hr/.
+</pre></section><section id="pL3" class="pane"><button class="copy" onclick="cp('tL3')">کپی</button><pre id="tL3">کار این دور (WAVE 19b، ۱۷ نوامبر) برای L3. صف تو = issueهای گیت‌هاب با برچسب lane:L3، به همین ترتیب (متن کامل در آخرین کامنت «## WAVE 19b» در issue 592).
+هر issue شرط «Done when»، وابستگی‌ها و قوانین را دارد. claim روی خود issue: bash scripts/dev/claim.sh &lt;شماره&gt; --agent antigravity (PR پیش‌نویس = قفل). issue با برچسب in-progress را برندار.
+حداکثر ۳ PR باز. وقتی یکی منتظر بازبینی یا وابستگی است، issue بعدی را شروع کن. تا وقتی issue بازِ بدون مانع در صفت هست، متوقف نشو.
+issueهای backlog (بدون برچسب research-row): اول روی origin/main چک کن؛ اگر انجام شده، با مدرک (لینک commit یا PR) ببندش؛ اگر نیمه‌کاره است، کاملش کن؛ اگر منسوخ است، با دلیل ببند.
+L1 تا L4 روی کامپیوتر مالک، L5 و L6 روی کامپیوتر همکار (docs/TEAM_SPLIT_2026-11-17.md).
+اصلاحات WAVE 18 (#728 #854 #860) ← #929 (T215) ← #927 (T213، اجرا نکن؛ hub اجرا می‌کند) ← بدهی محاسبهٔ پول از #891 (اول hr/) ← #940 (T226) ← #904 (T173) ← #936 (T222) ← #914 (T185) ← #923 (T196).
+backlog: #475 #585 #584 #780
 PRهای hub (۸۸۳ ۸۸۶ ۸۸۹ ۸۹۱ ۸۹۲ ۸۹۴ ۸۹۵) مال hub هستند؛ فقط اگر بازبینی blocker داد و hub تا ۱۲ ساعت رفعش نکرد، lane نام‌برده در WAVE 19 آن را برمی‌دارد.
 شمارهٔ migration بالاتر از جدیدترین main و همهٔ PRهای باز؛ CI این را چک می‌کند.
 هرگز متغیرهای محیطی یا رمزها را چاپ نکن.
@@ -218,7 +217,7 @@ PRهای hub (۸۸۳ ۸۸۶ ۸۸۹ ۸۹۱ ۸۹۲ ۸۹۴ ۸۹۵) مال hub هس�
    - اگر برای head فعلی «Verdict: blocker» بود، اول همان را درست کن.
    - اگر آن review برای head قدیمی‌تری است، PR منتظر بازبینی است. به آن دست نزن و سراغ تسک بعدی برو. بازبین خودکار هر ۲ ساعت روی GitHub اجرا می‌شود؛ منتظرش نمان.
 ۲. اگر یقین داری یک blocker اشتباه است (مثلاً می‌گوید یک نسخه وجود ندارد ولی CI روی main با همان نسخه سبز است)، زیر PR فقط یک خط بنویس: «false positive: &lt;دلیل با مسیر فایل&gt;» و ادامه بده. تصمیم با هماهنگ‌کننده است.
-۳. در issue 592 بنویس «taking T&lt;n&gt; (L3)». اگر کس دیگری (یک lane دیگر یا hub) قبلاً همان T را برداشته، آن را برندار.
+۳. issue را روی خودش قفل کن: bash scripts/dev/claim.sh &lt;شمارهٔ issue&gt; --agent antigravity (PR پیش‌نویس = قفل) و برای اطلاع در issue 592 یک خط «taking #&lt;issue&gt; (L3)» بنویس. issue با برچسب in-progress را برندار.
 ۴. اگر مالک مستقیم کاری خارج از WAVE به تو داد:
    - اول در issue 592 بنویس «taking ad-hoc: &lt;عنوان کوتاه&gt; (L3)»؛
    - بعد با همین قانون‌ها انجامش بده، با PR جدا و ردیف جدا در گزارش؛
@@ -267,12 +266,13 @@ NEW LESSONS:
 QUESTIONS:
 &lt;سؤال برای هماهنگ‌کننده، یا none&gt;
 VERIFIER: RESULT: OK
-</pre></section><section id="pL4" class="pane"><button class="copy" onclick="cp('tL4')">کپی</button><pre id="tL4">کار این دور (WAVE 19، ۱۷ نوامبر) برای L4، به همین ترتیب (متن کامل در آخرین کامنت «## WAVE 19» در issue 592).
-از این دور دو کامپیوتر موازی کار می‌کنند: L1 تا L4 روی کامپیوتر مالک، L5 و L6 روی کامپیوتر همکار (docs/TEAM_SPLIT_2026-11-17.md).
-شرح کامل ردیف‌ها: docs/strategy/INFRA_TARGET_2026-11-17.md و ARCHITECTURE_DECISIONS_2026-11-16.md.
-1. اصلاحات WAVE 18 خودت (#859 چهار blocker، #862، #864، #805).
-2. T211: سرعت قاضی هوشمند + قرارداد آمادهٔ Rust برای مسیر جست‌وجو (شرح در INFRA_TARGET). تا ادغام #859 به بخش‌های آن دست نزن.
-3. T212: پوشش قوانین: سؤال‌های آزمون برای ۴۴ قانون اضافهٔ v7b، مقایسهٔ v6 و v7b، خطای فوری اگر مجموعه تنظیم نشده بود.
+</pre></section><section id="pL4" class="pane"><button class="copy" onclick="cp('tL4')">کپی</button><pre id="tL4">کار این دور (WAVE 19b، ۱۷ نوامبر) برای L4. صف تو = issueهای گیت‌هاب با برچسب lane:L4، به همین ترتیب (متن کامل در آخرین کامنت «## WAVE 19b» در issue 592).
+هر issue شرط «Done when»، وابستگی‌ها و قوانین را دارد. claim روی خود issue: bash scripts/dev/claim.sh &lt;شماره&gt; --agent antigravity (PR پیش‌نویس = قفل). issue با برچسب in-progress را برندار.
+حداکثر ۳ PR باز. وقتی یکی منتظر بازبینی یا وابستگی است، issue بعدی را شروع کن. تا وقتی issue بازِ بدون مانع در صفت هست، متوقف نشو.
+issueهای backlog (بدون برچسب research-row): اول روی origin/main چک کن؛ اگر انجام شده، با مدرک (لینک commit یا PR) ببندش؛ اگر نیمه‌کاره است، کاملش کن؛ اگر منسوخ است، با دلیل ببند.
+L1 تا L4 روی کامپیوتر مالک، L5 و L6 روی کامپیوتر همکار (docs/TEAM_SPLIT_2026-11-17.md).
+اصلاحات WAVE 18 (#859 #862 #864 #805) ← #925 (T211، تا ادغام #859 به بخش‌های آن دست نزن) ← #926 (T212) ← #898 (T166) ← #913 (T183) ← #933 (T219).
+backlog: #760
 PRهای hub (۸۸۳ ۸۸۶ ۸۸۹ ۸۹۱ ۸۹۲ ۸۹۴ ۸۹۵) مال hub هستند؛ فقط اگر بازبینی blocker داد و hub تا ۱۲ ساعت رفعش نکرد، lane نام‌برده در WAVE 19 آن را برمی‌دارد.
 شمارهٔ migration بالاتر از جدیدترین main و همهٔ PRهای باز؛ CI این را چک می‌کند.
 هرگز متغیرهای محیطی یا رمزها را چاپ نکن.
@@ -305,7 +305,7 @@ PRهای hub (۸۸۳ ۸۸۶ ۸۸۹ ۸۹۱ ۸۹۲ ۸۹۴ ۸۹۵) مال hub هس�
    - اگر برای head فعلی «Verdict: blocker» بود، اول همان را درست کن.
    - اگر آن review برای head قدیمی‌تری است، PR منتظر بازبینی است. به آن دست نزن و سراغ تسک بعدی برو. بازبین خودکار هر ۲ ساعت روی GitHub اجرا می‌شود؛ منتظرش نمان.
 ۲. اگر یقین داری یک blocker اشتباه است (مثلاً می‌گوید یک نسخه وجود ندارد ولی CI روی main با همان نسخه سبز است)، زیر PR فقط یک خط بنویس: «false positive: &lt;دلیل با مسیر فایل&gt;» و ادامه بده. تصمیم با هماهنگ‌کننده است.
-۳. در issue 592 بنویس «taking T&lt;n&gt; (L4)». اگر کس دیگری (یک lane دیگر یا hub) قبلاً همان T را برداشته، آن را برندار.
+۳. issue را روی خودش قفل کن: bash scripts/dev/claim.sh &lt;شمارهٔ issue&gt; --agent antigravity (PR پیش‌نویس = قفل) و برای اطلاع در issue 592 یک خط «taking #&lt;issue&gt; (L4)» بنویس. issue با برچسب in-progress را برندار.
 ۴. اگر مالک مستقیم کاری خارج از WAVE به تو داد:
    - اول در issue 592 بنویس «taking ad-hoc: &lt;عنوان کوتاه&gt; (L4)»؛
    - بعد با همین قانون‌ها انجامش بده، با PR جدا و ردیف جدا در گزارش؛
@@ -354,13 +354,13 @@ NEW LESSONS:
 QUESTIONS:
 &lt;سؤال برای هماهنگ‌کننده، یا none&gt;
 VERIFIER: RESULT: OK
-</pre></section><section id="pL5" class="pane"><button class="copy" onclick="cp('tL5')">کپی</button><pre id="tL5">کار این دور (WAVE 19، ۱۷ نوامبر) برای L5، به همین ترتیب (متن کامل در آخرین کامنت «## WAVE 19» در issue 592).
-از این دور دو کامپیوتر موازی کار می‌کنند: L1 تا L4 روی کامپیوتر مالک، L5 و L6 روی کامپیوتر همکار (docs/TEAM_SPLIT_2026-11-17.md).
-شرح کامل ردیف‌ها: docs/strategy/INFRA_TARGET_2026-11-17.md و ARCHITECTURE_DECISIONS_2026-11-16.md.
-1. T206: اطلاعات شخصی بیرون از فیلدهای زنجیرهٔ هش (فقط شناسهٔ طرف حساب؛ کلید جدا برای هر طرف) — پیش‌نیاز T178.
-2. T178: شمارهٔ پشت‌سرهم دفتر کل برای هر شخصیت حقوقی + زنجیرهٔ هش + وضعیت‌های دوره (قفل نرم، دورهٔ اصلاحی، بستن قطعی).
-3. T180: رابط موتور مالیات (آزمایش GoRules ZEN طبق R19).
-4. T194 (کنترل بودجه هنگام سفارش)، T195 (میانگین موزون و بهای استاندارد). آزمون‌های R16 مربوط در مجموعهٔ T177 باید از skip به pass برسند.
+</pre></section><section id="pL5" class="pane"><button class="copy" onclick="cp('tL5')">کپی</button><pre id="tL5">کار این دور (WAVE 19b، ۱۷ نوامبر) برای L5. صف تو = issueهای گیت‌هاب با برچسب lane:L5، به همین ترتیب (متن کامل در آخرین کامنت «## WAVE 19b» در issue 592).
+هر issue شرط «Done when»، وابستگی‌ها و قوانین را دارد. claim روی خود issue: bash scripts/dev/claim.sh &lt;شماره&gt; --agent antigravity (PR پیش‌نویس = قفل). issue با برچسب in-progress را برندار.
+حداکثر ۳ PR باز. وقتی یکی منتظر بازبینی یا وابستگی است، issue بعدی را شروع کن. تا وقتی issue بازِ بدون مانع در صفت هست، متوقف نشو.
+issueهای backlog (بدون برچسب research-row): اول روی origin/main چک کن؛ اگر انجام شده، با مدرک (لینک commit یا PR) ببندش؛ اگر نیمه‌کاره است، کاملش کن؛ اگر منسوخ است، با دلیل ببند.
+L1 تا L4 روی کامپیوتر مالک، L5 و L6 روی کامپیوتر همکار (docs/TEAM_SPLIT_2026-11-17.md).
+#924 (T206) ← #908 (T178) ← #935 (T221) ← #910 (T180) ← #938 (T224) ← #921 (T194) ← #922 (T195) ← #911 (T181) ← #912 (T182). آزمون‌های R16 مربوط در مجموعهٔ T177 باید از skip به pass برسند.
+backlog: #555 #587 (هر دو را به T178 ربط بده) #497 #495 #510 #525
 PRهای hub (۸۸۳ ۸۸۶ ۸۸۹ ۸۹۱ ۸۹۲ ۸۹۴ ۸۹۵) مال hub هستند؛ فقط اگر بازبینی blocker داد و hub تا ۱۲ ساعت رفعش نکرد، lane نام‌برده در WAVE 19 آن را برمی‌دارد.
 شمارهٔ migration بالاتر از جدیدترین main و همهٔ PRهای باز؛ CI این را چک می‌کند.
 هرگز متغیرهای محیطی یا رمزها را چاپ نکن.
@@ -393,7 +393,7 @@ PRهای hub (۸۸۳ ۸۸۶ ۸۸۹ ۸۹۱ ۸۹۲ ۸۹۴ ۸۹۵) مال hub هس�
    - اگر برای head فعلی «Verdict: blocker» بود، اول همان را درست کن.
    - اگر آن review برای head قدیمی‌تری است، PR منتظر بازبینی است. به آن دست نزن و سراغ تسک بعدی برو. بازبین خودکار هر ۲ ساعت روی GitHub اجرا می‌شود؛ منتظرش نمان.
 ۲. اگر یقین داری یک blocker اشتباه است (مثلاً می‌گوید یک نسخه وجود ندارد ولی CI روی main با همان نسخه سبز است)، زیر PR فقط یک خط بنویس: «false positive: &lt;دلیل با مسیر فایل&gt;» و ادامه بده. تصمیم با هماهنگ‌کننده است.
-۳. در issue 592 بنویس «taking T&lt;n&gt; (L5)». اگر کس دیگری (یک lane دیگر یا hub) قبلاً همان T را برداشته، آن را برندار.
+۳. issue را روی خودش قفل کن: bash scripts/dev/claim.sh &lt;شمارهٔ issue&gt; --agent antigravity (PR پیش‌نویس = قفل) و برای اطلاع در issue 592 یک خط «taking #&lt;issue&gt; (L5)» بنویس. issue با برچسب in-progress را برندار.
 ۴. اگر مالک مستقیم کاری خارج از WAVE به تو داد:
    - اول در issue 592 بنویس «taking ad-hoc: &lt;عنوان کوتاه&gt; (L5)»؛
    - بعد با همین قانون‌ها انجامش بده، با PR جدا و ردیف جدا در گزارش؛
@@ -442,13 +442,12 @@ NEW LESSONS:
 QUESTIONS:
 &lt;سؤال برای هماهنگ‌کننده، یا none&gt;
 VERIFIER: RESULT: OK
-</pre></section><section id="pL6" class="pane"><button class="copy" onclick="cp('tL6')">کپی</button><pre id="tL6">کار این دور (WAVE 19، ۱۷ نوامبر) برای L6، به همین ترتیب (متن کامل در آخرین کامنت «## WAVE 19» در issue 592).
-از این دور دو کامپیوتر موازی کار می‌کنند: L1 تا L4 روی کامپیوتر مالک، L5 و L6 روی کامپیوتر همکار (docs/TEAM_SPLIT_2026-11-17.md).
-شرح کامل ردیف‌ها: docs/strategy/INFRA_TARGET_2026-11-17.md و ARCHITECTURE_DECISIONS_2026-11-16.md.
-1. T191: برچسب‌های شفافیت هوش مصنوعی — قانون AI اروپا (مادهٔ ۵۰) برای محصولی که بعد از ۲ اوت ۲۰۲۶ عرضه شود از روز اول اجرا می‌شود.
-2. T188: داده‌های مالیات آلمان (۱۹ و ۷ درصد، سقف‌های §19 با توقف وسط سال، دورهٔ اظهارنامهٔ §18، کدهای §13b با verified:false، بررسی VIES، کدینگ حساب سازگار با SKR03/04 با نام خنثی).
-3. T189: خروجی DATEV EXTF 700 (قبل از ارتقای برنامه به حالت عملیاتی، دامنهٔ API را کامل قفل کن؛ بعداً قابل افزایش نیست).
-4. T186: GoBD (بعد از ادغام T178).
+</pre></section><section id="pL6" class="pane"><button class="copy" onclick="cp('tL6')">کپی</button><pre id="tL6">کار این دور (WAVE 19b، ۱۷ نوامبر) برای L6. صف تو = issueهای گیت‌هاب با برچسب lane:L6، به همین ترتیب (متن کامل در آخرین کامنت «## WAVE 19b» در issue 592).
+هر issue شرط «Done when»، وابستگی‌ها و قوانین را دارد. claim روی خود issue: bash scripts/dev/claim.sh &lt;شماره&gt; --agent antigravity (PR پیش‌نویس = قفل). issue با برچسب in-progress را برندار.
+حداکثر ۳ PR باز. وقتی یکی منتظر بازبینی یا وابستگی است، issue بعدی را شروع کن. تا وقتی issue بازِ بدون مانع در صفت هست، متوقف نشو.
+issueهای backlog (بدون برچسب research-row): اول روی origin/main چک کن؛ اگر انجام شده، با مدرک (لینک commit یا PR) ببندش؛ اگر نیمه‌کاره است، کاملش کن؛ اگر منسوخ است، با دلیل ببند.
+L1 تا L4 روی کامپیوتر مالک، L5 و L6 روی کامپیوتر همکار (docs/TEAM_SPLIT_2026-11-17.md).
+#920 (T191) ← #917 (T188، بعد از رابط #910) ← #918 (T189؛ قبل از ارتقای برنامهٔ DATEV به حالت عملیاتی دامنهٔ API را کامل قفل کن) ← #915 (T186، بعد از #908) ← #916 (T187) ← #919 (T190، بعد از #939). بعد خلیج فارس: #907 (T176) ← #905 (T174) ← #906 (T175).
 PRهای hub (۸۸۳ ۸۸۶ ۸۸۹ ۸۹۱ ۸۹۲ ۸۹۴ ۸۹۵) مال hub هستند؛ فقط اگر بازبینی blocker داد و hub تا ۱۲ ساعت رفعش نکرد، lane نام‌برده در WAVE 19 آن را برمی‌دارد.
 شمارهٔ migration بالاتر از جدیدترین main و همهٔ PRهای باز؛ CI این را چک می‌کند.
 هرگز متغیرهای محیطی یا رمزها را چاپ نکن.
@@ -481,7 +480,7 @@ PRهای hub (۸۸۳ ۸۸۶ ۸۸۹ ۸۹۱ ۸۹۲ ۸۹۴ ۸۹۵) مال hub هس�
    - اگر برای head فعلی «Verdict: blocker» بود، اول همان را درست کن.
    - اگر آن review برای head قدیمی‌تری است، PR منتظر بازبینی است. به آن دست نزن و سراغ تسک بعدی برو. بازبین خودکار هر ۲ ساعت روی GitHub اجرا می‌شود؛ منتظرش نمان.
 ۲. اگر یقین داری یک blocker اشتباه است (مثلاً می‌گوید یک نسخه وجود ندارد ولی CI روی main با همان نسخه سبز است)، زیر PR فقط یک خط بنویس: «false positive: &lt;دلیل با مسیر فایل&gt;» و ادامه بده. تصمیم با هماهنگ‌کننده است.
-۳. در issue 592 بنویس «taking T&lt;n&gt; (L6)». اگر کس دیگری (یک lane دیگر یا hub) قبلاً همان T را برداشته، آن را برندار.
+۳. issue را روی خودش قفل کن: bash scripts/dev/claim.sh &lt;شمارهٔ issue&gt; --agent antigravity (PR پیش‌نویس = قفل) و برای اطلاع در issue 592 یک خط «taking #&lt;issue&gt; (L6)» بنویس. issue با برچسب in-progress را برندار.
 ۴. اگر مالک مستقیم کاری خارج از WAVE به تو داد:
    - اول در issue 592 بنویس «taking ad-hoc: &lt;عنوان کوتاه&gt; (L6)»؛
    - بعد با همین قانون‌ها انجامش بده، با PR جدا و ردیف جدا در گزارش؛
