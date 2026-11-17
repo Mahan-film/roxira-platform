@@ -574,8 +574,9 @@ function PrintFormBuilderPage() {
                 </div>
               </div>
 
-              {/* Column Reordering and Visibility */}
-              <div className="mt-6 border-t pt-4">
+              {/* Column Reordering and Visibility (sales_invoice only) */}
+              {docType === "sales_invoice" ? (
+                <div className="mt-6 border-t pt-4">
                 <h4 className="mb-3 text-sm font-semibold">
                   مدیریت و چینش ستون‌های جدول چاپ ({columns.length} ستون)
                 </h4>
@@ -658,6 +659,11 @@ function PrintFormBuilderPage() {
                   </table>
                 </div>
               </div>
+              ) : (
+                <div className="mt-6 border-t pt-4 text-xs text-muted-foreground">
+                  سفارشی‌سازی ستون‌های جدول فقط برای قالب فاکتور فروش اعمال می‌شود.
+                </div>
+              )}
             </Card>
           </div>
         </div>

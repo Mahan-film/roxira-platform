@@ -110,11 +110,12 @@ export class PrintTemplateRepository {
   async findByTitle(
     tenantId: string,
     docType: PrintDocType,
+    paperSize: PrintPaperSize,
     title: string,
     manager?: EntityManager,
   ): Promise<PrintTemplateEntity | null> {
     return this.withRepo(tenantId, manager, async (repo) => {
-      return repo.findOne({ where: { tenantId, docType, title } });
+      return repo.findOne({ where: { tenantId, docType, paperSize, title } });
     });
   }
 

@@ -69,12 +69,13 @@ describe('PrintTemplateService & Repository', () => {
       findById: jest.fn(async (tId: string, id: number) => {
         return templatesStore.find((t) => t.tenantId === tId && t.id === id) ?? null;
       }),
-      findByTitle: jest.fn(async (tId: string, docType: PrintDocType, title: string) => {
+      findByTitle: jest.fn(async (tId: string, docType: PrintDocType, paperSize: PrintPaperSize, title: string) => {
         return (
           templatesStore.find(
             (t) =>
               t.tenantId === tId &&
               t.docType === docType &&
+              t.paperSize === paperSize &&
               t.title.toLowerCase() === title.toLowerCase(),
           ) ?? null
         );
@@ -190,12 +191,20 @@ describe('PrintTemplateService & Repository', () => {
       });
       expect(salesTpl.id).toBeDefined();
 
-      // Same title with the same docType is rejected
+      // Same title with a different paperSize is allowed
+      const salesA5Tpl = await service.create(tenantId, {
+        title: 'قالب تست ۱',
+        docType: PrintDocType.SALES_INVOICE,
+        paperSize: PrintPaperSize.A5,
+      });
+      expect(salesA5Tpl.id).toBeDefined();
+
+      // Same title with the same docType and paperSize is rejected
       await expect(
         service.create(tenantId, {
           title: 'قالب تست ۱',
           docType: PrintDocType.SALES_INVOICE,
-          paperSize: PrintPaperSize.A5,
+          paperSize: PrintPaperSize.A4,
         }),
       ).rejects.toThrow('قبلاً برای این سازمان تعریف شده است');
     });
@@ -354,18 +363,18 @@ describe('PrintTemplateService & Repository', () => {
       expect(html).toContain('&lt;script&gt;');
     });
 
-    it('formats barcode label consumer price for both string and numeric rials input identically', () => {
+    it('formats barcode label consumer price from bigint-safe string rials input including 18-digit amounts', () => {
       const htmlStringPrice = service.renderBarcodeLabelSheetHtml({
         columns: 4,
         items: [{ sku: 'SKU-1', title: 'کالا ۱', price: '450000000', count: 1 }],
       } as never);
       expect(htmlStringPrice).toContain('۴۵۰٬۰۰۰٬۰۰۰ ریال');
 
-      const htmlNumberPrice = service.renderBarcodeLabelSheetHtml({
+      const htmlLargePrice = service.renderBarcodeLabelSheetHtml({
         columns: 4,
-        items: [{ sku: 'SKU-2', title: 'کالا ۲', price: 450000000 as never, count: 1 }],
+        items: [{ sku: 'SKU-2', title: 'کالا ۲', price: '9007199254740993', count: 1 }],
       } as never);
-      expect(htmlNumberPrice).toContain('۴۵۰٬۰۰۰٬۰۰۰ ریال');
+      expect(htmlLargePrice).toContain('۹٬۰۰۷٬۱۹۹٬۲۵۴٬۷۴۰٬۹۹۳ ریال');
     });
 
     it('clamps item label counts and rejects non-positive counts against the 500-label cap', () => {

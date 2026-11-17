@@ -32,7 +32,7 @@ export class CreatePrintFormTemplates1789900011200 implements MigrationInterface
         "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
         "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
         CONSTRAINT "PK_inv_print_templates_id" PRIMARY KEY ("id"),
-        CONSTRAINT "UQ_inv_print_templates_tenant_title" UNIQUE ("tenant_id", "doc_type", "title"),
+        CONSTRAINT "UQ_inv_print_templates_tenant_title" UNIQUE ("tenant_id", "doc_type", "paper_size", "title"),
         CONSTRAINT "CHK_inv_print_templates_doc_type"
           CHECK ("doc_type" IN ('sales_invoice', 'receipt_payment_voucher', 'stock_document', 'barcode_labels')),
         CONSTRAINT "CHK_inv_print_templates_paper_size"

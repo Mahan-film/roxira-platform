@@ -77,7 +77,12 @@ export class PrintTemplateService {
     if (!dto.title || typeof dto.title !== 'string' || !dto.title.trim()) {
       throw new BadRequestException('عنوان قالب نمی‌تواند خالی یا تهی باشد.');
     }
-    const existing = await this.repository.findByTitle(tenantId, dto.docType, dto.title.trim());
+    const existing = await this.repository.findByTitle(
+      tenantId,
+      dto.docType,
+      dto.paperSize,
+      dto.title.trim(),
+    );
     if (existing) {
       throw new ConflictException(
         `قالب چاپی با عنوان «${dto.title}» قبلاً برای این سازمان تعریف شده است.`,
@@ -154,7 +159,12 @@ export class PrintTemplateService {
         throw new BadRequestException('عنوان قالب نمی‌تواند خالی یا تهی باشد.');
       }
       if (dto.title.trim() !== existing.title) {
-        const duplicate = await this.repository.findByTitle(tenantId, existing.docType, dto.title.trim());
+        const duplicate = await this.repository.findByTitle(
+          tenantId,
+          existing.docType,
+          existing.paperSize,
+          dto.title.trim(),
+        );
         if (duplicate && duplicate.id !== id) {
           throw new ConflictException(
             `قالب چاپی دیگری با عنوان «${dto.title}» قبلاً ثبت شده است.`,
@@ -294,11 +304,9 @@ export class PrintTemplateService {
       throw new BadRequestException('حداکثر ۵۰۰ برچسب در یک درخواست مجاز است.');
     }
 
-    const formatPriceRials = (amount?: string | number): string => {
+    const formatPriceRials = (amount?: string): string => {
       if (amount === undefined || amount === null || amount === '') return '';
-      const digits = typeof amount === 'number'
-        ? (Number.isFinite(amount) ? String(Math.round(amount)) : '')
-        : String(amount).trim();
+      const digits = typeof amount === 'string' ? amount.trim() : '';
       if (!/^\d{1,18}$/.test(digits)) return '';
       const minor = toMinor(digits);
       return `${formatMoney(minor)} ریال`;
@@ -318,19 +326,20 @@ export class PrintTemplateService {
 
     const labelsHtml = labelItems
       .map((item) => {
-        const barcodeVal = item.barcode?.trim() || item.sku.trim();
+        const skuVal = (item.sku ?? '').trim();
+        const barcodeVal = item.barcode?.trim() || skuVal;
         const priceStr = showPrice && item.price ? formatPriceRials(item.price) : '';
         const barcodeResult = generateBarcodeSvg(barcodeVal, 24);
 
         return `
           <div class="barcode-label" style="width: ${colWidth}; height: ${labelHeightMm};">
             <div class="label-title" title="${escapeXml(item.title)}">${escapeXml(item.title)}</div>
-            ${showSku ? `<div class="label-sku">کد: ${escapeXml(item.sku)}</div>` : ''}
+            ${showSku ? `<div class="label-sku">کد: ${escapeXml(skuVal)}</div>` : ''}
             <div class="label-barcode-box">
               ${barcodeResult.svg}
               <div class="label-barcode-digits">${escapeXml(barcodeResult.encodedText)}</div>
             </div>
-            ${priceStr ? `<div class="label-price">${priceStr}</div>` : ''}
+            ${priceStr ? `<div class="label-price">${escapeXml(priceStr)}</div>` : ''}
           </div>
         `;
       })

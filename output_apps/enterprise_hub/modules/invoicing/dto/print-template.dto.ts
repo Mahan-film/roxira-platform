@@ -312,8 +312,9 @@ export class BarcodeLabelItemDto {
   @IsOptional()
   @Transform(({ value }) => {
     if (value === undefined || value === null || value === '') return undefined;
-    if (typeof value === 'number') return Number.isFinite(value) ? String(Math.round(value)) : undefined;
-    return String(value).trim();
+    if (typeof value === 'bigint') return value.toString();
+    if (typeof value === 'string') return value.trim();
+    return value;
   })
   @IsString()
   @MaxLength(18, { message: 'قیمت نمی‌تواند بیشتر از ۱۸ رقم باشد' })

@@ -35,7 +35,7 @@ export interface PrintTemplateOptions {
  * و برچسب‌های بارکد ۴ و ۵ ستونه را با اعمال RLS برای هر سازمان ذخیره می‌کند.
  */
 @Entity({ name: 'inv_print_templates' })
-@Unique('UQ_inv_print_templates_tenant_title', ['tenantId', 'docType', 'title'])
+@Unique('UQ_inv_print_templates_tenant_title', ['tenantId', 'docType', 'paperSize', 'title'])
 @Index('IDX_inv_print_templates_lookup', ['tenantId', 'docType', 'paperSize'])
 @Index('IDX_inv_print_templates_tenant_default', ['tenantId', 'docType', 'isDefault'])
 @Index('UQ_inv_print_templates_tenant_default', ['tenantId', 'docType', 'paperSize'], {
