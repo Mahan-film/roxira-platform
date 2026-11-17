@@ -39,7 +39,7 @@ The table below lists every Qdrant collection discovered across the entire Roxir
 
 ## 3. Enforcement Architecture: `TenantVectorStoreWrapper`
 
-Located in: [`output_apps/generated_modules/smartjudge/security/vector_tenant_wrapper.py`](file:///Users/mac/Developer/roxira-platform/output_apps/generated_modules/smartjudge/security/vector_tenant_wrapper.py)
+Located in: [`output_apps/generated_modules/smartjudge/security/vector_tenant_wrapper.py`](../../output_apps/generated_modules/smartjudge/security/vector_tenant_wrapper.py)
 
 ### 3.1. Core Invariants
 1. **Explicit Identification**: A query against any tenant collection MUST provide a non-empty `tenant_id` (or `user_id`). Placeholders such as `null`, `undefined`, `none`, `0`, or empty strings are strictly disallowed.
@@ -70,7 +70,7 @@ In `output_apps/ecosystem_core/src/learning/self_learning_agent.py`:
 
 ## 5. Automated Verification & Test Coverage
 
-The enforcement mechanism is verified by unit tests in [`output_apps/generated_modules/smartjudge/tests/test_vector_store_tenancy.py`](file:///Users/mac/Developer/roxira-platform/output_apps/generated_modules/smartjudge/tests/test_vector_store_tenancy.py):
+The enforcement mechanism is verified by unit tests in [`output_apps/generated_modules/smartjudge/tests/test_vector_store_tenancy.py`](../../output_apps/generated_modules/smartjudge/tests/test_vector_store_tenancy.py):
 
 1. `test_is_tenant_collection_detection`: Proves accurate classification between tenant-scoped collections and public legal corpora.
 2. `test_validate_identifier`: Proves rejection of `None`, empty strings, whitespace, injection characters, and `"null"` / `"0"`.
