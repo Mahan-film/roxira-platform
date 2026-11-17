@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AccessModule } from '../access/access.module';
 import { AccountingModule } from '../accounting/accounting.module';
 import { ChequesModule } from '../cheques/cheques.module';
 import { HrModule } from '../hr/hr.module';
@@ -12,6 +13,7 @@ import { AssistantController } from './controllers/assistant.controller';
 import { AssistantMemoryController } from './controllers/assistant-memory.controller';
 import { AssistantMemoryRepository } from './memory/assistant-memory.repository';
 import { AssistantMemoryService } from './memory/assistant-memory.service';
+import { AiInteractionRepository } from './repositories/ai-interaction.repository';
 import { AssistantLlmService } from './services/assistant-llm.service';
 import { AssistantMetricsService } from './metrics/assistant-metrics.service';
 import { LedgerMetricSources } from './metrics/ledger-metric-sources';
@@ -29,6 +31,7 @@ import { AssistantService } from './services/assistant.service';
  */
 @Module({
   imports: [
+    AccessModule,
     McpModule,
     InvoicingModule,
     InventoryModule,
@@ -42,6 +45,7 @@ import { AssistantService } from './services/assistant.service';
     AssistantService,
     AssistantMemoryService,
     AssistantMemoryRepository,
+    AiInteractionRepository,
     TenantScope,
     AssistantToolsService,
     AssistantLlmService,
@@ -50,6 +54,12 @@ import { AssistantService } from './services/assistant.service';
     { provide: METRIC_SOURCES, useExisting: LedgerMetricSources },
     AssistantRateLimiterService,
     redisClientProvider,
+  ],
+  exports: [
+    AssistantService,
+    AssistantMemoryService,
+    AiInteractionRepository,
+    AssistantToolsService,
   ],
 })
 export class AssistantModule {}
