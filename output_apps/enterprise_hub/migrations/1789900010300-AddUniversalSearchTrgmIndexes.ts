@@ -9,7 +9,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * - fin_cheques (cheque_number, sayad_number, party_name)
  * - fin_chart_of_accounts (code, name)
  */
-export class AddUniversalSearchTrgmIndexes1789900007000 implements MigrationInterface {
+export class AddUniversalSearchTrgmIndexes1789900010300 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm;`);
 

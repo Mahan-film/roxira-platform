@@ -1,14 +1,14 @@
-import { AddUniversalSearchTrgmIndexes1789900007000 } from '../../migrations/1789900007000-AddUniversalSearchTrgmIndexes';
+import { AddUniversalSearchTrgmIndexes1789900010300 } from '../../migrations/1789900010300-AddUniversalSearchTrgmIndexes';
 
 const createRunner = () => {
   const queries: string[] = [];
   return { queries, runner: { query: jest.fn(async (sql: string) => void queries.push(sql)) } };
 };
 
-describe('AddUniversalSearchTrgmIndexes migration (1789900007000)', () => {
+describe('AddUniversalSearchTrgmIndexes migration (1789900010300)', () => {
   it('up() creates pg_trgm extension and GIN trigram indexes across search entities', async () => {
     const { runner, queries } = createRunner();
-    await new AddUniversalSearchTrgmIndexes1789900007000().up(runner as never);
+    await new AddUniversalSearchTrgmIndexes1789900010300().up(runner as never);
     const sql = queries.join('\n');
 
     expect(sql).toContain('CREATE EXTENSION IF NOT EXISTS pg_trgm;');
@@ -41,7 +41,7 @@ describe('AddUniversalSearchTrgmIndexes migration (1789900007000)', () => {
 
   it('down() safely drops all created trigram indexes', async () => {
     const { runner, queries } = createRunner();
-    await new AddUniversalSearchTrgmIndexes1789900007000().down(runner as never);
+    await new AddUniversalSearchTrgmIndexes1789900010300().down(runner as never);
     const sql = queries.join('\n');
 
     expect(sql).toContain('DROP INDEX IF EXISTS "IDX_erp_parties_name_trgm"');
