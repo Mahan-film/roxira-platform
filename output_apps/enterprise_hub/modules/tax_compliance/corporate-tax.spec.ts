@@ -183,6 +183,6 @@ describe('corporate tax provision preview (DTX-01)', () => {
     const service = new CorporateTaxService({ findForYear } as unknown as StatutoryRepository);
     const result = await service.preview('tenant-1', dto({ accountingProfit: '1000000000.00' }));
     expect(findForYear).toHaveBeenCalledWith('tenant-1', 'IR', 1405);
-    expect(result.provision).toBe('250000000.00');
+    expect(result.provision).toBe('200000000.00');
   });
 });

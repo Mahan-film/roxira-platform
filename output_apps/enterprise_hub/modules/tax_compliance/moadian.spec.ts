@@ -767,6 +767,14 @@ describe('MoadianService — every pattern through the send path', () => {
     expect(packRegistry.resolve).toHaveBeenCalled();
     expect(mapMock).toHaveBeenCalled();
   });
+
+  it('falls back to mapInvoiceToMoadianPacket when no pack registry is provided', async () => {
+    const ctx = buildMoadian({ packRegistry: undefined });
+    await ctx.service.putCredential(TENANT_A, credentialDto());
+    const submission = await ctx.service.submitInvoice(TENANT_A, INVOICE_A);
+    expect(submission.id).toBeDefined();
+    expect(submission.taxId).toBeTruthy();
+  });
 });
 
 describe('MoadianService — send and poll', () => {
