@@ -120,6 +120,16 @@ describePg('Quotation to Invoice conversion on PostgreSQL (non-superuser, FORCE 
       vatRateResolver,
     );
 
+    // Seed tenants T1 and T2
+    await owner.query(
+      `INSERT INTO tenants (id, name, slug) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+      [T1, 'شرکت آزمایشی ۱', 'test-qinv-t1'],
+    );
+    await owner.query(
+      `INSERT INTO tenants (id, name, slug) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+      [T2, 'شرکت آزمایشی ۲', 'test-qinv-t2'],
+    );
+
     // Seed customer in T1
     await partiesService.create(T1, {
       code: 'CUST-T1',

@@ -20,18 +20,23 @@ export interface QuotationPrintMeta {
 }
 
 function parseRialMinor(val: unknown): bigint {
+  if (val === null || val === undefined) return 0n;
   if (typeof val === 'bigint') return val;
-  if (typeof val === 'number') return BigInt(Math.trunc(val));
+  if (typeof val === 'number') {
+    if (!Number.isSafeInteger(val)) {
+      throw new Error(`Invalid Rial minor amount: ${String(val)}`);
+    }
+    return BigInt(val);
+  }
   if (typeof val === 'string') {
     const s = val.replace(/,/g, '').trim();
-    if (!s) return 0n;
-    if (s.includes('.')) {
-      const [intPart] = s.split('.');
-      return BigInt(intPart || '0');
+    const match = /^(-?\d+)(?:\.0+)?$/.exec(s);
+    if (!match) {
+      throw new Error(`Invalid Rial minor amount: ${val}`);
     }
-    return BigInt(s);
+    return BigInt(match[1]);
   }
-  return 0n;
+  throw new Error(`Unsupported Rial minor amount type: ${typeof val}`);
 }
 
 function formatBigIntRial(val: bigint): string {
@@ -75,7 +80,7 @@ export function mapQuotationToSalesInvoiceA4Data(
   }
 
   const amountBeforeDiscountBig = totalAmountBig + totalDiscountBig;
-  const totalVatBig = (totalAmountBig * BigInt(vatRatePercent)) / 100n;
+  const totalVatBig = (totalAmountBig * BigInt(vatRatePercent) + 50n) / 100n;
   const grandTotalBig = totalAmountBig + totalVatBig;
 
   const validUntilNote = quotation.validUntil
@@ -131,7 +136,7 @@ export function mapQuotationToSalesInvoiceA4Data(
       const pBig = parseRialMinor(item.unitPrice);
       const dBig = parseRialMinor(item.discount);
       const subtotalBig = qBig * pBig - dBig;
-      const itemVatBig = (subtotalBig * BigInt(vatRatePercent)) / 100n;
+      const itemVatBig = (subtotalBig * BigInt(vatRatePercent) + 50n) / 100n;
       const lineTotalBig = subtotalBig + itemVatBig;
       return {
         row: formatNumber(index + 1),
