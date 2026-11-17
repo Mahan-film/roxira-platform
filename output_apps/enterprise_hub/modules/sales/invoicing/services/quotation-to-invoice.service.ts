@@ -6,10 +6,10 @@ import {
   Optional,
 } from '@nestjs/common';
 import * as crypto from 'crypto';
-import { EntityManager } from 'typeorm';
-import { fromMinor, Money, parseMinor, toMinor } from '../../../accounting/money';
+import { EntityManager, IsNull } from 'typeorm';
+import { fromMinor, Money, MoneyFormatError, parseMinor, toMinor } from '../../../accounting/money';
 import { Currency } from '../../../currency/enums/currency.enum';
-import { tehranIsoDate } from '../../../hr/services/jalali-period';
+import { tehranDateOf, tehranDayWindow } from '../../../hr/services/tehran-time';
 import { CreateInvoiceDto } from '../../../invoicing/dto/create-invoice.dto';
 import { InvoiceResponseDto } from '../../../invoicing/dto/invoice-response.dto';
 import { InvoiceDirection } from '../../../invoicing/enums/invoice-kind.enum';
@@ -76,9 +76,7 @@ export class QuotationToInvoiceService {
     dto?: ConvertQuotationToInvoiceDto,
     userId?: string,
   ): Promise<ConvertQuotationToInvoiceResponseDto> {
-    let expiredTarget = false;
-    try {
-      return await this.salesRepository.runInTransaction(tenantId, async (manager) => {
+    const txResult = await this.salesRepository.runInTransaction(tenantId, async (manager) => {
         const quotationRepo = manager.getRepository(SalesQuotationEntity);
         const quotationLineRepo = manager.getRepository(SalesQuotationLineEntity);
 
@@ -145,17 +143,17 @@ export class QuotationToInvoiceService {
         }
 
         // Check validity / expiry date and bounds
-        const today = tehranIsoDate(new Date());
+        const today = tehranDateOf(new Date());
         const effectiveDate = dto?.invoiceDate ?? today;
         const quoteDateRaw = quotation.quoteDate as unknown;
         const validUntilRaw = quotation.validUntil as unknown;
         const quoteDateIso =
           quoteDateRaw instanceof Date
-            ? tehranIsoDate(quoteDateRaw)
+            ? tehranDateOf(quoteDateRaw)
             : String(quotation.quoteDate).slice(0, 10);
         const validUntilIso = quotation.validUntil
           ? validUntilRaw instanceof Date
-            ? tehranIsoDate(validUntilRaw)
+            ? tehranDateOf(validUntilRaw)
             : String(quotation.validUntil).slice(0, 10)
           : null;
 
@@ -166,8 +164,11 @@ export class QuotationToInvoiceService {
           throw new BadRequestException('تاریخ صدور صورتحساب نمی‌تواند در آینده باشد.');
         }
         if (validUntilIso && validUntilIso < effectiveDate) {
-          expiredTarget = true;
-          throw new BadRequestException(QUOTATION_EXPIRED);
+          await quotationRepo.update(
+            { tenantId, id: quotationId, convertedInvoiceId: IsNull() },
+            { status: SalesQuotationStatus.EXPIRED },
+          );
+          return { expired: true as const };
         }
 
       // Load quotation lines
@@ -190,7 +191,10 @@ export class QuotationToInvoiceService {
       const tenant = this.tenantsRepository
         ? await this.tenantsRepository.findById(tenantId)
         : null;
-      const sellerName = tenant?.name?.trim() || 'سازمان من';
+      const sellerName = tenant?.name?.trim();
+      if (!sellerName) {
+        throw new BadRequestException('نام سازمان فروشنده ثبت نشده است.');
+      }
 
       // Resolve statutory VAT rate for effective date (fails closed if unavailable)
       let vatRate: number;
@@ -209,6 +213,20 @@ export class QuotationToInvoiceService {
 
       // Prepare invoice items with exact minor conversion for InvoicingService
       const invoiceItems = quotationLines.map((line) => {
+        const rawQty = String(line.quantity ?? '').trim();
+        const normalizedQty = rawQty.includes('.') ? rawQty.replace(/\.?0+$/, '') : rawQty;
+        let qtyVal: number | string;
+        try {
+          qtyVal = fromMinor(toMinor(normalizedQty));
+        } catch (err) {
+          if (err instanceof MoneyFormatError) {
+            throw new BadRequestException('مقدار سطر پیش‌فاکتور معتبر نیست یا بیش از ۲ رقم اعشار دارد.');
+          }
+          throw err;
+        }
+        if (typeof qtyVal === 'string' || qtyVal <= 0) {
+          throw new BadRequestException('مقدار سطر پیش‌فاکتور معتبر نیست.');
+        }
         const unitPriceMinor = toMinor(line.unitPrice);
         const discountMinor = line.discount ? toMinor(line.discount) : 0n;
         const unitPriceVal = fromMinor(unitPriceMinor);
@@ -221,7 +239,7 @@ export class QuotationToInvoiceService {
         return {
           itemId: line.itemId > 0 ? line.itemId : undefined,
           description: line.description?.trim() || `کالای ردیف ${line.lineNo}`,
-          quantity: Number(line.quantity),
+          quantity: qtyVal,
           unitPrice: unitPriceVal,
           discount: discountVal,
           vatRate,
@@ -247,11 +265,16 @@ export class QuotationToInvoiceService {
         warehouseId: dto?.warehouseId ?? undefined,
       };
 
+      const dayWindow = tehranDayWindow(effectiveDate);
+      if (!dayWindow) {
+        throw new BadRequestException('تاریخ صدور صورتحساب نامعتبر است.');
+      }
+
       const createdInvoice = await this.invoicingService.create(tenantId, invoicePayload, {
         idempotencyKey: dto?.idempotencyKey ? `QINV-${dto.idempotencyKey}` : undefined,
         requestHash: dto?.idempotencyKey ? requestHash : undefined,
         manager,
-        issuedAt: new Date(`${effectiveDate}T00:00:00+03:30`),
+        issuedAt: dayWindow.start,
       });
 
       // Transition quotation status to CONVERTED and persist link
@@ -264,31 +287,27 @@ export class QuotationToInvoiceService {
       );
 
       return {
-        quotationId: quotation.id,
-        quotationNumber: quotation.number,
-        invoiceId: createdInvoice.id,
-        taxInvoiceNumber: createdInvoice.taxInvoiceNumber,
-        status: String(createdInvoice.status),
-        partyCode: quotation.partyCode,
-        invoiceDate: effectiveDate,
-        totalAmount: moneyOut(createdInvoice.totalAmount),
-        totalTax: moneyOut(createdInvoice.totalTax),
-        finalPayable: moneyOut(createdInvoice.finalPayable),
-        replayed: false,
-        invoice: createdInvoice,
+        expired: false as const,
+        response: {
+          quotationId: quotation.id,
+          quotationNumber: quotation.number,
+          invoiceId: createdInvoice.id,
+          taxInvoiceNumber: createdInvoice.taxInvoiceNumber,
+          status: String(createdInvoice.status),
+          partyCode: quotation.partyCode,
+          invoiceDate: effectiveDate,
+          totalAmount: moneyOut(createdInvoice.totalAmount),
+          totalTax: moneyOut(createdInvoice.totalTax),
+          finalPayable: moneyOut(createdInvoice.finalPayable),
+          replayed: false,
+          invoice: createdInvoice,
+        },
       };
     });
-    } catch (err) {
-      if (expiredTarget) {
-        await this.salesRepository.runInTransaction(tenantId, async (m) => {
-          await m.getRepository(SalesQuotationEntity).update(
-            { tenantId, id: quotationId },
-            { status: SalesQuotationStatus.EXPIRED },
-          );
-        });
-      }
-      throw err;
+    if ('expired' in txResult && txResult.expired) {
+      throw new BadRequestException(QUOTATION_EXPIRED);
     }
+    return 'response' in txResult ? txResult.response : txResult;
   }
 
   private async replayConvertedInvoice(
@@ -297,7 +316,7 @@ export class QuotationToInvoiceService {
     invoice: any,
   ): Promise<ConvertQuotationToInvoiceResponseDto> {
     const invoiceDto = await this.invoicingService.findOne(tenantId, invoice.id);
-    const invoiceDate = tehranIsoDate(invoice.issuedAt ?? invoice.createdAt);
+    const invoiceDate = tehranDateOf(invoice.issuedAt ?? invoice.createdAt);
 
     return {
       quotationId: quotation.id,
