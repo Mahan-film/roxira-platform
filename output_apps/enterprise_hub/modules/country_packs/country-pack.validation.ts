@@ -24,7 +24,7 @@ export function validateCountryPack(pack: CountryPack): void {
   if (!COUNTRY_CODE.test(pack.country)) fail(pack, 'country must be an upper-case ISO 3166-1 alpha-2 code');
   if (!SEMVER.test(pack.version)) fail(pack, 'version must be x.y.z');
   if (!pack.name.trim()) fail(pack, 'name is required');
-  if (pack.status !== 'production' && pack.status !== 'test') fail(pack, 'status must be production or test');
+  if (pack.status !== 'production' && pack.status !== 'beta' && pack.status !== 'test') fail(pack, 'status must be production, beta, or test');
   if (pack.locale.languages.length === 0) fail(pack, 'locale needs at least one language');
   if (!Number.isInteger(pack.locale.currency.minorUnits) || pack.locale.currency.minorUnits < 0) {
     fail(pack, 'currency minorUnits must be a non-negative integer');

@@ -532,5 +532,57 @@ describe('Payment Rail Clearing & Settlement (T156)', () => {
         },
       ]);
     });
+
+    it('resolves MY chart accounts (62510, 62520, 12300) without overrides and reads rail feeRole', () => {
+      const myNoOverrides = settlementService.previewSettlement(MALAYSIA, {
+        rail: 'shopee',
+        date: '2026-11-16',
+        bankAccountCode: '11200',
+        grossAmount: 100000n,
+        feeAmount: 2000n,
+        commissionAmount: 4000n,
+        sstAmount: 480n,
+        netAmount: 93520n,
+        reference: 'SHOPEE-NO-OVERRIDES',
+      });
+      const codesByRole = Object.fromEntries(myNoOverrides.proposal.lines.map((l) => [l.role, l.accountCode]));
+      expect(codesByRole).toEqual({
+        bank: '11200',
+        payment_fee: '62510',
+        platform_commission: '62520',
+        vat_input: '12300',
+        clearing_rail: '11340',
+      });
+
+      const irWithTenantBankFee = settlementService.previewSettlement(
+        'IR',
+        {
+          rail: 'card',
+          date: '2026-11-16',
+          bankAccountCode: '1012',
+          grossAmount: 100000n,
+          feeAmount: 1000n,
+          netAmount: 99000n,
+          reference: 'IR-BANK-FEE-ROLE',
+        },
+        { bank_fee: '5299' },
+      );
+      const irFeeLine = irWithTenantBankFee.proposal.lines.find((l) => l.role === 'payment_fee');
+      expect(irFeeLine?.accountCode).toBe('5299');
+    });
+
+    it('requires reference or idempotencyKey in settleRail', async () => {
+      const mockPostingRules = { post: jest.fn() } as never;
+      const svc = new RailSettlementService(registry, mockPostingRules);
+      await expect(
+        svc.settleRail('tenant-1', MALAYSIA, {
+          rail: 'card',
+          date: '2026-11-16',
+          bankAccountCode: '11200',
+          grossAmount: 10000n,
+          netAmount: 10000n,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
   });
 });

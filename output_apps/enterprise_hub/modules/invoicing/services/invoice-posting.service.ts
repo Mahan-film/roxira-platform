@@ -3,6 +3,7 @@ import { EntityManager } from 'typeorm';
 import { minorToDecimal, parseScaled, toMinor } from '../../accounting/money';
 import { decideRoleAccount } from '../../accounting/services/role-account-resolver';
 import { AccountingService } from '../../accounting/services/accounting.service';
+import { CountryPackResolver } from '../../country_packs/country-pack.resolver';
 import { Currency } from '../../currency/enums/currency.enum';
 import { PostingRole } from '../../posting_rules/constants/posting-roles';
 import { RoleAccounts } from '../../posting_rules/domain/posting-engine';
@@ -88,6 +89,7 @@ export class InvoicePostingService {
     private readonly accountingService: AccountingService,
     private readonly postingRules: PostingRulesService,
     @Optional() private readonly stockDocuments?: StockDocumentsRepository,
+    @Optional() private readonly countryPackResolver?: CountryPackResolver,
   ) {}
 
   /** نقطه ورود پردازشگر صف؛ بر اساس وضعیت مقصد، رویداد مناسب را اجرا می‌کند. */
@@ -802,28 +804,46 @@ export class InvoicePostingService {
   ): Promise<AccountPlan> {
     const sale = this.directionOf(invoice) === InvoiceDirection.SALE;
     const paymentMethods = (invoice.payments ?? []).map((p) => (p.method ?? '').trim().toUpperCase());
+    const pack = this.countryPackResolver
+      ? await this.countryPackResolver.resolveForTenant(invoice.tenantId)
+      : undefined;
+    const isMyPack = pack?.country === 'MY';
+    const myClearingMethods = [
+      'DUITNOW', 'DUITNOW_QR', 'QR',
+      'EWALLET', 'TNG', 'GRABPAY', 'BOOST',
+      'SHOPEE', 'SHOPEEPAY',
+      'TIKTOK', 'TIKTOK_SHOP',
+      'GRABFOOD', 'GRAB',
+    ];
     const wanted: Array<[keyof AccountMap, InvoiceAccountSpec]> =
       phase === 'payment'
         ? [
-            ...(!paymentMethods.length || paymentMethods.some((m) => !['CARD', 'POS', 'VISA', 'MASTERCARD', 'DUITNOW', 'DUITNOW_QR', 'QR', 'EWALLET', 'TNG', 'GRABPAY', 'BOOST', 'SHOPEE', 'SHOPEEPAY', 'TIKTOK', 'TIKTOK_SHOP', 'GRABFOOD', 'GRAB'].includes(m))
-              ? ([['cash', CASH_BANK_ACCOUNT]] as Array<[keyof AccountMap, InvoiceAccountSpec]>)
-              : []),
+            ...(
+              !paymentMethods.length ||
+              paymentMethods.some(
+                (m) =>
+                  !['CARD', 'POS', 'VISA', 'MASTERCARD'].includes(m) &&
+                  !(isMyPack && myClearingMethods.includes(m)),
+              )
+                ? ([['cash', CASH_BANK_ACCOUNT]] as Array<[keyof AccountMap, InvoiceAccountSpec]>)
+                : []
+            ),
             ...(paymentMethods.some((m) => ['CARD', 'POS', 'VISA', 'MASTERCARD'].includes(m))
               ? ([['posClearing', POS_CLEARING_ACCOUNT]] as Array<[keyof AccountMap, InvoiceAccountSpec]>)
               : []),
-            ...(paymentMethods.some((m) => ['DUITNOW', 'DUITNOW_QR', 'QR'].includes(m))
+            ...(isMyPack && paymentMethods.some((m) => ['DUITNOW', 'DUITNOW_QR', 'QR'].includes(m))
               ? ([['clearingDuitnow', DUITNOW_CLEARING_ACCOUNT]] as Array<[keyof AccountMap, InvoiceAccountSpec]>)
               : []),
-            ...(paymentMethods.some((m) => ['EWALLET', 'TNG', 'GRABPAY', 'BOOST'].includes(m))
+            ...(isMyPack && paymentMethods.some((m) => ['EWALLET', 'TNG', 'GRABPAY', 'BOOST'].includes(m))
               ? ([['clearingEwallet', EWALLET_CLEARING_ACCOUNT]] as Array<[keyof AccountMap, InvoiceAccountSpec]>)
               : []),
-            ...(paymentMethods.some((m) => ['SHOPEE', 'SHOPEEPAY'].includes(m))
+            ...(isMyPack && paymentMethods.some((m) => ['SHOPEE', 'SHOPEEPAY'].includes(m))
               ? ([['clearingShopee', SHOPEE_CLEARING_ACCOUNT]] as Array<[keyof AccountMap, InvoiceAccountSpec]>)
               : []),
-            ...(paymentMethods.some((m) => ['TIKTOK', 'TIKTOK_SHOP'].includes(m))
+            ...(isMyPack && paymentMethods.some((m) => ['TIKTOK', 'TIKTOK_SHOP'].includes(m))
               ? ([['clearingTiktok', TIKTOK_CLEARING_ACCOUNT]] as Array<[keyof AccountMap, InvoiceAccountSpec]>)
               : []),
-            ...(paymentMethods.some((m) => ['GRABFOOD', 'GRAB'].includes(m))
+            ...(isMyPack && paymentMethods.some((m) => ['GRABFOOD', 'GRAB'].includes(m))
               ? ([['clearingGrabfood', GRABFOOD_CLEARING_ACCOUNT]] as Array<[keyof AccountMap, InvoiceAccountSpec]>)
               : []),
             sale ? ['receivable', RECEIVABLE_ACCOUNT] : ['payable', PAYABLE_ACCOUNT],

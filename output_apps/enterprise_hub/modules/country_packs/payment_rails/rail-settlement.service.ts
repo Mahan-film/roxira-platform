@@ -79,6 +79,88 @@ export function validateSettlementAmounts(dto: CreateRailSettlementDto): RailSet
 }
 
 /**
+ * Resolves account codes for clearing_rail, payment_fee, platform_commission, and vat_input
+ * by reading rail.feeRole / rail.commissionRole / rail.taxRole and checking overrides,
+ * tenantMapping, and the pack's own chart of accounts (never silently falling back to IR
+ * chart codes for non-IR packs when non-zero amounts are posted).
+ */
+export function resolveSettlementOverrides(
+  pack: CountryPack,
+  rail: PaymentRailConfig,
+  dto: CreateRailSettlementDto,
+  tenantMapping: RoleAccounts = {},
+  amounts?: RailSettlementAmounts,
+): Partial<Record<PostingRole, string>> {
+  const feeRole: PostingRole = rail.feeRole ?? 'payment_fee';
+  const commissionRole: PostingRole = rail.commissionRole ?? 'platform_commission';
+  const taxRole: PostingRole = rail.taxRole ?? 'vat_input';
+
+  const chartCodes = new Set(
+    (pack.chartTemplates ?? []).flatMap((t) => t.accounts.map((a) => a.code)),
+  );
+  const pickChartCode = (...candidates: string[]): string | undefined =>
+    candidates.find((c) => chartCodes.has(c));
+
+  const resolveRoleCode = (
+    configuredRole: PostingRole,
+    templateRole: PostingRole,
+    chartCandidates: string[],
+    required: boolean,
+    label: string,
+  ): string | undefined => {
+    const fromOverride = dto.overrides?.[templateRole] ?? dto.overrides?.[configuredRole];
+    if (fromOverride) return fromOverride;
+    const fromTenant = tenantMapping[templateRole] ?? tenantMapping[configuredRole];
+    if (fromTenant) return fromTenant;
+    const fromChart = pickChartCode(...chartCandidates);
+    if (fromChart) return fromChart;
+    if (pack.country !== 'IR' && required) {
+      throw new BadRequestException(
+        `حساب پیش‌فرض برای «${label}» (نقش ${configuredRole}) در بسته ${pack.country} یافت نشد؛ کد حساب را در overrides مشخص کنید.`,
+      );
+    }
+    return undefined;
+  };
+
+  const feeCode = resolveRoleCode(
+    feeRole,
+    'payment_fee',
+    ['62510', '62500'],
+    (amounts?.fee ?? 0n) > 0n,
+    'کارمزد درگاه',
+  );
+  const commissionCode = resolveRoleCode(
+    commissionRole,
+    'platform_commission',
+    ['62520'],
+    (amounts?.commission ?? 0n) > 0n,
+    'کمیسیون پلتفرم',
+  );
+  const taxCode = resolveRoleCode(
+    taxRole,
+    'vat_input',
+    ['12300'],
+    (amounts?.sst ?? 0n) > 0n,
+    'مالیات کارمزد',
+  );
+
+  const overrides: Partial<Record<PostingRole, string>> = {
+    bank: (dto.bankAccountCode ?? '').trim(),
+    clearing_rail:
+      dto.overrides?.clearing_rail ??
+      dto.overrides?.[rail.clearingRole] ??
+      tenantMapping[rail.clearingRole] ??
+      rail.defaultAccountCode,
+    ...(dto.overrides ?? {}),
+  };
+  if (feeCode) overrides.payment_fee = feeCode;
+  if (commissionCode) overrides.platform_commission = commissionCode;
+  if (taxCode) overrides.vat_input = taxCode;
+
+  return overrides;
+}
+
+/**
  * Builds the voucher proposal for a payment rail settlement (pure, no I/O).
  *
  * Debits:
@@ -102,12 +184,7 @@ export function buildRailSettlementProposal(
     throw new BadRequestException('کد حساب معین یا تفصیلی بانک مقصد الزامی است.');
   }
 
-  // Account overrides: bank from DTO, clearing from rail config / DTO override
-  const overrides: Partial<Record<PostingRole, string>> = {
-    bank: bankCode,
-    clearing_rail: dto.overrides?.clearing_rail ?? rail.defaultAccountCode,
-    ...(dto.overrides ?? {}),
-  };
+  const overrides = resolveSettlementOverrides(pack, rail, dto, tenantMapping, amounts);
 
   return buildProposal({
     docType: 'treasury.rail_settlement',
@@ -173,13 +250,12 @@ export class RailSettlementService {
       dto.description?.trim() ||
       `تسویه درگاه ${rail.name}${dto.reference ? ` - شناسه تسویه ${dto.reference}` : ''}`;
 
-    const overrides: Partial<Record<PostingRole, string>> = {
-      bank: bankCode,
-      clearing_rail: dto.overrides?.clearing_rail ?? rail.defaultAccountCode,
-      ...(dto.overrides ?? {}),
-    };
+    const sourceId = dto.idempotencyKey?.trim() || dto.reference?.trim();
+    if (!sourceId) {
+      throw new BadRequestException('برای ثبت تسویه درگاه، شناسه یکتا (idempotencyKey) یا شماره مرجع تسویه (reference) الزامی است.');
+    }
 
-    const sourceId = dto.idempotencyKey?.trim() || dto.reference?.trim() || `settle:${rail.id}:${dto.date}`;
+    const overrides = resolveSettlementOverrides(pack, rail, dto, {}, amounts);
 
     const voucher = await this.postingRules.post(
       tenantId,

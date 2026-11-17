@@ -274,7 +274,7 @@ export function createMalaysiaPack(): CountryPack {
     version: '1.0.0',
     country: MALAYSIA,
     name: 'Malaysia',
-    status: 'production',
+    status: 'beta',
     locale: {
       languages: ['en-MY', 'ms-MY'],
       direction: 'ltr',

@@ -10,8 +10,8 @@ import { PostingRole } from '../posting_rules/constants/posting-roles';
  */
 export const COUNTRY_PACK_INTERFACE_VERSION = 1;
 
-/** `production` packs describe a real country; `test` packs exist only to prove the seam. */
-export type CountryPackStatus = 'production' | 'test';
+/** `production` / `beta` packs describe a real country; `test` packs exist only to prove the seam. */
+export type CountryPackStatus = 'production' | 'beta' | 'test';
 
 export interface CurrencyInfo {
   /** ISO 4217 code of the country's book currency. */

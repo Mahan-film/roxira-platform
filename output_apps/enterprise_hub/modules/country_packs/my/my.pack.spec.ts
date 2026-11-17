@@ -27,7 +27,7 @@ describe('Malaysia Country Pack Skeleton (T142)', () => {
   it('metadata and locale match Malaysian specifications', () => {
     expect(pack.country).toBe('MY');
     expect(pack.name).toBe('Malaysia');
-    expect(pack.status).toBe('production');
+    expect(pack.status).toBe('beta');
     expect(pack.version).toBe('1.0.0');
     expect(pack.locale).toEqual({
       languages: ['en-MY', 'ms-MY'],

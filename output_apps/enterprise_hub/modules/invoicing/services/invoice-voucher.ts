@@ -56,7 +56,7 @@ export function documentDocType(sale: boolean, reverse: boolean): string {
  */
 export function settleRows(sale: boolean, parts: ReadonlyArray<readonly [string, bigint]>, owed: bigint): SignedRows {
   const sign = sale ? 1n : -1n;
-  const rows: Record<string, bigint> = {
+  const rows = {
     cash: 0n,
     card: 0n,
     duitnow: 0n,
