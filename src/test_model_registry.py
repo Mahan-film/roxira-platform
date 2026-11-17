@@ -432,3 +432,40 @@ def test_retirement_check_fails_on_retired_or_expiring_model(tmp_path):
     assert any("expiring-soon-model" in e for e in errs)
     assert any("old-tts-model" in e for e in errs)
 
+
+def test_validate_code_defaults_checks_load_role_model(tmp_path):
+    (tmp_path / "config").mkdir()
+    (tmp_path / "services" / "voice_phone_agent" / "src").mkdir(parents=True)
+    reg = tmp_path / "config" / "models.yaml"
+    reg.write_text(
+        textwrap.dedent(
+            """\
+            schema_version: 1
+            retired:
+              - id: whisper-1
+                shutdown_date: "2027-02-26"
+                reason: "OpenAI Whisper shutdown"
+            roles:
+              stt_openai:
+                description: test
+                data_policy: standard
+                models:
+                  - id: whisper-1
+              tts_openai:
+                description: test
+                data_policy: standard
+                models:
+                  - id: gpt-realtime-2.1-mini
+            """
+        ),
+        encoding="utf-8",
+    )
+    cfg = tmp_path / "services" / "voice_phone_agent" / "src" / "config.ts"
+    cfg.write_text(
+        "const s = loadRoleModel('stt_openai');\nconst t = loadRoleModel('tts_openai');\n",
+        encoding="utf-8",
+    )
+    errs = model_registry.validate_code_defaults(tmp_path, as_of_date="2027-02-20", days_threshold=30)
+    assert len(errs) == 1
+    assert "whisper-1" in errs[0]
+

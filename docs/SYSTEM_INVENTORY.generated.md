@@ -93,9 +93,9 @@ run `python3 scripts/gen_system_inventory.py` (CI-style check: `--check`).
 | strong | deepseek/deepseek-v4.1-flash-1017, deepseek/deepseek-v4.1-flash, z-ai/glm-5.3, moonshotai/kimi-k3, google/gemini-3.8-flash |
 | stt | openai/whisper-large-v3, openai/whisper-large-v3-turbo, openai/gpt-audio, deepgram/nova-3 |
 | stt_direct | groq:whisper-large-v3, mistral:voxtral-mini-latest, gemini:gemini-flash-latest |
-| stt_openai | openai/whisper-large-v3 |
+| stt_openai | gpt-transcribe |
 | summarize | scaledown/summarize |
-| tts | edge-tts:fa-IR-FaridNeural, openai/gpt-4o-audio-preview |
-| tts_openai | openai/gpt-4o-audio-preview |
+| tts | edge-tts:fa-IR-FaridNeural |
+| tts_openai | gpt-realtime-2.1-mini |
 | vision | google/gemini-3.8-flash |
 | voice_realtime | gemini-3.8-live, gemini-3.1-flash-live-preview |

@@ -376,29 +376,26 @@ roles:
           directly (not through llm_router.py). Documented Persian voice per
           docs/research/TECH_CURRENCY_2026-09.md. scripts/check_models.py
           skips this id (it will never appear in GET /api/v1/models).
-      - id: openai/gpt-4o-audio-preview
+
+  stt_openai:
+    description: Dedicated OpenAI speech-to-text model (replaces retiring whisper-1 and gpt-4o-transcribe, T161).
+    data_policy: standard
+    models:
+      - id: gpt-transcribe
+        price_per_1m: null
+        catalogue_listed: false
+        note: OpenAI /v1/audio/transcriptions replacement for retiring whisper-1 and gpt-4o-transcribe (26 Feb 2027).
+
+  tts_openai:
+    description: Dedicated OpenAI text-to-speech model (replaces retiring tts-1, tts-1-hd, and gpt-4o-mini-tts, T161).
+    data_policy: standard
+    models:
+      - id: gpt-realtime-2.1-mini
         price_per_1m: null
         catalogue_listed: false
         note: >
-          OpenAI audio synthesis model, used when TTS_PROVIDER=openai (replaces retiring tts-1).
-
-  stt_openai:
-    description: Dedicated OpenAI speech-to-text model (replaces retiring whisper-1, T161).
-    data_policy: standard
-    models:
-      - id: openai/whisper-large-v3
-        price_per_1m: null
-        catalogue_listed: false
-        note: OpenAI Whisper replacement for retiring whisper-1.
-
-  tts_openai:
-    description: Dedicated OpenAI text-to-speech model (replaces retiring tts-1, T161).
-    data_policy: standard
-    models:
-      - id: openai/gpt-4o-audio-preview
-        price_per_1m: null
-        catalogue_listed: false
-        note: OpenAI audio synthesis model (replaces retiring tts-1).
+          OpenAI replacement for retiring tts-1 / tts-1-hd / gpt-4o-mini-tts (6 Jan 2027).
+          Uses the Realtime API; voice_phone_agent defaults to edge TTS.
 
   vision:
     description: >

@@ -237,25 +237,43 @@ def validate_code_defaults(
     repo_root: pathlib.Path | None = None,
     as_of_date: str | None = None,
     days_threshold: int = 30,
+    registry_path: pathlib.Path | None = None,
 ) -> list[str]:
-    """Validates that code defaults (such as voice_phone_agent config) do not use retired models."""
+    """Validates that code defaults (such as voice_phone_agent config) do not use retired or hardcoded models."""
     errs: list[str] = []
     root = repo_root or REGISTRY_PATH.parents[1]
+    reg = registry_path or (root / "config" / "models.yaml")
     cfg_file = root / "services" / "voice_phone_agent" / "src" / "config.ts"
     if cfg_file.exists():
         text = cfg_file.read_text(encoding="utf-8")
-        stt_match = re.search(r"openaiSttModel:\s*str\('OPENAI_STT_MODEL',\s*['\"]([^'\"]+)['\"]\)", text)
-        if stt_match:
-            mid = stt_match.group(1)
-            is_bad, reason = check_retired_or_expiring(mid, as_of_date, days_threshold)
+        # 1. Fail if any hardcoded literal default is passed to str('OPENAI_*_MODEL', '...')
+        for env_key in ("OPENAI_STT_MODEL", "OPENAI_TTS_MODEL"):
+            m = re.search(rf"str\('{env_key}',\s*['\"]([^'\"]+)['\"]\)", text)
+            if m:
+                mid = m.group(1)
+                is_bad, reason = check_retired_or_expiring(mid, as_of_date, days_threshold, path=reg)
+                if is_bad:
+                    errs.append(f"voice_phone_agent {env_key} default '{mid}' is retiring/retired: {reason}")
+                else:
+                    errs.append(f"voice_phone_agent {env_key} has hardcoded literal default '{mid}' outside config/models.yaml")
+
+        # 2. Check every loadRoleModel('<role>') call against config/models.yaml
+        role_calls = re.findall(r"loadRoleModel\(\s*['\"]([A-Za-z0-9_]+)['\"]\s*(?:,\s*['\"]([^'\"]*)['\"])?\s*\)", text)
+        for role, fallback in role_calls:
+            if fallback:
+                errs.append(f"voice_phone_agent loadRoleModel('{role}') has hardcoded fallback '{fallback}'")
+            try:
+                mids = role_models(role, reg)
+            except ModelRegistryError as exc:
+                errs.append(f"voice_phone_agent role '{role}' missing from {reg}: {exc}")
+                continue
+            if not mids:
+                errs.append(f"voice_phone_agent role '{role}' has no models in {reg}")
+                continue
+            primary = mids[0].removeprefix("openai/")
+            is_bad, reason = check_retired_or_expiring(primary, as_of_date, days_threshold, path=reg)
             if is_bad:
-                errs.append(f"voice_phone_agent openaiSttModel default '{mid}' is retiring/retired: {reason}")
-        tts_match = re.search(r"openaiTtsModel:\s*str\('OPENAI_TTS_MODEL',\s*['\"]([^'\"]+)['\"]\)", text)
-        if tts_match:
-            mid = tts_match.group(1)
-            is_bad, reason = check_retired_or_expiring(mid, as_of_date, days_threshold)
-            if is_bad:
-                errs.append(f"voice_phone_agent openaiTtsModel default '{mid}' is retiring/retired: {reason}")
+                errs.append(f"voice_phone_agent role '{role}' primary '{primary}' is retiring/retired: {reason}")
     return errs
 
 

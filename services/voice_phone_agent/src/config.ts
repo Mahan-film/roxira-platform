@@ -15,39 +15,36 @@ const num = (k: string, d: number) => {
 };
 
 /** Reads the primary model ID for a role from config/models.yaml without external YAML dependencies (T161). */
-export function loadRoleModel(role: string, fallback: string): string {
-  try {
-    const yamlPath = path.resolve(ROOT, '../../config/models.yaml');
-    if (fs.existsSync(yamlPath)) {
-      const text = fs.readFileSync(yamlPath, 'utf8');
-      const lines = text.split(/\r?\n/);
-      let inRole = false;
-      for (const raw of lines) {
-        const withoutComment = raw.replace(/#.*$/, '');
-        if (!withoutComment.trim()) continue;
-        const indent = withoutComment.match(/^\s*/)?.[0].length ?? 0;
-        const trimmed = withoutComment.trim();
-        const roleMatch = /^([A-Za-z0-9_]+):\s*$/.exec(trimmed);
-        if (roleMatch && indent === 2) {
-          inRole = roleMatch[1] === role;
-          continue;
-        }
-        if (inRole) {
-          const idMatch = /^-\s*id:\s*(\S+)\s*$/.exec(trimmed);
-          if (idMatch) {
-            return idMatch[1].replace(/^['"]|['"]$/g, '');
-          }
-        }
+export function loadRoleModel(role: string): string {
+  const yamlPath = path.resolve(ROOT, '../../config/models.yaml');
+  if (!fs.existsSync(yamlPath)) {
+    throw new Error(`Model registry not found at ${yamlPath}`);
+  }
+  const text = fs.readFileSync(yamlPath, 'utf8');
+  const lines = text.split(/\r?\n/);
+  let inRole = false;
+  for (const raw of lines) {
+    const withoutComment = raw.replace(/#.*$/, '');
+    if (!withoutComment.trim()) continue;
+    const indent = withoutComment.match(/^\s*/)?.[0].length ?? 0;
+    const trimmed = withoutComment.trim();
+    const roleMatch = /^([A-Za-z0-9_]+):\s*$/.exec(trimmed);
+    if (roleMatch && indent === 2) {
+      inRole = roleMatch[1] === role;
+      continue;
+    }
+    if (inRole) {
+      const idMatch = /^-\s*id:\s*(\S+)\s*$/.exec(trimmed);
+      if (idMatch) {
+        return idMatch[1].replace(/^['"]|['"]$/g, '');
       }
     }
-  } catch {
-    // best-effort
   }
-  return fallback;
+  throw new Error(`Missing model id for role "${role}" in ${yamlPath}`);
 }
 
-const defaultOpenaiSttModel = (loadRoleModel('stt_openai', '') || loadRoleModel('stt', 'whisper-large-v3')).replace(/^openai\//, '');
-const defaultOpenaiTtsModel = (loadRoleModel('tts_openai', '') || loadRoleModel('tts', 'gpt-4o-audio-preview')).replace(/^openai\//, '');
+const defaultOpenaiSttModel = loadRoleModel('stt_openai').replace(/^openai\//, '');
+const defaultOpenaiTtsModel = loadRoleModel('tts_openai').replace(/^openai\//, '');
 
 export const cfg = {
   root: ROOT,
