@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "jurisdiction": "MY",
+  "description": "Malaysian statutory registration, exemption, and compliance thresholds for SST and MyInvois e-invoicing",
+  "sources": [
+    "Royal Malaysian Customs Department (JKDM), https://mysst.customs.gov.my",
+    "Inland Revenue Board of Malaysia (LHDN), https://www.hasil.gov.my/en/e-invoice/"
+  ],
+  "thresholds": [
+    {
+      "code": "my_sales_tax_rate_standard",
+      "label": "Standard Sales Tax Rate",
+      "value": "0.10",
+      "unit": "ratio",
+      "effectiveFrom": "2018-09-01",
+      "sourceUrl": "https://mysst.customs.gov.my",
+      "verified": true,
+      "description": "Standard 10% sales tax on taxable manufactured or imported goods"
+    },
+    {
+      "code": "my_sales_tax_rate_reduced",
+      "label": "Reduced Sales Tax Rate",
+      "value": "0.05",
+      "unit": "ratio",
+      "effectiveFrom": "2018-09-01",
+      "sourceUrl": "https://mysst.customs.gov.my",
+      "verified": true,
+      "description": "Reduced 5% sales tax on specific scheduled basic foodstuffs and building materials"
+    },
+    {
+      "code": "my_sales_tax_threshold",
+      "label": "Sales Tax Registration Threshold (MYR)",
+      "value": 500000,
+      "unit": "MYR",
+      "effectiveFrom": "2018-09-01",
+      "sourceUrl": "https://mysst.customs.gov.my",
+      "verified": true,
+      "description": "Annual taxable manufactured sales exceeding RM 500,000 mandates registration under Sales Tax Act 2018"
+    },
+    {
+      "code": "my_service_tax_rate_general",
+      "label": "General Service Tax Rate",
+      "value": "0.08",
+      "unit": "ratio",
+      "effectiveFrom": "2024-03-01",
+      "sourceUrl": "https://mysst.customs.gov.my",
+      "verified": true,
+      "description": "General service tax rate of 8% pursuant to Service Tax (Rate of Tax) (Amendment) Regulations 2024"
+    },
+    {
+      "code": "my_service_tax_rate_fnb",
+      "label": "Food & Beverage Service Tax Rate",
+      "value": "0.06",
+      "unit": "ratio",
+      "effectiveFrom": "2018-09-01",
+      "sourceUrl": "https://mysst.customs.gov.my",
+      "verified": true,
+      "description": "Preserved 6% service tax rate for food and beverage operators (Group B)"
+    },
+    {
+      "code": "my_service_tax_threshold_general",
+      "label": "General Service Tax Registration Threshold (MYR)",
+      "value": 500000,
+      "unit": "MYR",
+      "effectiveFrom": "2018-09-01",
+      "sourceUrl": "https://mysst.customs.gov.my",
+      "verified": true,
+      "description": "Annual value of prescribed taxable services exceeding RM 500,000 mandates registration"
+    },
+    {
+      "code": "my_service_tax_threshold_fnb",
+      "label": "F&B Operators Service Tax Registration Threshold (MYR)",
+      "value": 1500000,
+      "unit": "MYR",
+      "effectiveFrom": "2018-09-01",
+      "sourceUrl": "https://mysst.customs.gov.my",
+      "verified": true,
+      "description": "Annual turnover exceeding RM 1,500,000 for restaurant and catering operators (Group B)"
+    },
+    {
+      "code": "my_einvoice_phase4_threshold",
+      "label": "MyInvois E-Invoicing Phase 4 Cut-off (MYR)",
+      "value": 1000000,
+      "unit": "MYR",
+      "effectiveFrom": "2026-01-01",
+      "sourceUrl": "https://www.hasil.gov.my/en/e-invoice/",
+      "verified": true,
+      "description": "LHDN MyInvois Phase 4 mandate for businesses with annual turnover of RM 1M to RM 5M starting 1 Jan 2026"
+    },
+    {
+      "code": "my_einvoice_exemption_ceiling",
+      "label": "MyInvois Micro-Business Exemption Ceiling (MYR)",
+      "value": 1000000,
+      "unit": "MYR",
+      "effectiveFrom": "2026-01-01",
+      "sourceUrl": "https://www.hasil.gov.my/en/e-invoice/",
+      "verified": true,
+      "description": "Businesses with annual revenue below RM 1,000,000 are exempt from mandatory e-invoicing transmission"
+    },
+    {
+      "code": "my_einvoice_cancellation_window_hours",
+      "label": "MyInvois Rejection and Cancellation Window (Hours)",
+      "value": 72,
+      "unit": "hours",
+      "effectiveFrom": "2024-08-01",
+      "sourceUrl": "https://www.hasil.gov.my/en/e-invoice/",
+      "verified": true,
+      "description": "72-hour window from validation for buyer rejection or supplier cancellation of a validated e-invoice"
+    }
+  ]
+}
