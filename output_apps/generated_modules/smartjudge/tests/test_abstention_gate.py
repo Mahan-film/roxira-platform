@@ -150,3 +150,17 @@ def test_trim_sources_defaults_untagged_to_unofficial():
 
     trimmed = trim_sources([{"title": "ماده ۱", "summary": "متن نمونه"}])
     assert trimmed[0]["source_tier"] == "unofficial"
+
+
+def test_unofficial_stands_alone_even_when_official_chunk_is_in_pool():
+    chunks = [
+        {"law_name": "قانون کار", "article_no": "۱۰", "source_tier": "official"},
+        {"law_name": "بخشنامه غیررسمی", "article_no": "۲", "source_tier": "unofficial"},
+    ]
+    cited = [{"law_name": "بخشنامه غیررسمی", "article_no": "۲", "source_tier": "official"}]
+    valid, dropped, stands_alone = deterministic_citation_check(cited, chunks)
+    assert len(valid) == 1
+    assert len(dropped) == 0
+    assert valid[0]["source_tier"] == "unofficial"
+    assert stands_alone is True
+

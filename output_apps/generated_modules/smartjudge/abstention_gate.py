@@ -40,6 +40,20 @@ class AbstentionDecision:
     details: Dict[str, Any] = field(default_factory=dict)
 
 
+def _parse_date_tuple(raw: Any) -> Optional[Tuple[int, int, int]]:
+    """Parse YYYY-MM-DD, YYYY/MM/DD, or DD/MM/YYYY into (year, month, day)."""
+    s = norm(raw).replace("/", "-")
+    if not s:
+        return None
+    m = re.match(r"^(\d{4})-(\d{1,2})-(\d{1,2})$", s)
+    if m:
+        return int(m.group(1)), int(m.group(2)), int(m.group(3))
+    m = re.match(r"^(\d{1,2})-(\d{1,2})-(\d{4})$", s)
+    if m:
+        return int(m.group(3)), int(m.group(2)), int(m.group(1))
+    return None
+
+
 def filter_by_as_of(
     chunks: Sequence[dict],
     as_of_date: Optional[str] = None,
@@ -64,19 +78,30 @@ def filter_by_as_of(
         return out
 
     norm_target = norm(as_of_date).replace("/", "-")
+    target_tuple = _parse_date_tuple(norm_target)
     valid_chunks = []
     for c in chunks:
-        vf = str(c.get("valid_from") or "").replace("/", "-").strip()
-        vt = str(c.get("valid_to") or "").replace("/", "-").strip()
+        vf = norm(c.get("valid_from") or "").replace("/", "-")
+        vt = norm(c.get("valid_to") or "").replace("/", "-")
+        vf_tuple = _parse_date_tuple(vf)
+        vt_tuple = _parse_date_tuple(vt)
         status = str(c.get("status") or "").lower()
 
         # If explicit valid_from exists, target must be >= valid_from
-        if vf and norm_target < vf:
-            continue
+        if vf:
+            if target_tuple and vf_tuple:
+                if target_tuple < vf_tuple:
+                    continue
+            elif norm_target < vf:
+                continue
 
         # If explicit valid_to exists, target must be <= valid_to
-        if vt and norm_target > vt:
-            continue
+        if vt:
+            if target_tuple and vt_tuple:
+                if target_tuple > vt_tuple:
+                    continue
+            elif norm_target > vt:
+                continue
 
         # If status says repealed/superseded without valid_to, exclude for current queries
         if status in ("repealed", "superseded") and not vt:
@@ -115,20 +140,24 @@ def detect_version_conflict(chunks: Sequence[dict], as_of_date: Optional[str] = 
     return False
 
 
+# Word-boundary lookarounds that work for both ASCII and Persian/Arabic script
+_WB_START = r"(?<![\w\u0600-\u06FF])"
+_WB_END = r"(?![\w\u0600-\u06FF])"
+
 # Out-of-scope intent triggers: non-legal, medical, programming, foreign law without Iran comparative basis
 OUT_OF_SCOPE_PATTERNS = [
-    re.compile(norm(r"\b(?:پایتون|جاوااسکریپت|برنامه‌نویسی|html|css|react|sql query|کد نویسی)\b"), re.IGNORECASE),
-    re.compile(norm(r"\b(?:علائم سکته|درمان دارویی|دوز دارو|علت تنگی نفس|پزشک متخصص|کرونا)\b"), re.IGNORECASE),
-    re.compile(norm(r"\b(?:پیش‌بینی وضعیت هوا|دمای امروز|قیمت بیت‌کوین|ارز دیجیتال برای ترید)\b"), re.IGNORECASE),
-    re.compile(norm(r"\b(?:قانون اساسی آمریکا|دادگاه فدرال آلمان|حقوق فرانسه بدون تطبیق)\b"), re.IGNORECASE),
+    re.compile(_WB_START + norm(r"(?:پایتون|جاوااسکریپت|برنامه‌نویسی|html|css|react|sql query|کد نویسی)") + _WB_END, re.IGNORECASE),
+    re.compile(_WB_START + norm(r"(?:علائم سکته|درمان دارویی|دوز دارو|علت تنگی نفس|پزشک متخصص|کرونا)") + _WB_END, re.IGNORECASE),
+    re.compile(_WB_START + norm(r"(?:پیش‌بینی وضعیت هوا|دمای امروز|قیمت بیت‌کوین|ارز دیجیتال برای ترید)") + _WB_END, re.IGNORECASE),
+    re.compile(_WB_START + norm(r"(?:قانون اساسی آمریکا|دادگاه فدرال آلمان|حقوق فرانسه بدون تطبیق)") + _WB_END, re.IGNORECASE),
 ]
 
 FALSE_PREMISE_PATTERNS = [
     # E.g. asserts clearly false legal assertions as a leading question (digits normalized to 0-9)
-    re.compile(r"طبق کدام ماده.*?(?:چک سندی غیرتجاری است|قتل عمد هیچ مجازاتی ندارد|ساعت کار هفتگی (?:60|۶۰) ساعت است)", re.IGNORECASE),
-    re.compile(r"با توجه به اینکه.*?(?:حقوق کارگران غیرقانونی است|مالیات در ایران لغو شده است)", re.IGNORECASE),
-    re.compile(r"\b(?:ماده\s*(?:[3-9]\d|[1-9]\d{2,})\s*(?:قانون\s*)?(?:صدور\s*)?چک)\b", re.IGNORECASE),
-    re.compile(r"\b(?:قانون\s*(?:صدور\s*)?چک\s*ماده\s*(?:[3-9]\d|[1-9]\d{2,}))\b", re.IGNORECASE),
+    re.compile(norm(r"طبق کدام ماده.*?(?:چک سندی غیرتجاری است|قتل عمد هیچ مجازاتی ندارد|ساعت کار هفتگی (?:60|۶۰) ساعت است)"), re.IGNORECASE),
+    re.compile(norm(r"با توجه به اینکه.*?(?:حقوق کارگران غیرقانونی است|مالیات در ایران لغو شده است)"), re.IGNORECASE),
+    re.compile(_WB_START + norm(r"(?:ماده\s*(?:[3-9]\d|[1-9]\d{2,})\s*(?:قانون\s*)?(?:صدور\s*)?چک)") + _WB_END, re.IGNORECASE),
+    re.compile(_WB_START + norm(r"(?:قانون\s*(?:صدور\s*)?چک\s*ماده\s*(?:[3-9]\d|[1-9]\d{2,}))") + _WB_END, re.IGNORECASE),
 ]
 
 # Maximum known article counts for key statutes to detect non-existent article queries
@@ -263,8 +292,6 @@ def deterministic_citation_check(
         law_key = norm(c.get("law_name") or c.get("title") or "")
         art_key = norm(c.get("article_no") or c.get("article") or "")
         tier = str(c.get("source_tier") or c.get("tier") or "unofficial").lower()
-        if tier in ("official", "secondary"):
-            has_official_or_secondary = True
         if law_key and art_key:
             prev = available_chunks.get((law_key, art_key))
             if prev is None or tier in ("official", "secondary"):
