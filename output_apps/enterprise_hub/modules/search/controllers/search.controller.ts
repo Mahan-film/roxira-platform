@@ -12,8 +12,8 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
 import { requireTenantId } from '../../tenants/tenant-context';
+import { AccessRequest, requireAccess } from '../../access/access-context';
 import { AnyMember } from '../../access/decorators';
 import { SearchQueryDto, SearchResponseDto } from '../dto/search.dto';
 import { SearchService } from '../services/search.service';
@@ -29,7 +29,8 @@ import { SearchService } from '../services/search.service';
  * - Navigation pages
  *
  * Runs under RLS via TenantScope, backed by Postgres full-text & pg_trgm indexes.
- * Accessible to any authenticated organization member (@AnyMember).
+ * Accessible to any active member (@AnyMember); the service only searches the
+ * entity types whose module the caller may read (entitlement + read permission).
  */
 @ApiTags('Search - جستجوی سراسری')
 @ApiBearerAuth()
@@ -52,9 +53,9 @@ export class SearchController {
   })
   async search(
     @Query() dto: SearchQueryDto,
-    @Req() req: AuthenticatedRequest,
+    @Req() req: AccessRequest,
   ): Promise<SearchResponseDto> {
     const tenantId = requireTenantId(req);
-    return this.searchService.search(tenantId, dto.q, dto.limit, dto.types);
+    return this.searchService.search(tenantId, dto.q, dto.limit, dto.types, requireAccess(req));
   }
 }

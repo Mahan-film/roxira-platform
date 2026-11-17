@@ -6,6 +6,7 @@ describe('SearchController', () => {
   let mockSearchService: Partial<SearchService>;
 
   const TENANT_ID = '33333333-3333-4333-8333-333333333333';
+  const ACCESS = { roleKey: 'owner' };
 
   beforeEach(() => {
     mockSearchService = {
@@ -33,6 +34,7 @@ describe('SearchController', () => {
         tenantId: TENANT_ID,
         userId: 'u1',
       },
+      access: ACCESS,
     };
 
     const res = await controller.search(
@@ -45,6 +47,7 @@ describe('SearchController', () => {
       'تست',
       15,
       ['customer'],
+      ACCESS,
     );
     expect(res.total).toBe(1);
     expect(res.items[0].title).toBe('مشتری تست');
@@ -55,6 +58,7 @@ describe('SearchController', () => {
       user: {
         tenantId: TENANT_ID,
       },
+      access: ACCESS,
     };
 
     await controller.search({ q: 'فاکتور' }, req as any);
@@ -64,6 +68,7 @@ describe('SearchController', () => {
       'فاکتور',
       undefined,
       undefined,
+      ACCESS,
     );
   });
 });

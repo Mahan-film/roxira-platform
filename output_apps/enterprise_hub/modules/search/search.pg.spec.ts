@@ -14,7 +14,14 @@ import {
   TestDatabaseContext,
 } from '../../test/support/test-pg';
 import { SearchService } from './services/search.service';
+import { AccessContext } from '../access/access-context';
+import { SELLABLE_MODULES, systemRolePermissions } from '../access/catalogue';
 
+const OWNER = {
+  roleKey: 'owner',
+  permissions: new Set(systemRolePermissions('owner')),
+  entitledModules: new Set<string>(SELLABLE_MODULES),
+} as unknown as AccessContext;
 const T1 = '66666666-6666-4666-8666-666666666666';
 const T2 = '77777777-7777-4777-8777-777777777777';
 
@@ -89,7 +96,7 @@ describePg('Universal search on PostgreSQL with RLS and pg_trgm (T147)', () => {
 
   it('searches across all entity types in under 300 ms on seed data', async () => {
     const start = Date.now();
-    const res = await service.search(T1, 'آلفا', 20);
+    const res = await service.search(T1, 'آلفا', 20, undefined, OWNER);
     const duration = Date.now() - start;
 
     expect(duration).toBeLessThan(300);
@@ -107,28 +114,28 @@ describePg('Universal search on PostgreSQL with RLS and pg_trgm (T147)', () => {
 
   it('enforces strict tenant isolation under RLS (never returns another tenant data)', async () => {
     // T1 search must not see T2 party
-    const t1Results = await service.search(T1, 'مستاجر');
+    const t1Results = await service.search(T1, 'مستاجر', 20, undefined, OWNER);
     expect(t1Results.items.some((i) => i.title.includes('مستاجر دوم'))).toBe(false);
 
     // T2 search must see its own party and not T1
-    const t2Results = await service.search(T2, 'مستاجر');
+    const t2Results = await service.search(T2, 'مستاجر', 20, undefined, OWNER);
     expect(t2Results.items.some((i) => i.title.includes('مستاجر دوم'))).toBe(true);
 
-    const t2AlfaResults = await service.search(T2, 'ایسوس');
+    const t2AlfaResults = await service.search(T2, 'ایسوس', 20, undefined, OWNER);
     expect(t2AlfaResults.items.some((i) => i.type === 'product')).toBe(false);
   });
 
   it('matches fuzzy and partial codes via pg_trgm indexes', async () => {
     // Partial SKU
-    const skuRes = await service.search(T1, 'LAP-001');
+    const skuRes = await service.search(T1, 'LAP-001', 20, undefined, OWNER);
     expect(skuRes.items.some((i) => i.type === 'product' && i.title.includes('ایسوس'))).toBe(true);
 
     // Partial Cheque number
-    const chqRes = await service.search(T1, '778899');
+    const chqRes = await service.search(T1, '778899', 20, undefined, OWNER);
     expect(chqRes.items.some((i) => i.type === 'cheque' && i.title.includes('CHQ-778899'))).toBe(true);
 
     // Partial invoice number
-    const invRes = await service.search(T1, 'ALFA99');
+    const invRes = await service.search(T1, 'ALFA99', 20, undefined, OWNER);
     expect(invRes.items.some((i) => i.type === 'invoice' && i.title.includes('ALFA99'))).toBe(true);
   });
 });

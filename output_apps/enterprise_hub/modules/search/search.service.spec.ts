@@ -1,5 +1,22 @@
 import { SearchService, normalizeSearchQuery } from './services/search.service';
 import { TenantScope } from '../access/services/tenant-scope';
+import { AccessContext } from '../access/access-context';
+import { SELLABLE_MODULES, systemRolePermissions } from '../access/catalogue';
+
+function ctxFor(roleKey: string): AccessContext {
+  return {
+    userId: 'u1',
+    tenantId: '11111111-1111-4111-8111-111111111111',
+    membershipId: 'm1',
+    roleKey,
+    permissions: new Set(systemRolePermissions(roleKey)),
+    entitledModules: new Set(SELLABLE_MODULES),
+    branchId: null,
+    branchScoped: false,
+    require2fa: false,
+  };
+}
+const OWNER = ctxFor('owner');
 
 describe('SearchService', () => {
   let service: SearchService;
@@ -36,7 +53,7 @@ describe('SearchService', () => {
 
   describe('search', () => {
     it('returns empty result when query is blank', async () => {
-      const res = await service.search(TENANT_ID, '   ');
+      const res = await service.search(TENANT_ID, '   ', 20, undefined, OWNER);
       expect(res.total).toBe(0);
       expect(res.items).toEqual([]);
       expect(mockTenantScope.run).not.toHaveBeenCalled();
@@ -44,7 +61,7 @@ describe('SearchService', () => {
 
     it('matches static pages without hitting DB when only page matches', async () => {
       mockManagerQuery.mockResolvedValue([]);
-      const res = await service.search(TENANT_ID, 'داشبورد');
+      const res = await service.search(TENANT_ID, 'داشبورد', 20, undefined, OWNER);
       expect(res.total).toBeGreaterThan(0);
       const pageItem = res.items.find((i) => i.type === 'page');
       expect(pageItem).toBeDefined();
@@ -125,7 +142,7 @@ describe('SearchService', () => {
         return [];
       });
 
-      const res = await service.search(TENANT_ID, 'آلفا', 10);
+      const res = await service.search(TENANT_ID, 'آلفا', 10, undefined, OWNER);
       expect(res.total).toBeGreaterThanOrEqual(5);
 
       const customer = res.items.find((i) => i.type === 'customer');
@@ -157,7 +174,7 @@ describe('SearchService', () => {
 
     it('respects entity type filter when provided', async () => {
       mockManagerQuery.mockResolvedValue([]);
-      await service.search(TENANT_ID, 'آلفا', 10, ['customer']);
+      await service.search(TENANT_ID, 'آلفا', 10, ['customer'], OWNER);
 
       // Should only query erp_parties
       const queries = mockManagerQuery.mock.calls.map((c) => c[0]);
@@ -184,9 +201,57 @@ describe('SearchService', () => {
         return [];
       });
 
-      const res = await service.search(TENANT_ID, 'کالا');
+      const res = await service.search(TENANT_ID, 'کالا', 20, undefined, OWNER);
       expect(res.total).toBeGreaterThan(0);
       expect(res.items.some((i) => i.title === 'کالای سالم')).toBe(true);
+    });
+    it('escapes % and _ in the ILIKE pattern', async () => {
+      mockManagerQuery.mockResolvedValue([]);
+      await service.search(TENANT_ID, '50%_x', 10, ['customer'], OWNER);
+      expect(mockManagerQuery.mock.calls[0][1][1]).toBe('%50\\%\\_x%');
+    });
+
+    describe('per-entity permission gating', () => {
+      const queried = () => mockManagerQuery.mock.calls.map((c) => String(c[0]));
+
+      it.each(['sales', 'hr', 'legacy_member'])(
+        '%s gets no chart-of-accounts or cheque queries',
+        async (role) => {
+          mockManagerQuery.mockResolvedValue([]);
+          await service.search(TENANT_ID, 'آلفا', 10, undefined, ctxFor(role));
+          const q = queried();
+          expect(q.some((x) => x.includes('fin_chart_of_accounts'))).toBe(false);
+          expect(q.some((x) => x.includes('fin_cheques'))).toBe(false);
+        },
+      );
+
+      it.each(['hr', 'legacy_member'])('%s gets no invoice queries', async (role) => {
+        mockManagerQuery.mockResolvedValue([]);
+        await service.search(TENANT_ID, 'آلفا', 10, undefined, ctxFor(role));
+        expect(queried().some((x) => x.includes('FROM invoices'))).toBe(false);
+      });
+
+      it('sales may search invoices (invoicing:read) but not accounts', async () => {
+        mockManagerQuery.mockResolvedValue([]);
+        await service.search(TENANT_ID, 'آلفا', 10, undefined, ctxFor('sales'));
+        expect(queried().some((x) => x.includes('FROM invoices'))).toBe(true);
+      });
+
+      it.each(['accountant', 'owner'])('%s searches accounts, cheques and invoices', async (role) => {
+        mockManagerQuery.mockResolvedValue([]);
+        await service.search(TENANT_ID, 'آلفا', 10, undefined, ctxFor(role));
+        const q = queried();
+        expect(q.some((x) => x.includes('fin_chart_of_accounts'))).toBe(true);
+        expect(q.some((x) => x.includes('fin_cheques'))).toBe(true);
+        expect(q.some((x) => x.includes('FROM invoices'))).toBe(true);
+      });
+
+      it('skips entity types of modules the tenant has not enabled', async () => {
+        mockManagerQuery.mockResolvedValue([]);
+        const ctx = { ...ctxFor('owner'), entitledModules: new Set<string>() };
+        await service.search(TENANT_ID, 'آلفا', 10, undefined, ctx);
+        expect(mockManagerQuery).not.toHaveBeenCalled();
+      });
     });
   });
 });

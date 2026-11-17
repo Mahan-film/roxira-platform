@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
 import { fromDb } from '../../accounting/money';
+import { AccessContext } from '../../access/access-context';
+import { AccessAction, AccessModule, CORE_MODULES, permissionOf } from '../../access/catalogue';
 import { SearchEntityType, SearchItemDto, SearchResponseDto } from '../dto/search.dto';
 
 /**
@@ -164,6 +166,28 @@ export function normalizeSearchQuery(text: string): string {
   return s;
 }
 
+/** Escapes LIKE/ILIKE wildcards so user input is matched literally. */
+export function escapeLikePattern(text: string): string {
+  return text.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+/** Module whose read permission gates each database-backed entity type. */
+const ENTITY_MODULE: Readonly<Record<Exclude<SearchEntityType, 'page'>, AccessModule>> = {
+  customer: AccessModule.CRM,
+  supplier: AccessModule.CRM,
+  product: AccessModule.INVENTORY,
+  invoice: AccessModule.INVOICING,
+  bill: AccessModule.INVOICING,
+  cheque: AccessModule.CHEQUES,
+  account: AccessModule.ACCOUNTING,
+};
+
+/** Same rule as requireModulePermission (entitlement + read permission), as a boolean. */
+function canRead(access: AccessContext, module: AccessModule): boolean {
+  if (!CORE_MODULES.includes(module) && !access.entitledModules.has(module)) return false;
+  return access.permissions.has(permissionOf(module, AccessAction.READ));
+}
+
 @Injectable()
 export class SearchService {
   private readonly logger = new Logger(SearchService.name);
@@ -177,7 +201,8 @@ export class SearchService {
     tenantId: string,
     rawQuery: string,
     limit = 20,
-    types?: SearchEntityType[],
+    types: SearchEntityType[] | undefined,
+    access: AccessContext,
   ): Promise<SearchResponseDto> {
     const startTime = Date.now();
     const query = normalizeSearchQuery(rawQuery);
@@ -191,10 +216,12 @@ export class SearchService {
     }
 
     const typeSet = types && types.length > 0 ? new Set(types) : null;
-    const shouldSearch = (t: SearchEntityType) => !typeSet || typeSet.has(t);
+    // Entity types the caller may not read are skipped silently.
+    const shouldSearch = (t: SearchEntityType) =>
+      (!typeSet || typeSet.has(t)) && (t === 'page' || canRead(access, ENTITY_MODULE[t]));
 
     const perTypeLimit = Math.max(5, Math.ceil(limit / 2));
-    const likePattern = `%${query}%`;
+    const likePattern = `%${escapeLikePattern(query)}%`;
 
     const searchStaticPages = (): SearchItemDto[] => {
       if (!shouldSearch('page')) return [];
