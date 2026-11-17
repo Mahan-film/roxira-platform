@@ -15,7 +15,7 @@ import { InvoiceEntity } from '../../invoicing/entities/invoice.entity';
 import { InvoicingRepository } from '../../invoicing/repositories/invoicing.repository';
 import { TenantEntity } from '../../tenants/entities/tenant.entity';
 import { TenantsRepository } from '../../tenants/repositories/tenants.repository';
-import { CreateWooCommerceIntegration1789900011000 } from '../../../migrations/1789900011000-CreateWooCommerceIntegration';
+import { CreateWooCommerceIntegration1789900010700 } from '../../../migrations/1789900010700-CreateWooCommerceIntegration';
 import {
   createTestDatabase,
   describePg,
@@ -106,12 +106,12 @@ describePg('WooCommerce Integration on PostgreSQL (NOSUPERUSER NOBYPASSRLS) (T85
     const t1Config = await syncService.getConfig(T1);
     expect(t1Config.storeUrl).toBe('https://store1.example.com');
     expect(t1Config.maskedConsumerKey).toBe('ck_..._key');
-    expect(t1Config.webhookSecret).toBe('...1234');
+    expect(t1Config.maskedWebhookSecret).toBe('...1234');
 
     // Re-save without keys or with masked webhook secret preserves the real secret in DB
     await syncService.saveConfig(T1, {
       storeUrl: 'https://store1.example.com',
-      webhookSecret: t1Config.webhookSecret,
+      webhookSecret: t1Config.maskedWebhookSecret,
       autoSyncStock: false,
     });
     expect(await syncService.getWebhookSecret(T1)).toBe('sample_webhook_secret_1234');
@@ -138,7 +138,7 @@ describePg('WooCommerce Integration on PostgreSQL (NOSUPERUSER NOBYPASSRLS) (T85
       total_tax: '0',
       billing: { first_name: 'رضا', last_name: 'محمدی', phone: '09121234567' },
       line_items: [
-        { id: 1, name: 'کفش ورزشی', product_id: 101, quantity: 1, price: 1200000, total: '1200000' },
+        { id: 1, name: 'کفش ورزشی', product_id: 101, quantity: 1, price: '1200000', total: '1200000' },
       ],
     };
 
@@ -212,7 +212,7 @@ describePg('WooCommerce Integration on PostgreSQL (NOSUPERUSER NOBYPASSRLS) (T85
   });
 
   it('reversibility: migration down() and up() succeed', async () => {
-    const migration = new CreateWooCommerceIntegration1789900011000();
+    const migration = new CreateWooCommerceIntegration1789900010700();
     const qr = testDb.owner.createQueryRunner();
 
     try {

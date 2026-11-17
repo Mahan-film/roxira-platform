@@ -14,6 +14,7 @@ PRIVATE_BLOCKLIST.addSubnet('198.18.0.0', 15, 'ipv4');
 PRIVATE_BLOCKLIST.addSubnet('224.0.0.0', 4, 'ipv4');
 PRIVATE_BLOCKLIST.addSubnet('240.0.0.0', 4, 'ipv4');
 
+PRIVATE_BLOCKLIST.addSubnet('::ffff:0:0', 96, 'ipv6');
 PRIVATE_BLOCKLIST.addSubnet('::1', 128, 'ipv6');
 PRIVATE_BLOCKLIST.addSubnet('::', 128, 'ipv6');
 PRIVATE_BLOCKLIST.addSubnet('fc00::', 7, 'ipv6');
@@ -22,8 +23,19 @@ PRIVATE_BLOCKLIST.addSubnet('ff00::', 8, 'ipv6');
 
 export { PRIVATE_BLOCKLIST };
 
+export function normalizeHost(host: string): string {
+  return host.trim().replace(/^\[|\]$/g, '').split('%')[0].replace(/\.+$/, '').toLowerCase();
+}
+
+export function isPrivateIp(ip: string): boolean {
+  const clean = normalizeHost(ip);
+  const ipType = net.isIP(clean);
+  if (ipType === 0) return false;
+  return PRIVATE_BLOCKLIST.check(clean, ipType === 4 ? 'ipv4' : 'ipv6');
+}
+
 export function isPrivateOrLoopbackHost(host: string): boolean {
-  const cleanHost = host.replace(/^\[|\]$/g, '').toLowerCase();
+  const cleanHost = normalizeHost(host);
   const ipType = net.isIP(cleanHost);
   if (ipType !== 0) {
     return PRIVATE_BLOCKLIST.check(cleanHost, ipType === 4 ? 'ipv4' : 'ipv6');

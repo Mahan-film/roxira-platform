@@ -46,8 +46,8 @@ export class WooCommerceConfigResponseDto {
   @ApiProperty({ description: 'آیا کلید سکرت ذخیره شده است' })
   hasConsumerSecret: boolean;
 
-  @ApiProperty({ description: 'کلید مخفی وب‌هوک' })
-  webhookSecret: string;
+  @ApiProperty({ description: 'کلید ماسک‌شده وب‌هوک' })
+  maskedWebhookSecret: string;
 
   @ApiProperty({ description: 'آدرس وب‌هوک برای ثبت در تنظیمات ووکامرس' })
   webhookUrl: string;

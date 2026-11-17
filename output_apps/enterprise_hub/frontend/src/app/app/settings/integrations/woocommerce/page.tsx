@@ -207,10 +207,10 @@ export default function WooCommerceSettingsPage() {
                         <span className="font-mono">{config.maskedConsumerKey}</span>
                       </div>
                     )}
-                    {config.webhookSecret && (
+                    {config.maskedWebhookSecret && (
                       <div className="flex items-center justify-between">
                         <span className="text-muted-foreground">کلید وب‌هوک فعال:</span>
-                        <span className="font-mono">{config.webhookSecret}</span>
+                        <span className="font-mono">{config.maskedWebhookSecret}</span>
                       </div>
                     )}
                   </div>
@@ -263,8 +263,8 @@ export default function WooCommerceSettingsPage() {
                     value={webhookSecret}
                     onChange={(e) => setWebhookSecret(e.target.value)}
                     placeholder={
-                      config?.webhookSecret
-                        ? `${config.webhookSecret} (برای تغییر مقدار جدید وارد کنید)`
+                      config?.maskedWebhookSecret
+                        ? `${config.maskedWebhookSecret} (برای تغییر مقدار جدید وارد کنید)`
                         : "تولید خودکار در صورت خالی بودن"
                     }
                   />

@@ -32,7 +32,7 @@ export class WooCommerceLineItemDto {
   @IsOptional() @IsString() total?: string;
   @IsOptional() @IsString() total_tax?: string;
   @IsOptional() @IsString() sku?: string;
-  @IsOptional() price?: number | string;
+  @IsOptional() @IsString() price?: string;
 }
 
 export class WooCommerceOrderWebhookDto {
