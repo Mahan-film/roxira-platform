@@ -117,16 +117,23 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
       expect(res.expectedBp).toBe(1000n);
     });
 
-    it('accepts explicit line rate when expectedRate is omitted', () => {
-      const res = validateVatRateForYear(900n);
-      expect(res.valid).toBe(true);
-      expect(res.expectedBp).toBe(900n);
+    it('rejects non-zero rate when expectedRate is omitted or null (fail closed)', () => {
+      const resOmitted = validateVatRateForYear(900n);
+      expect(resOmitted.valid).toBe(false);
+      expect(resOmitted.expectedBp).toBe(0n);
+
+      const resNull = validateVatRateForYear(1000n, null);
+      expect(resNull.valid).toBe(false);
 
       const invalidNegative = validateVatRateForYear(-500n);
       expect(invalidNegative.valid).toBe(false);
 
       const invalidTooHigh = validateVatRateForYear(15000n);
       expect(invalidTooHigh.valid).toBe(false);
+
+      const exemptZero = validateVatRateForYear(0n);
+      expect(exemptZero.valid).toBe(true);
+      expect(exemptZero.isExempt).toBe(true);
     });
   });
 
@@ -183,9 +190,15 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
     } as unknown as InvoiceResponseDto;
 
     it('passes for a fully valid invoice', () => {
-      const result = runMoadianPreFlightValidation(validInvoice);
+      const result = runMoadianPreFlightValidation(validInvoice, { expectedVatRate: 0.1 });
       expect(result.valid).toBe(true);
       expect(result.errors).toHaveLength(0);
+    });
+
+    it('fails closed when expectedVatRate is omitted for a non-zero VAT rate', () => {
+      const result = runMoadianPreFlightValidation(validInvoice);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.code === 'ITEM_VAT_RATE_MISMATCH_FISCAL_YEAR')).toBe(true);
     });
 
     it('returns Persian error when buyer national ID checksum fails', () => {
@@ -297,7 +310,9 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
           },
         ],
       };
-      const result = runMoadianPreFlightValidation(persianInvoice as unknown as InvoiceResponseDto);
+      const result = runMoadianPreFlightValidation(persianInvoice as unknown as InvoiceResponseDto, {
+        expectedVatRate: 0.1,
+      });
       expect(result.valid).toBe(true);
       expect(result.errors).toHaveLength(0);
     });
@@ -363,7 +378,9 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
           },
         ],
       };
-      const result = runMoadianPreFlightValidation(irtInvoice as unknown as InvoiceResponseDto);
+      const result = runMoadianPreFlightValidation(irtInvoice as unknown as InvoiceResponseDto, {
+        expectedVatRate: 0.1,
+      });
       expect(result.valid).toBe(true);
       expect(result.errors).toHaveLength(0);
     });
@@ -391,6 +408,7 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
       // With defaultSstid -> passes
       const resWith = runMoadianPreFlightValidation(noItemCodeInvoice as unknown as InvoiceResponseDto, {
         defaultSstid: '2330001234567',
+        expectedVatRate: 0.1,
       });
       expect(resWith.valid).toBe(true);
     });

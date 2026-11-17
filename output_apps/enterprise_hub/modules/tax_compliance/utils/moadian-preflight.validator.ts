@@ -153,7 +153,7 @@ export function getJalaliYear(date: Date | string | null | undefined): number | 
  * Validates that VAT rate (in bigint basis points, where 1000n = 10.00%) corresponds to the
  * statutory rate for the fiscal year.
  * When expectedBp is provided, matches against it (or 0n for exempt).
- * When expectedBp is omitted, accepts any valid rate between 0n and 10000n (0% to 100%).
+ * Fails closed (returns valid: false) when expectedBp is omitted or null for non-zero rates.
  */
 export function validateVatRateForYear(
   rateBp: bigint,
@@ -164,16 +164,12 @@ export function validateVatRateForYear(
     return { valid: true, expectedBp: 0n, isExempt: true };
   }
 
-  if (expectedBp !== undefined && expectedBp !== null) {
-    return { valid: rateBp === expectedBp, expectedBp, isExempt: false };
+  // Fail closed when statutory expectedBp is missing
+  if (expectedBp === undefined || expectedBp === null) {
+    return { valid: false, expectedBp: 0n, isExempt: false };
   }
 
-  // Without a specific expected rate, accept any valid rate between 0% and 100%
-  if (rateBp >= 0n && rateBp <= 10000n) {
-    return { valid: true, expectedBp: rateBp, isExempt: false };
-  }
-
-  return { valid: false, expectedBp: 0n, isExempt: false };
+  return { valid: rateBp === expectedBp, expectedBp, isExempt: false };
 }
 
 /** Formats bigint basis points (e.g. 1000n -> "10", 1050n -> "10.5") without float arithmetic. */
