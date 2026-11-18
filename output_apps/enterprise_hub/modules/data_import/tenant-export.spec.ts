@@ -39,13 +39,18 @@ describe('Tenant Data Export / Customer Owns the Data (#230 / T77)', () => {
     ],
   };
 
+  let mockExportQueue: { add: jest.Mock };
+
   beforeEach(() => {
     mockExportRepo = {
       fetchTenantData: jest.fn().mockResolvedValue(sampleTenantData),
     } as unknown as jest.Mocked<TenantExportRepository>;
+    mockExportQueue = {
+      add: jest.fn().mockResolvedValue({ id: 'job-export-1' }),
+    };
 
     exportService = new TenantExportService(mockExportRepo);
-    controller = new TenantExportController(exportService);
+    controller = new TenantExportController(exportService, mockExportQueue as any);
   });
 
   describe('Tenant Isolation & Repository', () => {
@@ -202,11 +207,16 @@ describe('Tenant Data Export / Customer Owns the Data (#230 / T77)', () => {
       expect(file).toBeDefined();
     });
 
-    it('queueFullExport returns enqueued status', async () => {
+    it('queueFullExport enqueues a BullMQ job and returns enqueued status', async () => {
       const req = { user: { tenantId: mockTenantId, sub: 'user-admin' } } as any;
       const res = await controller.queueFullExport(req);
 
+      expect(mockExportQueue.add).toHaveBeenCalledWith(
+        'tenant-full-export',
+        expect.objectContaining({ tenantId: mockTenantId }),
+      );
       expect(res.enqueued).toBe(true);
+      expect(res.jobId).toBe('job-export-1');
       expect(res.tenantId).toBe(mockTenantId);
     });
   });
