@@ -6,6 +6,8 @@ import { AGEING_ALLOCATIONS } from '../accounting/reports/ageing-allocations';
 import { BankingModule } from '../banking/banking.module';
 import { ChequesModule } from '../cheques/cheques.module';
 import { InvoicingModule } from '../invoicing/invoicing.module';
+import { PostingRulesModule } from '../posting_rules/posting-rules.module';
+import { BankStatementController } from './controllers/bank-statement.controller';
 import { TreasuryController } from './controllers/treasury.controller';
 import { TreasurySmsController } from './controllers/treasury-sms.controller';
 import { TreasuryAllocationEntity } from './entities/treasury-allocation.entity';
@@ -15,8 +17,10 @@ import { TreasurySettingsEntity } from './entities/treasury-settings.entity';
 import { TreasurySmsDraftEntity } from './entities/treasury-sms-draft.entity';
 import { TreasuryLedgerPostingAdapter } from './posting/treasury-ledger-posting.adapter';
 import { TREASURY_POSTING } from './posting/treasury-posting.port';
+import { BankStatementRepository } from './repositories/bank-statement.repository';
 import { TreasuryRepository } from './repositories/treasury.repository';
 import { TreasurySmsRepository } from './repositories/treasury-sms.repository';
+import { BankStatementService } from './services/bank-statement.service';
 import { TreasuryService } from './services/treasury.service';
 import { TreasurySmsService } from './services/treasury-sms.service';
 
@@ -39,13 +43,16 @@ import { TreasurySmsService } from './services/treasury-sms.service';
     BankingModule,
     ChequesModule,
     InvoicingModule,
+    PostingRulesModule,
   ],
-  controllers: [TreasuryController, TreasurySmsController],
+  controllers: [TreasuryController, TreasurySmsController, BankStatementController],
   providers: [
     TreasuryService,
     TreasuryRepository,
     TreasurySmsService,
     TreasurySmsRepository,
+    BankStatementService,
+    BankStatementRepository,
     TenantScope,
     { provide: TREASURY_POSTING, useClass: TreasuryLedgerPostingAdapter },
     // Ageing and the party statement settle invoices by these allocations (#237).

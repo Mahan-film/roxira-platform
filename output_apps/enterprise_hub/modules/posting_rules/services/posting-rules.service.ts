@@ -61,6 +61,12 @@ export class PostingRulesService {
     return mapped ?? DEFAULT_ROLE_ACCOUNTS[role] ?? null;
   }
 
+  /** The tenant's own tenant-wide mapping for a role, with NO engine default: null when the tenant has not mapped it. */
+  async mappedAccountForRole(tenantId: string, role: PostingRole, manager?: EntityManager): Promise<string | null> {
+    const rows = await this.repository.listMappings(tenantId, [ALL_DOC_TYPES], manager);
+    return rows.find((row) => row.role === role)?.accountCode ?? null;
+  }
+
   /** Resolves every distinct role of a template for this tenant, flagging whether it used a default. */
   async resolveRolesForTemplate(
     tenantId: string,
