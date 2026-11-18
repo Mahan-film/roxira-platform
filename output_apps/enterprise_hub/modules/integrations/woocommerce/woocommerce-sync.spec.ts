@@ -7,11 +7,13 @@ import { Currency } from '../../currency/enums/currency.enum';
 import { CurrencyService } from '../../currency/services/currency.service';
 import { InvoiceJurisdiction } from '../../invoicing/enums/invoice-jurisdiction.enum';
 import { WooCommerceWebhookController } from './controllers/woocommerce-webhook.controller';
+import { UpdateWooCommerceConfigDto } from './dto/woocommerce-config.dto';
 import {
   WooCommerceSyncDirection,
   WooCommerceSyncStatus,
 } from './entities/woocommerce-sync-log.entity';
 import { WooCommerceSyncService } from './services/woocommerce-sync.service';
+import * as cryptoUtil from './utils/woocommerce-crypto.util';
 import {
   assertSafeStoreUrl,
   computeHmacSignature,
@@ -324,6 +326,12 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
         autoSyncStock: true,
       });
 
+      const dnsSpy = jest
+        .spyOn(cryptoUtil, 'assertSafeStoreUrlWithDns')
+        .mockResolvedValue({
+          parsed: new URL('https://shop.example.com'),
+          resolvedIps: ['93.184.216.34'],
+        });
       const fetchSpy = jest
         .spyOn(global, 'fetch')
         .mockResolvedValueOnce({
@@ -335,19 +343,49 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
           json: async () => ({ id: 77 }),
         } as Response);
 
-      const res = await service.pushStockUpdate(tenantId, 'SKU-1', 15, 250000n);
-      expect(res).toEqual({ success: true, externalId: 'SKU-1' });
-      expect(fetchSpy).toHaveBeenCalledTimes(2);
-      expect(fetchSpy.mock.calls[1][0]).toBe('https://shop.example.com/wp-json/wc/v3/products/77');
-      expect(mockWooRepo.createSyncLog).toHaveBeenCalledWith(
+      try {
+        const res = await service.pushStockUpdate(tenantId, 'SKU-1', 15, 250000n);
+        expect(res).toEqual({ success: true, externalId: 'SKU-1' });
+        expect(fetchSpy).toHaveBeenCalledTimes(2);
+        expect(fetchSpy.mock.calls[1][0]).toBe('https://shop.example.com/wp-json/wc/v3/products/77');
+        expect(mockWooRepo.createSyncLog).toHaveBeenCalledWith(
+          tenantId,
+          expect.objectContaining({
+            direction: WooCommerceSyncDirection.OUTBOUND_STOCK,
+            status: WooCommerceSyncStatus.SUCCESS,
+            externalId: 'SKU-1',
+          }),
+        );
+      } finally {
+        fetchSpy.mockRestore();
+        dnsSpy.mockRestore();
+      }
+    });
+
+    it('blocks pushStockUpdate when DNS resolves to private IP or fails', async () => {
+      mockWooRepo.findConfig.mockResolvedValue({
         tenantId,
-        expect.objectContaining({
-          direction: WooCommerceSyncDirection.OUTBOUND_STOCK,
-          status: WooCommerceSyncStatus.SUCCESS,
-          externalId: 'SKU-1',
-        }),
-      );
-      fetchSpy.mockRestore();
+        storeUrl: 'https://shop.example.com',
+        consumerKeyEncrypted: sealSecret('ck_test_1', tenantId),
+        consumerSecretEncrypted: sealSecret('cs_test_1', tenantId),
+        webhookSecretEncrypted: sealSecret('wh_1', tenantId),
+        autoSyncStock: true,
+      });
+
+      const dnsSpy = jest
+        .spyOn(cryptoUtil, 'assertSafeStoreUrlWithDns')
+        .mockRejectedValueOnce(new Error('WooCommerce storeUrl resolves to a private or loopback address'));
+      const fetchSpy = jest.spyOn(global, 'fetch');
+
+      try {
+        await expect(service.pushStockUpdate(tenantId, 'SKU-1', 15)).rejects.toThrow(
+          BadRequestException,
+        );
+        expect(fetchSpy).not.toHaveBeenCalled();
+      } finally {
+        fetchSpy.mockRestore();
+        dnsSpy.mockRestore();
+      }
     });
   });
 
@@ -453,6 +491,29 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
         .set('Content-Type', 'application/json')
         .send(invalidOrder)
         .expect(400);
+    });
+
+    it('rejects string "false" for boolean config flags under enableImplicitConversion (Rule 26)', async () => {
+      const pipe = new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+        transformOptions: { enableImplicitConversion: true },
+      });
+
+      await expect(
+        pipe.transform(
+          { storeUrl: 'https://shop.example.com', autoSyncOrders: 'false', autoSyncStock: 'false' },
+          { type: 'body', metatype: UpdateWooCommerceConfigDto },
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      const valid = await pipe.transform(
+        { storeUrl: 'https://shop.example.com', autoSyncOrders: false, autoSyncStock: false },
+        { type: 'body', metatype: UpdateWooCommerceConfigDto },
+      );
+      expect(valid.autoSyncOrders).toBe(false);
+      expect(valid.autoSyncStock).toBe(false);
     });
   });
 });

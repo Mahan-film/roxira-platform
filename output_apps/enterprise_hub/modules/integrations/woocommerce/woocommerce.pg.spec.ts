@@ -15,7 +15,7 @@ import { InvoiceEntity } from '../../invoicing/entities/invoice.entity';
 import { InvoicingRepository } from '../../invoicing/repositories/invoicing.repository';
 import { TenantEntity } from '../../tenants/entities/tenant.entity';
 import { TenantsRepository } from '../../tenants/repositories/tenants.repository';
-import { CreateWooCommerceIntegration1789900010700 } from '../../../migrations/1789900010700-CreateWooCommerceIntegration';
+import { CreateWooCommerceIntegration1789900012300 } from '../../../migrations/1789900012300-CreateWooCommerceIntegration';
 import {
   createTestDatabase,
   describePg,
@@ -212,7 +212,7 @@ describePg('WooCommerce Integration on PostgreSQL (NOSUPERUSER NOBYPASSRLS) (T85
   });
 
   it('reversibility: migration down() and up() succeed', async () => {
-    const migration = new CreateWooCommerceIntegration1789900010700();
+    const migration = new CreateWooCommerceIntegration1789900012300();
     const qr = testDb.owner.createQueryRunner();
 
     try {

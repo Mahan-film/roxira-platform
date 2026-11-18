@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, IsUrl, MaxLength, Min } from 'class-validator';
 
 export class UpdateWooCommerceConfigDto {
@@ -27,11 +28,13 @@ export class UpdateWooCommerceConfigDto {
 
   @ApiPropertyOptional({ description: 'همگام‌سازی خودکار سفارش‌ها', default: true })
   @IsOptional()
+  @Transform(({ obj, key }) => obj?.[key])
   @IsBoolean()
   autoSyncOrders?: boolean;
 
   @ApiPropertyOptional({ description: 'ارسال خودکار تغییرات موجودی کالا به ووکامرس', default: true })
   @IsOptional()
+  @Transform(({ obj, key }) => obj?.[key])
   @IsBoolean()
   autoSyncStock?: boolean;
 }
