@@ -61,6 +61,10 @@ export class ChartOfAccountEntity {
   @Column({ type: 'varchar', length: 32, name: 'report_line', nullable: true })
   reportLine: ReportLine | null;
 
+  /** When true, manual journal postings are rejected; only automated subledgers may post. */
+  @Column({ type: 'boolean', name: 'is_control_account', default: false })
+  isControlAccount: boolean;
+
   @OneToMany(() => JournalEntryLineEntity, (line) => line.account)
   lines: JournalEntryLineEntity[];
 }

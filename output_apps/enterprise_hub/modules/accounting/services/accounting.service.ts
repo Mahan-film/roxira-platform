@@ -36,6 +36,7 @@ import {
   FX_SCALE,
 } from '../constants/accounting.constants';
 import {
+  ControlAccountPostingException,
   DuplicateEntryNumberError,
   IdempotentReplayError,
   LockedPeriodError,
@@ -43,6 +44,8 @@ import {
   UnknownDimensionError,
   VoucherVersionConflictError,
 } from '../exceptions/ledger.exceptions';
+import { AccountingPeriodService } from './accounting-period.service';
+import { JournalSequencerService } from './journal-sequencer.service';
 import {
   LockPeriodDto,
   PeriodLockResponseDto,
@@ -168,6 +171,8 @@ export class AccountingService {
     /** Optional so unit tests and tools can build the service without the access module. */
     @Optional() private readonly ledgerAudit?: LedgerAuditService,
     private readonly budgetControl?: BudgetControlService,
+    @Optional() private readonly sequencer?: JournalSequencerService,
+    @Optional() private readonly periodService?: AccountingPeriodService,
   ) {}
 
   private toAccountDto(entity: ChartOfAccountEntity): AccountResponseDto {
@@ -258,6 +263,12 @@ export class AccountingService {
       permanentNumber:
         entity.permanentNumber != null ? String(entity.permanentNumber) : null,
       permanentFiscalYearId: entity.permanentFiscalYearId ?? null,
+      glAuditNumber:
+        entity.glAuditNumber != null ? String(entity.glAuditNumber) : null,
+      prevChainHash: entity.prevChainHash ?? null,
+      chainHash: entity.chainHash ?? null,
+      postedAtUtc: entity.postedAtUtc ?? null,
+      accountingPeriodId: entity.accountingPeriodId ?? null,
       date: entity.date,
       description: entity.description,
       status: entity.status,
@@ -697,6 +708,8 @@ export class AccountingService {
       entryType?: JournalEntryType;
       actorRole?: string | null;
       actorUserId?: string | null;
+      accountingPeriodId?: number | null;
+      allowControlAccount?: boolean;
     },
   ): Promise<JournalEntryResponseDto> {
     return this.postEntry(tenantId, dto, options ?? {}, manager);
@@ -805,6 +818,7 @@ export class AccountingService {
     tenantId: string,
     normalizedLines: NormalisedJournalLine[],
     manager?: EntityManager,
+    allowControlAccount = false,
   ): Promise<JournalLineInput[]> {
     const uniqueCodes = Array.from(
       new Set(normalizedLines.map((line) => line.accountCode)),
@@ -831,6 +845,13 @@ export class AccountingService {
       throw new BadRequestException(
         `سند روی حساب گروه یا کل ثبت نمی‌شود؛ حساب معین یا تفصیلی انتخاب کنید: ${headers.map((a) => a.code).join(', ')}`,
       );
+    }
+
+    if (!allowControlAccount) {
+      const controlAccounts = accounts.filter((account) => account.isControlAccount);
+      if (controlAccounts.length > 0) {
+        throw new ControlAccountPostingException(controlAccounts.map((a) => a.code));
+      }
     }
 
     return normalizedLines.map((line) => ({
@@ -891,6 +912,8 @@ export class AccountingService {
       entryType?: JournalEntryType;
       actorRole?: string | null;
       actorUserId?: string | null;
+      accountingPeriodId?: number | null;
+      allowControlAccount?: boolean;
     },
     manager?: EntityManager,
   ): Promise<JournalEntryResponseDto> {
@@ -965,7 +988,12 @@ export class AccountingService {
       }
       // Resolved once, after the number is known to be free (same order as before).
       if (lineInputs == null) {
-        lineInputs = await this.resolveLineInputs(tenantId, normalizedLines, manager);
+        lineInputs = await this.resolveLineInputs(
+          tenantId,
+          normalizedLines,
+          manager,
+          options.allowControlAccount ?? false,
+        );
       }
       if (this.budgetControl && status === JournalEntryStatus.POSTED) {
         const warnings: string[] = [];
@@ -1008,24 +1036,48 @@ export class AccountingService {
           budgetWarning = warnings.join(' | ');
         }
       }
-      try {
-        saved = await this.accountingRepository.persistJournalEntry(
+      if (status === JournalEntryStatus.POSTED && this.periodService) {
+        await this.periodService.assertPostingAllowed(
           tenantId,
-          {
-            entryNumber,
-            date,
-            description: dto.description,
-            status,
-            reversesEntryId: options.reversesEntryId ?? null,
-            entryType: options.entryType,
-            idempotencyKey,
-            idempotencyFingerprint,
-            tag: tag ?? null,
-            firmUserId: firmUserId ?? null,
-          },
-          lineInputs,
+          date,
+          { actorRole: options.actorRole ?? undefined, accountingPeriodId: options.accountingPeriodId },
           manager,
         );
+      }
+      try {
+        const persistAndSeal = async (txManager?: EntityManager): Promise<JournalEntryEntity> => {
+          const entry = await this.accountingRepository.persistJournalEntry(
+            tenantId,
+            {
+              entryNumber,
+              date,
+              description: dto.description,
+              status,
+              reversesEntryId: options.reversesEntryId ?? null,
+              entryType: options.entryType,
+              idempotencyKey,
+              idempotencyFingerprint,
+              tag: tag ?? null,
+              firmUserId: firmUserId ?? null,
+              accountingPeriodId: options.accountingPeriodId ?? null,
+            },
+            lineInputs!,
+            txManager,
+          );
+          if (status === JournalEntryStatus.POSTED && this.sequencer && txManager) {
+            const seal = await this.sequencer.sealEntry(tenantId, entry.id, txManager);
+            entry.glAuditNumber = seal.glAuditNumber;
+            entry.prevChainHash = seal.prevChainHash;
+            entry.chainHash = seal.chainHash;
+            entry.postedAtUtc = seal.postedAtUtc;
+          }
+          return entry;
+        };
+        if (status === JournalEntryStatus.POSTED && this.sequencer) {
+          saved = await this.accountingRepository.transaction(tenantId, persistAndSeal, manager);
+        } else {
+          saved = await persistAndSeal(manager);
+        }
       } catch (error) {
         if (error instanceof IdempotentReplayError && idempotencyKey) {
           return this.replayOf(error.existing as JournalEntryEntity, idempotencyKey, idempotencyFingerprint);
@@ -1223,7 +1275,10 @@ export class AccountingService {
     target: JournalEntryStatus,
     expectedVersion?: number | null,
     actor?: string,
-    options?: { actorRole?: string | null; actorUserId?: string | null },
+    options?: {
+      actorRole?: string | null;
+      actorUserId?: string | null;
+    },
   ): Promise<JournalEntryResponseDto> {
     if (target === JournalEntryStatus.POSTED) {
       assertNotAiIdentity(actor, 'post a journal entry');
@@ -1252,6 +1307,14 @@ export class AccountingService {
         }
       }
       if (target === JournalEntryStatus.POSTED) {
+        if (this.periodService) {
+          await this.periodService.assertPostingAllowed(
+            tenantId,
+            entry.date,
+            { actorRole: options?.actorRole ?? undefined, accountingPeriodId: entry.accountingPeriodId },
+            manager,
+          );
+        }
         try {
           await this.accountingRepository.assertDateOpen(tenantId, entry.date, manager);
         } catch (error) {
@@ -1280,6 +1343,9 @@ export class AccountingService {
         throw error;
       }
       if (target === JournalEntryStatus.POSTED) {
+        if (this.sequencer) {
+          await this.sequencer.sealEntry(tenantId, entry.id, manager);
+        }
         await this.ledgerAudit?.record(
           {
             kind: 'posted',

@@ -49,3 +49,28 @@ export class VoucherVersionConflictError extends Error {
     super(`Voucher ${entryId} was changed by another user.`);
   }
 }
+
+/** 422 Unprocessable Entity: period is SOFT_LOCKED (without role exception) or HARD_CLOSED. */
+export class PeriodStateLockedException extends HttpException {
+  constructor(message: string, readonly code: string = 'PERIOD_LOCKED') {
+    super(
+      { statusCode: 422, code, error: code, message },
+      422,
+    );
+  }
+}
+
+/** 422 Unprocessable Entity: manual journal posting into a control account is forbidden. */
+export class ControlAccountPostingException extends HttpException {
+  constructor(accountCodes: string[]) {
+    super(
+      {
+        statusCode: 422,
+        code: 'CONTROL_ACCOUNT_MANUAL_POSTING_FORBIDDEN',
+        error: 'CONTROL_ACCOUNT_MANUAL_POSTING_FORBIDDEN',
+        message: `Manual journal posting into control account(s) is forbidden: ${accountCodes.join(', ')}`,
+      },
+      422,
+    );
+  }
+}

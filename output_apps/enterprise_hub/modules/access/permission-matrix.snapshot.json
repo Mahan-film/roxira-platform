@@ -317,6 +317,17 @@
   "GET /auth/webauthn/credentials (AuthController.webauthnCredentials)": {
     "policy": "authOnly"
   },
+  "GET /enterprise-hub/accounting/accounting-periods (AccountingController.listAccountingPeriods)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/accounting/accounts (AccountingController.listAccounts)": {
     "policy": "accounting:read",
     "owner": true,
@@ -471,6 +482,28 @@
     "hr": false,
     "read_only": true,
     "partner_advisor": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/accounting/ledger/verify-chain (AccountingController.verifyChain)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/accounting/master-data-changes (AccountingController.listMasterDataChanges)": {
+    "policy": "accounting:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/period-locks (AccountingController.listPeriodLocks)": {
@@ -3283,6 +3316,50 @@
   },
   "POST /auth/webauthn/registration/verify (AuthController.webauthnRegistrationVerify)": {
     "policy": "authOnly"
+  },
+  "POST /enterprise-hub/accounting/accounting-periods (AccountingController.createAccountingPeriod)": {
+    "policy": "accounting:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/accounting/accounting-periods/:id/hard-close (AccountingController.hardCloseAccountingPeriod)": {
+    "policy": "accounting:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/accounting/accounting-periods/:id/soft-lock (AccountingController.softLockAccountingPeriod)": {
+    "policy": "accounting:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/accounting/accounting-periods/:id/unlock (AccountingController.unlockAccountingPeriod)": {
+    "policy": "accounting:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
   },
   "POST /enterprise-hub/accounting/accounts (AccountingController.createAccount)": {
     "policy": "accounting:create",

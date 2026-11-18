@@ -275,6 +275,7 @@ major version, or the Qdrant image). Tick each item and paste the log line.
       folder exists (daily launchd pull succeeded).
 - [ ] `gzip -t` passes on both the Postgres dump and the Qdrant archive.
 - [ ] Postgres restores with `ON_ERROR_STOP=1` and exits 0.
+- [ ] **GL chain-head check before reopening writes (T178):** inspect `fin_gl_sequencers` (`SELECT tenant_id, last_audit_number, head_hash FROM fin_gl_sequencers ORDER BY tenant_id;`) and compare `last_audit_number` and `head_hash` against the external write-once audit copy, then call `GET /enterprise-hub/accounting/ledger/verify-chain` for each active tenant and confirm `status: "VALID"` and `gaps: 0` before reopening writes (prevents chain fork or counter reuse after PITR).
 - [ ] `payment_orders` and `users` row counts both query successfully; `users`
       is > 0 and within a reasonable range of the previous drill's number.
 - [ ] The Qdrant archive contains **both** `iran_laws_v2` and

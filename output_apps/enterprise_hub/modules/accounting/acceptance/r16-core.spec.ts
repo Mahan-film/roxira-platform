@@ -7,6 +7,7 @@
  */
 import { ForbiddenException } from '@nestjs/common';
 import { proposeMatches } from '../../banking/matching/reconciliation-matcher';
+import { CalendarService } from '../../calendar';
 import { nextMonthCharge } from '../assets/depreciation';
 import {
   buildClosingRevaluationEntries,
@@ -14,7 +15,10 @@ import {
   buildTriCurrencyInvoiceEntry,
   FX_RATE_SCALE,
 } from '../fx-settlement';
+import { AccountingPeriodState, JournalEntryStatus } from '../enums/accounting.enum';
+import { PeriodStateLockedException } from '../exceptions/ledger.exceptions';
 import { fromMinor, roundMinorHalfUp } from '../money';
+import { AccountingPeriodService } from '../services/accounting-period.service';
 import {
   m,
   R16_T1_CONSOLIDATION as T1,
@@ -173,9 +177,75 @@ describe('R16 T2 three currencies, rounding, settlement', () => {
 });
 
 describe('R16 T3 period close and locks (T178)', () => {
-  it.skip('hard close is blocked while DRAFT-9 is unposted and names it — needs T178 (period states)', () => undefined);
-  it.skip('after hard close nobody can unlock or post into 2026-10 — needs T178', () => undefined);
-  it.skip('Jalali entity cut-offs follow Jalali month ends — needs T178 (per-entity calendars on period states)', () => undefined);
+  const calendar = new CalendarService();
+  const makeSvc = (unposted: Array<{ id: number; entry_number: string; status: string }> = []) => {
+    const periods: Array<Record<string, unknown>> = [];
+    let nextId = 1;
+    const repo = {
+      find: async () => periods,
+      findOne: async ({ where }: { where: Record<string, unknown> }) =>
+        periods.find((p) => (where.id != null ? p.id === where.id : p.code === where.code)) ?? null,
+      create: (d: Record<string, unknown>) => ({ id: nextId++, ...d }),
+      save: async (e: Record<string, unknown>) => {
+        const idx = periods.findIndex((p) => p.id === e.id);
+        if (idx >= 0) periods[idx] = e;
+        else periods.push(e);
+        return e;
+      },
+      createQueryBuilder: () => ({
+        where: () => ({
+          andWhere: () => ({
+            andWhere: () => ({
+              orderBy: () => ({
+                getMany: async () => periods.filter((p) => !p.isAdjustment),
+              }),
+            }),
+          }),
+        }),
+      }),
+    };
+    const scope = {
+      within: async (_t: string, _m: unknown, fn: (m: unknown) => Promise<unknown>) =>
+        fn({ getRepository: () => repo, query: async () => unposted }),
+    };
+    return new AccountingPeriodService(scope as never, calendar);
+  };
+
+  it('hard close is blocked while DRAFT-9 is unposted and names it', async () => {
+    const svc = makeSvc([{ id: 9, entry_number: 'DRAFT-9', status: JournalEntryStatus.DRAFT }]);
+    const oct = await svc.createPeriod('t1', {
+      code: '2026-10',
+      name: 'October 2026',
+      periodStart: '2026-10-01',
+      periodEnd: '2026-10-31',
+    });
+    await expect(svc.hardClosePeriod('t1', oct.id, 'admin')).rejects.toThrow(/DRAFT-9/);
+  });
+
+  it('after hard close nobody can unlock or post into 2026-10', async () => {
+    const svc = makeSvc([]);
+    const oct = await svc.createPeriod('t1', {
+      code: '2026-10',
+      name: 'October 2026',
+      periodStart: '2026-10-01',
+      periodEnd: '2026-10-31',
+    });
+    const closed = await svc.hardClosePeriod('t1', oct.id, 'admin');
+    expect(closed.state).toBe(AccountingPeriodState.HARD_CLOSED);
+    await expect(svc.unlockPeriod('t1', oct.id)).rejects.toThrow(/hard-closed/);
+    await expect(
+      svc.assertPostingAllowed('t1', new Date('2026-10-15T12:00:00Z'), { actorRole: 'admin' }),
+    ).rejects.toBeInstanceOf(PeriodStateLockedException);
+  });
+
+  it('Jalali entity cut-offs follow Jalali month ends', async () => {
+    const svc = makeSvc([]);
+    const periods = await svc.createJalaliYearPeriods('t-jalali', 1405);
+    expect(periods).toHaveLength(12);
+    expect(periods[6].code).toBe('1405-07');
+    expect(periods[11].code).toBe('1405-12');
+    expect(periods[11].periodEnd).toBe('2027-03-20');
+  });
 });
 
 describe('R16 T6 budgets and encumbrance', () => {
