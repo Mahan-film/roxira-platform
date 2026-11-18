@@ -33,7 +33,8 @@ export function sanitizeChainMetadata(value: unknown): unknown {
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      if (FORBIDDEN_CHAIN_PII_KEYS.has(k.toLowerCase())) continue;
+      const normalized = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (FORBIDDEN_CHAIN_PII_KEYS.has(normalized)) continue;
       out[k] = sanitizeChainMetadata(v);
     }
     return out;

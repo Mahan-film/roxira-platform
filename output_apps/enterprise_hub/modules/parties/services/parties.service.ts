@@ -134,14 +134,21 @@ export class PartiesService {
 
   /**
    * Erase a party's personal data by crypto-shredding (destroying the per-party key in
-   * `erp_party_keys` and scrubbing plaintext PII). The audit event records `partyId` only.
+   * `erp_party_keys` and scrubbing plaintext PII). The audit event records `partyId` and `actorUserId` only.
    */
-  async erasePersonalData(tenantId: string, partyId: number): Promise<{ partyId: number; erased: true }> {
+  async erasePersonalData(
+    tenantId: string,
+    partyId: number,
+    actorUserId: string | null = null,
+  ): Promise<{ partyId: number; erased: true }> {
+    if (!this.audit) {
+      throw new Error('AuditService is required to erase personal data');
+    }
     const erased = await this.repository.erasePersonalData(tenantId, partyId);
     if (!erased) throw new NotFoundException(NOT_FOUND_MESSAGE);
-    await this.audit?.record({
+    await this.audit.record({
       tenantId,
-      actorUserId: null,
+      actorUserId,
       action: 'party.erased',
       resourceType: 'party',
       resourceId: String(partyId),

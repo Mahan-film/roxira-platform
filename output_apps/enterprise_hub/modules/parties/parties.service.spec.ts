@@ -162,21 +162,33 @@ describe('T206 crypto-shredding & hash-chain verification after erasure', () => 
     };
     const service = new PartiesService(repo, audit);
 
-    // 1. Record an event that accidentally passes PII keys: sanitizer must strip them.
+    // 1. Record an event that accidentally passes PII keys (camelCase + snake_case): sanitizer must strip them.
     await audit.record({
       tenantId: T,
       actorUserId: null,
       action: 'party.referenced',
       resourceType: 'party',
       resourceId: '42',
-      metadata: { partyId: 42, partyName: 'شرکت آزمایشی', iban: 'IR000000000000001234567890', username: 'ali' },
+      metadata: {
+        partyId: 42,
+        partyName: 'شرکت آزمایشی',
+        party_name: 'شرکت آزمایشی',
+        customer_name: 'مشتری',
+        national_id: '0012345678',
+        economic_code: '411111111111',
+        iban: 'IR000000000000001234567890',
+        iban_number: 'IR000000000000001234567890',
+        username: 'ali',
+      },
     });
     expect(chainRows[0].metadata).toEqual({ partyId: 42 });
 
     // 2. Crypto-shred party 42.
-    await expect(service.erasePersonalData(T, 999)).rejects.toBeInstanceOf(NotFoundException);
-    const res = await service.erasePersonalData(T, 42);
+    await expect(new PartiesService(repo).erasePersonalData(T, 42)).rejects.toThrow(/AuditService is required/);
+    await expect(service.erasePersonalData(T, 999, 'user-1')).rejects.toBeInstanceOf(NotFoundException);
+    const res = await service.erasePersonalData(T, 42, 'user-1');
     expect(res).toEqual({ partyId: 42, erased: true });
+    expect(chainRows[1].actorUserId).toBe('user-1');
     expect(storedDek).toBeNull();
     expect(decryptPartyPii(storedDek, piiCiphertext)).toBeNull();
     expect(
