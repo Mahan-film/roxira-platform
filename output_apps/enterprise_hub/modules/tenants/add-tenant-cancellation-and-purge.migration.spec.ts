@@ -1,14 +1,14 @@
-import { AddTenantCancellationAndPurge1789900011000 } from '../../migrations/1789900011000-AddTenantCancellationAndPurge';
+import { AddTenantCancellationAndPurge1789900012700 } from '../../migrations/1789900012700-AddTenantCancellationAndPurge';
 
 const createRunner = () => {
   const queries: string[] = [];
   return { queries, runner: { query: jest.fn(async (sql: string) => void queries.push(sql)) } };
 };
 
-describe('AddTenantCancellationAndPurge migration (1789900011000)', () => {
+describe('AddTenantCancellationAndPurge migration (1789900012700)', () => {
   it('up() adds status, delete_after, cancelled_at, cancellation_reason, purged_at to tenants', async () => {
     const { runner, queries } = createRunner();
-    await new AddTenantCancellationAndPurge1789900011000().up(runner as never);
+    await new AddTenantCancellationAndPurge1789900012700().up(runner as never);
     const sql = queries.join('\n');
 
     expect(sql).toContain('ALTER TABLE "tenants"');
@@ -23,7 +23,7 @@ describe('AddTenantCancellationAndPurge migration (1789900011000)', () => {
 
   it('down() safely drops created columns, constraints, and index', async () => {
     const { runner, queries } = createRunner();
-    await new AddTenantCancellationAndPurge1789900011000().down(runner as never);
+    await new AddTenantCancellationAndPurge1789900012700().down(runner as never);
     const sql = queries.join('\n');
 
     expect(sql).toContain('DROP INDEX IF EXISTS "IDX_tenants_status_delete_after";');
