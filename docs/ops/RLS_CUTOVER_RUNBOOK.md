@@ -132,11 +132,11 @@ COMMIT;
 *Expected output*: Returns the actual branch count for that tenant.
 
 ### 4.4 Verify Superuser Credential Sanitization
-Ensure the superuser password is no longer accessible inside the backend container:
+Ensure the superuser (`enterprise_admin` / `postgres`) credentials are no longer active or exposed inside the backend container:
 ```bash
-docker exec roxira_enterprise_backend sh -c 'echo "owner=[${POSTGRES_PASSWORD:-}]"'
+docker exec roxira_enterprise_backend sh -c 'echo "user=${DATABASE_USER:-} app_user=${APP_DB_USER:-} pg_pw_len=${#POSTGRES_PASSWORD} db_pw_matches_app=$([ "${DATABASE_PASSWORD:-}" = "${APP_DB_PASSWORD:-}" ] && echo yes || echo no)"'
 ```
-*Expected output*: `owner=[]` (empty string).
+*Expected output*: `user=roxira_app app_user=roxira_app pg_pw_len=0 db_pw_matches_app=yes` (and `DATABASE_PASSWORD` does not hold the `enterprise_admin` superuser password).
 
 ### 4.5 Inspect Application Runtime Logs
 Monitor logs for 10 minutes to verify zero RLS violations or permission errors:
