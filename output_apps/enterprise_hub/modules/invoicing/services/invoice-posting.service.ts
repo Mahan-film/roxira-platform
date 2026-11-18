@@ -804,10 +804,6 @@ export class InvoicePostingService {
   ): Promise<AccountPlan> {
     const sale = this.directionOf(invoice) === InvoiceDirection.SALE;
     const paymentMethods = (invoice.payments ?? []).map((p) => (p.method ?? '').trim().toUpperCase());
-    const pack = this.countryPackResolver
-      ? await this.countryPackResolver.resolveForTenant(invoice.tenantId)
-      : undefined;
-    const isMyPack = pack?.country === 'MY';
     const myClearingMethods = [
       'DUITNOW', 'DUITNOW_QR', 'QR',
       'EWALLET', 'TNG', 'GRABPAY', 'BOOST',
@@ -815,6 +811,15 @@ export class InvoicePostingService {
       'TIKTOK', 'TIKTOK_SHOP',
       'GRABFOOD', 'GRAB',
     ];
+    if (!this.countryPackResolver && paymentMethods.some((m) => myClearingMethods.includes(m))) {
+      throw new Error(
+        `CountryPackResolver is required to route payment rail methods (${paymentMethods.join(', ')}) for invoice ${invoice.id}.`,
+      );
+    }
+    const pack = this.countryPackResolver
+      ? await this.countryPackResolver.resolveForTenant(invoice.tenantId)
+      : undefined;
+    const isMyPack = pack?.country === 'MY';
     const wanted: Array<[keyof AccountMap, InvoiceAccountSpec]> =
       phase === 'payment'
         ? [

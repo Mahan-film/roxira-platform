@@ -572,7 +572,7 @@ describe('Payment Rail Clearing & Settlement (T156)', () => {
     });
 
     it('requires reference or idempotencyKey in settleRail', async () => {
-      const mockPostingRules = { post: jest.fn() } as never;
+      const mockPostingRules = { post: jest.fn(), describe: jest.fn(async () => []) } as never;
       const svc = new RailSettlementService(registry, mockPostingRules);
       await expect(
         svc.settleRail('tenant-1', MALAYSIA, {
@@ -583,6 +583,66 @@ describe('Payment Rail Clearing & Settlement (T156)', () => {
           netAmount: 10000n,
         }),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects bankAccountCode that is not in pack chart or tenant mapping', () => {
+      expect(() =>
+        settlementService.previewSettlement(MALAYSIA, {
+          rail: 'card',
+          date: '2026-11-16',
+          bankAccountCode: '99999-INVALID',
+          grossAmount: 10000n,
+          netAmount: 10000n,
+          reference: 'BAD-BANK',
+        }),
+      ).toThrow(BadRequestException);
+
+      const withTenantBank = settlementService.previewSettlement(
+        MALAYSIA,
+        {
+          rail: 'card',
+          date: '2026-11-16',
+          bankAccountCode: '11299-TENANT',
+          grossAmount: 10000n,
+          netAmount: 10000n,
+          reference: 'TENANT-BANK',
+        },
+        { bank: '11299-TENANT' },
+      );
+      expect(withTenantBank.proposal.lines.find((l) => l.role === 'bank')?.accountCode).toBe('11299-TENANT');
+    });
+
+    it('rejects mismatched idempotencyKey and reference in settleRail', async () => {
+      const mockPostingRules = {
+        post: jest.fn(),
+        describe: jest.fn(async () => []),
+      } as never;
+      const svc = new RailSettlementService(registry, mockPostingRules);
+      await expect(
+        svc.settleRail('tenant-1', MALAYSIA, {
+          rail: 'card',
+          date: '2026-11-16',
+          bankAccountCode: '11200',
+          grossAmount: 10000n,
+          netAmount: 10000n,
+          idempotencyKey: 'idem-123',
+          reference: 'ref-456',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws when PostingRulesService.describe is missing or returns invalid shape in settleRail', async () => {
+      const missingDescribe = new RailSettlementService(registry, { post: jest.fn() } as never);
+      await expect(
+        missingDescribe.settleRail('tenant-1', MALAYSIA, {
+          rail: 'card',
+          date: '2026-11-16',
+          bankAccountCode: '11200',
+          grossAmount: 10000n,
+          netAmount: 10000n,
+          idempotencyKey: 'idem-123',
+        }),
+      ).rejects.toThrow(/describe/);
     });
   });
 });

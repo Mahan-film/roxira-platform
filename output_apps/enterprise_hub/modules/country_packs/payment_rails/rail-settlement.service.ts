@@ -144,8 +144,18 @@ export function resolveSettlementOverrides(
     'مالیات کارمزد',
   );
 
+  const bankCode = (dto.bankAccountCode ?? '').trim();
+  if (!bankCode) {
+    throw new BadRequestException('کد حساب معین یا تفصیلی بانک مقصد الزامی است.');
+  }
+  if (chartCodes.size > 0 && !chartCodes.has(bankCode) && tenantMapping.bank !== bankCode) {
+    throw new BadRequestException(
+      `کد حساب بانک «${bankCode}» در کدینگ حسابداری بسته ${pack.country} یا نگاشت مستأجر یافت نشد.`,
+    );
+  }
+
   const overrides: Partial<Record<PostingRole, string>> = {
-    bank: (dto.bankAccountCode ?? '').trim(),
+    bank: bankCode,
     clearing_rail:
       dto.overrides?.clearing_rail ??
       dto.overrides?.[rail.clearingRole] ??
@@ -250,19 +260,30 @@ export class RailSettlementService {
       dto.description?.trim() ||
       `تسویه درگاه ${rail.name}${dto.reference ? ` - شناسه تسویه ${dto.reference}` : ''}`;
 
-    const sourceId = dto.idempotencyKey?.trim() || dto.reference?.trim();
+    const idempotencyKey = dto.idempotencyKey?.trim();
+    const reference = dto.reference?.trim();
+    if (idempotencyKey && reference && idempotencyKey !== reference) {
+      throw new BadRequestException(
+        'شناسه یکتا (idempotencyKey) و شماره مرجع تسویه (reference) در صورت ارسال هم‌زمان نباید متفاوت باشند.',
+      );
+    }
+    const sourceId = idempotencyKey || reference;
     if (!sourceId) {
       throw new BadRequestException('برای ثبت تسویه درگاه، شناسه یکتا (idempotencyKey) یا شماره مرجع تسویه (reference) الزامی است.');
     }
 
+    if (typeof this.postingRules.describe !== 'function') {
+      throw new Error('PostingRulesService.describe(tenantId) is required in RailSettlementService.');
+    }
+    const describedList = await this.postingRules.describe(tenantId);
+    if (!Array.isArray(describedList)) {
+      throw new Error('PostingRulesService.describe(tenantId) returned an invalid template list.');
+    }
     const mutableMapping: Partial<Record<PostingRole, string>> = {};
-    if (typeof this.postingRules.describe === 'function') {
-      const describedList = await this.postingRules.describe(tenantId);
-      const described = describedList?.find((t) => t.docType === 'treasury.rail_settlement');
-      for (const entry of described?.roles ?? []) {
-        if (entry.source !== 'default' && entry.accountCode) {
-          mutableMapping[entry.role as PostingRole] = entry.accountCode;
-        }
+    const described = describedList.find((t) => t.docType === 'treasury.rail_settlement');
+    for (const entry of described?.roles ?? []) {
+      if (entry.source !== 'default' && entry.accountCode) {
+        mutableMapping[entry.role as PostingRole] = entry.accountCode;
       }
     }
     const tenantMapping: RoleAccounts = mutableMapping;
