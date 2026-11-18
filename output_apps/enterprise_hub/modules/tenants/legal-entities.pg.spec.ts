@@ -5,7 +5,8 @@
 import 'reflect-metadata';
 import { BadRequestException } from '@nestjs/common';
 import { TenantScope } from '../access/services/tenant-scope';
-import { createTestDatabase, describePg, TestDatabaseContext, TEST_T1 as T1, TEST_T2 as T2 } from '../../test/support/test-pg';
+import { CreateLegalEntitiesAndTaxIds1789900012100 } from '../../migrations/1789900012100-CreateLegalEntitiesAndTaxIds';
+import { APP_USER, createTestDatabase, describePg, TestDatabaseContext, TEST_T1 as T1, TEST_T2 as T2 } from '../../test/support/test-pg';
 import { LegalEntitiesRepository } from './repositories/legal-entities.repository';
 import { LegalEntitiesService } from './services/legal-entities.service';
 
@@ -15,6 +16,27 @@ describePg('LegalEntities on PostgreSQL (FORCE RLS + backfill)', () => {
 
   beforeAll(async () => {
     testDb = await createTestDatabase('legal_entities');
+    await testDb.owner.query(
+      `INSERT INTO tenants (id, name, slug, country_code)
+       VALUES ($1, 'Tenant One', 't1-legal', 'IR'), ($2, 'Tenant Two', 't2-legal', 'AE')
+       ON CONFLICT (id) DO NOTHING`,
+      [T1, T2],
+    );
+    await testDb.owner.query(
+      `INSERT INTO tenant_onboarding_progress (tenant_id, economic_code)
+       VALUES ($1, '411111111111')
+       ON CONFLICT (tenant_id) DO NOTHING`,
+      [T1],
+    );
+    const qr = testDb.owner.createQueryRunner();
+    try {
+      const migration = new CreateLegalEntitiesAndTaxIds1789900012100();
+      await migration.down(qr);
+      await migration.up(qr);
+    } finally {
+      await qr.release();
+    }
+    await testDb.owner.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE legal_entities TO ${APP_USER}`);
     service = new LegalEntitiesService(new LegalEntitiesRepository(new TenantScope(testDb.app)));
   }, 180_000);
 
@@ -32,7 +54,9 @@ describePg('LegalEntities on PostgreSQL (FORCE RLS + backfill)', () => {
 
     const list1 = await service.list(T1);
     const list2 = await service.list(T2);
-    expect(list1.some((e) => e.code === 'DEFAULT' && e.isDefault)).toBe(true);
+    const def1 = list1.find((e) => e.code === 'DEFAULT' && e.isDefault);
+    expect(def1).toBeDefined();
+    expect(def1?.taxId).toBe('411111111111');
     expect(list2.some((e) => e.code === 'DEFAULT' && e.isDefault)).toBe(true);
     expect(list1.every((e) => e.tenantId === T1)).toBe(true);
   });
