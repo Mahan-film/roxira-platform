@@ -8,6 +8,7 @@ Subcommands:
   url-db ENVNAME DBNAME       print the URL held in $ENVNAME with its database replaced by DBNAME
   check-url ENVNAME           validate a direct (non-pooler) postgres URL; prints nothing, exit 0/3/4
   count-sql                   stdin "schema|table" lines -> one UNION ALL count(*) statement
+  migration-pending           stdin = TypeORM `migration:show` output -> prints the number of pending ([ ]) migrations
   compare SRC DST [PCT [ABS]] compare "label|count" files (tolerance: max(ABS, PCT% of source))
 """
 from __future__ import annotations
@@ -130,6 +131,20 @@ def compare(src: dict[str, int], dst: dict[str, int], pct: float = 2.0, abs_slac
     return problems
 
 
+_MIG_LINE = re.compile(r"^\s*\[( |X|x)\]\s+(?:\d+\s+)?(\S+)\s*$")
+
+
+def parse_migration_show(text: str) -> tuple[list[str], list[str]]:
+    """TypeORM `migration:show` prints ` [X] <id> <Name>` for applied and ` [ ] <Name>` for pending migrations.
+    Returns (applied names, pending names); every other line (npm noise, warnings) is ignored."""
+    applied, pending = [], []
+    for line in text.splitlines():
+        m = _MIG_LINE.match(line)
+        if m:
+            (pending if m.group(1) == " " else applied).append(m.group(2))
+    return applied, pending
+
+
 def main(argv: list[str]) -> int:
     if len(argv) < 2:
         print(__doc__, file=sys.stderr)
@@ -148,6 +163,13 @@ def main(argv: list[str]) -> int:
         return 0
     if cmd == "check-url" and len(argv) == 3:
         return check_url(os.environ.get(argv[2], ""))
+    if cmd == "migration-pending":
+        applied, pending = parse_migration_show(sys.stdin.read())
+        if not applied and not pending:
+            print("migration-pending: no migration lines found in the input", file=sys.stderr)
+            return 1
+        print(len(pending))
+        return 0
     if cmd == "count-sql":
         sql = count_sql(sys.stdin)
         if not sql:
