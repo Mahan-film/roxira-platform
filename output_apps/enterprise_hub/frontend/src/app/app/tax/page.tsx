@@ -222,6 +222,7 @@ function MoadianCard() {
         setBusy(false);
         return;
       }
+      setPreFlightErrors([]);
     } catch (err) {
       setError(loadErrorMessage(err));
       setBusy(false);

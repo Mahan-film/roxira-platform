@@ -12,8 +12,30 @@ export class AddProductTaxCode1789900010800 implements MigrationInterface {
     );
   }
 
-  public async down(_q: QueryRunner): Promise<void> {
-    // Deliberate no-op: dropping erp_stock_items.tax_code would silently delete
-    // stored 13-digit SSTID values. Rollback requires manual data backup/restore.
+  public async down(q: QueryRunner): Promise<void> {
+    // Back up any non-null SSTID values before dropping the column so rollback does not silently lose data.
+    await q.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'erp_stock_items' AND column_name = 'tax_code'
+        ) THEN
+          IF EXISTS (SELECT 1 FROM "erp_stock_items" WHERE "tax_code" IS NOT NULL LIMIT 1) THEN
+            CREATE TABLE IF NOT EXISTS "_rollback_backup_erp_stock_items_tax_code" AS
+            SELECT "id", "tenant_id", "tax_code", now() AS "backed_up_at"
+            FROM "erp_stock_items"
+            WHERE false;
+            INSERT INTO "_rollback_backup_erp_stock_items_tax_code" ("id", "tenant_id", "tax_code", "backed_up_at")
+            SELECT "id", "tenant_id", "tax_code", now()
+            FROM "erp_stock_items"
+            WHERE "tax_code" IS NOT NULL;
+          END IF;
+        END IF;
+      END $$;
+    `);
+    await q.query(
+      `ALTER TABLE "erp_stock_items" DROP COLUMN IF EXISTS "tax_code"`,
+    );
   }
 }
