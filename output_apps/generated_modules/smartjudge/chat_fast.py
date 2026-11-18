@@ -70,7 +70,11 @@ def sse_frame(event: str, data: Any) -> str:
 # ---------------------------------------------------------------------------
 # Payload / prompt trimming
 # ---------------------------------------------------------------------------
-_KEEP_FIELDS = ("title", "category", "law_name", "article_no", "number", "subject", "binding_effect", "match_level", "repeal_status")
+_KEEP_FIELDS = (
+    "title", "category", "law_name", "article_no", "number", "subject",
+    "binding_effect", "match_level", "repeal_status", "source_tier", "tier",
+    "valid_from", "valid_to",
+)
 
 
 def _short(text: Any, limit: int) -> str:
@@ -86,6 +90,8 @@ def trim_sources(rows: Any, *, excerpt_chars: int = 220, max_rows: int = 6) -> l
             out.append(row)
             continue
         item = {k: row[k] for k in _KEEP_FIELDS if row.get(k) not in (None, "")}
+        if "source_tier" not in item:
+            item["source_tier"] = row.get("tier") or "unofficial"
         excerpt = _short(row.get("summary"), excerpt_chars)
         if excerpt:
             item["excerpt"] = excerpt

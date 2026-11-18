@@ -103,7 +103,17 @@ import {
 
 type StatutoryItem =
   | string
-  | { title?: string; category?: string; article?: string; law?: string; law_name?: string; article_no?: string | number; number?: string | number };
+  | {
+      title?: string;
+      category?: string;
+      article?: string;
+      law?: string;
+      law_name?: string;
+      article_no?: string | number;
+      number?: string | number;
+      source_tier?: "official" | "secondary" | "unofficial" | string;
+      tier?: string;
+    };
 
 type Attachment = {
   localId: string;
@@ -224,6 +234,21 @@ function statutoryLabel(item: StatutoryItem): string {
   return lawArt || item.category || "";
 }
 
+function sourceTierBadge(item: StatutoryItem): { label: string; className: string } | null {
+  if (typeof item === "string") return null;
+  const tier = (item.source_tier || item.tier || "").toLowerCase();
+  if (tier === "official" || tier === "رسمی") {
+    return { label: "رسمی", className: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30" };
+  }
+  if (tier === "secondary" || tier === "ثانویه") {
+    return { label: "ثانویه", className: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30" };
+  }
+  if (tier === "unofficial" || tier === "غیررسمی") {
+    return { label: "غیررسمی", className: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30" };
+  }
+  return null;
+}
+
 export function ChatShell() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -257,8 +282,7 @@ export function ChatShell() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const micHint = useMicHint();
   // Lockdown Mode / hardened browsers: hide voice controls when unsupported (text chat stays).
-  const [voiceSupport, setVoiceSupport] = useState<VoiceSupport | null>(null);
-  useEffect(() => setVoiceSupport(detectVoiceSupport()), []);
+  const [voiceSupport] = useState<VoiceSupport | null>(() => (typeof window !== "undefined" ? detectVoiceSupport() : null));
   const dictationOk = voiceSupport?.dictation !== false;
   const liveOk = voiceSupport?.live !== false;
   const recoveredRef = useRef(false);
@@ -1357,10 +1381,20 @@ export function ChatShell() {
               {msg.role === "assistant" && msg.statutory_basis && msg.statutory_basis.length > 0 && (
                 <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--ap-line)" }}>
                   <div className="mb-1.5 text-sm font-semibold ap-link">مستندات</div>
-                  <ul className="list-disc ps-4 space-y-1 ap-notice">
-                    {msg.statutory_basis.map((item, itemIdx) => (
-                      <li key={itemIdx}>{statutoryLabel(item)}</li>
-                    ))}
+                  <ul className="list-disc ps-4 space-y-1.5 ap-notice">
+                    {msg.statutory_basis.map((item, itemIdx) => {
+                      const tier = sourceTierBadge(item);
+                      return (
+                        <li key={itemIdx} className="flex items-center gap-2">
+                          <span>{statutoryLabel(item)}</span>
+                          {tier && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${tier.className}`}>
+                              {tier.label}
+                            </span>
+                          )}
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               )}
