@@ -381,7 +381,7 @@ export class WooCommerceSyncService {
         const totalDiscountMinor =
           orderDiscountMinor > 0n ? orderDiscountMinor : sumLineDiscountsMinor;
         // Net merchandise/shipping before tax and before discount so totalAmount - totalDiscount + totalTax === finalPayable
-        const totalAmountMinor = orderTotalMinor - totalTaxMinor + totalDiscountMinor;
+        const totalAmountMinor = orderTotalMinor + totalDiscountMinor - totalTaxMinor;
         const baseTotalAmountMinor = convertMinorToBase(totalAmountMinor);
         const baseTotalTaxMinor = convertMinorToBase(totalTaxMinor);
         const baseFinalPayableMinor = convertMinorToBase(orderTotalMinor);
@@ -491,6 +491,12 @@ export class WooCommerceSyncService {
     quantity: number,
     priceMinor?: bigint,
   ): Promise<{ success: boolean; externalId: string }> {
+    if (!Number.isFinite(quantity) || quantity < 0) {
+      throw new BadRequestException('Quantity must be a non-negative finite number');
+    }
+    if (priceMinor !== undefined && priceMinor < 0n) {
+      throw new BadRequestException('Price must be non-negative');
+    }
     const config = await this.wooRepo.findConfig(tenantId);
     if (!config) {
       throw new NotFoundException('WooCommerce not configured');
@@ -508,15 +514,10 @@ export class WooCommerceSyncService {
       try {
         await assertSafeStoreUrlWithDns(config.storeUrl);
       } catch (err: any) {
-        if (
-          err?.message?.includes('private') ||
-          err?.message?.includes('loopback') ||
-          err?.message?.includes('HTTPS') ||
-          err?.message?.includes('Invalid') ||
-          err?.message?.includes('internal')
-        ) {
-          throw new BadRequestException(err.message);
+        if (err instanceof BadRequestException) {
+          throw err;
         }
+        throw new BadRequestException(err?.message || 'Unsafe store URL');
       }
     };
 
