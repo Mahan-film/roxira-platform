@@ -39,6 +39,27 @@ export class JournalEntryLineResponseDto {
 
   @ApiProperty({ description: 'شرح سطر', nullable: true })
   description: string | null;
+
+  @ApiPropertyOptional({ description: 'کد ارز معامله', example: 'USD' })
+  txCurrencyCode?: string | null;
+
+  @ApiPropertyOptional({ description: 'نرخ تسعیر اعمال‌شده', example: 920000 })
+  fxRateApplied?: number | null;
+
+  @ApiPropertyOptional({ description: 'مبلغ بدهکار به ارز معامله' })
+  txDebit?: Money | null;
+
+  @ApiPropertyOptional({ description: 'مبلغ بستانکار به ارز معامله' })
+  txCredit?: Money | null;
+
+  @ApiPropertyOptional({ description: 'مبلغ بدهکار به ارز دفاتر' })
+  bookDebit?: Money | null;
+
+  @ApiPropertyOptional({ description: 'مبلغ بستانکار به ارز دفاتر' })
+  bookCredit?: Money | null;
+
+  @ApiPropertyOptional({ description: 'نشانگر سطر تعدیل گردکردن', default: false })
+  isRounding?: boolean;
 }
 
 /**

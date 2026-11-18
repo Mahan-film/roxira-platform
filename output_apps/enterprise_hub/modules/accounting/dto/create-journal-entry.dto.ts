@@ -1,9 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsISO8601,
   IsOptional,
@@ -109,6 +110,47 @@ export class JournalEntryLineDto {
   @IsOptional()
   @IsUUID()
   branchId?: string;
+
+  @ApiPropertyOptional({ description: 'کد ارز معامله (ISO 4217)', example: 'USD' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(8)
+  txCurrencyCode?: string;
+
+  @ApiPropertyOptional({ description: 'نرخ تسعیر اعمال‌شده', example: 920000 })
+  @IsOptional()
+  @IsMoneyAmount(6)
+  fxRateApplied?: number | string;
+
+  @ApiPropertyOptional({ description: 'مبلغ بدهکار به ارز معامله', example: 100 })
+  @IsOptional()
+  @IsMoneyAmount()
+  txDebit?: number | string;
+
+  @ApiPropertyOptional({ description: 'مبلغ بستانکار به ارز معامله', example: 0 })
+  @IsOptional()
+  @IsMoneyAmount()
+  txCredit?: number | string;
+
+  @ApiPropertyOptional({ description: 'مبلغ بدهکار به ارز دفاتر', example: 92000000 })
+  @IsOptional()
+  @IsMoneyAmount()
+  bookDebit?: number | string;
+
+  @ApiPropertyOptional({ description: 'مبلغ بستانکار به ارز دفاتر', example: 0 })
+  @IsOptional()
+  @IsMoneyAmount()
+  bookCredit?: number | string;
+
+  @ApiPropertyOptional({ description: 'سطر تعدیل گردکردن ناشی از تسعیر ارز', default: false })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return value;
+  })
+  @IsBoolean()
+  isRounding?: boolean;
 }
 
 /**

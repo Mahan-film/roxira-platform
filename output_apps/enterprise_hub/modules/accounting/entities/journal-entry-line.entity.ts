@@ -89,6 +89,73 @@ export class JournalEntryLineEntity {
   })
   fxRate: string | null;
 
+  /** کد ارز معامله (ISO 4217). */
+  @Column({
+    type: 'varchar',
+    length: 8,
+    name: 'tx_currency_code',
+    nullable: true,
+  })
+  txCurrencyCode: string | null;
+
+  /** نرخ تسعیر اعمال‌شده در زمان ثبت سطر. */
+  @Column({
+    type: 'numeric',
+    precision: 24,
+    scale: 6,
+    name: 'fx_rate_applied',
+    nullable: true,
+  })
+  fxRateApplied: string | null;
+
+  /** مبلغ بدهکار به ارز معامله (Transaction Currency). */
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    name: 'tx_debit',
+    nullable: true,
+  })
+  txDebit: string | null;
+
+  /** مبلغ بستانکار به ارز معامله (Transaction Currency). */
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    name: 'tx_credit',
+    nullable: true,
+  })
+  txCredit: string | null;
+
+  /** مبلغ بدهکار به ارز دفاتر (Book / Reporting Currency). */
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    name: 'book_debit',
+    nullable: true,
+  })
+  bookDebit: string | null;
+
+  /** مبلغ بستانکار به ارز دفاتر (Book / Reporting Currency). */
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    name: 'book_credit',
+    nullable: true,
+  })
+  bookCredit: string | null;
+
+  /** نشانگر سطر تعدیل گردکردن ناشی از تسعیر ارز. */
+  @Column({
+    type: 'boolean',
+    name: 'is_rounding',
+    default: false,
+  })
+  isRounding: boolean;
+
   /** کد طرف حساب/تفضیلی (party reference) — ارجاع بدون کلید خارجی. */
   @Column({
     type: 'varchar',
