@@ -154,6 +154,129 @@ def all_role_names(path: pathlib.Path | None = None) -> list[str]:
     return list(roles(path).keys())
 
 
+# ---- retired models registry & shutdown checks (T161) ---------------------------------------
+
+def retired_models(path: pathlib.Path | None = None) -> list[dict[str, Any]]:
+    """List of retiring/retired model entries from config/models.yaml."""
+    data = load(path) if path is None else _load_uncached(path)
+    return list(data.get("retired") or [])
+
+
+def check_retired_or_expiring(
+    model_id: str,
+    as_of_date: str | None = None,
+    days_threshold: int = 30,
+    path: pathlib.Path | None = None,
+) -> tuple[bool, str]:
+    """Checks if a model_id is retired or within days_threshold of shutdown.
+
+    Returns (is_retired_or_expiring, reason).
+    """
+    from datetime import datetime, timezone
+
+    if not model_id:
+        return False, ""
+
+    # Normalize ID: strip prefixes and lower-case
+    norm_id = str(model_id).strip().lower()
+    bare_id = norm_id.split("/")[-1].split(":")[-1]
+
+    if as_of_date:
+        today = datetime.strptime(as_of_date, "%Y-%m-%d").date()
+    else:
+        today = datetime.now(timezone.utc).date()
+
+    for entry in retired_models(path):
+        e_id = str(entry.get("id", "")).strip().lower()
+        e_bare = e_id.split("/")[-1].split(":")[-1]
+
+        # Match exact ID or bare model ID
+        if norm_id == e_id or bare_id == e_bare or norm_id.endswith("/" + e_id) or norm_id == e_bare:
+            sd_str = entry.get("shutdown_date")
+            reason = entry.get("reason") or "model is retired"
+            if not sd_str:
+                return True, f"{model_id} is marked retired: {reason}"
+            try:
+                sd = datetime.strptime(str(sd_str).strip(), "%Y-%m-%d").date()
+            except ValueError:
+                return True, f"{model_id} has invalid shutdown_date {sd_str}"
+
+            days_left = (sd - today).days
+            if days_left <= 0:
+                return True, f"{model_id} was retired on {sd_str} ({abs(days_left)} days ago): {reason}"
+            if days_left <= days_threshold:
+                return True, f"{model_id} shuts down on {sd_str} ({days_left} days <= {days_threshold} days threshold): {reason}"
+            return True, f"{model_id} is on the retirement list (shutdown {sd_str}): {reason}"
+
+    return False, ""
+
+
+def validate_registry_retirements(
+    path: pathlib.Path | None = None,
+    as_of_date: str | None = None,
+    days_threshold: int = 30,
+) -> list[str]:
+    """Validates that NO role in config/models.yaml uses a retired or expiring model ID.
+
+    Returns list of error messages.
+    """
+    errs: list[str] = []
+    reg_roles = roles(path)
+    for role_name, rdata in reg_roles.items():
+        for m in (rdata or {}).get("models", []) or []:
+            mid = m.get("id")
+            if not mid:
+                continue
+            is_bad, reason = check_retired_or_expiring(mid, as_of_date, days_threshold, path)
+            if is_bad:
+                errs.append(f"role '{role_name}' uses retiring/retired model '{mid}': {reason}")
+    return errs
+
+
+def validate_code_defaults(
+    repo_root: pathlib.Path | None = None,
+    as_of_date: str | None = None,
+    days_threshold: int = 30,
+    registry_path: pathlib.Path | None = None,
+) -> list[str]:
+    """Validates that code defaults (such as voice_phone_agent config) do not use retired or hardcoded models."""
+    errs: list[str] = []
+    root = repo_root or REGISTRY_PATH.parents[1]
+    reg = registry_path or (root / "config" / "models.yaml")
+    cfg_file = root / "services" / "voice_phone_agent" / "src" / "config.ts"
+    if cfg_file.exists():
+        text = cfg_file.read_text(encoding="utf-8")
+        # 1. Fail if any hardcoded literal default is passed to str('OPENAI_*_MODEL', '...')
+        for env_key in ("OPENAI_STT_MODEL", "OPENAI_TTS_MODEL"):
+            m = re.search(rf"str\('{env_key}',\s*['\"]([^'\"]+)['\"]\)", text)
+            if m:
+                mid = m.group(1)
+                is_bad, reason = check_retired_or_expiring(mid, as_of_date, days_threshold, path=reg)
+                if is_bad:
+                    errs.append(f"voice_phone_agent {env_key} default '{mid}' is retiring/retired: {reason}")
+                else:
+                    errs.append(f"voice_phone_agent {env_key} has hardcoded literal default '{mid}' outside config/models.yaml")
+
+        # 2. Check every loadRoleModel('<role>') call against config/models.yaml
+        role_calls = re.findall(r"loadRoleModel\(\s*['\"]([A-Za-z0-9_]+)['\"]\s*(?:,\s*['\"]([^'\"]*)['\"])?\s*\)", text)
+        for role, fallback in role_calls:
+            if fallback:
+                errs.append(f"voice_phone_agent loadRoleModel('{role}') has hardcoded fallback '{fallback}'")
+            try:
+                mids = role_models(role, reg)
+            except ModelRegistryError as exc:
+                errs.append(f"voice_phone_agent role '{role}' missing from {reg}: {exc}")
+                continue
+            if not mids:
+                errs.append(f"voice_phone_agent role '{role}' has no models in {reg}")
+                continue
+            primary = mids[0].removeprefix("openai/")
+            is_bad, reason = check_retired_or_expiring(primary, as_of_date, days_threshold, path=reg)
+            if is_bad:
+                errs.append(f"voice_phone_agent role '{role}' primary '{primary}' is retiring/retired: {reason}")
+    return errs
+
+
 # ---- routing: per-task chains and daily cost caps (issue #288) ---------------------------------
 
 DATA_CLASSES = ("public", "tenant-business", "personal")
