@@ -8,8 +8,8 @@ import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
  * - usage_counters: per-tenant, per-meter, per-period usage counter with atomic updates.
  * Both tables have tenant_id, FORCE RLS, and grants to roxira_app.
  */
-export class CreatePlanEntitlementsAndUsageCounters1789900010600 implements MigrationInterface {
-  name = 'CreatePlanEntitlementsAndUsageCounters1789900010600';
+export class CreatePlanEntitlementsAndUsageCounters1789900012600 implements MigrationInterface {
+  name = 'CreatePlanEntitlementsAndUsageCounters1789900012600';
 
   public async up(q: QueryRunner): Promise<void> {
     await q.query(`
