@@ -15,6 +15,7 @@ import {
   FX_RATE_SCALE,
 } from '../fx-settlement';
 import { fromMinor, roundMinorHalfUp } from '../money';
+import { BudgetControlService } from '../services/budget-control.service';
 import {
   m,
   R16_T1_CONSOLIDATION as T1,
@@ -179,15 +180,125 @@ describe('R16 T3 period close and locks (T178)', () => {
 });
 
 describe('R16 T6 budgets and encumbrance', () => {
+  const createInMemoryBudgetControl = (initialBudgetMinor: bigint) => {
+    let budgetMinor = initialBudgetMinor;
+    const encumbrances = new Map<string, bigint>();
+    const manager = {
+      query: async (sql: string, params: unknown[]) => {
+        if (sql.includes('FROM "fin_account_budgets"')) {
+          return [{ budget_amount: fromMinor(budgetMinor).toString() }];
+        }
+        if (sql.includes('FROM "fin_journal_entry_lines"')) {
+          return [{ spend: '0' }];
+        }
+        if (sql.includes('FROM "fin_budget_encumbrances"')) {
+          const sourceId = String(params[5] ?? '');
+          let committed = 0n;
+          for (const [id, amt] of encumbrances.entries()) {
+            if (id !== sourceId) committed += amt;
+          }
+          return [{ committed: committed.toString() }];
+        }
+        if (sql.includes('INSERT INTO "fin_budget_encumbrances"')) {
+          const sourceId = String(params[5]);
+          const amountMinor = BigInt(String(params[6]));
+          encumbrances.set(sourceId, amountMinor);
+          return [];
+        }
+        return [];
+      },
+    };
+    const scope = {
+      within: async (_tenantId: string, _mgr: unknown, cb: (m: typeof manager) => Promise<unknown>) =>
+        cb(manager),
+    };
+    const policy = { get: async () => 'warn' };
+    return {
+      service: new BudgetControlService(scope as never, policy as never),
+      reviseBudget: (nextMinor: bigint) => {
+        budgetMinor = nextMinor;
+      },
+    };
+  };
+
   it('fixture percentages hold (4,200/5,000 = 84%, 5,200/5,000 = 104%, 5,500 - 5,200 = 300)', () => {
     expect((T6.po88 * 100n) / T6.october).toBe(BigInt(T6.expected.po88WarningPercent));
     expect(T6.october - T6.po88).toBe(T6.expected.po88Remaining);
     expect(((T6.po88 + T6.po89) * 100n) / T6.october).toBe(BigInt(T6.expected.po89Percent));
     expect(T6.revisedBudget - T6.po88 - T6.po89).toBe(T6.expected.remainingAfterRevision);
   });
-  it.skip('PO-88 passes with an 84% warning — needs T194 (budget encumbrance; BudgetControlService has no PO commitments or warn/block percentages)', () => undefined);
-  it.skip('PO-89 (104%) is blocked — needs T194', () => undefined);
-  it.skip('after revision to 5,500.00 PO-89 passes leaving 300.00 — needs T194', () => undefined);
+
+  it('PO-88 passes with an 84% warning (800.00 left)', async () => {
+    const { service } = createInMemoryBudgetControl(T6.october);
+    const decision = await service.checkAndEncumberPo('tenant-1', {
+      accountCode: T6.account,
+      costCenterCode: T6.costCentre,
+      periodKey: '2026-10',
+      sourceId: 'PO-88',
+      amountMinor: T6.po88,
+      warnAtPercent: T6.warnAtPercent,
+      blockAtPercent: T6.blockAtPercent,
+    });
+    expect(decision.allowed).toBe(true);
+    expect(decision.status).toBe('WARN');
+    expect(decision.utilizationPercent).toBe(T6.expected.po88WarningPercent);
+    expect(decision.remainingMinor).toBe(T6.expected.po88Remaining);
+    expect(decision.warning).toContain('84%');
+  });
+
+  it('PO-89 (104%) is blocked', async () => {
+    const { service } = createInMemoryBudgetControl(T6.october);
+    await service.checkAndEncumberPo('tenant-1', {
+      accountCode: T6.account,
+      costCenterCode: T6.costCentre,
+      periodKey: '2026-10',
+      sourceId: 'PO-88',
+      amountMinor: T6.po88,
+    });
+    await expect(
+      service.checkAndEncumberPo('tenant-1', {
+        accountCode: T6.account,
+        costCenterCode: T6.costCentre,
+        periodKey: '2026-10',
+        sourceId: 'PO-89',
+        amountMinor: T6.po89,
+      }),
+    ).rejects.toMatchObject({
+      status: 400,
+      response: expect.objectContaining({ code: 'BUDGET_EXCEEDED', utilizationPercent: T6.expected.po89Percent }),
+    });
+  });
+
+  it('after revision to 5,500.00 PO-89 passes leaving 300.00', async () => {
+    const { service, reviseBudget } = createInMemoryBudgetControl(T6.october);
+    await service.checkAndEncumberPo('tenant-1', {
+      accountCode: T6.account,
+      costCenterCode: T6.costCentre,
+      periodKey: '2026-10',
+      sourceId: 'PO-88',
+      amountMinor: T6.po88,
+    });
+    await expect(
+      service.checkAndEncumberPo('tenant-1', {
+        accountCode: T6.account,
+        costCenterCode: T6.costCentre,
+        periodKey: '2026-10',
+        sourceId: 'PO-89',
+        amountMinor: T6.po89,
+      }),
+    ).rejects.toThrow();
+
+    reviseBudget(T6.revisedBudget);
+    const decision = await service.checkAndEncumberPo('tenant-1', {
+      accountCode: T6.account,
+      costCenterCode: T6.costCentre,
+      periodKey: '2026-10',
+      sourceId: 'PO-89',
+      amountMinor: T6.po89,
+    });
+    expect(decision.allowed).toBe(true);
+    expect(decision.remainingMinor).toBe(T6.expected.remainingAfterRevision);
+  });
 });
 
 describe('R16 T7 multi-book fixed assets', () => {
