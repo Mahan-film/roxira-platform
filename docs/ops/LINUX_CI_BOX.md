@@ -2,6 +2,9 @@
 
 Owner decision 2026-11-17: the HP laptop leaves Windows and becomes a headless Linux server for CI/CD. No production data, no production secrets. Once the repo goes private (`docs/strategy/PRIVATE_REPO_PLAN_2026-11-17.md`), this box runs **all** CI, because GitHub-hosted minutes on private repos are capped.
 
+
+> **2026-11-18:** the laptop is an **HP Laptop 15-da0xxx** (consumer column in Part B, BIOS F.36, SSD shown as about 233 GB). The owner decided the phone line also runs on this box. That changes Part E: the runner uses rootless Docker, and the phone stack runs under a separate `voice` user. See `LAPTOP_HANDOFF_2026-11-18.md`.
+
 ## Hardware and roles
 | Part | Value | Use |
 |---|---|---|
