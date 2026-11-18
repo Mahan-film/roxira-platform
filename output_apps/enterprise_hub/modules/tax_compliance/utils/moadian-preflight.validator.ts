@@ -456,12 +456,20 @@ export function runMoadianPreFlightValidation(
         message: `شناسه حافظه مالیاتی باید ۶ نویسه باشد. ${MOADIAN_ERROR_HINTS['0301']} (کد 0301)`,
         code: 'MEMORY_ID_INVALID',
       });
-    } else if (options.taxId && options.taxId.slice(0, 6).toUpperCase() !== memoryId.toUpperCase()) {
-      errors.push({
-        field: 'taxid',
-        message: `شناسه مالیاتی با شناسه حافظه مالیاتی همخوان نیست. ${MOADIAN_ERROR_HINTS['0301']} (کد 0301)`,
-        code: 'TAXID_MEMORY_ID_MISMATCH',
-      });
+    } else if (options.taxId) {
+      if (options.taxId.length < 6) {
+        errors.push({
+          field: 'taxid',
+          message: `شناسه مالیاتی باید حداقل ۶ نویسه داشته باشد. ${MOADIAN_ERROR_HINTS['0301']} (کد 0301)`,
+          code: 'TAXID_TOO_SHORT',
+        });
+      } else if (options.taxId.slice(0, 6).toUpperCase() !== memoryId.toUpperCase()) {
+        errors.push({
+          field: 'taxid',
+          message: `شناسه مالیاتی با شناسه حافظه مالیاتی همخوان نیست. ${MOADIAN_ERROR_HINTS['0301']} (کد 0301)`,
+          code: 'TAXID_MEMORY_ID_MISMATCH',
+        });
+      }
     }
   }
 

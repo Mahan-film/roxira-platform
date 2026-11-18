@@ -540,6 +540,7 @@ describe('Moadian server error hints (0301 / 0202 / 0012)', () => {
   it('0301: memory id must be 6 chars and prefix the taxid', () => {
     const codes = (o: object) => runMoadianPreFlightValidation(base, { now, ...o }).errors.map((e) => e.code);
     expect(codes({ memoryId: 'AB12' })).toContain('MEMORY_ID_INVALID');
+    expect(codes({ memoryId: 'ABC123', taxId: 'ABC' })).toContain('TAXID_TOO_SHORT');
     expect(codes({ memoryId: 'ABC123', taxId: 'XYZ999000000' })).toContain('TAXID_MEMORY_ID_MISMATCH');
     const ok = codes({ memoryId: 'ABC123', taxId: 'ABC123000000' });
     expect(ok).not.toContain('MEMORY_ID_INVALID');
