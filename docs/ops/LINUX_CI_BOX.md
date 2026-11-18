@@ -5,6 +5,15 @@ Owner decision 2026-11-17: the HP laptop leaves Windows and becomes a headless L
 
 > **2026-11-18:** the laptop is an **HP Laptop 15-da0xxx** (consumer column in Part B, BIOS F.36, SSD shown as about 233 GB). The owner decided the phone line also runs on this box. That changes Part E: the runner uses rootless Docker, and the phone stack runs under a separate `voice` user. See `LAPTOP_HANDOFF_2026-11-18.md`.
 
+## Live state (2026-11-18, hub)
+- **Host:** `roxira-ci`, Ubuntu **26.04.1** LTS (installed instead of 24.04), HP Laptop 15-da0xxx, LAN only (Wi-Fi now, Ethernet later). SSH from the Mac works with the Mac's key for `mahan` (admin), `runner` and `mahanfilms` (owner's own login, sudo). The `voice` user for the phone stack is still to be created (`docs/ops/LAPTOP_HANDOFF_2026-11-18.md`).
+- **Network:** GitHub, npm, PyPI, nodejs.org, ghcr.io, quay.io and public.ecr.aws work. Docker Hub (`registry-1.docker.io`), `download.docker.com` and `mirror.gcr.io` are blocked from this network (HTTP 403). Docker therefore comes from Ubuntu's own packages (`docker.io` 29.1, `docker-compose-v2` 2.40), and CI images move to `public.ecr.aws/docker/library/*` (#956).
+- **Proxy:** Xray is installed but **off**. The owner's config goes to `/etc/xray/config.json` (root:xray, 640); `sudo box-proxy on|off|status` starts it and routes system-Docker pulls through `http://127.0.0.1:10809` (SOCKS on 10808). Turn it on only when a job needs a blocked host.
+- **Data disk:** the 1 TB HDD was wiped (owner approved) and is mounted at `/srv/data` (ext4, label `data`, 907 GB): `backups/`, `restore-drill/`, `qdrant-snapshots/`, `shared/`, `ci-artifacts/` and `ci-cache/` (runner), `voice/`.
+- **CI runner:** GitHub runner 2.338 as user `runner`, **rootless Docker** (`DOCKER_HOST=unix:///run/user/1001/docker.sock`, not in the system `docker` group), persistent user service `actions-runner.service` (linger on), work dir `/srv/data/ci-cache/_work`, labels `self-hosted, Linux, X64, hp, linux-box`. No workflow uses it yet; #949 moves jobs over with the fork guard. Ephemeral mode was dropped: it would need a long-lived registration credential on the box.
+- **Firewall:** ufw on, SSH only from 192.168.0.0/16. Automatic security updates on.
+- **Hub access:** Claude on the Mac cannot open LAN connections itself (macOS Local Network permission), so the hub runs SSH through the app's Terminal tab and reads results from files.
+
 ## Hardware and roles
 | Part | Value | Use |
 |---|---|---|
@@ -74,8 +83,8 @@ In the Mac's Terminal (not in chat): `ssh-copy-id <username>@<that IP>`, then ty
 ## Part E — setup (the hub, over SSH)
 - Packages: `git curl jq unzip build-essential thermald lm-sensors unattended-upgrades ufw`; lid switch ignored; firewall allows SSH from the home network only; automatic security updates; no NVIDIA driver.
 - HDD: one GPT partition, ext4, mounted at `/srv/data` via `/etc/fstab` by UUID.
-- Docker CE from Docker's repository; Docker's data on the SSD; a weekly `docker system prune` for images older than 7 days.
-- User `runner` (no sudo, in the `docker` group); Node 22, Python 3.12, Playwright Chromium; GitHub runner as an **ephemeral** systemd service (`--ephemeral --labels hp`). The owner pastes the runner registration token into the box's terminal himself.
+- Docker from Ubuntu's `docker.io` package (Docker's own repository is blocked from this network); a weekly `docker system prune` for images older than 7 days.
+- User `runner` (no sudo, rootless Docker, not in the `docker` group); Node 22; GitHub runner as a persistent user service (labels `hp`). The hub registered it with a short-lived token piped from `gh` straight into `config.sh`, never displayed.
 - Ethernet: once the cable is in, netplan prefers it over Wi-Fi (route metric); nothing else changes.
 
 ## Security rules
