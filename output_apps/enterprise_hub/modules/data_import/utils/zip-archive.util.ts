@@ -12,26 +12,35 @@ export function createZipBuffer(files: Record<string, string | Buffer | Uint8Arr
   let offset = 0;
 
   for (const [name, content] of Object.entries(files)) {
+    if (!name || name.includes('\0') || name.startsWith('/') || name.includes('..')) {
+      throw new Error(`Invalid ZIP entry name: "${name}"`);
+    }
     const nameBuf = Buffer.from(name, 'utf-8');
+    if (nameBuf.length > 0xffff) {
+      throw new Error(`ZIP entry name exceeds 65535 bytes: "${name}"`);
+    }
     const dataBuf = Buffer.isBuffer(content)
       ? content
       : typeof content === 'string'
         ? Buffer.from(content, 'utf-8')
         : Buffer.from(content);
 
-    const compressed = zlib.deflateRawSync(dataBuf);
-    const crc = (zlib as any).crc32 ? (zlib as any).crc32(dataBuf) : computeCrc32Fallback(dataBuf);
+    const deflated = zlib.deflateRawSync(dataBuf);
+    const useStore = deflated.length >= dataBuf.length;
+    const payload = useStore ? dataBuf : deflated;
+    const method = useStore ? 0 : 8;
+    const crc = typeof (zlib as any).crc32 === 'function' ? (zlib as any).crc32(dataBuf) : computeCrc32Fallback(dataBuf);
 
     // Local file header (30 bytes + name)
     const lh = Buffer.alloc(30);
     lh.writeUInt32LE(0x04034b50, 0); // signature PK\x03\x04
     lh.writeUInt16LE(20, 4); // version needed (2.0)
-    lh.writeUInt16LE(0, 6); // general purpose flags
-    lh.writeUInt16LE(8, 8); // compression method (8 = deflate)
+    lh.writeUInt16LE(0x0800, 6); // general purpose flags (bit 11 = UTF-8 filename)
+    lh.writeUInt16LE(method, 8); // compression method (0 = store, 8 = deflate)
     lh.writeUInt16LE(0, 10); // file modification time
     lh.writeUInt16LE(0, 12); // file modification date
     lh.writeUInt32LE(crc >>> 0, 14); // crc-32
-    lh.writeUInt32LE(compressed.length, 18); // compressed size
+    lh.writeUInt32LE(payload.length, 18); // compressed size
     lh.writeUInt32LE(dataBuf.length, 22); // uncompressed size
     lh.writeUInt16LE(nameBuf.length, 26); // file name length
     lh.writeUInt16LE(0, 28); // extra field length
@@ -41,12 +50,12 @@ export function createZipBuffer(files: Record<string, string | Buffer | Uint8Arr
     ch.writeUInt32LE(0x02014b50, 0); // signature PK\x01\x02
     ch.writeUInt16LE(20, 4); // version made by
     ch.writeUInt16LE(20, 6); // version needed
-    ch.writeUInt16LE(0, 8); // general purpose flags
-    ch.writeUInt16LE(8, 10); // compression method (8 = deflate)
+    ch.writeUInt16LE(0x0800, 8); // general purpose flags (bit 11 = UTF-8 filename)
+    ch.writeUInt16LE(method, 10); // compression method
     ch.writeUInt16LE(0, 12); // file modification time
     ch.writeUInt16LE(0, 14); // file modification date
     ch.writeUInt32LE(crc >>> 0, 16); // crc-32
-    ch.writeUInt32LE(compressed.length, 20); // compressed size
+    ch.writeUInt32LE(payload.length, 20); // compressed size
     ch.writeUInt32LE(dataBuf.length, 24); // uncompressed size
     ch.writeUInt16LE(nameBuf.length, 28); // file name length
     ch.writeUInt16LE(0, 30); // extra field length
@@ -56,9 +65,9 @@ export function createZipBuffer(files: Record<string, string | Buffer | Uint8Arr
     ch.writeUInt32LE(0, 38); // external file attributes
     ch.writeUInt32LE(offset, 42); // relative offset of local header
 
-    localHeaders.push(lh, nameBuf, compressed);
+    localHeaders.push(lh, nameBuf, payload);
     centralHeaders.push(ch, nameBuf);
-    offset += lh.length + nameBuf.length + compressed.length;
+    offset += lh.length + nameBuf.length + payload.length;
   }
 
   const centralDirOffset = offset;
