@@ -120,11 +120,33 @@ describe('TaxEngineService (T180)', () => {
       taxPointDate: '2026-06-20',
       documentKind: 'INVOICE',
       withholdingCode: 'WHT_INV_10',
-      withholdingEvent: 'BILL',
     });
     expect(invWht.withholding.applied).toBe(true);
     expect(invWht.withholding.withheldMinor).toBe(10_000n);
     expect(invWht.withholding.certificateNumber).toBe('WHTI-2026-0001');
+    expect(invWht.journalLines.find((l) => l.accountCode === '2420')).toBeUndefined();
+    expect(invWht.journalLines.find((l) => l.accountCode === '1420')?.debitMinor).toBe(10_000n);
+    expect(invWht.journalLines.reduce((s, l) => s + l.debitMinor, 0n)).toBe(
+      invWht.journalLines.reduce((s, l) => s + l.creditMinor, 0n),
+    );
+
+    const billWht = engine.calculate({
+      country: 'DE',
+      taxCode: 'DE_STD',
+      netMinor: 100_000n,
+      taxPointDate: '2026-06-20',
+      documentKind: 'BILL',
+      withholdingCode: 'WHT_INV_10',
+      certificateNumber: 'WHTI-2026-9001',
+    });
+    expect(billWht.withholding.certificateNumber).toBe('WHTI-2026-9001');
+    expect(billWht.returnBoxes.inputMinor).toBe(19_000n);
+    expect(billWht.journalLines.find((l) => l.accountCode === '1410')?.debitMinor).toBe(19_000n);
+    expect(billWht.journalLines.find((l) => l.accountCode === '2420')?.creditMinor).toBe(10_000n);
+    expect(billWht.journalLines.find((l) => l.accountCode === '2010')?.creditMinor).toBe(109_000n);
+    expect(billWht.journalLines.reduce((s, l) => s + l.debitMinor, 0n)).toBe(
+      billWht.journalLines.reduce((s, l) => s + l.creditMinor, 0n),
+    );
   });
 
   it('preserves Iran VAT codes (9% before 1403, 10% from 1403, exempt 0%)', () => {

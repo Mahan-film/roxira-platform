@@ -1,10 +1,11 @@
 export type TaxDocumentKind = 'INVOICE' | 'CREDIT_NOTE' | 'BILL';
 export type WithholdingTiming = 'INVOICE' | 'PAYMENT';
-export type WithholdingEvent = 'BILL' | 'PAYMENT';
+export type WithholdingEvent = 'INVOICE' | 'BILL' | 'PAYMENT';
 
 /** Effective-dated tax rate rule; rates are integer basis points (19% = 1900, 10% = 1000). */
 export interface TaxRateRule {
   code: string;
+  country?: string;
   rateBps: number;
   /** Inclusive ISO date (YYYY-MM-DD). */
   effectiveFrom: string;
@@ -24,6 +25,11 @@ export interface WithholdingRule {
   certificatePrefix: string;
 }
 
+/** Persistent sequence store port for WHT certificate numbering (`PREFIX-YYYY-NNNN`). */
+export interface WhtCertificateSequenceStore {
+  next(prefix: string, year: number): number;
+}
+
 export interface TaxPostingAccounts {
   expenseOrRevenueAccount?: string;
   apOrArAccount?: string;
@@ -32,6 +38,7 @@ export interface TaxPostingAccounts {
   outputRcVatAccount?: string;
   bankAccount?: string;
   whtPayableAccount?: string;
+  whtReceivableAccount?: string;
 }
 
 export interface TaxCalculationInput {
@@ -52,6 +59,8 @@ export interface TaxCalculationInput {
   reverseCharge?: boolean;
   withholdingCode?: string | null;
   withholdingEvent?: WithholdingEvent;
+  /** Pre-allocated persistent certificate number from DB sequencer, if available. */
+  certificateNumber?: string | null;
   accounts?: TaxPostingAccounts;
 }
 
