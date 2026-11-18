@@ -12,7 +12,7 @@ export interface CaptureView {
   id: string;
   status: CaptureStatus;
   aiGenerated: boolean;
-  aiLabel: 'AI-generated draft';
+  aiLabel?: 'AI-generated draft';
   sourceCitations: AiSourceCitation[];
   sourceKind: string;
   confidence: number;

@@ -47,7 +47,18 @@ export function AiSourceCitations({
           key={`${citation.kind}-${citation.label}-${index}`}
           className="rounded-md border border-border bg-muted/40 px-2 py-0.5"
         >
-          {citation.label}
+          {citation.reference ? (
+            <a
+              href={citation.reference}
+              target="_blank"
+              rel="noreferrer"
+              className="underline hover:text-foreground"
+            >
+              {citation.label}
+            </a>
+          ) : (
+            citation.label
+          )}
         </span>
       ))}
     </div>

@@ -262,4 +262,11 @@ describe('CaptureService', () => {
     await expect(service.post(TENANT_A, 'ai:assistant', view.id)).rejects.toMatchObject({ status: 403 });
     expect(accounting.createJournalEntry).not.toHaveBeenCalled();
   });
+
+  it('does not mark human-created captures as AI-generated', async () => {
+    const { service } = setup();
+    const view = await service.create(TENANT_A, 'user-1', undefined, text);
+    expect(view.aiGenerated).toBe(false);
+    expect(view.aiLabel).toBeUndefined();
+  });
 });

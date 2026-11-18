@@ -156,7 +156,7 @@ export function InvoiceCaptureCard({
         <Badge variant={view.status === "posted" || view.status === "auto_posted" ? "default" : "secondary"}>
           {STATUS_LABEL[view.status]}
         </Badge>
-        <AiDraftBadge label={view.aiLabel ?? "AI-generated draft"} />
+        {view.aiGenerated && <AiDraftBadge label={view.aiLabel} />}
         <span className="text-xs text-muted-foreground">
           اطمینان کل: {Math.round(view.confidence * 100).toLocaleString("fa-IR")}٪
         </span>
@@ -166,14 +166,7 @@ export function InvoiceCaptureCard({
           </span>
         )}
       </header>
-      <AiSourceCitations
-        citations={
-          view.sourceCitations ?? [
-            { kind: "document", label: `source: ${view.sourceKind}`, reference: view.sourceUrl },
-            ...(view.model ? [{ kind: "model" as const, label: `model: ${view.model}` }] : []),
-          ]
-        }
-      />
+      <AiSourceCitations citations={view.sourceCitations} />
 
       <div className="flex flex-col gap-3 md:flex-row">
         {imageUrl && view.sourceKind === "image" && (

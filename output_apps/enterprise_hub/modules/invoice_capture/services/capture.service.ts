@@ -10,7 +10,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { AccountingService } from '../../accounting/services/accounting.service';
-import { assertNotAiIdentity } from '../../access/access-context';
+import { assertNotAiIdentity, isAiActor } from '../../access/access-context';
 import { imageMimeType, sniffFileKind } from '../../data_import/parsers/file-kind';
 import { parsePdf } from '../../data_import/parsers/pdf.parser';
 import {
@@ -293,11 +293,12 @@ export class CaptureService {
         ? [{ kind: 'transcript' as const, label: 'voice transcript' }]
         : []),
     ];
+    const aiGenerated = isAiActor(doc.createdBy);
     return {
       id: doc.id,
       status: doc.status,
-      aiGenerated: true,
-      aiLabel: 'AI-generated draft',
+      aiGenerated,
+      ...(aiGenerated ? { aiLabel: 'AI-generated draft' as const } : {}),
       sourceCitations,
       sourceKind: doc.sourceKind,
       confidence: Number(doc.confidence),
