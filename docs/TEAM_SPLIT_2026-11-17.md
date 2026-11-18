@@ -1,5 +1,7 @@
 # Team split from 2026-11-17
 
+**Update 2026-11-18:** the owner runs all six lanes (L1–L6) in Antigravity on his own machine for now; the colleague machine is optional and joins later with the same lane split.
+
 Two machines work in parallel on `Mahan-film/roxira-platform`. Both follow AGENTS.md, `docs/antigravity/LANE_PROMPT_FA.md` (v6) and the latest `## WAVE` comment on issue #592.
 
 | Machine | Antigravity lanes | Claude Code | Areas |

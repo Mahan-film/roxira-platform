@@ -36,10 +36,10 @@ Owner speaks Persian: reply in Persian; code, commits and docs in English. The o
 5. After #926 (T212): switch `LIGHTRAG_QDRANT_COLLECTION` to v7b. After #927 (T213): hub runs the Qdrant cleanup (v8h, v7, v4, v5, mistral_v1, phase1_test; later v2, bge_m3).
 
 ## Waiting on the owner
-- Rotate the Gemini key, `POSTGRES_PASSWORD` and the Umami secret with `set_secret.sh` (printed by an agent on 2026-11-17).
-- Paste the v6b prompts into fresh Antigravity chats (L1–L4 here; L5–L6 on the colleague's machine).
+- Secrets printed by an agent on 2026-11-17 (Gemini key, `POSTGRES_PASSWORD`, Umami secret): owner decided 2026-11-18 not to rotate now. They went into a local Mac transcript and the model provider, never to GitHub. Optional later via `set_secret.sh`.
+- All six lanes run on the owner's machine (2026-11-18). Re-paste the same v6b prompts in fresh chats whenever a lane stops; lanes first fix review-desk blockers on their open PRs (WIP 3).
 - Set up the HP laptop as the Linux CI box: `docs/ops/LINUX_CI_BOX.md` (workflow part: #947 T227, lane L1).
-- Private repo: choose plan A (Free, USD 0, no protected main) or B (Team, USD 8/month, hub recommends) in `docs/strategy/PRIVATE_REPO_PLAN_2026-11-17.md`; flip visibility only after #947 and #949.
+- Private repo: owner chose option A (Free, USD 0) on 2026-11-18. The hub flips visibility after #947 (CI box), #949 (CI on the box) and #951 (merge desk).
 - R18 (Smart Judge) deep-research report; its prompt is in `docs/strategy/DEEP_RESEARCH_ROUND4.md`.
 
 ## Next for the hub
