@@ -28,7 +28,13 @@ export class StructureService {
       throw new BadRequestException('Parent branch does not belong to this organisation.');
     }
     await this.entitlements.consume(ctx.tenantId, 'branches', 1);
-    const b = await this.repo.createBranch({ tenantId: ctx.tenantId, name: dto.name.trim(), code: dto.code ?? null, parentId: dto.parentId ?? null });
+    let b: BranchEntity;
+    try {
+      b = await this.repo.createBranch({ tenantId: ctx.tenantId, name: dto.name.trim(), code: dto.code ?? null, parentId: dto.parentId ?? null });
+    } catch (err) {
+      await this.entitlements.release(ctx.tenantId, 'branches', 1).catch(() => undefined);
+      throw err;
+    }
     await this.audit.record({ tenantId: ctx.tenantId, actorUserId: ctx.userId, action: 'branch.create', resourceType: 'branch', resourceId: b.id, request });
     return b;
   }

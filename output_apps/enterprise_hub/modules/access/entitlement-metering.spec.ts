@@ -101,6 +101,22 @@ describe('EntitlementService & Metering Wiring (T145)', () => {
     expect(repo.createBranch).not.toHaveBeenCalled();
   });
 
+  it('releases consumed branch slot when repo.createBranch throws', async () => {
+    const entitlements = {
+      consume: jest.fn().mockResolvedValue({ allowed: true, meter: 'branches', periodKey: 'current', limit: 2, used: 1, remaining: 1 }),
+      release: jest.fn().mockResolvedValue(undefined),
+    } as unknown as EntitlementService;
+    const repo = {
+      findBranch: jest.fn(),
+      createBranch: jest.fn().mockRejectedValue(new Error('DB constraint error')),
+    } as any;
+    const audit = { record: jest.fn() } as any;
+    const structure = new StructureService(repo, audit, entitlements);
+
+    await expect(structure.createBranch({ tenantId: T1, userId: 'u1' } as any, { name: 'شعبه ۲' })).rejects.toThrow('DB constraint error');
+    expect(entitlements.release).toHaveBeenCalledWith(T1, 'branches', 1);
+  });
+
   it('wires assistant chat through EntitlementService.consume(ai_messages)', async () => {
     const entitlements = { consume: jest.fn().mockRejectedValue(new HttpException('Usage limit reached for ai_messages.', 429)) } as unknown as EntitlementService;
     const llm = { complete: jest.fn() } as any;
