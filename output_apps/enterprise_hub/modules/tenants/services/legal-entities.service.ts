@@ -30,10 +30,14 @@ export class LegalEntitiesService {
   }
 
   async upsert(tenantId: string, input: UpsertLegalEntityInput): Promise<LegalEntityEntity> {
+    const existing = await this.repository.findByCode(tenantId, input.code);
     const country = input.countryCode.trim().toUpperCase();
-    if (country === 'AE' && input.vatGroupTin) {
-      const group = input.vatGroupTin.trim();
-      if (input.einvoiceId?.trim() === group || input.taxId?.trim() === group) {
+    const mergedGroupTin = (input.vatGroupTin !== undefined ? input.vatGroupTin : existing?.vatGroupTin)?.trim() ?? null;
+    const mergedEinvoiceId = (input.einvoiceId !== undefined ? input.einvoiceId : existing?.einvoiceId)?.trim() ?? null;
+    const mergedTaxId = (input.taxId !== undefined ? input.taxId : existing?.taxId)?.trim() ?? null;
+
+    if (country === 'AE' && mergedGroupTin) {
+      if (mergedEinvoiceId === mergedGroupTin || mergedTaxId === mergedGroupTin) {
         throw new BadRequestException(
           'UAE VAT group TIN cannot be used for e-invoicing; each member must use its own TIN.',
         );
@@ -70,7 +74,7 @@ export function assertValidEInvoicingRegistration(
   const groupTin = entity.vatGroupTin?.trim() ?? null;
 
   if (country === 'AE') {
-    if (groupTin && (memberTin === groupTin || entity.einvoiceId?.trim() === groupTin || overrideTin?.trim() === groupTin)) {
+    if (groupTin && memberTin === groupTin) {
       throw new BadRequestException(
         'UAE VAT group TIN cannot be used for e-invoicing; each member must use its own TIN.',
       );
@@ -82,8 +86,9 @@ export function assertValidEInvoicingRegistration(
     throw new BadRequestException('Legal entity must have a taxId, vatId, or einvoiceId for e-invoicing.');
   }
 
-  const effectiveTaxId = (entity.taxId ?? memberTin).trim();
-  const effectiveEinvoiceId = (overrideTin ?? entity.einvoiceId ?? effectiveTaxId).trim();
+  const fallbackId = (memberTin || entity.vatId || '').trim();
+  const effectiveTaxId = (entity.taxId?.trim() || fallbackId);
+  const effectiveEinvoiceId = (overrideTin?.trim() || entity.einvoiceId?.trim() || effectiveTaxId);
   return {
     legalEntityId: entity.id,
     countryCode: country,

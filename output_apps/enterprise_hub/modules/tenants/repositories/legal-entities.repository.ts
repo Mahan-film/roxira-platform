@@ -33,6 +33,12 @@ export class LegalEntitiesRepository {
     );
   }
 
+  findByCode(tenantId: string, code: string): Promise<LegalEntityEntity | null> {
+    return this.scope.run(tenantId, (m) =>
+      m.getRepository(LegalEntityEntity).findOne({ where: { tenantId, code: code.trim().toUpperCase() } }),
+    );
+  }
+
   findDefault(tenantId: string): Promise<LegalEntityEntity | null> {
     return this.scope.run(tenantId, async (m) => {
       const repo = m.getRepository(LegalEntityEntity);

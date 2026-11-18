@@ -19,6 +19,7 @@ describe('LegalEntitiesService (T224)', () => {
         vatGroupTin: '1009999999',
       })),
       findById: jest.fn(async () => null),
+      findByCode: jest.fn(async () => null),
       upsert: jest.fn(async (_t: string, input: any) => ({ id: 'le-1', ...input })),
     };
     const service = new LegalEntitiesService(repo);
@@ -83,5 +84,41 @@ describe('LegalEntitiesService (T224)', () => {
       vatId: 'DE123456789',
       einvoiceId: 'DE123456789',
     });
+
+    const vatOnly = assertValidEInvoicingRegistration({
+      id: 'le-de-2',
+      countryCode: 'DE',
+      taxId: null,
+      vatId: 'DE987654321',
+      einvoiceId: null,
+      vatGroupTin: null,
+    });
+    expect(vatOnly.taxId).toBe('DE987654321');
+    expect(vatOnly.einvoiceId).toBe('DE987654321');
+  });
+
+  it('refuses UAE VAT group TIN when updating an existing entity whose stored einvoiceId matches', async () => {
+    const repo: any = {
+      findByCode: jest.fn(async () => ({
+        id: 'le-ae',
+        tenantId: T1,
+        code: 'AE-MEM-2',
+        countryCode: 'AE',
+        taxId: '1009999999',
+        einvoiceId: '1009999999',
+        vatGroupTin: null,
+      })),
+      upsert: jest.fn(),
+    };
+    const service = new LegalEntitiesService(repo);
+    await expect(
+      service.upsert(T1, {
+        code: 'AE-MEM-2',
+        name: 'Member LLC',
+        countryCode: 'AE',
+        vatGroupTin: '1009999999',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(repo.upsert).not.toHaveBeenCalled();
   });
 });
