@@ -154,7 +154,7 @@ export class PayrollRunService {
         year,
         month,
       )) as PayrollYearRates | null | undefined;
-      if (packRates) {
+      if (packRates && typeof packRates === 'object' && Object.keys(packRates).length > 0) {
         return packRates;
       }
     }

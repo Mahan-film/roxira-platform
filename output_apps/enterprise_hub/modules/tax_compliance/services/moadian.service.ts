@@ -374,7 +374,16 @@ export class MoadianService implements OnModuleInit {
         };
         const eInvoiceAdapter = this.countryPackRegistry?.resolve()?.eInvoice;
         if (eInvoiceAdapter) {
-          return eInvoiceAdapter.map(invoice, mappingContext) as MoadianInvoicePacket;
+          const mapped = eInvoiceAdapter.map(invoice, mappingContext);
+          if (
+            !mapped ||
+            typeof mapped !== 'object' ||
+            typeof (mapped as MoadianInvoicePacket).header?.taxid !== 'string' ||
+            !Array.isArray((mapped as MoadianInvoicePacket).body)
+          ) {
+            throw new BadRequestException('Country pack eInvoice adapter returned an invalid Moadian packet');
+          }
+          return mapped as MoadianInvoicePacket;
         }
         return mapInvoiceToMoadianPacket(invoice, mappingContext);
       } catch (error) {
