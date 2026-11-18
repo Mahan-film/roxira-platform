@@ -113,6 +113,18 @@ export class CreatePurchaseOrderDto {
   @Matches(DATE)
   orderDate: string;
 
+  @ApiPropertyOptional({ description: 'کد حساب بودجه (برای کنترل تعهد بودجه)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  accountCode?: string;
+
+  @ApiPropertyOptional({ description: 'کد مرکز هزینه (برای کنترل تعهد بودجه)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  costCenterCode?: string;
+
   @ApiProperty({ type: [PurchaseOrderLineDto] })
   @IsArray()
   @ArrayMinSize(1)
@@ -236,6 +248,9 @@ export class PurchaseOrderResponseDto {
   @ApiProperty({ type: [PurchaseOrderLineResponseDto] }) lines: PurchaseOrderLineResponseDto[];
   @ApiPropertyOptional({ nullable: true }) requestId: string | null;
   @ApiProperty() orderDate: string;
+  @ApiPropertyOptional({ nullable: true }) accountCode?: string | null;
+  @ApiPropertyOptional({ nullable: true }) costCenterCode?: string | null;
+  @ApiPropertyOptional() budgetWarning?: string;
   @ApiPropertyOptional({ nullable: true }) approvedBy: string | null;
   @ApiPropertyOptional({ nullable: true }) approvedAt: Date | null;
   @ApiProperty() createdAt: Date;

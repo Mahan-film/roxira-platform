@@ -29,6 +29,8 @@ export interface NewPurchaseOrder {
   warehouseId: number | null;
   requestId: string | null;
   orderDate: string;
+  accountCode?: string | null;
+  costCenterCode?: string | null;
   lines: Array<{ sku: string; quantity: bigint; unitPrice: bigint }>;
 }
 
@@ -146,6 +148,8 @@ function mapOrder(row: Row, lines: PurchaseOrderLine[]): PurchaseOrder {
     lines,
     requestId: nullableText(row.request_id),
     orderDate: text(row.order_date),
+    accountCode: nullableText(row.account_code),
+    costCenterCode: nullableText(row.cost_center_code),
     approvedBy: nullableText(row.approved_by),
     approvedAt: toNullableDate(row.approved_at),
     createdAt: toDate(row.created_at),
@@ -320,8 +324,8 @@ export class PurchaseRepository {
   async insertOrder(tenantId: string, input: NewPurchaseOrder, manager: EntityManager): Promise<PurchaseOrder> {
     const rows: Row[] = await manager.query(
       `INSERT INTO "erp_purchase_orders"
-         ("tenant_id", "number", "supplier_code", "status", "warehouse_id", "request_id", "order_date")
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ("tenant_id", "number", "supplier_code", "status", "warehouse_id", "request_id", "order_date", "account_code", "cost_center_code")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
       [
         tenantId,
@@ -331,6 +335,8 @@ export class PurchaseRepository {
         input.warehouseId,
         input.requestId,
         input.orderDate,
+        input.accountCode ?? null,
+        input.costCenterCode ?? null,
       ],
     );
     const order = rows[0];
