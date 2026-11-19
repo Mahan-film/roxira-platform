@@ -7,6 +7,7 @@ import { CURRENT_COUNTRY_PACK } from './country-pack.context';
 import { CountryPackInterceptor } from './country-pack.interceptor';
 import { CountryPackRegistry } from './country-pack.registry';
 import { CountryPackResolver } from './country-pack.resolver';
+import { DatevExtfService } from './de/datev/datev-extf.service';
 import { createIranPack } from './ir/ir.pack';
 import { createMalaysiaPack } from './my/my.pack';
 
@@ -34,6 +35,7 @@ export const DEFAULT_COUNTRY = 'IR';
     },
     CountryPackResolver,
     CountryPackInterceptor,
+    DatevExtfService,
     {
       provide: CURRENT_COUNTRY_PACK,
       inject: [CountryPackResolver],
@@ -51,6 +53,7 @@ export const DEFAULT_COUNTRY = 'IR';
     CountryPackRegistry,
     CountryPackResolver,
     CountryPackInterceptor,
+    DatevExtfService,
     CURRENT_COUNTRY_PACK,
   ],
 })
