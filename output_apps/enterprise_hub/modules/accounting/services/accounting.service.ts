@@ -6,6 +6,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { BudgetControlService } from './budget-control.service';
+import { assertNotAiIdentity } from '../../access/access-context';
 import { LedgerAuditService } from '../../access/services/ledger-audit.service';
 import { EntityManager, FindOptionsWhere, ILike } from 'typeorm';
 import { createHash, randomBytes } from 'crypto';
@@ -1167,7 +1168,11 @@ export class AccountingService {
     id: number,
     target: JournalEntryStatus,
     expectedVersion?: number | null,
+    actor?: string,
   ): Promise<JournalEntryResponseDto> {
+    if (target === JournalEntryStatus.POSTED) {
+      assertNotAiIdentity(actor, 'post a journal entry');
+    }
     return this.accountingRepository.transaction(tenantId, async (manager) => {
       const entry = await this.lockEditableVoucher(tenantId, id, manager);
       if (entry.status === target) {
@@ -1415,6 +1420,7 @@ export class AccountingService {
     actor: string,
     dto: LockPeriodDto,
   ): Promise<PeriodLockResponseDto> {
+    assertNotAiIdentity(actor, 'lock an accounting period');
     const valid = (day: string): boolean =>
       new Date(`${day}T00:00:00.000Z`).toISOString().slice(0, 10) === day;
     if (!valid(dto.periodStart) || !valid(dto.periodEnd)) {
@@ -1448,6 +1454,7 @@ export class AccountingService {
     id: number,
     dto: UnlockPeriodDto,
   ): Promise<PeriodLockResponseDto> {
+    assertNotAiIdentity(actor, 'unlock an accounting period');
     const existing = await this.accountingRepository.findPeriodLock(tenantId, id);
     if (!existing) {
       throw new NotFoundException(`قفل دوره با شناسه ${id} یافت نشد.`);
