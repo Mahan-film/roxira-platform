@@ -104,7 +104,7 @@ describePg('Reservation and available stock on PostgreSQL (derived, non-superuse
       app.getRepository(WarehouseEntity),
       app.getRepository(StockItemEntity),
       app.getRepository(FifoBatchEntity),
-      app,
+      app, new TenantScope(app),
     );
     withSales = new InventoryService(invRepo, availability);
     withoutSales = new InventoryService(invRepo);
@@ -265,7 +265,7 @@ describePg('Reservation and available stock on PostgreSQL (derived, non-superuse
               ds.getRepository(WarehouseEntity),
               ds.getRepository(StockItemEntity),
               ds.getRepository(FifoBatchEntity),
-              ds,
+              ds, new TenantScope(ds),
             ),
           inject: [getDataSourceToken()],
         },

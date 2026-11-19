@@ -66,7 +66,7 @@ describePg('stock documents on PostgreSQL', () => {
         ds.getRepository(WarehouseEntity),
         ds.getRepository(StockItemEntity),
         ds.getRepository(FifoBatchEntity),
-        ds,
+        ds, new TenantScope(ds),
       ),
     );
     documents = new StockDocumentsService(

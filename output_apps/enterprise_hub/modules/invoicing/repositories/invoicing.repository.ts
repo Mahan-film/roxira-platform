@@ -452,27 +452,22 @@ export class InvoicingRepository {
       return new Map();
     }
     const scope = this.getScope();
-    const queryRunner = (m: EntityManager) =>
-      m.query(
-        `SELECT invoice_id AS "invoiceId", status, errors, tax_id AS "taxId"
-           FROM moadian_submissions
-          WHERE tenant_id = $1 AND invoice_id = ANY($2)`,
-        [tenantId, invoiceIds],
-      );
-
+    if (!scope) {
+      throw new Error('TenantScope is required to read moadian_submissions');
+    }
     const rows: Array<{
       invoiceId: string;
       status: string;
       errors: any;
       taxId: string;
-    }> = scope
-      ? await scope.run(tenantId, queryRunner)
-      : await this.dataSource.query(
-          `SELECT invoice_id AS "invoiceId", status, errors, tax_id AS "taxId"
-             FROM moadian_submissions
-            WHERE tenant_id = $1 AND invoice_id = ANY($2)`,
-          [tenantId, invoiceIds],
-        );
+    }> = await scope.run(tenantId, (m) =>
+      m.query(
+        `SELECT invoice_id AS "invoiceId", status, errors, tax_id AS "taxId"
+           FROM moadian_submissions
+          WHERE tenant_id = $1 AND invoice_id = ANY($2)`,
+        [tenantId, invoiceIds],
+      ),
+    );
 
     const map = new Map<
       string,

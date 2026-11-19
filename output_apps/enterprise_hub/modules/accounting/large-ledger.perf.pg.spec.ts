@@ -162,7 +162,7 @@ describePerf('100k vouchers timing on PostgreSQL', () => {
       ds.getRepository(WarehouseEntity),
       ds.getRepository(StockItemEntity),
       ds.getRepository(FifoBatchEntity),
-      ds,
+      ds, new TenantScope(ds),
     );
     inventory = new InventoryService(inventoryRepo);
     const invoicingRepo = new InvoicingRepository(ds.getRepository(InvoiceEntity), ds);
