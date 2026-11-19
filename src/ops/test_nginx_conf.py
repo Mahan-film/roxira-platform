@@ -12,10 +12,10 @@ HEADERS = [
     "add_header Referrer-Policy strict-origin-when-cross-origin always;",
     'add_header Permissions-Policy "camera=(), geolocation=(), payment=(self), microphone=(self)" always;',
     'add_header Strict-Transport-Security "max-age=15552000; includeSubDomains" always;',
-    "add_header Content-Security-Policy-Report-Only \"default-src 'self'; img-src 'self' data: https:; "
+    "add_header Content-Security-Policy \"default-src 'self'; img-src 'self' data: https:; "
     "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "
     "connect-src 'self' wss: https:; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; "
-    "form-action 'self'\" always;",
+    "form-action 'self'; upgrade-insecure-requests\" always;",
 ]
 
 
@@ -307,3 +307,27 @@ def test_backend_hub_and_judge_paths_are_mapped_once():
         for body in bodies:
             for req, want in items:
                 assert _upstream_path(body, req) == want
+
+
+def test_csp_enforced_and_rollback_toggle(tmp_path: Path):
+    import shutil
+    import subprocess
+
+    snippet = (SNIPPETS / "security_headers.conf").read_text(encoding="utf-8")
+    assert "add_header Content-Security-Policy " in snippet
+    assert "add_header Content-Security-Policy-Report-Only " not in snippet
+    assert "upgrade-insecure-requests" in snippet
+
+    toggle = CONF.parents[2] / "scripts" / "ops" / "nginx" / "toggle_csp.sh"
+    copy = tmp_path / "security_headers.conf"
+    shutil.copy2(SNIPPETS / "security_headers.conf", copy)
+
+    subprocess.run(["bash", str(toggle), "report-only", str(copy)], check=True)
+    ro_text = copy.read_text(encoding="utf-8")
+    assert "add_header Content-Security-Policy-Report-Only " in ro_text
+    assert "add_header Content-Security-Policy " not in ro_text
+
+    subprocess.run(["bash", str(toggle), "enforce", str(copy)], check=True)
+    enf_text = copy.read_text(encoding="utf-8")
+    assert "add_header Content-Security-Policy " in enf_text
+    assert "add_header Content-Security-Policy-Report-Only " not in enf_text
