@@ -96,6 +96,7 @@ In the Mac's Terminal (not in chat): `ssh-copy-id <username>@<that IP>`, then ty
 
 ## Security rules
 - Final hardening list (open, do not change yet): `mahanfilms` is in the system `docker` group, so its containers reach the internet directly and bypass the proxy.
+- Final hardening list: user `phone` is also in the system `docker` group (root-equivalent); the phone stack should move to a production server or rootless Docker later.
 - Until the repo is private: the runner serves only `push` to main, `merge_group`, `schedule` and `workflow_dispatch`; jobs carry a guard so a fork pull request never reaches it. After going private only collaborators can open PRs, but the guard stays.
 - No production keys, no `~/Secrets`, no SSH key to `roxira-prod` on the box. The `docker` group is root-equivalent, which is accepted only because the box holds nothing of value.
 - Tailscale is not needed: the runner only makes outbound connections to GitHub. Add it later only if SSH from outside the home network is wanted.
