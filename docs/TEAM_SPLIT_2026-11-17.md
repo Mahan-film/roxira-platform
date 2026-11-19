@@ -9,6 +9,8 @@ Two machines work in parallel on `Mahan-film/roxira-platform`. Both follow AGENT
 | Mac | L1 ops/CI/infra · L2 frontend + currency · L3 security/data · L4 Smart Judge | **main hub**: strategy, research digests, WAVE posts, review routing, merges of L1–L4 and hub PRs, all production steps | product strategy and production |
 | Linux box `roxira-ci` | L5 core ledger · L6 Germany pack, then Gulf · **L7 box + phone kit** (#956 → #949 → #947 → #951 → #959) | **box hub**: merges L5–L7 PRs after "no blocker"; brings the phone stack up under user `phone` and keeps it running; box upkeep (proxy, disk, runner, updates); never touches production | phone agent on the box, CI box |
 
+**Fallback builder (2026-11-19):** when the Antigravity quota runs out, the box hub (or the owner) runs `bash scripts/ops/ci_box/gemini_lanes.sh start` as `mahanfilms` from a login shell (proxy env). It opens tmux session `lanes` with windows L5, L6 and L7, each running Gemini CLI with auto-approve on the lane prompt (`--agent gemini`; FRESH_DB_PORT 55605/55606/55607). `status|attach|stop` manage it. A lane restarts 10 min after gemini exits, at most 6 times a day. It never starts on its own.
+
 The two hubs coordinate only through GitHub: issues, PRs and the latest `## WAVE` comment on #592. The main hub posts WAVEs for all seven lanes; the box hub posts box reports as comments on #592 with the prefix `BOX:`.
 
 ## Rules for both
