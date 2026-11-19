@@ -103,6 +103,12 @@ import contextvars
 from typing import Optional, List, Any, Sequence
 from fastapi import Request, APIRouter, Request, Body, WebSocket, WebSocketDisconnect, Query, File, UploadFile, Depends, Form
 from fastapi.responses import JSONResponse, StreamingResponse, Response
+
+try:
+    import orjson as _orjson  # noqa: F401
+    from fastapi.responses import ORJSONResponse as FastJSONResponse
+except ImportError:  # pragma: no cover - optional fast path
+    FastJSONResponse = JSONResponse
 from pydantic import field_validator as _field_validator
 from pydantic import BaseModel as _BaseModel, ConfigDict as _ConfigDict
 import psycopg
@@ -230,7 +236,11 @@ except Exception as _lr_import_exc:  # noqa: BLE001
             return pool.submit(asyncio.run, coro).result(timeout=timeout)
 
 
-router = APIRouter(prefix="/api/v1/apps/judge", tags=["SmartJudge Complete Engine"])
+router = APIRouter(
+    prefix="/api/v1/apps/judge",
+    tags=["SmartJudge Complete Engine"],
+    default_response_class=FastJSONResponse,
+)
 
 POSTGRES_DSN = (
     "postgresql://enterprise_admin:"
@@ -2261,16 +2271,51 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         retrieval_query = (user_text + "\n" + _case_files.retrieval_hint(case_records)).strip()
     elif review_mode:
         retrieval_query = (user_text + "\n" + review_text[:500]).strip()
-    laws, precedents = await aquery_knowledge_graph(retrieval_query, limit=5)
 
-    # پرسش‌های فراداده‌ای / کاتالوگی (نظیر شماره یا خلاصه آخرین رأی وحدت رویه)
+    # پرسش‌های فراداده‌ای / کاتالوگی و بسط دامنه به خروجی واکشی اصلی وابسته نیستند،
+    # بنابراین هم‌زمان با واکشی اصلی اجرا می‌شوند.
     cat_intent = _catalog_intent.detect(user_text)
+    use_prompt_library = _prompt_library.prompt_library_enabled()
+    detected_domains: list = []
+    competence_queries: list = []
+    if not review_mode and use_prompt_library:
+        detected_domains = _prompt_library.detect_domains(user_text)
+        competence_queries = list(_prompt_library.expand_competence_queries(user_text))
+
+    main_task = aquery_knowledge_graph(retrieval_query, limit=5)
+    cat_task = (
+        _rulings.latest_rulings(limit=5, sub_collection=(cat_intent.get("sub_collection") or "unity_rulings"))
+        if cat_intent
+        else None
+    )
+    comp_tasks = [aquery_knowledge_graph(q, limit=3) for q in competence_queries]
+
+    _t_exp = time.perf_counter()
+    gathered = await asyncio.gather(
+        main_task,
+        *([cat_task] if cat_task is not None else []),
+        *comp_tasks,
+        return_exceptions=True,
+    )
+    if competence_queries:
+        _timing_set("graph_expansion_ms", _t_exp)
+
+    main_res = gathered[0]
+    if isinstance(main_res, BaseException):
+        raise main_res
+    laws, precedents = main_res
+
+    offset = 1
     cat_rows: list = []
     cat_context_str = ""
-    if cat_intent:
+    if cat_task is not None:
+        cat_res = gathered[offset]
+        offset += 1
+        if isinstance(cat_res, BaseException):
+            print(f"[SMARTJUDGE][CATALOG-FAIL] {cat_res}", file=sys.stderr)
+        else:
+            cat_rows = list(cat_res or [])
         target = cat_intent.get("target") or "unity_supreme_court"
-        sub_coll = cat_intent.get("sub_collection") or "unity_rulings"
-        cat_rows = await _rulings.latest_rulings(limit=5, sub_collection=sub_coll)
         if cat_intent.get("is_number_ask"):
             direct_ans = _catalog_intent.format_deterministic_answer(cat_rows, target=target, is_voice=is_voice)
             return _consult_body(
@@ -2292,8 +2337,6 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
 
     # Default ON (SMARTJUDGE_PROMPT_LIBRARY=0 disables): competence questions get up to 3 extra
     # targeted retrieval queries, merged and de-duplicated by title.
-    use_prompt_library = _prompt_library.prompt_library_enabled()
-    detected_domains: list = []
     if review_mode:  # civil-code contract rules + topic laws (labor, consumer, lease, ...)
         extra_queries = _contract_review.retrieval_queries(review_text, user_text)
         extra_results = await asyncio.gather(
@@ -2310,14 +2353,8 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
                             and r.get("title") not in known:
                         known.add(r.get("title"))
                         rows.append(r)
-    elif use_prompt_library:
-        detected_domains = _prompt_library.detect_domains(user_text)
-        extra_queries = list(_prompt_library.expand_competence_queries(user_text))
-        _t_exp = time.perf_counter()
-        extra_results = await asyncio.gather(
-            *[aquery_knowledge_graph(q, limit=3) for q in extra_queries], return_exceptions=True
-        )
-        _timing_set("graph_expansion_ms", _t_exp)
+    elif competence_queries:
+        extra_results = gathered[offset:]
         for extra_res in extra_results:
             if isinstance(extra_res, BaseException):  # boost is best effort
                 print(f"[SMARTJUDGE][COMPETENCE-EXPAND-FAIL] {extra_res}", file=sys.stderr)
@@ -2670,9 +2707,8 @@ async def judge_chat_stream(request: Request, payload: dict = Body(...),
                             user: chat_auth.CurrentUser = Depends(get_current_user)):
     """SSE variant of /chat for every tier: same auth, identity, limits and idempotency.
 
-    Events: ``meta`` -> ``delta``* -> ``done`` (the full /chat JSON body) | ``error``.
-    Failures before the first token keep their normal HTTP status and JSON body, so the
-    client can fall back to /chat. A request_id that already completed is replayed as one chunk.
+    Events: ``meta`` (sent immediately as first SSE frame) -> ``delta``* -> ``done`` | ``error``.
+    A request_id that already completed is replayed as one chunk; failures surface as ``error`` events.
     """
     if "messages" in payload and not payload.get("message"):
         msgs = payload.get("messages", [])
@@ -2686,47 +2722,20 @@ async def judge_chat_stream(request: Request, payload: dict = Body(...),
     task = asyncio.create_task(_run_consult(payload, request, user, _cb))
     _BG_TASKS.add(task)
     task.add_done_callback(_BG_TASKS.discard)
-    first = asyncio.create_task(q.get())
-    done, _pending = await asyncio.wait({task, first}, return_when=asyncio.FIRST_COMPLETED)
-    first_piece = None
-    if first in done:
-        first_piece = first.result()
-    else:
-        first.cancel()
-        try:
-            result = task.result()
-        except Exception as exc:  # noqa: BLE001
-            print(f"[CHAT-STREAM-ERR] {type(exc).__name__}", file=sys.stderr)
-            return _chat_internal_error()
-        body = None
-        if isinstance(result, dict):
-            body = result
-        elif isinstance(result, JSONResponse) and result.status_code == 200:
-            try:
-                body = json.loads(result.body)
-            except Exception:  # noqa: BLE001
-                body = None
-        if body is None:
-            return result  # error / limit / 503: normal status + JSON
-
-        async def _single():
-            yield _chat_fast.sse_frame("meta", {"replay": isinstance(result, JSONResponse)})
-            yield _chat_fast.sse_frame("delta", {"content": body.get("reply", "")})
-            yield _chat_fast.sse_frame("done", body)
-
-        return StreamingResponse(_single(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
     async def _events():
         yield _chat_fast.sse_frame("meta", {"replay": False})
-        yield _chat_fast.sse_frame("delta", {"content": first_piece})
+        sent_delta = False
         while True:
             getter = asyncio.create_task(q.get())
             fin, _ = await asyncio.wait({task, getter}, return_when=asyncio.FIRST_COMPLETED)
             if getter in fin:
+                sent_delta = True
                 yield _chat_fast.sse_frame("delta", {"content": getter.result()})
                 continue
             getter.cancel()
             while not q.empty():
+                sent_delta = True
                 yield _chat_fast.sse_frame("delta", {"content": q.get_nowait()})
             break
         try:
@@ -2736,12 +2745,27 @@ async def judge_chat_stream(request: Request, payload: dict = Body(...),
             yield _chat_fast.sse_frame("error", {"code": "INTERNAL_ERROR", "message": "خطای داخلی سرور؛ لطفاً دوباره تلاش کنید."})
             return
         if isinstance(result, dict):
+            if not sent_delta and result.get("reply"):
+                yield _chat_fast.sse_frame("delta", {"content": result.get("reply", "")})
             yield _chat_fast.sse_frame("done", result)
-        else:  # JSONResponse after partial text (e.g. 503): surface as error event
+        elif isinstance(result, JSONResponse) and result.status_code == 200:
             try:
-                err = json.loads(result.body)
+                body = json.loads(result.body)
+            except Exception:  # noqa: BLE001
+                body = None
+            if isinstance(body, dict):
+                if not sent_delta and body.get("reply"):
+                    yield _chat_fast.sse_frame("delta", {"content": body.get("reply", "")})
+                yield _chat_fast.sse_frame("done", body)
+            else:
+                yield _chat_fast.sse_frame("error", {"code": "INTERNAL_ERROR", "status": 500})
+        else:
+            try:
+                err = json.loads(result.body) if isinstance(result, JSONResponse) else {"code": "INTERNAL_ERROR"}
             except Exception:  # noqa: BLE001
                 err = {"code": "INTERNAL_ERROR"}
+            if isinstance(err, dict) and isinstance(result, JSONResponse) and "status" not in err:
+                err["status"] = result.status_code
             yield _chat_fast.sse_frame("error", err)
 
     return StreamingResponse(_events(), media_type="text/event-stream", headers=_SSE_HEADERS)

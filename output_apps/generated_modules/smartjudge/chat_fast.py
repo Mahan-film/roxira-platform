@@ -15,6 +15,11 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Awaitable, Callable, Optional
 
+try:
+    import orjson as _orjson
+except ImportError:  # pragma: no cover - optional fast path
+    _orjson = None  # type: ignore[assignment]
+
 # ---------------------------------------------------------------------------
 # Sub-timings ([CHAT-TIMING] embed_ms / qdrant_ms / sql_ms / ttft_ms / llm_ms)
 # ---------------------------------------------------------------------------
@@ -61,9 +66,16 @@ class TTLCache:
 # ---------------------------------------------------------------------------
 # SSE framing
 # ---------------------------------------------------------------------------
+def json_dumps_compact(data: Any) -> str:
+    """Serialize ``data`` to compact UTF-8 JSON using orjson when available."""
+    if _orjson is not None:
+        return _orjson.dumps(data).decode("utf-8")
+    return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+
+
 def sse_frame(event: str, data: Any) -> str:
     """One Server-Sent-Events frame. JSON is single-line (ensure_ascii=False keeps Persian compact)."""
-    payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    payload = json_dumps_compact(data)
     return f"event: {event}\ndata: {payload}\n\n"
 
 
