@@ -147,7 +147,9 @@ step_frontend() {
   (
     cd output_apps/enterprise_hub/frontend
     npm ci
+    npm run lint:oxlint || echo "oxlint reported findings (non-blocking, as in CI)"
     npm run lint || echo "ESLint reported errors (non-blocking, as in CI)"
+    npm run typecheck:ts7 || echo "TypeScript 7 type-check reported errors (report-only, as in CI)"
     NEXT_TELEMETRY_DISABLED=1 npm run build
   )
 }
@@ -197,6 +199,29 @@ if changed_matches '^output_apps/enterprise_hub/frontend/'; then
   fi
 else
   skip_step "frontend" "no changes under output_apps/enterprise_hub/frontend"
+fi
+
+# backend (T202): oxlint first (non-blocking, as in CI), tsc 5.9 blocking, TypeScript 7 report-only.
+# Jest and the Postgres specs stay in CI.
+step_backend() {
+  (
+    cd output_apps/enterprise_hub
+    npm ci --no-audit --no-fund
+    npm run lint:oxlint || echo "oxlint reported findings (non-blocking, as in CI)"
+    npx tsc --noEmit
+    npm run typecheck:ts7 || echo "TypeScript 7 type-check reported errors (report-only, as in CI)"
+  )
+}
+
+if printf '%s\n' "$CHANGED" | grep -Ev '^output_apps/enterprise_hub/frontend/' | grep -Eq '^output_apps/enterprise_hub/'; then
+  if have npm; then
+    run_step "backend oxlint + tsc + TS7" step_backend
+  else
+    skip_step "backend" "npm not installed"
+    FAIL+=("backend (npm missing)")
+  fi
+else
+  skip_step "backend" "no changes under output_apps/enterprise_hub (outside frontend)"
 fi
 
 # migration lint (T170): ids above origin/main's newest and unique (blocking), then Squawk on the

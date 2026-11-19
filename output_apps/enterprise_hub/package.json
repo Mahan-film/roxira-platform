@@ -15,6 +15,8 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "lint": "eslint \"**/*.ts\" --fix",
+    "lint:oxlint": "oxlint -c .oxlintrc.json --ignore-pattern 'frontend/**' --ignore-pattern 'node_modules/**' .",
+    "typecheck:ts7": "node node_modules/typescript7/bin/tsc -p tsconfig.ts7.json",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
@@ -68,9 +70,11 @@
     "@typescript-eslint/parser": "^7.18.0",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-oxlint": "1.94.0",
     "eslint-plugin-prettier": "^5.5.7",
     "fast-check": "^3.23.2",
     "jest": "^29.7.0",
+    "oxlint": "1.94.0",
     "prettier": "^3.9.10",
     "source-map-support": "^0.5.21",
     "supertest": "^7.3.2",
@@ -78,7 +82,8 @@
     "ts-loader": "^9.5.1",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "typescript7": "npm:typescript@7.0.2"
   },
   "jest": {
     "moduleFileExtensions": [

@@ -417,7 +417,12 @@ jobs:
           cache: npm
           cache-dependency-path: output_apps/enterprise_hub/frontend/package-lock.json
       - run: npm ci
+      - name: oxlint (T202, runs before ESLint)
+        # Pre-existing findings (same class as the ESLint ones): report, do not block. Flip to blocking once clean.
+        continue-on-error: true
+        run: npm run lint:oxlint
       - name: npm run lint
+        # ESLint keeps only the rules oxlint does not cover (eslint-plugin-oxlint in eslint.config.mjs).
         # ~28 pre-existing ESLint errors: report, do not block. Flip to blocking once clean.
         continue-on-error: true
         run: |
@@ -470,6 +475,10 @@ jobs:
           cache: npm
           cache-dependency-path: output_apps/enterprise_hub/package-lock.json
       - run: npm ci --no-audit --no-fund
+      - name: oxlint (T202)
+        # Pre-existing findings (unused imports, useless escapes): report, do not block.
+        continue-on-error: true
+        run: npm run lint:oxlint
       - name: tsc --noEmit
         run: npx tsc --noEmit
       - name: Fresh migrations on an empty database
@@ -492,6 +501,47 @@ jobs:
           ROXIRA_TEST_PG_PORT: "5432"
           ROXIRA_TEST_PG_USER: postgres
         run: npx jest --runInBand --testPathPattern '\.pg\.spec\.ts$'
+
+  typescript7:
+    # T202: TypeScript 7 (native compiler) type-check, installed as the alias `typescript7` so the
+    # build and ts-jest keep TypeScript 5.9. REPORT-ONLY: continue-on-error, not a required check.
+    name: TypeScript 7 type-check (report-only)
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true'
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    timeout-minutes: 15
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [backend, frontend]
+        include:
+          - app: backend
+            dir: output_apps/enterprise_hub
+          - app: frontend
+            dir: output_apps/enterprise_hub/frontend
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ${{ matrix.dir }}/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: tsc 7 --noEmit (never fails the job; result goes to the summary)
+        run: |
+          set +e
+          npm run typecheck:ts7 > "$RUNNER_TEMP/ts7.log" 2>&1
+          code=$?
+          cat "$RUNNER_TEMP/ts7.log"
+          {
+            echo "### TypeScript 7 (${{ matrix.app }}), report-only"
+            echo "Exit code: $code, $(grep -c 'error TS' "$RUNNER_TEMP/ts7.log") errors."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
 
   m1-gate:
     # Issue #116 / docs/testing/M1_GATE.md. REPORT-ONLY: continue-on-error, and it is not a required check.
