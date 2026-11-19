@@ -3,7 +3,7 @@
 # Run once as root, from the box hub's clone after the PR merged and `git fetch` ran:
 #   sudo bash /home/mahanfilms/roxira-platform/scripts/ops/ci_box/05_root_phone_stack.sh
 # What it does (prints file names and variable NAMES only, never contents or values):
-#   1. extracts ~phone/voice-ai-bundle.tar.gz into /srv/data/phone/voice-ai (owner phone, go-rwx)
+#   1. extracts ~phone/voice-ai-bundle.tar.gz into /srv/data/phone/voice-ai (owner root, mode 700)
 #   2. moves ~phone/voice-ai-agent.env to /srv/data/phone/agent/.env (mode 600, owner phone)
 #   3. builds the agent from origin/main services/voice_phone_agent into /srv/data/phone/agent
 #      (npm ci && npm run build), creates the edge-tts venv, installs ffmpeg
@@ -39,9 +39,10 @@ if [ -f "$BUNDLE" ]; then
   STRIP=0
   first=$(echo "$LIST" | head -1 | cut -d/ -f1)
   if [ -n "$first" ] && [ "$first" != . ] && ! echo "$LIST" | grep -vqE "^$first(/|$)"; then STRIP=1; fi
-  install -d -m 700 -o $U -g $U $STACK
-  sudo -u $U tar -xzf "$BUNDLE" -C $STACK --no-same-owner --no-same-permissions --strip-components=$STRIP
-  chmod -R go-rwx $STACK
+  # Root-owned: the root wrapper runs docker compose on these files, so user phone must not edit them.
+  install -d -m 700 -o root -g root $STACK
+  tar -xzf "$BUNDLE" -C $STACK --no-same-owner --no-same-permissions --strip-components=$STRIP
+  chown -R root:root $STACK; chmod -R go-rwx $STACK
 else
   echo "no bundle at ~$U (already extracted?)"; [ -d $STACK ] || { echo "and $STACK missing"; exit 1; }
 fi
@@ -127,7 +128,7 @@ case "${1:-status}" in
       "${DC[@]}" pull -q --ignore-buildable 2>&1 | scrub || true
     fi
     "${DC[@]}" up -d --build 2>&1 | scrub
-    systemctl start voice-ai-tts voice-ai-agent
+    systemctl restart voice-ai-tts voice-ai-agent
     echo "up"
     ;;
   down)

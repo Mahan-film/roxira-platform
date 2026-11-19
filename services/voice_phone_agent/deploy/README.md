@@ -5,7 +5,7 @@ The Smart Judge phone line runs on the Linux box `roxira-ci` (`docs/ops/LINUX_CI
 
 | Part | Where |
 |---|---|
-| LiveKit stack (`lk-redis`, `lk-server`, `lk-sip`, `lk-sabanet-bridge`) | `/srv/data/phone/voice-ai` (from the owner's bundle; the compose file and the credential-bearing configs travel outside git) |
+| LiveKit stack (`lk-redis`, `lk-server`, `lk-sip`, `lk-sabanet-bridge`) | `/srv/data/phone/voice-ai`, root-owned (from the owner's bundle; the compose file and the credential-bearing configs travel outside git) |
 | Agent (Node, built from `origin/main`) | `/srv/data/phone/agent`, `.env` mode 600 |
 | edge-tts sidecar venv | `/srv/data/phone/venv` |
 | Units | `voice-ai-agent.service`, `voice-ai-tts.service` (user `phone`) |
@@ -34,3 +34,8 @@ the extracted bundle), then `sudo phone-stack up`.
 
 Open: a pinned-digest compose file in git that mounts the bundle's configs (after the first run shows
 the bundle's images and service names).
+
+Notes: `phone-stack logs` drops whole lines that mention keys, tokens or env on purpose: safety over
+detail. `box-proxy on` stays on after `up`, because all traffic on the box goes through the proxy
+(owner, 2026-11-19). User `phone` is in the system `docker` group (root-equivalent); this is on the
+final hardening list in `docs/ops/LINUX_CI_BOX.md`.
