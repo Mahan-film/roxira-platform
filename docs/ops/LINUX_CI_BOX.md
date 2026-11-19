@@ -38,6 +38,10 @@ Note: production is ARM (arm64) and this box is x86 (amd64). CI catches logic er
 3. **Weekly restore drill** (T198) and the WAL-G point-in-time restore test (T204), with dumps on the HDD.
 4. **Smart Judge offline evals** (T211 #925, T212 #926) against a local TEI + Qdrant copy.
 
+## Builders on the box
+- **Antigravity (lanes L5–L7)** runs as `mahanfilms` in the owner's desktop session (`mahan`, launcher `/home/mahan/bin/rx-antigravity`, which runs `xhost +SI:localuser:mahanfilms` and then `sudo -u mahanfilms antigravity`). It needs `NODE_USE_ENV_PROXY=1`, `HTTP(S)_PROXY=http://127.0.0.1:10809` and `--proxy-server=http://127.0.0.1:10809`.
+- **Gemini CLI = fallback builder:** `scripts/ops/ci_box/gemini_lanes.sh start|stop|status|attach|prompts` (tmux session `lanes`, windows L5–L7, auto-approve, 10 min restart wait, at most 6 restarts per lane per day). Start it only when the Antigravity quota is used up. Lanes refuse to run without `HTTPS_PROXY`. Prompts come from `docs/antigravity/prompts/L5..L7.txt` with `--agent gemini` and a box preamble. On the free API tier the CLI's default Flash model allows about 20 requests a day (checked 2026-11-19); `GEMINI_LANES_MODEL=<id>` chooses another Flash-class model, never Pro.
+
 ## Part A — before you erase Windows (owner, ~20 min)
 1. **Copy anything you still need** from both internal disks (SSD and HDD). Both will be erased.
 2. **Model name:** Windows Settings → System → About, or the sticker under the laptop (for example "HP ProBook 450 G5" or "HP Pavilion 15"). Tell the hub.
