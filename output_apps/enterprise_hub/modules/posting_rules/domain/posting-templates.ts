@@ -49,6 +49,12 @@ const INVOICE_LEGACY: Readonly<Partial<Record<PostingRole, string>>> = {
   inventory: '1301',
   cash: '1010',
   pos_clearing: '1015',
+  clearing_card: '1015',
+  clearing_duitnow: '1015',
+  clearing_ewallet: '1015',
+  clearing_shopee: '1015',
+  clearing_tiktok: '1015',
+  clearing_grabfood: '1015',
 };
 
 type InvoiceRow = readonly [key: string, role: PostingRole, description: string, party?: boolean];
@@ -80,14 +86,20 @@ const PURCHASE_ROWS: readonly InvoiceRow[] = [
   ['payable', 'payable', '', true],
 ];
 
-/** Settlement rows: cash/bank and POS clearing (card) in the order of the first payment, then the party. */
+/** Settlement rows: cash/bank, card and payment rails in the order of the first payment, then the party. */
 function settleRows(sale: boolean, cardFirst: boolean): readonly InvoiceRow[] {
   const cash: InvoiceRow = ['cash', 'cash', sale ? 'دریافت نقدی/بانکی بابت صورتحساب' : 'پرداخت نقدی/بانکی بابت صورتحساب'];
   const card: InvoiceRow = ['card', 'pos_clearing', sale ? 'دریافت از طریق پوز' : 'پرداخت نقدی/بانکی بابت صورتحساب'];
+  const duitnow: InvoiceRow = ['duitnow', 'clearing_duitnow', sale ? 'دریافت از طریق دیت‌ناو / DuitNow QR' : 'پرداخت از طریق دیت‌ناو'];
+  const ewallet: InvoiceRow = ['ewallet', 'clearing_ewallet', sale ? 'دریافت از طریق کیف پول الکترونیکی / eWallet' : 'پرداخت از طریق کیف پول الکترونیکی'];
+  const shopee: InvoiceRow = ['shopee', 'clearing_shopee', sale ? 'دریافت از طریق شُپی / Shopee' : 'پرداخت از طریق شُپی'];
+  const tiktok: InvoiceRow = ['tiktok', 'clearing_tiktok', sale ? 'دریافت از طریق تیک‌تاک / TikTok Shop' : 'پرداخت از طریق تیک‌تاک'];
+  const grabfood: InvoiceRow = ['grabfood', 'clearing_grabfood', sale ? 'دریافت از طریق گرَب‌فود / GrabFood' : 'پرداخت از طریق گرَب‌فود'];
   const party: InvoiceRow = sale
     ? ['party', 'receivable', 'تسویه حساب‌های دریافتنی', true]
     : ['party', 'payable', 'تسویه حساب‌های پرداختنی', true];
-  return [...(cardFirst ? [card, cash] : [cash, card]), party];
+  const rails = [duitnow, ewallet, shopee, tiktok, grabfood];
+  return [...(cardFirst ? [card, cash, ...rails] : [cash, card, ...rails]), party];
 }
 
 export const INVOICE_TEMPLATES: readonly PostingTemplate[] = [
@@ -347,6 +359,26 @@ export const POSTING_TEMPLATES: readonly PostingTemplate[] = [
       cr('pos_clearing', 'gross', 'تسویه وجوه در راه کارتخوان'),
     ],
     defaults: { pos_clearing: '1015', bank_fee: '5210' },
+  },
+  // T156: Payment rail settlement (Card, DuitNow QR, eWallets, Shopee, TikTok Shop, GrabFood)
+  {
+    docType: 'treasury.rail_settlement',
+    title: 'تسویه درگاه و پایانه پرداخت (پوز / دیت‌ناو / بازارگاه)',
+    amounts: ['gross', 'fee', 'commission', 'sst', 'net'],
+    lines: [
+      dr('bank', 'net', 'واریز خالص تسویه به بانک'),
+      dr('payment_fee', 'fee', 'کارمزد درگاه و تراکنش'),
+      dr('platform_commission', 'commission', 'کمیسیون پلتفرم و بازارگاه'),
+      dr('vat_input', 'sst', 'مالیات بر خدمات کارمزد و کمیسیون (SST)'),
+      cr('clearing_rail', 'gross', 'تسویه حساب واسط درگاه'),
+    ],
+    defaults: {
+      bank: '1012',
+      payment_fee: '5210',
+      platform_commission: '5210',
+      vat_input: '1045',
+      clearing_rail: '1015',
+    },
   },
   // #230 / T75: Month-end FX revaluation voucher for foreign-currency accounts
   {
