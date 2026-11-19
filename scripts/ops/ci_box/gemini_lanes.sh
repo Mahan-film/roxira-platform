@@ -68,9 +68,14 @@ case "${1:-status}" in
     if tmux has-session -t "$SESSION" 2>/dev/null; then echo "session '$SESSION' already running"; exit 0; fi
     mkdir -p "$STATE"
     for lane in "${LANES[@]}"; do gen_prompt "$lane" >/dev/null; done
-    tmux new-session -d -s "$SESSION" -n L5 -c "$REPO" "$SELF _run L5"
-    tmux new-window -t "$SESSION" -n L6 -c "$REPO" "$SELF _run L6"
-    tmux new-window -t "$SESSION" -n L7 -c "$REPO" "$SELF _run L7"
+    # Pass the proxy env explicitly: an already-running tmux server would not forward it.
+    ENVSTR=$(printf '%q ' env HTTPS_PROXY="$HTTPS_PROXY" HTTP_PROXY="${HTTP_PROXY:-$HTTPS_PROXY}" \
+      https_proxy="$HTTPS_PROXY" http_proxy="${HTTP_PROXY:-$HTTPS_PROXY}" NO_PROXY="${NO_PROXY:-localhost,127.0.0.1}" \
+      NODE_USE_ENV_PROXY=1 GEMINI_LANES_MODEL="${GEMINI_LANES_MODEL:-}" GEMINI_LANES_REPO="$REPO" \
+      GEMINI_LANES_STATE="$STATE" GEMINI_LANES_WAIT="$RESTART_WAIT" "$SELF")
+    tmux new-session -d -s "$SESSION" -n L5 -c "$REPO" "$ENVSTR _run L5"
+    tmux new-window -t "$SESSION" -n L6 -c "$REPO" "$ENVSTR _run L6"
+    tmux new-window -t "$SESSION" -n L7 -c "$REPO" "$ENVSTR _run L7"
     echo "started tmux session '$SESSION' (L5 L6 L7); attach with: $0 attach"
     ;;
   stop)
