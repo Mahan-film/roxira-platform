@@ -2,8 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { EntityManager, In } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
 import { CustomerGroup } from '../enums/customer-group.enum';
+import { PartyKeyEntity } from '../entities/party-key.entity';
 import { PartyEntity } from '../entities/party.entity';
 import { PartyRole } from '../enums/party-role.enum';
+import { ERASED_PARTY_NAME, encryptPartyPii, generatePartyDek } from '../services/party-crypto';
 
 export interface PartyInput {
   code: string;
@@ -105,10 +107,36 @@ export class PartiesRepository {
 
   // ------------------------------------------------------------------ writes
 
+  private async ensurePartyDek(m: EntityManager, tenantId: string, partyId: number): Promise<string> {
+    const keyRepo = m.getRepository(PartyKeyEntity);
+    const existing = await keyRepo.findOne({ where: { tenantId, partyId } });
+    if (existing) return existing.dekB64;
+    const dekB64 = generatePartyDek();
+    await m.query(
+      `INSERT INTO "erp_party_keys" ("tenant_id", "party_id", "dek_b64", "key_version")
+       VALUES ($1, $2, $3, 1)
+       ON CONFLICT ("tenant_id", "party_id") DO NOTHING`,
+      [tenantId, partyId, dekB64],
+    );
+    const row = await keyRepo.findOne({ where: { tenantId, partyId } });
+    return row?.dekB64 ?? dekB64;
+  }
+
   create(tenantId: string, input: PartyInput): Promise<PartyEntity> {
     return this.within(tenantId, undefined, async (m) => {
       const repo = m.getRepository(PartyEntity);
-      return repo.save(repo.create({ ...input, active: input.active ?? true, tenantId }));
+      const saved = await repo.save(repo.create({ ...input, active: input.active ?? true, tenantId }));
+      const dek = await this.ensurePartyDek(m, tenantId, saved.id);
+      const piiCiphertext = encryptPartyPii(dek, {
+        name: saved.name,
+        nationalId: saved.nationalId ?? null,
+        economicCode: saved.economicCode ?? null,
+        phone: saved.phone ?? null,
+        email: saved.email ?? null,
+      });
+      await repo.update({ id: saved.id, tenantId }, { piiCiphertext });
+      saved.piiCiphertext = piiCiphertext;
+      return saved;
     });
   }
 
@@ -117,8 +145,62 @@ export class PartiesRepository {
     return this.within(tenantId, undefined, async (m) => {
       const repo = m.getRepository(PartyEntity);
       if (Object.keys(patch).length > 0) await repo.update({ id, tenantId }, patch);
-      return repo.findOne({ where: { id, tenantId } });
+      const current = await repo.findOne({ where: { id, tenantId } });
+      if (!current) return null;
+      if (
+        !current.erasedAt &&
+        (patch.name !== undefined ||
+          patch.nationalId !== undefined ||
+          patch.economicCode !== undefined ||
+          patch.phone !== undefined ||
+          patch.email !== undefined)
+      ) {
+        const dek = await this.ensurePartyDek(m, tenantId, current.id);
+        const piiCiphertext = encryptPartyPii(dek, {
+          name: current.name,
+          nationalId: current.nationalId ?? null,
+          economicCode: current.economicCode ?? null,
+          phone: current.phone ?? null,
+          email: current.email ?? null,
+        });
+        await repo.update({ id, tenantId }, { piiCiphertext });
+        current.piiCiphertext = piiCiphertext;
+      }
+      return current;
     });
+  }
+
+  /**
+   * Crypto-shredding erasure (T206): destroy the per-party DEK in `erp_party_keys` and scrub
+   * plaintext PII columns on `erp_parties`, leaving `pii_ciphertext` undecryptable and the party
+   * ID/code intact for accounting/audit referential integrity.
+   */
+  async erasePersonalData(tenantId: string, partyId: number): Promise<boolean> {
+    return this.within(tenantId, undefined, async (m) => {
+      const existing = await m.getRepository(PartyEntity).findOne({ where: { tenantId, id: partyId } });
+      if (!existing) return false;
+      await m.query(`DELETE FROM "erp_party_keys" WHERE "tenant_id" = $1 AND "party_id" = $2`, [tenantId, partyId]);
+      await m.query(
+        `UPDATE "erp_parties"
+            SET "name" = $3,
+                "national_id" = NULL,
+                "economic_code" = NULL,
+                "phone" = NULL,
+                "email" = NULL,
+                "active" = false,
+                "erased_at" = COALESCE("erased_at", now()),
+                "updated_at" = now()
+          WHERE "tenant_id" = $1 AND "id" = $2`,
+        [tenantId, partyId, ERASED_PARTY_NAME],
+      );
+      return true;
+    });
+  }
+
+  findKeyForParty(tenantId: string, partyId: number): Promise<PartyKeyEntity | null> {
+    return this.within(tenantId, undefined, (m) =>
+      m.getRepository(PartyKeyEntity).findOne({ where: { tenantId, partyId } }),
+    );
   }
 
   /** Codes of the tenant's parties among the given ones (the importer's existence check). */
@@ -168,7 +250,21 @@ export class PartiesRepository {
             input.active ?? true,
           ],
         );
-        out.push({ id: Number(rows[0].id), code: String(rows[0].code), inserted: Boolean(rows[0].inserted) });
+        const partyId = Number(rows[0].id);
+        const dek = await this.ensurePartyDek(m, tenantId, partyId);
+        const piiCiphertext = encryptPartyPii(dek, {
+          name: input.name,
+          nationalId: input.nationalId ?? null,
+          economicCode: input.economicCode ?? null,
+          phone: input.phone ?? null,
+          email: input.email ?? null,
+        });
+        await m.query(`UPDATE "erp_parties" SET "pii_ciphertext" = $3 WHERE "tenant_id" = $1 AND "id" = $2`, [
+          tenantId,
+          partyId,
+          piiCiphertext,
+        ]);
+        out.push({ id: partyId, code: String(rows[0].code), inserted: Boolean(rows[0].inserted) });
       }
       return out;
     });

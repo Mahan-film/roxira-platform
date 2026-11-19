@@ -12,8 +12,11 @@ import { ConflictException } from '@nestjs/common';
 import * as path from 'path';
 import { DataSource } from 'typeorm';
 import { TenantScope } from '../access/services/tenant-scope';
+import { AuditRepository } from '../access/repositories/audit.repository';
+import { AuditService } from '../access/services/audit.service';
 import { PartyRole } from './enums/party-role.enum';
 import { PartiesRepository } from './repositories/parties.repository';
+import { decryptPartyPii, ERASED_PARTY_NAME } from './services/party-crypto';
 import { PartiesService } from './services/parties.service';
 
 const HOST = process.env.ROXIRA_TEST_PG_HOST;
@@ -47,6 +50,7 @@ describePg('Parties on PostgreSQL (non-superuser, FORCE RLS)', () => {
   let app: DataSource;
   let repository: PartiesRepository;
   let service: PartiesService;
+  let auditRepo: AuditRepository;
 
   const dto = (over: Record<string, unknown>) =>
     ({
@@ -70,8 +74,9 @@ describePg('Parties on PostgreSQL (non-superuser, FORCE RLS)', () => {
     app = await new DataSource({ ...options(db, role, APP_PW), extra: { max: 8 } }).initialize();
 
     const scope = new TenantScope(app);
+    auditRepo = new AuditRepository(scope, app);
     repository = new PartiesRepository(scope);
-    service = new PartiesService(repository);
+    service = new PartiesService(repository, new AuditService(auditRepo));
     for (const tenantId of [T1, T2]) {
       await owner.query(`INSERT INTO tenants (id, name, slug) VALUES ($1, $2, $2) ON CONFLICT DO NOTHING`, [tenantId, tenantId.slice(0, 8)]).catch(() => undefined);
     }
@@ -182,5 +187,47 @@ describePg('Parties on PostgreSQL (non-superuser, FORCE RLS)', () => {
     expect(await service.removeByIds(T1, importerRows.map((r) => r.id))).toBe(1);
     expect(await repository.findById(T1, importerRows[0].id)).toBeNull();
     expect(await service.getByCode(T1, 'DEAD')).toMatchObject({ active: false });
+  });
+
+  it('T206: erp_party_keys has FORCE RLS, crypto-shredding destroys the key, and audit chain stays verifiable', async () => {
+    const [keyRls] = await owner.query(
+      `SELECT c.relrowsecurity, c.relforcerowsecurity,
+              (SELECT count(*) FROM pg_policy p WHERE p.polrelid = c.oid)::int AS policies
+         FROM pg_class c WHERE c.relname = 'erp_party_keys'`,
+    );
+    expect(keyRls).toMatchObject({ relrowsecurity: true, relforcerowsecurity: true, policies: 1 });
+
+    const created = await service.create(
+      T1,
+      dto({ code: 'SHRED1', name: 'زهرا محمدی', nationalId: '0098765432', phone: '09121112233', email: 'z@example.com' }),
+    );
+    const keyBefore = await repository.findKeyForParty(T1, created.id);
+    expect(keyBefore).not.toBeNull();
+    const rowBefore = await repository.findById(T1, created.id);
+    expect(decryptPartyPii(keyBefore!.dekB64, rowBefore!.piiCiphertext)).toMatchObject({
+      name: 'زهرا محمدی',
+      nationalId: '0098765432',
+    });
+
+    await auditRepo.append({
+      tenantId: T1,
+      actorUserId: null,
+      action: 'party.referenced',
+      resourceType: 'party',
+      resourceId: String(created.id),
+      metadata: { partyId: created.id, partyName: 'زهرا محمدی', iban: 'IR000000000000001234567890' },
+    });
+
+    const erased = await service.erasePersonalData(T1, created.id);
+    expect(erased).toEqual({ partyId: created.id, erased: true });
+    expect(await repository.findKeyForParty(T1, created.id)).toBeNull();
+    const rowAfter = await repository.findById(T1, created.id);
+    expect(rowAfter?.name).toBe(ERASED_PARTY_NAME);
+    expect(rowAfter?.erasedAt).not.toBeNull();
+    expect(decryptPartyPii(null, rowAfter?.piiCiphertext)).toBeNull();
+
+    const chain = await auditRepo.verifyChain(T1);
+    expect(chain.ok).toBe(true);
+    expect(chain.brokenAtId).toBeNull();
   });
 });
