@@ -4,13 +4,17 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-User=mahan
-WorkingDirectory=/home/mahan/voice-ai/agent
-EnvironmentFile=-/home/mahan/voice-ai/agent/.env
-ExecStart=/home/mahan/voice-ai/.venv/bin/python tts_server.py
+User=phone
+Group=phone
+WorkingDirectory=/srv/data/phone/agent
+EnvironmentFile=-/srv/data/phone/agent/.env
+# Outbound traffic to Microsoft goes through the box proxy; listens on 127.0.0.1 only.
+Environment=PROXY_URL=http://127.0.0.1:10809
+ExecStart=/srv/data/phone/venv/bin/python tts_server.py
 Restart=always
 RestartSec=3
 MemoryMax=200M
+NoNewPrivileges=true
 
 [Install]
 WantedBy=multi-user.target

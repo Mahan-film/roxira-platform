@@ -34,5 +34,5 @@ journalctl -u voice-ai-agent -f -o cat
 ```
 
 `npm run build && node dist/smoke.js "سؤال"` checks TTS → VAD → STT → Smart Judge → TTS without a call.
-Unit files assume user `mahan` and `/home/mahan/voice-ai/agent`; adjust on another box.
+Unit files run as user `phone` from `/srv/data/phone/agent` on roxira-ci; see `deploy/README.md`.
 Measured on 2026-11-13: Groq STT ~0.9 s, edge-tts 1.6–2.8 s per sentence, ~200 MB RSS.

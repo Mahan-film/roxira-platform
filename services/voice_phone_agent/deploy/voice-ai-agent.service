@@ -4,16 +4,21 @@ After=docker.service network-online.target voice-ai-tts.service
 Wants=network-online.target voice-ai-tts.service
 
 [Service]
-User=mahan
-WorkingDirectory=/home/mahan/voice-ai/agent
-# no HTTP(S)_PROXY here on purpose: the code picks proxy vs direct per request
+User=phone
+Group=phone
+WorkingDirectory=/srv/data/phone/agent
+# No HTTP(S)_PROXY here on purpose: the code picks proxy or direct per request (src/http.ts).
+# PROXY_URL is the box's HTTP proxy; it is used only for foreign AI APIs. It wins over .env
+# because process.loadEnvFile never overrides variables that are already set.
 Environment=NODE_ENV=production
+Environment=PROXY_URL=http://127.0.0.1:10809
 ExecStart=/usr/bin/node --max-old-space-size=384 dist/main.js
 Restart=always
 RestartSec=3
 KillSignal=SIGTERM
 TimeoutStopSec=15
 MemoryMax=700M
+NoNewPrivileges=true
 
 [Install]
 WantedBy=multi-user.target
