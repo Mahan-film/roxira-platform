@@ -183,6 +183,27 @@ jobs:
       - name: Run custom rules
         run: semgrep --config .semgrep/roxira.yml --metrics=off output_apps src scripts
 
+  # T207: deterministic guards for the defects reviewers keep finding (docs/agents/LESSONS.md).
+  # Blocking, but only on lines this PR adds (merge-base diff), so existing debt never blocks.
+  agent-guards:
+    name: Agent guards (money, tenant scope, model ids, secrets)
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Run guards on added lines
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+        run: python3 scripts/ci/check_agent_guards.py --base "$BASE_SHA"
+
   ruff:
     name: Ruff (non-blocking)
     needs: changes

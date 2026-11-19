@@ -165,6 +165,8 @@ fi
 run_step "system inventory up to date" step_inventory
 run_step "no new hardcoded model ids" python3 scripts/ci/check_hardcoded_model_ids.py
 run_step "pinned GitHub Actions" python3 scripts/ci/check_pinned_actions.py
+# T207: money/tenant/model/secret guards, blocking, only on lines added since the base.
+run_step "agent guards (added lines)" python3 scripts/ci/check_agent_guards.py --base "$BASE_REF"
 
 # reviewer family: REPORT-ONLY for now (prints the finding, never fails the run).
 step_reviewer_family() {
