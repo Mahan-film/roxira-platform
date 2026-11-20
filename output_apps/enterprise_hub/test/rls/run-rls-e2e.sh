@@ -6,6 +6,8 @@
 set -euo pipefail
 HUB="$(cd "$(dirname "$0")/../.." && pwd)"
 ROOT="$(cd "$HUB/../.." && pwd)"
+CI_IMAGE_REGISTRY="${CI_IMAGE_REGISTRY:-public.ecr.aws/docker/library}"
+PG_IMAGE="${PG_IMAGE:-${CI_IMAGE_REGISTRY}/postgres:17-alpine}"
 PGB_IMAGE="$(sed -n 's/^ *image: \(edoburu\/pgbouncer@.*\)$/\1/p' "$ROOT/docker-compose.prod.yml")"
 ID="rxrls$$" NET="$ID-net" PG="$ID-pg" PGB="$ID-pgb"
 RLS_SUITES="${RLS_SUITES:-modules/accounting modules/hr modules/banking modules/invoice_capture modules/cheques modules/invoicing}"
@@ -19,7 +21,7 @@ trap cleanup EXIT
 docker network create "$NET" >/dev/null
 docker run -d --name "$PG" --network "$NET" -p "127.0.0.1:$PG_PORT:5432" --tmpfs /var/lib/postgresql/data \
   -e POSTGRES_USER=enterprise_admin -e POSTGRES_PASSWORD=owner-test-only -e POSTGRES_DB=postgres \
-  -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17-alpine >/dev/null
+  -e POSTGRES_HOST_AUTH_METHOD=trust "$PG_IMAGE" >/dev/null
 for _ in $(seq 1 30); do docker exec "$PG" pg_isready -U enterprise_admin -q && break; sleep 1; done
 sleep 2
 # Same settings as pgbouncer_prod in docker-compose.prod.yml.

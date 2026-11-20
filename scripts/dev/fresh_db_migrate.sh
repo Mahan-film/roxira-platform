@@ -13,14 +13,16 @@
 # Needs docker and `npm ci` done in output_apps/enterprise_hub. Never touches any other
 # database: it only talks to the container it started, and removes it on exit.
 #
-# Env: FRESH_DB_PORT (default 55432), FRESH_DB_IMAGE (default postgres:17),
+# Env: FRESH_DB_PORT (default 55432), CI_IMAGE_REGISTRY (default public.ecr.aws/docker/library),
+#      FRESH_DB_IMAGE (default ${CI_IMAGE_REGISTRY}/postgres:17),
 #      FRESH_DB_SKIP_REVERT=1 to skip step 5.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 HUB="$ROOT/output_apps/enterprise_hub"
 PORT="${FRESH_DB_PORT:-55432}"
-IMAGE="${FRESH_DB_IMAGE:-postgres:17}"
+CI_IMAGE_REGISTRY="${CI_IMAGE_REGISTRY:-public.ecr.aws/docker/library}"
+IMAGE="${FRESH_DB_IMAGE:-${CI_IMAGE_REGISTRY}/postgres:17}"
 CTR="rx-fresh-db-$$"
 BASELINE="LegacyBaseline1789000000000"
 WORK="$(mktemp -d)"
