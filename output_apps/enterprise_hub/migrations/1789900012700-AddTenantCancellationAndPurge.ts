@@ -52,6 +52,39 @@ export class AddTenantCancellationAndPurge1789900012700 implements MigrationInte
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
+    // Preserve any non-default cancellation/purge metadata before dropping columns
+    // so rollback never silently deletes data.
+    await queryRunner.query(`
+      CREATE TABLE IF NOT EXISTS "_rollback_backup_1789900012700_tenants_cancellation" (
+        "tenant_id" uuid PRIMARY KEY,
+        "status" character varying(32),
+        "delete_after" TIMESTAMP WITH TIME ZONE,
+        "cancelled_at" TIMESTAMP WITH TIME ZONE,
+        "cancellation_reason" text,
+        "purged_at" TIMESTAMP WITH TIME ZONE,
+        "backed_up_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      );
+    `);
+    await queryRunner.query(`
+      INSERT INTO "_rollback_backup_1789900012700_tenants_cancellation" (
+        "tenant_id", "status", "delete_after", "cancelled_at", "cancellation_reason", "purged_at"
+      )
+      SELECT "id", "status", "delete_after", "cancelled_at", "cancellation_reason", "purged_at"
+      FROM "tenants"
+      WHERE "status" <> 'active'
+         OR "delete_after" IS NOT NULL
+         OR "cancelled_at" IS NOT NULL
+         OR "cancellation_reason" IS NOT NULL
+         OR "purged_at" IS NOT NULL
+      ON CONFLICT ("tenant_id") DO UPDATE SET
+        "status" = EXCLUDED."status",
+        "delete_after" = EXCLUDED."delete_after",
+        "cancelled_at" = EXCLUDED."cancelled_at",
+        "cancellation_reason" = EXCLUDED."cancellation_reason",
+        "purged_at" = EXCLUDED."purged_at",
+        "backed_up_at" = NOW();
+    `);
+
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_tenants_status_delete_after";`);
     await queryRunner.query(`ALTER TABLE "tenants" DROP CONSTRAINT IF EXISTS "CHK_tenants_status";`);
     await queryRunner.query(`

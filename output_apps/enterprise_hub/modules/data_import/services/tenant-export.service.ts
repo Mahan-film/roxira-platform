@@ -148,7 +148,7 @@ export class TenantExportService {
     if (!rows || rows.length === 0) return '';
     const headerSet = new Set<string>();
     rows.forEach((r) => Object.keys(r || {}).forEach((k) => headerSet.add(k)));
-    const headers = Array.from(headerSet);
+    const headers = Array.from(headerSet).sort();
 
     const escapeCsv = (val: string): string => {
       if (val.includes(',') || val.includes('"') || val.includes('\n') || val.includes('\r')) {
