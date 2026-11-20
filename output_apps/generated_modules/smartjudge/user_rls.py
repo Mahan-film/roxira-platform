@@ -110,3 +110,12 @@ def set_user_rls_context(cursor: Any, user_ref: str) -> None:
     if not cleaned:
         raise ValueError("user_ref must be a non-empty string for user-scoped RLS")
     cursor.execute("SELECT set_config('app.current_user_ref', %s, true);", (cleaned,))
+
+
+def ensure_user_scoped_rls(cursor: Any) -> None:
+    """Invoke the idempotent `roxira_apply_user_scoped_rls()` DB helper.
+
+    Call this after Python creates any of the 6 Smart Judge user-scoped tables
+    on a fresh database so RLS (ENABLE + FORCE + policy) is never skipped.
+    """
+    cursor.execute("SELECT roxira_apply_user_scoped_rls();")

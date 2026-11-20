@@ -6,6 +6,7 @@ import pytest
 from output_apps.generated_modules.smartjudge.user_rls import (
     LEGACY_DROP_CANDIDATES,
     USER_SCOPED_TABLES,
+    ensure_user_scoped_rls,
     set_user_rls_context,
 )
 
@@ -57,5 +58,16 @@ def test_set_user_rls_context_fails_closed_on_empty_user_ref(bad: object) -> Non
         def execute(self, sql: str, params: tuple[str, ...]) -> None:
             raise AssertionError("should not execute set_config for empty user_ref")
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="user_ref must be a non-empty string"):
         set_user_rls_context(FakeCursor(), bad)  # type: ignore[arg-type]
+
+
+def test_ensure_user_scoped_rls_invokes_db_helper() -> None:
+    calls: list[str] = []
+
+    class FakeCursor:
+        def execute(self, sql: str) -> None:
+            calls.append(sql)
+
+    ensure_user_scoped_rls(FakeCursor())
+    assert calls == ["SELECT roxira_apply_user_scoped_rls();"]
