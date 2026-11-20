@@ -48,7 +48,7 @@ export class RentalTaxService {
     const pack = this.countryPackRegistry?.resolve();
     const rule = pack?.taxRules.find((r) => r.kind === 'rental_tax');
     const keys = rule ? (rule.statutoryKeys as readonly StatutoryKey[]) : KEYS;
-    const country = pack?.country;
+    const country = rule && pack?.country ? pack.country : 'IR';
     const used = await readStatutory(this.statutory, tenantId, dto.fiscalYear, keys, country);
     const deductionRate = String(used.get('rental_expense_deduction_rate')!.value);
     // The store holds whole rials (money kind); the computation works in minor units (rial x 100).

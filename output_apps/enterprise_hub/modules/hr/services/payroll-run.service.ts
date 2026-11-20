@@ -153,9 +153,22 @@ export class PayrollRunService {
         tenantId,
         year,
         month,
-      )) as PayrollYearRates | null | undefined;
+      )) as Partial<PayrollYearRates> | null | undefined;
       if (packRates && typeof packRates === 'object' && Object.keys(packRates).length > 0) {
-        return packRates;
+        const valid =
+          typeof packRates.year === 'number' &&
+          typeof packRates.minDailyWage === 'number' &&
+          typeof packRates.minMonthlyWage === 'number' &&
+          typeof packRates.monthlyWorkHours === 'number' &&
+          typeof packRates.employeeInsuranceRate === 'number' &&
+          typeof packRates.employerInsuranceRate === 'number' &&
+          typeof packRates.unemploymentInsuranceRate === 'number' &&
+          Array.isArray(packRates.annualTaxBrackets) &&
+          Boolean(packRates.insuranceRates && typeof packRates.insuranceRates === 'object');
+        if (!valid) {
+          throw new BadRequestException('Country pack payroll adapter returned invalid PayrollYearRates');
+        }
+        return packRates as PayrollYearRates;
       }
     }
     if (!(await this.statutory.hasYear(tenantId, year))) {

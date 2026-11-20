@@ -374,13 +374,31 @@ export class MoadianService implements OnModuleInit {
         };
         const eInvoiceAdapter = this.countryPackRegistry?.resolve()?.eInvoice;
         if (eInvoiceAdapter) {
-          const mapped = eInvoiceAdapter.map(invoice, mappingContext);
-          if (
-            !mapped ||
-            typeof mapped !== 'object' ||
-            typeof (mapped as MoadianInvoicePacket).header?.taxid !== 'string' ||
-            !Array.isArray((mapped as MoadianInvoicePacket).body)
-          ) {
+          const mapped = eInvoiceAdapter.map(invoice, mappingContext) as Partial<MoadianInvoicePacket> | null | undefined;
+          const h = mapped?.header;
+          const bodyValid =
+            Array.isArray(mapped?.body) &&
+            mapped.body.every(
+              (item) =>
+                item &&
+                typeof item === 'object' &&
+                typeof item.sstid === 'string' &&
+                typeof item.tsstam === 'number',
+            );
+          const headerValid =
+            h &&
+            typeof h === 'object' &&
+            typeof h.taxid === 'string' &&
+            h.taxid.length > 0 &&
+            typeof h.indatim === 'number' &&
+            typeof h.inty === 'number' &&
+            typeof h.inno === 'string' &&
+            typeof h.inp === 'number' &&
+            typeof h.ins === 'number' &&
+            typeof h.tins === 'string' &&
+            typeof h.setm === 'number' &&
+            typeof h.tbill === 'number';
+          if (!mapped || typeof mapped !== 'object' || !headerValid || !bodyValid || !Array.isArray(mapped.payments)) {
             throw new BadRequestException('Country pack eInvoice adapter returned an invalid Moadian packet');
           }
           return mapped as MoadianInvoicePacket;
