@@ -186,10 +186,14 @@ fi
 
 run_step "provider API keys in tracked files" step_provider_keys
 
-if have gitleaks; then
+# Pinned, SHA-256-verified binary (scripts/dev/install_gitleaks.sh) so local and CI scan the same way.
+if GL_BIN="$(bash scripts/dev/install_gitleaks.sh 2>/dev/null)"; then
+  gitleaks() { "$GL_BIN" "$@"; }
   run_step "gitleaks (new commits)" step_gitleaks
+elif have gitleaks; then
+  run_step "gitleaks (new commits, unpinned local binary)" step_gitleaks
 else
-  skip_step "gitleaks" "not installed (brew install gitleaks)"
+  skip_step "gitleaks" "not installed and the pinned download failed"
 fi
 
 if changed_matches '^output_apps/enterprise_hub/frontend/'; then
