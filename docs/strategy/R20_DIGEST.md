@@ -43,8 +43,12 @@ pull deploy, no production keys on the box, proxy egress lock). It changes three
 
 ## Conflicts with what we have seen
 
-- "Gemini CLI consumer access ended 2026-06-18": the box signed in to Gemini CLI with Google on
-  2026-11-19, so this claim is UNVERIFIED and we don't act on it.
+- "Gemini CLI consumer access ended 2026-06-18": CONFIRMED by Google's own announcement
+  (google-gemini/gemini-cli discussion #27274; see `docs/research/R21_AGENT_BRIDGE.md`). The box
+  sign-in on 2026-11-19 still worked, but that is not reliable. Unattended Google lanes use a
+  Gemini API key; consumer login stays for interactive use only.
+- Hub bridge: the owner chose the GitHub route on 2026-11-20 (WAVE:/REPORT: on #965, box timer,
+  row #1021). Remote Control needs one Claude account on both machines, and we have two.
 - The report suggests 30 days with no auto-merge. The hub keeps today's rule: review desk APPROVE
   plus green CI merges low-risk PRs; migrations, workflows and prod scripts need the owner.
 
