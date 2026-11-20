@@ -64,4 +64,4 @@ Owner speaks Persian: reply in Persian; code, commits and docs in English. The o
 - `src/ops/test_autodeploy.py` fails locally only (unrelated); never run pytest over `src/` or the repo root.
 
 ## Key documents
-`docs/strategy/ARCHITECTURE_DECISIONS_2026-11-16.md` (rows T166–T210) · `docs/strategy/INFRA_TARGET_2026-11-17.md` (T211–T218, Rust path) · `docs/strategy/research/` (R1–R17, R19 digests) · `docs/TEAM_SPLIT_2026-11-17.md` · `docs/TEAM_START.md` · `docs/owner/OWNER_ASKS_FA.md` · `docs/OPERATIONS_RUNBOOK.md` §7–8 (merge traps).
+`docs/ARCHITECTURE.md` (current architecture, diagrams) · `docs/strategy/ARCHITECTURE_DECISIONS_2026-11-16.md` (rows T166–T210) · `docs/strategy/INFRA_TARGET_2026-11-17.md` (T211–T218, Rust path) · `docs/strategy/research/` (R1–R17, R19 digests) · `docs/TEAM_SPLIT_2026-11-17.md` · `docs/TEAM_START.md` · `docs/owner/OWNER_ASKS_FA.md` · `docs/OPERATIONS_RUNBOOK.md` §7–8 (merge traps).

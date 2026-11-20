@@ -42,7 +42,10 @@ if [ -f "$BUNDLE" ]; then
   # Root-owned: the root wrapper runs docker compose on these files, so user phone must not edit them.
   install -d -m 700 -o root -g root $STACK
   tar -xzf "$BUNDLE" -C $STACK --no-same-owner --no-same-permissions --strip-components=$STRIP
-  chown -R root:root $STACK; chmod -R go-rwx $STACK
+  # Containers run as non-root users (Asterisk in lk-sabanet-bridge) and read their bind-mounted
+  # configs directly, so the files must be world-readable. $STACK itself stays root:root 700,
+  # so no host user other than root can reach them; nothing is writable except by root.
+  chown -R root:root $STACK; chmod -R go-w,a+rX $STACK; chmod 700 $STACK
 else
   echo "no bundle at ~$U (already extracted?)"; [ -d $STACK ] || { echo "and $STACK missing"; exit 1; }
 fi
@@ -104,6 +107,9 @@ install -d -m 755 -o root -g root /usr/local/lib/phone-stack
 T=$(mktemp); from_main healthcheck.sh > "$T"; install -m 755 -o root -g root "$T" /usr/local/lib/phone-stack/healthcheck.sh; rm -f "$T"
 printf 'COMPOSE=%q\n' "$COMPOSE" > /usr/local/lib/phone-stack/phone-stack.conf
 chmod 644 /usr/local/lib/phone-stack/phone-stack.conf
+# Model registry for the agent (MODELS_YAML in voice-ai-agent.service); the agent copy has no repo tree.
+git -c safe.directory="$REPO" -C "$REPO" show origin/main:config/models.yaml > /usr/local/lib/phone-stack/models.yaml
+chown root:root /usr/local/lib/phone-stack/models.yaml; chmod 644 /usr/local/lib/phone-stack/models.yaml
 TMP_BIN=$(mktemp)
 cat > "$TMP_BIN" <<'WRAPPER'
 #!/bin/bash

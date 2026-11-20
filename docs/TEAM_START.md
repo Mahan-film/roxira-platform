@@ -41,4 +41,4 @@ Every PR gets a cross-family review from the review desk (`gh workflow run revie
 Comment on issue #592. Handing work over: post the Handoff block (Done / Not done / Tests run / Not verified / Next step) as a PR comment.
 
 ## Read next
-`docs/AI_HANDOFF.md`, `docs/STATE.md`, `docs/COLLABORATION.md`, `docs/TEAM_SPLIT_2026-11-17.md`, `docs/ops/LINUX_CI_BOX.md`.
+`docs/AI_HANDOFF.md`, `docs/STATE.md`, `docs/ARCHITECTURE.md`, `docs/COLLABORATION.md`, `docs/TEAM_SPLIT_2026-11-17.md`, `docs/ops/LINUX_CI_BOX.md`.
