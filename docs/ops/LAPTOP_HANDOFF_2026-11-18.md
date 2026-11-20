@@ -41,3 +41,9 @@ Why WSL kept closing: `%UserProfile%\.wslconfig` capped WSL at `memory=3800MB` w
 - runner jobs still accept only `push` to `main`, `merge_group`, `schedule` and `workflow_dispatch`, with the fork guard.
 
 Long term, move the phone stack to a production server so that the box goes back to holding nothing of value.
+
+## Closeout on the box (2026-11-20)
+The handoff folder (without the two secret archives) was processed on `roxira-ci`:
+- **Git leftovers:** all 18 branches in the bundle match merged PRs (#165, #283, #348, #474, #476, #494, #512, #513, #518, #526, #531, #532, #535, #566, #573, #574, #575, #591), either by exact head commit or by the same change on `main`. The 11 `.patch` files hold no code: nine are the `AGENTS.md` that `next dev` writes into `output_apps/enterprise_hub/frontend/`, one is a local `e2e/node_modules` symlink, one is two AI summary files for #565. Nothing was restored.
+- **Claude memory:** still-valid notes were merged into the box hub memory; stale Windows/WSL paths and anything secret were dropped.
+- **Desktop prompts:** the deep-research prompts of rounds 1 and 2 are now in `docs/strategy/DEEP_RESEARCH_ROUND1.md` and `DEEP_RESEARCH_ROUND2.md` (R18 was already in `DEEP_RESEARCH_ROUND4.md`). The Antigravity prompt copy (v4) and the strategy summary are superseded by `docs/antigravity/LANE_PROMPT_FA.md` (v6) and `docs/strategy/PRODUCT_RESET_2026-11-15.md`.
