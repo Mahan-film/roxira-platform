@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the Roxira agent bridge every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=5min
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target
