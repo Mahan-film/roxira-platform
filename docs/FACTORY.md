@@ -91,7 +91,7 @@ VERIFIER: RESULT: OK
 - **Private repo plan A (not live yet):** protected branches and auto-merge are not available on the Free plan, so merges move to a merge desk script on the CI box and lanes stop calling `gh pr merge` ([strategy/PRIVATE_REPO_PLAN_2026-11-17.md](strategy/PRIVATE_REPO_PLAN_2026-11-17.md); `scripts/dev/merge_desk.py` in PR #1005 is not on `origin/main` yet, unverified).
 
 ## 7. Unblock playbook (lessons so far)
-1. **Pre-push tests hang or time out on the Mac.** `scripts/ops/deploy_local.sh` read its confirmation from `/dev/tty`. The Antigravity terminal is a real pty, so six tests in `src/ops/test_autodeploy.py` and `src/ops/test_deploy_migrate.py` waited for a human and hit the 60 s timeout. The fix is test-only (`start_new_session=True`), PR #1006, announced on #592 as in the merge queue. Part of the same problem landed as #1002 (merged). Whether #1006 itself is on `origin/main` is unverified.
+1. **Pre-push tests hang or time out on the Mac.** `scripts/ops/deploy_local.sh` read its confirmation from `/dev/tty`. The Antigravity terminal is a real pty, so six tests in `src/ops/test_autodeploy.py` and `src/ops/test_deploy_migrate.py` waited for a human and hit the 60 s timeout. The fix is test-only: `_run_script` with `start_new_session=True`, on main since #1002 (issue #1000; verified 2026-11-20: 26/26 pass under a pseudo-terminal). The hub's duplicate #1006 was closed. Reproduce such hangs with `script -q /dev/null <python> -m pytest ... < /dev/null`.
    - Temporary unblock: `LOCAL_CI_SKIP_PYTEST=1 FRESH_DB_PORT=<unique port> git push`. This skips only the local pytest step. GitHub CI still runs the full pytest suite, so nothing is hidden. After the fix lands, `git fetch origin && git rebase origin/main`, then a plain `FRESH_DB_PORT=<port> git push` works again.
    - Never `--no-verify`, never edit the hook, never weaken or delete the tests (LESSONS rule 2).
 2. **Date bomb in a test.** `cheques.service.spec.ts` hard-coded today's date and turned Backend CI red for every PR on 2026-11-20. Fixed in #1003. Never hard-code a date that means "not today"; use a fixed past date or compute relative to now. After such a fix, rebase and re-run Backend on the affected PRs.
@@ -105,7 +105,7 @@ VERIFIER: RESULT: OK
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `git push` hangs 60 s per test, pre-push fails on `src/ops/test_autodeploy.py` or `test_deploy_migrate.py` | test read `/dev/tty` under a real pty (#1006) | rebase on `origin/main` after #1006; until then `LOCAL_CI_SKIP_PYTEST=1 FRESH_DB_PORT=<port> git push` |
+| `git push` hangs 60 s per test, pre-push fails on `src/ops/test_autodeploy.py` or `test_deploy_migrate.py` | test read `/dev/tty` under a real pty (fixed in #1002) | `git fetch origin && git rebase origin/main`, then push normally |
 | Two sessions' local CI collide, database port busy | same `FRESH_DB_PORT` | give every session a unique port; check with `ss -tulnp` first and never use the reserved ports in AGENTS.md section 7 |
 | Frontend-touching push fails at the Turbopack step | sandbox cannot bind a port | push from a normal terminal |
 | Backend CI red on every PR, same spec | date bomb on `main` | land the fix on `main`, rebase, re-run Backend |
