@@ -20,7 +20,7 @@ Status 2026-11-20 (box hub, #1013). Every "latest" below was checked that day ag
 | Redis | prod compose | 7-alpine | 8.10.3 · Valkey 9.2.0 | 7.4: EOL 2029-12 | licence choice at next major |
 | Qdrant | prod compose | 1.19.0 | 1.20.2 | | 1 minor behind |
 | TEI (embeddings) | prod compose | digest pin | 1.9.4 | | check the digest's version |
-| LiveKit server / SIP | phone stack (#959, user `phone`) | per kit | server v1.13.11, sip v1.25.0 | | pin exact tags in the kit |
+| LiveKit server / SIP | phone stack (#959, user `phone`) | **`:latest` (unpinned)** on the box | server v1.13.11, sip v1.25.0 | | pin exact tags + digests in the kit |
 
 ### Frameworks and tools
 
@@ -65,6 +65,7 @@ Each step is one small PR with its own CI run and a review-desk verdict. Runtime
 2. **Node 26 everywhere, one wave**: image bumps #875, #876, #879 plus CI parity #1016 (`ci.yml` `NODE_VERSION` 22 → 26, and the four Node 20 workflows → 26), so CI tests what the images run. Checked on the box 2026-11-20 under Node 26.13.1:
    - hub: `tsc --noEmit`, `nest build` and Jest unit specs all pass (318 suites, 3366 tests, 0 failures);
    - frontend: `next build` passes.
+   - `node:26-alpine` hub image: the `npm ci` and `nest build` stages pass on musl. The runner stage `apk add` could not reach the Alpine CDN through the box proxy (TLS error). That is a box network limit, and it is the same on node:22-alpine.
    - The frontend `npm test` script (node `--test`) is not run in CI and is already broken: 37 failures on Node 22, 4 on Node 26 (extensionless imports, a TS `enum` in strip-only mode). That is a separate cleanup, not a Node 26 regression.
    - npm 11 in Node 26 skips install scripts that have not been approved (`allowScripts`). Only optional scripts are affected: `msgpackr-extract` (bullmq falls back to pure JS) and the `unrs-resolver` postinstall. `agent-task.yml` stays on Node 20 until the `opencode-ai` global install is checked with approved scripts.
 3. **Python 3.11 → 3.13 for `Dockerfile.prod`**: parity with CI and `requires-python`. In the same PR, align `openai` with pyproject and bump the pinned patch versions (torch 2.14.1 stays). Build the full image on the box and run the AI-core smoke test plus `answer_timing` before merge. Research service 3.12 → 3.13 together with its `smoke.sh`. Stragglers (`review-desk.yml`, `model-tournament.yml`) → 3.13.
