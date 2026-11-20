@@ -131,6 +131,10 @@ def _run_auto(a: dict, extra_env: dict | None = None):
         capture_output=True,
         text=True,
         timeout=60,
+        # No controlling terminal: deploy_local.sh reads its confirmation from /dev/tty when one
+        # exists, so under an IDE/agent terminal (Antigravity, VS Code) it would wait for a human
+        # and the test hits the 60 s timeout. A new session has no /dev/tty -> stdin is used.
+        start_new_session=True,
     )
 
 
@@ -254,6 +258,10 @@ def test_auto_confirm_ignored_when_marker_missing(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         timeout=60,
+        # No controlling terminal: deploy_local.sh reads its confirmation from /dev/tty when one
+        # exists, so under an IDE/agent terminal (Antigravity, VS Code) it would wait for a human
+        # and the test hits the 60 s timeout. A new session has no /dev/tty -> stdin is used.
+        start_new_session=True,
     )
     out = result.stdout + result.stderr
     assert result.returncode == 1, out
@@ -273,6 +281,10 @@ def test_auto_confirm_ignored_when_not_root(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         timeout=60,
+        # No controlling terminal: deploy_local.sh reads its confirmation from /dev/tty when one
+        # exists, so under an IDE/agent terminal (Antigravity, VS Code) it would wait for a human
+        # and the test hits the 60 s timeout. A new session has no /dev/tty -> stdin is used.
+        start_new_session=True,
     )
     out = result.stdout + result.stderr
     assert result.returncode == 1, out
@@ -307,6 +319,10 @@ def test_auto_confirm_ignored_when_not_local(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         timeout=60,
+        # No controlling terminal: deploy_local.sh reads its confirmation from /dev/tty when one
+        # exists, so under an IDE/agent terminal (Antigravity, VS Code) it would wait for a human
+        # and the test hits the 60 s timeout. A new session has no /dev/tty -> stdin is used.
+        start_new_session=True,
     )
     out = result.stdout + result.stderr
     assert result.returncode == 1, out

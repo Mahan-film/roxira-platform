@@ -93,6 +93,10 @@ def _run(sb: dict, *args: str, extra_env: dict | None = None, stdin: str = ""):
         capture_output=True,
         text=True,
         timeout=60,
+        # No controlling terminal: deploy_local.sh reads its confirmation from /dev/tty when one
+        # exists, so under an IDE/agent terminal (Antigravity, VS Code) it would wait for a human
+        # and the test hits the 60 s timeout. A new session has no /dev/tty -> stdin is used.
+        start_new_session=True,
     )
 
 
