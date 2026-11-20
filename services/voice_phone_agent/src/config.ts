@@ -16,7 +16,8 @@ const num = (k: string, d: number) => {
 
 /** Reads the primary model ID for a role from config/models.yaml without external YAML dependencies (T161). */
 export function loadRoleModel(role: string): string {
-  const yamlPath = path.resolve(ROOT, '../../config/models.yaml');
+  // MODELS_YAML: deployed copies (e.g. roxira-ci /srv/data/phone/agent) live outside the repo tree.
+  const yamlPath = (process.env.MODELS_YAML ?? '').trim() || path.resolve(ROOT, '../../config/models.yaml');
   if (!fs.existsSync(yamlPath)) {
     throw new Error(`Model registry not found at ${yamlPath}`);
   }
