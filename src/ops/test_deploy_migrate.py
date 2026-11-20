@@ -85,6 +85,10 @@ def sandbox(tmp_path: Path) -> dict:
 
 def _run(sb: dict, *args: str, extra_env: dict | None = None, stdin: str = ""):
     env = {**sb["env"], **(extra_env or {})}
+    # start_new_session: no controlling terminal, so confirm_read() in deploy_local.sh cannot
+    # open /dev/tty and reads the confirmation from `stdin` below. Without it, a run from an
+    # interactive terminal (every macOS lane: git push -> pre-push -> local_ci.sh) blocks on
+    # the real terminal until the 60 s pytest timeout.
     return subprocess.run(
         ["bash", str(script_path()), *args],
         cwd=sb["work"],
@@ -93,6 +97,7 @@ def _run(sb: dict, *args: str, extra_env: dict | None = None, stdin: str = ""):
         capture_output=True,
         text=True,
         timeout=60,
+        start_new_session=True,
     )
 
 
