@@ -232,31 +232,19 @@ function getCurrencyScale(currency?: Currency | string): number {
 export class InvalidAmountError extends Error {}
 
 /**
- * Exact minor units of a decimal number or string at `scale` decimals. The text is split on '.',
- * padded when shorter than `scale`, and rounded half up when longer. No float arithmetic is used.
- * Null, undefined and '' are 0. Anything that is not a plain decimal throws InvalidAmountError.
+ * Exact minor units of a decimal number or string at `scale` decimals, delegating to the shared
+ * `numberToScaled` helper from `modules/accounting/money.ts` (via `invoice-line-math.ts`).
+ * Null, undefined and '' are 0. Persian/Arabic digits are normalized first.
+ * Anything that is not a plain decimal throws InvalidAmountError.
  */
 export function toMinorUnits(value: number | string | null | undefined, scale: number): bigint {
   if (value === null || value === undefined || value === '') return 0n;
-  let text: string;
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value) || Math.abs(value) > Number.MAX_SAFE_INTEGER) {
-      throw new InvalidAmountError(`Invalid amount: ${value}`);
-    }
-    text = value.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits: 20 });
-  } else {
-    text = toLatinDigits(value).trim();
-  }
-  const match = /^(-?)(\d{1,18})(?:\.(\d+))?$/.exec(text);
-  if (!match) {
+  const normalized = typeof value === 'string' ? toLatinDigits(value).trim() : value;
+  try {
+    return numberToScaled(normalized, scale);
+  } catch {
     throw new InvalidAmountError(`Invalid amount: "${String(value)}"`);
   }
-  const [, sign, integer, fraction = ''] = match;
-  let units = BigInt(integer + fraction.slice(0, scale).padEnd(scale, '0'));
-  if (fraction.length > scale && fraction[scale] >= '5') {
-    units += 1n;
-  }
-  return sign === '-' ? -units : units;
 }
 
 /**
