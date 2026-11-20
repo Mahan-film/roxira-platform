@@ -28,7 +28,7 @@ flowchart LR
   ai --> redis
   ai --> qd[(Qdrant 1.19)]
   ai --> tei[TEI bge-m3 CPU]
-  ai --> kp[LiteLLM key pool<br/>127.0.0.1:4000]
+  ai --> kp[LiteLLM key pool<br/>loopback only]
   hub --> kp
   kp --> llm([Free ladder first,<br/>then paid fallback])
   subgraph timers [systemd timers on the host]
