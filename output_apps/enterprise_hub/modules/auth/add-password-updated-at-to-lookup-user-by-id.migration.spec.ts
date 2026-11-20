@@ -28,5 +28,7 @@ describe('AddPasswordUpdatedAtToLookupUserById migration (T105)', () => {
     expect(sql).toContain('CREATE OR REPLACE FUNCTION public.lookup_user_by_id(p_user_id uuid)');
     expect(sql).toContain('REVOKE ALL ON FUNCTION public.lookup_user_by_id(uuid) FROM PUBLIC');
     expect(sql).not.toContain('TO PUBLIC');
+    expect(sql).not.toContain('password_updated_at');
+    expect(sql).not.toContain('u.password_updated_at');
   });
 });
