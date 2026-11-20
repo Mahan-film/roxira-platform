@@ -59,7 +59,7 @@ export class BusinessTaxService {
     const pack = this.countryPackRegistry?.resolve();
     const rule = pack?.taxRules.find((r) => r.kind === 'business_income_tax');
     const keys = rule ? (rule.statutoryKeys as readonly StatutoryKey[]) : KEYS;
-    const country = pack?.country;
+    const country = rule && pack?.country ? pack.country : 'IR';
     const used = await readStatutory(this.statutory, tenantId, dto.fiscalYear, keys, country);
     const brackets = used.get('income_tax_art131_brackets')!.value as Bracket[];
     // The store holds whole rials (money kind); the computation works in minor units (rial x 100).
