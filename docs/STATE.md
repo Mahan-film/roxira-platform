@@ -46,7 +46,7 @@ Owner speaks Persian: reply in Persian; code, commits and docs in English. The o
 - Secrets printed by an agent on 2026-11-17 (Gemini key, `POSTGRES_PASSWORD`, Umami secret): owner decided 2026-11-18 not to rotate now. They went into a local Mac transcript and the model provider, never to GitHub. Optional later via `set_secret.sh`.
 - Run `04_root_box_status.sh` once on the box (#968), and one sudo step for the phone stack once #959 (T231) lands. Open hardening item: `mahanfilms` is in the docker group, so its containers bypass the proxy.
 - Private repo: owner chose option A (Free, USD 0) on 2026-11-18. The hub flips visibility after #947 (T227), #949 (T228) and #951 (T229, merge desk).
-- R18 (Smart Judge) deep research: the owner runs it (prompt in `docs/strategy/DEEP_RESEARCH_ROUND4.md`); the raw report goes to `docs/strategy/research/R18_SMART_JUDGE_RAW.md` via a box-hub PR. R1–R17 and R19 are digested.
+- R18 digested 2026-11-20: rows T234-T258 (#973-#997), see `docs/strategy/research/R18_SMART_JUDGE.md`. R1–R17 and R19 are digested.
 
 ## Next for the hub
 1. Review-desk verdicts → merge queued green PRs (#889, lane PRs listed in WAVE 20); dispatch the desk again after lane pushes.
@@ -64,4 +64,4 @@ Owner speaks Persian: reply in Persian; code, commits and docs in English. The o
 - `src/ops/test_autodeploy.py` fails locally only (unrelated); never run pytest over `src/` or the repo root.
 
 ## Key documents
-`docs/strategy/ARCHITECTURE_DECISIONS_2026-11-16.md` (rows T166–T210) · `docs/strategy/INFRA_TARGET_2026-11-17.md` (T211–T218, Rust path) · `docs/strategy/research/` (R1–R17, R19 digests) · `docs/TEAM_SPLIT_2026-11-17.md` · `docs/owner/OWNER_ASKS_FA.md` · `docs/OPERATIONS_RUNBOOK.md` §7–8 (merge traps).
+`docs/strategy/ARCHITECTURE_DECISIONS_2026-11-16.md` (rows T166–T210) · `docs/strategy/INFRA_TARGET_2026-11-17.md` (T211–T218, Rust path) · `docs/strategy/research/` (R1–R17, R19 digests) · `docs/TEAM_SPLIT_2026-11-17.md` · `docs/TEAM_START.md` · `docs/owner/OWNER_ASKS_FA.md` · `docs/OPERATIONS_RUNBOOK.md` §7–8 (merge traps).
