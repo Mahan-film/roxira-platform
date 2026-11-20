@@ -35,7 +35,7 @@ RUN cd main/pg && go build -tags libsodium -trimpath \
  && /out/wal-g --version
 
 FROM ${PG_IMAGE}
-RUN apk add --no-cache libsodium
+RUN apk add --no-cache libsodium coreutils
 COPY --from=build /out/wal-g /usr/local/bin/wal-g
 COPY walg-archive.sh /usr/local/bin/walg-archive
 RUN chmod 0755 /usr/local/bin/walg-archive /usr/local/bin/wal-g

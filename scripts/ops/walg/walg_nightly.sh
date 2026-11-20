@@ -31,7 +31,7 @@ elif ! walg_exec delete retain FULL "$WALG_RETAIN_FULL" --confirm >/dev/null 2>"
 fi
 
 if [ -z "$err" ]; then
-  : >"$WALG_FLAG_DIR/CHAIN_BROKEN" 2>/dev/null || true   # a fresh base backup restarts the chain
+  rm -f "$WALG_FLAG_DIR/CHAIN_BROKEN" 2>/dev/null || true   # a fresh base backup restarts the chain
   env_write "$WALG_BASE_FILE" "WALG_BASE_RESULT=OK" "WALG_BASE_LAST_OK=$started" "WALG_BASE_LAST_OK_EPOCH=$(date +%s)"
   log "walg base backup ok ($started)"
   "$here/walg_status.sh" || true
