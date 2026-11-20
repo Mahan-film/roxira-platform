@@ -76,7 +76,7 @@ export class DoctorWithholdingService {
     const pack = this.countryPackRegistry?.resolve();
     const rule = pack?.taxRules.find((r) => r.kind === 'doctor_withholding');
     const keys = rule ? (rule.statutoryKeys as readonly StatutoryKey[]) : KEYS;
-    const country = rule && pack?.country ? pack.country : 'IR';
+    const country = pack?.country || 'IR';
     const used = await readStatutory(this.statutory, tenantId, dto.fiscalYear, keys, country);
     const rate = String(used.get('doctor_fee_withholding_rate')!.value);
 
