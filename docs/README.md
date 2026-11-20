@@ -7,6 +7,7 @@ Never read `repomix-output.xml`, `database_snapshots/`, `*.sql` or `*.tar.gz`.
 ## Start here
 | File | What it is |
 |---|---|
+| [hub/HUB_START.md](hub/HUB_START.md) | Restart the hub on a new Claude account, Mac user or machine; hub memory copy in [hub/memory/](hub/memory/MEMORY.md) |
 | [TEAM_START.md](TEAM_START.md) | One page for a new colleague and their AI accounts |
 | [STATE.md](STATE.md) | Current state: what is live, what is open, what waits on the owner |
 | `ARCHITECTURE.md` | Architecture overview (may be added by another change; unverified on this branch) |
@@ -23,6 +24,7 @@ Never read `repomix-output.xml`, `database_snapshots/`, `*.sql` or `*.tar.gz`.
 | [strategy/MASTER_PLAN_2026-11-16.md](strategy/MASTER_PLAN_2026-11-16.md) | Current master plan and phases |
 | [strategy/ARCHITECTURE_DECISIONS_2026-11-16.md](strategy/ARCHITECTURE_DECISIONS_2026-11-16.md) | What we adopt and refuse; rows T166 to T210 |
 | [strategy/INFRA_TARGET_2026-11-17.md](strategy/INFRA_TARGET_2026-11-17.md) | Target infrastructure and the Rust-ready path; rows T211 to T218 |
+| [strategy/R20_DIGEST.md](strategy/R20_DIGEST.md) | Two machines, agent dispatcher, private repo at $0: decisions D1-D6 and rows R20-1..8 (raw: [research/R20_TWO_MACHINE_RAW.md](strategy/research/R20_TWO_MACHINE_RAW.md)) |
 | [strategy/PRIVATE_REPO_PLAN_2026-11-17.md](strategy/PRIVATE_REPO_PLAN_2026-11-17.md) | Plan for making the repo private (plan A chosen) |
 | [strategy/ADR_GLOBAL_CORE.md](strategy/ADR_GLOBAL_CORE.md) | Global core design decision |
 | [strategy/ADR_RUST_READY_HOT_PATH.md](strategy/ADR_RUST_READY_HOT_PATH.md) | Retrieval contract and Rust trigger |

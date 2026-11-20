@@ -1,0 +1,53 @@
+- [Roxira overview](project-roxira-overview.md) — project topology, prod host, open security debt
+- [Two GitHub accounts, one Mac](project-two-github-accounts.md) — mahan-films + mahansudo; git author is "Test User"; switch gh before claiming
+- [Strategy map 2026-11-03](project-strategy-map-2026-11-03.md) — read order, Iran-first accounting direction, autodeploy blocked by dirty tree
+- [Key leak audit 2026-11-03](project-key-leak-audit-2026-11-03.md) — AI pool clean; search/SMS/Kira keys live in history block going public
+- [State 2026-10-30](project-state-2026-10-30.md) — srv1 dirty tree live, PRs 871/884/885, backup failing, key inventory doc
+- [Never collect src tests locally](feedback-never-collect-src-tests.md) — src test_*.py run git commit/checkout + agents at import
+- [Hub delegates to Sonnet agents](feedback-hub-delegation.md) — strategist role; agents local-only, prod writes need owner OK
+- [Antigravity is owner-run](feedback-antigravity-owner-relay.md) — owner runs the app and relays reports; Claude never automates agy
+- [Owner: minimal handoffs, Persian](feedback-owner-minimal-work.md) — do almost everything yourself; owner only gets UI clicks/approvals
+- [HARD RULE: Opus never executes](feedback-cheap-execution-only.md) — strategist/architect only; all work → agent issues / OpenCode pool
+- [GitHub org & auto-merge](project-github-plan-automerge.md) — repo now Mahan-film/roxira-platform (Team); server deploy key needs org deploy-keys on
+- [Research first, prove challenges, use auto-merge](feedback-research-and-automerge.md) — test sites/tools yourself; merge with gh pr merge --auto --squash
+- [Test before telling; lawyer gets only hard questions](feedback-test-before-telling.md) — verify every link/command first; research searchable legal questions yourself
+- [Auto-merge is enabled; hub merges green PRs](project-automerge-enabled.md) — --auto or plain --squash; traps in docs/OPERATIONS_RUNBOOK.md §7-8
+- [Public repo & zero-cost](project-public-repo-and-zero-cost.md) — mahan-films/roxira public MIT, local CI, ~/Secrets/roxira/roxira.env, classifier blocks
+- [Keys, local infra, CI state 2026-10-04](project-keys-and-local-infra.md) — roxira.env + set_secret.sh, OmniRoute 127.0.0.1:20128, local_ci, Actions off, nothing auto-deployed
+- [Local agent factory plan 2026-10](project-factory-plan-2026-10.md) — stack verdicts, autonomy ladder L0-L4, Mac 16GB limits, built vs next
+- [Scan provider key patterns before publishing](feedback-scan-keys-before-publishing.md) — gitleaks missed 8 real keys in public repo; never echo env lines
+- [Terminal commands, not websites](feedback-terminal-commands-not-ui.md) — give paste-ready gh/bash blocks with real PR numbers
+- [Cheap models, never Gemini Pro](feedback-cheap-models-no-gemini-pro.md) — free → DeepSeek V4.1 Flash → others; Gemini Flash only if essential
+- [Legal sources: ekhtebar + nezamat + qavanin](feedback-ekhtebar-sole-legal-source.md) — Iranian legal content only; any fitting source otherwise; Groq only from server IP
+- [Business decisions are the owner's](feedback-business-decisions-are-owners.md) — pricing/free access: ask owner; lawyers pay; only our collaborators get granted access
+- [Lawyer answers 2026-10-13](project-lawyer-answers-2026-10-13.md) — 9 decisions (thresholds, rent laws, mahr 110, repeal warnings) + owner's reduce-lawyer-dependence vision
+- [Rule «ناامیدی»: always a plan B](feedback-rule-naomidi-always-fallback.md) — blocked site/tool → use alternative sources/strategies (no bypassing security)
+- [State 2026-10-12](project-state-2026-10-12.md) — PRs 556-567 merged, pending owner deploy/v3/law-watch steps
+- [Subagent policy](feedback-no-claude-subagents.md) — server agents first; if no credit, Claude subagents allowed (Haiku 5.5 first, then Sonnet 5.5), parallel (owner 2026-10-16)
+- [Roxira portal decisions](project-roxira-portal-decisions-2026-10-14.md) — prices removed, founder stays, e-namad untouched, integrity+tenant isolation approved
+- [State 2026-10-14](project-state-2026-10-14.md) — srv1 live, VPN tuned, key pool, remaining list (laws v4, audit P1, PR triage, old server)
+- [Migration to srv1 <ip>](project-migration-srv1-2026-10-13.md) — in progress; done/next steps, never cron on both
+- [Server agents (Groq) live](project-server-agents-groq.md) — SMOKE PASS 2026-10-13; dispatch via run_task.sh, no OpenRouter fallback
+- [State 2026-10-15](project-state-2026-10-15.md) — regs v2 built, guides batch3, rc.majlis law ids, core.bare/pre-push traps
+- [Owner direction 2026-10-16](project-owner-direction-2026-10-16.md) — factory first, then global business via Malaysian company; cost-effective, open source
+- [Public repo migrated 2026-11-03](project-public-repo-migrated-2026-11-03.md) — repo now public/scrubbed; old = roxira-platform-private; guard refuses old root; Codeberg mirror stopped
+- [Public CI + team tools 2026-11-03](project-public-ci-and-team-tools-2026-11-03.md) — Actions on, only ci.yml; push protection; team_status.py; workflow pushes need mahan-films
+- [Owner answers 2026-11-03](project-owner-answers-2026-11-03.md) — Telegram daily, rotate keys now, fleet low cap, review rule, colleague access, old server criteria
+- [Domains: .ir Iran, .net global](project-domains-iran-vs-global.md) — roxira.ir Iran-only, roxira.net global; ghazihoushmand.ir legal Iran; Iran first
+- [PRIORITY 1: accounting first](project-accounting-first.md) — complete automatic accounting for roxira.ir before anything else; checklist in issue #230
+- [Max 2 emails a day](feedback-email-max-two-per-day.md) — 12-hour digest, urgent via Telegram only; repo notifications ignored for both accounts
+- [OpenCode builds, Claude supervises](feedback-opencode-builds-claude-supervises.md) — bulk work to fleet/OpenCode on both machines; Claude briefs, reviews, merges
+- [Fleet supervision 2026-11-05](project-fleet-supervision-2026-11-05.md) — how fleet runs, supervisor daemon, traps from batches 1-4
+- [Never raise hosting location](feedback-no-hosting-location-topic.md) — Iran/Germany, shutdowns, domestic hosting: owner forbids the topic
+- [Team model + Claude scarce 2026-11-12](project-team-operating-model-2026-11-12.md) — Roxira + Smart Judge; Gemini builds, DeepSeek-only desk every 2 h, hub spends minimal tokens
+- [Full authority 2026-11-12](feedback-full-authority-2026-11-12.md) — owner: do whatever is needed; merge infra after Sonnet review; still no bypass/keys/pricing
+- [Review routing](feedback-review-routing.md) — Haiku 5.5 reviews all Antigravity PRs in parallel + CI triage; Sonnet confirms critical only (2026-11-12)
+- [Review desk can't enqueue](project-review-desk-merge-method.md) — plain gh pr merge needs a method flag; task forbids --squash (2026-11-12)
+- [State 2026-11-16](project-state-2026-11-16.md) — L1-L4 done, ~30 lane PRs unmerged (4 red CI), R8-R12 answers incoming
+- [Owner decisions 2026-11-16](project-owner-decisions-2026-11-16.md) — lowest cost, own MY Sdn Bhd = entity + pilot #1, data improves service + private option
+- [Re-ask owner items in Persian](feedback-reask-owner-items.md) — read docs/owner/OWNER_ASKS_FA.md each session, re-ask pending rows
+- [Product first 2026-11-16](project-product-first-2026-11-16.md) — no company decisions until product done; DE→Gulf packs; WIP limit; merge pass; Mac disk guard
+- [R17 Germany structure](project-r17-germany-structure.md) — D1: German GmbH/UG owned by MY Sdn Bhd, partner as GF; legal steps after product
+- [Never name the country](feedback-never-name-the-country.md) — say "default/current pack"; network blocks = "blocked from this network"
+- [CI box + phone stack](project-ci-box-and-phone-stack.md) — roxira-ci Ubuntu 26.04 @<ip>, Docker Hub 403, SSH via Terminal tab, users runner/phone/mahanfilms
+- [R18 digest 2026-11-20](project-r18-digest-2026-11-20.md) — T234-T258 = #973-#997, WAVE 21, Option 2 phased; docs PR #998
