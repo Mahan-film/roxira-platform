@@ -57,7 +57,7 @@ export class CreateWooCommerceIntegration1789900012300 implements MigrationInter
         ON "woocommerce_sync_logs" ("tenant_id", "direction", "external_id");
       CREATE UNIQUE INDEX IF NOT EXISTS "UQ_wc_sync_logs_tenant_success"
         ON "woocommerce_sync_logs" ("tenant_id", "direction", "external_id")
-        WHERE "status" = 'success' AND "direction" = 'INBOUND_ORDER';
+        WHERE "status" = 'success' AND "direction" = 'inbound_order';
     `);
 
     await queryRunner.query(`
