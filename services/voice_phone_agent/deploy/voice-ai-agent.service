@@ -12,6 +12,8 @@ WorkingDirectory=/srv/data/phone/agent
 # because process.loadEnvFile never overrides variables that are already set.
 Environment=NODE_ENV=production
 Environment=PROXY_URL=http://127.0.0.1:10809
+# Root-owned copy of config/models.yaml from origin/main, installed by 05_root_phone_stack.sh.
+Environment=MODELS_YAML=/usr/local/lib/phone-stack/models.yaml
 ExecStart=/usr/bin/node --max-old-space-size=384 dist/main.js
 Restart=always
 RestartSec=3
