@@ -66,7 +66,7 @@ alert() {
 # Only these subcommands may run; anything else is refused.
 walg_exec() {
   case "${1:-}" in
-    backup-push | backup-list | delete | wal-push | wal-fetch | backup-fetch) ;;
+    backup-push | backup-list | delete | wal-push | wal-fetch) ;;
     *) die "wal-g subcommand not allowed: ${1:-<none>}" ;;
   esac
   docker exec -u postgres "$WALG_CONTAINER" wal-g "$@"
