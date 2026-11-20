@@ -23,10 +23,17 @@ die() { log "ERROR: $*"; exit 1; }
 
 load_walg_env() {
   if [ -r "$WALG_ENV_FILE" ]; then
-    set -a
-    # shellcheck disable=SC1090
-    . "$WALG_ENV_FILE"
-    set +a
+    local line key val
+    while IFS= read -r line || [ -n "$line" ]; do
+      line="${line%$'\r'}"
+      case "$line" in '' | '#'*) continue ;; esac
+      [[ "$line" =~ ^(WALG_|AWS_|PG|POSTGRES_)[A-Z0-9_]*= ]] || die "env file has an invalid line (expected KEY=VALUE with WALG_/AWS_/PG/POSTGRES_)"
+      # shellcheck disable=SC2016  # literal match on purpose
+      case "$line" in *'$'* | *'`'*) die "env file contains forbidden shell metacharacters (\$ or backtick)" ;; esac
+      key="${line%%=*}"
+      val="${line#*=}"
+      export "$key=$val"
+    done <"$WALG_ENV_FILE"
   elif [ "$DRY_RUN" = "1" ]; then
     log "WARN: $WALG_ENV_FILE not readable (ok for --dry-run)"
   else
@@ -59,7 +66,7 @@ alert() {
 # Only these subcommands may run; anything else is refused.
 walg_exec() {
   case "${1:-}" in
-    backup-push | backup-list | delete | wal-push | wal-fetch | backup-fetch | st) ;;
+    backup-push | backup-list | delete | wal-push | wal-fetch | backup-fetch) ;;
     *) die "wal-g subcommand not allowed: ${1:-<none>}" ;;
   esac
   docker exec -u postgres "$WALG_CONTAINER" wal-g "$@"

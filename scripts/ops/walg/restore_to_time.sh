@@ -80,12 +80,13 @@ fi
 
 command -v docker >/dev/null || fail "docker not found"
 [ -n "$env_file" ] && [ -r "$env_file" ] || fail "--env-file <walg.env> is required and must be readable"
-# The file is handed to docker as-is: allow only KEY=VALUE lines (comments/blank ok) with known key prefixes, no command substitution.
+# The file is handed to docker as-is: allow only KEY=VALUE lines (comments/blank ok) with known key prefixes, no shell metacharacters.
 while IFS= read -r line || [ -n "$line" ]; do
+  case "$line" in *$'\r'*) fail "env file contains carriage return" ;; esac
   case "$line" in '' | '#'*) continue ;; esac
   [[ "$line" =~ ^(WALG_|AWS_|PG|POSTGRES_)[A-Z0-9_]*= ]] || fail "env file has a line that is not KEY=VALUE with an allowed key (WALG_/AWS_/PG/POSTGRES_)"
   # shellcheck disable=SC2016  # literal match on purpose
-  case "$line" in *'$('* | *'`'*) fail "env file contains command substitution" ;; esac
+  case "$line" in *'$'* | *'`'*) fail "env file contains forbidden shell metacharacters (\$ or backtick)" ;; esac
 done <"$env_file"
 docker image inspect "$image" >/dev/null 2>&1 \
   || fail "image $image not found; build it: docker build -t $image docker/postgres-walg"

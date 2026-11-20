@@ -37,11 +37,11 @@
 # `docker run` deployment); it is deployable like any other named service.
 set -euo pipefail
 
+PROJECT_DIR="/opt/roxira_platform"
 COMPOSE_FILE="docker-compose.prod.yml"
 # WAL-G overlay (T204): postgres_prod must keep archiving when /etc/roxira/walg.env exists, so include the overlay then.
 COMPOSE_ARGS=(-f "$COMPOSE_FILE")
-[ -r /etc/roxira/walg.env ] && [ -f docker-compose.walg.yml ] && COMPOSE_ARGS+=(-f docker-compose.walg.yml)
-PROJECT_DIR="/opt/roxira_platform"
+[ -r /etc/roxira/walg.env ] && [ -f "$PROJECT_DIR/docker-compose.walg.yml" ] && COMPOSE_ARGS+=(-f docker-compose.walg.yml)
 NGINX_SERVICE="nginx_gateway"
 NGINX_CONTAINER="roxira_nginx_prod"
 NGINX_CONF_PATH="output_apps/nginx_config/nginx.conf"
