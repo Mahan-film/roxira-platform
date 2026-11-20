@@ -1,0 +1,10 @@
+[Unit]
+Description=Roxira Direct Push to Main Guard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/roxira-platform
+EnvironmentFile=-%h/laptop-secrets/telegram.env
+ExecStart=/usr/bin/env bash %h/roxira-platform/scripts/dev/check_main_push.sh --repo Mahan-film/roxira-platform

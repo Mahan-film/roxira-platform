@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Roxira Merge Desk every 10 minutes
+
+[Timer]
+OnCalendar=*:0/10
+Persistent=true
+Unit=roxira-merge-desk.service
+
+[Install]
+WantedBy=timers.target

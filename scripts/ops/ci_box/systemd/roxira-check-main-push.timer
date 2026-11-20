@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Roxira Direct Push to Main Guard every 10 minutes
+
+[Timer]
+OnCalendar=*:0/10
+Persistent=true
+Unit=roxira-check-main-push.service
+
+[Install]
+WantedBy=timers.target

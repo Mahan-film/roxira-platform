@@ -1,0 +1,10 @@
+[Unit]
+Description=Roxira Merge Desk (merge at most one ready PR per run)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/roxira-platform
+EnvironmentFile=-%h/laptop-secrets/telegram.env
+ExecStart=/usr/bin/python3 %h/roxira-platform/scripts/dev/merge_desk.py --repo Mahan-film/roxira-platform
