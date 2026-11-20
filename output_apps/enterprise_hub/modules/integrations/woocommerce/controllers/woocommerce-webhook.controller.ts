@@ -26,6 +26,8 @@ import { verifyHmacSignature } from '../utils/woocommerce-crypto.util';
 export class WooCommerceWebhookController {
   constructor(private readonly syncService: WooCommerceSyncService) {}
 
+  // Per-tenant webhook route: tenantId scopes the RLS secret lookup, and HMAC-SHA256 verification
+  // against that tenant's secret prevents cross-tenant forgery even if a UUID is known.
   @Post('webhook/:tenantId')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'وب‌هوک دریافت سفارش‌ها و تغییرات از فروشگاه ووکامرس' })
@@ -56,11 +58,7 @@ export class WooCommerceWebhookController {
     }
 
     const normalizedTopic = (topic || '').trim().toLowerCase();
-    const isOrderTopic = normalizedTopic
-      ? normalizedTopic.startsWith('order.')
-      : body?.id !== undefined && Array.isArray(body?.line_items);
-
-    if (!isOrderTopic) {
+    if (!normalizedTopic || !normalizedTopic.startsWith('order.')) {
       return { status: 'ignored', topic: normalizedTopic };
     }
 

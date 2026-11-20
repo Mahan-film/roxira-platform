@@ -45,8 +45,8 @@ export class WooCommerceRepository {
     if (scope) {
       return scope.run(tenantId, async (manager) => {
         await manager.query(
-          `SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))`,
-          [tenantId, `wc_order:${externalId}`],
+          `SELECT pg_advisory_xact_lock(('x' || substr(md5($1 || ':wc_order:' || $2), 1, 16))::bit(64)::bigint)`,
+          [tenantId, externalId],
         );
         return fn(manager);
       });

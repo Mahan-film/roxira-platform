@@ -15,7 +15,13 @@ PRIVATE_BLOCKLIST.addSubnet('198.18.0.0', 15, 'ipv4');
 PRIVATE_BLOCKLIST.addSubnet('224.0.0.0', 4, 'ipv4');
 PRIVATE_BLOCKLIST.addSubnet('240.0.0.0', 4, 'ipv4');
 
-PRIVATE_BLOCKLIST.addSubnet('::ffff:0:0', 96, 'ipv6');
+PRIVATE_BLOCKLIST.addSubnet('::ffff:127.0.0.0', 104, 'ipv6');
+PRIVATE_BLOCKLIST.addSubnet('::ffff:10.0.0.0', 104, 'ipv6');
+PRIVATE_BLOCKLIST.addSubnet('::ffff:172.16.0.0', 108, 'ipv6');
+PRIVATE_BLOCKLIST.addSubnet('::ffff:192.168.0.0', 112, 'ipv6');
+PRIVATE_BLOCKLIST.addSubnet('::ffff:169.254.0.0', 112, 'ipv6');
+PRIVATE_BLOCKLIST.addSubnet('::ffff:0.0.0.0', 104, 'ipv6');
+PRIVATE_BLOCKLIST.addSubnet('::ffff:100.64.0.0', 106, 'ipv6');
 PRIVATE_BLOCKLIST.addSubnet('::1', 128, 'ipv6');
 PRIVATE_BLOCKLIST.addSubnet('::', 128, 'ipv6');
 PRIVATE_BLOCKLIST.addSubnet('fc00::', 7, 'ipv6');
@@ -58,8 +64,8 @@ function getMasterKey(customKey?: Buffer): Buffer {
     return customKey;
   }
   const envKey = process.env.WOOCOMMERCE_KEY_ENCRYPTION_KEY;
-  if (!envKey || envKey.trim().length === 0) {
-    throw new Error('WOOCOMMERCE_KEY_ENCRYPTION_KEY is not configured (fail closed)');
+  if (!envKey || envKey.trim().length < 32) {
+    throw new Error('WOOCOMMERCE_KEY_ENCRYPTION_KEY must be configured with at least 32 characters (fail closed)');
   }
   return createHash('sha256').update(envKey.trim()).digest();
 }
