@@ -9,6 +9,7 @@ EnvironmentFile=-/etc/roxira/radar.env
 WorkingDirectory=/opt/roxira_platform
 Environment=RADAR_MAX_USD=0.05
 Environment=RADAR_STATE_DIR=/var/lib/roxira-radar
+Environment=RADAR_DECISIONS_FILE=/var/lib/roxira-radar/DECISIONS.md
 ExecStart=/usr/bin/python3 /opt/roxira_platform/scripts/ops/radar/radar.py --mode daily --no-llm
 StateDirectory=roxira-radar
 User=root

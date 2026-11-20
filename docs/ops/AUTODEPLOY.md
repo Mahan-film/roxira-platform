@@ -70,6 +70,12 @@ journalctl -u roxira-autodeploy.service -n 50 --no-pager
   verified; a failed or unverified migration records the SHA and aborts.
 - Smoke tests run from the server; any failure triggers automatic rollback.
 - A failed SHA is written to `autodeploy-failed-shas` so the timer does not retry it.
+- When autodeploy refuses a dirty server tree or a failed migration, it records the target SHA once and sends an urgent Telegram alert (naming the dirty paths, never file contents).
+- After fixing the dirty tree or migration, clear the failed-target marker with one command so the next timer tick retries:
+
+```bash
+scripts/ops/autodeploy/clear_failed.sh <sha-prefix>   # or --all
+```
 
 ## Manual fallback
 

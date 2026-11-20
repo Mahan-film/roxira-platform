@@ -35,6 +35,8 @@ DEPLOYED_BEFORE=""
 TARGET_SHORT=""
 MIGRATED=false
 RESULT="skipped"
+FAIL_REASON=""
+FAIL_DETAIL=""
 LOG_FILE=""
 DEPLOY_TMP=""
 
@@ -58,7 +60,15 @@ write_status() {
     # Best effort: notify the owner for a real outcome, never for a no-op/skip.
     # A failed (rolled back) deploy is urgent -> Telegram only (1/h); a good deploy goes to the digest.
     if [ "$RESULT" = "failed" ]; then
-      python3 "$REPO/scripts/ops/notify/notify.py" --urgent "deploy-failed" "استقرار ${TARGET_SHORT:0:7} ناموفق بود و برگردانده شد" >/dev/null 2>&1 || true
+      if [ "$FAIL_REASON" = "dirty-tree" ]; then
+        python3 "$REPO/scripts/ops/notify/notify.py" --urgent "autodeploy-dirty-${TARGET_SHORT:0:7}" \
+          "autodeploy refused ${TARGET_SHORT:0:7}: dirty tree (${FAIL_DETAIL}). Clear marker: scripts/ops/autodeploy/clear_failed.sh ${TARGET_SHORT:0:7}" >/dev/null 2>&1 || true
+      elif [ "$FAIL_REASON" = "migrate-failed" ]; then
+        python3 "$REPO/scripts/ops/notify/notify.py" --urgent "autodeploy-migrate-${TARGET_SHORT:0:7}" \
+          "autodeploy refused ${TARGET_SHORT:0:7}: migration failed (deploy not started). Clear marker: scripts/ops/autodeploy/clear_failed.sh ${TARGET_SHORT:0:7}" >/dev/null 2>&1 || true
+      else
+        python3 "$REPO/scripts/ops/notify/notify.py" --urgent "deploy-failed" "استقرار ${TARGET_SHORT:0:7} ناموفق بود و برگردانده شد" >/dev/null 2>&1 || true
+      fi
     elif [ "$RESULT" = "ok" ]; then
       python3 "$REPO/scripts/ops/notify/notify.py" --queue info autodeploy "deploy ${TARGET_SHORT:0:7}" "deployed ok" >/dev/null 2>&1 || true
     fi
@@ -115,6 +125,23 @@ if [ -f "$FAILED_SHAS" ] && grep -qxF "$TARGET" "$FAILED_SHAS"; then
   exit 0
 fi
 
+# Refuse a dirty server working tree before running deploy_local.sh so we record the target
+# once and send an urgent Telegram alert naming only the dirty paths (never file contents).
+DIRTY_RAW="$(git -C "$REPO" status --porcelain -uall 2>/dev/null || true)"
+if [ -n "$DIRTY_RAW" ]; then
+  DIRTY_PATHS="$(printf '%s\n' "$DIRTY_RAW" | sed 's/^...//' | head -n 10 | paste -sd ', ' -)"
+  DIRTY_COUNT="$(printf '%s\n' "$DIRTY_RAW" | wc -l | tr -d ' ')"
+  if [ "$DIRTY_COUNT" -gt 10 ]; then
+    DIRTY_PATHS="$DIRTY_PATHS (+$((DIRTY_COUNT - 10)) more)"
+  fi
+  log "dirty working tree in $REPO ($DIRTY_COUNT paths: $DIRTY_PATHS); refusing deploy of $TARGET_SHORT"
+  record_failure
+  FAIL_REASON="dirty-tree"
+  FAIL_DETAIL="$DIRTY_PATHS"
+  RESULT="failed"
+  exit 1
+fi
+
 # Copy the deploy script FROM THE TARGET commit, exactly like the owner flow
 # (`git show ... > /tmp/deploy_local.sh`), so the safety rails match the code being shipped.
 DEPLOY_TMP="$(mktemp "${TMPDIR:-/tmp}/roxira-autodeploy-deploy.XXXXXX.sh")"
@@ -127,6 +154,7 @@ if git -C "$REPO" diff --name-only "$DEPLOYED_BEFORE" "$TARGET" | grep -q "^$MIG
   if ! DEPLOY_SSH_HOST=local DEPLOY_AUTO_CONFIRM="$TARGET_SHORT" bash "$DEPLOY_TMP" migrate --yes; then
     log "migrate failed for $TARGET_SHORT; recording as failed and NOT deploying"
     record_failure
+    FAIL_REASON="migrate-failed"
     RESULT="failed"
     exit 1
   fi
