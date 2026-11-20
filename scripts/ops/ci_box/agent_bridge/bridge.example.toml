@@ -1,0 +1,12 @@
+# Copy to ~/.config/roxira-bridge/bridge.toml
+[bridge]
+repo = "Mahan-film/roxira-platform"
+issue = 965
+# NUMERIC GitHub user ids allowed to send WAVE comments (never logins).
+# 226124844 = mahan-films (Mac hub), 211047265 = mahansudo (box account).
+# Re-check with: gh api users/<login> --jq .id
+allowed_user_ids = [226124844, 211047265]
+workdir = "~/roxira-platform"
+timeout_minutes = 45
+max_budget_usd = 5.0
+allow_write = true
