@@ -18,7 +18,7 @@ services:
       - roxira_mesh
 
   twenty_redis:
-    image: valkey/valkey:8-alpine
+    image: redis:7.4.11-alpine
     container_name: roxira_twenty_redis
     restart: always
     mem_limit: 256m
@@ -26,7 +26,7 @@ services:
     pids_limit: 128
     security_opt:
       - no-new-privileges:true
-    command: valkey-server --appendonly yes
+    command: redis-server --appendonly yes
     volumes:
       - /opt/roxira_platform/twenty_data/redis:/data
     networks:

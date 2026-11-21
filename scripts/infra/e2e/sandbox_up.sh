@@ -104,7 +104,7 @@ docker network create --internal --label rxtest=1 "$RX_NET" >/dev/null
 docker run -d --name "$RX_PG" --network "$RX_NET" --label rxtest=1 \
   -e POSTGRES_USER=rx -e "POSTGRES_PASSWORD=$PGPW" -e POSTGRES_DB=rxtest \
   --tmpfs /var/lib/postgresql/data postgres:17-alpine >/dev/null
-docker run -d --name "$RX_REDIS" --network "$RX_NET" --label rxtest=1 valkey/valkey:8-alpine >/dev/null
+docker run -d --name "$RX_REDIS" --network "$RX_NET" --label rxtest=1 redis:7-alpine >/dev/null
 ready=0
 for _ in $(seq 1 90); do
   if docker exec "$RX_PG" psql -U rx -d rxtest -Atc "select 1" >/dev/null 2>&1; then ready=1; break; fi

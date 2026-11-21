@@ -16,6 +16,14 @@ import re
 import sys
 from dataclasses import dataclass
 
+# Production compose files and scripts scheduled for migration in #992 (T253 maintenance window).
+# Kept untouched in #1122 to avoid uncoordinated live container recreations on autodeploy.
+EXCLUDED_PENDING_MIGRATION = {
+    "docker-compose.prod.yml",
+    "docker-compose.modern-stack.yml",
+    "sandbox_up.sh",
+}
+
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 # Matches YAML `image: <ref>` (handling optional quotes and GHA ${{ ... }} prefixes)
@@ -69,11 +77,11 @@ def check_image_ref(raw_image: str) -> str | None:
     if name == "valkey" or org_name == "valkey/valkey":
         return None
 
-    # Redis: only <= 7.2.x is BSD-3-Clause; 7.4+, 8+, latest, or unpinned `7` / `7-alpine` are RSALv2/SSPLv1
+    # Redis: only 7.2.x is supported BSD-3-Clause; 7.4+, 8+, latest, or unpinned `7` / `7-alpine` are RSALv2/SSPLv1
     if name == "redis":
-        if tag.startswith("7.2") or tag.startswith("7.0") or tag.startswith("6."):
+        if tag.startswith("7.2"):
             return None
-        return f"Redis tag '{tag}' is RSALv2/SSPLv1 or unpinned 7.x (use valkey/valkey:8-alpine or redis:7.2)"
+        return f"Redis tag '{tag}' is RSALv2/SSPLv1 or unsupported/unpinned (use valkey/valkey:8-alpine or redis:7.2)"
 
     if name.startswith("redis-stack"):
         return "redis-stack is dual-licensed RSALv2/SSPLv1 (non-OSI)"
@@ -133,11 +141,13 @@ def iter_target_files(root: pathlib.Path = REPO_ROOT) -> list[pathlib.Path]:
     if sandbox.is_file():
         targets.append(sandbox)
 
-    # Exclude vendored / node_modules / .git
+    # Exclude vendored / node_modules / .git and pending maintenance cutover files
     clean: list[pathlib.Path] = []
     seen: set[pathlib.Path] = set()
     for p in sorted(targets):
         if any(part in {"node_modules", ".git", ".next", "dist", "venv", ".venv"} for part in p.parts):
+            continue
+        if p.name in EXCLUDED_PENDING_MIGRATION:
             continue
         if p not in seen and p.is_file():
             seen.add(p)

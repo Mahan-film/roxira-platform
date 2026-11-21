@@ -197,10 +197,7 @@ services:
       - roxira_net
 
   redis_prod:
-    # T299 (#1122): Replaced unpinned redis:7-alpine digest (RSAL/SSPL risk) with Valkey 8 (BSD-3-Clause).
-    # Production restart requires owner OK; migration tracked in #992.
-    # Rollback: revert to redis:7.2-alpine (BSD-3-Clause) pinned by digest.
-    image: valkey/valkey:8-alpine
+    image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
     container_name: roxira_redis_prod
     restart: always
     mem_limit: 256m

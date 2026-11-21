@@ -14,7 +14,7 @@ run `python3 scripts/gen_system_inventory.py` (CI-style check: `--check`).
 | pgbouncer_prod | edoburu/pgbouncer:v1.26.1-p0 | 127.0.0.1:6432:6432 |
 | postgres_prod | postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73 | 127.0.0.1:5432:5432 |
 | qdrant_prod | qdrant/qdrant:v1.19.0@sha256:057ee3a8da769fe7310dd3537b4dc7583bf87a95ce8ac43c0af5a46bc580d1fc | 127.0.0.1:6333:6333 |
-| redis_prod | valkey/valkey:8-alpine | 127.0.0.1:6379:6379 |
+| redis_prod | redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf | 127.0.0.1:6379:6379 |
 | roxira_embeddings | ghcr.io/huggingface/text-embeddings-inference@sha256:798cd7615e060a72ccbdf19aa0ada52289c6a0147490195bafaece6ce04d70f1 | - |
 | roxira_enterprise_backend | build | 127.0.0.1:3000:3000 |
 | roxira_enterprise_frontend | build | 127.0.0.1:3001:3001 |

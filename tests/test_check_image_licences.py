@@ -15,6 +15,7 @@ def test_blocks_rsal_sspl_agpl_images() -> None:
     blocked = [
         "redis:7.4.11-alpine",
         "redis:8-alpine",
+        "redis:7.0-alpine",
         "redis:7",
         "redis:7-alpine",
         "redis:latest",
@@ -33,6 +34,7 @@ def test_blocks_rsal_sspl_agpl_images() -> None:
 def test_allows_permissive_images() -> None:
     allowed = [
         "valkey/valkey:8-alpine",
+        "valkey/valkey:8-alpine@sha256:9971099af41c36e887aabdfe22b80c0fe45df949163dfc9cb434febc57cfc3fc",
         "docker.io/valkey/valkey:8-alpine",
         "valkey/valkey:8",
         "redis:7.2",
