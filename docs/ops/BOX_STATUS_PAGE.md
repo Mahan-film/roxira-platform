@@ -42,3 +42,5 @@ Undo: the installer prints it (disable the three units, delete `roxira-status-*`
 ## Not verified
 Telegram delivery through the box proxy, a real alert, the journal read for the orch tick on a live orch, the `last-backup` stamp format
 (taken from the reliability script, no stamp exists yet), a LAN bind, and the real gateway-side spend (the box only sees its own logs).
+
+The phone panel and its alerts (SIP registration, containers, agent crash loop, LiveKit, firewall drops, log growth) are described in docs/ops/PHONE_MONITORING.md.
