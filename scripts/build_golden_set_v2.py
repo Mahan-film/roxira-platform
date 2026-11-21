@@ -105,9 +105,16 @@ _SYNTHETIC_TEMPLATES = [
 
 
 def build_items() -> list[dict]:
+    """Build the 360 stratified golden set items across 4 strata:
+    - anonymised_real: 5 domains * 10 articles * 2 phrasing variants = 100 items
+    - public_benchmark_adapted: 5 domains * 10 articles * 2 templates = 100 items
+    - synthetic: 4 domains * 5 articles * 4 sub-templates = 80 items
+    - adversarial: 4 categories (repealed, bills, tier-3-only, non-existent) * 20 items = 80 items
+    Total = 100 + 100 + 80 + 80 = 360 items.
+    """
     items: list[dict] = []
 
-    # 1. 100 anonymised_real questions
+    # 1. 100 anonymised_real questions (5 domains x 10 articles x 2 variants = 100)
     idx = 1
     for law_name, code, arts, prompts in _REAL_TOPICS:
         for i, (art, prompt) in enumerate(zip(arts, prompts)):

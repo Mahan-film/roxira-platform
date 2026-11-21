@@ -31,7 +31,14 @@ MAX_LAWYER_CSV_ROWS = 60
 _PHONE_RE = re.compile(r"(?<!\d)09\d{9}(?!\d)")
 _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 _NATIONAL_ID_RE = re.compile(r"(?<!\d)\d{10}(?!\d)")
-_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r", "\n")
+
+EXPECTED_MIN_STRATA_COUNTS: Dict[str, int] = {
+    "anonymised_real": 100,
+    "public_benchmark_adapted": 100,
+    "synthetic": 80,
+    "adversarial": 80,
+}
 
 
 def neutralise_csv_cell(value: Any) -> str:
@@ -118,9 +125,10 @@ def validate_golden_set_v2(items: Sequence[Dict[str, Any]]) -> List[str]:
         if item.get("must_abstain") is False and isinstance(expected_ids, list) and len(expected_ids) == 0:
             errors.append(f"{item_id or idx}: non-abstaining item must have expected_article_ids")
 
-    for s, count in strata_counts.items():
-        if count == 0:
-            errors.append(f"stratum '{s}' has 0 items")
+    for s, min_count in EXPECTED_MIN_STRATA_COUNTS.items():
+        count = strata_counts.get(s, 0)
+        if count < min_count:
+            errors.append(f"stratum '{s}' has {count} items, expected at least {min_count}")
 
     return errors
 

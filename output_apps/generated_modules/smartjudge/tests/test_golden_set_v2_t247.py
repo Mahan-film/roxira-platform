@@ -31,11 +31,29 @@ def test_golden_set_v2_exists_and_passes_schema():
     strata = {it["stratum"] for it in items}
     assert strata == set(VALID_STRATA)
 
-    # Adversarial stratum must have must_abstain items and forbidden_repealed_ids items
+    real = [it for it in items if it["stratum"] == "anonymised_real"]
+    bench = [it for it in items if it["stratum"] == "public_benchmark_adapted"]
+    syn = [it for it in items if it["stratum"] == "synthetic"]
     adv = [it for it in items if it["stratum"] == "adversarial"]
-    assert len(adv) >= 60
+
+    assert len(real) == 100, f"expected 100 anonymised_real, got {len(real)}"
+    assert len(bench) == 100, f"expected 100 public_benchmark_adapted, got {len(bench)}"
+    assert len(syn) == 80, f"expected 80 synthetic, got {len(syn)}"
+    assert len(adv) == 80, f"expected 80 adversarial, got {len(adv)}"
+    assert len(items) == 360
+
+    # Adversarial stratum must have must_abstain items and forbidden_repealed_ids items
     assert any(it.get("must_abstain") is True for it in adv)
     assert any(it.get("forbidden_repealed_ids") for it in adv)
+
+
+def test_build_items_reproducible():
+    from scripts.build_golden_set_v2 import build_items
+
+    built = build_items()
+    assert len(built) == 360
+    items = load_golden_set_v2(GOLDEN_JSON)
+    assert built == items, "build_items() output must match committed golden_set_v2.json exactly"
 
 
 def test_lawyer_review_csv_under_60_rows_and_safe():
@@ -53,6 +71,7 @@ def test_csv_formula_neutralisation(tmp_path):
     assert neutralise_csv_cell("+1+1") == "'+1+1"
     assert neutralise_csv_cell("-2") == "'-2"
     assert neutralise_csv_cell("@SUM(A1)") == "'@SUM(A1)"
+    assert neutralise_csv_cell("\nCMD()") == "'\nCMD()"
     assert neutralise_csv_cell("normal") == "normal"
 
     out = tmp_path / "test.csv"
