@@ -18,6 +18,8 @@ import {
 import { getStockDocument, listStockDocuments } from "@/lib/api/inventory-client";
 import { formatMoneyRial, formatNumber } from "@/lib/fa-format";
 import { printWarehouseDocument } from "@/lib/print/open-warehouse-document-window";
+import { getDefaultPrintTemplateOrNull } from "@/lib/api/print-templates-client";
+import { PrintDocType, PrintPaperSize } from "@/types/print-template";
 import {
   STOCK_DOCUMENT_TYPE_LABELS,
   type StockDocument,
@@ -127,7 +129,13 @@ export function StockDocumentsList({ warehouses, refreshKey }: StockDocumentsLis
                             type="button"
                             size="sm"
                             variant="outline"
-                            onClick={() => printWarehouseDocument(detail, name)}
+                            onClick={async () => {
+                              const tpl = await getDefaultPrintTemplateOrNull(
+                                PrintDocType.STOCK_DOCUMENT,
+                                PrintPaperSize.A4,
+                              );
+                              printWarehouseDocument(detail, name, tpl ?? undefined);
+                            }}
                           >
                             <Printer />
                             چاپ
