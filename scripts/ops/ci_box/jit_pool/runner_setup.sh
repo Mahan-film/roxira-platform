@@ -48,7 +48,17 @@ install -m 0644 "$lib/roxira-jit@.service" "$units/roxira-jit@.service"
 printf '[Service]\nCPUQuota=400%%\nMemoryHigh=5G\nMemoryMax=6G\nTasksMax=4096\n' > "$units/roxira-jit@docker.service.d/limits.conf"
 # light slot: the launcher only; the container itself is limited by docker run (--cpus 1 --memory 2g).
 printf '[Service]\nCPUQuota=50%%\nMemoryMax=256M\n' > "$units/roxira-jit@light.service.d/limits.conf"
+# The old persistent runner gets the same tool cache path (setup-python needs /opt/hostedtoolcache).
+# It is restarted only when no job is running; otherwise the next restart picks it up.
+mkdir -p "$units/actions-runner.service.d"
+printf '[Service]\nEnvironment=RUNNER_TOOL_CACHE=/opt/hostedtoolcache\nEnvironment=AGENT_TOOLSDIRECTORY=/opt/hostedtoolcache\n' \
+  > "$units/actions-runner.service.d/toolcache.conf"
 systemctl --user daemon-reload
+if pgrep -u "$(id -u)" -f Runner.Worker >/dev/null 2>&1; then
+  echo "old runner: busy, tool cache path applies at its next restart"
+else
+  systemctl --user try-restart actions-runner.service && echo "old runner: restarted with /opt/hostedtoolcache"
+fi
 systemctl --user enable --now roxira-jit@light.service roxira-jit@docker.service
 for s in light docker; do echo "roxira-jit@$s: $(systemctl --user is-active roxira-jit@$s.service || true)"; done
 echo "old runner (actions-runner): $(systemctl --user is-active actions-runner.service || true) (kept until two JIT runs pass)"

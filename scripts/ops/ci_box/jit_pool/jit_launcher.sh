@@ -77,14 +77,14 @@ run_docker() {
   local name="$1" cfg="$2" dir rc
   dir="$home/docker/$name"
   rm -rf "$dir"
-  mkdir -p "$dir" "$home/toolcache-docker"
+  mkdir -p "$dir"
   cp -a "$template/." "$dir/"
   set +e
   (
     cd "$dir"
     env -i HOME="$HOME" PATH=/usr/local/bin:/usr/bin:/bin USER="$(id -un)" LANG=C.UTF-8 \
       XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" DOCKER_HOST="$DOCKER_HOST" \
-      RUNNER_TOOL_CACHE="$home/toolcache-docker" \
+      RUNNER_TOOL_CACHE=/opt/hostedtoolcache AGENT_TOOLSDIRECTORY=/opt/hostedtoolcache \
       ACTIONS_RUNNER_INPUT_JITCONFIG="$cfg" \
       ./run.sh
   )

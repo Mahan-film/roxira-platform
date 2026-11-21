@@ -12,7 +12,9 @@
 #   3. CI resource cap for everything user `runner` runs, including rootless Docker containers
 #      (brief section 7: docker slot 4 threads / 6 GB + light slot 1 thread / 2 GB):
 #      systemctl set-property user@<runner-uid>.service CPUQuota=500% MemoryHigh=7G MemoryMax=8G TasksMax=8192
-#   4. apt: fonts-noto-color-emoji (the one Playwright chromium dependency this box lacks).
+#   4. apt: postgresql-client (psql for the RLS gate and app-role steps) and fonts-noto-color-emoji
+#      (the one Playwright chromium dependency this box lacks); /opt/hostedtoolcache owned by runner
+#      (setup-python's builds only work from that path).
 #   5. as user runner: runner_setup.sh (runner template v<same as old runner>, SHA-256 checked;
 #      light image; user units roxira-jit@light + roxira-jit@docker, enabled).
 # Does NOT touch: nftables, ufw, xray, sudoers, the proxy, the phone stack, production, or the old
@@ -88,12 +90,22 @@ if [ "$cur_cpu" = "5s" ] && [ "$cur_mem" = "$((8 * 1024 * 1024 * 1024))" ]; then
   run systemctl set-property "user@$RUID.service" "CPUQuota=$CPU" "MemoryHigh=$MEM_HIGH" "MemoryMax=$MEM_MAX" "TasksMax=$TASKS"
 fi
 
-echo "== 4. Playwright chromium dependency"
-if dpkg-query -W -f='${Status}' fonts-noto-color-emoji 2>/dev/null | grep -q "install ok installed"; then
-  ok "fonts-noto-color-emoji"
+echo "== 4. packages and tool cache (what GitHub-hosted images have and CI jobs expect)"
+for pkg in postgresql-client fonts-noto-color-emoji; do
+  if dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q "install ok installed"; then
+    ok "$pkg"
+  else
+    todo "apt-get install $pkg"
+    run env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends "$pkg"
+  fi
+done
+# actions/setup-python builds only run from /opt/hostedtoolcache (their shared-library path is fixed
+# at build time); elsewhere python fails as soon as a test starts it with a clean environment.
+if [ -d /opt/hostedtoolcache ] && [ "$(stat -c %U /opt/hostedtoolcache)" = "$RUNNER" ]; then
+  ok "/opt/hostedtoolcache"
 else
-  todo "apt-get install fonts-noto-color-emoji"
-  run env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends fonts-noto-color-emoji
+  todo "/opt/hostedtoolcache (owner $RUNNER, 0755)"
+  run install -d -o "$RUNNER" -g "$RUNNER" -m 0755 /opt/hostedtoolcache
 fi
 
 echo "== 5. runner side (as $RUNNER): template, light image, launchers"
