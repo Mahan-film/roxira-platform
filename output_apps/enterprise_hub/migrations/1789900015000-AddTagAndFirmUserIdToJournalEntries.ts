@@ -28,6 +28,7 @@ export class AddTagAndFirmUserIdToJournalEntries1789900015000
     await queryRunner.query(`
       DROP INDEX IF EXISTS "IDX_fin_journal_entries_tenant_tag"
     `);
+    // Reversible rollback drops newly added columns; production rollbacks should be verified with database snapshots.
     await queryRunner.query(`
       ALTER TABLE "fin_journal_entries"
         DROP COLUMN IF EXISTS "firm_user_id",

@@ -868,7 +868,7 @@ export class AccountingService {
     await this.ensureDefaultAccounts(tenantId, manager);
 
     const isPartner = options.actorRole === 'partner_advisor';
-    const tag = dto.tag ?? (isPartner || dto.isAdjustmentPeriod ? 'PARTNER_ADJUSTMENT' : null);
+    const tag = dto.tag ?? (isPartner ? 'PARTNER_ADJUSTMENT' : (dto.isAdjustmentPeriod ? 'ADJUSTMENT' : null));
     const firmUserId = dto.firmUserId ?? (isPartner ? options.actorUserId ?? null : null);
 
     const status = dto.status ?? JournalEntryStatus.POSTED;
