@@ -1,0 +1,29 @@
+# Light-slot image for JIT runners (R20-8, #1024): lint, unit tests and scanners, no Docker inside.
+# Built by runner_setup.sh as user `runner` with rootless Docker; the build context is the runner
+# template (a pristine actions/runner release, SHA-256 checked), never the old runner's directory.
+# Base from public.ecr.aws: Docker Hub is blocked from this network.
+FROM public.ecr.aws/docker/library/ubuntu:24.04
+
+ARG DEBIAN_FRONTEND=noninteractive
+# Runner (.NET) needs libicu/libssl/krb5/lttng; jobs need git, curl, jq, unzip, xz, zstd, python3.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates curl git git-lfs gnupg jq unzip xz-utils zstd tar gzip bzip2 \
+      python3 python3-venv python3-pip build-essential openssl \
+      libicu74 libssl3t64 libkrb5-3 zlib1g liblttng-ust1t64 \
+ && rm -rf /var/lib/apt/lists/*
+# ubuntu:24.04 ships user "ubuntu" with uid 1000; the runner takes that uid instead.
+RUN if id ubuntu >/dev/null 2>&1; then userdel -r ubuntu; fi \
+ && useradd -m -u 1000 -s /bin/bash runner \
+ && mkdir -p /opt/hostedtoolcache \
+ && chown runner:runner /opt/hostedtoolcache
+
+COPY --chown=runner:runner . /home/runner/actions-runner
+USER runner
+WORKDIR /home/runner/actions-runner
+ENV RUNNER_TOOL_CACHE=/opt/hostedtoolcache \
+    AGENT_TOOLSDIRECTORY=/opt/hostedtoolcache \
+    ImageOS=ubuntu24 \
+    LANG=C.UTF-8
+# The JIT config arrives as ACTIONS_RUNNER_INPUT_JITCONFIG (env file); one job, then exit.
+CMD ["/home/runner/actions-runner/run.sh"]
