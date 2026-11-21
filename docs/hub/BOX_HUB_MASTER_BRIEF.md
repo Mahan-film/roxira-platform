@@ -37,6 +37,8 @@ Start order each session:
 - box user-level services (`systemctl --user`) for `mahanfilms`;
 - reviews and merges of L5–L7 PRs under the merge rule in section 7.
 
+**Account change 2026-11-21:** this laptop's Claude login is now the account that left the Mac; the Mac hub runs on the colleague's (main owner's) account. Spending and production approvals follow open item O-1 in `docs/STATE.md` (default: the person running the Mac hub). Raise spend asks through `ASK-HUB:` on #965 as well as to the person at this laptop.
+
 **Ask the owner** (Persian, one paste-ready command at a time) for:
 
 - any `sudo` line outside the narrow wrappers;
@@ -74,8 +76,8 @@ Agents and models:
 
 | Machine | Who runs there | Accounts |
 |---------|----------------|----------|
-| Owner's MacBook Air (16 GB) | main hub (Claude), Antigravity lanes L1 ops/CI, L2 frontend, L3 security/data, L4 Smart Judge | gh `mahan-films` (owner, numeric id 226124844), owner's Claude account A |
-| Laptop `roxira-ci` (i7-8550U 4C/8T, 24 GB, 256 GB SSD + 1 TB HDD `/srv/data`, Ubuntu 26.04, home LAN, no public IP) | box hub (you), lanes L5–L7 (Gemini CLI headless/tmux; Antigravity cannot sign in here), GitHub runner, phone stack, backups of the box | gh `mahansudo` (colleague's account, numeric id 211047265, full repo access), owner's Claude account B |
+| Owner's MacBook Air (16 GB) | main hub (Claude), Antigravity lanes L1 ops/CI, L2 frontend, L3 security/data, L4 Smart Judge | gh `mahan-films` (owner, numeric id 226124844), the colleague's (main owner's) Claude account |
+| Laptop `roxira-ci` (i7-8550U 4C/8T, 24 GB, 256 GB SSD + 1 TB HDD `/srv/data`, Ubuntu 26.04, home LAN, no public IP) | box hub (you), lanes L5–L7 (Gemini CLI headless/tmux; Antigravity cannot sign in here), GitHub runner, phone stack, backups of the box | gh `mahansudo` (colleague's account, numeric id 211047265, full repo access), the partner's Claude account (moved from the Mac 2026-11-21) |
 | Production server (`srv1`, 4 vCPU, 8 GB, arm64) | the live product; deploys itself by pulling `main` every 5 min | only the main hub and the owner reach it |
 
 **Linux users on the laptop**
@@ -135,7 +137,7 @@ Builders hold **no** keys (R20 D5).
 | Auth/app | `JWT_SECRET*`, `GOOGLE_CLIENT_*`, `WEBAUTHN_*`, `ADMIN_HEALTH_KEY`, Twenty secrets, Postgres credentials | prod | never |
 | Backups | `BACKUP_R2_*` | prod off-site | later, for box restic to R2 (owner decides) |
 | GitHub | gh login `mahansudo` (box), `mahan-films` (Mac); runner registration token (short-lived) | bridge, merge gate, runner | gh login only |
-| Claude | owner's Claude account B login (`claude -p`) | box hub, bridge | yes (login, not a key) |
+| Claude | Claude login of the laptop account (`claude -p`) | box hub, bridge | yes (login, not a key) |
 
 **Rules**
 

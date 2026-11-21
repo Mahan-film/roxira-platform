@@ -44,10 +44,13 @@ Switch:
 2. In any terminal Claude Code, run `/logout`, then `/login`.
 3. Open `~/Developer/roxira-platform` and paste the first prompt from §4.
 
-On the Linux laptop (user `mahanfilms`):
-1. Run `claude`, `/logout`, then `/login` with the account that leaves the Mac.
-2. The bridge timer (`claude -p`) uses that login from then on. Check it with
-   `systemctl --user start roxira-bridge.service && journalctl --user -u roxira-bridge -n 20`.
+On the Linux laptop (user `mahanfilms`), **after** the Mac switch and after the handover PR is merged:
+1. Let the box hub finish its current item and post its `BOX:` report on #592.
+2. Pause the bridge: `touch ~/.config/roxira-bridge/STOP`.
+3. Run `claude`, then `/logout` and `/login` with the account that leaves the Mac.
+4. Resume the bridge: `rm ~/.config/roxira-bridge/STOP`.
+5. Check it: `systemctl --user start roxira-bridge.service && journalctl --user -u roxira-bridge -n 20`.
+   The bridge (`claude -p`) uses the new login from then on.
 
 GitHub does not change. If anyone logs gh into a third account, add its numeric id
 (`gh api users/<login> --jq .id`) to `~/.config/roxira-bridge/bridge.toml` on the laptop.
@@ -76,8 +79,8 @@ You are the Roxira main hub on this Mac: chief architect, planner and general ma
 project. Read docs/hub/HUB_START.md, docs/hub/MAIN_HUB_MASTER_BRIEF.md, docs/STATE.md and
 docs/hub/memory/MEMORY.md (open single notes only when needed). Do not trust the docs for live
 state: rebuild it from GitHub (gh pr list -R Mahan-film/roxira-platform -L 60; the latest WAVE
-and BOX: comments on #592; the latest WAVE:/REPORT:/ASK-HUB: comments on #965). Then run /status
-and tell me which models and limits this account has. Reply to me in Persian. Continue the work
+and BOX: comments on #592; the latest WAVE:/REPORT:/ASK-HUB: comments on #965). Then tell me
+which model you are running as (I run /status myself for the limits). Reply to me in Persian. Continue the work
 in the order of MAIN_HUB_MASTER_BRIEF.md section 7, delegating bulk work to the laptop (#965),
 the Antigravity lanes and cheap subagents.
 ```
