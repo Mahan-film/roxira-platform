@@ -26,7 +26,7 @@ describe('CutoverWizardService (T327 R32)', () => {
 
     mockAccountingService = {
       importOpeningBalances: jest.fn().mockResolvedValue(105),
-      createJournalEntry: jest.fn(),
+      createJournalEntry: jest.fn().mockResolvedValue({ id: 105, entryNumber: 'OB-20260321' }),
       lockPeriod: jest.fn().mockImplementation(async (_tenant, _actor, dto) => ({
         id: 77,
         tenantId: TENANT_ID,
@@ -188,14 +188,18 @@ describe('CutoverWizardService (T327 R32)', () => {
       expect(response.tieOutSummary.passed).toBe(true);
 
       // Verify opening journal was created
-      expect(mockAccountingService.importOpeningBalances).toHaveBeenCalledWith(
+      expect(mockAccountingService.createJournalEntry).toHaveBeenCalledWith(
         TENANT_ID,
-        expect.arrayContaining([
-          expect.objectContaining({
-            accountCode: '1301',
-            date: '2026-03-21',
-          }),
-        ]),
+        expect.objectContaining({
+          date: '2026-03-21',
+          description: expect.stringContaining('سند افتتاحیه'),
+          lines: expect.arrayContaining([
+            expect.objectContaining({
+              accountCode: '1301',
+              debit: '50000000',
+            }),
+          ]),
+        }),
       );
 
       // Verify pre-cutover period was locked

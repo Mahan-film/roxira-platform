@@ -128,18 +128,18 @@ export class CutoverWizardService {
     // ۳. ثبت سند افتتاحیه در صورت وجود سطرها
     let openingJournalEntryId: number | undefined = undefined;
     if (dto.openingBalances && dto.openingBalances.length > 0) {
-      const openingInputs = dto.openingBalances.map((b) => ({
-        accountCode: b.accountCode,
-        debit: b.debit ? Number(parseMoneyValue(b.debit)) : 0,
-        credit: b.credit ? Number(parseMoneyValue(b.credit)) : 0,
-        description: b.description ?? 'مانده افتتاحیه انتقال سیستم (Cutover Opening)',
+      const entry = await this.accountingService.createJournalEntry(tenantId, {
+        entryNumber: `OB-${dto.cutoverDate.replace(/-/g, '')}`,
         date: dto.cutoverDate,
-      }));
-
-      openingJournalEntryId = await this.accountingService.importOpeningBalances(
-        tenantId,
-        openingInputs,
-      );
+        description: 'سند افتتاحیه انتقال سیستم (Cutover Opening Journal)',
+        lines: dto.openingBalances.map((b) => ({
+          accountCode: b.accountCode,
+          debit: b.debit ? parseMoneyValue(b.debit).toString() : '0',
+          credit: b.credit ? parseMoneyValue(b.credit).toString() : '0',
+          description: b.description ?? 'مانده افتتاحیه انتقال سیستم (Cutover Opening)',
+        })),
+      });
+      openingJournalEntryId = entry.id;
     }
 
     // ۴. قفل قطعی دوره حسابداری پیش از کات‌اوور (R32 D5)
