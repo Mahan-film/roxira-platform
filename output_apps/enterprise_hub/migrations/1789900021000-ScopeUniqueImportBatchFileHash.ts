@@ -10,10 +10,10 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * bound lock acquisition with `SET LOCAL lock_timeout` and `IF NOT EXISTS` inside the standard
  * transaction.
  */
-export class ScopeUniqueImportBatchFileHash1789900019000
+export class ScopeUniqueImportBatchFileHash1789900021000
   implements MigrationInterface
 {
-  name = 'ScopeUniqueImportBatchFileHash1789900019000';
+  name = 'ScopeUniqueImportBatchFileHash1789900021000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`SET LOCAL lock_timeout = '5s'`);
