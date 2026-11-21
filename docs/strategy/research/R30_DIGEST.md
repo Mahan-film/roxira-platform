@@ -50,3 +50,36 @@ Streaming vs file STT; unofficial TTS endpoint outage; proxy outage means silent
 6. L7: "Nightly voice test (synthetic audio, 8 kHz)". Done when: it reports stage timings p50/p95, entity error rate, barge-in rate, register state, cost per call, and pages on regression.
 7. L4: "Voice compliance: AI greeting, recording consent flow, retention job, DPA/sub-processor entry". Done when: greeting text approved by the lawyer, no recording without opt-in, retention job deletes at the set age, vendors listed.
 8. L7: "Phone cost and abuse caps". Done when: per-number and global daily caps, monthly spend cap, alert at 80%.
+
+## Second opinion (Gemini Deep Research, 2026-11-21)
+
+Saved in `R30_GEMINI.md` (Stage 1 and Stage 2). Nothing above is replaced. Rule used: where the two sides conflict, the claim with a primary URL and a date wins; the rest is UNVERIFIED. **Premise difference:** Gemini assumes an EU-hosted launch with German numbers and German/English callers; this digest starts from the default market and the "Unregistered" trunk problem. Facts below are compared; the scope difference is an owner call.
+
+### Agreements
+- LiveKit Cloud: EU data region fixed at project creation; region pinning only on the Scale plan (USD 500 a month); third-party providers need their own EU endpoints and DPAs.
+- Twilio Germany: inbound USD 0.0060 a minute, number USD 1.35 a month, outbound from USD 0.0243. Both sides read the Twilio page.
+- Deepgram Nova-3 is USD 0.29-0.35 an hour on the current price page (Gemini's Stage 2 corrects its own Stage 1 figure of USD 0.55). EU endpoints exist for Deepgram and Speechmatics.
+- Art. 50 AI Act: the duty is "at the latest at the first interaction", not literally "first sentence"; speak the AI notice first anyway. No recording unless the caller agrees; GDPR sets no fixed retention number.
+- Narrowband audio hurts statute numbers; use read-back and a nightly synthetic test.
+
+### Conflicts (primary URL and date wins, else UNVERIFIED)
+| Topic | This digest | Gemini | Verdict |
+|---|---|---|---|
+| STT candidate | bake-off of Whisper turbo, Deepgram, Soniox, Azure | Speechmatics first (custom dictionary of 1,000 words, German number formatting) | Add Speechmatics to the bake-off; do not pick before a test on 8 kHz legal audio. Its price (digest: USD 0.30-0.80 an hour; Gemini: 0.15-0.40) is UNVERIFIED. |
+| Speechmatics models | not stated | Enhanced takes one language per stream; Melia 1 handles code-switching; a cheaper discount needs a model-training opt-in | Take Gemini's caution as a rule: never accept a training discount. UNVERIFIED until the lane reads the pricing page. |
+| Latency target | 1.5 s p50, 2.5 s p95 | under 800 ms, estimate 570-755 ms | UNVERIFIED (Gemini's figure is a vendor engineering guide). Keep our target; measure. |
+| TTS | Azure fa-IR first, Aura-2 USD 0.03 per 1k characters | ElevenLabs Eleven v4 Turbo first, but EU residency not verified; Azure or Aura-2 as the EU-safe default | Agree on the safe default; ElevenLabs EU residency UNVERIFIED. |
+| Section 201 StGB | only secondary sources | cites the statute page: up to 3 years or fine; attempt is punishable; prosecuted on complaint | Gemini has a primary URL. Accept the penalty and the attempt rule; "all parties must consent" stays commentary. |
+| AI Act dates | Omnibus date not read | Regulation (EU) 2026/1744 (EUR-Lex, 8 Jul 2026): Art. 50(2) marking grace to 2 Dec 2026 only for systems placed before 2 Aug 2026; high-risk Annex III moved to 2 Dec 2027 | Gemini has a primary URL but its own Stage 2 says the excerpt lacked the Annex III article. Art. 50(2) date: accept; Annex III date: UNVERIFIED. |
+| Carriers | Twilio, DIDWW, Telnyx | adds sipgate and easybell (German), with a correction of its own easybell figures | Only relevant if a German number is wanted; prices UNVERIFIED. |
+
+### Only one side has it
+- **Gemini only:** the legal-assistant scope could reach professional-secrecy rules for lawyers (section 203 StGB) and the German legal-services act, and Annex III "administration of justice" if the agent evaluates cases; pre-consent audio buffering is itself exposed (attempt is punishable); watermarking of synthetic speech under Art. 50(2) may not survive 8 kHz G.711; LiveKit fees beyond the plan (agent minute USD 0.01, observability USD 0.01, 10 s minimum); 60/60 rounding at some carriers; no emergency-number routing on wholesale trunks; DTMF fallback for numbers; ElevenLabs concurrency cap on Scale. All UNVERIFIED unless a primary page was named above.
+- **This digest only:** the diagnosis that "Unregistered" is the Asterisk bridge, not LiveKit; Groq Whisper and Soniox prices; Azure fa-IR; DEBUG_RECORD_CALLERS; the 15 missed risks.
+
+### Row changes
+- No new row. Comments added: #1116 (T293: add Speechmatics, never take a training discount), #1117 (T294: TTS EU residency check before choosing), #1119 (T296: leading silence, barge-in time, consent gate with zero persistence), #1120 (T297: no pre-consent buffering, Art. 50(2) marking check, professional-secrecy and scope questions), #1121 (T298: model LiveKit plan fees and per-minute rounding in the cost caps).
+
+### Owner decisions (not for agents)
+- Does the phone agent only take intake and answer from statutes, or does it evaluate cases? The second may move it into high-risk rules (Gemini says 2 Dec 2027, UNVERIFIED) and professional-secrecy duties. Default: intake and statute lookup only.
+- Whether a German-market number and an EU-pinned LiveKit project (USD 500 a month) are wanted before real callers.

@@ -23,9 +23,6 @@ export class TenantMeResponseDto {
   })
   tenantRole: TenantRole | null;
 
-  @ApiProperty({ description: 'نرخ پیش‌فرض VAT سازمان (نسبت)', example: 0.1 })
-  defaultVatRate: number;
-
   @ApiProperty({ description: 'کد کشور سازمان (ISO 3166-1 alpha-2)', example: 'IR' })
   countryCode: string;
 
@@ -62,7 +59,6 @@ export class TenantMeResponseDto {
       name: tenant.name,
       slug: tenant.slug,
       tenantRole,
-      defaultVatRate: Number(tenant.defaultVatRate ?? 0.1),
       countryCode: tenant.countryCode ?? 'IR',
       packVersion: tenant.packVersion ?? '1.0.0',
       bookCurrencyCode: tenant.bookCurrencyCode ?? 'IRR',

@@ -20,6 +20,13 @@ export class BatchSummaryDto {
   @ApiProperty({ description: 'نام فایل بارگذاری‌شده' })
   fileName: string;
 
+  @ApiProperty({
+    description: 'هش SHA-256 محتوای فایل برای جلوگیری از ورود تکراری',
+    required: false,
+    nullable: true,
+  })
+  fileHash?: string | null;
+
   @ApiProperty({ description: 'تعداد ردیف‌های درج‌شده' })
   inserted: number;
 

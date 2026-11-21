@@ -6,7 +6,18 @@
 
 import { createHash } from 'crypto';
 import { PackageTableReader } from '../parsers/package-source.types';
-import { EntityImportAdapter } from '../registry/import-registry.types';
+import {
+  EntityImportAdapter,
+  NormalisedRecord,
+} from '../registry/import-registry.types';
+import {
+  EffectiveTieOutConfig,
+  TieOutCategory,
+} from './effective-tie-out-config.registry';
+import {
+  ImportTieOutEngine,
+  TieOutSummary,
+} from './import-tie-out.engine';
 import { PackageAnalysis } from './package-analysis';
 import { buildRecords, concreteMapping } from './record-builder';
 
@@ -43,6 +54,16 @@ export interface ReconciliationReport {
   balanced: boolean;
   blockersFa: string[];
   warningsFa: string[];
+  /** گزارش جامع موتور مغایرت‌گیری سرفصل‌های کنترل افتتاحیه (TB, AR/AP, Stock, Bank). */
+  tieOut?: TieOutSummary;
+}
+
+export interface ReconcilePackageOptions {
+  asOfDate?: string;
+  currency?: string;
+  customConfig?: Partial<EffectiveTieOutConfig>;
+  controlTotals?: Partial<Record<TieOutCategory, number | string | bigint>>;
+  tieOutEngine?: ImportTieOutEngine;
 }
 
 const DEBIT_CREDIT: Record<string, { debit: string; credit: string }> = {
@@ -70,10 +91,12 @@ export function reconcilePackage(
   analysis: PackageAnalysis | undefined,
   adapters: EntityImportAdapter[],
   selections: ReconcileSelection[],
+  options?: ReconcilePackageOptions,
 ): ReconciliationReport {
   const result: TableReconciliation[] = [];
   const blockersFa: string[] = [];
   const warningsFa: string[] = [];
+  const recordsByEntity = new Map<string, NormalisedRecord[]>();
   let debit = 0;
   let credit = 0;
 
@@ -91,6 +114,10 @@ export function reconcilePackage(
     );
     const moneyToRial = selection.moneyToRial && selection.moneyToRial > 0 ? selection.moneyToRial : 1;
     const { records, invalidRows } = buildRecords(adapter, table, mapping, { moneyToRial });
+
+    // تجمیع ردیف‌ها به تفکیک موجودیت جهت موتور مغایرت‌گیری کنترل‌ها
+    const existing = recordsByEntity.get(adapter.key) ?? [];
+    recordsByEntity.set(adapter.key, [...existing, ...records]);
 
     const mappedColumns = new Set(Object.keys(mapping));
     const unmappedColumns = table.columns.map((c) => c.name).filter((name) => !mappedColumns.has(name));
@@ -163,6 +190,20 @@ export function reconcilePackage(
     result.push(row);
   }
 
+  // ارزیابی موتور مغایرت‌گیری کنترل‌های سرفصل افتتاحیه (TB, AR, AP, Stock, Bank)
+  const tieOutEngine = options?.tieOutEngine ?? new ImportTieOutEngine();
+  const tieOut = tieOutEngine.evaluateTieOuts({
+    recordsByEntity,
+    asOfDate: options?.asOfDate,
+    currency: options?.currency,
+    customConfig: options?.customConfig,
+    controlTotals: options?.controlTotals,
+  });
+
+  if (!tieOut.passed) {
+    blockersFa.push(...tieOut.blockersFa);
+  }
+
   const balanced = blockersFa.length === 0;
   return {
     key: selectionKey(selections),
@@ -170,6 +211,10 @@ export function reconcilePackage(
     totals: { debit, credit, difference: debit - credit },
     balanced,
     blockersFa,
-    warningsFa: [...warningsFa, ...result.flatMap((t) => t.warningsFa.map((w) => `«${t.name}»: ${w}`))],
+    warningsFa: [
+      ...warningsFa,
+      ...result.flatMap((t) => t.warningsFa.map((w) => `«${t.name}»: ${w}`)),
+    ],
+    tieOut,
   };
 }

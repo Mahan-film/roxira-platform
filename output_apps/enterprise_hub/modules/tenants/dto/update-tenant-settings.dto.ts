@@ -18,18 +18,6 @@ import {
  */
 export class UpdateTenantSettingsDto {
   @ApiPropertyOptional({
-    description: 'نرخ پیش‌فرض مالیات بر ارزش افزوده (نسبت؛ ۰٫۱ = ۱۰٪)',
-    example: 0.1,
-    minimum: 0,
-    maximum: 1,
-  })
-  @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 4 })
-  @Min(0)
-  @Max(1)
-  defaultVatRate?: number;
-
-  @ApiPropertyOptional({
     description: 'کد کشور سازمان (ISO 3166-1 alpha-2). پس از ثبت نخستین سند قطعی قفل می‌شود.',
     example: 'IR',
   })

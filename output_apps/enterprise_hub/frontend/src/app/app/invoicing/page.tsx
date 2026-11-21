@@ -125,9 +125,6 @@ function InvoicingPage() {
     const controller = new AbortController();
     getMyTenant(controller.signal)
       .then((tenant) => {
-        if (tenant.defaultVatRate !== undefined) {
-          setDefaultVatRate(tenant.defaultVatRate);
-        }
         setOwnName(tenant.name ?? "");
       })
       .catch(() => {

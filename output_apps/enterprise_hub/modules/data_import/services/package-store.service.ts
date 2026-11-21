@@ -6,7 +6,7 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import {
@@ -36,6 +36,8 @@ export interface PackageState {
   packageId: string;
   tenantId: string;
   fileName: string;
+  /** هش محتوای فایل برای جلوگیری از ورود مجدد تکراری */
+  fileHash?: string | null;
   kind: PackageKind;
   size: number;
   createdAt: number;
@@ -220,6 +222,7 @@ export class PackageStoreService implements OnModuleInit, OnModuleDestroy {
 
     const extension = safeExtension(file.originalname);
     const kind = detectPackageKind(file.originalname, file.buffer);
+    const fileHash = createHash('sha256').update(file.buffer).digest('hex');
 
     const packageId = randomUUID();
     const dir = this.packageDir(tenantId, packageId);
@@ -233,6 +236,7 @@ export class PackageStoreService implements OnModuleInit, OnModuleDestroy {
       packageId,
       tenantId,
       fileName: file.originalname ?? 'package',
+      fileHash,
       kind,
       size: file.buffer.length,
       createdAt: Date.now(),
@@ -253,6 +257,7 @@ export class PackageStoreService implements OnModuleInit, OnModuleDestroy {
   ): Promise<PackageState> {
     const buffer = await fs.readFile(filePath);
     const kind = detectPackageKind(originalName, buffer);
+    const fileHash = createHash('sha256').update(buffer).digest('hex');
     const packageId = randomUUID();
     await fs.mkdir(this.packageDir(tenantId, packageId), { recursive: true });
     await fs.rename(filePath, this.sourcePath(tenantId, packageId, safeExtension(originalName)));
@@ -260,6 +265,7 @@ export class PackageStoreService implements OnModuleInit, OnModuleDestroy {
       packageId,
       tenantId,
       fileName: originalName || 'package',
+      fileHash,
       kind,
       size: buffer.length,
       createdAt: Date.now(),

@@ -73,3 +73,38 @@ licence other than ZAP changed; Digital Omnibus final text (only a Council manda
 | L3 security/data | Tenant-isolation test report and production RLS bypass fix (T105) | CI RLS audit green, report committed, superuser path removed or compensated |
 | L1 ops | Insurance + pentest procurement (broker quotes Tech E&O + cyber; 3 pentest quotes with ASVS L2 scope) | Quote comparison table in `docs/strategy/`, owner decision asked |
 | L3 security/data | Incident response and breach-notice runbook with 48 h customer notice, security.txt, retention table per data class | Runbook merged, drill done once, `security.txt` served |
+
+## Second opinion (Gemini Deep Research, 2026-11-21)
+
+Saved unchanged in `R29_GEMINI.md` (Stage 1 and Stage 2). This section does not replace anything above. Rule used: where the two sides conflict, the claim with a primary URL and a date wins; everything else is UNVERIFIED until a lane reads the page.
+
+### Agreements
+- Section 62a StBerG: a plain GDPR DPA does not satisfy it; a text-form addendum with the criminal-consequence warning and text-form flow-down to sub-providers is needed (statute page on gesetze-im-internet.de, both sides).
+- DATEV Premium Partner certificate mandatory since 30 Jun 2026, grace to 31 Dec 2026 for started processes; Schnittstellen Partners are not covered (DATEV pages, both sides). Both put VdS 10010 on top of VdS 10000 in the lower tier.
+- ISO 27001:2013 certificates ended 31 Oct 2025; 2022 edition only.
+- A processor tells the controller without undue delay; promise a customer notice time we can meet (this digest: 48 h, Gemini: 24-48 h). The 72 h clock belongs to the controller.
+- The DPF is valid; General Court dismissed the challenge on 3 Sep 2025; appeal C-703/25 P pending. Keep SCCs as a fallback. Gemini gives lodging date 31 Oct 2025 from the court register, which matches the date in this digest's RAW row.
+- Art. 30(2) processor records, SDM-based TOMs, restore drills with a dated record, Object Lock copy, tamper-evident audit log, insurance only after the controls exist.
+
+### Conflicts (resolved by primary URL and date, else UNVERIFIED)
+| Topic | This digest | Gemini | Verdict |
+|---|---|---|---|
+| ISO 27001 first-year cost | EUR 6-25k narrow scope | EUR 12.5-25k DIY, 23-49k consultant-led (vendor blog, Aug 2026) | UNVERIFIED both; vendor estimates. Keep our range, get quotes (T290). |
+| Pentest price | EUR 5-15k plus retest | from about EUR 3-3.5k (two vendor rate cards) | UNVERIFIED; scope decides. Ask three quotes with ASVS L2 scope (T290). |
+| German insurance price | none found | exali tariff pages: IT liability from EUR 125 net, cyber from EUR 145 net; sample sums | Gemini gives vendor pages, so keep as an indicative range only; the lane must re-read the exali pages and a broker. One DCD figure was read from a page for architects, not IT. |
+| SDM guarantees | not stated | 7 guarantees; Resilience (Art. 32(1)(b)) is not an eighth | Gemini's own correction of its Stage 1 is right: use 7 in the TOMs annex. |
+| SOC 2 log retention | not stated | Stage 2 says AICPA sets no fixed 12-month number | Treat 12 months as an operating norm, not a rule. |
+| Scanners | Trivy compromised 19-22 Mar 2026 (Aqua advisory, GHSA-69fq-xp46-6x23); pin and checksum | Recommends Trivy and TruffleHog without noting this | This digest wins (primary advisory). TruffleHog is AGPL-3.0: fine as a CI tool, never in the runtime; the T252 licence gate must allow-list it explicitly. |
+| CRA | SaaS is a NIS2 matter unless remote processing is needed by a shipped product | Same, plus: any local connector or desktop client is in scope; reporting duties from 11 Sep 2026, full duties 11 Dec 2027 | Dates UNVERIFIED (Gemini cites EUR-Lex 2024/2847 but gives no article text). Check only if we ever ship a local connector. |
+
+### Only one side has it
+- **Gemini only:** German standard-terms law (sections 307/309 BGB) can void a US-style liability cap; GoBD and structured e-invoice duties as a procurement veto for German tax advisors; AI Act buyer audits from 2 Aug 2026; CLOUD Act exposure of a US-parent host even in an EU region; Art. 37 DPO trigger beyond the 20-person rule; two-person segregation-of-duties problem for the ISO internal audit. All UNVERIFIED (no primary text in its sources). The first two are worth an expert answer.
+- **This digest only:** DATEV accepted-certificate list including CISIS12 and TUEV TRUST IT and the exclusion of SOC 2 and CSA STAR; NIS2 law in force 6 Dec 2025; Trivy incident; the conflicts with SUBPROCESSORS.md, DPA.md, STATE.md and R8.
+
+### Row changes
+- No new row. Comments added to the existing rows: #1109 (T286: liability cap under sections 307/309 BGB, SDM has 7 guarantees, GoBD note), #1111 (T288: TruffleHog licence note for T252), #1113 (T290: indicative insurance and pentest ranges from Gemini, UNVERIFIED), #1112 (T289: log retention wording).
+- The EU-tenant routing profile (D1) is owner-decided (2026-11-21) and tracked in #1108; nothing here changes it.
+
+### Expert questions added (default in brackets)
+1. Does our standard liability clause survive sections 307/309 BGB? [carve out intent, gross negligence, life/body/health; cap simple negligence on core duties at foreseeable typical loss, within insured limits]
+2. Does our workflow need a GoBD process document for German tax advisors? [append-only storage, DATEV-compatible export, plain-language process document template]

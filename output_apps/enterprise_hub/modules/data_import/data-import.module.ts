@@ -20,6 +20,8 @@ import { ImportMappingMemoryEntity } from './entities/import-mapping-memory.enti
 import { ImportMappingMemoryRepository } from './repositories/import-mapping-memory.repository';
 import { ChunkedUploadService } from './services/chunked-upload.service';
 import { MappingMemoryService } from './services/mapping-memory.service';
+import { EffectiveTieOutConfigRegistry } from './analysis/effective-tie-out-config.registry';
+import { ImportTieOutEngine } from './analysis/import-tie-out.engine';
 import { PackageOcrService } from './services/package-ocr.service';
 import { PackageReconciliationService } from './services/package-reconciliation.service';
 import { DataImportBatchItemEntity } from './entities/data-import-batch-item.entity';
@@ -128,6 +130,8 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     PackageStoreService,
     PackageProgressService,
     PackageAnalysisService,
+    EffectiveTieOutConfigRegistry,
+    ImportTieOutEngine,
     PackageCommitService,
     PackageImportService,
     PackageImportProcessor,
@@ -215,6 +219,8 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     SepidarMappingAdapter,
     HolooMappingAdapter,
     SepidarPersistenceService,
+    EffectiveTieOutConfigRegistry,
+    ImportTieOutEngine,
   ],
 })
 export class DataImportModule {}

@@ -145,11 +145,14 @@ describePg('Data Import & Damages FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSR
   it('isolates DataImportBatchRepository across tenants under NOSUPERUSER NOBYPASSRLS', async () => {
     const batchIdA = randomUUID();
     const batchIdB = randomUUID();
+    const hashA = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2';
+    const hashB = 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff';
 
     await batchRepo.createBatch(TENANT_A, {
       id: batchIdA,
       entity: 'crm_leads',
       fileName: 'leads-a.csv',
+      fileHash: hashA,
       inserted: 2,
     });
     await batchRepo.addItems(TENANT_A, batchIdA, 'crm_leads', [
@@ -161,6 +164,7 @@ describePg('Data Import & Damages FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSR
       id: batchIdB,
       entity: 'crm_leads',
       fileName: 'leads-b.csv',
+      fileHash: hashB,
       inserted: 1,
     });
     await batchRepo.addItems(TENANT_B, batchIdB, 'crm_leads', [
@@ -168,11 +172,19 @@ describePg('Data Import & Damages FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSR
     ]);
 
     expect((await batchRepo.findBatch(TENANT_A, batchIdA))?.fileName).toBe('leads-a.csv');
+    expect((await batchRepo.findBatch(TENANT_A, batchIdA))?.fileHash).toBe(hashA);
     expect(await batchRepo.findBatch(TENANT_B, batchIdA)).toBeNull();
     expect((await batchRepo.listBatches(TENANT_A)).map((b) => b.id)).toEqual([batchIdA]);
     expect((await batchRepo.listBatches(TENANT_B)).map((b) => b.id)).toEqual([batchIdB]);
     expect(await batchRepo.findItems(TENANT_A, batchIdA)).toHaveLength(2);
     expect(await batchRepo.findItems(TENANT_B, batchIdA)).toEqual([]);
+
+    // Idempotent re-import lookup via findByFileHash respects tenant RLS isolation
+    const foundA = await batchRepo.findByFileHash(TENANT_A, hashA);
+    expect(foundA?.id).toBe(batchIdA);
+    expect(foundA?.fileHash).toBe(hashA);
+    // Tenant B cannot see Tenant A's batch by hash
+    expect(await batchRepo.findByFileHash(TENANT_B, hashA)).toBeNull();
 
     // Tenant B cannot modify or delete Tenant A's batch or items
     await batchRepo.markUndone(TENANT_B, batchIdA);
@@ -180,6 +192,14 @@ describePg('Data Import & Damages FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSR
     await batchRepo.removeBatch(TENANT_B, batchIdA);
     expect((await batchRepo.findBatch(TENANT_A, batchIdA))?.undone).toBe(false);
     expect(await batchRepo.findItems(TENANT_A, batchIdA)).toHaveLength(2);
+
+    // Tenant A undo marks batch undone and removes items under RLS
+    await batchRepo.markUndone(TENANT_A, batchIdA);
+    expect((await batchRepo.findBatch(TENANT_A, batchIdA))?.undone).toBe(true);
+    // Undone batch is ignored by findByFileHash so re-import is permitted after undo
+    expect(await batchRepo.findByFileHash(TENANT_A, hashA)).toBeNull();
+    await batchRepo.removeItems(TENANT_A, batchIdA);
+    expect(await batchRepo.findItems(TENANT_A, batchIdA)).toHaveLength(0);
   });
 
   it('isolates ImportMappingMemoryRepository across tenants under NOSUPERUSER NOBYPASSRLS', async () => {

@@ -20,15 +20,12 @@ export interface TenantMe {
   name: string;
   slug: string;
   tenantRole: TenantRole | null;
-  /** نرخ پیش‌فرض VAT سازمان به‌صورت نسبت (۰٫۱ = ۱۰٪) */
-  defaultVatRate?: number;
   /** حالت بدون رصد کارکنان (Works-Council / BetrVG §87(1)6) */
   noEmployeeTelemetry?: boolean;
 }
 
 /** بدنه به‌روزرسانی تنظیمات سازمان — PATCH /tenants/me/settings */
 export interface UpdateTenantSettingsPayload {
-  defaultVatRate?: number;
   noEmployeeTelemetry?: boolean;
 }
 
