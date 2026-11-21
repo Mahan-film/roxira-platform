@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- EXAMPLE ONLY, not installed by any script. Weekly (Sunday 10:00) dry-run report of Mac worktrees.
+     To install: copy to ~/Library/LaunchAgents/com.roxira.prune-worktrees.plist, replace /ABS/PATH/TO/REPO
+     with the main checkout path, then `launchctl load` it. Keeps DRY-RUN: add "--apply" to
+     ProgramArguments only after reading a few reports. gh must be authenticated for the user. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.roxira.prune-worktrees</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/ABS/PATH/TO/REPO/scripts/ops/prune_worktrees.sh</string>
+    <string>--fetch</string>
+  </array>
+  <key>WorkingDirectory</key><string>/ABS/PATH/TO/REPO</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>REPORT_FILE</key><string>/tmp/worktree_prune_report.txt</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <dict><key>Weekday</key><integer>0</integer><key>Hour</key><integer>10</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>/tmp/worktree_prune.out</string>
+  <key>StandardErrorPath</key><string>/tmp/worktree_prune.err</string>
+</dict>
+</plist>
