@@ -52,7 +52,7 @@ export class RentalTaxService {
     const used = await readStatutory(this.statutory, tenantId, dto.fiscalYear, keys, country);
     const deductionRate = String(used.get('rental_expense_deduction_rate')!.value);
     // The store holds whole rials (money kind); the computation works in minor units (rial x 100).
-    const ceiling = BigInt(used.get('income_exemption_ceiling_art57_art101')!.value as number) * 100n;
+    const ceiling = BigInt(String(used.get('income_exemption_ceiling_art57_art101')!.value)) * 100n;
     const brackets = used.get('income_tax_art131_brackets')!.value as Bracket[];
 
     const gross = parseMinor(dto.rentReceived) + big(dto.inKindIncome);
