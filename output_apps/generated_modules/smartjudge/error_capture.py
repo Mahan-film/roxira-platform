@@ -147,6 +147,11 @@ def _dsn() -> str:
 
 
 def write_event(event: dict[str, Any]) -> None:
+    """Best effort: write event with tenant isolation.
+    
+    The Postgres connection MUST use a non-superuser role without BYPASSRLS (e.g. roxira_app)
+    so app.tenant_id is strictly enforced by PostgreSQL FORCE ROW LEVEL SECURITY.
+    """
     dsn = _dsn()
     if not dsn:
         return

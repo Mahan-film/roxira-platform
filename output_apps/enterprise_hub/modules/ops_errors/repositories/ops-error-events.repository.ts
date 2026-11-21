@@ -64,11 +64,13 @@ export class OpsErrorEventsRepository {
   ) {}
 
   /**
-   * `tenants` is a non-RLS registry table; enumerates all tenant scopes (plus the platform scope)
-   * so scheduled alert/digest/purge jobs iterate tenant-by-tenant inside `TenantScope`.
+   * Enumerates all tenant scopes (plus the platform scope) strictly inside TenantScope so Postgres
+   * FORCE RLS is observed and no unscoped raw DataSource queries bypass tenancy guards.
    */
   async scanTenantIds(): Promise<string[]> {
-    const rows = await this.dataSource.query<{ id: string }[]>(`SELECT id FROM tenants`);
+    const rows = await this.scope.run(PLATFORM_OPS_TENANT_ID, async (m) =>
+      m.query<{ id: string }[]>(`SELECT id FROM tenants`),
+    );
     const ids = new Set<string>([PLATFORM_OPS_TENANT_ID]);
     for (const r of rows) {
       if (r.id) ids.add(r.id);
@@ -83,18 +85,18 @@ export class OpsErrorEventsRepository {
         `INSERT INTO ops_error_events
            (tenant_id, fingerprint, day, source, error_class, route, http_method, status, release,
             sample_message, sample_stack)
-         VALUES ($1, $2, (now() AT TIME ZONE 'UTC')::date, $3, $4, $5, $6, $7, $8, $9, $10)
+         VALUES ($1, $2, timezone('utc', now())::date, $3, $4, $5, $6, $7, $8, $9, $10)
          ON CONFLICT (tenant_id, fingerprint, day) DO UPDATE SET
            last_seen = now(),
            count = ops_error_events.count + 1,
            prev_hour_count = CASE
-             WHEN ops_error_events.hour_start = date_trunc('hour', now()) THEN ops_error_events.prev_hour_count
-             WHEN ops_error_events.hour_start = date_trunc('hour', now()) - interval '1 hour' THEN ops_error_events.hour_count
+             WHEN ops_error_events.hour_start = date_trunc('hour', timezone('utc', now())) THEN ops_error_events.prev_hour_count
+             WHEN ops_error_events.hour_start = date_trunc('hour', timezone('utc', now())) - interval '1 hour' THEN ops_error_events.hour_count
              ELSE 0 END,
            hour_count = CASE
-             WHEN ops_error_events.hour_start = date_trunc('hour', now()) THEN ops_error_events.hour_count + 1
+             WHEN ops_error_events.hour_start = date_trunc('hour', timezone('utc', now())) THEN ops_error_events.hour_count + 1
              ELSE 1 END,
-           hour_start = date_trunc('hour', now()),
+           hour_start = date_trunc('hour', timezone('utc', now())),
            route = COALESCE(EXCLUDED.route, ops_error_events.route),
            status = COALESCE(EXCLUDED.status, ops_error_events.status),
            release = COALESCE(EXCLUDED.release, ops_error_events.release)`,
