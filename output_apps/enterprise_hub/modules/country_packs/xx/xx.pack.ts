@@ -57,6 +57,25 @@ export function createTestPack(values: readonly TestPackValue[] = [{ key: 'xx_sa
       },
     ],
     taxRules: [{ kind: 'sales_tax', label: 'Sales tax', statutoryKeys: rows.map((row) => row.key) }],
+    paymentRails: [
+      {
+        id: 'card',
+        name: 'Card Test Rail',
+        methods: ['CARD', 'POS'],
+        clearingRole: 'pos_clearing',
+        defaultAccountCode: '1015',
+        feeRole: 'bank_fee',
+      },
+      {
+        id: 'duitnow',
+        name: 'DuitNow QR Test Rail',
+        methods: ['DUITNOW', 'DUITNOW_QR'],
+        clearingRole: 'clearing_duitnow',
+        defaultAccountCode: '11320',
+        feeRole: 'payment_fee',
+        taxRole: 'vat_input',
+      },
+    ],
     statutory: {
       knownKeys: () => rows.map((row) => row.key),
       valuesFor: () => Promise.resolve(rows),

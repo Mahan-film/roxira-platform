@@ -359,6 +359,14 @@ const buildService = () => {
   return { repository, service: new InventoryService(repository) };
 };
 
+/** Pass-through TenantScope for unit tests: hands the repository mocks to the code under test. */
+const fakeScope = (repos: Record<string, unknown>, ds?: { transaction: (cb: (m: never) => unknown) => unknown }) => {
+  const manager = { getRepository: (entity: { name: string }) => repos[entity.name] } as never;
+  const run = (_tenantId: string, work: (m: never) => unknown) =>
+    ds ? ds.transaction(work) : work(manager);
+  return { run, within: (_t: string, m: never | undefined, work: (m: never) => unknown) => (m ? work(m) : run(_t, work)) } as never;
+};
+
 describe('InventoryRepository — tenant scoping', () => {
   it('stamps tenantId on createWarehouse', async () => {
     const warehouses = {
@@ -370,6 +378,7 @@ describe('InventoryRepository — tenant scoping', () => {
       {} as never,
       {} as never,
       {} as never,
+      fakeScope({ WarehouseEntity: warehouses }),
     );
 
     await repository.createWarehouse('tenant-a', {
@@ -389,6 +398,7 @@ describe('InventoryRepository — tenant scoping', () => {
       {} as never,
       {} as never,
       {} as never,
+      fakeScope({ WarehouseEntity: warehouses }),
     );
 
     await repository.findWarehouseById('tenant-a', 7);
@@ -408,6 +418,7 @@ describe('InventoryRepository — tenant scoping', () => {
       stockItems as never,
       {} as never,
       {} as never,
+      fakeScope({ StockItemEntity: stockItems }),
     );
 
     await repository.createStockItem('tenant-a', { sku: 'SKU-1' });
@@ -425,6 +436,7 @@ describe('InventoryRepository — tenant scoping', () => {
       stockItems as never,
       {} as never,
       {} as never,
+      fakeScope({ StockItemEntity: stockItems }),
     );
 
     await repository.saveStockItem('tenant-a', {
@@ -455,6 +467,7 @@ describe('InventoryRepository — tenant scoping', () => {
       stockItems as never,
       {} as never,
       {} as never,
+      fakeScope({ StockItemEntity: stockItems }),
     );
 
     await repository.findStockItemsAndCount('tenant-a', {
@@ -488,6 +501,7 @@ describe('InventoryRepository — tenant scoping', () => {
       {} as never,
       {} as never,
       dataSource as never,
+      fakeScope({}, dataSource),
     );
 
     await repository.persistInbound('tenant-a', {

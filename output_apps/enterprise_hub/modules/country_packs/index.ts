@@ -5,6 +5,7 @@ export { createIranPack } from './ir/ir.pack';
 export type { IranCountryPack, IranPackDeps } from './ir/ir.pack';
 export { createMalaysiaPack, MALAYSIA } from './my/my.pack';
 export { createTestPack, TEST_COUNTRY } from './xx/xx.pack';
+export * from './payment_rails';
 export { CountryPacksModule, DEFAULT_COUNTRY } from './country-packs.module';
 export {
   CountryPackCls,

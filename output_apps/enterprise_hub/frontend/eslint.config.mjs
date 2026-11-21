@@ -1,6 +1,7 @@
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
+import oxlint from "eslint-plugin-oxlint";
 
 const PALETTE_REGEX =
   /^(?:[a-zA-Z0-9_-]+:)*(?:bg|text|border)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d+$/;
@@ -116,6 +117,8 @@ const eslintConfig = defineConfig([
       "ui-debt/no-raw-palette-or-physical-direction": "warn",
     },
   },
+  // Must stay last: turns off every ESLint rule that oxlint (run first in CI) already covers.
+  ...oxlint.buildFromOxlintConfigFile("./.oxlintrc.json"),
 ]);
 
 export default eslintConfig;

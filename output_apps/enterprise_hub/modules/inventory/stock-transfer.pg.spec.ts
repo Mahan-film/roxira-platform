@@ -12,6 +12,7 @@ import { FifoBatchEntity } from './entities/fifo-batch.entity';
 import { StockItemEntity } from './entities/stock-item.entity';
 import { WarehouseEntity } from './entities/warehouse.entity';
 import { InventoryRepository } from './repositories/inventory.repository';
+import { TenantScope } from '../access/services/tenant-scope';
 import { StockDocumentsRepository } from './repositories/stock-documents.repository';
 import { InventoryService } from './services/inventory.service';
 import { StockDocumentsService } from './services/stock-documents.service';
@@ -57,7 +58,7 @@ describePg('stores, warehouses and transfers on PostgreSQL', () => {
         ds.getRepository(WarehouseEntity),
         ds.getRepository(StockItemEntity),
         ds.getRepository(FifoBatchEntity),
-        ds,
+        ds, new TenantScope(ds),
       ),
     );
     const docRepo = new StockDocumentsRepository(ds);

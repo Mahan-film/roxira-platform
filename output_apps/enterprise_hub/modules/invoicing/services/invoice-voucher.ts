@@ -50,23 +50,46 @@ export function documentDocType(sale: boolean, reverse: boolean): string {
 }
 
 /**
- * Rows of the settlement voucher. Same-method parts merge into one line (cash for every method but
- * CARD, POS clearing for CARD); the party row settles the whole amount owed.
+ * Rows of the settlement voucher. Routes each payment method to its own clearing account
+ * (card, DuitNow QR, eWallets, marketplaces) and cash/bank, with same-method parts merged into one line.
+ * The party row settles the whole amount owed.
  */
 export function settleRows(sale: boolean, parts: ReadonlyArray<readonly [string, bigint]>, owed: bigint): SignedRows {
   const sign = sale ? 1n : -1n;
-  let cash = 0n;
-  let card = 0n;
-  for (const [method, amount] of parts) {
-    if (method === 'CARD') card += sign * amount;
-    else cash += sign * amount;
+  const rows = {
+    cash: 0n,
+    card: 0n,
+    duitnow: 0n,
+    ewallet: 0n,
+    shopee: 0n,
+    tiktok: 0n,
+    grabfood: 0n,
+  };
+  for (const [rawMethod, amount] of parts) {
+    const method = (rawMethod ?? '').trim().toUpperCase();
+    if (method === 'CARD' || method === 'POS' || method === 'VISA' || method === 'MASTERCARD') {
+      rows.card += sign * amount;
+    } else if (method === 'DUITNOW' || method === 'DUITNOW_QR' || method === 'QR') {
+      rows.duitnow += sign * amount;
+    } else if (method === 'EWALLET' || method === 'TNG' || method === 'GRABPAY' || method === 'BOOST') {
+      rows.ewallet += sign * amount;
+    } else if (method === 'SHOPEE' || method === 'SHOPEEPAY') {
+      rows.shopee += sign * amount;
+    } else if (method === 'TIKTOK' || method === 'TIKTOK_SHOP') {
+      rows.tiktok += sign * amount;
+    } else if (method === 'GRABFOOD' || method === 'GRAB') {
+      rows.grabfood += sign * amount;
+    } else {
+      rows.cash += sign * amount;
+    }
   }
-  return { cash, card, party: -sign * owed };
+  return { ...rows, party: -sign * owed };
 }
 
 /** The settle template whose line order follows the first payment (cash-first unless it is a card). */
 export function settleDocType(sale: boolean, parts: ReadonlyArray<readonly [string, bigint]>): string {
-  const cardFirst = parts[0]?.[0] === 'CARD';
+  const firstMethod = (parts[0]?.[0] ?? '').trim().toUpperCase();
+  const cardFirst = firstMethod === 'CARD' || firstMethod === 'POS';
   return `invoice.${sale ? 'sale' : 'purchase'}.settle${cardFirst ? '_card_first' : ''}`;
 }
 

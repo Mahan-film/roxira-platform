@@ -277,6 +277,12 @@ export function DraftResultCard(props: { result: DraftResult; busy: boolean; onR
         <span className="text-sm font-semibold" style={{ color: "var(--ap-warn)" }}>
           پیش‌نویس غیررسمی — {result.title}
         </span>
+        <span
+          data-testid="ai-generated-draft-badge"
+          className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium"
+        >
+          AI-generated draft
+        </span>
       </div>
       <div className="max-h-[60vh] overflow-y-auto rounded-xl p-3" style={{ background: "var(--ap-surface)" }}>
         <MarkdownView markdown={result.draft_markdown} />

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, Loader2, Undo2, XCircle } from "lucide-react";
 
+import { AiDraftBadge, AiSourceCitations } from "@/components/app/ai-draft-banner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -155,6 +156,7 @@ export function InvoiceCaptureCard({
         <Badge variant={view.status === "posted" || view.status === "auto_posted" ? "default" : "secondary"}>
           {STATUS_LABEL[view.status]}
         </Badge>
+        {view.aiGenerated && <AiDraftBadge label={view.aiLabel} />}
         <span className="text-xs text-muted-foreground">
           اطمینان کل: {Math.round(view.confidence * 100).toLocaleString("fa-IR")}٪
         </span>
@@ -164,6 +166,7 @@ export function InvoiceCaptureCard({
           </span>
         )}
       </header>
+      <AiSourceCitations citations={view.sourceCitations} />
 
       <div className="flex flex-col gap-3 md:flex-row">
         {imageUrl && view.sourceKind === "image" && (

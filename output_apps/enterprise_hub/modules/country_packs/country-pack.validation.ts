@@ -1,4 +1,5 @@
 import { assertFiscalSpec } from '../calendar/fiscal-year';
+import { isPostingRole } from '../posting_rules/constants/posting-roles';
 import {
   COUNTRY_PACK_INTERFACE_VERSION,
   CountryPack,
@@ -23,7 +24,7 @@ export function validateCountryPack(pack: CountryPack): void {
   if (!COUNTRY_CODE.test(pack.country)) fail(pack, 'country must be an upper-case ISO 3166-1 alpha-2 code');
   if (!SEMVER.test(pack.version)) fail(pack, 'version must be x.y.z');
   if (!pack.name.trim()) fail(pack, 'name is required');
-  if (pack.status !== 'production' && pack.status !== 'test') fail(pack, 'status must be production or test');
+  if (pack.status !== 'production' && pack.status !== 'beta' && pack.status !== 'test') fail(pack, 'status must be production, beta, or test');
   if (pack.locale.languages.length === 0) fail(pack, 'locale needs at least one language');
   if (!Number.isInteger(pack.locale.currency.minorUnits) || pack.locale.currency.minorUnits < 0) {
     fail(pack, 'currency minorUnits must be a non-negative integer');
@@ -68,5 +69,44 @@ export function validateCountryPack(pack: CountryPack): void {
   for (const report of pack.reportPack) {
     if (reportIds.has(report.id)) fail(pack, `duplicate report id ${report.id}`);
     reportIds.add(report.id);
+  }
+
+  if (pack.paymentRails) {
+    const railIds = new Set<string>();
+    const seenMethods = new Set<string>();
+    for (const rail of pack.paymentRails) {
+      if (!rail.id || !rail.id.trim()) fail(pack, 'payment rail id must not be empty');
+      if (railIds.has(rail.id)) fail(pack, `duplicate payment rail id «${rail.id}»`);
+      railIds.add(rail.id);
+
+      if (!rail.name || !rail.name.trim()) fail(pack, `payment rail «${rail.id}» needs a name`);
+      if (!rail.methods || rail.methods.length === 0) {
+        fail(pack, `payment rail «${rail.id}» must specify at least one payment method`);
+      }
+      for (const m of rail.methods) {
+        const norm = m.trim().toUpperCase();
+        if (!norm) fail(pack, `payment rail «${rail.id}» has empty payment method`);
+        if (seenMethods.has(norm)) {
+          fail(pack, `duplicate payment method «${norm}» across payment rails in pack`);
+        }
+        seenMethods.add(norm);
+      }
+
+      if (!isPostingRole(rail.clearingRole)) {
+        fail(pack, `payment rail «${rail.id}» uses unknown clearing role «${rail.clearingRole}»`);
+      }
+      if (!rail.defaultAccountCode || !rail.defaultAccountCode.trim()) {
+        fail(pack, `payment rail «${rail.id}» must specify defaultAccountCode`);
+      }
+      if (rail.feeRole && !isPostingRole(rail.feeRole)) {
+        fail(pack, `payment rail «${rail.id}» uses unknown fee role «${rail.feeRole}»`);
+      }
+      if (rail.commissionRole && !isPostingRole(rail.commissionRole)) {
+        fail(pack, `payment rail «${rail.id}» uses unknown commission role «${rail.commissionRole}»`);
+      }
+      if (rail.taxRole && !isPostingRole(rail.taxRole)) {
+        fail(pack, `payment rail «${rail.id}» uses unknown tax role «${rail.taxRole}»`);
+      }
+    }
   }
 }

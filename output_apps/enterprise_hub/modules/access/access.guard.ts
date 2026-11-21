@@ -10,7 +10,7 @@ import { LoginWindowService } from './services/login-window.service';
 import { IS_PUBLIC_KEY } from '../auth/decorators/public.decorator';
 import { ROLES_KEY } from '../auth/decorators/roles.decorator';
 import { TenantRole } from '../tenants/enums/tenant-role.enum';
-import { AccessContext, AccessRequest } from './access-context';
+import { AccessContext, AccessRequest, AI_ASSISTANT_ROLE } from './access-context';
 import { denied } from './access-errors';
 import {
   AccessAction,
@@ -95,10 +95,14 @@ export class AccessGuard implements CanActivate {
     if (!user.tenantId) {
       throw denied('NO_ORGANISATION', 'Your account is not part of an organisation yet.');
     }
-    const ctx = await this.access.resolve(user.sub, user.tenantId);
-    if (!ctx) {
+    const resolved = await this.access.resolve(user.sub, user.tenantId);
+    if (!resolved) {
       throw denied('NOT_A_MEMBER', 'You are not an active member of this organisation.');
     }
+    const ctx: AccessContext =
+      user.isAi === true || resolved.roleKey === AI_ASSISTANT_ROLE
+        ? { ...resolved, isAiIdentity: true }
+        : resolved;
 
     await this.loginWindow.assertAllowed(ctx.tenantId, ctx.userId, undefined, ctx.roleKey);
 

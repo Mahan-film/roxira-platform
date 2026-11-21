@@ -143,7 +143,7 @@ describePg('Landed cost on PostgreSQL (non-superuser, FORCE RLS)', () => {
       app.getRepository(WarehouseEntity),
       app.getRepository(StockItemEntity),
       app.getRepository(FifoBatchEntity),
-      app,
+      app, new TenantScope(app),
     );
     inventory = new InventoryService(inventoryRepository);
     const stockAccounts = {

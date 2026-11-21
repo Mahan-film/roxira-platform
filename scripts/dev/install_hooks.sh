@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Install a git pre-push hook that
-#   1. refuses to push the old unscrubbed history (scripts/dev/guard_old_history.sh), and
-#   2. runs scripts/dev/local_ci.sh.
-# Skip local CI once with: SKIP_LOCAL_CI=1 git push   (the history guard always runs)
+#   1. refuses to push the old unscrubbed history (scripts/dev/guard_old_history.sh),
+#   2. scans the commits being pushed with the pinned gitleaks binary
+#      (scripts/dev/pre_push_gitleaks.sh, replaces GitHub push protection), and
+#   3. runs scripts/dev/local_ci.sh.
+# Skip local CI once with: SKIP_LOCAL_CI=1 git push   (the history guard and gitleaks always run)
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -27,11 +29,14 @@ input="$(cat)"
 if [ -x "$HOOKS_DIR/guard-old-history" ]; then
   printf '%s\n' "$input" | "$HOOKS_DIR/guard-old-history" "$@"
 fi
+ROOT="$(git rev-parse --show-toplevel)"
+if [ -x "$ROOT/scripts/dev/pre_push_gitleaks.sh" ]; then
+  printf '%s\n' "$input" | "$ROOT/scripts/dev/pre_push_gitleaks.sh"
+fi
 if [ "${SKIP_LOCAL_CI:-0}" = "1" ]; then
   echo "SKIP_LOCAL_CI=1: skipping local CI"
   exit 0
 fi
-ROOT="$(git rev-parse --show-toplevel)"
 # Drop GIT_DIR & co. that git exports to hooks (local_ci.sh also does this).
 # shellcheck disable=SC2046
 unset $(git rev-parse --local-env-vars)

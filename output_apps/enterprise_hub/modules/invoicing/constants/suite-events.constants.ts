@@ -121,11 +121,63 @@ export const POS_CLEARING_ACCOUNT: InvoiceAccountSpec = {
   code: '1015',
   name: 'حساب واسط پوز',
   accountType: AccountType.ASSET,
-  match: ['واسط پوز', 'پوز'],
+  match: ['واسط پوز', 'پوز', 'clearing_card', 'card clearing'],
+};
+
+/** حساب واسط دیت‌ناو (DuitNow QR Clearing) — دارایی، پیش‌فرض کد ۱۱۳۲۰ / ۱۰۱۵. */
+export const DUITNOW_CLEARING_ACCOUNT: InvoiceAccountSpec = {
+  code: '11320',
+  name: 'تسویه دیت‌ناو / DuitNow QR Clearing',
+  accountType: AccountType.ASSET,
+  match: ['دیت‌ناو', 'duitnow', 'clearing_duitnow'],
+};
+
+/** حساب واسط کیف پول الکترونیکی (eWallet Clearing) — دارایی، پیش‌فرض کد ۱۱۳۳۰ / ۱۰۱۵. */
+export const EWALLET_CLEARING_ACCOUNT: InvoiceAccountSpec = {
+  code: '11330',
+  name: 'تسویه کیف پول الکترونیکی / eWallet Clearing',
+  accountType: AccountType.ASSET,
+  match: ['کیف پول', 'ewallet', 'tng', 'grabpay', 'clearing_ewallet'],
+};
+
+/** حساب واسط شُپی (Shopee Clearing) — دارایی، پیش‌فرض کد ۱۱۳۴۰ / ۱۰۱۵. */
+export const SHOPEE_CLEARING_ACCOUNT: InvoiceAccountSpec = {
+  code: '11340',
+  name: 'تسویه شُپی / Shopee Marketplace Clearing',
+  accountType: AccountType.ASSET,
+  match: ['شپی', 'shopee', 'clearing_shopee'],
+};
+
+/** حساب واسط تیک‌تاک (TikTok Shop Clearing) — دارایی، پیش‌فرض کد ۱۱۳۵۰ / ۱۰۱۵. */
+export const TIKTOK_CLEARING_ACCOUNT: InvoiceAccountSpec = {
+  code: '11350',
+  name: 'تسویه تیک‌تاک / TikTok Shop Clearing',
+  accountType: AccountType.ASSET,
+  match: ['تیک‌تاک', 'tiktok', 'clearing_tiktok'],
+};
+
+/** حساب واسط گرَب‌فود (GrabFood Clearing) — دارایی، پیش‌فرض کد ۱۱۳۶۰ / ۱۰۱۵. */
+export const GRABFOOD_CLEARING_ACCOUNT: InvoiceAccountSpec = {
+  code: '11360',
+  name: 'تسویه گرَب‌فود / GrabFood Delivery Clearing',
+  accountType: AccountType.ASSET,
+  match: ['گرب‌فود', 'گرَب‌فود', 'grabfood', 'grab', 'clearing_grabfood'],
 };
 
 /** How a sale was paid; each method lands in its own ledger account. */
-export const PAYMENT_METHODS = ['CASH', 'CARD', 'BANK_TRANSFER'] as const;
+export const PAYMENT_METHODS = [
+  'CASH',
+  'CARD',
+  'BANK_TRANSFER',
+  'DUITNOW',
+  'DUITNOW_QR',
+  'EWALLET',
+  'TNG',
+  'GRABPAY',
+  'SHOPEE',
+  'TIKTOK',
+  'GRABFOOD',
+] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 /** حداکثر طول متن خطای ثبت ذخیره‌شده روی صورتحساب. */

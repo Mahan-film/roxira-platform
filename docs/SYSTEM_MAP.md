@@ -1,6 +1,8 @@
 # System map (what exists)
 
-Canonical inventory for a fresh chat. Written 2026-09-30 by the hub; §2 (production server) refreshed 2026-10-22, payments/auth/mail rows 2026-10-20 (other rows may be older). Current status lives in `docs/STATE.md`;
+> Architecture overview with diagrams: `docs/ARCHITECTURE.md`. This file is the detailed inventory.
+
+Canonical inventory for a fresh chat. Written 2026-09-30 by the hub; refreshed 2026-11-20 (§1-§3, §5, store and builder rows); payments/auth/mail rows 2026-10-20, key table 2026-10 (may be older). Current status lives in `docs/STATE.md`;
 the derivable facts (compose, nginx, workflows, versions, model ids) are in `docs/SYSTEM_INVENTORY.generated.md`
 (regenerate: `python3 scripts/gen_system_inventory.py`). Anything not checked is marked UNVERIFIED. Key NAMES only, never values.
 
@@ -15,16 +17,16 @@ the derivable facts (compose, nginx, workflows, versions, model ids) are in `doc
 - Priority (STRATEGY §1): Smart Judge earns revenue; Roxira OS is the platform. Reliability of Smart Judge comes first.
 - Owner-facing FAQ in Persian: `docs/OWNER_GUIDE_FA.md`.
 
-## 2. Production server (refreshed 2026-10-22)
+## 2. Production server (refreshed 2026-11-20)
 | Item | Value |
 | --- | --- |
-| Host | `roxira-prod` = `91.107.248.99` (srv1.roxira.net, Ubuntu 26.04 arm64, 4 vCPU / 7.7 GB RAM + zram + 4 GB swapfile / 75 GB disk; old host 5.75.200.67 until decommission) |
-| Repo | `/opt/roxira_platform`, deployed automatically: `roxira-autodeploy.timer` every 5 min (backup, migrate, smoke against the local origin, legal gate, auto-rollback; `docs/ops/AUTODEPLOY.md`); status `/root/deploy-state/autodeploy-last.json` |
+| Host | `roxira-prod` (alias from `scripts/ops/ssh_config.example`; srv1, Ubuntu 26.04 arm64, 4 vCPU / 7.7 GB RAM + zram + 4 GB swapfile / 75 GB disk). An older host is kept only until decommission |
+| Repo | `/opt/roxira_platform`, deployed automatically: `roxira-autodeploy.timer` every 5 min (backup, migrate, smoke against the local origin, legal gate, auto-rollback; `docs/ops/AUTODEPLOY.md`); status `/root/deploy-state/autodeploy-last.json`. Pull-based: no deploy key or production key lives on the CI box. Stall on a dirty checkout: fix is T232 (#961) |
 | Exposed ports | 22, 80, 443 only (ufw; Cloudflare-only on 80/443). Compose publishes app ports on 127.0.0.1 only |
 | Secrets | `/opt/roxira_platform/.env` (set with `scripts/ops/set_server_env.sh`); backups in `/root/env-backups/` (never in repo) |
 | Resource plan | `docs/strategy/LEAN_ARCHITECTURE_2026-10-22.md`: memory caps on every compose service, query embeddings on Cloudflare Workers AI, disk guard, `vm.swappiness=20` |
 
-Running containers (16):
+Compose services (`docker-compose.prod.yml`, 10) plus the key pool and side stacks:
 | Container | Image / origin | Role |
 | --- | --- | --- |
 | roxira_nginx_prod | nginx:alpine (compose) | TLS gateway for all domains; edge-cache headers for /laws, /regulations, /guides, sitemaps |
@@ -33,14 +35,14 @@ Running containers (16):
 | roxira_enterprise_backend | compose | NestJS enterprise API (3000): tenants, CRM, HR, accounting, inventory, invoicing, tax compliance, data import |
 | roxira_postgres_prod / roxira_pgbouncer | postgres:17-alpine / pgbouncer (compose) | Main DB `enterprise_db` + pooling (6432) |
 | roxira_redis_prod | redis:7-alpine (compose) | Cache, rate limits, daily caps |
-| roxira_qdrant_prod | qdrant v1.19 (compose) | Vectors: `iran_laws_v6`, `iran_regulations_v2`, `iran_rulings_v1` (nightly replica to Qdrant Cloud) |
-| roxira_embeddings | TEI bge-m3 (compose) | Fallback query embedder and corpus builds |
-| roxira_keypool | LiteLLM (127.0.0.1:4000) | Model key pool / ladders (`config/key_pool.yaml`) |
+| roxira_qdrant_prod | qdrant v1.19 (compose) | Vectors: laws collection v6 (16 laws, served; v7b with 60 laws waits for T212), `iran_regulations_v2`, `iran_rulings_v1`; 8 stale collections to delete (T213); replica to Qdrant Cloud |
+| roxira_embeddings | TEI bge-m3 (compose, CPU) | Query embedder (~40 ms warm) and corpus builds |
+| roxira_keypool | LiteLLM (loopback :4000; separate compose project `roxira-keypool`) | Model key pool / ladders (`config/key_pool.yaml`) |
 | roxira_research, research-stack-searxng/valkey | services/research | Research service 127.0.0.1:8090 |
 | roxira_umami | umami 3.4 | Analytics |
 | roxira_mail | boky/postfix | Verification mail (DKIM rx1) |
 | roxira_docker_socket_proxy | tecnativa | Read-only docker API for the owner console |
-Stopped on purpose: Twenty CRM (3 containers, data volumes kept; replaced by our own suite; restart command in `/root/deploy-state/disk-guard.log`), crawl4ai.
+Retired: Twenty CRM (3 containers, data volumes kept; replaced by our own suite; restart command in `/root/deploy-state/disk-guard.log`), crawl4ai.
 
 Timers (host, `systemctl list-timers | grep roxira`): autodeploy (5 min), disk-guard (hourly), monitor-synthetic / monitor-logs (5 min), monitor-daily, usdt-poll (1 min), telegram-offsite (04:15 UTC, encrypted pg dump to the owner's Telegram), neon-offsite (nightly restore check), codeberg-mirror (hourly), qdrant-replica, backup-dr-run/check/report (restic), admin-snapshot, marketing-publish, kpi-weekly, credit-watch, cf-refresh, sbom, selfimprove, radar, docker-prune, agentdb-gc, autodaemon. Agent queue: `roxira-taskq.service` (`scripts/infra/server_agents/taskq.py`).
 
@@ -50,10 +52,10 @@ NOT automated: kernel reboot, `.env` changes (owner runs `set_server_env.sh` for
 | Layer | Tech | Where | Versions (repo) |
 | --- | --- | --- | --- |
 | AI core | Python FastAPI, LightRAG, langgraph, sentence-transformers (bge-m3 embeddings), faster-whisper, edge-tts, docling | `output_apps/generated_modules/smartjudge/`, `src/`, `run_unified_server.py`; image `Dockerfile.prod` | Image `python:3.11-slim`; `pyproject.toml` says `>=3.13` (see contradictions); pydantic >=2.13.4, httpx >=0.28.1; fastapi and qdrant-client unpinned |
-| Enterprise backend | NestJS (Controller-Service-DTO-Repository), TypeORM, BullMQ | `output_apps/enterprise_hub/` (`@roxira/enterprise-hub` 1.0.0) | @nestjs/core ^10.4.4, typeorm ^0.3.20, bullmq ^5.12.0, typescript ^5.9.3 |
+| Enterprise backend | NestJS (Controller-Service-DTO-Repository), TypeORM, BullMQ | `output_apps/enterprise_hub/` (`@roxira/enterprise-hub` 1.0.0); modules in `modules/`, country packs `de`, `ir`, `my`, `xx` in `modules/country_packs/` | @nestjs/core ^10.4.4, typeorm ^0.3.20, bullmq ^5.12.0, typescript ^5.9.3 |
 | Frontend | Next.js App Router, Tailwind, shadcn/ui, standalone build | `output_apps/enterprise_hub/frontend/` (`@roxira/enterprise-hub-frontend` 0.1.0) | next 16.3.4, react 19.2.8, tailwindcss ^4, typescript ^5 |
 | Gateway | nginx | `output_apps/nginx_config/nginx.conf` | nginx:alpine |
-| CI | GitHub Actions | `.github/workflows/` | Python 3.13, Node 20 |
+| CI | GitHub Actions + local pre-push CI (`scripts/dev/local_ci.sh`); self-hosted runner on the CI box | `.github/workflows/` | Python 3.13, Node 20 |
 
 Data stores:
 | Store | Detail |
@@ -61,11 +63,12 @@ Data stores:
 | Postgres 17 | `enterprise_db` via PgBouncer (transaction pool); every new table needs a tenant/owner column |
 | SQLite | `roxira_auth.db` (`ROXIRA_AUTH_DB_URL`, in the AI-core container) |
 | Redis 7 | cache, BullMQ |
-| Qdrant | `iran_laws_v2`: 4,243 points, 8 laws, used for answers (env `LIGHTRAG_QDRANT_COLLECTION`). `iran_laws_bge_m3`: 1,308 points, 1,305 placeholders (old). Code reading for #117/#151: the citation guard's real lookup follows `LIGHTRAG_QDRANT_COLLECTION`; `iran_laws_bge_m3` was only the label in its report (now env `ROXIRA_CITATION_QDRANT_COLLECTION`). Not yet confirmed on prod. Other collections: UNVERIFIED |
+| Qdrant | Answers use collection v6 (16 laws, R@1 0.729, R@5 0.929) set by env `LIGHTRAG_QDRANT_COLLECTION` (STATE 2026-11-19); v7b (60 laws) after T212 #926. If the env var is unset the engine silently falls back to `iran_laws_v2` (R@5 0.44): T212 makes it fail fast. Stale collections are removed by T213 #927. Citation guard collection: env `ROXIRA_CITATION_QDRANT_COLLECTION` |
 
 Other components:
 | Area | Detail |
 | --- | --- |
+| Phone line | Node agent `services/voice_phone_agent/` with LiveKit and a SIP bridge on the CI box under user `phone` (deploy kit `scripts/ops/ci_box/05_root_phone_stack.sh`); diagram in `docs/ARCHITECTURE.md` §7 |
 | Voice | STT `openai/whisper-large-v3-turbo` (OpenRouter; AssemblyAI keys in template), TTS edge-tts `fa-IR-FaridNeural`; optional Gemini Live realtime (`voice_realtime` role, off by default, W20/#84). Docs `docs/W20_realtime_voice.md` |
 | Payments | Zibal live (`ZIBAL_MERCHANT` env-only, `ZIBAL_CALLBACK_URL`, `PAYMENTS_LIVE`; result page with receipts, activation retry, verify rate limits); verify via `payment_orders`. USDT-TRC20 self-custody checkout live (`CRYPTO_PAY_ENABLED=1`, poller `roxira-usdt-poll.timer` inside the app container, `docs/ops/CRYPTO_PAYMENTS.md`). Pricing (2026-10-20): Free / Basic $4 / Pro $10 / Premium $29, annual = 10x, toman = USD x max(Tetherland rate, 280,000 floor) + optional margin; older `PRICE_TOMAN_*` values are historical. Token packs are "coming soon" |
 | SMS / OTP | Kavenegar (templates `ghazi-verify`, `roxira-verify`) |
@@ -108,15 +111,13 @@ Keys and secrets by NAME (values are never in this repo or in chat):
 
 Known gap: only ONE Actions secret exists, so workflows that read BRAVE_API_KEY, EXA_API_KEY, FIRECRAWL_API_KEY, JINA_API_KEY, TAVILY_KEYS (and OPENROUTER_RESEARCH_KEY) get empty values. Keys remain in git history (owner chose not to rotate); old keys were revoked.
 
-## 5. Builder toolchain
-Lanes (ADR 0003, `docs/decisions/0003-agent-operating-model.md`, status proposed):
-| Step | Who | For |
+## 5. Builder toolchain (refreshed 2026-11-20)
+Work is queued as GitHub issues labelled `lane:L1`..`lane:L7` (order: latest `## WAVE` comment on #592) and built by agents in separate worktrees; a draft PR is the lock (`scripts/dev/claim.sh`). Full flow with diagram: `docs/ARCHITECTURE.md` §8; machines: `docs/TEAM_SPLIT_2026-11-17.md`.
+| Machine | Lanes and builders | Hub (Claude Code) |
 | --- | --- | --- |
-| 1 | `rx`/`rxall` (OpenCode on the LiteLLM pool) or GitHub `agent` label | one issue, <= ~80 changed lines, <= 3 files, spec inline. GitHub lane is unreliable (#99, #77) |
-| 2 | Claude subagent `implementer` (Sonnet); the hub runs git | fix a failed step 1; legal core, auth, payments |
-| 3 | separate Sonnet workstream chat | design/investigation |
-| 4 | Opus | ADRs only |
-Caps: 3 rx workers, 2 Claude subagents, 1 extra chat. Hub = Sonnet; `/handoff` at ~60% context. Hub never implements product code.
+| Mac | L1 ops/CI/infra, L2 frontend + currency, L3 security/data, L4 Smart Judge; Antigravity | main hub: strategy, WAVEs, review routing, merges L1-L4 and hub PRs, all production steps |
+| Linux box `roxira-ci` | L5 core ledger, L6 Germany then Gulf, L7 box + phone kit; Antigravity, Gemini CLI fallback (`scripts/ops/ci_box/gemini_lanes.sh`) | box hub: merges L5-L7, box upkeep, phone stack; never touches production |
+Older tooling below (`rx`, OpenCode, GitHub `agent` label, ADR 0003 `docs/decisions/0003-agent-operating-model.md`) is the earlier model and may be unused; check before relying on it.
 
 Mac toolchain:
 | Tool | Detail |
@@ -127,9 +128,9 @@ Mac toolchain:
 | Other CLIs | gemini CLI, agy, rtk (wraps git/pytest; use `rtk proxy <cmd>` or `python3 -m pytest <file>`), qmd, engram, uv, node, docker |
 | MCP in Claude Code | engram (memory), qmd (docs search), codebase-memory (code graph), context7 (library docs; `.mcp.json`) |
 | Claude subagents | `.claude/agents/`: implementer (sonnet), tester (haiku), reviewer (opus) |
-| Network | Mac is flaky to GitHub/OpenRouter (retry); OpenRouter may 403 the Mac IP (VPN); Iranian official sites reachable only intermittently |
+| Network | Mac is flaky to GitHub/OpenRouter (retry); OpenRouter may refuse the Mac's address (VPN); some official legal sites are reachable only intermittently or are blocked from this network |
 
-GitHub: org `Mahan-film`, repo `roxira-platform`, private, Team plan; squash merge, delete branch on merge, `allow_auto_merge=true`. Ruleset `main-protection` requires a PR plus checks Detect changes, Secret scan, Pytest (unit), Frontend gate. Hub merges reviewed PRs with `gh pr merge <n> --auto --squash`. Server pulls via a deploy key (org "Allow deploy keys" must stay on). Advanced Security (paid) deliberately off.
+GitHub: org `Mahan-film`, repo `roxira-platform` (public now; owner chose the private Free plan on 2026-11-18, flip after #947/#949/#951, see STATE); squash merge, delete branch on merge, `allow_auto_merge=true`. Ruleset `main-protection` requires a PR plus checks Detect changes, Secret scan, Pytest (unit), Frontend gate. Hub merges reviewed PRs with `gh pr merge <n> --auto --squash`. Server pulls via a deploy key (org "Allow deploy keys" must stay on). Advanced Security (paid) deliberately off.
 
 Workflows (`.github/workflows/`, triggers in the generated inventory):
 | File | Purpose |
@@ -145,13 +146,15 @@ Workflows (`.github/workflows/`, triggers in the generated inventory):
 | model-registry-check.yml | Weekly diff of `config/models.yaml` against the OpenRouter catalogue |
 | model-eval.yml | Manual coding-smoke eval for a candidate model |
 | tech-radar-weekly.yml | Weekly tech radar on `cheap`/`strong` roles |
+| review-desk.yml | Cross-family review of all open PRs at their heads (dispatch once, without `-f pr`) |
+| deploy-prod.yml, preview-e2e.yml, codeql.yml, model-tournament.yml, project-pages.yml, rx-automerge.yml | Deploy helper, preview E2E, code scanning, model comparison, project pages, rx auto-merge (see the generated inventory for triggers) |
 
 ## 6. Hard rules and permissions
 | Actor | Allowed alone | Needs owner's explicit yes | Blocked |
 | --- | --- | --- | --- |
 | Hub (Sonnet) | write issues, review PRs, merge green PRs (`--auto --squash`), read-only ssh inspection, update docs | any prod deploy (one question), restart containers, change files on prod, spend beyond caps, DB migration or data fix, install systemd units, enable paid GitHub features, rotate keys | implementing product code, running model/agent code on prod, direct ssh writes without owner OK, entering or pasting keys, pytest over `src/`/repo root |
 | Workers (rx, agents) | branch + PR only | n/a | prod access, secrets, migrations |
-- Migrations land only via reviewed PRs; never directly on the production DB. Customer/case data never goes to `:free` models.
+- Migrations land only via reviewed PRs; never directly on the production DB. Free-first model routing applies to product data too (owner decisions 2026-10-14 and 2026-11-16); tenants with the private data option use paid models with data collection denied. Never send secrets to any model.
 - Never put a service key in frontend code. Secrets from the environment only; no defaults in code.
 - Run only CI-collected tests (`src/ci_quarantine.py`); many `src/test_*.py` run git or paid APIs at import.
 - Never read `repomix-output.xml`, `database_snapshots/`, `*.sql`, `*.tar.gz`. `git fetch && git checkout origin/main` before work.

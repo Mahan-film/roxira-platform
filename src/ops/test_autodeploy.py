@@ -90,6 +90,27 @@ def _make_repo(tmp_path: Path, *, reset_to_base: bool) -> dict:
     return {"origin": origin, "work": work, "base": base, "target": target}
 
 
+def _run_script(cmd: list[str], *, cwd: Path, env: dict, stdin: str | None = None):
+    """Run a deploy script detached from any controlling terminal.
+
+    deploy_local.sh confirm_read() prefers /dev/tty so piped input cannot answer a prod
+    confirmation. start_new_session=True leaves the child without a controlling terminal, so
+    /dev/tty cannot be opened and the answer comes from `stdin`, the same on a tty-less Linux
+    runner and on an interactive macOS shell (git push -> pre-push -> local_ci.sh), where
+    the read used to block on the real terminal until the 60 s pytest timeout.
+    """
+    return subprocess.run(
+        cmd,
+        cwd=cwd,
+        env=env,
+        input=stdin,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        start_new_session=True,
+    )
+
+
 def _stub(bindir: Path, name: str, text: str) -> None:
     bindir.mkdir(parents=True, exist_ok=True)
     p = bindir / name
@@ -124,14 +145,7 @@ def auto_env(tmp_path: Path) -> dict:
 
 def _run_auto(a: dict, extra_env: dict | None = None):
     env = {**a["env"], **(extra_env or {})}
-    return subprocess.run(
-        [REAL_BASH, str(AUTO_SCRIPT)],
-        cwd=a["work"],
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
+    return _run_script([REAL_BASH, str(AUTO_SCRIPT)], cwd=a["work"], env=env)
 
 
 def test_scripts_pass_bash_syntax_check() -> None:
@@ -142,6 +156,13 @@ def test_scripts_pass_bash_syntax_check() -> None:
     ):
         result = subprocess.run(["bash", "-n", str(path)], capture_output=True, text=True)
         assert result.returncode == 0, (path, result.stderr)
+
+
+def test_run_script_has_no_controlling_terminal(tmp_path: Path) -> None:
+    # Guards the 60 s hang on interactive shells: confirm_read() must not find a /dev/tty.
+    probe = "if { : </dev/tty; } 2>/dev/null; then echo tty; else echo no-tty; fi"
+    result = _run_script([REAL_BASH, "-c", probe], cwd=tmp_path, env=dict(os.environ))
+    assert result.stdout.strip() == "no-tty", result.stdout
 
 
 def test_autodeploy_runs_migrate_before_deploy_on_migration_diff(auto_env: dict) -> None:
@@ -246,14 +267,8 @@ def _local_migrate_env(tmp_path: Path, *, marker: bool) -> dict:
 
 def test_auto_confirm_ignored_when_marker_missing(tmp_path: Path) -> None:
     c = _local_migrate_env(tmp_path, marker=False)
-    result = subprocess.run(
-        ["bash", str(DEPLOY_SCRIPT), "migrate", "--yes"],
-        cwd=c["work"],
-        env=c["env"],
-        input="",
-        capture_output=True,
-        text=True,
-        timeout=60,
+    result = _run_script(
+        ["bash", str(DEPLOY_SCRIPT), "migrate", "--yes"], cwd=c["work"], env=c["env"], stdin=""
     )
     out = result.stdout + result.stderr
     assert result.returncode == 1, out
@@ -265,14 +280,8 @@ def test_auto_confirm_ignored_when_marker_missing(tmp_path: Path) -> None:
 @pytest.mark.skipif(os.geteuid() == 0, reason="the uid gate only applies to non-root")
 def test_auto_confirm_ignored_when_not_root(tmp_path: Path) -> None:
     c = _local_migrate_env(tmp_path, marker=True)
-    result = subprocess.run(
-        ["bash", str(DEPLOY_SCRIPT), "migrate", "--yes"],
-        cwd=c["work"],
-        env=c["env"],
-        input="",
-        capture_output=True,
-        text=True,
-        timeout=60,
+    result = _run_script(
+        ["bash", str(DEPLOY_SCRIPT), "migrate", "--yes"], cwd=c["work"], env=c["env"], stdin=""
     )
     out = result.stdout + result.stderr
     assert result.returncode == 1, out
@@ -299,14 +308,8 @@ def test_auto_confirm_ignored_when_not_local(tmp_path: Path) -> None:
         "FAKE_BASE_SHA_FILE": str(tmp_path / "base_sha"),
     }
     (tmp_path / "base_sha").write_text(repo["base"], encoding="utf-8")
-    result = subprocess.run(
-        ["bash", str(DEPLOY_SCRIPT), "migrate", "--yes"],
-        cwd=repo["work"],
-        env=env,
-        input="",
-        capture_output=True,
-        text=True,
-        timeout=60,
+    result = _run_script(
+        ["bash", str(DEPLOY_SCRIPT), "migrate", "--yes"], cwd=repo["work"], env=env, stdin=""
     )
     out = result.stdout + result.stderr
     assert result.returncode == 1, out

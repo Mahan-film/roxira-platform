@@ -27,7 +27,7 @@ describe('Malaysia Country Pack Skeleton (T142)', () => {
   it('metadata and locale match Malaysian specifications', () => {
     expect(pack.country).toBe('MY');
     expect(pack.name).toBe('Malaysia');
-    expect(pack.status).toBe('production');
+    expect(pack.status).toBe('beta');
     expect(pack.version).toBe('1.0.0');
     expect(pack.locale).toEqual({
       languages: ['en-MY', 'ms-MY'],
@@ -75,11 +75,36 @@ describe('Malaysia Country Pack Skeleton (T142)', () => {
 
     // Key Malaysian accounts present
     expect(codes.has('11200')).toBe(true); // Cash at Bank - MYR
+    expect(codes.has('11310')).toBe(true); // Card Clearing
+    expect(codes.has('11320')).toBe(true); // DuitNow QR Clearing
+    expect(codes.has('11330')).toBe(true); // eWallet Clearing
+    expect(codes.has('11340')).toBe(true); // Marketplace Clearing - Shopee
+    expect(codes.has('11350')).toBe(true); // Marketplace Clearing - TikTok Shop
+    expect(codes.has('11360')).toBe(true); // Delivery Clearing - GrabFood
     expect(codes.has('12300')).toBe(true); // SST Input Tax
     expect(codes.has('21300')).toBe(true); // SST Output Tax
     expect(codes.has('22100')).toBe(true); // EPF Payable
     expect(codes.has('22200')).toBe(true); // SOCSO Payable
     expect(codes.has('22300')).toBe(true); // EIS Payable
+    expect(codes.has('62510')).toBe(true); // Payment Gateway & Card Merchant Fees
+    expect(codes.has('62520')).toBe(true); // Marketplace & Platform Commissions
+  });
+
+  it('configures standard Malaysian payment rails with dedicated clearing accounts (T156)', () => {
+    expect(pack.paymentRails).toBeDefined();
+    expect(pack.paymentRails?.length).toBe(6);
+
+    const railIds = pack.paymentRails?.map((r) => r.id);
+    expect(railIds).toEqual(['card', 'duitnow', 'ewallet', 'shopee', 'tiktok', 'grabfood']);
+
+    const chart = pack.chartTemplates[0];
+    const chartCodes = new Set(chart.accounts.map((a) => a.code));
+
+    for (const rail of pack.paymentRails ?? []) {
+      expect(rail.methods.length).toBeGreaterThanOrEqual(1);
+      expect(chartCodes.has(rail.defaultAccountCode)).toBe(true);
+      expect(rail.clearingRole).toMatch(/^clearing_/);
+    }
   });
 
   it('holds no legal figure in tax rules: contains statutory keys only', () => {

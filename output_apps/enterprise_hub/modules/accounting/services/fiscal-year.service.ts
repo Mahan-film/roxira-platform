@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
+import { assertNotAiIdentity } from '../../access/access-context';
 import { Currency } from '../../currency/enums/currency.enum';
 import { INCOME_SUMMARY_ACCOUNT, RETAINED_EARNINGS_ACCOUNT } from '../constants/iran-chart-template';
 import {
@@ -197,6 +198,7 @@ export class FiscalYearService {
     id: number,
     dto: CloseFiscalYearDto,
   ): Promise<CloseResultDto> {
+    assertNotAiIdentity(actor, 'close a fiscal year');
     return this.accountingRepository.transaction(tenantId, async (manager) => {
       await this.accountingRepository.lockLedgerExclusive(tenantId, manager);
       const years = await this.fiscalYears.list(tenantId, manager);
@@ -366,6 +368,7 @@ export class FiscalYearService {
     id: number,
     dto: ReopenFiscalYearDto,
   ): Promise<FiscalYearResponseDto> {
+    assertNotAiIdentity(actor, 'reopen a fiscal year');
     return this.accountingRepository.transaction(tenantId, async (manager) => {
       await this.accountingRepository.lockLedgerExclusive(tenantId, manager);
       const years = await this.fiscalYears.list(tenantId, manager);

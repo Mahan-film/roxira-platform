@@ -1,4 +1,4 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
@@ -110,23 +110,11 @@ export class InventoryRepository {
     @InjectRepository(FifoBatchEntity)
     private readonly batches: Repository<FifoBatchEntity>,
     private readonly dataSource: DataSource,
-    @Optional()
-    private readonly scope?: TenantScope,
+    private readonly scope: TenantScope,
   ) {}
 
-  private get tenantScope(): TenantScope | undefined {
-    if (this.scope) {
-      return this.scope;
-    }
-    const ds =
-      this.dataSource ??
-      this.warehouses?.manager?.connection ??
-      this.stockItems?.manager?.connection ??
-      this.batches?.manager?.connection;
-    if ((ds as { isInitialized?: boolean } | undefined)?.isInitialized) {
-      return new TenantScope(ds);
-    }
-    return undefined;
+  private get tenantScope(): TenantScope {
+    return this.scope;
   }
 
   private withWarehouses<T>(
@@ -249,13 +237,11 @@ export class InventoryRepository {
 
   /** A store of this tenant, or null (used to validate a warehouse's `storeId`). */
   async findStoreById(tenantId: string, id: number): Promise<StoreEntity | null> {
+    // Always tenant-scoped (sets app.tenant_id for RLS); never fall back to the bare DataSource.
     const scope = this.tenantScope;
-    if (scope) {
-      return scope.run(tenantId, (m) =>
-        m.getRepository(StoreEntity).findOne({ where: { id, tenantId } }),
-      );
-    }
-    return this.dataSource.getRepository(StoreEntity).findOne({ where: { id, tenantId } });
+    return scope.run(tenantId, (m) =>
+      m.getRepository(StoreEntity).findOne({ where: { id, tenantId } }),
+    );
   }
 
   /** Updates the editable warehouse fields, scoped by tenant. */

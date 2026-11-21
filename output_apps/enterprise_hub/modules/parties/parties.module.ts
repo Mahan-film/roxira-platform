@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AccessModule } from '../access/access.module';
 import { TenantScope } from '../access/services/tenant-scope';
 import { PartiesController } from './controllers/parties.controller';
+import { PartyKeyEntity } from './entities/party-key.entity';
 import { PartyEntity } from './entities/party.entity';
 import { PartiesRepository } from './repositories/parties.repository';
 import { PartiesService } from './services/parties.service';
@@ -12,7 +14,7 @@ import { PartiesService } from './services/parties.service';
  * importer) can consume `PartiesService` without a cycle.
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([PartyEntity])],
+  imports: [TypeOrmModule.forFeature([PartyEntity, PartyKeyEntity]), AccessModule],
   controllers: [PartiesController],
   providers: [PartiesService, PartiesRepository, TenantScope],
   exports: [PartiesService],

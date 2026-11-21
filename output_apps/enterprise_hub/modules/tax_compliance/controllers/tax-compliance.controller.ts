@@ -195,6 +195,7 @@ export class TaxComplianceController {
     return this.taxComplianceService.submitSignature(
       this.tenantIdOf(request),
       id,
+      request.user?.sub,
     );
   }
 }

@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { LEGAL_VOCAB } from './legal-terms.js';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const envFile = path.join(ROOT, '.env');
@@ -16,7 +17,8 @@ const num = (k: string, d: number) => {
 
 /** Reads the primary model ID for a role from config/models.yaml without external YAML dependencies (T161). */
 export function loadRoleModel(role: string): string {
-  const yamlPath = path.resolve(ROOT, '../../config/models.yaml');
+  // MODELS_YAML: deployed copies (e.g. roxira-ci /srv/data/phone/agent) live outside the repo tree.
+  const yamlPath = (process.env.MODELS_YAML ?? '').trim() || path.resolve(ROOT, '../../config/models.yaml');
   if (!fs.existsSync(yamlPath)) {
     throw new Error(`Model registry not found at ${yamlPath}`);
   }
@@ -57,6 +59,9 @@ export const cfg = {
   roomPrefix: str('ROOM_PREFIX', 'call-'),
   sipIdentityPrefix: str('SIP_IDENTITY_PREFIX', 'sip_'),
   agentIdentity: str('AGENT_IDENTITY', 'ai-agent-bot'),
+  // Called numbers for the local bridge's inbound trunk (comma list). Empty = LiveKit's default
+  // trunk, which accepts any called number (allowed only from 127.0.0.1/32, see sip.ts).
+  sipTrunkNumbers: str('SIP_TRUNK_NUMBERS').split(',').map((s) => s.trim()).filter(Boolean),
 
   // Only for blocked foreign APIs (STT/TTS/LLM). Never used for LiveKit or Smart Judge.
   proxyUrl: str('PROXY_URL', 'http://127.0.0.1:10808'),
@@ -79,17 +84,18 @@ export const cfg = {
   // max wait (from end of speech) for the preferred model; 3-flash-preview took 3.2-4.5 s on all 4 keys
   // (2026-11-15). After that a backup that already answered, else Whisper's own text.
   geminiWaitMs: num('GEMINI_WAIT_MS', 4800),
+  // GEMINI_API_KEY is optional: without it the hybrid path is off and Whisper alone is used.
   geminiSttPrompt: str('GEMINI_STT_PROMPT', 'Transcribe this Persian phone call verbatim in Persian script. '
-    + 'The caller is asking an Iranian legal question; typical terms: آرای وحدت رویه، دادنامه، تجدیدنظرخواهی، '
-    + 'مهریه، چک برگشتی، دیوان عالی کشور، قانون مدنی، ماده، تبصره. Write what was said, do not correct or '
-    + 'complete it. Output only the transcript. If there is no clearly intelligible speech, output nothing.'),
+    + `The caller is asking an Iranian legal question; typical terms: ${[...LEGAL_VOCAB].reverse().join('، ')}. `
+    + 'Write what was said, do not correct or complete it. Output only the transcript. '
+    + 'If there is no clearly intelligible speech, output nothing.'),
   openaiKey: str('OPENAI_API_KEY'),
   openaiSttModel: str('OPENAI_STT_MODEL', defaultOpenaiSttModel),
-  // Whisper vocabulary hint (keep under ~220 tokens). Terms come from real phone-call misrecognitions.
-  sttPrompt: str('STT_PROMPT', 'پرسش حقوقی تلفنی: مهلت تجدیدنظرخواهی، آرای وحدت رویه، دادنامه، واخواهی، فرجام‌خواهی، '
-    + 'دادخواست، دادسرا، بازپرس، شورای حل اختلاف، دیوان عالی کشور، دیوان عدالت اداری، اجرای احکام، '
-    + 'مهریه، نفقه، اعسار، طلاق توافقی، حضانت، ارث، انحصار وراثت، چک برگشتی، سفته، قولنامه، '
-    + 'سند رسمی، اجاره‌نامه، تخلیه، دیه، قانون مدنی، آیین دادرسی، ماده، تبصره.'),
+  // Whisper vocabulary hint. Whisper uses only the LAST 224 prompt tokens (OpenAI docs; not measured
+  // on Groq), so LEGAL_VOCAB ends with
+  // the most important terms; keep the total no longer than the 2026-11 prompt (~330 characters).
+  // Terms come from real phone-call misrecognitions (legal-terms.ts).
+  sttPrompt: str('STT_PROMPT', `پرسش حقوقی تلفنی: ${LEGAL_VOCAB.join('، ')}.`),
 
   ttsProvider: str('TTS_PROVIDER', 'edge') as 'edge' | 'openai' | 'smartjudge',
   edgeTtsUrl: str('EDGE_TTS_URL', 'http://127.0.0.1:5055'),

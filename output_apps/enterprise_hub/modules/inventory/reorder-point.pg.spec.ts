@@ -14,6 +14,7 @@ import { FifoBatchEntity } from './entities/fifo-batch.entity';
 import { StockItemEntity } from './entities/stock-item.entity';
 import { WarehouseEntity } from './entities/warehouse.entity';
 import { InventoryRepository } from './repositories/inventory.repository';
+import { TenantScope } from '../access/services/tenant-scope';
 import { InventoryService } from './services/inventory.service';
 
 const HOST = process.env.ROXIRA_TEST_PG_HOST;
@@ -60,7 +61,7 @@ describePg('below reorder point list on PostgreSQL', () => {
         ds.getRepository(WarehouseEntity),
         ds.getRepository(StockItemEntity),
         ds.getRepository(FifoBatchEntity),
-        ds,
+        ds, new TenantScope(ds),
       ),
     );
     const items: Array<[string, number, number]> = [

@@ -13,6 +13,7 @@ import {
   generateKeyPair as generateKeyPairCallback,
 } from 'crypto';
 import { FindOptionsWhere, ILike, IsNull, Not } from 'typeorm';
+import { assertNotAiIdentity } from '../../access/access-context';
 import { InvoiceResponseDto } from '../../invoicing/dto/invoice-response.dto';
 import { InvoicingService } from '../../invoicing/services/invoicing.service';
 import { MOADIAN_ENV } from '../constants/moadian.constants';
@@ -468,7 +469,9 @@ export class TaxComplianceService {
   async submitSignature(
     tenantId: string,
     id: string,
+    actor?: string,
   ): Promise<TaxSignatureDetailResponseDto> {
+    assertNotAiIdentity(actor, 'file a tax return');
     const signature = await this.taxComplianceRepository.findSignatureById(
       tenantId,
       id,

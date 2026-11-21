@@ -1,10 +1,11 @@
 import * as path from 'node:path';
-import { RoomServiceClient } from 'livekit-server-sdk';
+import { RoomServiceClient, SipClient } from 'livekit-server-sdk';
 import { dispose } from '@livekit/rtc-node';
 import { cfg, validateConfig } from './config.js';
 import { closeHttp, fetchDirect } from './http.js';
 import { logger } from './log.js';
 import { CallSession, type Prompts } from './session.js';
+import { keepSipRouting } from './sip.js';
 import { cachedPrompt } from './tts.js';
 
 const log = logger('main');
@@ -70,6 +71,10 @@ async function main() {
   validateConfig();
   rooms = new RoomServiceClient(cfg.livekitHttp, cfg.livekitKey, cfg.livekitSecret);
   log.info(`STT=${cfg.sttProvider} TTS=${cfg.ttsProvider}(${cfg.ttsVoice}) brain=${cfg.judgeBase} max_calls=${cfg.maxConcurrentCalls}`);
+  // Inbound trunk + dispatch rule live only in LiveKit's Redis; re-create them if missing (#1039).
+  // Runs in the background with retries, so a LiveKit that is still starting never blocks or kills the agent.
+  void keepSipRouting(new SipClient(cfg.livekitHttp, cfg.livekitKey, cfg.livekitSecret),
+    { roomPrefix: cfg.roomPrefix, numbers: cfg.sipTrunkNumbers }, logger('sip'), () => stopping);
   await waitForTts();
   const prompts = await loadPrompts();
   log.info('ready for incoming calls');

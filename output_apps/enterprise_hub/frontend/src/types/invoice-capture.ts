@@ -48,9 +48,18 @@ export interface CaptureVoucherLine {
   description: string;
 }
 
+export interface AiSourceCitation {
+  kind: "document" | "model" | "vendor_rule" | "transcript";
+  label: string;
+  reference?: string;
+}
+
 export interface CaptureView {
   id: string;
   status: CaptureStatus;
+  aiGenerated: boolean;
+  aiLabel?: "AI-generated draft";
+  sourceCitations: AiSourceCitation[];
   sourceKind: "image" | "pdf" | "voice" | "text";
   confidence: number;
   fieldConfidence: Record<string, number>;
