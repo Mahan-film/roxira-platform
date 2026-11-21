@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import * as path from 'path';
 import { DataSource } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
+import { AuditRepository } from '../../access/repositories/audit.repository';
 import { AuditService } from '../../access/services/audit.service';
 import { PolicyService } from '../../tenants/policy/policy.service';
 import { BudgetControlService } from './budget-control.service';
@@ -81,7 +82,7 @@ describePg('BudgetEncumbrance on PostgreSQL (NOSUPERUSER NOBYPASSRLS, FORCE RLS)
     appDs = new DataSource(options(db, role, APP_PW));
     await appDs.initialize();
     const scope = new TenantScope(appDs);
-    const policy = new PolicyService(scope, new AuditService(scope));
+    const policy = new PolicyService(scope, new AuditService(new AuditRepository(scope, appDs)));
     service = new BudgetControlService(scope, policy);
   }, 60_000);
 
