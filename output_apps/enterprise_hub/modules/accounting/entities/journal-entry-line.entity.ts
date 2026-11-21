@@ -56,10 +56,10 @@ export class JournalEntryLineEntity {
   @JoinColumn({ name: 'account_id' })
   account: ChartOfAccountEntity;
 
-  @Column({ type: 'numeric', precision: 18, scale: 2, default: 0 })
+  @Column({ type: 'numeric', precision: 20, scale: 4, default: 0 })
   debit: string;
 
-  @Column({ type: 'numeric', precision: 18, scale: 2, default: 0 })
+  @Column({ type: 'numeric', precision: 20, scale: 4, default: 0 })
   credit: string;
 
   /**
@@ -111,8 +111,8 @@ export class JournalEntryLineEntity {
   /** مبلغ بدهکار به ارز معامله (Transaction Currency). */
   @Column({
     type: 'numeric',
-    precision: 18,
-    scale: 2,
+    precision: 20,
+    scale: 4,
     name: 'tx_debit',
     nullable: true,
   })
@@ -121,8 +121,8 @@ export class JournalEntryLineEntity {
   /** مبلغ بستانکار به ارز معامله (Transaction Currency). */
   @Column({
     type: 'numeric',
-    precision: 18,
-    scale: 2,
+    precision: 20,
+    scale: 4,
     name: 'tx_credit',
     nullable: true,
   })
@@ -131,8 +131,8 @@ export class JournalEntryLineEntity {
   /** مبلغ بدهکار به ارز دفاتر (Book / Reporting Currency). */
   @Column({
     type: 'numeric',
-    precision: 18,
-    scale: 2,
+    precision: 20,
+    scale: 4,
     name: 'book_debit',
     nullable: true,
   })
@@ -141,8 +141,8 @@ export class JournalEntryLineEntity {
   /** مبلغ بستانکار به ارز دفاتر (Book / Reporting Currency). */
   @Column({
     type: 'numeric',
-    precision: 18,
-    scale: 2,
+    precision: 20,
+    scale: 4,
     name: 'book_credit',
     nullable: true,
   })

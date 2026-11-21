@@ -4,6 +4,7 @@
  * exact with no tolerance.
  */
 import { MONEY_SCALE } from './constants/accounting.constants';
+import { getCurrencyExponent } from '../country_packs/currency-exponents';
 
 const FACTOR = 10 ** MONEY_SCALE;
 const FACTOR_BIG = BigInt(FACTOR);
@@ -180,4 +181,120 @@ export function rialsToMillionRials(rials: bigint): string {
   const fraction = remainder.toString().padStart(6, '0').replace(/0+$/, '');
   return `${negative ? '-' : ''}${integer}.${fraction}`;
 }
+
+/** numeric(20,4): 16 integer digits. */
+const CURRENCY_DECIMAL_PATTERN = /^(-?)(\d{1,16})(?:\.(\d+))?$/;
+
+function normaliseDecimalInput(value: number | string): string {
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+  if (!Number.isFinite(value)) {
+    throw new MoneyFormatError(`Invalid amount: ${value}`);
+  }
+  const text = value.toString();
+  if (text.includes('e') || text.includes('E')) {
+    return value.toFixed(8).replace(/\.?0+$/, '');
+  }
+  return text;
+}
+
+/**
+ * Formats BigInt minor units of `currencyCode` into an exact decimal string
+ * with the currency's ISO 4217 exponent (0 decimals => no decimal point).
+ */
+export function formatCurrencyMinor(minor: bigint, currencyCode: string): string {
+  const exponent = getCurrencyExponent(currencyCode);
+  const negative = minor < 0n;
+  const abs = negative ? -minor : minor;
+  if (exponent === 0) {
+    return `${negative ? '-' : ''}${abs}`;
+  }
+  const factor = 10n ** BigInt(exponent);
+  const integer = abs / factor;
+  const fraction = (abs % factor).toString().padStart(exponent, '0');
+  return `${negative ? '-' : ''}${integer}.${fraction}`;
+}
+
+/**
+ * Rounds `value` half-away-from-zero to the ISO 4217 exponent of `currencyCode`
+ * using exact BigInt arithmetic (never floats).
+ *
+ * Examples:
+ * - `roundToCurrencyExponent('1.234', 'OMR')` => `'1.234'`
+ * - `roundToCurrencyExponent('0.125', 'KWD')` => `'0.125'`
+ * - `roundToCurrencyExponent('1.2345', 'OMR')` => `'1.235'`
+ * - `roundToCurrencyExponent('50000.4', 'IRR')` => `'50000'`
+ * - `roundToCurrencyExponent('50000.5', 'IRR')` => `'50001'`
+ */
+export function roundToCurrencyExponent(
+  value: number | string,
+  currencyCode: string,
+): string {
+  const exponent = getCurrencyExponent(currencyCode);
+  const text = normaliseDecimalInput(value);
+  const match = CURRENCY_DECIMAL_PATTERN.exec(text);
+  if (!match) {
+    throw new MoneyFormatError(
+      `Invalid amount "${value}" for currency "${currencyCode}".`,
+    );
+  }
+  const [, sign, integer, fraction = ''] = match;
+  const factor = 10n ** BigInt(exponent);
+  const keptFraction = fraction.slice(0, exponent).padEnd(exponent, '0');
+  let minor =
+    BigInt(integer) * factor + (exponent > 0 ? BigInt(keptFraction) : 0n);
+  const nextDigit = fraction[exponent] ?? '0';
+  if (nextDigit >= '5') {
+    minor += 1n;
+  }
+  if (minor === 0n) {
+    return formatCurrencyMinor(0n, currencyCode);
+  }
+  return formatCurrencyMinor(sign === '-' ? -minor : minor, currencyCode);
+}
+
+/**
+ * Parses an exact decimal string or number into BigInt minor units for `currencyCode`.
+ * Rejects any fractional digits beyond the currency's ISO 4217 exponent (never silently rounds).
+ */
+export function parseCurrencyMinor(
+  value: number | string,
+  currencyCode: string,
+): bigint {
+  const exponent = getCurrencyExponent(currencyCode);
+  const text = normaliseDecimalInput(value);
+  const match = CURRENCY_DECIMAL_PATTERN.exec(text);
+  if (!match) {
+    throw new MoneyFormatError(
+      `Invalid amount "${value}" for currency "${currencyCode}".`,
+    );
+  }
+  const [, sign, integer, fraction = ''] = match;
+  const significantFraction = fraction.replace(/0+$/, '');
+  if (significantFraction.length > exponent) {
+    throw new MoneyFormatError(
+      `Amount "${value}" has more than ${exponent} decimal places for currency "${currencyCode}".`,
+    );
+  }
+  const factor = 10n ** BigInt(exponent);
+  const padded = fraction.slice(0, exponent).padEnd(exponent, '0');
+  const minor =
+    BigInt(integer) * factor + (exponent > 0 ? BigInt(padded) : 0n);
+  return sign === '-' ? -minor : minor;
+}
+
+/**
+ * Posting-time helper: rounds `value` to `currencyCode`'s ISO 4217 exponent
+ * and returns both exact BigInt minor units and the formatted decimal string.
+ */
+export function roundAndParseCurrencyMinor(
+  value: number | string,
+  currencyCode: string,
+): { minor: bigint; decimal: string } {
+  const decimal = roundToCurrencyExponent(value, currencyCode);
+  const minor = parseCurrencyMinor(decimal, currencyCode);
+  return { minor, decimal };
+}
+
 

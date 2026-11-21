@@ -1,4 +1,11 @@
 export * from './country-pack.types';
+export {
+  ISO_4217_CURRENCY_EXPONENTS,
+  UnsupportedCurrencyError,
+  getCurrencyExponent,
+  isSupportedCurrency,
+} from './currency-exponents';
+export type { CurrencyExponent } from './currency-exponents';
 export { CountryPackRegistry } from './country-pack.registry';
 export { validateCountryPack } from './country-pack.validation';
 export { createIranPack } from './ir/ir.pack';

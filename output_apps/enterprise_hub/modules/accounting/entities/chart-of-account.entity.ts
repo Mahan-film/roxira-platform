@@ -48,7 +48,7 @@ export class ChartOfAccountEntity {
    * Debit-positive running balance, a cache of SUM(debit - credit) over the account's lines.
    * numeric(18,2) (returned by `pg` as a string): never read it as a float.
    */
-  @Column({ type: 'numeric', precision: 18, scale: 2, default: 0 })
+  @Column({ type: 'numeric', precision: 20, scale: 4, default: 0 })
   balance: string;
 
   /** Null for imported and legacy accounts, which report through inference. */

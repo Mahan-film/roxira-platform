@@ -154,28 +154,28 @@ export class InvoiceEntity {
   @Column({ type: 'varchar', length: 3, default: 'USD' })
   baseCurrency: Currency;
 
-  @Column({ type: 'decimal', precision: 18, scale: 2 })
+  @Column({ type: 'decimal', precision: 20, scale: 4 })
   totalAmount: number;
 
-  @Column({ type: 'decimal', precision: 18, scale: 2 })
+  @Column({ type: 'decimal', precision: 20, scale: 4 })
   totalDiscount: number;
 
-  @Column({ type: 'decimal', precision: 18, scale: 2 })
+  @Column({ type: 'decimal', precision: 20, scale: 4 })
   totalTax: number;
 
-  @Column({ type: 'decimal', precision: 18, scale: 2 })
+  @Column({ type: 'decimal', precision: 20, scale: 4 })
   finalPayable: number;
 
   /** جمع ناخالص معادل ارز پایه. */
-  @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
+  @Column({ type: 'decimal', precision: 20, scale: 4, default: 0 })
   baseTotalAmount: number;
 
   /** جمع مالیات معادل ارز پایه. */
-  @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
+  @Column({ type: 'decimal', precision: 20, scale: 4, default: 0 })
   baseTotalTax: number;
 
   /** مبلغ نهایی قابل پرداخت معادل ارز پایه. */
-  @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
+  @Column({ type: 'decimal', precision: 20, scale: 4, default: 0 })
   baseFinalPayable: number;
 
   @Index()
