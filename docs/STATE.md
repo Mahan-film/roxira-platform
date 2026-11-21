@@ -1,6 +1,6 @@
 # Current state (read this first)
 
-> **Last update: 2026-11-21 evening (main hub, Claude on the Mac).**
+> **Last update: 2026-11-22 (main hub, Claude Sonnet 5.5 on the Mac).**
 > New hub: `docs/hub/HUB_START.md` -> `docs/hub/MAIN_HUB_MASTER_BRIEF.md` -> this file. Laptop: `docs/hub/BOX_HUB_MASTER_BRIEF.md`
 > and `docs/hub/BOX_INFRA_MISSION_PROMPT.md`. Live GitHub data beats this file: `gh pr list`, newest `## WAVE` and `BOX:`/`HUB` comments on #592 and #965.
 
@@ -13,8 +13,10 @@ secret, a physical action, sudo on the laptop or a production write. Never name 
 - Secrets: never write a key into a file under the repo, ~/Desktop, ~/Documents or any synced folder, never print it. Move it only by clipboard relay
   (Mac `ssh roxira-prod '... | cut -d= -f2-' | pbcopy`; box `read -rs` into the env file, mode 600; then `pbcopy </dev/null`). AirDrop does not work with Linux.
 - Private flip: the sentence "go private" comes only from the owners. Policy for private code and production paths is AGENTS.md section 4a.
-- Production writes need the owner's explicit sentence in the chat. Approved so far: create and rotate the `box-lanes` virtual key. It was rotated on
-  2026-11-21 at 17:02 UTC; every earlier value is dead. Do NOT rotate again unless a value was exposed. Delivery to the box (gateway.env) is still pending.
+- Production writes need the owner's explicit sentence in the chat (a read-only check is free). Approved so far: create and rotate the `box-lanes` virtual key (rotated
+  2026-11-21 17:02 UTC; do NOT rotate again unless exposed). Key delivery to the box (gateway.env) is the owner's clipboard relay (note on #592).
+- Merge only on a review-desk "no blocker" for the PR's CURRENT head; check CI at JOB level (a run can say success with a failed job). Probe free tiers once, spaced apart.
+  Lessons 30-36 in `docs/agents/LESSONS.md`. `gh` needs the sandbox off on the Mac (TLS error). With little disk, edit through the GitHub API instead of new worktrees.
 
 ## Direction
 - **Product first:** CRM/ERP/accounting/tax usable globally (default pack live; DE/EU next, Malaysia second, then the Gulf), plus Smart Judge.
@@ -40,15 +42,19 @@ secret, a physical action, sudo on the laptop or a production write. Never name 
 - Gateway virtual keys: `mac-agents` (3 USD/day), `laptop-mahansudo-srv` (2); `box-lanes` (1 USD/day, agent groups only) EXISTS (verified 2026-11-21); its value is delivered by the owner relay (note on #592).
 - Paid fallback balances checked: both OpenRouter keys have limits (5 and 4 USD) and almost no usage. Nothing to charge now.
 
-## Merged 2026-11-21
-#1053 #1062 #1086 #1100 (research digests R22-R33), #1082 orch v0, #1083 lane budgets, #1084 CI image mirror, #1087 LiveKit generated keys,
-#1088 direct-push alert (dry-run), #1089 builder egress + redaction, #1091 minimal lane prompts, #1157 source watcher design,
-#1074 currency precision, #955 user RLS for Smart Judge, #1073 #1075 Smart Judge normalisation and router hygiene, #1044 #972 #892.
+## Merged 2026-11-21/22
+#1081 #1180 #1097 #1182 (box lane runner, box-lanes key, mission prompt), #1165 (health.sh fix) and nine more green PRs, #1195 (test_orch import fix, main CI), #1204 (lessons),
+#1207 #1209 #1211 #1221 #1223 (Gemini second opinions R29 R28 R31 R30 R32), #1213 #1219 #1234 (AGENTS 4a private-code policy), #1238 (safe worktree prune script),
+#1215 (REVERT of the cutover wizard #1202: it could apply an irreversible period lock with an empty body; production shows 0 cutover rows, 0 new locks, 0 OB- journals).
+Queued after "no blocker": #1241 (R28 Stage 2 run 2), #1246 R24, #1247 R22, #1248 R23, #1250 R25, #1252 R26 (second opinions), #1197 (accountant access).
 
 ## Open PRs
-- Hub: #1081 lane runner pack, #1180 box-lanes key, #1097 mission prompt + TECH_RADAR and #1182 handoff are all merged. The review desk reviews only 8 PRs per run: dispatch it once and let it finish (re-dispatching cancels the pending run).
-- Red or blocked: #1072 (CI image pull), #889 (conflicts + migration number + raw DataSource, row #1093).
-- Lane PRs with real review blockers (lanes answer them in marathon rounds): #728 #763 #805 #831 #850 #854 #868 #943 #963 #964 #999; #771 conflicts.
+- The review desk reviews only 8 PRs per run: dispatch it once and let it finish (re-dispatching cancels the pending run).
+- Cutover redo: #1229 has THREE BLOCKERS from an independent review (no confirmation step, no test that red tie-outs stop the lock, self-attested totals); #1226 and #1227 had none from it
+  (the desk put a blocker on #1226: read both). Merging #1229 re-enables the reverted path: needs the owner's explicit sentence.
+- Held for the owner: #1161 (deploy key, signed tags), #1158 (Redis pin), #1046 (root CI script), #1072 (nginx/SSE), #889 (parked, row #1093), #1200 (Postgres/PgBouncer sizing),
+  #1225 (proprietary LICENSE: desk reviews, a lawyer sees it, hub never self-merges), #1205 (draft, box hub).
+- Lane PRs with real blockers (lanes answer them): #1201 #1198 #1159 #963 #964 #943 #868 #850 #831 #805 #771 #728; #999 and #1172 were updated to main and need a fresh verdict.
 
 ## Production steps waiting (each needs the owner's explicit sentence)
 1. Deliver the existing `box-lanes` key to the box with the hidden-prompt relay (exact commands in the HUB -> BOX note on #592), then replace the temporary
@@ -59,14 +65,18 @@ secret, a physical action, sudo on the laptop or a production write. Never name 
 ## Waiting on the owner
 - Box (laptop Claude has the mission prompt and answers on #965): sudo lines, restic password and Telegram env, SIP registration details,
   confirm the tunnel key (or send the lane user's PUBLIC key), caps in each provider console, the `box-lanes` cap (hub proposes 1 USD/day, approved).
-- Decisions: EU-tenant AI data path vs tax-advisor secrecy (#1108), Redis licence audit (#1122), private-repo flip date (only after #947 #949 #1024,
-  merge gate live, runner mode proven; review desk every 4 h then), R22 spend choices, wedge market after the default pack (DE proposed).
-- Research still to run by the owner: none open (R22-R33 digested); new topics only on request.
+- Decided 2026-11-21: no non-EU AI engine on the ledger path of EU or German tax-advisor tenants (row #1108). Still open: Redis licence audit (#1122); private-repo flip date (only the owners
+  say "go private"); #889 error table (platform-scope mechanism = hub recommendation, or drop tenant_id); free-first routing vs "no free tiers" for tenant documents (R22/R25); country order
+  (Gemini: Malaysia or UAE first; digests: default pack, DE, Gulf); hard spend caps in provider consoles; the owner clears Brave/Codex caches himself.
+- Research outputs still to send (Gemini): R27 and R33 (both stages), R22 Stage 2; prompts are in `docs/research/prompts/`. R22-R26 and R28-R32 are registered as `R<n>_GEMINI.md` plus a Second opinion section.
 
 ## Known issues
-- Gateway groups `agent-strong-free`, `best-product`, `best-all` fail health; `health.sh` KeyError (#1092, L1 prio 1).
+- Gateway groups `agent-light-free`, `agent-strong-free`, `best-all` timed out in one burst probe (may be quota, not a dead model); #1092 needs per-request timeouts, a fallback order and a timeout in the direct health probe. Do not probe repeatedly.
 - Redis pins that may be non-BSD (#1122); Node `engines` and Python 3.11 vs 3.13 mismatch (#1125); `openai` pinned twice.
-- Mac disk was 2.8 GiB free; 24 clean worktrees removed (8.6 GiB free). 69 dirty/unpushed worktrees kept (row #1177). Do not bulk-delete.
+- Mac disk: 36 more clean worktrees removed 2026-11-22 (28 GiB free after the owner cleared caches). 51 dirty, 42 no-PR, 24 open-PR and 6 unpushed worktrees kept; use
+  `scripts/ops/prune_worktrees.sh` (dry run first). Never bulk-delete.
+- Production keeps an EMPTY table `data_import_cutovers` from the reverted wizard (its migration file was deleted); #1226's migration is idempotent against it. A drop needs the owner's sentence.
+- Orch dry-run fails on the box until #1205 removes `gh --slurp` (gh 2.46).
 - Box SSH: port 22 open but the handshake is closed (optional; GitHub is the control plane). Mac launchd jobs `llm-tunnel`, `team-status`, `fleet` need a check.
 - 164 OSV findings (#1031), CSP report-only, PgBouncer sizing, Redis AOF, 21 tables without FORCE RLS until T200.
 
