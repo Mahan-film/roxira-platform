@@ -19,7 +19,7 @@ The two hubs coordinate only through GitHub: issues, PRs and the latest `## WAVE
 - Migration ids: above the newest on `origin/main` **and** every open PR (CI check `check_migration_ids.py --open-prs` enforces it); renumber on rebase.
 - Shared files (permission matrix, `app.module.ts`, nav menu): append-only, alphabetical.
 - Every PR gets a cross-family review (review desk: `gh workflow run review-desk.yml`, one dispatch without `-f pr` reviews all open PRs at their heads; per-PR dispatches cancel each other). No merge without "no blocker" on the current head.
-- Merge only through the queue: `gh pr merge N --auto --squash`.
+- Merge only through the queue while the repo is public: `gh pr merge N --auto --squash`. After the private flip the box merge gate merges (`docs/ops/PRIVATE_FLIP_CHECKLIST.md`); nobody merges by hand.
 - The box hub reviews and merges only L5–L7 PRs; the main hub handles everything else and all production steps.
 - Production: read-only for agents; never print environment variables or secrets (an agent did on 2026-11-17).
 

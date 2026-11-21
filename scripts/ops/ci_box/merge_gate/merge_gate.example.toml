@@ -23,6 +23,7 @@ state_dir = "~/.local/state/roxira-merge-gate"
 required_checks = [
   "Detect changes",
   "Secret scan (new commits only)",
+  "Semgrep CE (new findings)",
   "Agent guards (money, tenant scope, model ids, secrets)",
   "Pytest (unit)",
   "Compose config",

@@ -23,7 +23,7 @@ Agent ids: `claude-<login>`, `opencode`, `antigravity`, `server-<lane>`. Pick a 
 Issues labelled `lane:L1`..`lane:L7` (plus `prio:1..3`, `research-row`). The order per lane is in the latest `## WAVE` comment on issue #592. Never take an issue labelled `in-progress`. At most 3 open PRs per lane.
 
 ## Review and merge
-Every PR gets a cross-family review from the review desk (`gh workflow run review-desk.yml`, once, without `-f pr`). Merge only with "no blocker" on the current head, through the queue: `gh pr merge N --auto --squash`. Never merge your own PR without that verdict. The main hub (Mac) merges L1-L4 and hub PRs; the box hub merges L5-L7.
+Every PR gets a cross-family review from the review desk (`gh workflow run review-desk.yml`, once, without `-f pr`). Merge only with "no blocker" on the current head, through the queue while the repo is public: `gh pr merge N --auto --squash`; after the private flip the box merge gate merges instead (`docs/ops/PRIVATE_FLIP_CHECKLIST.md`). Never merge your own PR without that verdict. The main hub (Mac) merges L1-L4 and hub PRs; the box hub merges L5-L7.
 
 ## Hard rules
 - No secrets in code, docs, logs or chat; read them from the environment only. Never print env values.
