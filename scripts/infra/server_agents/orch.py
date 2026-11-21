@@ -96,10 +96,28 @@ def gh(*args: str, body: dict | None = None):
     return json.loads(res.stdout) if res.stdout.strip() else None
 
 
+def parse_json_stream(text: str) -> list:
+    """`gh api --paginate` prints one JSON document per page, back to back (no --slurp: gh < 2.48 lacks it)."""
+    dec = json.JSONDecoder()
+    docs: list = []
+    i, n = 0, len(text)
+    while i < n:
+        while i < n and text[i].isspace():
+            i += 1
+        if i >= n:
+            break
+        doc, i = dec.raw_decode(text, i)
+        docs.append(doc)
+    return docs
+
+
 def gh_list(path: str) -> list:
-    pages = gh("--paginate", "--slurp", path) or []
+    cmd = [gh_bin(), "api", "--paginate", path]
+    res = subprocess.run(cmd, capture_output=True, text=True, timeout=120, check=False)
+    if res.returncode != 0:
+        raise GhError(f"gh api --paginate failed: {res.stderr.strip()[:200]}")
     out: list = []
-    for page in pages:
+    for page in parse_json_stream(res.stdout):
         out.extend(page if isinstance(page, list) else [page])
     return out
 
