@@ -322,3 +322,21 @@ def test_root_script_dry_run_needs_no_root_and_prints_no_secrets():
         code = [ln for ln in text.splitlines() if not ln.lstrip().startswith("#")]
         assert not any(forbidden in ln for ln in code), forbidden
     assert "--dry-run" in text and "systemctl set-property" in text
+
+
+def test_launcher_retires_old_runner_only_when_idle(launcher_env, tmp_path):
+    bindir = Path(launcher_env["env"]["PATH"].split(":")[0])
+    (bindir / "systemctl").write_text('#!/bin/bash\necho "systemctl $*" >> "$FAKE_LOG"\nexit 0\n')
+    (bindir / "systemctl").chmod(0o755)
+    (bindir / "pgrep").write_text('#!/bin/bash\n[ -e "$HOME/busy" ]\n')
+    (bindir / "pgrep").chmod(0o755)
+    control = Path(launcher_env["env"]["JIT_CONTROL"])
+    control.mkdir(parents=True, exist_ok=True)
+    (control / "retire-old-runner").touch()
+    (launcher_env["tmp"] / "busy").touch()
+    assert launch(launcher_env, "light").returncode == 0
+    log = (launcher_env["tmp"] / "log").read_text()
+    assert "disable --now actions-runner" not in log           # busy: left alone
+    (launcher_env["tmp"] / "busy").unlink()
+    assert launch(launcher_env, "light").returncode == 0
+    assert "systemctl --user disable --now actions-runner" in (launcher_env["tmp"] / "log").read_text()

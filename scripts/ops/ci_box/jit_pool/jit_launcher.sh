@@ -33,10 +33,14 @@ say() { echo "jit-$slot: $*"; }
 
 retire_old_runner() {
   [ -e "$control/retire-old-runner" ] || return 0
-  if systemctl --user is-enabled -q actions-runner 2>/dev/null; then
-    say "retire-old-runner flag found: disabling the persistent runner service"
-    systemctl --user disable --now actions-runner || true
+  systemctl --user is-enabled -q actions-runner 2>/dev/null || return 0
+  # Never cut a running job short: wait until the old runner has no Runner.Worker.
+  if pgrep -u "$(id -u)" -f 'actions-runner/bin/Runner.Worker' >/dev/null 2>&1; then
+    say "retire-old-runner flag found: old runner busy, retrying next loop"
+    return 0
   fi
+  say "retire-old-runner flag found: disabling the persistent runner service"
+  systemctl --user disable --now actions-runner || true
 }
 
 claim() {
