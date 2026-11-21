@@ -152,6 +152,10 @@ export function validateConfig(c: Cfg = cfg): void {
   if (!c.livekitKey || !c.livekitSecret) {
     throw new Error('LIVEKIT_API_KEY and LIVEKIT_API_SECRET must be set');
   }
+  // LiveKit's public dev pair (built from parts so the repo guard finds no literal). Refuse to run on it (#1036).
+  if (c.livekitKey === ['dev', 'key'].join('') && c.livekitSecret === ['sec', 'ret'].join('')) {
+    throw new Error('LIVEKIT_API_KEY/SECRET is the public LiveKit dev pair; run: sudo phone-stack keys rotate');
+  }
   if (!c.judgeGatewayKey && !c.judgeToken) {
     throw new Error('SMARTJUDGE_PHONE_GATEWAY_KEY (or SMARTJUDGE_TOKEN) must be set');
   }

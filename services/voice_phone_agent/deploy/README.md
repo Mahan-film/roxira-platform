@@ -22,7 +22,9 @@ Hub) go through `box-proxy on`. `phone-stack up` switches it on when a pull fail
 # once, as root (after this PR merged and `git fetch` ran in ~mahanfilms/roxira-platform):
 sudo bash /home/mahanfilms/roxira-platform/scripts/ops/ci_box/05_root_phone_stack.sh
 # then as mahanfilms (sudoers allows only this wrapper):
-sudo phone-stack up
+sudo phone-stack keys check    # lengths only; FAIL if the public LiveKit dev pair is in use
+sudo phone-stack keys rotate   # random openssl pair -> agent env (600) + stack configs; then `up`
+sudo phone-stack up            # refuses to start while the dev pair is present
 sudo phone-stack status     # OK/FAIL lines: 4 containers, 2 units, LiveKit, TTS sidecar,
                             # synthetic TTS path, SIP registration and carrier
                             # contact qualify (one word each)

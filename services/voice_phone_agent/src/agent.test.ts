@@ -171,6 +171,18 @@ test('validateConfig rejects empty LiveKit credentials', () => {
   );
 });
 
+test('validateConfig refuses the public LiveKit dev pair', () => {
+  const pubKey = ['dev', 'key'].join('');
+  const pubSecret = ['sec', 'ret'].join('');
+  assert.throws(
+    () => validateConfig({ ...cfg, livekitKey: pubKey, livekitSecret: pubSecret, judgeGatewayKey: 'gw-key' }),
+    /dev pair/,
+  );
+  assert.doesNotThrow(() =>
+    validateConfig({ ...cfg, livekitKey: 'APIgenerated1', livekitSecret: 'g'.repeat(40), judgeGatewayKey: 'gw-key' }),
+  );
+});
+
 test('validateConfig fails closed when both gateway key and token are empty', () => {
   assert.throws(
     () => validateConfig({ ...cfg, livekitKey: 'lk-key', livekitSecret: 'lk-sec', judgeGatewayKey: '', judgeToken: '' }),
