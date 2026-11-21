@@ -186,7 +186,8 @@ class Pool:
                 keep.append(r)
                 continue
             slot, ts = parsed
-            if r.get("status") == "offline" and self.now - ts > stale:
+            # never delete a busy runner: a network blip can show a runner offline mid-job
+            if r.get("status") == "offline" and not r.get("busy") and self.now - ts > stale:
                 self.actions.append(f"delete stale {r['name']}")
                 if not self.dry:
                     try:

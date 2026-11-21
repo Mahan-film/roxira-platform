@@ -153,6 +153,7 @@ def test_cleanup_deletes_only_stale_offline_pool_runners(jp, env):
         {"id": 2, "name": old, "status": "offline", "busy": False},                   # stale
         {"id": 3, "name": f"jit-docker-{NOW - 1000:010d}-123456", "status": "online", "busy": True},
         {"id": 4, "name": f"jit-light-{NOW - 10:010d}-fedcba", "status": "offline", "busy": False},
+        {"id": 5, "name": f"jit-docker-{NOW - 2000:010d}-0a0b0c", "status": "offline", "busy": True},  # blip mid-job
     ])
     run_tick(jp, env, api)
     deleted = [c[1] for c in api.calls if c[0] == "DELETE"]

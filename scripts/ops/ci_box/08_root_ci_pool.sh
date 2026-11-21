@@ -51,6 +51,7 @@ run()  { if [ "$DRY" = 1 ]; then echo "[dry-run] $*"; else "$@"; fi; }
 id "$RUNNER" >/dev/null 2>&1 || { echo "FAIL  user $RUNNER missing"; exit 1; }
 id "$CTRL" >/dev/null 2>&1 || { echo "FAIL  user $CTRL missing"; exit 1; }
 RUID="$(id -u "$RUNNER")"
+RHOME="$(getent passwd "$RUNNER" | cut -d: -f6)"
 for f in jit_launcher.sh runner_setup.sh Dockerfile.light 'roxira-jit@.service'; do
   [ -f "$SRC/$f" ] || { echo "FAIL  $SRC/$f missing (run from a checkout of the repo)"; exit 1; }
 done
@@ -118,7 +119,7 @@ fi
 
 echo "== 5. runner side (as $RUNNER): template, light image, launchers"
 if [ "$DRY" = 1 ]; then
-  echo "[dry-run] runuser -u $RUNNER -- env XDG_RUNTIME_DIR=/run/user/$RUID bash $LIB/runner_setup.sh"
+  echo "[dry-run] runuser -u $RUNNER -- env HOME=$RHOME XDG_RUNTIME_DIR=/run/user/$RUID bash $LIB/runner_setup.sh"
   if [ "$(id -u)" -eq 0 ]; then
     for s in light docker; do
       st="$(runuser -u "$RUNNER" -- env XDG_RUNTIME_DIR="/run/user/$RUID" systemctl --user is-active "roxira-jit@$s.service" 2>/dev/null || true)"
@@ -130,7 +131,7 @@ if [ "$DRY" = 1 ]; then
     echo "now   $RUNNER reaches api.github.com: HTTP ${code:-none}"
   fi
 else
-  runuser -u "$RUNNER" -- env XDG_RUNTIME_DIR="/run/user/$RUID" bash "$LIB/runner_setup.sh"
+  runuser -u "$RUNNER" -- env HOME="$RHOME" USER="$RUNNER" XDG_RUNTIME_DIR="/run/user/$RUID" bash "$LIB/runner_setup.sh"
 fi
 
 echo
