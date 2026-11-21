@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Optional } from '@nestjs/common';
 import { Currency } from '../../currency/enums/currency.enum';
 import { CreateInvoiceDto, InvoiceItemDto, InvoicePartyInfoDto } from '../dto/create-invoice.dto';
 import { InvoiceDirection, InvoiceSubject } from '../enums/invoice-kind.enum';
@@ -55,11 +55,13 @@ export interface VendorInvoiceLineItem {
 export interface EffectiveTaxTreatmentRule {
   jurisdiction: string;
   customerType: 'B2B' | 'B2C';
+  documentType?: 'INVOICE' | 'CREDIT_NOTE';
   taxCode: string;
   taxName: string;
   rateBps: number;
   rateDecimal: string;
   isReverseCharge: boolean;
+  requiresVerifiedVatId?: boolean;
   mandatoryMention?: string;
   effectiveFrom: string; // YYYY-MM-DD
   effectiveTo?: string; // YYYY-MM-DD
@@ -71,8 +73,11 @@ export interface EffectiveTaxTreatmentRule {
  * Request to generate a vendor invoice or credit note.
  */
 export interface VendorInvoiceRequest {
+  tenantId?: string;
   documentType: 'INVOICE' | 'CREDIT_NOTE';
   series: string; // e.g. "INV-2026" or "CN-2026"
+  channel?: string;
+  fiscalYear?: number;
   issueDate: string; // YYYY-MM-DD
   supplier: VendorInvoiceParty;
   customer: VendorInvoiceParty;
@@ -119,6 +124,34 @@ export interface VendorInvoiceDocument {
   };
 }
 
+export function assertValidIsoDate(dateStr: string, field = 'issueDate'): void {
+  if (typeof dateStr !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    throw new BadRequestException(`Invalid ${field}: must be in YYYY-MM-DD format.`);
+  }
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const p = new Date(Date.UTC(y, m - 1, d));
+  if (p.getUTCFullYear() !== y || p.getUTCMonth() + 1 !== m || p.getUTCDate() !== d) {
+    throw new BadRequestException(`Invalid ${field}: calendar date does not exist (${dateStr}).`);
+  }
+}
+
+export function getCurrencyExponent(currency: Currency | string): number {
+  const c = String(currency).toUpperCase();
+  if (c === 'JPY' || c === 'IRR' || c === 'IRT') return 0;
+  if (c === 'KWD' || c === 'BHD' || c === 'OMR') return 3;
+  return 2;
+}
+
+export function multiplyMinorByQuantity(unitPriceMinor: bigint, quantity: number): bigint {
+  if (quantity === 0) return 0n;
+  const isNeg = quantity < 0;
+  const [i, f = ''] = Math.abs(quantity).toString().split('.');
+  const denom = 10n ** BigInt(f.length);
+  const scaled = BigInt(i) * denom + BigInt(f || '0');
+  const rounded = (unitPriceMinor * scaled + denom / 2n) / denom;
+  return isNeg ? -rounded : rounded;
+}
+
 /**
  * Effective-Dated Tax Treatment Registry.
  * Holds statutory tax treatment rules with effective date bounds.
@@ -155,6 +188,19 @@ export class EffectiveTaxTreatmentRegistry {
       sourceUrl: 'https://mysst.customs.gov.my',
       verified: true,
     },
+    // Malaysia Service Tax (SST) - B2C Rates
+    {
+      jurisdiction: 'MY', customerType: 'B2C', taxCode: 'MY-VT-GEN-B2C', taxName: 'Malaysian Service Tax (SST)',
+      rateBps: 800, rateDecimal: '0.08', isReverseCharge: false,
+      mandatoryMention: 'Service Tax (SST) 8% applicable under the Service Tax Act 2018.',
+      effectiveFrom: '2024-03-01', sourceUrl: 'https://mysst.customs.gov.my', verified: true,
+    },
+    {
+      jurisdiction: 'MY', customerType: 'B2C', taxCode: 'MY-VT-LEG-B2C', taxName: 'Malaysian Service Tax (SST)',
+      rateBps: 600, rateDecimal: '0.06', isReverseCharge: false,
+      mandatoryMention: 'Service Tax (SST) 6% applicable under the Service Tax Act 2018.',
+      effectiveFrom: '2018-09-01', effectiveTo: '2024-02-29', sourceUrl: 'https://mysst.customs.gov.my', verified: true,
+    },
     // Malaysia Service Tax (SST) - B2B Exemption (0% for qualified B2B IT/Management services)
     {
       jurisdiction: 'MY_EXEMPT',
@@ -178,15 +224,31 @@ export class EffectiveTaxTreatmentRegistry {
       rateBps: 0,
       rateDecimal: '0.00',
       isReverseCharge: true,
+      requiresVerifiedVatId: true,
       mandatoryMention: 'Reverse charge: Customer to account for VAT under Article 196 of Council Directive 2006/112/EC.',
       effectiveFrom: '2007-01-01',
       sourceUrl: 'https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32006L0112',
       verified: true,
     },
+    // EU Cross-Border B2B - Standard VAT (unverified customer VAT ID)
+    {
+      jurisdiction: 'EU', customerType: 'B2B', taxCode: 'EU-STANDARD-VAT', taxName: 'EU Standard VAT (Unverified Customer)',
+      rateBps: 2000, rateDecimal: '0.20', isReverseCharge: false, requiresVerifiedVatId: false,
+      mandatoryMention: 'Standard VAT charged: VAT identification number not verified on VIES.',
+      effectiveFrom: '2007-01-01', sourceUrl: 'https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32006L0112', verified: true,
+    },
+    // EU Consumer (B2C) Invoices - Standard VAT
+    {
+      jurisdiction: 'EU', customerType: 'B2C', documentType: 'INVOICE', taxCode: 'EU-B2C-VAT', taxName: 'EU Consumer VAT',
+      rateBps: 2000, rateDecimal: '0.20', isReverseCharge: false,
+      mandatoryMention: 'EU consumer VAT charged under Directive 2006/112/EC.',
+      effectiveFrom: '2015-01-01', sourceUrl: 'https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32006L0112', verified: true,
+    },
     // EU Consumer (B2C) Refund / Credit Note Treatment
     {
       jurisdiction: 'EU',
       customerType: 'B2C',
+      documentType: 'CREDIT_NOTE',
       taxCode: 'EU-B2C-REFUND',
       taxName: 'EU Consumer Refund Credit Note',
       rateBps: 0,
@@ -197,6 +259,19 @@ export class EffectiveTaxTreatmentRegistry {
       sourceUrl: 'https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32011L0083',
       verified: true,
     },
+    // Non-EU / Non-MY International Export of Services (Zero-Rated)
+    {
+      jurisdiction: 'EXPORT', customerType: 'B2B', taxCode: 'EXPORT-ZERO', taxName: 'Zero-Rated International Export',
+      rateBps: 0, rateDecimal: '0.00', isReverseCharge: false,
+      mandatoryMention: 'Zero-rated export of services outside taxing jurisdiction.',
+      effectiveFrom: '2000-01-01', sourceUrl: 'https://mysst.customs.gov.my', verified: true,
+    },
+    {
+      jurisdiction: 'EXPORT', customerType: 'B2C', taxCode: 'EXPORT-ZERO', taxName: 'Zero-Rated International Export',
+      rateBps: 0, rateDecimal: '0.00', isReverseCharge: false,
+      mandatoryMention: 'Zero-rated export of services outside taxing jurisdiction.',
+      effectiveFrom: '2000-01-01', sourceUrl: 'https://mysst.customs.gov.my', verified: true,
+    },
   ];
 
   /** Register or update a statutory tax treatment rule dynamically (no hardcoding). */
@@ -205,6 +280,7 @@ export class EffectiveTaxTreatmentRegistry {
       (r) =>
         r.jurisdiction === rule.jurisdiction &&
         r.customerType === rule.customerType &&
+        r.documentType === rule.documentType &&
         r.effectiveFrom === rule.effectiveFrom,
     );
     if (existingIdx >= 0) {
@@ -221,20 +297,20 @@ export class EffectiveTaxTreatmentRegistry {
     jurisdiction: string;
     customerType: 'B2B' | 'B2C';
     date: string;
+    documentType?: 'INVOICE' | 'CREDIT_NOTE';
     hasVerifiedVatId?: boolean;
     exempt?: boolean;
   }): EffectiveTaxTreatmentRule {
-    const targetJurisdiction = params.exempt && params.jurisdiction === 'MY'
+    assertValidIsoDate(params.date, 'date');
+    let targetJurisdiction = params.exempt && params.jurisdiction === 'MY'
       ? 'MY_EXEMPT'
       : params.jurisdiction;
 
-    const matches = this.rules.filter((rule) => {
-      if (rule.jurisdiction !== targetJurisdiction) return false;
-      if (rule.customerType !== params.customerType) return false;
-      if (params.date < rule.effectiveFrom) return false;
-      if (rule.effectiveTo && params.date > rule.effectiveTo) return false;
-      return true;
-    });
+    let matches = this.filterRules(targetJurisdiction, params);
+    if (matches.length === 0 && targetJurisdiction !== 'MY' && targetJurisdiction !== 'EU' && targetJurisdiction !== 'MY_EXEMPT') {
+      targetJurisdiction = 'EXPORT';
+      matches = this.filterRules(targetJurisdiction, params);
+    }
 
     if (matches.length === 0) {
       throw new BadRequestException(
@@ -246,42 +322,87 @@ export class EffectiveTaxTreatmentRegistry {
     matches.sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom));
     return matches[0];
   }
+
+  private filterRules(
+    jurisdiction: string,
+    params: { customerType: 'B2B' | 'B2C'; date: string; documentType?: 'INVOICE' | 'CREDIT_NOTE'; hasVerifiedVatId?: boolean; },
+  ): EffectiveTaxTreatmentRule[] {
+    return this.rules.filter((rule) => {
+      if (rule.jurisdiction !== jurisdiction || rule.customerType !== params.customerType) return false;
+      if (rule.documentType && params.documentType && rule.documentType !== params.documentType) return false;
+      if (rule.requiresVerifiedVatId !== undefined && rule.requiresVerifiedVatId !== Boolean(params.hasVerifiedVatId)) return false;
+      if (params.date < rule.effectiveFrom || (rule.effectiveTo && params.date > rule.effectiveTo)) return false;
+      return true;
+    });
+  }
+}
+
+export interface DocumentCounterKey {
+  tenantId?: string;
+  documentType?: string;
+  channel?: string;
+  fiscalYear?: number;
+  series: string;
+}
+
+export interface SequencerStore {
+  nextNumber(key: DocumentCounterKey, manager?: any): Promise<number> | number;
+}
+
+export class MemorySequencerStore implements SequencerStore {
+  private readonly state = new Map<string, number>();
+  private key(k: DocumentCounterKey): string {
+    return `${k.tenantId ?? 'default'}:${k.documentType ?? 'INVOICE'}:${k.channel ?? 'DEFAULT'}:${k.fiscalYear ?? 0}:${k.series}`;
+  }
+  nextNumber(k: DocumentCounterKey): number {
+    const next = (this.state.get(this.key(k)) ?? 0) + 1;
+    this.state.set(this.key(k), next);
+    return next;
+  }
+  seed(k: DocumentCounterKey, last: number): void { this.state.set(this.key(k), last); }
+  exportSnapshot(): Record<string, number> { return Object.fromEntries(this.state.entries()); }
+  importSnapshot(s: Record<string, number>): void { for (const [k, v] of Object.entries(s)) this.state.set(k, v); }
+}
+
+export class PostgresSequencerStore implements SequencerStore {
+  async nextNumber(k: DocumentCounterKey, manager: any): Promise<number> {
+    if (!manager?.query) throw new BadRequestException('EntityManager query runner required for Postgres sequencer.');
+    const rows: Array<{ last_number: string | number }> = await manager.query(
+      `INSERT INTO "fin_document_counters" ("tenant_id", "document_type", "channel", "fiscal_year", "series", "last_number")
+       VALUES ($1, $2, $3, $4, $5, 1)
+       ON CONFLICT ("tenant_id", "document_type", "channel", "fiscal_year", "series")
+       DO UPDATE SET "last_number" = "fin_document_counters"."last_number" + 1, "updated_at" = now()
+       RETURNING "last_number"`,
+      [k.tenantId ?? '00000000-0000-0000-0000-000000000000', k.documentType ?? 'INVOICE', k.channel ?? 'DEFAULT', k.fiscalYear ?? 0, k.series],
+    );
+    return Number(rows[0].last_number);
+  }
 }
 
 /**
  * Validates and enforces gapless document numbering sequences.
  */
+@Injectable()
 export class GaplessNumberSequencer {
-  private readonly sequences = new Map<string, number>();
+  constructor(private store: SequencerStore = new MemorySequencerStore()) {}
+  setStore(store: SequencerStore): void { this.store = store; }
 
-  /**
-   * Allocate the next gapless number for a series.
-   */
-  nextNumber(series: string): { sequenceNumber: number; documentNumber: string } {
-    const current = this.sequences.get(series) ?? 0;
-    const nextSeq = current + 1;
-    this.sequences.set(series, nextSeq);
-    return {
-      sequenceNumber: nextSeq,
-      documentNumber: `${series}-${String(nextSeq).padStart(6, '0')}`,
-    };
+  nextNumber(keyOrSeries: string | DocumentCounterKey, manager?: any): { sequenceNumber: number; documentNumber: string } {
+    const key = typeof keyOrSeries === 'string' ? { series: keyOrSeries } : keyOrSeries;
+    const res = this.store.nextNumber(key, manager);
+    if (typeof res !== 'number') throw new BadRequestException('Use nextNumberAsync for async stores.');
+    return { sequenceNumber: res, documentNumber: `${key.series}-${String(res).padStart(6, '0')}` };
   }
 
-  /**
-   * Seed a sequence to start at a specific number (e.g. for new fiscal years or migrations).
-   */
-  seedSequence(series: string, lastAssignedNumber: number): void {
-    this.sequences.set(series, lastAssignedNumber);
+  async nextNumberAsync(keyOrSeries: string | DocumentCounterKey, manager?: any): Promise<{ sequenceNumber: number; documentNumber: string }> {
+    const key = typeof keyOrSeries === 'string' ? { series: keyOrSeries } : keyOrSeries;
+    const res = await this.store.nextNumber(key, manager);
+    return { sequenceNumber: res, documentNumber: `${key.series}-${String(res).padStart(6, '0')}` };
   }
 
-  /**
-   * Static gapless sequence validation across a list of documents.
-   * Throws if any gap or duplicate is detected.
-   */
   static validateGaplessSequence(docs: readonly VendorInvoiceDocument[]): void {
     if (docs.length <= 1) return;
 
-    // Group by series
     const bySeries = new Map<string, VendorInvoiceDocument[]>();
     for (const doc of docs) {
       const list = bySeries.get(doc.series) ?? [];
@@ -318,24 +439,28 @@ export class GaplessNumberSequencer {
 export class VendorInvoiceGenerator {
   constructor(
     private readonly taxRegistry: EffectiveTaxTreatmentRegistry,
+    @Optional() private readonly sequencer?: GaplessNumberSequencer,
   ) {}
 
-  /**
-   * Generate a valid vendor invoice or credit note with gapless numbers,
-   * effective-dated statutory tax rules, and strict minor-units arithmetic.
-   */
   generate(
     request: VendorInvoiceRequest,
-    sequenceNumber: number,
+    sequenceNumber?: number,
   ): VendorInvoiceDocument {
-    if (sequenceNumber <= 0) {
+    assertValidIsoDate(request.issueDate, 'issueDate');
+    const seq = sequenceNumber !== undefined
+      ? sequenceNumber
+      : (this.sequencer ?? new GaplessNumberSequencer()).nextNumber({
+          tenantId: request.tenantId, documentType: request.documentType,
+          channel: request.channel, fiscalYear: request.fiscalYear, series: request.series,
+        }).sequenceNumber;
+
+    if (seq <= 0) {
       throw new BadRequestException('Sequence number must be a positive integer.');
     }
 
-    const documentNumber = `${request.series}-${String(sequenceNumber).padStart(6, '0')}`;
+    const documentNumber = `${request.series}-${String(seq).padStart(6, '0')}`;
     const customerType = request.customer.isB2B ? 'B2B' : 'B2C';
 
-    // Determine target jurisdiction: EU Member States map to EU rules
     const isEuCountry = ['DE', 'FR', 'NL', 'IT', 'ES', 'SE', 'PL', 'BE', 'AT', 'IE', 'FI', 'PT', 'GR', 'CZ', 'RO', 'DK', 'HU', 'SK', 'BG', 'HR', 'LT', 'SI', 'LV', 'EE', 'CY', 'LU', 'MT'].includes(
       request.customer.country.toUpperCase(),
     );
@@ -345,6 +470,7 @@ export class VendorInvoiceGenerator {
       jurisdiction,
       customerType,
       date: request.issueDate,
+      documentType: request.documentType,
       hasVerifiedVatId: request.customer.verifiedTaxId,
     });
 
@@ -357,9 +483,8 @@ export class VendorInvoiceGenerator {
     let totalTax = 0n;
 
     const lines: VendorInvoiceLineItem[] = request.items.map((item) => {
-      const net = BigInt(item.quantity) * item.unitPriceMinor;
-      // Exact basis-point money calculation: (net * rateBps) / 10000n
-      const tax = treatment.isReverseCharge ? 0n : (net * BigInt(treatment.rateBps)) / 10000n;
+      const net = multiplyMinorByQuantity(item.unitPriceMinor, item.quantity);
+      const tax = treatment.isReverseCharge ? 0n : (net * BigInt(treatment.rateBps) + 5000n) / 10000n;
       const gross = net + tax;
 
       totalNet += net;
@@ -383,14 +508,23 @@ export class VendorInvoiceGenerator {
 
     let fxRateInfo: VendorInvoiceDocument['fxRate'];
     if (request.fxRate) {
-      // Calculate tax in base currency if FX rate is given
-      // Rate is a decimal string like "4.450000"
+      const srcDecimals = getCurrencyExponent(request.currency);
+      const baseDecimals = getCurrencyExponent(request.fxRate.baseCurrency);
+      const expDiff = baseDecimals - srcDecimals;
       const [rateInt, rateFrac = ''] = request.fxRate.rate.split('.');
       const scale = rateFrac.length;
       const rateScaled = BigInt(rateInt) * (10n ** BigInt(scale)) + BigInt(rateFrac || '0');
-      const taxInBase = scale > 0
-        ? (totalTax * rateScaled) / (10n ** BigInt(scale))
-        : totalTax * rateScaled;
+      const rateDenom = 10n ** BigInt(scale);
+
+      let taxInBase: bigint;
+      if (expDiff >= 0) {
+        const factor = 10n ** BigInt(expDiff);
+        taxInBase = (totalTax * rateScaled * factor + rateDenom / 2n) / rateDenom; // money-ok: BigInt integer division
+      } else {
+        const div = 10n ** BigInt(-expDiff);
+        const totalDenom = rateDenom * div;
+        taxInBase = (totalTax * rateScaled + totalDenom / 2n) / totalDenom; // money-ok: BigInt integer division
+      }
 
       fxRateInfo = {
         baseCurrency: request.fxRate.baseCurrency,
@@ -415,7 +549,7 @@ export class VendorInvoiceGenerator {
       documentType: request.documentType,
       documentNumber,
       series: request.series,
-      sequenceNumber,
+      sequenceNumber: seq,
       issueDate: request.issueDate,
       supplier: request.supplier,
       customer: request.customer,
@@ -431,10 +565,6 @@ export class VendorInvoiceGenerator {
     };
   }
 
-  /**
-   * Convert a VendorInvoiceDocument into a Roxira CreateInvoiceDto compatible structure
-   * for seamless insertion and posting into our own double-entry ledger.
-   */
   toLedgerCreateInvoiceDto(doc: VendorInvoiceDocument): CreateInvoiceDto {
     const sellerInfo: InvoicePartyInfoDto = {
       name: doc.supplier.name,
@@ -450,12 +580,15 @@ export class VendorInvoiceGenerator {
       registrationNumber: doc.customer.registrationNumber,
     };
 
+    const exp = getCurrencyExponent(doc.currency);
+    const denom = 10 ** exp;
+
     const items: InvoiceItemDto[] = doc.lines.map((l) => ({
       description: l.description,
       quantity: l.quantity,
-      unitPrice: Number(l.unitPriceMinor), // money-ok: CreateInvoiceDto.items wire DTO expects number
+      unitPrice: Number(l.unitPriceMinor) / denom, // money-ok: CreateInvoiceDto wire format expects major unit numbers
       discount: 0,
-      vatRate: Number(l.taxRateDecimal),
+      vatRate: l.taxRateBps / 10000,
       sku: l.sku ?? undefined,
     }));
 
