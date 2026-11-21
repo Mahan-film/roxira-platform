@@ -33,6 +33,8 @@ WARN=0
 say() { printf '%s\n' "$*"; }
 act() { if [ "$APPLY" = 1 ]; then say "[apply]   $*"; else say "[dry-run] would: $*"; fi; }
 warn() { WARN=$((WARN + 1)); say "[warn]    $*"; }
+# lane-run is always installed; in --apply mode a missing nc -X or opencode is fatal, in dry-run only a warning.
+need() { if [ "$APPLY" = 1 ]; then say "[error]   $*" >&2; exit 1; else warn "$*"; fi; }
 
 say "== checks (read-only)"
 [ -x "$HERE/lane-run" ] || warn "lane-run is not executable in $HERE"
@@ -40,9 +42,9 @@ command -v ssh >/dev/null || warn "ssh missing"
 command -v python3 >/dev/null || warn "python3 missing"
 command -v git >/dev/null || warn "git missing"
 if /usr/bin/nc -h 2>&1 | grep -q -- '-X'; then say "nc supports -X (proxy CONNECT): ok"
-else warn "/usr/bin/nc has no -X option: install netcat-openbsd (admin step) or the tunnel cannot use the box proxy"; fi
+else need "/usr/bin/nc has no -X option: install netcat-openbsd (admin step) or the tunnel cannot use the box proxy"; fi
 if command -v opencode >/dev/null || [ -x "$BIN/opencode" ]; then say "opencode: found"
-else warn "opencode not found: install it for this user first (docs/ops/BOX_LANE_RUNNER.md step 3)"; fi
+else need "opencode not found: install it for this user first (docs/ops/BOX_LANE_RUNNER.md step 3)"; fi
 if command -v ss >/dev/null; then
   if ss -tln 2>/dev/null | grep -q '127.0.0.1:10809 '; then say "box proxy 127.0.0.1:10809: listening"
   else warn "nothing listens on 127.0.0.1:10809 (box proxy off? ask the admin to run: sudo box-proxy on)"; fi

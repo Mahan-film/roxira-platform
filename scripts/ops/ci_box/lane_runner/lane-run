@@ -99,22 +99,35 @@ print(json.dumps({"ts": datetime.datetime.now(datetime.timezone.utc).isoformat()
 budget_py() { # check|show. check: prints the reason and exits 4 when the lane hit a cap today
   LR_MODE="$1" LR_LANE="$LANE_LC" LR_LOG="$LOGFILE" LR_BUDGETS="$BUDGETS" LR_LIB="$REPO/scripts/infra/server_agents" python3 - <<'PY'
 import json, os, sys, time
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 sys.path.insert(0, os.environ["LR_LIB"])
 import lane_budget as lb
 cfg = lb.load_config(Path(os.environ["LR_BUDGETS"]))
 lane = os.environ["LR_LANE"]
 recs = lb.read_records([Path(os.environ["LR_LOG"])], lb.day_start(time.time()))
-usd = tok = 0.0
+def dec(v):  # USD parsed from its string form, never via float; bad or negative input counts as 0
+    try:
+        d = Decimal(str(v if v is not None else 0))
+    except InvalidOperation:
+        return Decimal(0)
+    return d if d.is_finite() and d > 0 else Decimal(0)
+def count(v):  # token counts are ints
+    try:
+        return max(int(v or 0), 0)
+    except (TypeError, ValueError):
+        return 0
+usd = Decimal(0)
+tok = 0
 att = 0
 for _, r in recs:
     if lb.lane_name(str(r.get("lane"))) != lane or r.get("status") in ("skipped_bot", "refused", "over_budget"):
         continue
     att += 1
-    usd += lb._num(r.get("cost_usd"))
-    tok += lb._num(r.get("tokens"))
+    usd += dec(r.get("cost_usd"))
+    tok += count(r.get("tokens"))
 if os.environ["LR_MODE"] == "show":
-    print(json.dumps({"lane": lane, "attempts_today": att, "usd_today": round(usd, 6), "tokens_today": int(tok),
+    print(json.dumps({"lane": lane, "attempts_today": att, "usd_today": str(usd.quantize(Decimal("0.000001"))), "tokens_today": tok,
                       "caps": lb.caps(cfg, lane)}))
     sys.exit(0)
 why = lb.over_budget(lane, {"usd": usd, "tokens": tok}, att, cfg)
@@ -247,11 +260,12 @@ fi
 LR_LANE="$LANE" LR_GROUP="$MODEL_GROUP" LR_RC="$RC" LR_SHA="$SHA" LR_S0="$SPEND0" LR_S1="$SPEND1" \
   LR_DUR="$(( $(date +%s) - START ))" LR_SMOKE="$SMOKE" python3 - >>"$LOGFILE" <<'PY'
 import datetime, json, os
+from decimal import Decimal, InvalidOperation
 e = os.environ
-cost = None
+cost = None  # USD as a decimal string (6 places), parsed from strings, never float
 try:
-    cost = round(max(float(e["LR_S1"]) - float(e["LR_S0"]), 0.0), 6)
-except ValueError:
+    cost = str(max(Decimal(e["LR_S1"]) - Decimal(e["LR_S0"]), Decimal(0)).quantize(Decimal("0.000001")))
+except (InvalidOperation, ValueError):
     pass
 print(json.dumps({"ts": datetime.datetime.now(datetime.timezone.utc).isoformat(), "lane": e["LR_LANE"],
                   "model_group": e["LR_GROUP"], "model_alias": "keypool/" + e["LR_GROUP"],
