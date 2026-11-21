@@ -5,6 +5,7 @@ import {
   Get,
   HttpStatus,
   Patch,
+  Post,
   Req,
 } from '@nestjs/common';
 import {
@@ -16,9 +17,15 @@ import {
 import { AccessAction, AccessModule } from '../../access/catalogue';
 import { AnyMember, ModuleAccess, RequireAction } from '../../access/decorators';
 import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
+import { AllowDuringCancellation } from '../decorators/allow-during-cancellation.decorator';
+import {
+  CancelTenantDto,
+  TenantCancellationStatusResponseDto,
+} from '../dto/tenant-cancellation.dto';
 import { TenantMeResponseDto } from '../dto/tenant-me-response.dto';
 import { UpdateTenantSettingsDto } from '../dto/update-tenant-settings.dto';
 import { TenantRole } from '../enums/tenant-role.enum';
+import { TenantCancellationService } from '../services/tenant-cancellation.service';
 import { TenantsService } from '../services/tenants.service';
 import { requireTenantId } from '../tenant-context';
 
@@ -48,7 +55,10 @@ function toTenantRole(value: string | null | undefined): TenantRole | null {
 @ModuleAccess(AccessModule.MEMBERS)
 @Controller('tenants')
 export class TenantsController {
-  constructor(private readonly tenantsService: TenantsService) {}
+  constructor(
+    private readonly tenantsService: TenantsService,
+    private readonly tenantCancellationService: TenantCancellationService,
+  ) {}
 
   @AnyMember()
   @Get('me')
@@ -82,5 +92,34 @@ export class TenantsController {
       tenant,
       toTenantRole(request.user?.tenantRole),
     );
+  }
+
+  @RequireAction(AccessAction.ADMIN)
+  @Post('me/cancel')
+  @ApiOperation({ summary: 'لغو اشتراک سازمان و انتقال به وضعیت فقط خواندنی (T148)' })
+  @ApiResponse({ status: HttpStatus.OK, type: TenantCancellationStatusResponseDto })
+  @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'دسترسی مدیریتی لازم است' })
+  async cancelTenant(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: CancelTenantDto,
+  ): Promise<TenantCancellationStatusResponseDto> {
+    const tenantId = requireTenantId(request);
+    return this.tenantCancellationService.cancelTenant(
+      tenantId,
+      dto.reason,
+      dto.gracePeriodDays ?? 30,
+    );
+  }
+
+  @AnyMember()
+  @AllowDuringCancellation()
+  @Get('me/cancellation-status')
+  @ApiOperation({ summary: 'بررسی وضعیت لغو و مهلت نگهداری داده‌های سازمان (T148)' })
+  @ApiResponse({ status: HttpStatus.OK, type: TenantCancellationStatusResponseDto })
+  async getCancellationStatus(
+    @Req() request: AuthenticatedRequest,
+  ): Promise<TenantCancellationStatusResponseDto> {
+    const tenantId = requireTenantId(request);
+    return this.tenantCancellationService.getCancellationStatus(tenantId);
   }
 }

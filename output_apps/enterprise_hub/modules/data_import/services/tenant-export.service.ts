@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { TenantExportRepository } from '../repositories/tenant-export.repository';
+import { createZipBuffer } from '../utils/zip-archive.util';
 
 export interface TenantExportMetadata {
   tenantId: string;
@@ -138,5 +139,85 @@ export class TenantExportService {
       },
       tables,
     };
+  }
+
+  /**
+   * Generates a single CSV string from an array of rows, applying formula injection sanitization.
+   */
+  toCsvString(rows: any[]): string {
+    if (!rows || rows.length === 0) return '';
+    const headerSet = new Set<string>();
+    rows.forEach((r) => Object.keys(r || {}).forEach((k) => headerSet.add(k)));
+    const headers = Array.from(headerSet).sort();
+
+    const escapeCsv = (val: string): string => {
+      if (val.includes(',') || val.includes('"') || val.includes('\n') || val.includes('\r')) {
+        return `"${val.replace(/"/g, '""')}"`;
+      }
+      return val;
+    };
+
+    const headerLine = headers.map(escapeCsv).join(',');
+    const dataLines = rows.map((r) =>
+      headers
+        .map((h) => escapeCsv(this.sanitizeCellForSpreadsheet(r[h])))
+        .join(','),
+    );
+
+    return [headerLine, ...dataLines].join('\n');
+  }
+
+  /**
+   * Generates a complete ZIP archive (Task T148) containing CSV and JSON files
+   * for every tenant table, plus metadata.json with cryptographic SHA-256 checksum.
+   */
+  async generateFullExportZip(
+    tenantId: string,
+    preloadedData?: Record<string, any[]>,
+  ): Promise<{ buffer: Buffer; metadata: TenantExportMetadata; filename: string }> {
+    const tablesData = preloadedData ?? (await this.exportRepo.fetchAllTenantData(tenantId));
+
+    const tableCounts: Record<string, number> = {};
+    const zipFiles: Record<string, string | Buffer> = {};
+
+    for (const [table, rows] of Object.entries(tablesData)) {
+      const records = rows || [];
+      tableCounts[table] = records.length;
+
+      // 1. CSV export per table
+      const csvContent = this.toCsvString(records);
+      zipFiles[`csv/${table}.csv`] = csvContent;
+
+      // 2. JSON export per table
+      zipFiles[`json/${table}.json`] = JSON.stringify(records, null, 2);
+    }
+
+    const exportedAt = new Date().toISOString();
+    const version = '1.0';
+
+    const contentToHash = JSON.stringify({
+      tenantId,
+      exportedAt,
+      version,
+      tableCounts,
+      data: tablesData,
+    });
+    const checksum = crypto.createHash('sha256').update(contentToHash).digest('hex');
+
+    const metadata: TenantExportMetadata = {
+      tenantId,
+      exportedAt,
+      version,
+      tableCounts,
+      checksum,
+    };
+
+    zipFiles['metadata.json'] = JSON.stringify(metadata, null, 2);
+
+    const buffer = createZipBuffer(zipFiles);
+    const dateSlug = exportedAt.slice(0, 10);
+    const filename = `tenant-export-${tenantId.slice(0, 8)}-${dateSlug}.zip`;
+
+    return { buffer, metadata, filename };
   }
 }

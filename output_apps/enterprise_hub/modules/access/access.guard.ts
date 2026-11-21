@@ -1,6 +1,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   Logger,
   UnauthorizedException,
@@ -9,7 +10,9 @@ import { Reflector } from '@nestjs/core';
 import { LoginWindowService } from './services/login-window.service';
 import { IS_PUBLIC_KEY } from '../auth/decorators/public.decorator';
 import { ROLES_KEY } from '../auth/decorators/roles.decorator';
+import { ALLOW_DURING_CANCELLATION_KEY } from '../tenants/decorators/allow-during-cancellation.decorator';
 import { TenantRole } from '../tenants/enums/tenant-role.enum';
+import { assertTenantCancellationAccess } from '../tenants/utils/cancellation-readonly.util';
 import { AccessContext, AccessRequest, AI_ASSISTANT_ROLE } from './access-context';
 import { denied } from './access-errors';
 import {
@@ -105,6 +108,19 @@ export class AccessGuard implements CanActivate {
         : resolved;
 
     await this.loginWindow.assertAllowed(ctx.tenantId, ctx.userId, undefined, ctx.roleKey);
+
+    const allowCancellation = Boolean(
+      this.reflector.getAllAndOverride<boolean | undefined>(
+        ALLOW_DURING_CANCELLATION_KEY,
+        targets,
+      ),
+    );
+    assertTenantCancellationAccess({
+      status: ctx.tenantStatus,
+      deleteAfter: ctx.deleteAfter,
+      method: request.method,
+      allowDuringCancellation: allowCancellation,
+    });
 
     if (module && !anyMember) {
       const handler = context.getHandler();

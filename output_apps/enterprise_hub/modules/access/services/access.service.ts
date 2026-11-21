@@ -106,6 +106,8 @@ export class AccessService {
       scope,
       amountLimits,
       fieldVisibility,
+      tenantStatus: tenant.status,
+      deleteAfter: tenant.deleteAfter,
     };
   }
 

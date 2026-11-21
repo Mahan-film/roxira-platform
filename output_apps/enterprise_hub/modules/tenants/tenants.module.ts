@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -10,9 +11,16 @@ import { AuthRepository } from '../auth/repositories/auth.repository';
 import { TenantsController } from './controllers/tenants.controller';
 import { LegalEntityEntity } from './entities/legal-entity.entity';
 import { TenantEntity } from './entities/tenant.entity';
+import { CancelledReadonlyGuard } from './guards/cancelled-readonly.guard';
+import { TenantPurgeProcessor } from './processors/tenant-purge.processor';
 import { LegalEntitiesRepository } from './repositories/legal-entities.repository';
 import { TenantsRepository } from './repositories/tenants.repository';
 import { LegalEntitiesService } from './services/legal-entities.service';
+import {
+  TENANT_EXPORT_QUEUE,
+  TENANT_PURGE_QUEUE,
+  TenantCancellationService,
+} from './services/tenant-cancellation.service';
 import { TenantsService } from './services/tenants.service';
 
 /**
@@ -33,6 +41,10 @@ import { TenantsService } from './services/tenants.service';
 @Module({
   imports: [
     TypeOrmModule.forFeature([TenantEntity, LegalEntityEntity, UserEntity]),
+    BullModule.registerQueue(
+      { name: TENANT_EXPORT_QUEUE },
+      { name: TENANT_PURGE_QUEUE },
+    ),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -48,7 +60,25 @@ import { TenantsService } from './services/tenants.service';
     }),
   ],
   controllers: [TenantsController],
-  providers: [TenantsService, TenantsRepository, LegalEntitiesService, LegalEntitiesRepository, TenantScope, AuthRepository, JwtAuthGuard],
-  exports: [TenantsService, TenantsRepository, LegalEntitiesService],
+  providers: [
+    TenantsService,
+    TenantsRepository,
+    LegalEntitiesService,
+    LegalEntitiesRepository,
+    TenantScope,
+    AuthRepository,
+    JwtAuthGuard,
+    TenantCancellationService,
+    TenantPurgeProcessor,
+    CancelledReadonlyGuard,
+  ],
+  exports: [
+    BullModule,
+    TenantsService,
+    TenantsRepository,
+    LegalEntitiesService,
+    TenantCancellationService,
+    CancelledReadonlyGuard,
+  ],
 })
 export class TenantsModule {}

@@ -39,6 +39,10 @@ export interface AccessContext {
   fieldVisibility?: FieldVisibilityMap;
   /** True when the caller is an AI / automated assistant identity (T191 / EU AI Act Art. 50). */
   isAiIdentity?: boolean;
+  /** Lifecycle status of tenant ('active', 'cancelled_readonly', 'purged') (#T148). */
+  tenantStatus?: string;
+  /** Deletion timestamp for cancelled organisations (#T148). */
+  deleteAfter?: Date | null;
 }
 
 export interface AccessRequest extends AuthenticatedRequest {
