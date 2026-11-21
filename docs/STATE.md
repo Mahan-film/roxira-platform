@@ -7,6 +7,14 @@
 The owner speaks Persian: reply in Persian; code, commits and docs in English. The owner wants full automation: hand over a command only for a
 secret, a physical action, sudo on the laptop or a production write. Never name the owners' country ("the default pack").
 
+## Hub discipline (read before acting)
+- Only ONE Mac hub chat acts (merges, review-desk dispatch, production writes). Any other chat only reads and answers. The newest handoff decides which one.
+- The Mac hub never administers the Linux box and never SSHes into it. Box work belongs to the box hub; GitHub is the control plane (notes on #592, answers on #965).
+- Secrets: never write a key into a file under the repo, ~/Desktop, ~/Documents or any synced folder, never print it. Move it only by clipboard relay
+  (Mac `ssh roxira-prod '... | cut -d= -f2-' | pbcopy`; box `read -rs` into the env file, mode 600; then `pbcopy </dev/null`). AirDrop does not work with Linux.
+- Production writes need the owner's explicit sentence in the chat. Approved so far: create and rotate the `box-lanes` virtual key. It was rotated on
+  2026-11-21 at 17:02 UTC; every earlier value is dead. Do NOT rotate again unless a value was exposed. Delivery to the box (gateway.env) is still pending.
+
 ## Direction
 - **Product first:** CRM/ERP/accounting/tax usable globally (default pack live; DE/EU next, Malaysia second, then the Gulf), plus Smart Judge.
 - **Hub = chief architect and reviewer.** Lanes build; the hub writes rows, routes reviews, merges, runs production steps. Free models first.
