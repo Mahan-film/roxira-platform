@@ -15,6 +15,17 @@ import time
 from typing import AsyncGenerator, Callable, Dict, List, Optional
 from dataclasses import dataclass
 
+try:
+    from ..security.pii_scrubber import (
+        scrub_pii_with_counts as _scrub_pii_with_counts,
+        unmask_pii_entities as _unmask_pii_entities,
+    )
+except ImportError:  # pragma: no cover - top-level script import
+    from security.pii_scrubber import (
+        scrub_pii_with_counts as _scrub_pii_with_counts,
+        unmask_pii_entities as _unmask_pii_entities,
+    )
+
 logger = logging.getLogger("smartjudge.realtime_voice")
 
 
@@ -34,6 +45,15 @@ class LiveKitCompatibleVoiceAgent:
         self.vad_silence_threshold_ms = vad_silence_threshold_ms
         self._is_speaking = False
         self._interrupted = False
+
+    def scrub_user_transcript(self, transcript: str) -> tuple[str, Dict[str, str]]:
+        """Scrub Persian/Latin PII from an STT transcript before any external LLM/judge call."""
+        scrubbed, mapping, _ = _scrub_pii_with_counts(transcript, context="voice_agent_stt")
+        return scrubbed, mapping
+
+    def restore_assistant_text(self, text: str, mapping: Dict[str, str]) -> str:
+        """Restore typed PII placeholders in the assistant's response."""
+        return _unmask_pii_entities(text, mapping)
 
     async def on_user_speech_frame(self, frame: AudioFrame):
         """دریافت فریم‌های صوتی کاربر و تشخیص قطع صحبت دستیار (Barge-in)."""
@@ -61,8 +81,10 @@ class LiveKitCompatibleVoiceAgent:
 
             sentence_buffer += text_chunk
             if any(d in sentence_buffer for d in delimiters) and len(sentence_buffer.strip()) > 15:
-                # تبدیل این جمله به صوت
-                sentence_to_speak = sentence_buffer.strip()
+                # تبدیل این جمله به صوت (ابتدا پاکسازی PII پیش از ارسال به سرویس TTS بیرونی)
+                sentence_to_speak, _, _ = _scrub_pii_with_counts(
+                    sentence_buffer.strip(), context="voice_agent_tts"
+                )
                 sentence_buffer = ""
 
                 try:
@@ -80,7 +102,10 @@ class LiveKitCompatibleVoiceAgent:
         if sentence_buffer.strip() and not self._interrupted:
             try:
                 import edge_tts
-                comm = edge_tts.Communicate(sentence_buffer.strip(), self.tts_voice)
+                trailing_text, _, _ = _scrub_pii_with_counts(
+                    sentence_buffer.strip(), context="voice_agent_tts"
+                )
+                comm = edge_tts.Communicate(trailing_text, self.tts_voice)
                 async for audio_chunk in comm.stream():
                     if audio_chunk["type"] == "audio":
                         yield audio_chunk["data"]
