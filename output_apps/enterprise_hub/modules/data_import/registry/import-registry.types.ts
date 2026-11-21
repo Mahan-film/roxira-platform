@@ -1,3 +1,5 @@
+import type { EntityManager } from 'typeorm';
+
 /**
  * انواع مشترک «رجیستری ورود داده» (Import Registry).
  *
@@ -81,6 +83,8 @@ export interface UndoOutcome {
 export interface AdapterCommitContext {
   /** Target bank account for `bank-statement` rows. */
   bankAccountId?: number;
+  /** Optional tenant-scoped transaction manager for atomic batch + row commit. */
+  manager?: EntityManager;
 }
 
 /**

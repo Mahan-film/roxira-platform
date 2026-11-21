@@ -14,7 +14,10 @@ import { MappingMemoryService } from './mapping-memory.service';
 import { PackageAnalysisService } from './package-analysis.service';
 import { PackageProgressService } from './package-progress.service';
 import { PackageStoreService } from './package-store.service';
-import { DataImportBatchRepository } from '../repositories/data-import-batch.repository';
+import {
+  DataImportBatchRepository,
+  hashPackageSelections,
+} from '../repositories/data-import-batch.repository';
 
 /** انتخاب یک جدول برای commit از بدنهٔ درخواست. */
 export interface PackageCommitTableInput {
@@ -68,27 +71,66 @@ export class PackageCommitService {
       return sum + (analysis?.rowCount ?? 0);
     }, 0);
 
-    // Idempotent re-import check: if this database package was already committed and not undone,
-    // return the existing batch with 0 new rows (Done when: the same file twice creates 0 new rows).
-    if (state.fileHash && typeof this.batchRepository.findByFileHash === 'function') {
-      const existingBatch = await this.batchRepository.findByFileHash(
-        tenantId,
-        state.fileHash,
-      );
-      if (existingBatch) {
-        await this.progress.set(tenantId, packageId, {
-          phase: 'committed',
-          done: total,
-          total,
-          inserted: {},
-          skipped: { package: total },
-          errors: [],
-        });
-        state.status = 'committed';
-        state.batchId = existingBatch.id;
-        await this.store.writeState(state);
-        return { batchId: existingBatch.id };
+    const mappingHash = hashPackageSelections(selections);
+
+    // Atomic idempotency reservation scoped by (tenant_id, 'package', file_hash, mapping_hash):
+    // two parallel commits race on the unique partial index so only one writes rows.
+    let existingBatchId: string | null = null;
+    if (state.fileHash && typeof this.batchRepository.tryReserveBatch === 'function') {
+      const reserved = await this.batchRepository.tryReserveBatch(tenantId, {
+        id: batchId,
+        entity: 'package',
+        fileName: state.fileName,
+        fileHash: state.fileHash,
+        mappingHash,
+        inserted: 0,
+      });
+      if (!reserved) {
+        const existing = await this.batchRepository.findByFileHash(
+          tenantId,
+          state.fileHash,
+          'package',
+          mappingHash,
+        );
+        existingBatchId = existing?.id ?? batchId;
       }
+    } else {
+      if (state.fileHash && typeof this.batchRepository.findByFileHash === 'function') {
+        const existing = await this.batchRepository.findByFileHash(
+          tenantId,
+          state.fileHash,
+          'package',
+          mappingHash,
+        );
+        if (existing) {
+          existingBatchId = existing.id;
+        }
+      }
+      if (!existingBatchId) {
+        await this.batchRepository.createBatch(tenantId, {
+          id: batchId,
+          entity: 'package',
+          fileName: state.fileName,
+          fileHash: state.fileHash,
+          mappingHash,
+          inserted: 0,
+        });
+      }
+    }
+
+    if (existingBatchId) {
+      await this.progress.set(tenantId, packageId, {
+        phase: 'committed',
+        done: total,
+        total,
+        inserted: {},
+        skipped: { package: total },
+        errors: [],
+      });
+      state.status = 'committed';
+      state.batchId = existingBatchId;
+      await this.store.writeState(state);
+      return { batchId: existingBatchId };
     }
 
     await this.progress.set(tenantId, packageId, {
@@ -98,16 +140,6 @@ export class PackageCommitService {
       inserted: {},
       skipped: {},
       errors: [],
-    });
-
-    // Create the batch header BEFORE any row is written: whatever happens afterwards (crash,
-    // adapter exception) every inserted row is already reachable through this batch for undo.
-    await this.batchRepository.createBatch(tenantId, {
-      id: batchId,
-      entity: 'package',
-      fileName: state.fileName,
-      fileHash: state.fileHash,
-      inserted: 0,
     });
 
     let parsed: ParsedPackage;
