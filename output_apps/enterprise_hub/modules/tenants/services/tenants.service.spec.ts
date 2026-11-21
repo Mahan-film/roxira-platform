@@ -45,7 +45,6 @@ describe('TenantsService', () => {
       timezone: 'Asia/Tehran',
       locale: 'fa-IR',
       fiscalYearStartMonth: 1,
-      defaultVatRate: 0.1,
     };
     mocks.tenantsRepository.updateSettings.mockResolvedValue(updated);
 
@@ -56,7 +55,6 @@ describe('TenantsService', () => {
       timezone: 'Asia/Tehran',
       locale: 'fa-IR',
       fiscalYearStartMonth: 1,
-      defaultVatRate: 0.1,
     });
 
     expect(mocks.tenantsRepository.updateSettings).toHaveBeenCalledWith('tenant-1', {
@@ -66,7 +64,6 @@ describe('TenantsService', () => {
       timezone: 'Asia/Tehran',
       locale: 'fa-IR',
       fiscalYearStartMonth: 1,
-      defaultVatRate: 0.1,
     });
     expect(res).toBe(updated);
   });
@@ -76,7 +73,7 @@ describe('TenantsService', () => {
     mocks.tenantsRepository.updateSettings.mockResolvedValue(null);
 
     await expect(
-      service.updateSettings('missing', { defaultVatRate: 0.1 }),
+      service.updateSettings('missing', { countryCode: 'IR' }),
     ).rejects.toThrow('سازمانی برای حساب شما یافت نشد.');
   });
 });
