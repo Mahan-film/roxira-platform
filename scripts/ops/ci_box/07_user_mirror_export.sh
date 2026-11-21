@@ -103,10 +103,18 @@ tmp="$ROOT/.partial-$day"; rm -rf "$tmp"; mkdir -p "$tmp"
 fail() { echo "$(stamp) FAIL $1" | tee -a "$STATE/export.log" >&2; echo "FAIL $(stamp)" > "$STATE/export.last"; rm -rf "$tmp"; exit 1; }
 
 export_one() { # name endpoint
-  gh api --paginate --slurp "repos/$REPO/$2" > "$tmp/$1.pages" || fail "gh api $1"
+  # No --slurp (needs gh >= 2.48; Ubuntu 26.04 ships 2.46): pages arrive back to back.
+  gh api --paginate "repos/$REPO/$2" > "$tmp/$1.pages" || fail "gh api $1"
   python3 -I - "$tmp/$1.pages" "$tmp/$1.json" <<'PY' || fail "flatten $1"
 import json, sys
-pages = json.load(open(sys.argv[1]))
+text, dec, pages, i = open(sys.argv[1]).read(), json.JSONDecoder(), [], 0
+while True:
+    while i < len(text) and text[i].isspace():
+        i += 1
+    if i >= len(text):
+        break
+    doc, i = dec.raw_decode(text, i)
+    pages.append(doc)
 flat = [x for p in pages for x in (p if isinstance(p, list) else [p])]
 json.dump(flat, open(sys.argv[2], "w"), indent=1, ensure_ascii=False)
 print(len(flat))
