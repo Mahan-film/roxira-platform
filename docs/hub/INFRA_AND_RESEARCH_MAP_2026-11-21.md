@@ -64,7 +64,7 @@ All `docs/antigravity/prompts/L*.txt` last changed 2026-11-18 (WAVE 19b). Stale:
 (many merged or superseded; R18 rows #973-#997, #1021-#1047 absent); L5-L7 say Antigravity on the
 laptop but the box uses Gemini CLI/OpenCode; max-3-PR rule vs box brief (1 in progress, 2 in review);
 no mention of the new push form (`LOCAL_CI_SKIP_PYTEST=1 FRESH_DB_PORT=<n> git push`) or gitleaks.
-Fix without rewrites each wave: `docs/antigravity/prompts/STABLE_LANE_PROMPT.txt` (no inline queues).
+Fixed in this PR: `docs/antigravity/prompts/L1.txt`..`L7.txt` regenerated with no inline queues (they read the newest `## WAVE` on #592), agent id `antigravity-L<n>`, new push form, gitleaks hook, WIP 3 (Mac) / 2 (laptop). `LANE_PROMPTS.html` removed (stale copy); `ALL_LANES.txt` regenerated.
 
 ## 5. Open items for the hub
 1. Answer the #965 ASK-HUB on phone corpus coverage (raise T257 #996 to prio 1 or keep last).
