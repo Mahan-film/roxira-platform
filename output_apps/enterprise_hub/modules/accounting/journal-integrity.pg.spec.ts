@@ -82,7 +82,8 @@ describePg('T178 Journal Integrity & Period States on PostgreSQL (roxira_app, FO
     periods = new AccountingPeriodService(scope, new CalendarService());
     changeLogs = new MasterDataChangeLogService(scope);
     const repo = new AccountingRepository(scope);
-    accounting = new AccountingService(repo, new CurrencyService(), undefined, undefined, sequencer, periods);
+    const currency = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
+    accounting = new AccountingService(repo, currency, undefined, undefined, sequencer, periods);
   });
 
   afterAll(async () => {

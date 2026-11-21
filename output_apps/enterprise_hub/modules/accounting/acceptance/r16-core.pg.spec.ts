@@ -310,7 +310,7 @@ describePg('R16 core acceptance on PostgreSQL', () => {
       await dims.create(T1, { kind: DimensionKind.COST_CENTER, code: 'CC-SALES', name: 'Sales' });
       await accounting.createJournalEntry(T1, {
         entryNumber: T5.bill.id,
-        date: noon('2026-10-12'),
+        date: noon('2026-11-12'),
         description: 'BILL-55',
         lines: [
           { accountCode: '5020', debit: decimal(T5.bill.splits['CC-RND']), costCenterCode: 'CC-RND' },
@@ -318,7 +318,7 @@ describePg('R16 core acceptance on PostgreSQL', () => {
           { accountCode: '2010', credit: decimal(T5.bill.total) },
         ],
       } as never);
-      const report = await costCentres.trialBalance(T1, { from: '2026-10-01', to: '2026-10-31' });
+      const report = await costCentres.trialBalance(T1, { from: '2026-11-01', to: '2026-11-30' });
       const debit = (code: string) => report.centres.find((c) => c.code === code)!.totals.periodDebit;
       expect(debit('CC-RND')).toBe(fromDb(decimal(T5.bill.splits['CC-RND'])));
       expect(debit('CC-SALES')).toBe(fromDb(decimal(T5.expected.salesAt20261031)));
