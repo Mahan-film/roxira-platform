@@ -69,6 +69,7 @@ export class DataImportBatchRepository {
       id: string;
       entity: string;
       fileName: string;
+      fileHash?: string | null;
       inserted: number;
     },
   ): Promise<void> {
@@ -78,6 +79,7 @@ export class DataImportBatchRepository {
         tenantId,
         entity: data.entity,
         fileName: data.fileName,
+        fileHash: data.fileHash ?? null,
         inserted: data.inserted,
         undone: false,
         createdAt: new Date(),
@@ -118,6 +120,16 @@ export class DataImportBatchRepository {
   ): Promise<DataImportBatchEntity | null> {
     return this.withBatches(tenantId, (repo) =>
       repo.findOne({ where: { id: batchId, tenantId } }),
+    );
+  }
+
+  /** جستجوی دستهٔ فعال بر اساس هش محتوای فایل برای جلوگیری از ورود مجدد تکراری. */
+  async findByFileHash(
+    tenantId: string,
+    fileHash: string,
+  ): Promise<DataImportBatchEntity | null> {
+    return this.withBatches(tenantId, (repo) =>
+      repo.findOne({ where: { tenantId, fileHash, undone: false } }),
     );
   }
 
