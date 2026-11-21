@@ -43,3 +43,36 @@ Uploaded files are PII and need purge rules; staging tables need tenant RLS; cal
 | L2 | Fuzzy duplicate queue for parties/items (RapidFuzz, no auto-merge) | Fixture with known duplicates: queue finds them, none merged without a click |
 | L5 | Two-week onboarding playbook and health dashboard | Checklist in docs; dashboard shows the four activation events and days since last login per tenant |
 | L5 | Raw upload retention and purge policy (30 days after sign-off) | Policy text reviewed by lawyer; purge job spec; mapping and report kept |
+
+## Second opinion (Gemini Deep Research, 2026-11-21)
+
+Saved in `R32_GEMINI.md` (Stage 1 and Stage 2). Nothing above is replaced. Rule used: primary URL plus date wins, the rest is UNVERIFIED.
+
+### Hub note (not from Gemini)
+Row T327 (cutover wizard, #1150) shipped as #1202 and was reverted by #1215 on 2026-11-21 because it could apply an irreversible period lock with an empty body while live on production. When the row is reopened, add: a blocking guard that refuses an empty or unsigned request, an explicit confirmation step, and a test that proves the lock is not applied without green tie-outs.
+
+### Agreements
+- Staging pipeline (raw, normalised, validated, commit) with a dry run on the real commit path; deterministic idempotency key by source system and natural key plus file hash; every created row tagged with the import batch; undo only while nothing downstream uses the batch, otherwise compensating entries.
+- Cutover on a period boundary, opening journal against a temporary account, open AR/AP net of payments, no negative stock, FIFO layers either kept or one stated average layer, open POs and orders by remaining quantity, period lock after sign-off.
+- SheetJS: npm `xlsx` stops at 0.18.5; the fixed version is a tarball on cdn.sheetjs.com. Prefer exceljs or python-calamine; use charset-normalizer for encodings. RapidFuzz (MIT) for matching with a human review queue; GPL packages (python-Levenshtein) stay out.
+- Churn and activation figures from vendor blogs are not usable. Gemini's Stage 2 withdraws them too (the 36% "median" is an average; the median in the cited survey is 30%).
+- Keep two onboarding tracks: a fast operational win in the first two weeks and a later period-end accounting cutover.
+
+### Conflicts (primary URL and date wins, else UNVERIFIED)
+| Topic | This digest | Gemini | Verdict |
+|---|---|---|---|
+| chardet licence | v7 is 0BSD; older versions LGPL (from memory) | 7.0.0 claimed MIT on 2 Mar 2026, an original author disputed the relicensing (issue 327), later 7.x declares 0BSD; LGPL for 6.x per LWN and a law-firm note | Compatible. Gemini adds a legal risk: the clean-room dispute is open. Use charset-normalizer (MIT since inception) and do not use chardet. |
+| Xero CSV date handling | primary page not verified | Xero Central says the chosen date format applies to future CSV imports with the same headers | Gemini has the primary page; accept it as a risk for our own saved mapping (store the date format with the mapping, show it on every import). |
+| Importer approach | keep own parsers, add a library only for a real failing file | build an owned staging pipeline on MIT/Apache libraries, rather than buy an embeddable importer | Compatible. Gemini's cost figures (EUR 40-75k one-off) are internal estimates, UNVERIFIED. |
+| Record retention | not stated | US tax pages quoted; Stage 2 adds German 6-10 year rules without a URL | UNVERIFIED. Retention must be a per-country pack setting; do not hard-code a number. |
+| SheetJS licence and CVEs | licence read from the repo; no CVE | CVE-2023-30533 (below 0.19.3) and CVE-2024-22363 (below 0.20.2) on NVD | Add the CVEs (NVD pages, Apr 2023 and Apr 2024). |
+
+### Only one side has it
+- **Gemini only (UNVERIFIED unless a URL is named):** formula injection in exported CSV (cells starting with =, +, -, @); zip-bomb and XML expansion in uploaded spreadsheets; fixed-asset and deferred-revenue schedules at cutover; open foreign-currency items need both the document rate and the cutover rate; bank-feed or payment-processor feeds that overlap the opening date (needs a watermark and external id check); customer deposits and partly shipped sales orders; a CDN tarball is invisible to npm audit and Dependabot; PapaParse issues 939 and 1118 (ESM and a build crash); an accountant or bookkeeper invite role; QuickBooks Online limits (100 bills per batch, 350 KB, English only) and that Business Central does not migrate sales or purchase orders (Microsoft Learn pages).
+- **This digest only:** the repo's own reader inventory; Frappe and Odoo import behaviour; legacy number series next to gapless numbering; staging tables under tenant RLS; Persian and Arabic normalisation; raw upload purge.
+
+### Row changes
+- No new row. Comments added: #1149 (T326: undo boundary, formula-injection and upload limits), #1150 (T327: the empty-body guard above and the fixed-asset, deferred-revenue and open-FX questions), #1151 (T328: customer deposits and partly shipped orders), #1152 (T329: store the date format with the mapping), #1153 (T330: blocking keys beyond about 50,000 rows, UNVERIFIED).
+
+### Owner decisions (not for agents)
+- None new. The free or paid migration decision stays as above.
