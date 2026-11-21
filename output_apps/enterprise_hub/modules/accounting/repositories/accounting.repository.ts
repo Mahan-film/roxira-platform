@@ -426,6 +426,8 @@ export class AccountingRepository {
       entryType?: JournalEntryType;
       idempotencyKey?: string | null;
       idempotencyFingerprint?: string | null;
+      tag?: string | null;
+      firmUserId?: string | null;
     },
     lineInputs: JournalLineInput[],
     outerManager?: EntityManager,
@@ -464,6 +466,8 @@ export class AccountingRepository {
             entryType: header.entryType ?? JournalEntryType.NORMAL,
             idempotencyKey: header.idempotencyKey ?? null,
             idempotencyFingerprint: header.idempotencyFingerprint ?? null,
+            tag: header.tag ?? null,
+            firmUserId: header.firmUserId ?? null,
           })
           .orIgnore()
           .returning('id')
@@ -756,6 +760,30 @@ export class AccountingRepository {
           { date },
         )
         .getOne();
+    });
+  }
+
+  /**
+   * True when `date` falls inside an OPEN fiscal year whose server-side adjustment period is open.
+   */
+  async isDateInAdjustmentPeriod(
+    tenantId: string,
+    date: Date,
+    manager?: EntityManager,
+  ): Promise<boolean> {
+    return this.scope.within(tenantId, manager, async (m) => {
+      const match = await m
+        .getRepository(FiscalYearEntity)
+        .createQueryBuilder('fy')
+        .where('fy.tenantId = :tenantId', { tenantId })
+        .andWhere('fy.status = :status', { status: FiscalYearStatus.OPEN })
+        .andWhere('fy.adjustmentPeriodOpen = true')
+        .andWhere(
+          'CAST(CAST(:date AS timestamp) AS date) BETWEEN fy.startDate AND fy.endDate',
+          { date },
+        )
+        .getOne();
+      return match !== null;
     });
   }
 

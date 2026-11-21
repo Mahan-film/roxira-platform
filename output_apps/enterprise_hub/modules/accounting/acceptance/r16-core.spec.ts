@@ -5,6 +5,7 @@
  * Passing `it` blocks call the real code (money rounding, depreciation, bank matcher). Every
  * `it.skip` names the row that adds the missing capability; none calls an API that does not exist.
  */
+import { ForbiddenException } from '@nestjs/common';
 import { proposeMatches } from '../../banking/matching/reconciliation-matcher';
 import { nextMonthCharge } from '../assets/depreciation';
 import {
@@ -22,7 +23,20 @@ import {
   R16_T7_ASSET as T7,
   R16_T9_BANK as T9,
   R16_T10_TAX as T10,
+  R16_T12_ACCOUNTANT as T12,
 } from './r16-fixtures';
+import {
+  AccessAction,
+  AccessModule,
+  PARTNER_ADVISOR_ROLE,
+  systemRolePermissions,
+} from '../../access/catalogue';
+import { evaluateAccess } from '../../access/policy-evaluator';
+import { AccessContext } from '../../access/access-context';
+import { denied } from '../../access/access-errors';
+import { AccountantFirmService } from '../../access/services/accountant-firm.service';
+import { AccountingRepository } from '../repositories/accounting.repository';
+import { AccountingService } from '../services/accounting.service';
 
 /** amount (2 decimals) x rate (6 decimals), half up to 2 decimals. */
 const convert = (amountMinor: bigint, rateScaled: bigint): bigint => roundMinorHalfUp(amountMinor * rateScaled, 1_000_000n);
@@ -269,9 +283,205 @@ describe('R16 T11 e-invoice adapters', () => {
 });
 
 describe('R16 T12 accountant access', () => {
-  it.skip('partner adviser adjustment journal is tagged PARTNER_ADJUSTMENT with the firm user id — needs T178 (adjustment period) and T196 (accountant-firm access)', () => undefined);
-  it.skip('IBAN edit returns 403 for the partner role — needs T196 (accountant-firm access)', () => undefined);
-  it.skip('revoking the firm user ends sessions on all three tenants within 60 s with a security audit entry — needs T196 (accountant-firm access)', () => undefined);
+  const adminUserId = 'd0000001-0000-4000-8000-000000000001';
+  const firmUserId = 'a1111111-1111-4111-8111-111111111111';
+  const tenantIds = [
+    '10000001-0000-4000-8000-000000000001',
+    '20000002-0000-4000-8000-000000000002',
+    '30000003-0000-4000-8000-000000000003',
+  ];
+
+  it('partner adviser adjustment journal is tagged PARTNER_ADJUSTMENT with the firm user id', async () => {
+    let capturedHeader: any = null;
+    const fakeRepo = {
+      countAccounts: async () => 1,
+      findEntryByIdempotencyKey: async () => null,
+      findEntryByNumber: async () => null,
+      isDateInAdjustmentPeriod: async () => true,
+      findAccountsByCodes: async () => [
+        { id: 1, code: '1001', level: 'moin' },
+        { id: 2, code: '2001', level: 'moin' },
+      ],
+      persistJournalEntry: async (_tenantId: string, header: any, _lines: any) => {
+        capturedHeader = header;
+        return {
+          id: 101,
+          entryNumber: header.entryNumber,
+          entryType: header.entryType,
+          permanentNumber: null,
+          permanentFiscalYearId: null,
+          date: header.date,
+          description: header.description,
+          status: header.status,
+          version: 1,
+          tag: header.tag,
+          firmUserId: header.firmUserId,
+          lines: [
+            { id: 1, accountId: 1, accountCode: '1001', debit: '1000.00', credit: '0.00', currency: 'IRR' },
+            { id: 2, accountId: 2, accountCode: '2001', debit: '0.00', credit: '1000.00', currency: 'IRR' },
+          ],
+        } as any;
+      },
+    } as unknown as AccountingRepository;
+
+    const fakeCurrency = {
+      convert: (val: number) => val,
+      round: (val: number) => val,
+    } as any;
+
+    const service = new AccountingService(
+      fakeRepo,
+      fakeCurrency,
+    );
+
+    const dto = {
+      description: 'Q4 year-end accrual adjustment',
+      lines: [
+        { accountCode: '1001', debit: 1000, credit: 0 },
+        { accountCode: '2001', debit: 0, credit: 1000 },
+      ],
+    };
+
+    const res = await service.createJournalEntry(
+      tenantIds[0],
+      dto,
+      undefined,
+      { actorRole: PARTNER_ADVISOR_ROLE, actorUserId: firmUserId },
+    );
+
+    expect(capturedHeader.tag).toBe(T12.tag); // 'PARTNER_ADJUSTMENT'
+    expect(capturedHeader.firmUserId).toBe(firmUserId);
+    expect(res.tag).toBe(T12.tag);
+    expect(res.firmUserId).toBe(firmUserId);
+  });
+
+  it('IBAN edit returns 403 for the partner role', () => {
+    const ctx: AccessContext = {
+      userId: firmUserId,
+      tenantId: tenantIds[0],
+      membershipId: 'm-123',
+      roleKey: PARTNER_ADVISOR_ROLE,
+      customRoleId: null,
+      permissions: new Set(systemRolePermissions(PARTNER_ADVISOR_ROLE)),
+      entitledModules: new Set([AccessModule.BANKING, AccessModule.ACCOUNTING]),
+      branchId: null,
+      branchScoped: false,
+      require2fa: false,
+      scope: { type: 'org', ids: [] },
+      amountLimits: {},
+      fieldVisibility: { cost: true, margin: true, salary: false },
+    };
+
+    const decision = evaluateAccess(ctx, {
+      module: AccessModule.BANKING,
+      action: AccessAction.POST,
+    });
+
+    expect(decision.allowed).toBe(false);
+    if (!decision.allowed) {
+      expect(decision.code).toBe('FORBIDDEN_ACTION');
+      const err = denied(decision.code, decision.message || 'Forbidden');
+      expect(err).toBeInstanceOf(ForbiddenException);
+      expect(err.getStatus()).toBe(T12.ibanEditStatus); // 403
+    }
+  });
+
+  it('revoking the firm user ends sessions on all three tenants within 60 s with a security audit entry', async () => {
+    expect(tenantIds.length).toBe(T12.tenants); // 3
+
+    const storedMemberships = new Map<string, any>();
+    const auditLogs: any[] = [];
+    const activeSessions = new Set<string>();
+
+    const sid = 'sess-firm-1';
+    activeSessions.add(`${firmUserId}:${sid}`);
+
+    const mockMemberships = {
+      findByTenantUser: jest.fn(async (tenantId: string, userId: string) => {
+        return (
+          storedMemberships.get(`${tenantId}:${userId}`) ?? {
+            id: `m-${tenantId}`,
+            tenantId,
+            userId,
+            roleKey: PARTNER_ADVISOR_ROLE,
+            status: 'ACTIVE',
+          }
+        );
+      }),
+      listForUser: jest.fn(async () =>
+        tenantIds.map((tenantId) => ({
+          membershipId: `adm-${tenantId}`,
+          tenantId,
+          tenantName: `Org ${tenantId}`,
+          roleKey: 'admin',
+          status: 'ACTIVE',
+        })),
+      ),
+      save: jest.fn(async (m: any) => {
+        storedMemberships.set(`${m.tenantId}:${m.userId}`, m);
+        return m;
+      }),
+    };
+
+    const mockAccess = {
+      resolve: jest.fn(async (_u: string, tenantId: string) => ({
+        userId: adminUserId,
+        tenantId,
+        membershipId: `adm-${tenantId}`,
+        roleKey: 'admin',
+        customRoleId: null,
+        permissions: new Set(systemRolePermissions('admin')),
+        entitledModules: new Set([AccessModule.MEMBERS]),
+        branchId: null,
+        branchScoped: false,
+        require2fa: false,
+        scope: { type: 'org', ids: [] },
+        amountLimits: {},
+        fieldVisibility: { cost: true, margin: true, salary: false },
+      })),
+      invalidateUser: jest.fn(async (userId: string) => {
+        for (const k of Array.from(activeSessions)) {
+          if (k.startsWith(`${userId}:`)) activeSessions.delete(k);
+        }
+      }),
+      isSessionActive: jest.fn(async (s: string, u: string) => activeSessions.has(`${u}:${s}`)),
+    };
+
+    const mockAudit = {
+      record: jest.fn(async (entry: any) => {
+        auditLogs.push(entry);
+      }),
+    };
+
+    const mockRefreshTokens = {
+      revokeAllForUser: jest.fn(async (u: string) => {
+        for (const k of Array.from(activeSessions)) {
+          if (k.startsWith(`${u}:`)) activeSessions.delete(k);
+        }
+      }),
+    };
+
+    const firmService = new AccountantFirmService(
+      mockMemberships as any,
+      mockAccess as any,
+      mockAudit as any,
+      mockRefreshTokens as any,
+    );
+
+    expect(await firmService.isSessionActive(sid, firmUserId)).toBe(true);
+
+    const start = Date.now();
+    await firmService.revokeFirmUser(adminUserId, firmUserId, tenantIds);
+    const elapsed = Date.now() - start;
+
+    expect(elapsed).toBeLessThan(T12.revokeWithinSeconds * 1000); // < 60s
+    expect(await firmService.isSessionActive(sid, firmUserId)).toBe(false);
+
+    // Security audit entry written for all 3 client tenants
+    const secLogs = auditLogs.filter((a) => a.action === 'security.firm_user_revoked');
+    expect(secLogs.length).toBe(3);
+    expect(secLogs.map((l) => l.tenantId).sort()).toEqual(tenantIds.slice().sort());
+  });
 });
 
 describe('R16 T13 API idempotency and webhooks (T185)', () => {

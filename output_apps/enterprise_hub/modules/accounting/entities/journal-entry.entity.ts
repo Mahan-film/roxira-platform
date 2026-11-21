@@ -88,6 +88,19 @@ export class JournalEntryEntity {
   })
   entryType: JournalEntryType;
 
+  /**
+   * برچسب اختیاری سند (مانند PARTNER_ADJUSTMENT برای اسناد تعدیلی حسابدار مؤسسه).
+   */
+  @Index()
+  @Column({ type: 'varchar', length: 64, name: 'tag', nullable: true })
+  tag: string | null;
+
+  /**
+   * شناسه کاربر مؤسسه حسابداری ثبت‌کننده سند (R16 Test 12 / T196).
+   */
+  @Column({ type: 'uuid', name: 'firm_user_id', nullable: true })
+  firmUserId: string | null;
+
   @OneToMany(() => JournalEntryLineEntity, (line) => line.journalEntry, {
     cascade: true,
   })

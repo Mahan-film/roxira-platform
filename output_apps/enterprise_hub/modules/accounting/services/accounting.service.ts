@@ -1,12 +1,14 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
 import { BudgetControlService } from './budget-control.service';
 import { assertNotAiIdentity } from '../../access/access-context';
+import { PARTNER_ADVISOR_ROLE } from '../../access/catalogue';
 import { LedgerAuditService } from '../../access/services/ledger-audit.service';
 import { EntityManager, FindOptionsWhere, ILike } from 'typeorm';
 import { createHash, randomBytes } from 'crypto';
@@ -267,6 +269,8 @@ export class AccountingService {
       baseTotalDebit: this.toBaseCurrency(asNumber(debitMinor), entryCurrency),
       baseTotalCredit: this.toBaseCurrency(asNumber(creditMinor), entryCurrency),
       lines,
+      tag: entity.tag ?? null,
+      firmUserId: entity.firmUserId ?? null,
     };
   }
 
@@ -688,8 +692,14 @@ export class AccountingService {
     tenantId: string,
     dto: CreateJournalEntryDto,
     manager?: EntityManager,
+    options?: {
+      reversesEntryId?: number;
+      entryType?: JournalEntryType;
+      actorRole?: string | null;
+      actorUserId?: string | null;
+    },
   ): Promise<JournalEntryResponseDto> {
-    return this.postEntry(tenantId, dto, {}, manager);
+    return this.postEntry(tenantId, dto, options ?? {}, manager);
   }
 
   /** Posts an entry of a fiscal close or an opening; only the close service calls this. */
@@ -846,13 +856,54 @@ export class AccountingService {
     }));
   }
 
+  /**
+   * Partner advisors (T196) may only create, edit, or post adjustment-period journals while the
+   * target date falls inside an open server-side adjustment period (`fin_fiscal_years.adjustment_period_open`).
+   */
+  private async assertPartnerAdvisorAdjustmentPeriod(
+    tenantId: string,
+    date: Date,
+    actorRole?: string | null,
+    manager?: EntityManager,
+  ): Promise<void> {
+    if (actorRole !== PARTNER_ADVISOR_ROLE) {
+      return;
+    }
+    const inAdjustmentPeriod =
+      (await this.accountingRepository.isDateInAdjustmentPeriod?.(
+        tenantId,
+        date,
+        manager,
+      )) === true;
+    if (!inAdjustmentPeriod) {
+      throw new ForbiddenException({
+        code: 'PARTNER_ADVISOR_ADJUSTMENT_PERIOD_ONLY',
+        message: 'حسابدار مؤسسه فقط در دورهٔ تعدیلات باز مجاز به ثبت یا ویرایش سند است.',
+      });
+    }
+  }
+
   private async postEntry(
     tenantId: string,
     dto: CreateJournalEntryDto,
-    options: { reversesEntryId?: number; entryType?: JournalEntryType },
+    options: {
+      reversesEntryId?: number;
+      entryType?: JournalEntryType;
+      actorRole?: string | null;
+      actorUserId?: string | null;
+    },
     manager?: EntityManager,
   ): Promise<JournalEntryResponseDto> {
     await this.ensureDefaultAccounts(tenantId, manager);
+
+    const date = dto.date ? new Date(dto.date) : new Date();
+    const isPartner = options.actorRole === PARTNER_ADVISOR_ROLE;
+    if (isPartner) {
+      await this.assertPartnerAdvisorAdjustmentPeriod(tenantId, date, options.actorRole, manager);
+    }
+    // Server-authoritative attribution: client payload can never forge or strip partner tags.
+    const tag = isPartner ? 'PARTNER_ADJUSTMENT' : null;
+    const firmUserId = isPartner ? (options.actorUserId ?? null) : null;
 
     const status = dto.status ?? JournalEntryStatus.POSTED;
     const normalizedLines = dto.lines.map((line) => this.normalizeLine(line, dto.branchId));
@@ -877,7 +928,6 @@ export class AccountingService {
       this.assertBalanced(normalizedLines);
     }
 
-    const date = dto.date ? new Date(dto.date) : new Date();
     const explicitNumber = dto.entryNumber?.trim() || '';
     const isGenerated = explicitNumber.length === 0;
     let entryNumber = isGenerated ? this.generateEntryNumber(date) : explicitNumber;
@@ -970,6 +1020,8 @@ export class AccountingService {
             entryType: options.entryType,
             idempotencyKey,
             idempotencyFingerprint,
+            tag: tag ?? null,
+            firmUserId: firmUserId ?? null,
           },
           lineInputs,
           manager,
@@ -1109,6 +1161,7 @@ export class AccountingService {
     tenantId: string,
     id: number,
     dto: UpdateJournalEntryDto,
+    options?: { actorRole?: string | null; actorUserId?: string | null },
   ): Promise<JournalEntryResponseDto> {
     await this.ensureDefaultAccounts(tenantId);
     return this.accountingRepository.transaction(tenantId, async (manager) => {
@@ -1130,6 +1183,7 @@ export class AccountingService {
         }
       }
       const date = dto.date ? new Date(dto.date) : entry.date;
+      await this.assertPartnerAdvisorAdjustmentPeriod(tenantId, date, options?.actorRole, manager);
       try {
         // Both ends of the move are checked: a voucher sitting in a locked period may not be
         // edited out of it, and the new date must be open as well.
@@ -1169,6 +1223,7 @@ export class AccountingService {
     target: JournalEntryStatus,
     expectedVersion?: number | null,
     actor?: string,
+    options?: { actorRole?: string | null; actorUserId?: string | null },
   ): Promise<JournalEntryResponseDto> {
     if (target === JournalEntryStatus.POSTED) {
       assertNotAiIdentity(actor, 'post a journal entry');
@@ -1202,6 +1257,12 @@ export class AccountingService {
         } catch (error) {
           this.mapPeriodLock(error);
         }
+        await this.assertPartnerAdvisorAdjustmentPeriod(
+          tenantId,
+          new Date(entry.date),
+          options?.actorRole,
+          manager,
+        );
       }
       try {
         await this.accountingRepository.setEntryStatus(

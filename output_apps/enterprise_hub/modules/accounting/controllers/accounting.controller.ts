@@ -1,3 +1,4 @@
+import { AccessContext, AccessRequest } from '../../access/access-context';
 import { AccessAction, AccessModule } from '../../access/catalogue';
 import { ModuleAccess, RequireAction } from '../../access/decorators';
 import {
@@ -74,6 +75,24 @@ export class AccountingController {
     return String(request.user?.sub ?? 'unknown').slice(0, 64);
   }
 
+  /**
+   * Verified tenant role key from AccessGuard (`request.access.roleKey`).
+   * Never trusts global `request.user.role` or unverified headers (fail closed).
+   */
+  private actorRoleOf(request: AuthenticatedRequest): string | null {
+    const access = (request as AuthenticatedRequest & Partial<AccessRequest>).access as
+      | AccessContext
+      | undefined;
+    return access?.roleKey ?? null;
+  }
+
+  private actorUserIdOf(request: AuthenticatedRequest): string | null {
+    const access = (request as AuthenticatedRequest & Partial<AccessRequest>).access as
+      | AccessContext
+      | undefined;
+    return access?.userId ?? request.user?.sub ?? null;
+  }
+
   @Get('accounts')
   @ApiOperation({ summary: 'فهرست حساب‌های دفتر کل (Chart of Accounts)' })
   @ApiResponse({ status: HttpStatus.OK, type: [AccountResponseDto] })
@@ -120,6 +139,11 @@ export class AccountingController {
     return this.accountingService.createJournalEntry(
       this.tenantIdOf(request),
       idempotencyKey ? { ...dto, idempotencyKey } : dto,
+      undefined,
+      {
+        actorRole: this.actorRoleOf(request),
+        actorUserId: this.actorUserIdOf(request),
+      },
     );
   }
 
@@ -182,7 +206,15 @@ export class AccountingController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateJournalEntryDto,
   ): Promise<JournalEntryResponseDto> {
-    return this.accountingService.updateVoucher(this.tenantIdOf(request), id, dto);
+    return this.accountingService.updateVoucher(
+      this.tenantIdOf(request),
+      id,
+      dto,
+      {
+        actorRole: this.actorRoleOf(request),
+        actorUserId: this.actorUserIdOf(request),
+      },
+    );
   }
 
   @RequireAction(AccessAction.POST)
@@ -206,6 +238,10 @@ export class AccountingController {
       dto.status,
       dto.expectedVersion,
       this.actorOf(request),
+      {
+        actorRole: this.actorRoleOf(request),
+        actorUserId: this.actorUserIdOf(request),
+      },
     );
   }
 
