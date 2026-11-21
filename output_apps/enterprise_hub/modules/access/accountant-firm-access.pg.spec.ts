@@ -82,7 +82,7 @@ describePg('T196 Accountant-firm access on PostgreSQL (roxira_app FORCE RLS, rea
       );
     }
     await testDb.owner.query(
-      `INSERT INTO "users" ("id", "phone", "displayName", "is_active")
+      `INSERT INTO "users" ("id", "phone", "displayName", "isActive")
        VALUES ($1, '09120000001', 'Firm Admin', true),
               ($2, '09120000002', 'External Advisor', true)
        ON CONFLICT DO NOTHING`,
@@ -244,7 +244,7 @@ describePg('T196 Accountant-firm access on PostgreSQL (roxira_app FORCE RLS, rea
     for (const tenantId of TENANTS) {
       expect(await accessService.resolve(FIRM_USER_ID, tenantId)).toBeNull();
       expect(await replicaAccessService.resolve(FIRM_USER_ID, tenantId)).toBeNull();
-      const logs = await auditRepo.list(tenantId, { action: 'security.firm_user_revoked', limit: 10 });
+      const logs = await auditRepo.listForTenant(tenantId, { action: 'security.firm_user_revoked', limit: 10 });
       expect(logs.length).toBeGreaterThanOrEqual(1);
     }
   });
