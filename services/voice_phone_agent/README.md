@@ -33,6 +33,9 @@ sudo systemctl enable --now voice-ai-tts voice-ai-agent
 journalctl -u voice-ai-agent -f -o cat
 ```
 
+- **Legal vocabulary:** `src/legal-terms.ts` holds the STT prompt terms (most important last: Whisper keeps the
+  end of the prompt) and a small repair for misrecognitions from real calls; every rule has a test. `npm test` runs them.
+
 `npm run build && node dist/smoke.js "سؤال"` checks TTS → VAD → STT → Smart Judge → TTS without a call.
 Unit files run as user `phone` from `/srv/data/phone/agent` on roxira-ci; see `deploy/README.md`.
 Measured on 2026-11-13: Groq STT ~0.9 s, edge-tts 1.6–2.8 s per sentence, ~200 MB RSS.

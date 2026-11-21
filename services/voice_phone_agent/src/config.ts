@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { LEGAL_VOCAB } from './legal-terms.js';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const envFile = path.join(ROOT, '.env');
@@ -80,17 +81,17 @@ export const cfg = {
   // max wait (from end of speech) for the preferred model; 3-flash-preview took 3.2-4.5 s on all 4 keys
   // (2026-11-15). After that a backup that already answered, else Whisper's own text.
   geminiWaitMs: num('GEMINI_WAIT_MS', 4800),
+  // GEMINI_API_KEY is optional: without it the hybrid path is off and Whisper alone is used.
   geminiSttPrompt: str('GEMINI_STT_PROMPT', 'Transcribe this Persian phone call verbatim in Persian script. '
-    + 'The caller is asking an Iranian legal question; typical terms: آرای وحدت رویه، دادنامه، تجدیدنظرخواهی، '
-    + 'مهریه، چک برگشتی، دیوان عالی کشور، قانون مدنی، ماده، تبصره. Write what was said, do not correct or '
-    + 'complete it. Output only the transcript. If there is no clearly intelligible speech, output nothing.'),
+    + `The caller is asking an Iranian legal question; typical terms: ${[...LEGAL_VOCAB].reverse().join('، ')}. `
+    + 'Write what was said, do not correct or complete it. Output only the transcript. '
+    + 'If there is no clearly intelligible speech, output nothing.'),
   openaiKey: str('OPENAI_API_KEY'),
   openaiSttModel: str('OPENAI_STT_MODEL', defaultOpenaiSttModel),
-  // Whisper vocabulary hint (keep under ~220 tokens). Terms come from real phone-call misrecognitions.
-  sttPrompt: str('STT_PROMPT', 'پرسش حقوقی تلفنی: مهلت تجدیدنظرخواهی، آرای وحدت رویه، دادنامه، واخواهی، فرجام‌خواهی، '
-    + 'دادخواست، دادسرا، بازپرس، شورای حل اختلاف، دیوان عالی کشور، دیوان عدالت اداری، اجرای احکام، '
-    + 'مهریه، نفقه، اعسار، طلاق توافقی، حضانت، ارث، انحصار وراثت، چک برگشتی، سفته، قولنامه، '
-    + 'سند رسمی، اجاره‌نامه، تخلیه، دیه، قانون مدنی، آیین دادرسی، ماده، تبصره.'),
+  // Whisper vocabulary hint. Whisper keeps only the LAST ~224 prompt tokens, so LEGAL_VOCAB ends with
+  // the most important terms; keep the total no longer than the 2026-11 prompt (~330 characters).
+  // Terms come from real phone-call misrecognitions (legal-terms.ts).
+  sttPrompt: str('STT_PROMPT', `پرسش حقوقی تلفنی: ${LEGAL_VOCAB.join('، ')}.`),
 
   ttsProvider: str('TTS_PROVIDER', 'edge') as 'edge' | 'openai' | 'smartjudge',
   edgeTtsUrl: str('EDGE_TTS_URL', 'http://127.0.0.1:5055'),
