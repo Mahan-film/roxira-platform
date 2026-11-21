@@ -55,6 +55,7 @@ import { PackageStoreService } from './services/package-store.service';
 import { UploadStoreService } from './services/upload-store.service';
 import { SepidarChequesFifoAdapter } from './migration/bak/sepidar-cheques-fifo.adapter';
 import { TenantExportService } from './services/tenant-export.service';
+import { TenantRestoreService } from './services/tenant-restore.service';
 import { TenantExportController } from './controllers/tenant-export.controller';
 import { TenantExportRepository } from './repositories/tenant-export.repository';
 import { SepidarMappingAdapter } from './migration/bak/sepidar-mapping.adapter';
@@ -202,6 +203,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     BulkImportProcessor,
     TenantExportRepository,
     TenantExportService,
+    TenantRestoreService,
     ImportDryRunService,
     {
       provide: OBJECT_STORE,
@@ -215,6 +217,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     SepidarChequesFifoAdapter,
     TenantExportRepository,
     TenantExportService,
+    TenantRestoreService,
     ImportDryRunService, // Re-exported for external module injection (single provider instance registered above)
     SepidarMappingAdapter,
     HolooMappingAdapter,
