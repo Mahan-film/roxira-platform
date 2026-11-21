@@ -185,18 +185,6 @@
     "partner_advisor": false,
     "legacy_member": false
   },
-  "DELETE /org/advisors/:userId (OrgController.revokePartnerAdvisor)": {
-    "policy": "members:admin",
-    "owner": true,
-    "admin": true,
-    "accountant": false,
-    "sales": false,
-    "cheque_reviewer": false,
-    "hr": false,
-    "read_only": false,
-    "partner_advisor": false,
-    "legacy_member": false
-  },
   "DELETE /org/branches/:id (OrgController.deleteBranch)": {
     "policy": "members:admin",
     "owner": true,
@@ -5500,30 +5488,6 @@
   },
   "POST /org/ (OrgController.create)": {
     "policy": "authOnly"
-  },
-  "POST /org/advisors (OrgController.assignPartnerAdvisor)": {
-    "policy": "members:admin",
-    "owner": true,
-    "admin": true,
-    "accountant": false,
-    "sales": false,
-    "cheque_reviewer": false,
-    "hr": false,
-    "read_only": false,
-    "partner_advisor": false,
-    "legacy_member": false
-  },
-  "POST /org/advisors/:userId/revoke-all (OrgController.revokeFirmUserAcrossTenants)": {
-    "policy": "members:admin",
-    "owner": true,
-    "admin": true,
-    "accountant": false,
-    "sales": false,
-    "cheque_reviewer": false,
-    "hr": false,
-    "read_only": false,
-    "partner_advisor": false,
-    "legacy_member": false
   },
   "POST /org/branches (OrgController.createBranch)": {
     "policy": "members:admin",
