@@ -88,6 +88,26 @@ export class JournalEntryEntity {
   })
   entryType: JournalEntryType;
 
+  /** Per-entity gapless GL audit number allocated at commit when POSTED (T178). */
+  @Column({ type: 'bigint', name: 'gl_audit_number', nullable: true })
+  glAuditNumber: string | null;
+
+  /** SHA-256 hex digest of the previous posted entry in this entity's chain (64 zeros for #1). */
+  @Column({ type: 'varchar', length: 64, name: 'prev_chain_hash', nullable: true })
+  prevChainHash: string | null;
+
+  /** SHA-256(prev_chain_hash || canonical(entry)) allocated at commit when POSTED (T178). */
+  @Column({ type: 'varchar', length: 64, name: 'chain_hash', nullable: true })
+  chainHash: string | null;
+
+  /** Exact UTC timestamp used in the canonical hash pre-image. */
+  @Column({ type: 'timestamptz', name: 'posted_at_utc', nullable: true })
+  postedAtUtc: Date | null;
+
+  /** Optional explicit accounting period id (e.g. an ADJUSTMENT period). */
+  @Column({ type: 'integer', name: 'accounting_period_id', nullable: true })
+  accountingPeriodId: number | null;
+
   @OneToMany(() => JournalEntryLineEntity, (line) => line.journalEntry, {
     cascade: true,
   })
