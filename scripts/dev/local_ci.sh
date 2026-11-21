@@ -5,13 +5,14 @@
 #
 # Usage: scripts/dev/local_ci.sh [--base <git-ref>]   (default base: origin/main)
 # Env:   LOCAL_CI_SKIP_PYTEST=1 to skip the unit-test step.
+#        LOCAL_CI_REMOTE=<ssh host> to run on the CI box (scripts/dev/local_ci_remote.sh).
 set -euo pipefail
 
 BASE_REF="origin/main"
 while [ $# -gt 0 ]; do
   case "$1" in
     --base) BASE_REF="${2:?--base needs a ref}"; shift 2 ;;
-    -h|--help) sed -n '2,7p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,8p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -26,6 +27,12 @@ cd "$REPO_ROOT"
 # now, so plain repo discovery finds the same repo without them.
 # shellcheck disable=SC2046
 unset $(git rev-parse --local-env-vars)
+
+# #947 T227: LOCAL_CI_REMOTE=<ssh host> runs this script on that machine (the CI box) instead,
+# streams its output and returns its exit code. Unset (the default) changes nothing.
+if [ -n "${LOCAL_CI_REMOTE:-}" ]; then
+  exec bash "$REPO_ROOT/scripts/dev/local_ci_remote.sh" "$BASE_REF"
+fi
 
 # Self-bootstrap: if ruff or pytest are missing, create a private virtualenv once
 # (LOCAL_CI_VENV, default ~/venvs/roxira), install the CI tools there and use it.

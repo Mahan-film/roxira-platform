@@ -38,6 +38,17 @@ Note: production is ARM (arm64) and this box is x86 (amd64). CI catches logic er
 3. **Weekly restore drill** (T198) and the WAL-G point-in-time restore test (T204), with dumps on the HDD.
 4. **Smart Judge offline evals** (T211 #925, T212 #926) against a local TEI + Qdrant copy.
 
+## Remote local CI (#947 T227)
+`LOCAL_CI_REMOTE=<ssh host> git push` (or `LOCAL_CI_REMOTE=<host> scripts/dev/local_ci.sh`) runs the pre-push checks on the box instead of the Mac: `scripts/dev/local_ci.sh` hands off to `scripts/dev/local_ci_remote.sh`, which
+
+1. pushes the committed `HEAD` and the base commit over ssh into a bare repo on the box (`~/local-ci/roxira/repo.git`, set `LOCAL_CI_REMOTE_DIR` to change it);
+2. makes a fresh detached worktree there and applies `git diff HEAD` (uncommitted edits to tracked files);
+3. runs `local_ci.sh --base <that base>` there, streams the output and exits with the same code.
+
+Untracked and ignored files (`.env`, keys, `node_modules`) never leave the Mac, which is why this is a git transfer and not an rsync of the worktree. Only `LOCAL_CI_SKIP_PYTEST`, `LOCAL_CI_NO_BOOTSTRAP` and `FRESH_DB_PORT` are passed through, after validation. Use the `runner` login (it has rootless Docker for the fresh-DB step): `LOCAL_CI_REMOTE=runner@roxira-ci FRESH_DB_PORT=<free port> git push`. Unset, nothing changes. Tests: `src/ops/test_local_ci_remote.py` (a fake `ssh` runs the remote side locally).
+
+The nightly full run and the Playwright gates (M1, smoke + axe; the T168 #900 shards when they land) run on the box `docker` slot through the runner picker in `ci.yml` (#949, PR #1044), with the fork guard and the `workflow_dispatch` input `runner=hosted` as the offline fallback.
+
 ## Builders on the box
 - **Antigravity (lanes L5–L7)** runs as `mahanfilms` in the owner's desktop session (`mahan`, launcher `/home/mahan/bin/rx-antigravity`, which runs `xhost +SI:localuser:mahanfilms` and then `sudo -u mahanfilms antigravity`). It needs `NODE_USE_ENV_PROXY=1`, `HTTP(S)_PROXY=http://127.0.0.1:10809` and `--proxy-server=http://127.0.0.1:10809`.
 - **Gemini CLI = fallback builder:** `scripts/ops/ci_box/gemini_lanes.sh start|stop|status|attach|prompts` (tmux session `lanes`, windows L5–L7, auto-approve, 10 min restart wait, at most 6 restarts per lane per day). Start it only when the Antigravity quota is used up. Lanes refuse to run without `HTTPS_PROXY`. Prompts come from `docs/antigravity/prompts/L5..L7.txt` with `--agent gemini` and a box preamble. On the free API tier the CLI's default Flash model allows about 20 requests a day (checked 2026-11-19); `GEMINI_LANES_MODEL=<id>` chooses another Flash-class model, never Pro.
