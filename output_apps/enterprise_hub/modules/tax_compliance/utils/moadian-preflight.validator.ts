@@ -141,12 +141,47 @@ export function getJalaliYear(date: Date | string | null | undefined): number | 
   if (isNaN(d.getTime())) {
     return null;
   }
-  const parts = new Intl.DateTimeFormat('en-US-u-ca-persian-nu-latn', {
+  // Tehran-local Gregorian calendar date (tz data only; no Persian-calendar ICU locale data needed).
+  const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Tehran',
     year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
   }).formatToParts(d);
-  const yearPart = parts.find((p) => p.type === 'year');
-  return yearPart ? parseInt(yearPart.value, 10) : null;
+  const num = (type: string): number => parseInt(parts.find((p) => p.type === type)?.value ?? '', 10);
+  const gy = num('year');
+  const gm = num('month');
+  const gd = num('day');
+  if (!Number.isFinite(gy) || !Number.isFinite(gm) || !Number.isFinite(gd)) {
+    return null;
+  }
+  return gregorianToJalaliYear(gy, gm, gd);
+}
+
+const GREGORIAN_DAYS_BEFORE_MONTH = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+
+/**
+ * Pure-JS Gregorian -> Jalali (Solar Hijri) year using the 33-year-cycle arithmetic.
+ * Does not depend on ICU (`ca-persian`) so it behaves identically on small-icu Node builds.
+ */
+export function gregorianToJalaliYear(gy: number, gm: number, gd: number): number {
+  const gy2 = gm > 2 ? gy + 1 : gy;
+  let days =
+    355666 +
+    365 * gy +
+    Math.floor((gy2 + 3) / 4) -
+    Math.floor((gy2 + 99) / 100) +
+    Math.floor((gy2 + 399) / 400) +
+    GREGORIAN_DAYS_BEFORE_MONTH[gm - 1] +
+    gd;
+  let jy = -1595 + 33 * Math.floor(days / 12053);
+  days %= 12053;
+  jy += 4 * Math.floor(days / 1461);
+  days %= 1461;
+  if (days > 365) {
+    jy += Math.floor((days - 1) / 365);
+  }
+  return jy;
 }
 
 /**
@@ -507,7 +542,18 @@ export function runMoadianPreFlightValidation(
     }
 
     // Tax rate for fiscal year & exact minor-unit line math
-    const vatRateUnits = amount(item.vatRate ?? 0, LINE_RATE_DECIMALS, `${fieldPrefix}.vatRate`);
+    // A missing vatRate is an error: never default to 0 (exempt).
+    const vatRateMissing = item.vatRate === undefined || item.vatRate === null;
+    if (vatRateMissing) {
+      errors.push({
+        field: `${fieldPrefix}.vatRate`,
+        message: `سطر ${index + 1}: نرخ مالیات بر ارزش افزوده (vatRate) مشخص نشده است؛ برای اقلام معاف صراحتاً ۰ وارد کنید.`,
+        code: 'VAT_RATE_MISSING',
+      });
+    }
+    const vatRateUnits = vatRateMissing
+      ? null
+      : amount(item.vatRate as number | string, LINE_RATE_DECIMALS, `${fieldPrefix}.vatRate`);
     if (vatRateUnits !== null) {
       const vatRateBp = divRoundHalfUp(vatRateUnits, 100n);
       const vatCheck = validateVatRateForYear(vatRateBp, expectedVatRateBp);

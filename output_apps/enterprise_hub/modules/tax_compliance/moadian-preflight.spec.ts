@@ -95,6 +95,15 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
       expect(getJalaliYear('2026-11-10T00:00:00Z')).toBe(1405);
     });
 
+    it('derives Jalali year without ICU at Nowruz boundaries', () => {
+      expect(getJalaliYear('2025-03-21T12:00:00Z')).toBe(1404);
+      expect(getJalaliYear('2025-03-20T12:00:00Z')).toBe(1403);
+      expect(getJalaliYear('2024-03-20T12:00:00Z')).toBe(1403);
+      expect(getJalaliYear('2024-03-19T12:00:00Z')).toBe(1402);
+      expect(getJalaliYear('2026-03-21T12:00:00Z')).toBe(1405);
+      expect(getJalaliYear('2026-03-20T12:00:00Z')).toBe(1404);
+    });
+
     it('accepts rate equal to provided expectedVatRate (1000n bp = 10%)', () => {
       const res1404 = validateVatRateForYear(1000n, 1000n);
       expect(res1404.valid).toBe(true);
@@ -199,6 +208,18 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
       const result = runMoadianPreFlightValidation(validInvoice);
       expect(result.valid).toBe(false);
       expect(result.errors.some((e) => e.code === 'ITEM_VAT_RATE_MISMATCH_FISCAL_YEAR')).toBe(true);
+    });
+
+    it('reports VAT_RATE_MISSING (never defaults to exempt) when a line has no vatRate', () => {
+      const { vatRate: _omit, ...lineWithoutRate } = validInvoice.items[0] as unknown as Record<string, unknown>;
+      void _omit;
+      const missing = {
+        ...validInvoice,
+        items: [lineWithoutRate],
+      } as unknown as InvoiceResponseDto;
+      const result = runMoadianPreFlightValidation(missing, { expectedVatRate: 0.1 });
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.code === 'VAT_RATE_MISSING')).toBe(true);
     });
 
     it('returns Persian error when buyer national ID checksum fails', () => {
