@@ -29,10 +29,10 @@ export class TreasuryAllocationEntity {
   @Column({ type: 'varchar', length: 64, name: 'target_number', nullable: true })
   targetNumber: string | null;
 
-  @Column({ type: 'numeric', precision: 18, scale: 2 })
+  @Column({ type: 'numeric', precision: 20, scale: 4 })
   amount: string;
 
-  @Column({ type: 'numeric', precision: 18, scale: 2, default: 0 })
+  @Column({ type: 'numeric', precision: 20, scale: 4, default: 0 })
   writeoff: string;
 
   @Column({ type: 'date', name: 'allocated_date' })

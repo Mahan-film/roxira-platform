@@ -181,8 +181,8 @@ describePg('Ledger on PostgreSQL', () => {
         ),
       );
       await expect(Promise.all(posts)).resolves.toHaveLength(20);
-      expect(await balanceOf(T1, '1010')).toBe('200.00');
-      expect(await balanceOf(T1, '4010')).toBe('-300.00');
+      expect(await balanceOf(T1, '1010')).toBe('200.0000');
+      expect(await balanceOf(T1, '4010')).toBe('-300.0000');
       await expectBalancesMatchLines();
     });
 
@@ -524,8 +524,8 @@ describePg('Ledger on PostgreSQL', () => {
 
       await base.runMigrations();
       const after = await base.query(`SELECT code, balance, balance_legacy_double FROM fin_chart_of_accounts WHERE tenant_id=$1 ORDER BY code`, [T1]);
-      expect(after.find((r: { code: string }) => r.code === '1010')).toMatchObject({ balance: '0.30', balance_legacy_double: 0.30000000000000004 });
-      expect(after.find((r: { code: string }) => r.code === '9999')).toMatchObject({ balance: '0.00', balance_legacy_double: 5 });
+      expect(after.find((r: { code: string }) => r.code === '1010')).toMatchObject({ balance: '0.3000', balance_legacy_double: 0.30000000000000004 });
+      expect(after.find((r: { code: string }) => r.code === '9999')).toMatchObject({ balance: '0.0000', balance_legacy_double: 5 });
       const log = await base.query(`SELECT account_id, balance_before, balance_from_lines FROM fin_balance_reconciliation_log`);
       expect(log).toEqual([{ account_id: id('9999'), balance_before: '5.00', balance_from_lines: '0.00' }]);
       // the old "<number>-REV" convention is backfilled into reverses_entry_id
@@ -542,7 +542,7 @@ describePg('Ledger on PostgreSQL', () => {
       expect(Number((await base.query(`SELECT balance FROM fin_chart_of_accounts WHERE code='1010' AND tenant_id=$1`, [T1]))[0].balance)).toBe(0.3);
 
       await base.runMigrations();
-      expect((await base.query(`SELECT data_type, numeric_precision, numeric_scale FROM information_schema.columns WHERE table_name='fin_chart_of_accounts' AND column_name='balance'`))[0]).toEqual({ data_type: 'numeric', numeric_precision: 18, numeric_scale: 2 });
+      expect((await base.query(`SELECT data_type, numeric_precision, numeric_scale FROM information_schema.columns WHERE table_name='fin_chart_of_accounts' AND column_name='balance'`))[0]).toEqual({ data_type: 'numeric', numeric_precision: 20, numeric_scale: 4 });
       await base.destroy();
     }, 120_000);
   });

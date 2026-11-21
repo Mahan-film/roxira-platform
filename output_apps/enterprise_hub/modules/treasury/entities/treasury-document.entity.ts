@@ -34,13 +34,13 @@ export class TreasuryDocumentEntity {
   @Column({ type: 'varchar', length: 128, name: 'party_name' })
   partyName: string;
 
-  @Column({ type: 'numeric', precision: 18, scale: 2 })
+  @Column({ type: 'numeric', precision: 20, scale: 4 })
   total: string;
 
-  @Column({ type: 'numeric', precision: 18, scale: 2, name: 'writeoff_total', default: 0 })
+  @Column({ type: 'numeric', precision: 20, scale: 4, name: 'writeoff_total', default: 0 })
   writeoffTotal: string;
 
-  @Column({ type: 'numeric', precision: 18, scale: 2, name: 'advance_remaining', default: 0 })
+  @Column({ type: 'numeric', precision: 20, scale: 4, name: 'advance_remaining', default: 0 })
   advanceRemaining: string;
 
   @Column({ type: 'varchar', length: 512, nullable: true })
