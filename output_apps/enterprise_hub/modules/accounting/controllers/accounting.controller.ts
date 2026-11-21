@@ -9,7 +9,6 @@ import {
   Get,
   HttpCode,
   HttpStatus,
-  Optional,
   Param,
   ParseIntPipe,
   Post,
@@ -72,9 +71,9 @@ export class AccountingController {
   constructor(
     private readonly accountingService: AccountingService,
     private readonly voucherToolsService: VoucherToolsService,
-    @Optional() private readonly sequencer?: JournalSequencerService,
-    @Optional() private readonly periodService?: AccountingPeriodService,
-    @Optional() private readonly masterDataChanges?: MasterDataChangeLogService,
+    private readonly sequencer: JournalSequencerService,
+    private readonly periodService: AccountingPeriodService,
+    private readonly masterDataChanges: MasterDataChangeLogService,
   ) {}
 
   /** استخراج شناسه مستأجر و بررسی دسترسی مدیریتی از کاربر تأییدشده. */
@@ -384,21 +383,20 @@ export class AccountingController {
     );
   }
 
+  @RequireAction(AccessAction.READ)
   @Get('ledger/verify-chain')
   @ApiOperation({ summary: 'تأیید زنجیره هش و شماره‌های ممیزی دفتر کل (T178)' })
   async verifyChain(
     @Req() request: AuthenticatedRequest,
   ): Promise<VerifyChainResult> {
-    if (!this.sequencer) {
-      throw new BadRequestException('JournalSequencerService is not available.');
-    }
     return this.sequencer.verifyChain(this.tenantIdOf(request));
   }
 
+  @RequireAction(AccessAction.READ)
   @Get('accounting-periods')
   @ApiOperation({ summary: 'فهرست دوره‌های حسابداری و وضعیت آن‌ها' })
   async listAccountingPeriods(@Req() request: AuthenticatedRequest) {
-    return this.periodService?.listPeriods(this.tenantIdOf(request)) ?? [];
+    return this.periodService.listPeriods(this.tenantIdOf(request));
   }
 
   @RequireAction(AccessAction.ADMIN)
@@ -409,9 +407,6 @@ export class AccountingController {
     @Req() request: AuthenticatedRequest,
     @Body() dto: CreateAccountingPeriodDto,
   ) {
-    if (!this.periodService) {
-      throw new BadRequestException('AccountingPeriodService is not available.');
-    }
     return this.periodService.createPeriod(this.tenantIdOf(request), dto);
   }
 
@@ -424,9 +419,6 @@ export class AccountingController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: SoftLockPeriodDto,
   ) {
-    if (!this.periodService) {
-      throw new BadRequestException('AccountingPeriodService is not available.');
-    }
     return this.periodService.softLockPeriod(
       this.tenantIdOf(request),
       id,
@@ -444,9 +436,6 @@ export class AccountingController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: HardClosePeriodDto,
   ) {
-    if (!this.periodService) {
-      throw new BadRequestException('AccountingPeriodService is not available.');
-    }
     return this.periodService.hardClosePeriod(
       this.tenantIdOf(request),
       id,
@@ -463,12 +452,10 @@ export class AccountingController {
     @Req() request: AuthenticatedRequest,
     @Param('id', ParseIntPipe) id: number,
   ) {
-    if (!this.periodService) {
-      throw new BadRequestException('AccountingPeriodService is not available.');
-    }
     return this.periodService.unlockPeriod(this.tenantIdOf(request), id);
   }
 
+  @RequireAction(AccessAction.READ)
   @Get('master-data-changes')
   @ApiOperation({ summary: 'فهرست تاریخچه تغییرات داده‌های پایه (T178)' })
   async listMasterDataChanges(
@@ -476,11 +463,9 @@ export class AccountingController {
     @Query('entityType') entityType?: string,
     @Query('entityId') entityId?: string,
   ) {
-    return (
-      this.masterDataChanges?.listChanges(this.tenantIdOf(request), {
-        entityType,
-        entityId,
-      }) ?? []
-    );
+    return this.masterDataChanges.listChanges(this.tenantIdOf(request), {
+      entityType,
+      entityId,
+    });
   }
 }

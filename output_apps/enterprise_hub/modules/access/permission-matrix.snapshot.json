@@ -326,6 +326,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/accounts (AccountingController.listAccounts)": {
@@ -493,6 +494,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/master-data-changes (AccountingController.listMasterDataChanges)": {
@@ -504,6 +506,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/period-locks (AccountingController.listPeriodLocks)": {
@@ -3326,6 +3329,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/accounting-periods/:id/hard-close (AccountingController.hardCloseAccountingPeriod)": {
@@ -3337,6 +3341,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/accounting-periods/:id/soft-lock (AccountingController.softLockAccountingPeriod)": {
@@ -3348,6 +3353,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/accounting-periods/:id/unlock (AccountingController.unlockAccountingPeriod)": {
@@ -3359,6 +3365,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/accounts (AccountingController.createAccount)": {

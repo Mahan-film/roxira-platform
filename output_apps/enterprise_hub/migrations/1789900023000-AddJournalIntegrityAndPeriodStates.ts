@@ -8,8 +8,8 @@ import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
  *
  * Revert: `down()` drops triggers, functions, tables, indexes, and columns in reverse order.
  */
-export class AddJournalIntegrityAndPeriodStates1789900012800 implements MigrationInterface {
-  name = 'AddJournalIntegrityAndPeriodStates1789900012800';
+export class AddJournalIntegrityAndPeriodStates1789900023000 implements MigrationInterface {
+  name = 'AddJournalIntegrityAndPeriodStates1789900023000';
 
   public async up(q: QueryRunner): Promise<void> {
     await q.query(`SET LOCAL lock_timeout = '2s'`);
@@ -58,6 +58,8 @@ export class AddJournalIntegrityAndPeriodStates1789900012800 implements Migratio
              AND OLD.chain_hash IS NULL
              AND NEW.chain_hash IS NOT NULL
              AND NEW.gl_audit_number IS NOT NULL
+             AND NEW.prev_chain_hash IS NOT NULL
+             AND NEW.posted_at_utc IS NOT NULL
              AND NEW.id IS NOT DISTINCT FROM OLD.id
              AND NEW.tenant_id IS NOT DISTINCT FROM OLD.tenant_id
              AND NEW.entry_number IS NOT DISTINCT FROM OLD.entry_number
@@ -79,6 +81,14 @@ export class AddJournalIntegrityAndPeriodStates1789900012800 implements Migratio
         RETURN NEW;
       END;
       $$ LANGUAGE plpgsql
+    `);
+    // Attach (idempotent): the trigger name is shared with the original guard migration, so
+    // re-create it explicitly. lock_timeout above bounds the ACCESS EXCLUSIVE wait.
+    await q.query(`DROP TRIGGER IF EXISTS "TRG_fin_journal_entries_guard_posted" ON "fin_journal_entries"`);
+    await q.query(`
+      CREATE TRIGGER "TRG_fin_journal_entries_guard_posted"
+        BEFORE UPDATE OR DELETE ON "fin_journal_entries"
+        FOR EACH ROW EXECUTE FUNCTION fin_guard_posted_entry()
     `);
 
     // 4. Period states (OPEN, SOFT_LOCKED, ADJUSTMENT, HARD_CLOSED)

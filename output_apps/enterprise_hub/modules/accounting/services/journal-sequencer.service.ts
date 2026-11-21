@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { EntityManager } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
@@ -139,15 +139,21 @@ export class JournalSequencerService {
       });
       const chainHash = JournalSequencerService.computeChainHash(prevHash, canonical);
 
-      await m.query(
+      const sealed: Array<{ id: number }> = await m.query(
         `UPDATE "fin_journal_entries"
             SET "gl_audit_number" = $1,
                 "prev_chain_hash" = $2,
                 "chain_hash" = $3,
                 "posted_at_utc" = $4
-          WHERE "id" = $5 AND "tenant_id" = $6 AND "chain_hash" IS NULL`,
+          WHERE "id" = $5 AND "tenant_id" = $6 AND "chain_hash" IS NULL
+        RETURNING "id"`,
         [nextNumber, prevHash, chainHash, postedAtIso, entryId, tenantId],
       );
+      // Already sealed or not ours: fail before the sequencer advances so no number is burned
+      // and the chain head cannot fork.
+      if (sealed.length === 0) {
+        throw new ConflictException(`Journal entry ${entryId} is already sealed or not found.`);
+      }
 
       await m.query(
         `UPDATE "fin_gl_sequencers"
@@ -271,6 +277,23 @@ export class JournalSequencerService {
         }
         prevHash = e.chain_hash ?? expectedHash;
         expectedNumber = actualNum + 1n;
+      }
+
+      // Tamper evidence: the sequencer row is the committed head. Deleted tail entries or a
+      // rewritten head both make the recomputed head differ from it.
+      const headRows: Array<{ last_audit_number: string; head_hash: string }> = await m.query(
+        `SELECT "last_audit_number"::text, "head_hash" FROM "fin_gl_sequencers" WHERE "tenant_id" = $1`,
+        [tenantId],
+      );
+      const head = headRows[0];
+      if (
+        !brokenAtAuditNumber &&
+        head &&
+        (head.last_audit_number !== (entries.length ? entries[entries.length - 1].gl_audit_number : '0') ||
+          head.head_hash !== prevHash)
+      ) {
+        brokenAtAuditNumber = head.last_audit_number;
+        reason = 'Sequencer head does not match the last sealed entry (entries removed or altered)';
       }
 
       const totalEntries = entries.length;

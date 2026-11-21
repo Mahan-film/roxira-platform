@@ -82,11 +82,17 @@ describe('T178 Journal Integrity & Period States (unit + 50 writes/s latency)', 
         prev = hash;
       }
 
+      let sequencerLast = entries.length;
+      let sequencerHead = prev;
       const mockScope = {
         within: async (_t: string, _m: unknown, fn: (m: { query: (sql: string) => Promise<unknown[]> }) => Promise<unknown>) =>
           fn({
-            query: async (sql: string) =>
-              sql.includes('fin_journal_entries') ? entries : allLines,
+            query: async (sql: string) => {
+              if (sql.includes('fin_gl_sequencers')) {
+                return [{ last_audit_number: String(sequencerLast), head_hash: sequencerHead }];
+              }
+              return sql.includes('fin_journal_entries') ? entries : allLines;
+            },
           }),
       };
 
@@ -101,6 +107,12 @@ describe('T178 Journal Integrity & Period States (unit + 50 writes/s latency)', 
       const broken = await svc.verifyChain(T1);
       expect(broken.status).toBe('BROKEN');
       expect(broken.brokenAtAuditNumber).toBe('42');
+
+      // Truncation: tail entry deleted while the committed sequencer head still points at it.
+      allLines[82].debit = '100.00';
+      sequencerLast = entries.length + 1;
+      const truncated = await svc.verifyChain(T1);
+      expect(truncated.status).toBe('BROKEN');
     });
 
     it('measures p95 sealing latency under 50 writes/s load (< 25ms)', async () => {
@@ -116,6 +128,9 @@ describe('T178 Journal Integrity & Period States (unit + 50 writes/s latency)', 
               { account_id: 1, debit: '500.00', credit: '0.00', tx_debit: '500.00', tx_credit: '0.00', book_debit: '500.00', book_credit: '0.00' },
               { account_id: 2, debit: '0.00', credit: '500.00', tx_debit: '0.00', tx_credit: '500.00', book_debit: '0.00', book_credit: '500.00' },
             ];
+          }
+          if (sql.includes('UPDATE "fin_journal_entries"')) {
+            return [{ id: params[4] }];
           }
           if (sql.includes('UPDATE "fin_gl_sequencers"')) {
             seqNumber = BigInt(String(params[0]));
