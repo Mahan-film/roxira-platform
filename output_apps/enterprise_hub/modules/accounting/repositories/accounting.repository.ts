@@ -55,6 +55,10 @@ export interface JournalLineInput {
   txCreditMinor?: bigint | null;
   bookDebitMinor?: bigint | null;
   bookCreditMinor?: bigint | null;
+  reportingCurrencyCode?: string | null;
+  reportingFxRate?: string | null;
+  reportingDebitMinor?: bigint | null;
+  reportingCreditMinor?: bigint | null;
   isRounding?: boolean;
 }
 
@@ -649,6 +653,12 @@ export class AccountingRepository {
       txCredit: minorToDecimal(line.txCreditMinor != null ? line.txCreditMinor : line.creditMinor),
       bookDebit: minorToDecimal(line.bookDebitMinor != null ? line.bookDebitMinor : line.debitMinor),
       bookCredit: minorToDecimal(line.bookCreditMinor != null ? line.bookCreditMinor : line.creditMinor),
+      reportingCurrencyCode: line.reportingCurrencyCode ?? null,
+      reportingFxRate: line.reportingFxRate ?? null,
+      reportingDebit:
+        line.reportingDebitMinor != null ? minorToDecimal(line.reportingDebitMinor) : null,
+      reportingCredit:
+        line.reportingCreditMinor != null ? minorToDecimal(line.reportingCreditMinor) : null,
       isRounding: line.isRounding ?? false,
     }));
     for (let offset = 0; offset < lineRows.length; offset += 200) {

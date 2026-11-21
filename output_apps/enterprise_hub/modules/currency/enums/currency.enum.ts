@@ -15,4 +15,5 @@ export enum Currency {
   TRY = 'TRY',
   CNY = 'CNY',
   OMR = 'OMR',
+  GBP = 'GBP',
 }
