@@ -7,6 +7,7 @@ needs is in git or in the owner's own secrets folder. Nothing depends on one Cla
 
 | Thing | Where | Account-bound? |
 |-------|-------|----------------|
+| Shared map: machines, accounts, stack, flows, plan | `docs/hub/SYSTEM_OVERVIEW.md` (read this first) | no (git) |
 | Rules for every agent | `CLAUDE.md`, `AGENTS.md`, `docs/agents/LESSONS.md` | no (git) |
 | Current state and plan | `docs/README.md` (index), `docs/STATE.md`, `docs/STRATEGY_NOW.md`, `docs/FACTORY.md`, `docs/ARCHITECTURE.md` | no (git) |
 | Hub memory (decisions, owner feedback, traps) | `docs/hub/memory/*.md` (scrubbed copy) | no (git) |
