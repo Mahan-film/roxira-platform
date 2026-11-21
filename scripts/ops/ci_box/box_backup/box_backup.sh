@@ -8,7 +8,8 @@
 #
 # Configuration: ~/.config/roxira-box-backup/backup.conf (see box-backup.conf.example). Secrets live ONLY in
 # mode-600 files outside the repo: restic.pass (repo password) and offbox.env (S3/B2 credentials).
-# Not configured yet (no password file, repo dir missing, restic missing): a clear message and exit 0, marker SKIP.
+# Not configured yet (no password file, restic missing): a clear message and exit 0, marker SKIP. Once the password
+# file exists, a missing data disk or repository directory is a FAIL (marker, exit 1, Telegram).
 # The root-level restic job from 06_root_reliability.sh (/etc, root-owned files) is separate and untouched.
 set -euo pipefail
 umask 077
@@ -86,25 +87,23 @@ if [ "$MODE" = dry ]; then
 fi
 
 # ------------------------------------------------------------------ apply: preconditions (no-op when not configured)
-command -v restic >/dev/null || skip "restic is not installed" "sudo apt install restic"
 secret_file_ok "$PASSWORD_FILE" || skip "restic password file missing, empty or not mode 600: $PASSWORD_FILE" \
   "umask 077; mkdir -p $(dirname "$PASSWORD_FILE"); head -c 32 /dev/urandom | base64 | tr -d '\\n=' > $PASSWORD_FILE   # then copy it into your password manager"
-if ! is_remote "$REPOSITORY"; then
-  if [ ! -d "$REPOSITORY" ]; then
-    if mkdir -p "$REPOSITORY" 2>/dev/null; then chmod 700 "$REPOSITORY"
-    else skip "repository directory $REPOSITORY does not exist and cannot be created" \
-      "sudo install -d -o $(id -un) -g $(id -gn) -m 700 $REPOSITORY"; fi
-  fi
-  [ -w "$REPOSITORY" ] || skip "repository directory $REPOSITORY is not writable" "sudo chown $(id -un) $REPOSITORY"
-fi
-grep -q ' /srv/data ' /proc/mounts 2>/dev/null || case "$REPOSITORY" in /srv/data/*) skip "/srv/data is not mounted" "mount the data disk" ;; esac
-
+command -v restic >/dev/null || skip "restic is not installed" "sudo apt install restic"
+# From here on the job is configured: any problem is a FAIL (marker + non-zero exit + Telegram), never a quiet SKIP.
 mkdir -p "$STATE" "$WORK"
-exec 9> "$WORK/backup.lock"
-flock -n 9 || { say "another backup run holds the lock, exiting"; exit 0; }
 LOG="$STATE/backup.log"
 fail() { say "FAIL: $*" | tee -a "$LOG" >&2; write_marker FAIL "$*"; exit 1; }
-trap 'rm -rf "$TMPL"' EXIT
+if ! is_remote "$REPOSITORY"; then
+  grep -q ' /srv/data ' /proc/mounts 2>/dev/null || case "$REPOSITORY" in /srv/data/*) fail "/srv/data is not mounted (data disk missing?)" ;; esac
+  if [ ! -d "$REPOSITORY" ]; then
+    if mkdir -p "$REPOSITORY" 2>/dev/null; then chmod 700 "$REPOSITORY"
+    else fail "repository directory $REPOSITORY does not exist and cannot be created. Fix: sudo install -d -o $(id -un) -g $(id -gn) -m 700 $REPOSITORY"; fi
+  fi
+  [ -w "$REPOSITORY" ] || fail "repository directory $REPOSITORY is not writable. Fix: sudo chown $(id -un) $REPOSITORY"
+fi
+exec 9> "$WORK/backup.lock"
+flock -n 9 || { say "another backup run holds the lock, exiting"; exit 0; }
 
 # ------------------------------------------------------------------ stage: consistent sqlite copy + manifest
 STAGE="$WORK/stage"

@@ -30,7 +30,7 @@ def scan(path):
     except OSError:
         return "unreadable"
     if b"\0" in head[:4096]:
-        return ""  # binary (sqlite etc.): name filters are the guard; the stage copy is scanned by the caller
+        return ""  # binary (sqlite etc.) is not scanned: the allowlist and the name filters are the guard
     text = head.decode("utf-8", "replace")
     for name, rx in RULES.items():
         if rx.search(text):

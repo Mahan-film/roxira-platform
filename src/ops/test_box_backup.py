@@ -7,6 +7,7 @@ import importlib.util
 import os
 import shutil
 import stat
+import sys
 import subprocess
 import tempfile
 import unittest
@@ -16,6 +17,8 @@ ROOT = Path(__file__).resolve().parents[2]
 DIR = ROOT / "scripts/ops/ci_box/box_backup"
 scan = None
 HAVE_RESTIC = shutil.which("restic") is not None
+LINUX = sys.platform.startswith("linux")  # the scripts use GNU stat/sha256sum/shuf/flock
+E2E = os.environ.get("BOX_BACKUP_E2E") == "1"  # real restic round trips take about 40 s: opt in
 FAKE_SECRET = "sk-" + "A1b2C3d4E5f6G7h8I9j0K1l2"  # assembled so this file itself never matches a scanner
 
 
@@ -28,6 +31,8 @@ def setUpModule():
 
 class Fixture(unittest.TestCase):
     def setUp(self):
+        if not LINUX:
+            self.skipTest("Linux only")
         self.tmp = Path(tempfile.mkdtemp(prefix="boxbk."))
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
         self.home = self.tmp / "home"
@@ -127,6 +132,22 @@ class DryRunAndSkip(Fixture):
         self.assertIn("SKIP", r.stdout)
         self.assertIn("mode 600", r.stdout)
 
+    def stub_restic(self):
+        """A restic that does nothing, so precondition handling can be tested without the real binary."""
+        bindir = self.tmp / "bin"
+        bindir.mkdir()
+        (bindir / "restic").write_text("#!/bin/sh\nexit 0\n")
+        (bindir / "restic").chmod(0o755)
+        return {"PATH": f"{bindir}:{os.environ['PATH']}"}
+
+    def test_configured_but_unusable_repository_is_a_fail_not_a_skip(self):
+        self.repo = Path("/proc/nope/repo")  # cannot be created
+        self.write_conf()
+        r = self.sh("box_backup.sh", "--apply", env=self.stub_restic())
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertTrue(self.marker().startswith("FAIL "), self.marker())
+        self.assertIn("sudo install -d", r.stdout + r.stderr)
+
     def test_notify_hook_is_noop_without_env_file(self):
         r = subprocess.run(["bash", str(DIR / "notify_failure.sh")], env={**self.env, "BOX_BACKUP_NOTIFY_ENV": str(self.tmp / "none.env")},
                            capture_output=True, text=True)
@@ -143,7 +164,7 @@ class DryRunAndSkip(Fixture):
         self.assertIn("skipped", r.stdout)
 
 
-@unittest.skipUnless(HAVE_RESTIC, "restic not installed")
+@unittest.skipUnless(HAVE_RESTIC and E2E, "set BOX_BACKUP_E2E=1 (and have restic installed) for the real round trips")
 class BackupAndDrill(Fixture):
     def test_backup_is_idempotent_secret_free_and_restorable(self):
         r = self.sh("box_backup.sh", "--apply")

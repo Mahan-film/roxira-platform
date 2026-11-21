@@ -40,6 +40,10 @@ only growing part (files above 20 MB are skipped).
 
 The off-box copy inherits the same content: nothing secret is ever sent anywhere.
 
+Failure handling: no password file or no restic binary = `SKIP` marker, message and exit 0 (not configured yet). Once the
+password file exists, anything else (data disk not mounted, repository directory missing or not writable, backup or
+check errors, a failed off-box copy) = `FAIL` marker, non-zero exit and the Telegram notice, so a dead disk is never silent.
+
 ## Retention, schedule, freshness
 
 - Retention per repository: `--keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune`, grouped by host and tag so a
@@ -119,5 +123,7 @@ restic is already installed on the box (0.18.1). If it is missing: `sudo apt ins
 
 ## Tests
 
-`python3 -m pytest src/ops/test_box_backup.py` (fixture HOME, throwaway repo and password; restic-dependent tests skip
-when restic is absent). Not covered by automation: a real S3/B2 destination, the Telegram send, systemd execution.
+`python3 -m pytest src/ops/test_box_backup.py` runs the fast tests (dry-run, secret filters, skip/fail handling, units;
+Linux only). `BOX_BACKUP_E2E=1 python3 -m pytest src/ops/test_box_backup.py` adds the real restic round trips (backup,
+idempotence, restore drill, off-box copy to a second filesystem; about 40 s; needs restic). Everything uses a fixture HOME,
+a throwaway repo and password. Not covered by automation: a real S3/B2 destination, the Telegram send, systemd execution.
