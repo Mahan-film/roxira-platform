@@ -55,7 +55,7 @@ FORBIDDEN_IMAGE_PATTERNS: list[tuple[str, str, re.Pattern[str]]] = [
         "redis:7.4+",
         "RSAL/SSPL/AGPL",
         re.compile(
-            r"(?:image:\s*|FROM\s+)(?:docker\.io/library/)?redis:(?:7\.[4-9]|[8-9]|[1-9][0-9])(?:\.[0-9]+)?",
+            r"(?:image:\s*|FROM\s+)(?:docker\.io/library/)?redis:(?:7\.(?:[4-9]|[1-9][0-9])|[8-9]|[1-9][0-9])(?:\.[0-9]+)?",
             re.IGNORECASE,
         ),
     ),

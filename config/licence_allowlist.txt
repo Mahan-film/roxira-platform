@@ -1,6 +1,10 @@
 # Reviewed runtime licence exceptions for scripts/ci/check_runtime_licences.py (T252 / #991).
-# Format: <package-name>  or  <package-name>@<LICENCE-TAG>  # reason and review date
-# Example: example-pkg@GPL  # owner-reviewed, 2026-11-21
+# Format: <package-or-image>  or  <package-or-image>@<LICENCE-TAG>  # reason and review date
+# Examples:
+#   example-pkg@GPL               # npm package example (owner-reviewed, 2026-11-21)
+#   redis:7.4+@RSAL/SSPL/AGPL      # container image key with licence (owner-reviewed, 2026-11-21)
+#   mongo:7+                      # container image short key
 #
 # Forbidden runtime licences: GPL, AGPL, SSPL, RSAL, CC-BY-NC, ELv2.
+# Forbidden container images: redis:7.4+, mongo:7+, elasticsearch:8+.
 # Keep this file empty unless an owner-reviewed exception is documented here.
