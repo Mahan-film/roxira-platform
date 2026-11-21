@@ -214,7 +214,10 @@ jobs:
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/trivy" --version
       - name: Scan filesystem
-        run: trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --exit-code 0 --format table . > "$RUNNER_TEMP/trivy-fs.txt"
+        # mirror.gcr.io (Trivy's default DB source) is blocked from the CI box network; ghcr.io works everywhere.
+        run: |
+          trivy fs --db-repository ghcr.io/aquasecurity/trivy-db:2 --java-db-repository ghcr.io/aquasecurity/trivy-java-db:1 \
+            --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --exit-code 0 --format table . > "$RUNNER_TEMP/trivy-fs.txt"
       - name: Upload Trivy report
         if: always()
         continue-on-error: true
@@ -602,6 +605,17 @@ jobs:
       DATABASE_NAME: rxfresh
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: psql client on the CI box (shim to the Postgres service container)
+        # GitHub-hosted images ship psql; the box host may not (08_root_ci_pool.sh installs it).
+        if: runner.environment == 'self-hosted'
+        env:
+          PG_CTR: ${{ job.services.postgres.id }}
+        run: |
+          if command -v psql >/dev/null 2>&1; then psql --version; exit 0; fi
+          mkdir -p "$RUNNER_TEMP/pgbin"
+          printf '#!/bin/sh\nexec docker exec -i -e PGHOST -e PGPORT -e PGUSER -e PGDATABASE -e PGPASSWORD %s psql "$@"\n' "$PG_CTR" > "$RUNNER_TEMP/pgbin/psql"
+          chmod +x "$RUNNER_TEMP/pgbin/psql"
+          echo "$RUNNER_TEMP/pgbin" >> "$GITHUB_PATH"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -701,7 +715,8 @@ jobs:
       redis:
         image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/docker/library' }}/redis:7
         ports:
-          - 6379:6379
+          # Host port 16379: 6379 is taken on the CI box (phone stack); same on hosted runners.
+          - 16379:6379
     env:
       DATABASE_HOST: 127.0.0.1
       DATABASE_PORT: "5432"
@@ -710,7 +725,7 @@ jobs:
       DATABASE_PASSWORD: ci-trust-auth
       DATABASE_NAME: rxfresh
       REDIS_HOST: 127.0.0.1
-      REDIS_PORT: "6379"
+      REDIS_PORT: "16379"
       # Throwaway per-run secret for this job's own backend; never a real key.
       JWT_SECRET: ci-m1-gate-throwaway-secret-0123456789abcdef
       JWT_SECRET_KEY: ci-m1-gate-throwaway-secret-0123456789abcdef
@@ -719,6 +734,17 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: psql client on the CI box (shim to the Postgres service container)
+        # GitHub-hosted images ship psql; the box host may not (08_root_ci_pool.sh installs it).
+        if: runner.environment == 'self-hosted'
+        env:
+          PG_CTR: ${{ job.services.postgres.id }}
+        run: |
+          if command -v psql >/dev/null 2>&1; then psql --version; exit 0; fi
+          mkdir -p "$RUNNER_TEMP/pgbin"
+          printf '#!/bin/sh\nexec docker exec -i -e PGHOST -e PGPORT -e PGUSER -e PGDATABASE -e PGPASSWORD %s psql "$@"\n' "$PG_CTR" > "$RUNNER_TEMP/pgbin/psql"
+          chmod +x "$RUNNER_TEMP/pgbin/psql"
+          echo "$RUNNER_TEMP/pgbin" >> "$GITHUB_PATH"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -765,12 +791,18 @@ jobs:
           NODE_PATH="$PWD/node_modules" node ../../scripts/ci/mint_e2e_session.js "$RUNNER_TEMP/session.m1-accountant.json"
       - name: Install Playwright (chromium)
         working-directory: e2e
+        env:
+          # The browser CDN is blocked from the CI box network; the box hub seeds this dir through its
+          # proxy (scripts/ops/ci_box/jit_pool/seed_playwright.sh). Empty on hosted runners.
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.environment == 'self-hosted' && (vars.CI_BOX_PLAYWRIGHT_PATH || '/srv/data/ci-jit/ms-playwright') || '' }}
         run: |
           npm ci
-          npx playwright install ${{ runner.environment == 'github-hosted' && '--with-deps ' || '' }}chromium
+          npx playwright install ${{ runner.environment == 'github-hosted' && '--with-deps ' || '' }}chromium \
+            || { [ -z "$PLAYWRIGHT_BROWSERS_PATH" ] || echo "::error::Playwright browsers missing on the box: run scripts/ops/ci_box/jit_pool/seed_playwright.sh as mahanfilms"; exit 1; }
       - name: Run the M1 gate
         working-directory: e2e
         env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.environment == 'self-hosted' && (vars.CI_BOX_PLAYWRIGHT_PATH || '/srv/data/ci-jit/ms-playwright') || '' }}
           E2E_BASE_URL: http://127.0.0.1:3001
           APP_E2E_SESSION_FILE_M1: ${{ runner.temp }}/session.m1.json
           APP_E2E_SESSION_FILE_ACCOUNTANT: ${{ runner.temp }}/session.m1-accountant.json
@@ -819,12 +851,18 @@ jobs:
           echo "::error::frontend did not start"; tail -40 "$RUNNER_TEMP/frontend-smoke.log"; exit 1
       - name: Install Playwright (chromium)
         working-directory: e2e
+        env:
+          # The browser CDN is blocked from the CI box network; the box hub seeds this dir through its
+          # proxy (scripts/ops/ci_box/jit_pool/seed_playwright.sh). Empty on hosted runners.
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.environment == 'self-hosted' && (vars.CI_BOX_PLAYWRIGHT_PATH || '/srv/data/ci-jit/ms-playwright') || '' }}
         run: |
           npm ci
-          npx playwright install ${{ runner.environment == 'github-hosted' && '--with-deps ' || '' }}chromium
+          npx playwright install ${{ runner.environment == 'github-hosted' && '--with-deps ' || '' }}chromium \
+            || { [ -z "$PLAYWRIGHT_BROWSERS_PATH" ] || echo "::error::Playwright browsers missing on the box: run scripts/ops/ci_box/jit_pool/seed_playwright.sh as mahanfilms"; exit 1; }
       - name: Run Playwright smoke + axe gate
         working-directory: e2e
         env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.environment == 'self-hosted' && (vars.CI_BOX_PLAYWRIGHT_PATH || '/srv/data/ci-jit/ms-playwright') || '' }}
           E2E_BASE_URL: http://127.0.0.1:3001
           CI: "true"
         run: npx playwright test tests/smoke/ --project=chromium --reporter=list,html
