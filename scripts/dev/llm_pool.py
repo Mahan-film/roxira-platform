@@ -213,7 +213,9 @@ def chat(
             continue
         body: dict[str, Any] = {"model": d.model, "messages": messages, "max_tokens": max_tokens}
         body.update(d.extra_body)
-        headers = {"Authorization": f"Bearer {env[d.key_env]}", "Content-Type": "application/json"}
+        headers = {"Content-Type": "application/json"}
+        if not d.keyless:
+            headers["Authorization"] = f"Bearer {env[d.key_env]}"
         status, data = post(kc.fill_url(d.base_url, env, d.url_vars).rstrip("/") + "/chat/completions", headers, body, timeout)
         if status == 200 and data:
             try:
@@ -254,12 +256,20 @@ def health(pool: dict[str, Any], env: dict[str, str], gateway: str | None, post:
     seen: set[str] = set()
     for g in pool["groups"]:
         for d in kc.group_deployments(pool, g, set(env)):
+            if d.mode == "embedding":
+                continue
             ck = f"{d.provider}|{d.key_env}|{d.model}"
             if ck in seen:
                 continue
             seen.add(ck)
+            headers = {"Content-Type": "application/json"}
+            if not d.keyless:
+                token = env.get(d.key_env, "")
+                if not token:
+                    continue
+                headers["Authorization"] = f"Bearer {token}"
             st, _ = post(kc.fill_url(d.base_url, env, d.url_vars).rstrip("/") + "/chat/completions",
-                         {"Authorization": f"Bearer {env[d.key_env]}", "Content-Type": "application/json"},
+                         headers,
                          {"model": d.model, "messages": ping, "max_tokens": 5, **d.extra_body}, 30.0)
             print(f"{d.provider:16s} {d.key_env:26s} {d.model:34s} {'ok' if st == 200 else st or 'conn'}")
             bad += st != 200

@@ -23,7 +23,7 @@ pool["groups"].pop("embeddings", None)
 with open(sys.argv[1], "w", encoding="utf-8") as fh:
     yaml.safe_dump(pool, fh)
 PY
-export KEYPOOL_CONFIG="$CHAT_POOL"
+export KEY_POOL_CONFIG="$CHAT_POOL"
 
 echo "== direct providers (agent-free, private) =="
 python3 "$HERE/../../dev/llm_pool.py" --health --direct || true
