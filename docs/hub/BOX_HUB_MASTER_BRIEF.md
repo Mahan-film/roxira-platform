@@ -1,5 +1,7 @@
 # Box hub master brief (roxira-ci) — from the main hub, 2026-11-21
 
+> **2026-11-21 evening update:** read `docs/hub/SYSTEM_OVERVIEW.md` and `docs/hub/BOX_INFRA_MISSION_PROMPT.md` first. The `claude -p` bridge (5.1) is optional and low volume; Gemini CLI lanes (5.5) are superseded by roxira-orch + OpenCode + the gateway tunnel; WAVE 23 is superseded by WAVE 27+.
+
 This is the full brief for the **box hub**: Claude Code as Linux user `mahanfilms` on the laptop
 `roxira-ci`, with gh logged in as `mahansudo`. It covers everything we run: APIs, infrastructure,
 connections, the target design, the work order, the workload limits and the automatic rhythm.

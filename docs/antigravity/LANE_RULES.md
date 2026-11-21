@@ -95,3 +95,5 @@ NEW LESSONS:
 QUESTIONS:
 <سؤال برای هماهنگ‌کننده، یا none>
 VERIFIER: RESULT: OK
+
+برای تصویر کلی ماشین‌ها، حساب‌ها و استراتژی فقط وقتی یک ردیف لازم داشت: docs/hub/SYSTEM_OVERVIEW.md را بخوان.

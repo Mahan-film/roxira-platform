@@ -1,5 +1,7 @@
 # Main hub master brief (Mac) — 2026-11-21
 
+> **2026-11-21 evening update:** read `docs/hub/SYSTEM_OVERVIEW.md` first. Where this brief mentions the `claude -p` bridge as the main path to the box, WAVE 23, or Gemini CLI lanes, it is superseded: box lanes now run on roxira-orch + OpenCode + the key-pool gateway (no Claude login), WAVE 27+ is the queue, lane prompts are minimal (`LANE_RULES.md`).
+
 This is the brief for **Claude Code on the owner's Mac**: the main hub. It is written for a Claude
 account that has never seen this project. It mirrors `docs/hub/BOX_HUB_MASTER_BRIEF.md` (the
 laptop side). If this brief and an older doc disagree, this brief and `docs/STATE.md` win. Live

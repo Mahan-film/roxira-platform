@@ -70,6 +70,6 @@ secret, a physical action, sudo on the laptop or a production write. Never name 
 - 164 OSV findings (#1031), CSP report-only, PgBouncer sizing, Redis AOF, 21 tables without FORCE RLS until T200.
 
 ## Key documents
-`docs/hub/MAIN_HUB_MASTER_BRIEF.md`, `docs/hub/BOX_INFRA_MISSION_PROMPT.md`, `docs/antigravity/LANE_RULES.md`, `docs/ops/BOX_LANE_RUNNER.md`,
+`docs/hub/SYSTEM_OVERVIEW.md` (read first), `docs/hub/MAIN_HUB_MASTER_BRIEF.md`, `docs/hub/BOX_INFRA_MISSION_PROMPT.md`, `docs/antigravity/LANE_RULES.md`, `docs/ops/BOX_LANE_RUNNER.md`,
 `docs/ops/ORCH.md`, `docs/ops/BUILDER_EGRESS.md`, `docs/strategy/research/`, `docs/strategy/TECH_RADAR.md`, `docs/STRATEGY_NOW.md`,
 `docs/owner/OWNER_ASKS_FA.md`, `docs/OPERATIONS_RUNBOOK.md` sections 7-8.
