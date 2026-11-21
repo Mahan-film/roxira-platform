@@ -1,41 +1,57 @@
-# R22 digest: unattended agent CLIs on subscription logins (2026-11-21)
+# R22 digest: unattended agent CLIs on subscription logins (2026-11-21, stage 1 + stage 2)
 
-Source: owner-run deep research, stage 1 only (stage 2 skeptical review NOT yet received). Every price,
-limit and date below is "requires primary check" before it drives spend. Facts and decisions are kept apart.
+Source: owner-run deep research, stage 1 and stage 2 (skeptical review). Prices, limits and dates are
+"requires primary check" before they drive spend. Facts and decisions are kept apart.
 
-## Reported facts (unverified until stage 2)
-- Anthropic consumer terms ban bot/script access except via API key or where explicitly permitted.
-  Claude Code docs say subscription limits "assume ordinary, individual usage". A Help Center note
-  (reported 2026-10-07) says `claude -p` and the Agent SDK still draw from subscription limits.
-  Sharing one personal login across several lanes or shared CI is outside "ordinary individual use".
-  EEA consumer terms are reported to say "non-commercial use only" (community reading, unverified).
-- Google: consumer sign-in for Gemini CLI ended 2026-06-18. Antigravity `agy -p` is documented for
-  scripting, but wrapping it inside other agents is reported as unsupported on consumer plans, with
-  403 TOS_VIOLATION waves (latest reported 2026-11-16). A suspension reportedly covers Antigravity,
-  Gemini CLI and Code Assist together; one appeal, then a permanent ban.
-- OpenAI: `codex exec` with an API key is the documented unattended path. Pooling or rotating
-  accounts is forbidden.
-- Running one personal login on two of your own machines is allowed; sharing it with another person
-  or using two personal accounts to multiply quota is not. Proxied or shifting egress raises ban risk
-  for subscription logins, but not for API keys.
-- Reported cheap compliant options for 7 lanes at about USD 10-30 per month: (1) direct paid API keys
-  with tiered routing, (2) OpenCode Go (USD 10) plus overflow, (3) local models plus a small API budget.
+## Verified facts (stage 2)
+- Anthropic Consumer Terms 3.7 ban bot/script access except via an API key or explicit permission
+  (verified). Claude Code docs say plan limits "assume ordinary, individual usage" and are enforced
+  "without prior notice" (verified; canonical URL is now code.claude.com).
+- Help Center (updated 2026-10-30): `claude -p` and the Agent SDK on a subscription still draw from
+  the subscription limits. That is permitted for individual use; it is not a basis for unattended
+  multi-lane infrastructure. Our own bridge hit the 5-hour limit on 2026-11-21 (pilot failed).
+- Google: consumer Gemini CLI sign-in ended 2026-06-18 (verified). Antigravity Additional Terms 6 bans
+  using the service "in connection with products not provided by us" (verified). Google staff
+  approved launching `agy -p` from another agent on 2026-10-05 and reversed it on 2026-11-09:
+  policy whiplash, so never build on it.
+- OpenAI: terms ban credential sharing and rate-limit circumvention (verified). `codex exec` with an
+  API key is the supported unattended path.
+- Planned price rises: Gemini 4 Argon/Carbon on 2026-12-01, Gemini 3.8 Flash on 2027-01-01 (verified).
+- OpenCode Go: the cross-model 5-hour lockout issue was closed as "not planned" (intended behaviour).
+  Stage 2 rates Go unfit for unattended production.
+- Corrections to stage 1: Haiku 5.5 uses a denser tokenizer and adaptive thinking (more billed tokens,
+  nearer the 100K price cliff); the 2h/8h background discount does not fit interactive CLI loops;
+  a 5-minute prompt-cache expiry makes long tool calls expensive.
 
-## Proposed decisions
-1. Mac lanes L1-L4 stay interactive Antigravity chats pasted by the owner. That is ordinary individual
-   use. Never automate them (already a standing rule).
-2. Unattended lanes (L5-L7 and the #965 bridge) must not depend on a consumer login. Target: scoped
-   API keys under one billing organisation, per-lane keys, hard spend caps.
-3. The current bridge runs `claude -p` on the laptop under a personal login. Keep it only for the
-   hub-to-hub bridge at low volume until the owner decides on an API key.
-4. Gemini CLI needs an API key (consumer login is gone). A USD 5 prepay on Gemini API Paid Tier 1 is
-   the cheapest reliable Google option and also gives paid-tier data terms.
-5. Operating rules for every unattended lane: keys injected by systemd EnvironmentFile outside the
-   repo, staggered schedules off the top of the hour, turn and time caps, stable prompt prefixes.
+## Decision
+1. No consumer login (Claude Pro, Antigravity, Gemini consumer) on any unattended path. They stay
+   for each person's own interactive work: one account per person, never rotated or shared.
+2. Lanes L5-L7 run on the existing free-first key-pool gateway (OpenCode + LiteLLM), with paid DeepSeek
+   as the capped last fallback. Stage 2 recommends two paid APIs; we keep free-first by owner
+   decision and add direct OpenAI/Anthropic keys only as a later, capped secondary if the free chain
+   proves unreliable (revisit trigger below).
+3. Rows: T275 (#1078 box lane runner), T276 (#1079 orch), T277 (#1080 gateway audit).
+4. Safety rules for every unattended lane (all go into T275/T276):
+   - per-lane daily dollar/token caps and a circuit breaker, not only a monthly ceiling;
+   - loop guard: ignore bot-authored events, idempotency key per (issue, head sha), draft PRs only,
+     never auto-merge;
+   - issue, comment and log text is untrusted data (prompt injection can use a legitimate token);
+   - structured telemetry per run (lane, model alias, tokens, cost, exit status, git sha);
+   - pin model aliases through config/models.yaml; tolerate API-contract changes between versions;
+   - deterministic scripts first (lint, dependency diff, log regex); LLM only where needed;
+   - stagger schedules off the top of the hour; keys in an EnvironmentFile outside the repo,
+     rotated every 90 days; egress allowlist (gateway tunnel plus Git host).
+5. Treat logs that may contain personal data as PII: scrub before any model call.
 
-## Owner decisions (not taken by the hub)
-- Spend: API key for the bridge and lanes (about USD 10-30 per month), or OpenCode Go (USD 10).
-- Whether the box hub's personal Claude login may keep driving the bridge.
+## Revisit triggers
+Actual spend above USD 30 per month twice in a row; a price rise above 25 percent; human rework of
+agent PRs above 25 percent over 30 days; provider 429/5xx above 5 percent of runs in 14 days; any new
+high-severity advisory in a CLI we run.
+
+## Owner decisions
+- Hard spend caps in each provider console (what the hub cannot set).
+- Whether to add a small direct OpenAI/Anthropic key as secondary (default: later, only on a trigger).
 
 ## Not verified
-All prices, limits and policy quotes. Stage 2 is missing: ask the owner to send it.
+Zed/InfoWorld subsidy ratio; the 2026-10-17 OpenCode console breach (secondary sources only);
+several Gemini price rows; whether a one-seat ChatGPT Business workspace is available in our region.
