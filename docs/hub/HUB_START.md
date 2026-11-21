@@ -22,6 +22,36 @@ needs is in git or in the owner's own secrets folder. Nothing depends on one Cla
 Nothing to move: Claude Code keeps `~/.claude/` (memory, settings) when you log in with another
 account. Log in, open the repo, and say: "Read docs/hub/HUB_START.md and continue."
 
+## 2a. Switching the Mac's Claude account (planned 2026-11-21)
+
+The Mac's Claude login moves to the colleague, now the main owner. The current account moves to
+the Linux laptop. Same macOS user, so `~/.claude/` (memory, settings, local MCPs such as engram,
+codebase-memory and qmd), `~/Secrets/roxira/`, `~/.ssh/config`, the gh logins and the
+`ir.roxira.*` launchd jobs all stay.
+
+What does **not** carry over, because it belongs to the claude.ai account:
+- desktop app session history and the sidebar (this hub's old chats);
+- claude.ai artifacts, cloud routines and connectors. Checked on 2026-11-21: no artifacts, no
+  scheduled tasks and no cron jobs exist, so nothing is lost;
+- plan, models and usage limits. Check them on the new account with `/status`.
+
+Before logging out (old account):
+1. All hub work is merged on `main`, and the handover PR shows **MERGED**.
+2. `python3 scripts/dev/hub_memory.py export` has run, and its diff is committed.
+
+Switch:
+1. In the Claude desktop app, sign out (account menu), then sign in with the colleague's account.
+2. In any terminal Claude Code, run `/logout`, then `/login`.
+3. Open `~/Developer/roxira-platform` and paste the first prompt from §4.
+
+On the Linux laptop (user `mahanfilms`):
+1. Run `claude`, `/logout`, then `/login` with the account that leaves the Mac.
+2. The bridge timer (`claude -p`) uses that login from then on. Check it with
+   `systemctl --user start roxira-bridge.service && journalctl --user -u roxira-bridge -n 20`.
+
+GitHub does not change. If anyone logs gh into a third account, add its numeric id
+(`gh api users/<login> --jq .id`) to `~/.config/roxira-bridge/bridge.toml` on the laptop.
+
 ## 3. New Mac user or new Mac
 
 ```bash
@@ -35,13 +65,21 @@ Then copy `~/Secrets/roxira/` from the old user or machine by hand (USB or passw
 mode 700/600. Never send it through chat, email or git. In git, memory notes show IPs and phone
 numbers as `<ip>` and `<phone>`. The real values are in the SSH config and the secrets folder.
 
+A new macOS user also loses the per-user launchd jobs `ir.roxira.*` (`~/Library/LaunchAgents`:
+backup-pull, reposync, lawwatch, diskguard, mac-cleanup, iranrelay, team-status, llm-tunnel, fleet).
+Copy the plists from the old user, fix the paths, and run `launchctl bootstrap gui/$(id -u) <plist>` for each.
+
 ## 4. First prompt for the new hub
 
 ```text
-You are the Roxira main hub. Read docs/hub/HUB_START.md, then docs/README.md, docs/STATE.md,
-docs/STRATEGY_NOW.md and docs/hub/memory/MEMORY.md (open single notes only when needed).
-Reply to the owner in Persian. Check open PRs (gh pr list -R Mahan-film/roxira-platform),
-the latest WAVE on #592 and the latest comments on #965, then continue the work.
+You are the Roxira main hub on this Mac: chief architect, planner and general manager of the
+project. Read docs/hub/HUB_START.md, docs/hub/MAIN_HUB_MASTER_BRIEF.md, docs/STATE.md and
+docs/hub/memory/MEMORY.md (open single notes only when needed). Do not trust the docs for live
+state: rebuild it from GitHub (gh pr list -R Mahan-film/roxira-platform -L 60; the latest WAVE
+and BOX: comments on #592; the latest WAVE:/REPORT:/ASK-HUB: comments on #965). Then run /status
+and tell me which models and limits this account has. Reply to me in Persian. Continue the work
+in the order of MAIN_HUB_MASTER_BRIEF.md section 7, delegating bulk work to the laptop (#965),
+the Antigravity lanes and cheap subagents.
 ```
 
 ## 5. Keeping the copy fresh
