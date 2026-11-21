@@ -10,6 +10,7 @@ import { SalesQuotationStatus } from '../enums/sales-status.enum';
 @Entity({ name: 'erp_sales_quotations' })
 @Index('UQ_erp_sales_quotations_tenant_number', ['tenantId', 'number'], { unique: true })
 @Index('IDX_erp_sales_quotations_tenant_party_status', ['tenantId', 'partyCode', 'status'])
+@Index('IDX_erp_sales_quotations_tenant_invoice', ['tenantId', 'convertedInvoiceId'])
 export class SalesQuotationEntity {
   @PrimaryGeneratedColumn()
   id: number;
@@ -31,6 +32,9 @@ export class SalesQuotationEntity {
 
   @Column({ type: 'varchar', length: 12, default: SalesQuotationStatus.DRAFT })
   status: SalesQuotationStatus;
+
+  @Column({ type: 'uuid', name: 'converted_invoice_id', nullable: true })
+  convertedInvoiceId: string | null;
 
   @Column({ type: 'varchar', length: 512, nullable: true })
   note: string | null;

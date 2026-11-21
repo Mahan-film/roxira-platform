@@ -71,3 +71,6 @@ export const JUDGE_API_PROXY_BASE_PATH = "/api/judge";
 
 /** Cheque register (received/issued cheques, lifecycle, due list) in NestJS */
 export const CHEQUES_RESOURCE_PATH = "enterprise-hub/cheques";
+
+/** Sales cycle (quotations, orders, deliveries) in NestJS */
+export const SALES_RESOURCE_PATH = "enterprise-hub/sales";
