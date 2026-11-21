@@ -63,7 +63,7 @@ def test_global_cap_env_wins(monkeypatch):
 
 def test_shipped_config_parses():
     cfg = lane_budget.load_config(HERE.parent / "lane_budgets.json")
-    assert set(cfg["lanes"]) >= {"be", "fe", "data", "test", "review"}
+    assert set(cfg["lanes"]) >= {"be", "fe", "data", "test", "review", "l5", "l6", "l7"}
     assert cfg["cost_log"] == "/var/log/roxira-keypool/requests.jsonl"
 
 
