@@ -213,6 +213,37 @@ class T(unittest.TestCase):
         self.assertEqual(att.get_content().strip(), "# سلام")
         m.as_bytes()  # serialises
 
+    def test_default_caps_consistency_and_realistic_payload_sizes(self):
+        caps = eo.Caps.from_env({})
+        self.assertEqual(caps, eo.Caps())
+        self.assertGreaterEqual(caps.max_day_bytes, caps.max_mails * caps.part_bytes)
+        # Typical pgcfg (85 MiB), medium (175 MiB, previously OVER_CAP), large (250 MiB), boundary (340 MiB)
+        for size_mb, expected_parts in [(85, 5), (175, 11), (250, 15), (340, 20)]:
+            size = size_mb * eo.MB
+            n_parts = -(-size // caps.part_bytes)
+            self.assertEqual(n_parts, expected_parts)
+            self.assertIsNone(eo.check_caps(size, n_parts, caps, 0))
+        # Over-cap above 20 mails (360 MiB -> 22 parts)
+        over_size = 360 * eo.MB
+        over_parts = -(-over_size // caps.part_bytes)
+        self.assertIn("per-run cap", eo.check_caps(over_size, over_parts, caps, 0))
+
+    def test_real_payload_size_175mb_plan_and_split(self):
+        """Exercise plan_offsite with a real 175 MiB age-header file under default Caps()."""
+        src = self.d / "roxira-offsite-2026-11-21.tar.age"
+        total_size = 175 * eo.MB
+        with open(src, "wb") as fh:
+            fh.write(eo.AGE_MAGIC + b"\n")
+            fh.truncate(total_size)
+        manifest, parts = eo.plan_offsite(src, self.d / "parts_175m", "2026-11-21", "prod", eo.Caps())
+        self.assertEqual(manifest["status"], "OK")
+        self.assertEqual(len(parts), 11)
+        self.assertEqual(sum(p.size for p in parts), total_size)
+        self.assertTrue(all(p.size <= eo.Caps().part_bytes for p in parts))
+        joined = self.d / "joined_175m.tar.age"
+        sha = eo.join_parts([Path(p.path) for p in parts], joined)
+        self.assertEqual(sha, manifest["source"]["sha256"])
+
 
 if __name__ == "__main__":
     unittest.main()
