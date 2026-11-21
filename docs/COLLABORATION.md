@@ -24,6 +24,17 @@ Code sessions, work on this repository at the same time. This page is the agreed
 - **هر کس با حساب Claude خودش کار کند.** استفاده مشترک از یک حساب طبق قوانین Anthropic مجاز نیست.
 - **هر نفر یک کامپیوتر.** ریپو، issueها، PRها و سرور مشترک‌اند؛ کامپیوتر، حساب‌ها و کلیدها جدا. هر عامل با `claim.sh <n> --agent <ابزار>` شروع می‌شود و اسم صاحبش خودکار روی شاخه می‌آید، پس `team_status.py` نشان می‌دهد عامل‌های هر نفر الان روی چه کاری هستند.
 
+## Pruning old worktrees (Mac)
+
+`bash scripts/ops/prune_worktrees.sh` lists every worktree of the repo (except the main checkout and the one you
+run it from) and classifies it: SAFE (clean incl. untracked, no OPEN PR on its branch, HEAD is a PR head or on a
+remote branch) or kept as DIRTY, LOCKED, OPEN_PR, NO_PR, UNPUSHED or UNKNOWN (`gh` failed; fail closed). It is a
+dry run by default and writes a report (counts and sizes per class; dirty files, unpushed commits and last commit
+date for each kept worktree; sizes of regenerable caches). `--apply` runs plain `git worktree remove <path>` (never
+`--force`) for SAFE worktrees only; branches are never deleted. `--fetch` refreshes remote refs first. Caches are
+only sized; the report prints opt-in commands to run by hand. Test: `bash scripts/ops/test_prune_worktrees.sh`.
+Weekly example (not installed): `scripts/ops/com.roxira.prune-worktrees.plist.example`.
+
 ## The rules
 
 1. **One task = one GitHub issue.** Small and concrete, with an acceptance test in the body.
