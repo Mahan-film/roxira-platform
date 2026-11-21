@@ -1,4 +1,8 @@
 [Unit]
+# Restart=always with a short delay never trips the default start limit, so the unit never reaches
+# `failed` and OnFailure never fires. 10 starts in 10 minutes -> failed -> Telegram alert.
+StartLimitIntervalSec=600
+StartLimitBurst=10
 Description=Smart Judge Persian phone agent (LiveKit SIP)
 After=docker.service network-online.target voice-ai-tts.service
 Wants=network-online.target voice-ai-tts.service
@@ -16,7 +20,7 @@ Environment=PROXY_URL=http://127.0.0.1:10809
 Environment=MODELS_YAML=/usr/local/lib/phone-stack/models.yaml
 ExecStart=/usr/bin/node --max-old-space-size=384 dist/main.js
 Restart=always
-RestartSec=3
+RestartSec=5
 KillSignal=SIGTERM
 TimeoutStopSec=15
 MemoryMax=700M
