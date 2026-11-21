@@ -3,8 +3,10 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
+import { BudgetControlService } from '../../accounting/services/budget-control.service';
 import { PostingRulesService } from '../../posting_rules/services/posting-rules.service';
 import { mergeRoleAccounts } from '../../invoicing/services/invoice-voucher';
 import { TenantScope } from '../../access/services/tenant-scope';
@@ -12,6 +14,7 @@ import { InventoryService } from '../services/inventory.service';
 import { StockDocumentsService } from '../services/stock-documents.service';
 import {
   assertTransition,
+  orderTotal,
   planReceipt,
   PurchaseDomainError,
   ReceiptPlan,
@@ -80,6 +83,8 @@ function toOrderResponse(order: PurchaseOrder): PurchaseOrderResponseDto {
     })),
     requestId: order.requestId,
     orderDate: order.orderDate,
+    accountCode: order.accountCode ?? null,
+    costCenterCode: order.costCenterCode ?? null,
     approvedBy: order.approvedBy,
     approvedAt: order.approvedAt,
     createdAt: order.createdAt,
@@ -148,6 +153,7 @@ export class PurchaseCycleService {
     private readonly inventory: InventoryService,
     private readonly stockDocuments: StockDocumentsService,
     private readonly postingRules: PostingRulesService,
+    @Optional() private readonly budgetControl?: BudgetControlService,
   ) {}
 
   /** Domain errors become 400 for a bad line/unknown line, 409 for every other rule refusal. */
@@ -312,6 +318,8 @@ export class PurchaseCycleService {
           warehouseId: dto.warehouseId ?? null,
           requestId: null,
           orderDate: dto.orderDate,
+          accountCode: dto.accountCode?.trim() || null,
+          costCenterCode: dto.costCenterCode?.trim() || null,
           lines,
         },
         manager,
@@ -329,6 +337,21 @@ export class PurchaseCycleService {
       const order = await this.repository.findOrder(tenantId, orderId, manager, true);
       if (!order) throw new NotFoundException(NOT_FOUND_ORDER);
       this.transitionOrThrow(order.status, PurchaseOrderStatus.APPROVED);
+      let budgetWarning: string | undefined;
+      if (this.budgetControl && order.accountCode) {
+        const decision = await this.budgetControl.checkAndEncumberPo(
+          tenantId,
+          {
+            accountCode: order.accountCode,
+            costCenterCode: order.costCenterCode ?? null,
+            periodKey: order.orderDate.slice(0, 7),
+            sourceId: order.id,
+            amountMinor: orderTotal(order),
+          },
+          manager,
+        );
+        budgetWarning = decision.warning;
+      }
       const approvedAt = new Date();
       await this.repository.updateOrderStatus(
         tenantId,
@@ -337,12 +360,15 @@ export class PurchaseCycleService {
         manager,
         { approvedBy: userId, approvedAt },
       );
-      return toOrderResponse({
-        ...order,
-        status: PurchaseOrderStatus.APPROVED,
-        approvedBy: userId,
-        approvedAt,
-      });
+      return {
+        ...toOrderResponse({
+          ...order,
+          status: PurchaseOrderStatus.APPROVED,
+          approvedBy: userId,
+          approvedAt,
+        }),
+        ...(budgetWarning ? { budgetWarning } : {}),
+      };
     });
   }
 
@@ -356,6 +382,7 @@ export class PurchaseCycleService {
       if (!order) throw new NotFoundException(NOT_FOUND_ORDER);
       this.transitionOrThrow(order.status, PurchaseOrderStatus.CANCELLED);
       await this.repository.updateOrderStatus(tenantId, order.id, PurchaseOrderStatus.CANCELLED, manager);
+      await this.budgetControl?.releaseEncumbrance(tenantId, 'purchase_order', order.id, manager);
       return toOrderResponse({ ...order, status: PurchaseOrderStatus.CANCELLED });
     });
   }
@@ -370,6 +397,7 @@ export class PurchaseCycleService {
       if (!order) throw new NotFoundException(NOT_FOUND_ORDER);
       this.transitionOrThrow(order.status, PurchaseOrderStatus.CLOSED);
       await this.repository.updateOrderStatus(tenantId, order.id, PurchaseOrderStatus.CLOSED, manager);
+      await this.budgetControl?.releaseEncumbrance(tenantId, 'purchase_order', order.id, manager);
       return toOrderResponse({ ...order, status: PurchaseOrderStatus.CLOSED });
     });
   }
