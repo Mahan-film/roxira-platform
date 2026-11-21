@@ -140,7 +140,6 @@ export class AccountingController {
       idempotencyKey ? { ...dto, idempotencyKey } : dto,
       undefined,
       {
-        isSystem: false,
         actorRole: this.actorRoleOf(request),
         actorUserId: this.actorUserIdOf(request),
       },
@@ -190,11 +189,6 @@ export class AccountingController {
       this.tenantIdOf(request),
       id,
       dto,
-      {
-        isSystem: false,
-        actorRole: this.actorRoleOf(request),
-        actorUserId: request.user?.sub ?? null,
-      },
     );
   }
 
@@ -216,7 +210,6 @@ export class AccountingController {
       id,
       dto,
       {
-        isSystem: false,
         actorRole: this.actorRoleOf(request),
         actorUserId: this.actorUserIdOf(request),
       },
@@ -245,7 +238,6 @@ export class AccountingController {
       dto.expectedVersion,
       this.actorOf(request),
       {
-        isSystem: false,
         actorRole: this.actorRoleOf(request),
         actorUserId: this.actorUserIdOf(request),
       },
