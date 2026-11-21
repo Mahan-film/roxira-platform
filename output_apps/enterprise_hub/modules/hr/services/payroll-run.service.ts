@@ -156,7 +156,7 @@ export class PayrollRunService {
       )) as Partial<PayrollYearRates> | null | undefined;
       if (packRates && typeof packRates === 'object' && Object.keys(packRates).length > 0) {
         const valid =
-          typeof packRates.year === 'number' &&
+          packRates.year === year &&
           typeof packRates.minDailyWage === 'number' &&
           typeof packRates.minMonthlyWage === 'number' &&
           typeof packRates.monthlyWorkHours === 'number' &&
@@ -166,7 +166,7 @@ export class PayrollRunService {
           Array.isArray(packRates.annualTaxBrackets) &&
           Boolean(packRates.insuranceRates && typeof packRates.insuranceRates === 'object');
         if (!valid) {
-          throw new BadRequestException('Country pack payroll adapter returned invalid PayrollYearRates');
+          throw new BadRequestException(`Country pack payroll adapter returned invalid PayrollYearRates for year ${year} (missing, mistyped or wrong-year fields)`);
         }
         return packRates as PayrollYearRates;
       }
