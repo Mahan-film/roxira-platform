@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """CI runtime licence gate (T252 / #991).
 
-Scans runtime lockfiles (Node package-lock.json) and container/Python dependency
-manifests for Smart Judge, voice, and core services. Fails on forbidden runtime
-licences: GPL, AGPL, SSPL, RSAL, CC-BY-NC, ELv2 (Elastic-2.0), unless explicitly
-listed in config/licence_allowlist.txt with a documented reason.
+Scans runtime Node lockfiles (package-lock.json) and container image references
+in Dockerfiles and docker-compose manifests. Fails on forbidden runtime licences:
+GPL, AGPL, SSPL, RSAL, CC-BY-NC, ELv2 (Elastic-2.0), unless explicitly listed in
+config/licence_allowlist.txt with a documented reason.
 
 Usage:
   python3 scripts/ci/check_runtime_licences.py [--root <dir>] [--allowlist <file>]
@@ -51,7 +51,30 @@ PERMISSIVE_RE = re.compile(
 
 # Known forbidden base images / packages when referenced in Dockerfiles or compose.
 FORBIDDEN_IMAGE_PATTERNS: list[tuple[str, str, re.Pattern[str]]] = [
-    ("redis:8+", "RSAL/SSPL/AGPL", re.compile(r"(?:image:\s*|FROM\s+)(?:docker\.io/library/)?redis:8(?:\.[0-9]+)?", re.IGNORECASE)),
+    (
+        "redis:7.4+",
+        "RSAL/SSPL/AGPL",
+        re.compile(
+            r"(?:image:\s*|FROM\s+)(?:docker\.io/library/)?redis:(?:7\.[4-9]|[8-9]|[1-9][0-9])(?:\.[0-9]+)?",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "mongo:7+",
+        "SSPL",
+        re.compile(
+            r"(?:image:\s*|FROM\s+)(?:docker\.io/library/)?mongo:(?:[7-9]|[1-9][0-9]|latest)(?:\.[0-9]+)?",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "elasticsearch:8+",
+        "ELv2/SSPL",
+        re.compile(
+            r"(?:image:\s*|FROM\s+)(?:docker\.elastic\.co/elasticsearch/|docker\.io/library/)?elasticsearch:(?:[8-9]|[1-9][0-9]|latest)(?:\.[0-9]+)?",
+            re.IGNORECASE,
+        ),
+    ),
 ]
 
 
