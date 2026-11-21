@@ -461,10 +461,13 @@ export class ImportTieOutEngine {
       );
       const normDesc = normaliseFaPatternText(rawDesc);
 
-      // Priority 1: exact account code match (never falls through to name substring match).
-      let matched = categories.filter((c) => code !== '' && c.rule.accountCodes.includes(code));
-      // Priority 2: bounded pattern match on normalized description when no exact code matched.
-      if (matched.length === 0 && normDesc !== '') {
+      // Priority 1: exact account code match. When account code is present, match ONLY by exact code;
+      // never fall through to name pattern or substring match.
+      let matched: typeof categories = [];
+      if (code !== '') {
+        matched = categories.filter((c) => c.rule.accountCodes.includes(code));
+      } else if (normDesc !== '') {
+        // Priority 2: bounded whole-word pattern match on normalized description only when account code is absent.
         matched = categories.filter((c) =>
           c.rule.namePatterns.some((p) => matchesBoundedPattern(normDesc, p)),
         );
@@ -598,20 +601,25 @@ export class ImportTieOutEngine {
 
     if (!hasControl && !(tb.found && hasSubledger)) {
       warningsFa.push(missingWarning);
-      if (!requireSubledgerOrControl) return null;
+      // AP check without controlTotal or counterpart subledger must fail (never silently pass).
+      if (!requireSubledgerOrControl && category !== 'ACCOUNTS_PAYABLE') return null;
       const presentUnits = hasSubledger ? subledgerUnits : tb.balance;
+      const actualMoney = formatTieOutMoney(presentUnits, currency);
       return {
         category,
         name,
-        expectedMinor: '0',
-        expectedMoney: formatTieOutMoney(0n, currency),
+        expectedMinor: 'انجام نشد',
+        expectedMoney: 'انجام نشد',
         actualMinor: presentUnits.toString(),
-        actualMoney: formatTieOutMoney(presentUnits, currency),
-        differenceMinor: presentUnits.toString(),
-        differenceMoney: formatTieOutMoney(presentUnits < 0n ? -presentUnits : presentUnits, currency),
+        actualMoney,
+        differenceMinor: 'انجام نشد',
+        differenceMoney: 'انجام نشد',
         currency,
         matched: false,
-        blockerFa: missingWarning,
+        blockerFa:
+          category === 'ACCOUNTS_PAYABLE'
+            ? `کنترل حساب‌های پرداختنی (AP): مانده معین پرداختنی در افتتاحیه (${actualMoney}) بدون صورتحساب‌های خرید باز یا مبلغ کنترل تاییدشده قابل تایید نیست؛ وارد کردن صورتحساب‌های باز یا مبلغ کنترل الزامی است.`
+            : missingWarning,
       };
     }
 
