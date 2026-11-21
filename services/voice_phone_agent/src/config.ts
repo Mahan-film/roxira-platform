@@ -88,7 +88,8 @@ export const cfg = {
     + 'If there is no clearly intelligible speech, output nothing.'),
   openaiKey: str('OPENAI_API_KEY'),
   openaiSttModel: str('OPENAI_STT_MODEL', defaultOpenaiSttModel),
-  // Whisper vocabulary hint. Whisper keeps only the LAST ~224 prompt tokens, so LEGAL_VOCAB ends with
+  // Whisper vocabulary hint. Whisper uses only the LAST 224 prompt tokens (OpenAI docs; not measured
+  // on Groq), so LEGAL_VOCAB ends with
   // the most important terms; keep the total no longer than the 2026-11 prompt (~330 characters).
   // Terms come from real phone-call misrecognitions (legal-terms.ts).
   sttPrompt: str('STT_PROMPT', `پرسش حقوقی تلفنی: ${LEGAL_VOCAB.join('، ')}.`),

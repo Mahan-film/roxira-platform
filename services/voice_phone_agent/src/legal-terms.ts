@@ -2,8 +2,9 @@
  * Persian legal vocabulary for the phone STT, and a small post-STT repair for misrecognitions
  * seen on real calls.
  *
- * - LEGAL_VOCAB feeds the Whisper prompt and the Gemini prompt (config.ts). Whisper keeps only the
- *   LAST ~224 prompt tokens, so the most important terms go at the END of the list.
+ * - LEGAL_VOCAB feeds the Whisper prompt and the Gemini prompt (config.ts). Per the OpenAI Whisper
+ *   docs only the LAST 224 prompt tokens are used (not measured on Groq), so the most important
+ *   terms go at the END of the list.
  * - repairLegalTerms() fixes exact misrecognitions from real calls. It is a patch, not the cure:
  *   the cure is a better STT path (Gemini hybrid needs GEMINI_API_KEY, #989).
  *   The Smart Judge server runs its own repair (legal_phonetics.repair_legal_phonetics) on every
@@ -13,7 +14,7 @@
  */
 
 /**
- * Ordered least to most important (Whisper truncates the prompt from the front). The prompt stays
+ * Ordered least to most important (Whisper is documented to drop the front of a long prompt). The prompt stays
  * about as long as the 2026-11-15 one (~335 characters); to make room for the 2026-11-21 terms,
  * rarely-misheard ones were dropped (واخواهی، فرجام‌خواهی، بازپرس، اعسار، انحصار وراثت، سفته، قولنامه،
  * اجاره‌نامه، آیین دادرسی).
@@ -24,7 +25,9 @@ export const LEGAL_VOCAB: readonly string[] = [
   'دیوان عدالت اداری', 'دیوان عالی کشور',
   // 2026-11-21 call: each of these was misheard
   'بخشنامه', 'آیین‌نامه', 'تخلفات انتظامی وکلا', 'دادگاه عالی انتظامی قضات', 'قانون مبارزه با پولشویی',
-  'قوه قضاییه', 'آخرین آرای وحدت رویه',
+  // no آخرین here: a bare "آخرین آرای وحدت رویه" read back from the prompt on line noise would
+  // trigger the server's "latest rulings" answer
+  'قوه قضاییه', 'آرای وحدت رویه',
 ];
 
 interface Rule { re: RegExp; to: string; seen: string }
