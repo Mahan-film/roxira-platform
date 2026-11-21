@@ -1,0 +1,8 @@
+[Unit]
+Description=Roxira JIT runner pool controller (one tick, R20-8)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 %h/roxira-jit/jit_pool.py --config %h/.config/roxira-jit/jit_pool.toml
+TimeoutStartSec=120
+Nice=10
