@@ -15,7 +15,20 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
+
+from output_apps.generated_modules.smartjudge.authority_tiers import (
+    AUTHORITY_TIER_1,
+    AUTHORITY_TIER_2,
+    BILL_NOT_YET_LAW_SENTENCE,
+    STATUS_BILL_UNENACTED,
+    STATUS_REPEALED,
+    filter_tier_1_2_enacted,
+    has_authoritative_chunk,
+    has_bill_chunk,
+    resolve_chunk_authority_tier,
+    resolve_chunk_status,
+)
 
 # Re-use digit translation
 _DIGIT_MAP = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
@@ -35,9 +48,10 @@ def norm(text: Any) -> str:
 @dataclass
 class AbstentionDecision:
     should_abstain: bool
-    reason: Optional[str] = None  # "low_score" | "version_conflict" | "out_of_scope" | "false_premise" | "no_as_of_version"
+    reason: Optional[str] = None  # "low_score" | "version_conflict" | "out_of_scope" | "false_premise" | "no_as_of_version" | "unofficial_only" | "bill_unenacted" | "repealed_only"
     message: Optional[str] = None
     details: Dict[str, Any] = field(default_factory=dict)
+    notices: List[str] = field(default_factory=list)
 
 
 def _parse_date_tuple(raw: Any) -> Optional[Tuple[int, int, int]]:
@@ -211,8 +225,10 @@ def evaluate_abstention_gate(
     rerank_threshold: float = DEFAULT_RERANK_THRESHOLD,
     as_of_date: Optional[str] = None,
     require_grounding: bool = True,
+    tier_1_2_fallback: Optional[Callable[[str], Sequence[dict]]] = None,
+    enforce_authority_tier: bool = True,
 ) -> AbstentionDecision:
-    """Evaluates the 4 hard abstention rules (R6 Decision 3)."""
+    """Evaluates the hard abstention rules (R6 Decision 3 + T238 authority tiers)."""
     # 0. As-of date validity check
     if as_of_date:
         valid_chunks = filter_by_as_of(retrieved_chunks, as_of_date)
@@ -269,7 +285,57 @@ def evaluate_abstention_gate(
             details={"query": query},
         )
 
-    return AbstentionDecision(should_abstain=False)
+    # Rule 5 (T238): Repealed-only chunks without as_of_date cannot ground a current answer
+    if not as_of_date and retrieved_chunks:
+        if all(resolve_chunk_status(c) == STATUS_REPEALED for c in retrieved_chunks if isinstance(c, dict)):
+            return AbstentionDecision(
+                should_abstain=True,
+                reason="repealed_only",
+                message="تمامی مستندات بازیابی‌شده منسوخ یا ملغی شده‌اند و قانون لازم‌الاجرای معتبری یافت نشد.",
+                details={"chunks_count": len(retrieved_chunks)},
+            )
+
+    # Rule 6 (T238): Authority tier gate — top-5 must contain at least one Tier 1 or Tier 2
+    # enacted/amended chunk; otherwise run one fallback search restricted to Tiers 1-2.
+    notices: List[str] = []
+    if enforce_authority_tier and retrieved_chunks:
+        top_5 = list(retrieved_chunks)[:5]
+        bill_present = has_bill_chunk(top_5, top_k=5)
+        if bill_present:
+            notices.append(BILL_NOT_YET_LAW_SENTENCE)
+
+        if not has_authoritative_chunk(top_5, top_k=5):
+            fallback_hits: List[dict] = []
+            fallback_attempted = False
+            if tier_1_2_fallback is not None:
+                fallback_attempted = True
+                raw_fallback = tier_1_2_fallback(query) or []
+                fallback_hits = filter_tier_1_2_enacted(raw_fallback)
+
+            if fallback_hits:
+                return AbstentionDecision(
+                    should_abstain=False,
+                    details={"fallback_used": True, "fallback_hits": len(fallback_hits)},
+                    notices=notices,
+                )
+
+            if bill_present:
+                return AbstentionDecision(
+                    should_abstain=True,
+                    reason="bill_unenacted",
+                    message=BILL_NOT_YET_LAW_SENTENCE,
+                    details={"fallback_attempted": fallback_attempted},
+                    notices=[BILL_NOT_YET_LAW_SENTENCE],
+                )
+
+            return AbstentionDecision(
+                should_abstain=True,
+                reason="unofficial_only",
+                message="مستند رسمی یا شبه‌رسمی (سطح ۱ یا ۲) برای پاسخ به این پرسش یافت نشد و منابع غیررسمی به تنهایی کافی نیستند.",
+                details={"fallback_attempted": fallback_attempted},
+            )
+
+    return AbstentionDecision(should_abstain=False, notices=notices)
 
 
 def deterministic_citation_check(
