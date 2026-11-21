@@ -9,7 +9,8 @@
     "start": "node --max-old-space-size=384 dist/main.js",
     "dev": "tsx src/main.ts",
     "tts": "/home/mahan/voice-ai/.venv/bin/python tts_server.py",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test src/*.test.ts"
   },
   "dependencies": {
     "@livekit/rtc-node": "^1.2.2",
