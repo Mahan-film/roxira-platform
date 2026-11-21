@@ -1,0 +1,105 @@
+{
+  "_meta": {
+    "purpose": "Seed for the nightly Smart Judge eval (#987 T248): the owner's questions from the phone test call of 2026-11-21, where most answers were non-answers. Text only: no caller number, no audio, no room name.",
+    "type": "integration eval: calls the live chat endpoint and therefore LLMs; NOT run in unit CI. Only the file shape is checked in CI (src/test_phone_owner_eval_seed.py).",
+    "run": "python3 scripts/eval_chat_golden.py --set data/eval/chat_golden/phone_owner_2026-11-21.json --voice --base-url https://<host> (voice mode, as the phone line asks); without --voice = text mode. --validate checks the file offline.",
+    "status": "DRAFT. Every key point is verify=TO-VERIFY: written at law-name level, NOT checked by a lawyer; do not treat as ground truth until it is.",
+    "matching": "Same as golden_set.json. must_mention: each item is a list of alternative substrings (any one matches, after digit/ZWNJ normalisation). must_not_mention: regexes that must NOT appear; here they catch the non-answers of the real call (clarifying question instead of an answer, 'not in my sources').",
+    "fields": "question = what the caller meant (wording: 'stt_fixed' = the transcript with the misheard terms corrected, 'inferred' = part of the transcript was unintelligible, see notes). stt_heard = what Whisper produced on the call (for STT repair regression, #989). channel = the channel the question came from."
+  },
+  "cases": [
+    {
+      "id": "phone-latest-judiciary-circulars",
+      "channel": "voice",
+      "question": "آخرین بخشنامه قوه قضاییه چی بوده؟",
+      "wording": "stt_fixed",
+      "stt_heard": "آخرین بخشنامه قول به غذایی چی بوده؟",
+      "must_mention": [
+        {"any_of": ["بخشنامه"], "fact": "answers about circulars (بخشنامه) of the judiciary", "verify": "TO-VERIFY"},
+        {"any_of": ["قوه قضاییه", "رئیس قوه", "ریاست قوه"], "fact": "names the judiciary or its head as the issuer", "verify": "TO-VERIFY"}
+      ],
+      "must_not_mention": [
+        {"pattern": "قول به غذایی", "reason": "echoes the STT error instead of the term", "verify": "TO-VERIFY"},
+        {"pattern": "کمی (بیشتر|دقیق\\s?تر) (توضیح|بگویید)|منظورتان (کدام|چیست)|متوجه منظورتان نشدم", "reason": "clarifying question instead of an answer (2026-11-21 call)", "verify": "TO-VERIFY"}
+      ],
+      "notes": "Needs a circulars feed or a dated 'latest' path; the regulations collection holds CBI circulars and deregulation-board resolutions, not judiciary circulars."
+    },
+    {
+      "id": "phone-disciplinary-offences-judges-lawyers",
+      "channel": "voice",
+      "question": "تخلفات انتظامی قضات که در دادگاه عالی انتظامی قضات رسیدگی می‌شود چی‌ها هستش و تخلفات انتظامی وکلا چی‌ها هستش؟",
+      "wording": "stt_fixed",
+      "stt_heard": "انامه‌بیره تخلافات دادگاه عالی انتظامی قضاک انتظامی چی ها هستش و انتظامی وکلا چی ها هستش؟",
+      "must_mention": [
+        {"any_of": ["قانون نظارت بر رفتار قضات"], "fact": "judges' disciplinary offences are listed in قانون نظارت بر رفتار قضات", "verify": "TO-VERIFY"},
+        {"any_of": ["دادگاه عالی انتظامی قضات", "دادگاه عالی انتظامی"], "fact": "names the disciplinary court for judges", "verify": "TO-VERIFY"},
+        {"any_of": ["لایحه قانونی استقلال کانون وکلا", "استقلال کانون وکلای دادگستری"], "fact": "lawyers' disciplinary offences and penalties come from the لایحه قانونی استقلال کانون وکلای دادگستری and its آیین‌نامه", "verify": "TO-VERIFY"},
+        {"any_of": ["دادگاه انتظامی وکلا", "دادسرای انتظامی وکلا", "دادسرا و دادگاه انتظامی"], "fact": "names the bar's disciplinary prosecutor/court for lawyers", "verify": "TO-VERIFY"}
+      ],
+      "must_not_mention": [
+        {"pattern": "قضاک", "reason": "echoes the STT error", "verify": "TO-VERIFY"},
+        {"pattern": "برای من موجود نیست|یافت نشد|در منابع (بازیابی|موجود)", "reason": "'not in my sources' for a basic, well-known list (2026-11-21 call)", "verify": "TO-VERIFY"}
+      ]
+    },
+    {
+      "id": "phone-latest-aml-law",
+      "channel": "voice",
+      "question": "آخرین قانون مبارزه با پولشویی چی‌ها بوده؟",
+      "wording": "inferred",
+      "stt_heard": "آخرین وعی چیز فرقی که ساده شده و آخرین قانون موردان برشویش چی ها بوده؟",
+      "must_mention": [
+        {"any_of": ["قانون مبارزه با پولشویی"], "fact": "names قانون مبارزه با پولشویی", "verify": "TO-VERIFY"},
+        {"any_of": ["اصلاح", "1397"], "fact": "mentions the later amendment of the law (believed 1397)", "verify": "TO-VERIFY"}
+      ],
+      "must_not_mention": [
+        {"pattern": "موردان|برشویش", "reason": "echoes the STT error", "verify": "TO-VERIFY"},
+        {"pattern": "کمی (بیشتر|دقیق\\s?تر) (توضیح|بگویید)|منظورتان (کدام|چیست)|متوجه منظورتان نشدم", "reason": "clarifying question instead of an answer (2026-11-21 call)", "verify": "TO-VERIFY"}
+      ],
+      "notes": "The first half of the turn was unintelligible on the call (maybe a second 'latest ...' question); only the AML part is kept."
+    },
+    {
+      "id": "phone-latest-unity-rulings",
+      "channel": "voice",
+      "question": "آخرین آرای وحدت رویه چه بوده؟",
+      "wording": "stt_fixed",
+      "stt_heard": "آخر آرای عدی بستا سویه چه بوده؟",
+      "must_mention": [
+        {"any_of": ["وحدت رویه"], "fact": "answers about unity rulings", "verify": "TO-VERIFY"},
+        {"any_of": ["دیوان عالی کشور", "هیئت عمومی", "هیأت عمومی"], "fact": "names the issuer (هیئت عمومی دیوان عالی کشور)", "verify": "TO-VERIFY"},
+        {"any_of": ["شماره"], "fact": "names at least one recent ruling by number (catalog path)", "verify": "TO-VERIFY"}
+      ],
+      "must_not_mention": [
+        {"pattern": "عدی بستا|سویه", "reason": "echoes the STT error", "verify": "TO-VERIFY"},
+        {"pattern": "برنخوردم|دیده نمی\\s?شود", "reason": "'not found' for the catalog question (2026-11-21 call)", "verify": "TO-VERIFY"}
+      ],
+      "notes": "The server's catalog intent (catalog_intent.py) answers this from the rulings collection, but only when the words آخرین + وحدت رویه reach it."
+    },
+    {
+      "id": "phone-what-can-you-write",
+      "channel": "voice",
+      "question": "مثلاً برای من چی می‌تونی بنویسی؟",
+      "wording": "stt_fixed",
+      "stt_heard": "مثلا برای من چی می‌تونی بنویسی؟",
+      "must_mention": [
+        {"any_of": ["دادخواست"], "fact": "offers to draft a petition", "verify": "TO-VERIFY"},
+        {"any_of": ["شکوائیه", "شکواییه", "لایحه", "اظهارنامه"], "fact": "names at least one more document type", "verify": "TO-VERIFY"}
+      ],
+      "must_not_mention": []
+    },
+    {
+      "id": "phone-fight-public-vs-private-place",
+      "channel": "voice",
+      "question": "اگر درگیری در خیابان و محل عمومی باشد با درگیری داخل خانه و محل خصوصی، آیا از نظر قانون فرق می‌کند؟",
+      "wording": "inferred",
+      "stt_heard": "الان توی یک درگیری اختیارمونی و یک درگیری که مثلا توی خونه هستش آیا قانون فرق می در محل اومده و یا در محل خصوصی؟",
+      "must_mention": [
+        {"any_of": ["ضرب و جرح", "دیه", "صدمه"], "fact": "the injury itself (ضرب و جرح / دیه) is punishable in both places", "verify": "TO-VERIFY"},
+        {"any_of": ["نظم عمومی", "اخلال در نظم", "نزاع دسته جمعی", "محل عمومی", "اماکن عمومی"], "fact": "a public place can add offences (disturbing public order, group fight)", "verify": "TO-VERIFY"}
+      ],
+      "must_not_mention": [
+        {"pattern": "منظورتان (کدام|چیست)|کمی (بیشتر|دقیق\\s?تر) (توضیح|بگویید)", "reason": "clarifying question instead of an answer (2026-11-21 call)", "verify": "TO-VERIFY"}
+      ],
+      "notes": "On the call the agent removed the first half as 'echo' (fixed in #989), so Smart Judge only got the second half. 'اختیارمونی' is read here as خیابونی (street); inferred."
+    }
+  ]
+}
