@@ -6,6 +6,7 @@ import { FifoBatchEntity } from '../inventory/entities/fifo-batch.entity';
 import { StockItemEntity } from '../inventory/entities/stock-item.entity';
 import { WarehouseEntity } from '../inventory/entities/warehouse.entity';
 import { InventoryRepository } from '../inventory/repositories/inventory.repository';
+import { TenantScope } from '../access/services/tenant-scope';
 import { StockDocumentsRepository } from '../inventory/repositories/stock-documents.repository';
 import { InventoryService } from '../inventory/services/inventory.service';
 import { InvoiceEntity } from './entities/invoice.entity';
@@ -43,7 +44,7 @@ describePg('invoice kinds on PostgreSQL', () => {
         testDb.app.getRepository(WarehouseEntity),
         testDb.app.getRepository(StockItemEntity),
         testDb.app.getRepository(FifoBatchEntity),
-        testDb.app,
+        testDb.app, new TenantScope(testDb.app),
       ),
     );
     invoicing = new InvoicingRepository(testDb.app.getRepository(InvoiceEntity), testDb.app);

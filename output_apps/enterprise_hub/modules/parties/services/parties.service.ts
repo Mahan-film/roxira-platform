@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { AuditService } from '../../access/services/audit.service';
 import { fromMinor, toMinor } from '../../accounting/money';
 import { CustomerGroup } from '../enums/customer-group.enum';
 import { PartyEntity } from '../entities/party.entity';
@@ -10,22 +11,24 @@ import {
   UpdatePartyDto,
 } from '../dto/party.dto';
 import { PartyInput, PartiesRepository, PartyPatch, UpsertedPartyRow } from '../repositories/parties.repository';
+import { ERASED_PARTY_NAME } from './party-crypto';
 
 const DUPLICATE_CODE_MESSAGE = 'کد طرف حساب تکراری است.';
 const NOT_FOUND_MESSAGE = 'طرف حساب یافت نشد.';
 
 /** Entity -> API shape; pure so the importer and tests can reuse it. */
 export function toPartyResponse(party: PartyEntity): PartyResponseDto {
+  const erased = Boolean(party.erasedAt);
   return {
     id: party.id,
     code: party.code,
-    name: party.name,
+    name: erased ? ERASED_PARTY_NAME : party.name,
     role: party.role,
-    nationalId: party.nationalId ?? null,
-    economicCode: party.economicCode ?? null,
-    phone: party.phone ?? null,
-    email: party.email ?? null,
-    active: party.active,
+    nationalId: erased ? null : (party.nationalId ?? null),
+    economicCode: erased ? null : (party.economicCode ?? null),
+    phone: erased ? null : (party.phone ?? null),
+    email: erased ? null : (party.email ?? null),
+    active: erased ? false : party.active,
     creditLimit: party.creditLimit ? String(fromMinor(BigInt(party.creditLimit))) : '0',
     customerGroup: party.customerGroup ?? CustomerGroup.CONSUMER,
     createdAt: party.createdAt,
@@ -44,7 +47,10 @@ function isDuplicateCode(error: unknown): boolean {
  */
 @Injectable()
 export class PartiesService {
-  constructor(private readonly repository: PartiesRepository) {}
+  constructor(
+    private readonly repository: PartiesRepository,
+    @Optional() private readonly audit?: AuditService,
+  ) {}
 
   async list(tenantId: string, query: QueryPartiesDto): Promise<{ data: PartyResponseDto[]; total: number }> {
     const { rows, total } = await this.repository.list(tenantId, query);
@@ -124,5 +130,30 @@ export class PartiesService {
 
   removeByIds(tenantId: string, ids: number[]): Promise<number> {
     return this.repository.deleteByIds(tenantId, ids);
+  }
+
+  /**
+   * Erase a party's personal data by crypto-shredding (destroying the per-party key in
+   * `erp_party_keys` and scrubbing plaintext PII). The audit event records `partyId` and `actorUserId` only.
+   */
+  async erasePersonalData(
+    tenantId: string,
+    partyId: number,
+    actorUserId: string | null = null,
+  ): Promise<{ partyId: number; erased: true }> {
+    if (!this.audit) {
+      throw new Error('AuditService is required to erase personal data');
+    }
+    const erased = await this.repository.erasePersonalData(tenantId, partyId);
+    if (!erased) throw new NotFoundException(NOT_FOUND_MESSAGE);
+    await this.audit.record({
+      tenantId,
+      actorUserId,
+      action: 'party.erased',
+      resourceType: 'party',
+      resourceId: String(partyId),
+      metadata: { partyId },
+    });
+    return { partyId, erased: true };
   }
 }

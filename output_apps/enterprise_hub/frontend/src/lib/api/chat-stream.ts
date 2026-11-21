@@ -24,7 +24,7 @@ import {
 } from "./judge-chat-client";
 
 /** No byte from the stream within this time => give up on streaming and use /chat. */
-export const STREAM_FIRST_BYTE_TIMEOUT_MS = 30_000;
+export const STREAM_FIRST_BYTE_TIMEOUT_MS = 60_000;
 
 export interface ChatDoneBody {
   status?: string;

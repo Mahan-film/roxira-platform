@@ -86,13 +86,13 @@ services:
       - VIP_PHONE_ALLOWLIST=${VIP_PHONE_ALLOWLIST:-}
     depends_on:
       postgres_prod:
-        condition: service_started
+        condition: service_healthy
       redis_prod:
-        condition: service_started
+        condition: service_healthy
       qdrant_prod:
-        condition: service_started
+        condition: service_healthy
       pgbouncer_prod:
-        condition: service_started
+        condition: service_healthy
       roxira_embeddings:
         condition: service_healthy
     healthcheck:
@@ -116,6 +116,7 @@ services:
     restart: always
     mem_limit: 1024m
     mem_reservation: 512m
+    oom_score_adj: -800  # T205: kernel OOM killer must pick anything else first (mid-commit kill = recovery)
     security_opt:
       - no-new-privileges:true
     environment:
@@ -147,11 +148,12 @@ services:
   # ------------------------------------------------------------------
   pgbouncer_prod:
     # pinned 2026-11-07 to the running version v1.25.2-p0; bump deliberately
-    image: edoburu/pgbouncer:v1.25.2-p0
+    image: edoburu/pgbouncer:v1.26.1-p0
     container_name: roxira_pgbouncer
     restart: always
     mem_limit: 128m
     mem_reservation: 64m
+    oom_score_adj: -500  # T205: protect the DB entry point
     security_opt:
       - no-new-privileges:true
     environment:
@@ -196,6 +198,7 @@ services:
     restart: always
     mem_limit: 256m
     mem_reservation: 128m
+    oom_score_adj: -500  # T205: protect queue/session state
     security_opt:
       - no-new-privileges:true
     ports:
@@ -259,6 +262,7 @@ services:
       - /var/lib/roxira/tei-cache:/data
     mem_limit: 3500m
     mem_reservation: 1024m
+    oom_score_adj: 500  # T205: disposable: stateless, restarts on its own, dies first
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:80/health || exit 1"]
       interval: 15s
@@ -288,6 +292,8 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
+      # T205: V8 old-space cap below mem_limit (900m) so Node GCs hard instead of being OOM-killed
+      - NODE_OPTIONS=--max-old-space-size=640
       - DATABASE_HOST=roxira_pgbouncer
       - DATABASE_PORT=6432
       # Restricted role once APP_DB_USER/APP_DB_PASSWORD are in .env (docs/ops/APP_DB_ROLE.md).
@@ -339,11 +345,16 @@ services:
       - /var/lib/roxira/import-spool:/import-spool
     ports:
       - "127.0.0.1:3000:3000"
+    # T210: wait for healthy redis/postgres/pgbouncer, else ioredis logs ECONNREFUSED after a reboot.
     depends_on:
-      - postgres_prod
-      - redis_prod
-      - pgbouncer_prod
-      - docker-socket-proxy
+      postgres_prod:
+        condition: service_healthy
+      redis_prod:
+        condition: service_healthy
+      pgbouncer_prod:
+        condition: service_healthy
+      docker-socket-proxy:
+        condition: service_started
     # Healthcheck comes from output_apps/enterprise_hub/Dockerfile (curl /docs);
     # not redefined here so it stays in sync with the image.
     logging:
@@ -426,6 +437,8 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
+      # T205: V8 old-space cap below mem_limit (600m)
+      - NODE_OPTIONS=--max-old-space-size=400
       - HOSTNAME=0.0.0.0
       - NEST_API_ORIGIN=http://roxira_enterprise_backend:3000
       - LEAD_NOTIFY_EMAIL=${LEAD_NOTIFY_EMAIL:-}

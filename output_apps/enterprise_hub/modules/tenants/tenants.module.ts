@@ -5,10 +5,14 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { JWT_DEFAULT_EXPIRES_IN } from '../auth/constants/auth.constants';
 import { UserEntity } from '../auth/entities/user.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { TenantScope } from '../access/services/tenant-scope';
 import { AuthRepository } from '../auth/repositories/auth.repository';
 import { TenantsController } from './controllers/tenants.controller';
+import { LegalEntityEntity } from './entities/legal-entity.entity';
 import { TenantEntity } from './entities/tenant.entity';
+import { LegalEntitiesRepository } from './repositories/legal-entities.repository';
 import { TenantsRepository } from './repositories/tenants.repository';
+import { LegalEntitiesService } from './services/legal-entities.service';
 import { TenantsService } from './services/tenants.service';
 
 /**
@@ -28,7 +32,7 @@ import { TenantsService } from './services/tenants.service';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([TenantEntity, UserEntity]),
+    TypeOrmModule.forFeature([TenantEntity, LegalEntityEntity, UserEntity]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -44,7 +48,7 @@ import { TenantsService } from './services/tenants.service';
     }),
   ],
   controllers: [TenantsController],
-  providers: [TenantsService, TenantsRepository, AuthRepository, JwtAuthGuard],
-  exports: [TenantsService, TenantsRepository],
+  providers: [TenantsService, TenantsRepository, LegalEntitiesService, LegalEntitiesRepository, TenantScope, AuthRepository, JwtAuthGuard],
+  exports: [TenantsService, TenantsRepository, LegalEntitiesService],
 })
 export class TenantsModule {}

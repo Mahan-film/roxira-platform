@@ -1,6 +1,7 @@
 # AI handoff: how any assistant continues this project
 
 Works for Claude, Gemini, DeepSeek, Codex, OpenCode or a person. Read this first, then `AGENTS.md`.
+New colleague joining? Start with `docs/TEAM_START.md`.
 
 ## What this project is
 

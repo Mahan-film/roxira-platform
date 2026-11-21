@@ -36,6 +36,7 @@ import { FiscalYearEntity } from './entities/fiscal-year.entity';
 import { JournalEntryLineEntity } from './entities/journal-entry-line.entity';
 import { JournalEntryAttachmentEntity } from './entities/journal-entry-attachment.entity';
 import { JournalEntryEntity } from './entities/journal-entry.entity';
+import { FxRateEntity } from './entities/fx-rate.entity';
 import { PeriodLockEntity } from './entities/period-lock.entity';
 import { PettyCashFundEntity, PettyCashTransactionEntity } from './entities/petty-cash.entity';
 import { AccountingRepository } from './repositories/accounting.repository';
@@ -87,6 +88,7 @@ import { BudgetVsActualService } from './services/budget-vs-actual.service';
       RecurringVoucherRunEntity,
       JournalEntryAttachmentEntity,
       AccountBudgetEntity,
+      FxRateEntity,
     ]),
     CurrencyModule,
     CalendarModule,

@@ -205,6 +205,7 @@ export class AccountingController {
       id,
       dto.status,
       dto.expectedVersion,
+      this.actorOf(request),
     );
   }
 

@@ -12,19 +12,19 @@ def _load_helper():
     for node in tree.body:
         if isinstance(node, ast.FunctionDef) and node.name == "_resolve_citation_collection":
             keep.append(node)
-        elif isinstance(node, ast.Assign) and any(
-            getattr(t, "id", "") == "CITATION_QDRANT_COLLECTION_DEFAULT" for t in node.targets
-        ):
-            keep.append(node)
-    ns = {"os": __import__("os")}
+    from output_apps.generated_modules.smartjudge import served_collection
+
+    ns = {"_served_collection": served_collection}
     exec(compile(ast.Module(body=keep, type_ignores=[]), str(SRC), "exec"), ns)  # noqa: S102
     return ns
 
 
 def test_default_value():
+    """T201: the default is the served collection (LIGHTRAG_QDRANT_COLLECTION), not a hardcoded name."""
     ns = _load_helper()
-    assert ns["_resolve_citation_collection"]({}) == "iran_laws_bge_m3"
-    assert ns["_resolve_citation_collection"]({"ROXIRA_CITATION_QDRANT_COLLECTION": "  "}) == "iran_laws_bge_m3"
+    served = {"LIGHTRAG_QDRANT_COLLECTION": "iran_laws_v8h"}
+    assert ns["_resolve_citation_collection"](served) == "iran_laws_v8h"
+    assert ns["_resolve_citation_collection"]({**served, "ROXIRA_CITATION_QDRANT_COLLECTION": "  "}) == "iran_laws_v8h"
 
 
 def test_overridden_value():

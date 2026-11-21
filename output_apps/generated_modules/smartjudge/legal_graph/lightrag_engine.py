@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import hashlib
 import json
 import logging
 import math
@@ -451,6 +452,7 @@ from . import qdrant_cloud as _qcloud  # noqa: E402  (optional read-only cloud r
 from . import retrieval_boost as _rb  # noqa: E402  (pure helpers, no circular import)
 from .. import legal_tokenize as _lt  # noqa: E402  (shared sparse tokenizer, stdlib only)
 from .. import reranker as _reranker  # noqa: E402  (optional cross-encoder, flag-gated, never raises)
+from .. import answer_timing as _answer_timing  # noqa: E402  (T201 per-stage timing, never raises)
 from .. import key_rotation as _kr  # noqa: E402  (key slots + per-key cooldown, stdlib only)
 _ENACTED_DESPITE_TITLE = (
     "لایحه اصلاحی قانون تجارت",
@@ -727,6 +729,55 @@ except Exception:  # noqa: BLE001 - never block engine import
         _chat_fast = None
 
 _embed_cache = _chat_fast.TTLCache(ttl=600.0, max_entries=512) if _chat_fast else None
+
+try:  # Persian/Arabic text normalisation for query-embedding cache keys
+    from .. import legal_tokenize as _legal_tokenize
+except Exception:  # noqa: BLE001 - never block engine import
+    try:
+        from output_apps.generated_modules.smartjudge import legal_tokenize as _legal_tokenize
+    except Exception:  # noqa: BLE001
+        _legal_tokenize = None
+
+_EMBED_CACHE_TTL_S = max(60, int(os.environ.get("SMARTJUDGE_EMBED_CACHE_TTL_S", str(7 * 86400))))
+_EMBED_CACHE_MAX_ENTRIES = max(1, int(os.environ.get("SMARTJUDGE_EMBED_CACHE_MAX_ENTRIES", "10000")))
+_EMBED_REDIS_INDEX_KEY = "sj:embed:v1:index"
+_embed_redis_client: Any = None
+_embed_redis_disabled = False
+
+
+def set_embed_redis_client(client: Any) -> None:
+    """Inject a sync redis-compatible client for query embeddings, or None to disable."""
+    global _embed_redis_client, _embed_redis_disabled
+    _embed_redis_client = client
+    _embed_redis_disabled = client is None
+
+
+def _embed_redis_url() -> str:
+    url = os.environ.get("REDIS_URL", "").strip()
+    if url:
+        return url
+    host = os.environ.get("REDIS_HOST", "").strip()
+    if not host:
+        return ""
+    return f"redis://{host}:{os.environ.get('REDIS_PORT', '6379').strip()}/0"
+
+
+def _get_embed_redis() -> Any:
+    global _embed_redis_client, _embed_redis_disabled
+    if _embed_redis_client is not None or _embed_redis_disabled:
+        return _embed_redis_client
+    url = _embed_redis_url()
+    if not url:
+        _embed_redis_disabled = True
+        return None
+    try:
+        import redis  # optional dependency
+
+        _embed_redis_client = redis.Redis.from_url(url, socket_timeout=0.3, socket_connect_timeout=0.3)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("embed redis cache disabled: %s", exc)
+        _embed_redis_disabled = True
+    return _embed_redis_client
 
 
 def embedding_url() -> str:
@@ -1103,8 +1154,51 @@ def bge_hosts_state() -> Dict[str, Any]:
 
 
 def _embed_cache_key(text: str) -> str:
-    """کلید کش: متن پرس‌وجوی نرمال‌شده (فاصله/خط‌های تکراری یکی‌شده)."""
-    return " ".join(str(text).split())
+    """کلید کش: متن پرس‌وجوی فارسی نرمال‌شده (تبدیل ي/ك عربی، ارقام و فاصله‌های تکراری)."""
+    norm = _legal_tokenize.normalize(text) if _legal_tokenize is not None else str(text or "")
+    return " ".join(norm.split())
+
+
+def _embed_redis_key(norm_text: str) -> str:
+    digest = hashlib.sha256(f"{embed_backend()}:{get_default_embed_model()}:{norm_text}".encode("utf-8")).hexdigest()
+    return f"sj:embed:v1:{digest}"
+
+
+def _embed_redis_get(norm_text: str) -> Optional[List[float]]:
+    client = _get_embed_redis()
+    if client is None:
+        return None
+    try:
+        raw = client.get(_embed_redis_key(norm_text))
+        if not raw:
+            return None
+        vec = json.loads(raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else raw)
+        if isinstance(vec, list) and vec:
+            return [float(x) for x in vec]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("embed redis get failed: %s", exc)
+    return None
+
+
+def _embed_redis_set(norm_text: str, vector: List[float]) -> None:
+    client = _get_embed_redis()
+    if client is None or not vector:
+        return
+    rkey = _embed_redis_key(norm_text)
+    payload = json.dumps(vector, separators=(",", ":"))
+    try:
+        client.set(rkey, payload, ex=_EMBED_CACHE_TTL_S)
+        client.zadd(_EMBED_REDIS_INDEX_KEY, {rkey: time.time()})
+        count = int(client.zcard(_EMBED_REDIS_INDEX_KEY) or 0)
+        if count > _EMBED_CACHE_MAX_ENTRIES:
+            excess = count - _EMBED_CACHE_MAX_ENTRIES
+            victims = client.zrange(_EMBED_REDIS_INDEX_KEY, 0, excess - 1)
+            if victims:
+                victim_keys = [v.decode("utf-8") if isinstance(v, (bytes, bytearray)) else str(v) for v in victims]
+                client.delete(*victim_keys)
+                client.zrem(_EMBED_REDIS_INDEX_KEY, *victim_keys)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("embed redis set failed: %s", exc)
 
 
 def _embed_query_cf(text: str) -> Optional[List[float]]:
@@ -1141,6 +1235,11 @@ def _embed_query_sync(text: str) -> Optional[List[float]]:
         hit = _embed_cache.get(key)
         if hit is not None:
             return list(hit)
+    redis_hit = _embed_redis_get(key)
+    if redis_hit is not None:
+        if _embed_cache is not None:
+            _embed_cache.set(key, redis_hit)
+        return redis_hit
     if embed_backend() == "cf":
         t0 = time.perf_counter()
         result = _embed_query_cf(text)
@@ -1149,6 +1248,7 @@ def _embed_query_sync(text: str) -> Optional[List[float]]:
                 _chat_fast.timing_add("embed_ms", (time.perf_counter() - t0) * 1000)
             if _embed_cache is not None:
                 _embed_cache.set(key, result)
+            _embed_redis_set(key, result)
             return result
     if embedding_url():
         try:
@@ -1158,6 +1258,7 @@ def _embed_query_sync(text: str) -> Optional[List[float]]:
                 _chat_fast.timing_add("embed_ms", (time.perf_counter() - t0) * 1000)
             if _embed_cache is not None:
                 _embed_cache.set(key, result)
+            _embed_redis_set(key, result)
             return result
         except Exception as exc:  # noqa: BLE001
             logger.warning("Shared embedding service failed -> scroll fallback: %s", exc)
@@ -1173,6 +1274,7 @@ def _embed_query_sync(text: str) -> Optional[List[float]]:
             _chat_fast.timing_add("embed_ms", (time.perf_counter() - t0) * 1000)
         if _embed_cache is not None:
             _embed_cache.set(key, result)
+        _embed_redis_set(key, result)
         return result
     except Exception as exc:  # noqa: BLE001
         logger.warning("Query embedding failed -> scroll fallback: %s", exc)
@@ -2015,10 +2117,12 @@ async def qdrant_fallback_laws(
     """Hybrid legal retrieval; with SMARTJUDGE_RERANKER=local the top-N candidates are
     rescored by a cross-encoder and cut to ``limit`` (the single rerank wiring point)."""
     if not _reranker.enabled():
+        _answer_timing.note_rerank_skipped()
         return await _qdrant_fallback_laws_impl(query, limit, active_only)
     want = max(1, int(limit))
     rows = await _qdrant_fallback_laws_impl(query, _reranker.candidate_count(want), active_only)
-    return await _reranker.arerank(query, rows, top_k=want)
+    with _answer_timing.stage("rerank_ms"):
+        return await _reranker.arerank(query, rows, top_k=want)
 
 
 async def _qdrant_fallback_laws_impl(

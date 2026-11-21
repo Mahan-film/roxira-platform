@@ -115,6 +115,12 @@ export function IndictmentResultView({ result }: { result: IndictmentDraftRespon
           <AlertTriangle className="size-4" aria-hidden="true" />
           {insufficient ? "مبنای ناکافی" : "پیش‌نویس تأییدنشده"}
         </span>
+        <span
+          data-testid="ai-generated-draft-badge"
+          className="inline-flex min-h-9 items-center rounded-[980px] border border-border bg-muted px-3 text-xs font-medium"
+        >
+          AI-generated draft
+        </span>
         <div className="no-print flex flex-wrap gap-2">
           <button type="button" className="ap-btn ap-btn-ghost" onClick={copy}>
             <Copy className="size-4" aria-hidden="true" />

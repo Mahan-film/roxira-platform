@@ -17,6 +17,7 @@ import { FifoBatchEntity } from './entities/fifo-batch.entity';
 import { StockItemEntity } from './entities/stock-item.entity';
 import { WarehouseEntity } from './entities/warehouse.entity';
 import { InventoryRepository } from './repositories/inventory.repository';
+import { TenantScope } from '../access/services/tenant-scope';
 import { InventoryService } from './services/inventory.service';
 import { InventoryItemsRegistry } from '../data_import/registry/inventory-items.registry';
 import { NormalisedRecord } from '../data_import/registry/import-registry.types';
@@ -88,7 +89,7 @@ describePg('items import with unit cost and opening stock on PostgreSQL', () => 
         ds.getRepository(WarehouseEntity),
         ds.getRepository(StockItemEntity),
         ds.getRepository(FifoBatchEntity),
-        ds,
+        ds, new TenantScope(ds),
       ),
     );
     registry = new InventoryItemsRegistry(inventory);

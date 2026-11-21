@@ -610,7 +610,7 @@ describe('ChequesService partial payment (CHK-01)', () => {
       t.service.partialPayment(A, c.id, { amount: 40, idempotencyKey: 'pay-conflict' }),
     ).rejects.toBeInstanceOf(ConflictException);
     await expect(
-      t.service.partialPayment(A, c.id, { amount: 30, eventDate: '2026-11-20', idempotencyKey: 'pay-conflict' }),
+      t.service.partialPayment(A, c.id, { amount: 30, eventDate: '2025-01-15', idempotencyKey: 'pay-conflict' }),
     ).rejects.toBeInstanceOf(ConflictException);
     await expect(
       t.service.partialPayment(A, c.id, { amount: 30, bankAccountId: 7, idempotencyKey: 'pay-conflict' }),

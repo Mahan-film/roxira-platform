@@ -37,6 +37,8 @@ export interface AccessContext {
   amountLimits?: AmountLimitsMap;
   /** Field visibility flags for `cost`, `margin`, and `salary` (#584-3). */
   fieldVisibility?: FieldVisibilityMap;
+  /** True when the caller is an AI / automated assistant identity (T191 / EU AI Act Art. 50). */
+  isAiIdentity?: boolean;
 }
 
 export interface AccessRequest extends AuthenticatedRequest {
@@ -101,4 +103,45 @@ export function requireScopedAction(
   });
   const err = decisionToError(decision);
   if (err) throw err;
+}
+
+export const AI_ASSISTANT_ROLE = 'ai_assistant';
+const AI_ACTOR_PREFIXES = ['ai:', 'ai-assistant', 'ai_assistant'] as const;
+
+export function isAiIdentityContext(
+  ctx?: Partial<Pick<AccessContext, 'isAiIdentity' | 'roleKey' | 'userId'>> | null,
+): boolean {
+  if (!ctx) return false;
+  if (ctx.isAiIdentity === true) return true;
+  if (ctx.roleKey === AI_ASSISTANT_ROLE) return true;
+  return isAiActor(ctx.userId);
+}
+
+export function isAiActor(
+  actor?: string | { isAiIdentity?: boolean; roleKey?: string; userId?: string } | null,
+): boolean {
+  if (!actor) return false;
+  if (typeof actor === 'object') {
+    return isAiIdentityContext(actor);
+  }
+  const normalized = actor.trim().toLowerCase();
+  return AI_ACTOR_PREFIXES.some(
+    (prefix) => normalized === prefix || normalized.startsWith(`${prefix}:`) || normalized.startsWith('ai:'),
+  );
+}
+
+/**
+ * T191: AI identities can never post journal entries, lock/unlock accounting
+ * periods, close fiscal years, or file/submit tax returns.
+ */
+export function assertNotAiIdentity(
+  actor: string | { isAiIdentity?: boolean; roleKey?: string; userId?: string } | null | undefined,
+  operation: string,
+): void {
+  if (isAiActor(actor)) {
+    throw denied(
+      'AI_IDENTITY_FORBIDDEN',
+      `AI identities are not permitted to ${operation}.`,
+    );
+  }
 }

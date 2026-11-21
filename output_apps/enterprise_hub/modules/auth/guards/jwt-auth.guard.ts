@@ -27,6 +27,8 @@ export interface JwtPayload {
   sid?: string;
   /** True when this session passed a second factor (TOTP or passkey). */
   mfa?: boolean;
+  /** True when the caller is an automated AI / assistant identity (EU AI Act Art. 50 / T191). */
+  isAi?: boolean;
   iat?: number;
   exp?: number;
 }

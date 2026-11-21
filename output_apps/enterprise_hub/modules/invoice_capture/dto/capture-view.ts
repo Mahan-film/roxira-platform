@@ -1,10 +1,19 @@
 import { DraftInvoice, Finding, Voucher } from '../domain/capture.types';
 import { CaptureStatus } from '../entities/capture.entities';
 
+export interface AiSourceCitation {
+  kind: 'document' | 'model' | 'vendor_rule' | 'transcript';
+  label: string;
+  reference?: string;
+}
+
 /** What the draft card renders (API response; no secrets, no raw model output). */
 export interface CaptureView {
   id: string;
   status: CaptureStatus;
+  aiGenerated: boolean;
+  aiLabel?: 'AI-generated draft';
+  sourceCitations: AiSourceCitation[];
   sourceKind: string;
   confidence: number;
   fieldConfidence: Record<string, number>;

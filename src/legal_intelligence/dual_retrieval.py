@@ -134,6 +134,11 @@ _ACTIVE_PREDICATE = (
     "AND metadata->>'status' IS DISTINCT FROM 'REPEALED'"
 )
 
+# Digits of node_id as a number, for ordering. Ids such as LAW_123_ART_45 hold
+# several numbers, so the concatenated digits exceed int4 (T210: "value
+# 17893306486952 is out of range for type integer"). numeric has no overflow.
+_NODE_NUM_SQL = "COALESCE(NULLIF(regexp_replace(node_id, '\\D', '', 'g'), '')::numeric, 0)"
+
 # Four ranked sub-selects are fused with UNION ALL so the whole retrieval is
 # resolved in one statement / one network round trip. Named params are reused by
 # psycopg across the statement.
@@ -173,7 +178,7 @@ low_prec AS (
          OR node_id = ANY(%(prec_ids)s)
          OR title ILIKE ANY(%(prec_pats)s)
       )
-    ORDER BY (metadata->>'precedent_id' = ANY(%(prec_nums)s)) DESC, COALESCE(NULLIF(regexp_replace(node_id, '\D', '', 'g'), '')::int, 0) DESC
+    ORDER BY (metadata->>'precedent_id' = ANY(%(prec_nums)s)) DESC, {_NODE_NUM_SQL} DESC
     LIMIT %(prec_cap)s
 ),
 high_prec_kw AS (
@@ -183,7 +188,7 @@ high_prec_kw AS (
     WHERE node_type = 'PRECEDENT'
       AND {_ACTIVE_PREDICATE}
       AND (title ILIKE ANY(%(kw_pats)s) OR category ILIKE ANY(%(kw_pats)s))
-    ORDER BY (category ILIKE ANY(%(kw_pats)s)) DESC, COALESCE(NULLIF(regexp_replace(node_id, '\D', '', 'g'), '')::int, 0) DESC
+    ORDER BY (category ILIKE ANY(%(kw_pats)s)) DESC, {_NODE_NUM_SQL} DESC
     LIMIT %(prec_cap)s
 ),
 high_prec AS (
@@ -196,7 +201,7 @@ high_prec AS (
         FROM graph_nodes
         WHERE node_type = 'PRECEDENT'
           AND {_ACTIVE_PREDICATE}
-        ORDER BY COALESCE(NULLIF(regexp_replace(node_id, '\D', '', 'g'), '')::int, 0) DESC
+        ORDER BY {_NODE_NUM_SQL} DESC
         LIMIT %(prec_cap)s
     ) general_active
     WHERE NOT EXISTS (SELECT 1 FROM high_prec_kw)
@@ -208,7 +213,7 @@ FROM (
     UNION ALL SELECT * FROM low_prec
     UNION ALL SELECT * FROM high_prec
 ) fused
-ORDER BY kind, rank, COALESCE(NULLIF(regexp_replace(node_id, '\D', '', 'g'), '')::int, 0) DESC, node_id ASC;
+ORDER BY kind, rank, {_NODE_NUM_SQL} DESC, node_id ASC;
 """
 
 

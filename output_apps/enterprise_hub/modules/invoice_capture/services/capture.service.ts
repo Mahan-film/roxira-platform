@@ -10,6 +10,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { AccountingService } from '../../accounting/services/accounting.service';
+import { assertNotAiIdentity, isAiActor } from '../../access/access-context';
 import { imageMimeType, sniffFileKind } from '../../data_import/parsers/file-kind';
 import { parsePdf } from '../../data_import/parsers/pdf.parser';
 import {
@@ -31,7 +32,7 @@ import { looksLikeInjection, redactSecrets } from '../domain/redact';
 import { sniffAudio } from '../domain/source';
 import { VoucherBuildError, buildVoucher } from '../domain/voucher';
 import { dedupeKey, suggestAccount, validateDraft } from '../domain/validate';
-import { CaptureView } from '../dto/capture-view';
+import { AiSourceCitation, CaptureView } from '../dto/capture-view';
 import { CreateCaptureDto, UpdateDraftDto, UpdateSettingsDto, UpsertVendorRuleDto } from '../dto/capture.dto';
 import {
   CaptureDocumentEntity,
@@ -277,9 +278,28 @@ export class CaptureService {
     const party = counterparty(draft);
     const vendor = enriched?.vendor ?? (doc.vendorId ? await this.repo.findVendor(tenantId, doc.vendorId) : null);
     const rule = enriched?.rule ?? (vendor ? await this.repo.findRule(tenantId, vendor.id) : null);
+    const sourceUrl = `/enterprise-hub/assistant/capture/documents/${doc.id}/source`;
+    const sourceCitations: AiSourceCitation[] = [
+      {
+        kind: 'document',
+        label: `source: ${doc.sourceKind}`,
+        reference: sourceUrl,
+      },
+      ...(doc.model ? [{ kind: 'model' as const, label: `model: ${doc.model}` }] : []),
+      ...(vendor
+        ? [{ kind: 'vendor_rule' as const, label: `vendor: ${vendor.name}`, reference: vendor.id }]
+        : []),
+      ...(stored.transcript
+        ? [{ kind: 'transcript' as const, label: 'voice transcript' }]
+        : []),
+    ];
+    const aiGenerated = isAiActor(doc.createdBy);
     return {
       id: doc.id,
       status: doc.status,
+      aiGenerated,
+      ...(aiGenerated ? { aiLabel: 'AI-generated draft' as const } : {}),
+      sourceCitations,
       sourceKind: doc.sourceKind,
       confidence: Number(doc.confidence),
       fieldConfidence: doc.fieldConfidence,
@@ -293,7 +313,7 @@ export class CaptureService {
       journalEntryId: doc.journalEntryId,
       postedBy: doc.postedBy,
       autoReasons: stored.autoReasons ?? [],
-      sourceUrl: `/enterprise-hub/assistant/capture/documents/${doc.id}/source`,
+      sourceUrl,
       transcript: stored.transcript,
       createdAt: doc.createdAt.toISOString(),
     };
@@ -380,6 +400,7 @@ export class CaptureService {
 
   /** One-click post of a reviewed draft. Posts through `AccountingService` only. */
   async post(tenantId: string, actor: string, id: string): Promise<CaptureView> {
+    assertNotAiIdentity(actor, 'post an invoice capture draft');
     const doc = await this.mustFind(tenantId, id);
     if (doc.status === 'posted' || doc.status === 'auto_posted') {
       return this.view(tenantId, id);

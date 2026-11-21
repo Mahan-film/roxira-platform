@@ -70,3 +70,58 @@ updates:
         update-types:
           - minor
           - patch
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      docker-root-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: docker
+    directory: /output_apps/enterprise_hub
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      enterprise-hub-docker-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: docker
+    directory: /output_apps/enterprise_hub/frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      frontend-docker-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: docker
+    directory: /services/research
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      research-docker-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: docker
+    directory: /templates/saas-chassis
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      saas-chassis-docker-minor-patch:
+        update-types:
+          - minor
+          - patch

@@ -33,6 +33,62 @@ schema_version: 1
 checked_at: "2026-10-17"
 source: docs/research/TECH_CURRENCY_2026-09.md
 
+# Retired and retiring models tracked per R12 (docs/strategy/research/R10_R11_R12_BUSINESS_GROWTH_TECH.md).
+# A CI check fails if any role or code default uses an id that is retired or within 30 days of shutdown.
+retired:
+  - id: tts-1
+    provider: openai
+    shutdown_date: "2027-01-06"
+    reason: "OpenAI TTS shutdown (6 Jan 2027)"
+  - id: tts-1-hd
+    provider: openai
+    shutdown_date: "2027-01-06"
+    reason: "OpenAI TTS shutdown (6 Jan 2027)"
+  - id: gpt-4o-mini-tts
+    provider: openai
+    shutdown_date: "2027-01-06"
+    reason: "OpenAI TTS shutdown (6 Jan 2027)"
+  - id: whisper-1
+    provider: openai
+    shutdown_date: "2027-02-26"
+    reason: "OpenAI Whisper shutdown (26 Feb 2027)"
+  - id: gpt-4o-transcribe
+    provider: openai
+    shutdown_date: "2027-02-26"
+    reason: "OpenAI transcription shutdown (26 Feb 2027)"
+  - id: gpt-5
+    provider: openai
+    shutdown_date: "2026-12-11"
+    reason: "OpenAI shutdown (11 Dec 2026)"
+  - id: o3
+    provider: openai
+    shutdown_date: "2026-12-11"
+    reason: "OpenAI shutdown (11 Dec 2026)"
+  - id: gpt-4o
+    provider: openai
+    shutdown_date: "2027-01-14"
+    reason: "OpenAI shutdown (14 Jan 2027)"
+  - id: gpt-4.1
+    provider: openai
+    shutdown_date: "2027-01-14"
+    reason: "OpenAI shutdown (14 Jan 2027)"
+  - id: claude-sonnet-4-5
+    provider: anthropic
+    shutdown_date: "2026-11-30"
+    reason: "Anthropic retirement (30 Nov 2026)"
+  - id: gemini-2.5-pro
+    provider: google
+    shutdown_date: "2026-12-01"
+    reason: "Google auto-route to 3.x / retirement (1 Dec 2026)"
+  - id: gemini-2.5-flash
+    provider: google
+    shutdown_date: "2026-12-01"
+    reason: "Google auto-route to 3.x / retirement (1 Dec 2026)"
+  - id: text-embedding-004
+    provider: google
+    shutdown_date: "2026-01-14"
+    reason: "Google shutdown (14 Jan 2026)"
+
 roles:
   # ---- Product runtime tiers (docs/STRATEGY.md §3b) -----------------------
   free:
@@ -320,6 +376,26 @@ roles:
           directly (not through llm_router.py). Documented Persian voice per
           docs/research/TECH_CURRENCY_2026-09.md. scripts/check_models.py
           skips this id (it will never appear in GET /api/v1/models).
+
+  stt_openai:
+    description: Dedicated OpenAI speech-to-text model (replaces retiring whisper-1 and gpt-4o-transcribe, T161).
+    data_policy: standard
+    models:
+      - id: gpt-transcribe
+        price_per_1m: null
+        catalogue_listed: false
+        note: OpenAI /v1/audio/transcriptions replacement for retiring whisper-1 and gpt-4o-transcribe (26 Feb 2027).
+
+  tts_openai:
+    description: Dedicated OpenAI text-to-speech model (replaces retiring tts-1, tts-1-hd, and gpt-4o-mini-tts, T161).
+    data_policy: standard
+    models:
+      - id: gpt-realtime-2.1-mini
+        price_per_1m: null
+        catalogue_listed: false
+        note: >
+          OpenAI replacement for retiring tts-1 / tts-1-hd / gpt-4o-mini-tts (6 Jan 2027).
+          Uses the Realtime API; voice_phone_agent defaults to edge TTS.
 
   vision:
     description: >

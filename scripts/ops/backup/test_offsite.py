@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -68,6 +69,53 @@ class UrlHelpers(unittest.TestCase):
         self.assertEqual(t.check_url(FAKE_URL.replace("ep-cool-123", "ep-cool-123-pooler")), 3)
         self.assertEqual(t.check_url("mysql://a:b@h/db"), 4)
         self.assertEqual(t.check_url(""), 4)
+
+
+class MigrationShow(unittest.TestCase):
+    FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "typeorm_migration_show.txt")
+
+    def test_fixture_parses(self):
+        with open(self.FIXTURE) as fh:
+            applied, pending = t.parse_migration_show(fh.read())
+        self.assertEqual(len(applied), 3)
+        self.assertEqual(pending, ["AddCostCentersToJournal1789100000000", "CreateAttendanceRollup1789200000000"])
+
+    def test_noise_ignored_and_none_pending(self):
+        applied, pending = t.parse_migration_show("> hub@1 typeorm\nwarning [ ] not a line start\n [X] 7 Foo1\n")
+        self.assertEqual((applied, pending), (["Foo1"], []))
+
+    def test_cli_counts_pending_and_rejects_empty(self):
+        script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "offsite_tools.py")
+        with open(self.FIXTURE) as fh:
+            r = subprocess.run([sys.executable, "-I", script, "migration-pending"], stdin=fh, capture_output=True, text=True)
+        self.assertEqual((r.returncode, r.stdout.strip()), (0, "2"))
+        r = subprocess.run([sys.executable, "-I", script, "migration-pending"], input="boom", capture_output=True, text=True)
+        self.assertEqual(r.returncode, 1)
+
+
+@unittest.skipUnless(shutil.which("docker") and subprocess.run(["docker", "info"], capture_output=True).returncode == 0,
+                     "docker not reachable")
+class CountsAgainstPostgres(unittest.TestCase):
+    """Runs the generated manifest SQL against a throwaway postgres:17 container (no published port)."""
+
+    def test_generated_sql_runs(self):
+        name = f"rx-counts-test-{os.getpid()}"
+        subprocess.run(["docker", "run", "-d", "--rm", "--name", name, "-e", "POSTGRES_PASSWORD=x", "postgres:17-alpine"],
+                       check=True, capture_output=True)
+        try:
+            for _ in range(60):
+                if subprocess.run(["docker", "exec", name, "pg_isready", "-U", "postgres"], capture_output=True).returncode == 0:
+                    break
+                time.sleep(1)
+            setup = 'CREATE TABLE users(i int); INSERT INTO users SELECT generate_series(1,7); CREATE TABLE "we""ird"(i int);'
+            subprocess.run(["docker", "exec", "-i", name, "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1"], input=setup,
+                           text=True, check=True, capture_output=True)
+            sql = t.count_sql(["public|users\n", 'public|we"ird\n'])
+            r = subprocess.run(["docker", "exec", "-i", name, "psql", "-U", "postgres", "-Atq", "-F", "|", "-v", "ON_ERROR_STOP=1"],
+                               input=sql, text=True, check=True, capture_output=True)
+            self.assertEqual(sorted(r.stdout.split()), sorted(['public.users|7', 'public.we"ird|0']))
+        finally:
+            subprocess.run(["docker", "rm", "-f", name], capture_output=True)
 
 
 class Counts(unittest.TestCase):

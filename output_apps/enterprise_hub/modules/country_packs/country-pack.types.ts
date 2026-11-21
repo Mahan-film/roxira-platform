@@ -1,4 +1,5 @@
 import { CalendarId, FiscalYearSpec } from '../calendar/calendar.types';
+import { PostingRole } from '../posting_rules/constants/posting-roles';
 
 /**
  * The country pack interface (docs/strategy/ADR_GLOBAL_CORE.md, decision 1).
@@ -9,8 +10,8 @@ import { CalendarId, FiscalYearSpec } from '../calendar/calendar.types';
  */
 export const COUNTRY_PACK_INTERFACE_VERSION = 1;
 
-/** `production` packs describe a real country; `test` packs exist only to prove the seam. */
-export type CountryPackStatus = 'production' | 'test';
+/** `production` / `beta` packs describe a real country; `test` packs exist only to prove the seam. */
+export type CountryPackStatus = 'production' | 'beta' | 'test';
 
 export interface CurrencyInfo {
   /** ISO 4217 code of the country's book currency. */
@@ -105,6 +106,29 @@ export interface ReportPackEntry {
   route: string;
 }
 
+/**
+ * Payment rail configuration (T156): routes payment methods (card, DuitNow QR, e-wallets,
+ * marketplaces) to rail-specific clearing accounts in the country's chart of accounts.
+ */
+export interface PaymentRailConfig {
+  /** Unique identifier of the rail, e.g. 'card', 'duitnow', 'ewallet', 'shopee', 'tiktok', 'grabfood'. */
+  readonly id: string;
+  /** Human-readable display label. */
+  readonly name: string;
+  /** Payment method aliases mapped to this rail (case-insensitive in matching), e.g. ['CARD', 'POS'], ['DUITNOW', 'DUITNOW_QR']. */
+  readonly methods: readonly string[];
+  /** Posting role for the rail's clearing account. */
+  readonly clearingRole: PostingRole;
+  /** Default account code in the country's chart of accounts (e.g. '11310', '11320', '1015'). */
+  readonly defaultAccountCode: string;
+  /** Posting role for transaction fees / merchant discount rate (MDR) (default: 'payment_fee' or 'bank_fee'). */
+  readonly feeRole?: PostingRole;
+  /** Posting role for marketplace / platform commissions (default: 'platform_commission'). */
+  readonly commissionRole?: PostingRole;
+  /** Posting role for SST / VAT on processing fees & commissions (default: 'vat_input'). */
+  readonly taxRole?: PostingRole;
+}
+
 export interface CountryPack {
   interfaceVersion: number;
   /** Semantic version of this pack's own content. */
@@ -118,6 +142,8 @@ export interface CountryPack {
   chartTemplates: readonly ChartTemplateInfo[];
   taxRules: readonly TaxRuleInfo[];
   statutory: StatutoryPort;
+  /** Payment rails and their clearing accounts configured in the pack (T156). */
+  readonly paymentRails?: readonly PaymentRailConfig[];
   /** Absent when the country has no e-invoice scheme in the product. */
   eInvoice?: EInvoiceAdapter;
   /** Absent when the country has no payroll rules in the product. */

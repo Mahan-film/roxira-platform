@@ -9,6 +9,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { assertNotAiIdentity } from '../../access/access-context';
 import { Queue } from 'bullmq';
 import {
   X509Certificate,
@@ -343,7 +344,9 @@ export class MoadianService implements OnModuleInit {
     tenantId: string,
     invoiceId: string,
     options: SubmitMoadianInvoiceDto = {},
+    actor?: string,
   ): Promise<MoadianSubmissionResponseDto> {
+    assertNotAiIdentity(actor, 'file a tax return');
     this.assertEnabled();
     // findOne خود به مستأجر محدود است و برای صورتحساب سازمان دیگر NotFound می‌دهد.
     const invoice = await this.invoicingService.findOne(tenantId, invoiceId);

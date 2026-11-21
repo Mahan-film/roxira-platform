@@ -140,3 +140,10 @@ export enum DimensionKind {
   COST_CENTER = 'COST_CENTER',
   PROJECT = 'PROJECT',
 }
+
+/** Type of exchange rate: spot market rate, official tax authority rate, or month/year-end closing rate. */
+export enum FxRateType {
+  SPOT = 'SPOT',
+  TAX_OFFICIAL = 'TAX_OFFICIAL',
+  CLOSING = 'CLOSING',
+}

@@ -129,7 +129,7 @@ The owner has no Storage Box. The supported minimum is:
 
 | Copy | Where | Written by | Encrypted | Retention |
 |---|---|---|---|---|
-| 1 | server disk `/opt/roxira_backups/dr/sets/<UTC timestamp>` (`latest` symlink) | hourly `server_backup.sh run` | no (same trust as the DB disk, directory is 0700 root) | newest `BACKUP_KEEP_LOCAL_SETS` (default 3, 1 when disk >= 85%) |
+| 1 | server disk `/opt/roxira_backups/dr/sets/<UTC timestamp>` (`latest` symlink) | hourly `server_backup.sh run` | no (same trust as the DB disk, directory is 0700 root); T197: only the newest set is kept (`BACKUP_KEEP_HOURLY=1`, `BACKUP_KEEP_DAILY=0`), the encrypted off-site copies are the history | newest 1 set (also when disk >= 85%) |
 | 2 | Mac `~/Backups/roxira-dr/restic` | daily `mac_pull.sh` (rsync over ssh, then `restic backup`) | yes, restic AES-256 | daily 14, weekly 8, monthly 12 |
 | 3 (optional, later) | Cloudflare R2 bucket | `server_backup.sh run` once `BACKUP_S3_*` is set | yes, restic | forget policy of section 3 |
 
@@ -161,3 +161,56 @@ One-shot server rollout for this mode: `scripts/ops/rollout/ops_rollout.sh` (run
 - `restic forget --prune` runs once a day (03:xx UTC) to avoid hourly prune load.
 - If both Storage Box and server die and the Mac is off, the S3 repo (if enabled) is the last copy; enabling it is recommended.
 - Scripts use GNU `stat`/`cp -al` (server side, Linux only); `mac_pull.sh` is macOS-safe (bash 3.2).
+
+## 12. Measured RTO: real restore drill and migration rehearsal on the Mac (T197, T198)
+
+Why: the weekly srv1 drill proves the chain with a throwaway key and a fresh payload. It does not prove that the
+real age key opens the real off-site copies, and nobody had timed a restore of real data. `scripts/ops/backup/mac_restore_rehearsal.sh`
+does both on the owner's Mac at no extra cost (Docker, the existing R2 bucket, the existing age key).
+
+Off-site copies it restores (all age-encrypted on the server before upload, never in clear on R2 or Telegram):
+
+| Artifact | R2 key | Written by | R2 retention | Telegram |
+|---|---|---|---|---|
+| Postgres + configs payload (includes `pg/<container>/<db>.counts`, the row-count manifest) | `pgcfg/hourly/`, `pgcfg/daily/` | hourly `server_backup.sh pgcfg` | 7 d hourly, 30 d daily | 6-hourly dump (`telegram_offsite.sh`) |
+| Qdrant snapshots (all collections + `collection_info.json`) | `qdrant/daily/` | daily `server_backup.sh run` | 7 d (`BACKUP_R2_QDRANT_KEEP_DAYS`) | only up to `TELEGRAM_MAX_TOTAL_MB` (150), else skipped and logged |
+| Config set (`configs.tar.gz`) | `configs/daily/` | daily `server_backup.sh run` | 30 d (`BACKUP_R2_CONFIGS_KEEP_DAYS`) | 45 MB parts via `--send-file` |
+
+`server_backup.sh` records `QDRANT_LAST_RESULT` / `CONFIGS_LAST_RESULT` (OK, FAIL, NOT_CONFIGURED) plus `*_R2_RESULT`,
+`*_TG_RESULT` (OK, SKIPPED_TOO_BIG, FAIL, DISABLED) and `*_BYTES` in `/var/lib/roxira-backup/status.env`. An R2 failure also makes
+`LAST_RESULT=FAIL`, so the existing alert and the daily report cover it. The whole step is fail-closed: it runs only when `BACKUP_OFFSITE_EXTRAS=1` is set
+in `/etc/roxira/backup.env`. Turn the Telegram part with `BACKUP_OFFSITE_TELEGRAM=0` in `/etc/roxira/backup.env`.
+
+Run it (Docker Desktop running; R2 and Telegram values come from `~/Secrets/roxira/roxira.env`, the key path from
+`ROXIRA_AGE_IDENTITY`, default `~/Secrets/roxira/backup-age.key`; nothing is printed):
+
+```bash
+bash scripts/ops/backup/mac_restore_rehearsal.sh --dry-run     # plan only
+bash scripts/ops/backup/mac_restore_rehearsal.sh               # the real run
+```
+
+What it does, in order, with throwaway containers on `127.0.0.1:55710` (Postgres) and `:55711` (Qdrant):
+
+1. Pull images (outside the clock), then start the clock.
+2. Download the newest `pgcfg/hourly/` payload and the newest `qdrant/daily/` set, decrypt, restore every dump and every snapshot.
+3. Smoke: row counts of the 10 biggest tables per database against the manifest (tolerance `REHEARSAL_COUNT_TOL_PCT`, default 5 %, because the live
+   database keeps changing between the dump and the count), Qdrant `points_count` against `collection_info.json`.
+4. Stop the RTO clock. **RTO = download + decrypt + restore + smoke**, measured on that Mac. A real server rebuild adds the
+   server provisioning steps of section 8 on top.
+5. `git fetch origin main`, `git archive` the hub, then in a node container on the same docker network: `migration:show`
+   (pending count), `migration:run`, `migration:show` (must be 0 pending). This rehearses the next deploy against real data.
+6. Append one line to `~/Backups/roxira-dr/rehearsal.log`, send it through `scripts/ops/notify/notify.py`, remove the containers, network and work dir.
+
+Result line, for example: `2026-11-17T09:00:00Z restore-rehearsal PASS rto=612s total=905s payload=20261117T080737Z.tar.age payload_age=1980s dbs=4 counts=38checked/0nomanifest qdrant=ok(3coll) migrations=ok(2->0,main@abc1234)` (illustrative, not a measurement).
+`FAIL` means a decrypt, restore, count, Qdrant or migration step broke (the detail is in the line); `SLOW` means RTO went above `REHEARSAL_MAX_RTO_S`.
+Record the first measured `rto=` and `total=` here after the owner has run it, and re-measure after big data growth:
+
+| Date | rto | total | payload size | notes |
+|---|---|---|---|---|
+| (not measured yet) | | | | |
+
+Weekly on the Mac (not installed by default): `bash scripts/ops/backup/install_mac_rehearsal.sh --dry-run`, then without
+`--dry-run`. It renders `deploy/launchd/ir.roxira.restore-rehearsal.plist.template` (Sundays 11:30) into `~/Library/LaunchAgents/`.
+Remove it with `launchctl bootout gui/$(id -u)/ir.roxira.restore-rehearsal` and delete the plist.
+
+Limits: single R2 PUT per object (a Qdrant set above about 5 GB needs multipart); the Mac needs free disk of roughly 3x the payload size under `~/Backups/roxira-dr/`.

@@ -2,6 +2,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AccountingModule } from '../accounting/accounting.module';
+import { CountryPacksModule } from '../country_packs/country-packs.module';
 import { CrmModule } from '../crm/crm.module';
 import { CurrencyModule } from '../currency/currency.module';
 import { InventoryModule } from '../inventory/inventory.module';
@@ -57,6 +58,7 @@ import { InvoicePaymentLinkController } from './controllers/invoice-payment-link
     CrmModule,
     InventoryModule,
     AccountingModule,
+    CountryPacksModule,
     PostingRulesModule,
     TenantsModule,
     PartiesModule,

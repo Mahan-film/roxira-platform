@@ -13,7 +13,7 @@ warn() { printf 'WARN  %s\n' "$1"; }
 fail() { printf 'FAIL  %s\n      fix: %s\n' "$1" "$2"; fails=$((fails + 1)); }
 
 case "$LANE" in
-  L1|L2|L3|L4) ok "lane $LANE" ;;
+  L1|L2|L3|L4|L5|L6|L7) ok "lane $LANE" ;;
   *) fail "lane id missing or wrong ('$LANE')" "bash scripts/dev/lane_preflight.sh L1   (first line of the prompt says which lane)" ;;
 esac
 

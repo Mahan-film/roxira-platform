@@ -1,0 +1,5 @@
+ [X] 1 LegacyBaseline1789000000000
+ [X] 2 CreateDamageCalculationsTable1789036084586
+ [X] 3 CreateInvoicesTable1789037877166
+ [ ] AddCostCentersToJournal1789100000000
+ [ ] CreateAttendanceRollup1789200000000

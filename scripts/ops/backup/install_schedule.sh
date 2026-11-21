@@ -97,7 +97,7 @@ ERRORS=0
 err() { log "ERROR: $*"; ERRORS=$((ERRORS + 1)); }
 for t in age age-keygen python3 docker; do command -v "$t" >/dev/null || log "WARNING: $t not found on PATH (the drill and uploads need age, age-keygen, python3, docker)"; done
 if [ ! -r "$ENV_FILE" ]; then
-  err "$ENV_FILE is not readable: the 2-set retention cannot be written and R2/age settings cannot be checked"
+  err "$ENV_FILE is not readable: the 1-set retention cannot be written and R2/age settings cannot be checked"
 else
   for n in BACKUP_R2_ENDPOINT BACKUP_R2_BUCKET BACKUP_R2_ACCESS_KEY_ID BACKUP_R2_SECRET_ACCESS_KEY BACKUP_AGE_RECIPIENT; do
     grep -qE "^(export[[:space:]]+)?${n}=.+" "$ENV_FILE" || err "$n is not set in $ENV_FILE"
@@ -138,9 +138,9 @@ for f in "${SRC[@]}"; do run install -m 644 "$f" "$UNIT_DIR/$(basename "$f")"; d
 # Retention follows the schedule: 2 local sets only once the run timer is daily (the script default stays 6 + 3).
 if [ -f "$ENV_FILE" ] && ! grep -qF "$MARK_BEGIN" "$ENV_FILE"; then
   if [ "$MODE" = "--apply" ]; then
-    printf '\n%s\nBACKUP_KEEP_HOURLY=2\nBACKUP_KEEP_DAILY=0\n%s\n' "$MARK_BEGIN" "$MARK_END" >>"$ENV_FILE"
+    printf '\n%s\nBACKUP_KEEP_HOURLY=1\nBACKUP_KEEP_DAILY=0\n%s\n' "$MARK_BEGIN" "$MARK_END" >>"$ENV_FILE"
   else
-    printf 'dry-run: append BACKUP_KEEP_HOURLY=2 / BACKUP_KEEP_DAILY=0 block to %s\n' "$ENV_FILE"
+    printf 'dry-run: append BACKUP_KEEP_HOURLY=1 / BACKUP_KEEP_DAILY=0 block to %s\n' "$ENV_FILE"
   fi
 fi
 run $SYSTEMCTL daemon-reload

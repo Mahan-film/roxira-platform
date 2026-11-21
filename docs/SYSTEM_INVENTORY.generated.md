@@ -10,7 +10,7 @@ run `python3 scripts/gen_system_inventory.py` (CI-style check: `--check`).
 | docker-socket-proxy | tecnativa/docker-socket-proxy:v0.5.0@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459 | - |
 | enterprise_app | build | 127.0.0.1:8000:8000 |
 | nginx_gateway | nginx:alpine@sha256:db35bfc6b2951e7f8a72db5db120288c127ffaeeb4a6d4b95a26fead017d5913 | 443:443<br>80:80 |
-| pgbouncer_prod | edoburu/pgbouncer:v1.25.2-p0 | 127.0.0.1:6432:6432 |
+| pgbouncer_prod | edoburu/pgbouncer:v1.26.1-p0 | 127.0.0.1:6432:6432 |
 | postgres_prod | postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73 | 127.0.0.1:5432:5432 |
 | qdrant_prod | qdrant/qdrant:v1.19.0@sha256:057ee3a8da769fe7310dd3537b4dc7583bf87a95ce8ac43c0af5a46bc580d1fc | 127.0.0.1:6333:6333 |
 | redis_prod | redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf | 127.0.0.1:6379:6379 |
@@ -20,7 +20,7 @@ run `python3 scripts/gen_system_inventory.py` (CI-style check: `--check`).
 
 ## Environment variable names referenced in docker-compose.prod.yml
 
-`APP_DB_PASSWORD`, `APP_DB_USER`, `AUTH`, `AUTH_TYPE`, `BUILD`, `COMMIT`, `CONFIGS`, `CONTAINERS`, `DATABASE_HOST`, `DATABASE_NAME`, `DATABASE_PASSWORD`, `DATABASE_PORT`, `DATABASE_USER`, `DB_HOST`, `DB_NAME`, `DB_PASSWORD`, `DB_PORT`, `DB_USER`, `DEFAULT_POOL_SIZE`, `DISTRIBUTION`, `DOCKER_HOST`, `EMBEDDING_URL`, `EVENTS`, `EXEC`, `GIT_SHA`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `HOME`, `HOSTNAME`, `IGNORE_STARTUP_PARAMETERS`, `IMAGES`, `IMPORT_BULK_SPOOL_DIR`, `INFO`, `JUDGE_API_ORIGIN`, `JWT_SECRET`, `JWT_TTL_SECONDS`, `KAVENEGAR_API_KEY`, `KAVENEGAR_TEMPLATE_GHAZI`, `KAVENEGAR_TEMPLATE_ROXIRA`, `KEYPOOL_MASTER_KEY`, `KIRA_API_KEY`, `KIRA_BASE_URL`, `KIRA_FALLBACK_MODEL`, `KIRA_REASONING_MODEL`, `LEAD_NOTIFY_EMAIL`, `LISTEN_PORT`, `MAX_CLIENT_CONN`, `MAX_DB_CONNECTIONS`, `NEST_API_ORIGIN`, `NETWORKS`, `NEXT_PUBLIC_UMAMI_WEBSITE_ID`, `NEXT_PUBLIC_UMAMI_WEBSITE_ID_GHAZI`, `NODES`, `NODE_ENV`, `OPENROUTER_API_KEY`, `PING`, `PLUGINS`, `POOL_MODE`, `PORT`, `POST`, `POSTGRES_DB`, `POSTGRES_HOST`, `POSTGRES_PASSWORD`, `POSTGRES_PORT`, `POSTGRES_USER`, `PYTHONDONTWRITEBYTECODE`, `PYTHONPATH`, `PYTHON_BIN`, `QDRANT_CLOUD_API_KEY`, `QDRANT_CLOUD_URL`, `QDRANT_HOST`, `QDRANT_PORT`, `RADAR_PROJECT_ROOT`, `REDIS_HOST`, `REDIS_PORT`, `ROXIRA_AUTH_DB_URL`, `SANDBOX_JWT_SECRET`, `SECRETS`, `SERVICES`, `SESSION`, `SMARTJUDGE_LLM_GATEWAY`, `SMARTJUDGE_LLM_GATEWAY_MODEL`, `SWARM`, `SYSTEM`, `TASKS`, `VERSION`, `VIP_PHONE_ALLOWLIST`, `VOLUMES`, `WEBAUTHN_ORIGINS`, `WEBAUTHN_RP_ID`, `WEBAUTHN_RP_NAME`
+`APP_DB_PASSWORD`, `APP_DB_USER`, `AUTH`, `AUTH_TYPE`, `BUILD`, `COMMIT`, `CONFIGS`, `CONTAINERS`, `DATABASE_HOST`, `DATABASE_NAME`, `DATABASE_PASSWORD`, `DATABASE_PORT`, `DATABASE_USER`, `DB_HOST`, `DB_NAME`, `DB_PASSWORD`, `DB_PORT`, `DB_USER`, `DEFAULT_POOL_SIZE`, `DISTRIBUTION`, `DOCKER_HOST`, `EMBEDDING_URL`, `EVENTS`, `EXEC`, `GIT_SHA`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `HOME`, `HOSTNAME`, `IGNORE_STARTUP_PARAMETERS`, `IMAGES`, `IMPORT_BULK_SPOOL_DIR`, `INFO`, `JUDGE_API_ORIGIN`, `JWT_SECRET`, `JWT_TTL_SECONDS`, `KAVENEGAR_API_KEY`, `KAVENEGAR_TEMPLATE_GHAZI`, `KAVENEGAR_TEMPLATE_ROXIRA`, `KEYPOOL_MASTER_KEY`, `KIRA_API_KEY`, `KIRA_BASE_URL`, `KIRA_FALLBACK_MODEL`, `KIRA_REASONING_MODEL`, `LEAD_NOTIFY_EMAIL`, `LISTEN_PORT`, `MAX_CLIENT_CONN`, `MAX_DB_CONNECTIONS`, `NEST_API_ORIGIN`, `NETWORKS`, `NEXT_PUBLIC_UMAMI_WEBSITE_ID`, `NEXT_PUBLIC_UMAMI_WEBSITE_ID_GHAZI`, `NODES`, `NODE_ENV`, `NODE_OPTIONS`, `OPENROUTER_API_KEY`, `PING`, `PLUGINS`, `POOL_MODE`, `PORT`, `POST`, `POSTGRES_DB`, `POSTGRES_HOST`, `POSTGRES_PASSWORD`, `POSTGRES_PORT`, `POSTGRES_USER`, `PYTHONDONTWRITEBYTECODE`, `PYTHONPATH`, `PYTHON_BIN`, `QDRANT_CLOUD_API_KEY`, `QDRANT_CLOUD_URL`, `QDRANT_HOST`, `QDRANT_PORT`, `RADAR_PROJECT_ROOT`, `REDIS_HOST`, `REDIS_PORT`, `ROXIRA_AUTH_DB_URL`, `SANDBOX_JWT_SECRET`, `SECRETS`, `SERVICES`, `SESSION`, `SMARTJUDGE_LLM_GATEWAY`, `SMARTJUDGE_LLM_GATEWAY_MODEL`, `SWARM`, `SYSTEM`, `TASKS`, `VERSION`, `VIP_PHONE_ALLOWLIST`, `VOLUMES`, `WEBAUTHN_ORIGINS`, `WEBAUTHN_RP_ID`, `WEBAUTHN_RP_NAME`
 
 ## nginx server_name values
 
@@ -39,6 +39,7 @@ run `python3 scripts/gen_system_inventory.py` (CI-style check: `--check`).
 | agent-review.yml | Agent review | pull_request_target, workflow_dispatch |
 | agent-task.yml | Agent task | issues, workflow_dispatch |
 | ci.yml | CI | merge_group, pull_request, push, workflow_dispatch |
+| codeql.yml | CodeQL | push, schedule |
 | deploy-prod.yml | Deploy prod | workflow_dispatch, workflow_run |
 | deps-audit-weekly.yml | Weekly dependency audit | schedule, workflow_dispatch |
 | e2e-smoke.yml | E2E smoke (production) | schedule, workflow_dispatch |
@@ -93,7 +94,9 @@ run `python3 scripts/gen_system_inventory.py` (CI-style check: `--check`).
 | strong | deepseek/deepseek-v4.1-flash-1017, deepseek/deepseek-v4.1-flash, z-ai/glm-5.3, moonshotai/kimi-k3, google/gemini-3.8-flash |
 | stt | openai/whisper-large-v3, openai/whisper-large-v3-turbo, openai/gpt-audio, deepgram/nova-3 |
 | stt_direct | groq:whisper-large-v3, mistral:voxtral-mini-latest, gemini:gemini-flash-latest |
+| stt_openai | gpt-transcribe |
 | summarize | scaledown/summarize |
 | tts | edge-tts:fa-IR-FaridNeural |
+| tts_openai | gpt-realtime-2.1-mini |
 | vision | google/gemini-3.8-flash |
 | voice_realtime | gemini-3.8-live, gemini-3.1-flash-live-preview |

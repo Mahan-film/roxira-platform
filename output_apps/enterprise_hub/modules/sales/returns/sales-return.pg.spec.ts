@@ -156,7 +156,7 @@ describePg('Sales returns of delivery invoices on PostgreSQL (non-superuser, rea
         app.getRepository(WarehouseEntity),
         app.getRepository(StockItemEntity),
         app.getRepository(FifoBatchEntity),
-        app,
+        app, new TenantScope(app),
       ),
       availability,
     );

@@ -125,7 +125,7 @@ describePg('Sales delivery notes on PostgreSQL (non-superuser, real posting engi
         app.getRepository(WarehouseEntity),
         app.getRepository(StockItemEntity),
         app.getRepository(FifoBatchEntity),
-        app,
+        app, new TenantScope(app),
       ),
       availability,
     );

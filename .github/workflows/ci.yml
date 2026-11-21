@@ -30,9 +30,8 @@ permissions:
   contents: read
 
 env:
-  GITLEAKS_VERSION: "8.30.1"
   PYTHON_VERSION: "3.13"
-  NODE_VERSION: "22"
+  NODE_VERSION: "26"
   SEMGREP_VERSION: "1.178.0"
   TRIVY_VERSION: "0.75.0"
 
@@ -52,6 +51,7 @@ jobs:
       projects: ${{ steps.filter.outputs.projects }}
       templates: ${{ steps.filter.outputs.templates }}
       e2e: ${{ steps.filter.outputs.e2e }}
+      migrations: ${{ steps.filter.outputs.migrations }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
@@ -91,6 +91,12 @@ jobs:
             templates:
               - "templates/**"
               - ".github/workflows/ci.yml"
+            migrations:
+              - "output_apps/enterprise_hub/migrations/**"
+              - "scripts/dev/check_migration_ids.py"
+              - "scripts/dev/lint_migrations_squawk.py"
+              - "scripts/dev/install_squawk.sh"
+              - ".github/workflows/ci.yml"
             e2e:
               - "e2e/**"
               - "output_apps/enterprise_hub/**"
@@ -108,11 +114,18 @@ jobs:
           fetch-depth: 0
           filter: blob:none
           ref: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
-      - name: Install gitleaks
+      # MIT gitleaks CLI binary (not gitleaks-action, which needs a licence for orgs).
+      # Version + SHA-256 are pinned in scripts/dev/install_gitleaks.sh; the cache key hashes it.
+      - name: Cache gitleaks binary
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/roxira/gitleaks-*
+          key: gitleaks-${{ runner.os }}-${{ hashFiles('scripts/dev/install_gitleaks.sh') }}
+      - name: Install gitleaks (pinned, SHA-256 verified)
         run: |
-          curl -sSfL --retry 5 --retry-all-errors --retry-delay 10 "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
-            | tar -xz -C /usr/local/bin gitleaks
-          gitleaks version
+          dir="$(dirname "$(bash scripts/dev/install_gitleaks.sh)")"
+          echo "$dir" >> "$GITHUB_PATH"
+          "$dir/gitleaks" version
       - name: Self-test (a new fake token must be caught)
         run: |
           t=$(mktemp -d) && cp .gitleaks.toml "$t/" && cd "$t"
@@ -163,18 +176,77 @@ jobs:
           if-no-files-found: warn
 
   semgrep:
-    name: Semgrep (report-only)
+    name: Semgrep CE (report-only)
     runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 10
     continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: .github/workflows/ci.yml
       - run: pip install "semgrep==${SEMGREP_VERSION}"
       - name: Run custom rules
         run: semgrep --config .semgrep/roxira.yml --metrics=off output_apps src scripts
+      # Replaces CodeQL / GitHub code scanning once the repo is private. Only files this PR
+      # touches; report-only until the findings are triaged (flip by adding --error).
+      - name: Semgrep p/default on changed files
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git diff --name-only --diff-filter=d "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/changed.txt"
+          echo "changed files: $(wc -l < "$RUNNER_TEMP/changed.txt")"
+          [ -s "$RUNNER_TEMP/changed.txt" ] || exit 0
+          xargs -a "$RUNNER_TEMP/changed.txt" semgrep scan --config p/default --metrics=off --quiet --disable-version-check \
+            --exclude 'package-lock.json' --exclude 'node_modules' | tee "$RUNNER_TEMP/semgrep-default.txt"
+
+  # R20-1: OSV-Scanner (Apache-2.0) over every tracked lockfile. REPORT-ONLY until the current
+  # findings are triaged (see the follow-up issue); flip by removing continue-on-error.
+  osv-scanner:
+    name: OSV-Scanner (report-only)
+    if: github.event_name == 'pull_request'
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Cache osv-scanner binary
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/roxira/osv-scanner-*
+          key: osv-scanner-${{ runner.os }}-${{ hashFiles('scripts/dev/install_osv_scanner.sh') }}
+      - name: Scan lockfiles
+        run: |
+          OSV="$(bash scripts/dev/install_osv_scanner.sh)"
+          bash scripts/ci/osv_scan.sh "$OSV" | tee "$RUNNER_TEMP/osv.txt"
+          { echo "### OSV-Scanner (report-only)"; tail -n 40 "$RUNNER_TEMP/osv.txt"; } >> "$GITHUB_STEP_SUMMARY"
+
+  # T207: deterministic guards for the defects reviewers keep finding (docs/agents/LESSONS.md).
+  # Blocking, but only on lines this PR adds (merge-base diff), so existing debt never blocks.
+  agent-guards:
+    name: Agent guards (money, tenant scope, model ids, secrets)
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Run guards on added lines
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+        run: python3 scripts/ci/check_agent_guards.py --base "$BASE_SHA"
 
   ruff:
     name: Ruff (non-blocking)
@@ -368,6 +440,31 @@ jobs:
           cp ci/compose.env .env
           docker compose --env-file ci/compose.env -f docker-compose.prod.yml config -q
 
+  migration-lint:
+    name: Migration ids + Squawk (new migrations only)
+    needs: changes
+    if: needs.changes.outputs.migrations == 'true' && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Migration id check (blocking)
+        run: |
+          # The id must be above the newest id on main's tip, not above the merge base.
+          git fetch --no-tags origin main
+          python3 scripts/dev/check_migration_ids.py --base origin/main
+      - name: Squawk on new migrations (not-null and robust-stmts rules block)
+        run: |
+          # Official release binary; the pinned version and SHA-256 live in install_squawk.sh.
+          SQUAWK="$(bash scripts/dev/install_squawk.sh "$RUNNER_TEMP/squawk")"
+          export SQUAWK
+          python3 scripts/dev/lint_migrations_squawk.py --base origin/main
+
   frontend:
     name: Frontend lint + build
     needs: changes
@@ -385,7 +482,12 @@ jobs:
           cache: npm
           cache-dependency-path: output_apps/enterprise_hub/frontend/package-lock.json
       - run: npm ci
+      - name: oxlint (T202, runs before ESLint)
+        # Pre-existing findings (same class as the ESLint ones): report, do not block. Flip to blocking once clean.
+        continue-on-error: true
+        run: npm run lint:oxlint
       - name: npm run lint
+        # ESLint keeps only the rules oxlint does not cover (eslint-plugin-oxlint in eslint.config.mjs).
         # ~28 pre-existing ESLint errors: report, do not block. Flip to blocking once clean.
         continue-on-error: true
         run: |
@@ -412,7 +514,7 @@ jobs:
     services:
       postgres:
         # Same major version as production (docker-compose.prod.yml, fresh_db_migrate.sh).
-        image: postgres:17
+        image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/docker/library' }}/postgres:17
         env:
           # Throwaway service container: the pg specs connect without a password.
           POSTGRES_HOST_AUTH_METHOD: trust
@@ -438,10 +540,22 @@ jobs:
           cache: npm
           cache-dependency-path: output_apps/enterprise_hub/package-lock.json
       - run: npm ci --no-audit --no-fund
+      - name: oxlint (T202)
+        # Pre-existing findings (unused imports, useless escapes): report, do not block.
+        continue-on-error: true
+        run: npm run lint:oxlint
       - name: tsc --noEmit
         run: npx tsc --noEmit
       - name: Fresh migrations on an empty database
         run: npm run migration:run
+      - name: RLS coverage gate (T192)
+        # Every tenant_id table needs ENABLE + FORCE RLS and a tenant policy; global tables are in scripts/dev/rls_allowlist.txt.
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: "5432"
+          PGUSER: postgres
+          PGDATABASE: rxfresh
+        run: bash ../../scripts/dev/rls_coverage.sh
       - name: Jest unit specs
         # *.pg.spec.ts skip themselves without ROXIRA_TEST_PG_HOST; they run in the next step.
         run: npx jest --testPathIgnorePatterns '/node_modules/' '/frontend/' '/dist/' '\.pg\.spec\.ts$'
@@ -452,6 +566,47 @@ jobs:
           ROXIRA_TEST_PG_PORT: "5432"
           ROXIRA_TEST_PG_USER: postgres
         run: npx jest --runInBand --testPathPattern '\.pg\.spec\.ts$'
+
+  typescript7:
+    # T202: TypeScript 7 (native compiler) type-check, installed as the alias `typescript7` so the
+    # build and ts-jest keep TypeScript 5.9. REPORT-ONLY: continue-on-error, not a required check.
+    name: TypeScript 7 type-check (report-only)
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true'
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    timeout-minutes: 15
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [backend, frontend]
+        include:
+          - app: backend
+            dir: output_apps/enterprise_hub
+          - app: frontend
+            dir: output_apps/enterprise_hub/frontend
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ${{ matrix.dir }}/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: tsc 7 --noEmit (never fails the job; result goes to the summary)
+        run: |
+          set +e
+          npm run typecheck:ts7 > "$RUNNER_TEMP/ts7.log" 2>&1
+          code=$?
+          cat "$RUNNER_TEMP/ts7.log"
+          {
+            echo "### TypeScript 7 (${{ matrix.app }}), report-only"
+            echo "Exit code: $code, $(grep -c 'error TS' "$RUNNER_TEMP/ts7.log") errors."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
 
   m1-gate:
     # Issue #116 / docs/testing/M1_GATE.md. REPORT-ONLY: continue-on-error, and it is not a required check.
@@ -464,7 +619,7 @@ jobs:
     continue-on-error: true
     services:
       postgres:
-        image: postgres:17
+        image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/docker/library' }}/postgres:17
         env:
           POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: rxfresh
@@ -476,7 +631,7 @@ jobs:
           --health-timeout 5s
           --health-retries 20
       redis:
-        image: redis:7
+        image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/docker/library' }}/redis:7
         ports:
           - 6379:6379
     env:

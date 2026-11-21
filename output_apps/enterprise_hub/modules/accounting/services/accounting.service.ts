@@ -6,6 +6,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { BudgetControlService } from './budget-control.service';
+import { assertNotAiIdentity } from '../../access/access-context';
 import { LedgerAuditService } from '../../access/services/ledger-audit.service';
 import { EntityManager, FindOptionsWhere, ILike } from 'typeorm';
 import { createHash, randomBytes } from 'crypto';
@@ -71,12 +72,19 @@ import {
 import { ChartOfAccountEntity } from '../entities/chart-of-account.entity';
 import { JournalEntryLineEntity } from '../entities/journal-entry-line.entity';
 import { JournalEntryEntity } from '../entities/journal-entry.entity';
+import { FxRateEntity } from '../entities/fx-rate.entity';
 import {
   AccountLevel,
   AccountType,
+  FxRateType,
   JournalEntryStatus,
   JournalEntryType,
 } from '../enums/accounting.enum';
+import {
+  CreateFxRateDto,
+  FxRateResponseDto,
+  QueryFxRatesDto,
+} from '../dto/fx-rate.dto';
 import {
   AccountingRepository,
   JournalLineInput,
@@ -131,6 +139,13 @@ interface NormalisedJournalLine {
   costCenterCode: string | null;
   projectCode: string | null;
   branchId: string | null;
+  txCurrencyCode: string;
+  fxRateApplied: string;
+  txDebitMinor: bigint;
+  txCreditMinor: bigint;
+  bookDebitMinor: bigint;
+  bookCreditMinor: bigint;
+  isRounding: boolean;
 }
 
 /** Minor units as a JS number for consumers that need one (base-currency conversion, banking). */
@@ -181,6 +196,30 @@ export class AccountingService {
       fxRate: line.fxRate != null ? Number(line.fxRate) : null,
       partyCode: line.partyCode ?? null,
       description: line.description,
+      txCurrencyCode: line.txCurrencyCode ?? line.currency ?? Currency.IRR,
+      fxRateApplied:
+        line.fxRateApplied != null
+          ? Number(line.fxRateApplied)
+          : line.fxRate != null
+            ? Number(line.fxRate)
+            : 1,
+      txDebit:
+        line.txDebit != null
+          ? fromMinor(fromDb(line.txDebit))
+          : fromMinor(fromDb(line.debit)),
+      txCredit:
+        line.txCredit != null
+          ? fromMinor(fromDb(line.txCredit))
+          : fromMinor(fromDb(line.credit)),
+      bookDebit:
+        line.bookDebit != null
+          ? fromMinor(fromDb(line.bookDebit))
+          : fromMinor(fromDb(line.debit)),
+      bookCredit:
+        line.bookCredit != null
+          ? fromMinor(fromDb(line.bookCredit))
+          : fromMinor(fromDb(line.credit)),
+      isRounding: line.isRounding ?? false,
     };
   }
 
@@ -252,8 +291,11 @@ export class AccountingService {
         throw error;
       }
     };
-    const debitMinor = amount(line.debit);
-    const creditMinor = amount(line.credit);
+    const isRounding = Boolean(line.isRounding);
+
+    // Book reporting amounts
+    const debitMinor = amount(line.bookDebit ?? line.debit);
+    const creditMinor = amount(line.bookCredit ?? line.credit);
 
     if (debitMinor < 0n || creditMinor < 0n) {
       throw new BadRequestException('مبالغ بدهکار و بستانکار نمی‌توانند منفی باشند.');
@@ -270,6 +312,15 @@ export class AccountingService {
       throw new BadRequestException(
         `سطر حساب ${line.accountCode} باید یا بدهکار یا بستانکار بزرگ‌تر از صفر داشته باشد.`,
       );
+    }
+
+    if (isRounding) {
+      const roundingAmount = hasDebit ? debitMinor : creditMinor;
+      if (roundingAmount > 100n) {
+        throw new BadRequestException(
+          `مبلغ سطر گردکردن نمی‌تواند بیش از ۱ ریال (۱۰۰ واحد جزئی) باشد: ${minorToDecimal(roundingAmount)}`,
+        );
+      }
     }
 
     const currency = line.currency
@@ -316,6 +367,43 @@ export class AccountingService {
       }
     }
 
+    // Transaction amounts & currency:
+    let txDebitMinor: bigint;
+    let txCreditMinor: bigint;
+    if (isRounding) {
+      if (
+        (line.txDebit != null && amount(line.txDebit) > 0n) ||
+        (line.txCredit != null && amount(line.txCredit) > 0n)
+      ) {
+        throw new BadRequestException('سطر گردکردن نباید مبلغی در ارز معامله داشته باشد.');
+      }
+      txDebitMinor = 0n;
+      txCreditMinor = 0n;
+    } else if (line.txDebit != null || line.txCredit != null) {
+      txDebitMinor = amount(line.txDebit);
+      txCreditMinor = amount(line.txCredit);
+    } else if (amountFx != null) {
+      const fxUnits = fromDb(line.amountFx!.toString());
+      txDebitMinor = hasDebit ? fxUnits : 0n;
+      txCreditMinor = hasCredit ? fxUnits : 0n;
+    } else {
+      txDebitMinor = debitMinor;
+      txCreditMinor = creditMinor;
+    }
+
+    const txCurrencyCode = (
+      line.txCurrencyCode?.trim() ||
+      (amountFx != null ? currency : (line.currency ? normalizeCurrency(line.currency) : NormalisedCurrency.IRR)) ||
+      NormalisedCurrency.IRR
+    ).toUpperCase();
+
+    const fxRateApplied =
+      line.fxRateApplied != null
+        ? scaledToDecimal(parseScaled(line.fxRateApplied, FX_SCALE), FX_SCALE)
+        : fxRate != null
+          ? scaledToDecimal(fxRate, FX_SCALE)
+          : '1.0';
+
     return {
       accountCode: line.accountCode,
       debitMinor: hasDebit ? debitMinor : 0n,
@@ -329,6 +417,13 @@ export class AccountingService {
       costCenterCode: line.costCenterCode?.trim() || null,
       projectCode: line.projectCode?.trim() || null,
       branchId: line.branchId ?? defaultBranchId ?? null,
+      txCurrencyCode,
+      fxRateApplied,
+      txDebitMinor,
+      txCreditMinor,
+      bookDebitMinor: hasDebit ? debitMinor : 0n,
+      bookCreditMinor: hasCredit ? creditMinor : 0n,
+      isRounding,
     };
   }
 
@@ -609,18 +704,90 @@ export class AccountingService {
 
   /** Exact check in integer minor units: debit equals credit and the total is above zero. */
   private assertBalanced(lines: NormalisedJournalLine[]): void {
-    const debitMinor = lines.reduce((sum, l) => sum + l.debitMinor, 0n);
-    const creditMinor = lines.reduce((sum, l) => sum + l.creditMinor, 0n);
+    const bookDebit = lines.reduce((sum, l) => sum + l.bookDebitMinor, 0n);
+    const bookCredit = lines.reduce((sum, l) => sum + l.bookCreditMinor, 0n);
 
-    if (debitMinor !== creditMinor) {
+    if (bookDebit !== bookCredit) {
       throw new BadRequestException(
-        `سند تراز نیست: جمع بدهکار (${minorToDecimal(debitMinor)}) با جمع بستانکار (${minorToDecimal(creditMinor)}) برابر نیست.`,
+        `سند تراز نیست: جمع بدهکار دفاتر (${minorToDecimal(bookDebit)}) با جمع بستانکار دفاتر (${minorToDecimal(bookCredit)}) برابر نیست.`,
       );
     }
 
-    if (debitMinor <= 0n) {
+    if (bookDebit <= 0n) {
       throw new BadRequestException('مبلغ سند باید بزرگ‌تر از صفر باشد.');
     }
+
+    const nonRoundingLines = lines.filter((l) => !l.isRounding);
+    const txCurrencies = Array.from(new Set(nonRoundingLines.map((l) => l.txCurrencyCode)));
+    if (txCurrencies.length === 1) {
+      const txDebit = nonRoundingLines.reduce((sum, l) => sum + l.txDebitMinor, 0n);
+      const txCredit = nonRoundingLines.reduce((sum, l) => sum + l.txCreditMinor, 0n);
+      if (txDebit !== txCredit) {
+        throw new BadRequestException(
+          `سند در ارز معامله (${txCurrencies[0]}) تراز نیست: جمع بدهکار (${minorToDecimal(txDebit)}) با جمع بستانکار (${minorToDecimal(txCredit)}) برابر نیست.`,
+        );
+      }
+    }
+
+    for (const r of lines.filter((l) => l.isRounding)) {
+      const roundingAmount = r.bookDebitMinor > 0n ? r.bookDebitMinor : r.bookCreditMinor;
+      if (roundingAmount > 100n) {
+        throw new BadRequestException(
+          `مبلغ سطر گردکردن نمی‌تواند بیش از ۱ ریال (۱۰۰ واحد جزئی) باشد: ${minorToDecimal(roundingAmount)}`,
+        );
+      }
+      if (r.txDebitMinor !== 0n || r.txCreditMinor !== 0n) {
+        throw new BadRequestException(
+          'سطر گردکردن نباید مبلغی در ارز معامله داشته باشد.',
+        );
+      }
+    }
+  }
+
+  /**
+   * Helper to append a rounding adjustment line if book debit and credit differ by up to 100 minor units (1 IRR).
+   */
+  applyRoundingResidual(
+    lines: JournalEntryLineDto[],
+    roundingAccountCode: string,
+    description: string = 'تعدیل گردکردن ناشی از تسعیر ارز',
+  ): JournalEntryLineDto[] {
+    const sumBookDebit = lines.reduce((sum, l) => {
+      const val = l.bookDebit ?? l.debit;
+      return sum + (val != null ? toMinor(val) : 0n);
+    }, 0n);
+    const sumBookCredit = lines.reduce((sum, l) => {
+      const val = l.bookCredit ?? l.credit;
+      return sum + (val != null ? toMinor(val) : 0n);
+    }, 0n);
+
+    const diff = sumBookDebit - sumBookCredit;
+    if (diff === 0n) {
+      return [...lines];
+    }
+    const absDiff = diff < 0n ? -diff : diff;
+    if (absDiff > 100n) {
+      throw new BadRequestException(
+        `اختلاف تراز دفاتر (${minorToDecimal(absDiff)}) بیش از ۱ ریال (۱۰۰ واحد جزئی) است و با سطر گردکردن قابل حل نیست.`,
+      );
+    }
+
+    const roundingLine: JournalEntryLineDto = {
+      accountCode: roundingAccountCode,
+      debit: diff < 0n ? fromMinor(absDiff) : 0,
+      credit: diff > 0n ? fromMinor(absDiff) : 0,
+      bookDebit: diff < 0n ? fromMinor(absDiff) : 0,
+      bookCredit: diff > 0n ? fromMinor(absDiff) : 0,
+      txDebit: 0,
+      txCredit: 0,
+      currency: Currency.IRR,
+      txCurrencyCode: Currency.IRR,
+      fxRateApplied: 1,
+      isRounding: true,
+      description,
+    };
+
+    return [...lines, roundingLine];
   }
 
   /** Looks the account codes up and refuses unknown codes and header (group or kol) accounts. */
@@ -669,6 +836,13 @@ export class AccountingService {
       costCenterCode: line.costCenterCode,
       projectCode: line.projectCode,
       branchId: line.branchId,
+      txCurrencyCode: line.txCurrencyCode,
+      fxRateApplied: line.fxRateApplied,
+      txDebitMinor: line.txDebitMinor,
+      txCreditMinor: line.txCreditMinor,
+      bookDebitMinor: line.bookDebitMinor,
+      bookCreditMinor: line.bookCreditMinor,
+      isRounding: line.isRounding,
     }));
   }
 
@@ -994,7 +1168,11 @@ export class AccountingService {
     id: number,
     target: JournalEntryStatus,
     expectedVersion?: number | null,
+    actor?: string,
   ): Promise<JournalEntryResponseDto> {
+    if (target === JournalEntryStatus.POSTED) {
+      assertNotAiIdentity(actor, 'post a journal entry');
+    }
     return this.accountingRepository.transaction(tenantId, async (manager) => {
       const entry = await this.lockEditableVoucher(tenantId, id, manager);
       if (entry.status === target) {
@@ -1242,6 +1420,7 @@ export class AccountingService {
     actor: string,
     dto: LockPeriodDto,
   ): Promise<PeriodLockResponseDto> {
+    assertNotAiIdentity(actor, 'lock an accounting period');
     const valid = (day: string): boolean =>
       new Date(`${day}T00:00:00.000Z`).toISOString().slice(0, 10) === day;
     if (!valid(dto.periodStart) || !valid(dto.periodEnd)) {
@@ -1275,6 +1454,7 @@ export class AccountingService {
     id: number,
     dto: UnlockPeriodDto,
   ): Promise<PeriodLockResponseDto> {
+    assertNotAiIdentity(actor, 'unlock an accounting period');
     const existing = await this.accountingRepository.findPeriodLock(tenantId, id);
     if (!existing) {
       throw new NotFoundException(`قفل دوره با شناسه ${id} یافت نشد.`);
@@ -1612,5 +1792,71 @@ export class AccountingService {
         runningBalance: fromMinor(row.running),
       })),
     };
+  }
+
+  private toFxRateDto(entity: FxRateEntity): FxRateResponseDto {
+    return {
+      id: entity.id,
+      baseCurrency: entity.baseCurrency,
+      quoteCurrency: entity.quoteCurrency,
+      rateDate: entity.rateDate,
+      rateType: entity.rateType,
+      rate: Number(entity.rate),
+      source: entity.source,
+      createdAt: entity.createdAt,
+    };
+  }
+
+  async upsertFxRate(
+    tenantId: string,
+    dto: CreateFxRateDto,
+    manager?: EntityManager,
+  ): Promise<FxRateResponseDto> {
+    const rateStr = typeof dto.rate === 'number' ? dto.rate.toString() : dto.rate;
+    const entity = await this.accountingRepository.upsertFxRate(
+      tenantId,
+      {
+        baseCurrency: dto.baseCurrency,
+        quoteCurrency: dto.quoteCurrency,
+        rateDate: dto.rateDate,
+        rateType: dto.rateType,
+        rate: rateStr,
+        source: dto.source,
+      },
+      manager,
+    );
+    return this.toFxRateDto(entity);
+  }
+
+  async findFxRate(
+    tenantId: string,
+    baseCurrency: string,
+    quoteCurrency: string,
+    rateDate: string,
+    rateType: FxRateType = FxRateType.SPOT,
+    manager?: EntityManager,
+  ): Promise<FxRateResponseDto | null> {
+    const entity = await this.accountingRepository.findFxRate(
+      tenantId,
+      baseCurrency,
+      quoteCurrency,
+      rateDate,
+      rateType,
+      manager,
+    );
+    return entity ? this.toFxRateDto(entity) : null;
+  }
+
+  async listFxRates(
+    tenantId: string,
+    query: QueryFxRatesDto = {},
+    manager?: EntityManager,
+  ): Promise<FxRateResponseDto[]> {
+    const entities = await this.accountingRepository.listFxRates(
+      tenantId,
+      query,
+      manager,
+    );
+    return entities.map((e) => this.toFxRateDto(e));
   }
 }

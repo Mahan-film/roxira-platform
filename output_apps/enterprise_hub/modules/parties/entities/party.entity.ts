@@ -51,6 +51,14 @@ export class PartyEntity {
   @Column({ type: 'bigint', name: 'credit_limit', default: '0' })
   creditLimit: string;
 
+  /** AES-256-GCM encrypted personal data under the party's per-party DEK in `erp_party_keys`. */
+  @Column({ type: 'text', name: 'pii_ciphertext', nullable: true })
+  piiCiphertext: string | null;
+
+  /** Timestamp when this party's per-party key was destroyed (crypto-shredding). */
+  @Column({ type: 'timestamp', name: 'erased_at', nullable: true })
+  erasedAt: Date | null;
+
   @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt: Date;
 

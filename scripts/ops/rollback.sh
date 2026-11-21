@@ -11,8 +11,11 @@
 # meant to be run by hand: "the site is broken after a deploy, roll it back".
 set -euo pipefail
 
-COMPOSE_FILE="docker-compose.prod.yml"
 PROJECT_DIR="/opt/roxira_platform"
+COMPOSE_FILE="docker-compose.prod.yml"
+# WAL-G overlay (T204): postgres_prod must keep archiving when /etc/roxira/walg.env exists, so include the overlay then.
+COMPOSE_ARGS=(-f "$COMPOSE_FILE")
+[ -r /etc/roxira/walg.env ] && [ -f "$PROJECT_DIR/docker-compose.walg.yml" ] && COMPOSE_ARGS+=(-f docker-compose.walg.yml)
 
 log() { printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"; }
 fail() { log "ERROR: $*"; exit 1; }
@@ -28,7 +31,7 @@ command -v docker >/dev/null 2>&1 || fail "docker not found"
 
 # Derive the image repo (everything before ":") from the service's current
 # container, the same way deploy.sh derives it when it tags ":prev".
-cid="$(docker compose -f "$COMPOSE_FILE" ps -aq "$SERVICE" || true)"
+cid="$(docker compose "${COMPOSE_ARGS[@]}" ps -aq "$SERVICE" || true)"
 [ -n "$cid" ] || fail "service ${SERVICE} has no container (running or stopped); nothing to roll back"
 current_image="$(docker inspect --format '{{.Config.Image}}' "$cid")"
 image_repo="${current_image%%:*}"
@@ -39,10 +42,10 @@ docker image inspect "$prev_tag" >/dev/null 2>&1 || fail "no ${prev_tag} image f
 log "rolling back ${SERVICE} to ${prev_tag}"
 docker tag "$prev_tag" "${image_repo}:latest" || fail "could not retag ${prev_tag} as ${image_repo}:latest"
 
-docker compose -f "$COMPOSE_FILE" up -d --no-deps "$SERVICE" || fail "up -d for ${SERVICE} failed during rollback"
+docker compose "${COMPOSE_ARGS[@]}" up -d --no-deps "$SERVICE" || fail "up -d for ${SERVICE} failed during rollback"
 
 log "waiting for ${SERVICE} to report healthy or stay running"
-cid="$(docker compose -f "$COMPOSE_FILE" ps -q "$SERVICE")"
+cid="$(docker compose "${COMPOSE_ARGS[@]}" ps -q "$SERVICE")"
 elapsed=0
 timeout="${ROLLBACK_HEALTH_TIMEOUT:-60}"
 has_check="$(docker inspect --format '{{if .State.Health}}yes{{else}}no{{end}}' "$cid")"

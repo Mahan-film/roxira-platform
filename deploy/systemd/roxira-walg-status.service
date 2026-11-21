@@ -1,0 +1,11 @@
+[Unit]
+Description=Roxira WAL-G archive health check, writes walg.env and alerts (prepared, not enabled)
+After=docker.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/roxira_platform
+ExecStart=/opt/roxira_platform/scripts/ops/walg/walg_status.sh
+Nice=15
+TimeoutStartSec=2min

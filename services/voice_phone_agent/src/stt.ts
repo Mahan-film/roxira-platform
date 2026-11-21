@@ -2,6 +2,7 @@ import { FormData } from 'undici';
 import { IN_RATE, wav } from './audio.js';
 import { cfg } from './config.js';
 import { fetchDirect, fetchProxied } from './http.js';
+import { repairLegalTerms } from './legal-terms.js';
 
 function buildForm(wavBuf: Buffer, model?: string): FormData {
   const form = new FormData();
@@ -214,10 +215,18 @@ let keyCursor = 0;
 // Whisper hallucinates these on silence/noise; treat as "nothing heard".
 const HALLUCINATIONS = [/زیرنویس/, /امیدوارم از این ویدیو/, /لطفا سابسکرایب/, /^[\s.،؟!…]*$/];
 
-function clean(t: string): string {
+/** true when `s` is Whisper reading its own vocabulary prompt back (near-silence), not a caller's term. */
+export function isPromptEcho(s: string, prompt: string = cfg.sttPrompt): boolean {
+  const core = s.replace(/[.،]+$/, '').trim();
+  if (!prompt || core.length < 12 || !prompt.includes(core)) return false;
+  // a caller may say exactly one term of the list ("قانون مبارزه با پولشویی"): only the prompt's
+  // header or a run of several list items (a comma or colon inside, or 5+ words) is an echo
+  return /[،:]/.test(core) || core.split(/\s+/).length >= 5;
+}
+
+export function clean(t: string): string {
   const s = t.replace(/\s+/g, ' ').trim();
   if (s.length < 2 || HALLUCINATIONS.some((re) => re.test(s))) return '';
-  // on near-silence Whisper may echo the vocabulary prompt back
-  if (cfg.sttPrompt && s.length >= 12 && cfg.sttPrompt.includes(s.replace(/[.،]+$/, ''))) return '';
-  return s;
+  if (isPromptEcho(s)) return '';
+  return repairLegalTerms(s);
 }

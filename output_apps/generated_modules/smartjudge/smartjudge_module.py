@@ -17,6 +17,8 @@ from output_apps.generated_modules.smartjudge.fast_path import (
 )
 from output_apps.generated_modules.smartjudge import chat_safety as _chat_safety
 from output_apps.generated_modules.smartjudge import chat_fast as _chat_fast
+from output_apps.generated_modules.smartjudge import answer_timing as _answer_timing
+from output_apps.generated_modules.smartjudge import served_collection as _served_collection
 from output_apps.generated_modules.smartjudge import chat_auth
 from output_apps.generated_modules.smartjudge import email_auth as _email_auth
 from output_apps.generated_modules.smartjudge import email_sender as _email_sender
@@ -34,6 +36,7 @@ from output_apps.generated_modules.smartjudge import catalog_intent as _catalog_
 from output_apps.generated_modules.smartjudge import regulations_retrieval as _regs
 from output_apps.generated_modules.smartjudge import laws_public as _laws_public
 from output_apps.generated_modules.smartjudge import regulations_public as _regulations_public
+from output_apps.generated_modules.smartjudge import abstention_gate as _abstention_gate
 from output_apps.ecosystem_core.src.billing import payment_orders
 from output_apps.ecosystem_core.src.billing import payment_service
 from output_apps.ecosystem_core.src.billing import crypto_payment_service, router_crypto
@@ -100,6 +103,12 @@ import contextvars
 from typing import Optional, List, Any, Sequence
 from fastapi import Request, APIRouter, Request, Body, WebSocket, WebSocketDisconnect, Query, File, UploadFile, Depends, Form
 from fastapi.responses import JSONResponse, StreamingResponse, Response
+
+try:
+    import orjson as _orjson  # noqa: F401
+    from fastapi.responses import ORJSONResponse as FastJSONResponse
+except ImportError:  # pragma: no cover - optional fast path
+    FastJSONResponse = JSONResponse
 from pydantic import field_validator as _field_validator
 from pydantic import BaseModel as _BaseModel, ConfigDict as _ConfigDict
 import psycopg
@@ -227,7 +236,11 @@ except Exception as _lr_import_exc:  # noqa: BLE001
             return pool.submit(asyncio.run, coro).result(timeout=timeout)
 
 
-router = APIRouter(prefix="/api/v1/apps/judge", tags=["SmartJudge Complete Engine"])
+router = APIRouter(
+    prefix="/api/v1/apps/judge",
+    tags=["SmartJudge Complete Engine"],
+    default_response_class=FastJSONResponse,
+)
 
 POSTGRES_DSN = (
     "postgresql://enterprise_admin:"
@@ -1727,6 +1740,7 @@ async def _run_consult(payload: dict, request, user, stream_cb=None):
               f"retrieval_ms={timing.get('retrieval_ms', 0)} ttft_ms={timing.get('ttft_ms', 0)} "
               f"llm_ms={timing.get('llm_ms', 0)} total_ms={round((time.perf_counter() - t0) * 1000)} "
               f"tier={'VIP' if user.tier == 'VIP' else 'FREE'}", file=sys.stderr)
+        _answer_timing.emit(request_id, timing, round((time.perf_counter() - t0) * 1000), tier="VIP" if user.tier == "VIP" else "FREE", collection=CITATION_QDRANT_COLLECTION)
 
 
 # ---------------------------------------------------------------------------
@@ -2201,7 +2215,9 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
             "unified_precedents": [],
             "model_assigned": cfg["primary_model"],
             "tier": selected_tier,
-            "latency_ms": round((time.time() - t0) * 1000, 2)
+            "latency_ms": round((time.time() - t0) * 1000, 2),
+            "abstained": True,
+            "abstention_reason": "out_of_scope",
         }
     
     court_suggestion, court_missing = _court_suggestion_for_chat(user_text, payload)
@@ -2255,16 +2271,51 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         retrieval_query = (user_text + "\n" + _case_files.retrieval_hint(case_records)).strip()
     elif review_mode:
         retrieval_query = (user_text + "\n" + review_text[:500]).strip()
-    laws, precedents = await aquery_knowledge_graph(retrieval_query, limit=5)
 
-    # پرسش‌های فراداده‌ای / کاتالوگی (نظیر شماره یا خلاصه آخرین رأی وحدت رویه)
+    # پرسش‌های فراداده‌ای / کاتالوگی و بسط دامنه به خروجی واکشی اصلی وابسته نیستند،
+    # بنابراین هم‌زمان با واکشی اصلی اجرا می‌شوند.
     cat_intent = _catalog_intent.detect(user_text)
+    use_prompt_library = _prompt_library.prompt_library_enabled()
+    detected_domains: list = []
+    competence_queries: list = []
+    if not review_mode and use_prompt_library:
+        detected_domains = _prompt_library.detect_domains(user_text)
+        competence_queries = list(_prompt_library.expand_competence_queries(user_text))
+
+    main_task = aquery_knowledge_graph(retrieval_query, limit=5)
+    cat_task = (
+        _rulings.latest_rulings(limit=5, sub_collection=(cat_intent.get("sub_collection") or "unity_rulings"))
+        if cat_intent
+        else None
+    )
+    comp_tasks = [aquery_knowledge_graph(q, limit=3) for q in competence_queries]
+
+    _t_exp = time.perf_counter()
+    gathered = await asyncio.gather(
+        main_task,
+        *([cat_task] if cat_task is not None else []),
+        *comp_tasks,
+        return_exceptions=True,
+    )
+    if competence_queries:
+        _timing_set("graph_expansion_ms", _t_exp)
+
+    main_res = gathered[0]
+    if isinstance(main_res, BaseException):
+        raise main_res
+    laws, precedents = main_res
+
+    offset = 1
     cat_rows: list = []
     cat_context_str = ""
-    if cat_intent:
+    if cat_task is not None:
+        cat_res = gathered[offset]
+        offset += 1
+        if isinstance(cat_res, BaseException):
+            print(f"[SMARTJUDGE][CATALOG-FAIL] {cat_res}", file=sys.stderr)
+        else:
+            cat_rows = list(cat_res or [])
         target = cat_intent.get("target") or "unity_supreme_court"
-        sub_coll = cat_intent.get("sub_collection") or "unity_rulings"
-        cat_rows = await _rulings.latest_rulings(limit=5, sub_collection=sub_coll)
         if cat_intent.get("is_number_ask"):
             direct_ans = _catalog_intent.format_deterministic_answer(cat_rows, target=target, is_voice=is_voice)
             return _consult_body(
@@ -2286,8 +2337,6 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
 
     # Default ON (SMARTJUDGE_PROMPT_LIBRARY=0 disables): competence questions get up to 3 extra
     # targeted retrieval queries, merged and de-duplicated by title.
-    use_prompt_library = _prompt_library.prompt_library_enabled()
-    detected_domains: list = []
     if review_mode:  # civil-code contract rules + topic laws (labor, consumer, lease, ...)
         extra_queries = _contract_review.retrieval_queries(review_text, user_text)
         extra_results = await asyncio.gather(
@@ -2304,12 +2353,8 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
                             and r.get("title") not in known:
                         known.add(r.get("title"))
                         rows.append(r)
-    elif use_prompt_library:
-        detected_domains = _prompt_library.detect_domains(user_text)
-        extra_queries = list(_prompt_library.expand_competence_queries(user_text))
-        extra_results = await asyncio.gather(
-            *[aquery_knowledge_graph(q, limit=3) for q in extra_queries], return_exceptions=True
-        )
+    elif competence_queries:
+        extra_results = gathered[offset:]
         for extra_res in extra_results:
             if isinstance(extra_res, BaseException):  # boost is best effort
                 print(f"[SMARTJUDGE][COMPETENCE-EXPAND-FAIL] {extra_res}", file=sys.stderr)
@@ -2326,6 +2371,44 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
     # ground the model or reach the client.
     laws = _source_filter.filter_relevant(laws)
     precedents = _source_filter.filter_relevant(precedents)
+
+    as_of = payload.get("as_of_date") or payload.get("as_of")
+    if as_of:
+        laws = _abstention_gate.filter_by_as_of(laws, as_of)
+        precedents = _abstention_gate.filter_by_as_of(precedents, as_of)
+
+    # Abstention gate (R6 Decision 3): low score / no grounding, version conflict, out of scope, false premise, or missing as-of
+    if not review_mode and not case_records:
+        all_chunks = list(laws) + list(precedents)
+        chunk_scores = [
+            float(c.get("rerank_score") if c.get("rerank_score") is not None else c.get("score"))
+            for c in all_chunks
+            if isinstance(c, dict) and (c.get("rerank_score") is not None or c.get("score") is not None)
+        ]
+        top_rerank_score = max(chunk_scores) if chunk_scores else None
+        gate_decision = _abstention_gate.evaluate_abstention_gate(
+            user_text,
+            retrieved_chunks=all_chunks,
+            rerank_score=top_rerank_score,
+            as_of_date=as_of,
+            require_grounding=True,
+        )
+        if gate_decision.should_abstain:
+            return _consult_body(
+                conv_id=conv_id or str(uuid.uuid4()),
+                reply=_chat_safety.to_latin_digits(gate_decision.message or "اطلاعات حقوقی معتبر برای پاسخ قطعی یافت نشد."),
+                prob=None,
+                draft=None,
+                laws=[],
+                precedents=[],
+                court_suggestion=None,
+                case_file_refs=[],
+                model=cfg["primary_model"],
+                tier=selected_tier,
+                t0=t0,
+                abstained=True,
+                abstention_reason=gate_decision.reason,
+            )
 
     _timing_set("retrieval_ms", _t_retrieval)
 
@@ -2446,6 +2529,7 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
                 )
                 reply_msg = routed.content
                 routed_model = routed.model or None
+                _answer_timing.note_router_result(routed)
                 if not is_voice and _answer_escalation.enabled() and _llm_gateway.may_use_paid(selected_tier):
                     # B3: flag-gated, one strong-tier re-ask on a deterministic quality trigger.
                     esc = await _answer_escalation.maybe_escalate(
@@ -2474,6 +2558,7 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
                 if _llm_gateway is not None:  # some free models prepend English reasoning text
                     reply_msg = _llm_gateway.strip_leaked_reasoning(reply_msg)
                 routed_model = outcome.model
+                _answer_timing.note_stream_outcome(outcome)
                 bucket = _chat_timing.get()
                 if bucket is not None and outcome.ttft_ms is not None:
                     bucket["ttft_ms"] = outcome.ttft_ms
@@ -2622,9 +2707,8 @@ async def judge_chat_stream(request: Request, payload: dict = Body(...),
                             user: chat_auth.CurrentUser = Depends(get_current_user)):
     """SSE variant of /chat for every tier: same auth, identity, limits and idempotency.
 
-    Events: ``meta`` -> ``delta``* -> ``done`` (the full /chat JSON body) | ``error``.
-    Failures before the first token keep their normal HTTP status and JSON body, so the
-    client can fall back to /chat. A request_id that already completed is replayed as one chunk.
+    Events: ``meta`` (sent immediately as first SSE frame) -> ``delta``* -> ``done`` | ``error``.
+    A request_id that already completed is replayed as one chunk; failures surface as ``error`` events.
     """
     if "messages" in payload and not payload.get("message"):
         msgs = payload.get("messages", [])
@@ -2638,47 +2722,20 @@ async def judge_chat_stream(request: Request, payload: dict = Body(...),
     task = asyncio.create_task(_run_consult(payload, request, user, _cb))
     _BG_TASKS.add(task)
     task.add_done_callback(_BG_TASKS.discard)
-    first = asyncio.create_task(q.get())
-    done, _pending = await asyncio.wait({task, first}, return_when=asyncio.FIRST_COMPLETED)
-    first_piece = None
-    if first in done:
-        first_piece = first.result()
-    else:
-        first.cancel()
-        try:
-            result = task.result()
-        except Exception as exc:  # noqa: BLE001
-            print(f"[CHAT-STREAM-ERR] {type(exc).__name__}", file=sys.stderr)
-            return _chat_internal_error()
-        body = None
-        if isinstance(result, dict):
-            body = result
-        elif isinstance(result, JSONResponse) and result.status_code == 200:
-            try:
-                body = json.loads(result.body)
-            except Exception:  # noqa: BLE001
-                body = None
-        if body is None:
-            return result  # error / limit / 503: normal status + JSON
-
-        async def _single():
-            yield _chat_fast.sse_frame("meta", {"replay": isinstance(result, JSONResponse)})
-            yield _chat_fast.sse_frame("delta", {"content": body.get("reply", "")})
-            yield _chat_fast.sse_frame("done", body)
-
-        return StreamingResponse(_single(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
     async def _events():
         yield _chat_fast.sse_frame("meta", {"replay": False})
-        yield _chat_fast.sse_frame("delta", {"content": first_piece})
+        sent_delta = False
         while True:
             getter = asyncio.create_task(q.get())
             fin, _ = await asyncio.wait({task, getter}, return_when=asyncio.FIRST_COMPLETED)
             if getter in fin:
+                sent_delta = True
                 yield _chat_fast.sse_frame("delta", {"content": getter.result()})
                 continue
             getter.cancel()
             while not q.empty():
+                sent_delta = True
                 yield _chat_fast.sse_frame("delta", {"content": q.get_nowait()})
             break
         try:
@@ -2688,12 +2745,27 @@ async def judge_chat_stream(request: Request, payload: dict = Body(...),
             yield _chat_fast.sse_frame("error", {"code": "INTERNAL_ERROR", "message": "خطای داخلی سرور؛ لطفاً دوباره تلاش کنید."})
             return
         if isinstance(result, dict):
+            if not sent_delta and result.get("reply"):
+                yield _chat_fast.sse_frame("delta", {"content": result.get("reply", "")})
             yield _chat_fast.sse_frame("done", result)
-        else:  # JSONResponse after partial text (e.g. 503): surface as error event
+        elif isinstance(result, JSONResponse) and result.status_code == 200:
             try:
-                err = json.loads(result.body)
+                body = json.loads(result.body)
+            except Exception:  # noqa: BLE001
+                body = None
+            if isinstance(body, dict):
+                if not sent_delta and body.get("reply"):
+                    yield _chat_fast.sse_frame("delta", {"content": body.get("reply", "")})
+                yield _chat_fast.sse_frame("done", body)
+            else:
+                yield _chat_fast.sse_frame("error", {"code": "INTERNAL_ERROR", "status": 500})
+        else:
+            try:
+                err = json.loads(result.body) if isinstance(result, JSONResponse) else {"code": "INTERNAL_ERROR"}
             except Exception:  # noqa: BLE001
                 err = {"code": "INTERNAL_ERROR"}
+            if isinstance(err, dict) and isinstance(result, JSONResponse) and "status" not in err:
+                err["status"] = result.status_code
             yield _chat_fast.sse_frame("error", err)
 
     return StreamingResponse(_events(), media_type="text/event-stream", headers=_SSE_HEADERS)
@@ -5430,13 +5502,12 @@ async def draft_template(
 #   خودکار استناد نامعتبر با متن رسمی مصوب یا درج نشان ``[فاقد تطابق رسمی]``.
 # ==============================================================================
 CITATION_GUARD_VERSION = "1.0"
-CITATION_QDRANT_COLLECTION_DEFAULT = "iran_laws_bge_m3"
 
 
 def _resolve_citation_collection(environ=None) -> str:
-    """Collection name reported by the guard; env ROXIRA_CITATION_QDRANT_COLLECTION, default unchanged."""
-    env = os.environ if environ is None else environ
-    return (env.get("ROXIRA_CITATION_QDRANT_COLLECTION") or "").strip() or CITATION_QDRANT_COLLECTION_DEFAULT
+    """Collection name reported by the guard: env ROXIRA_CITATION_QDRANT_COLLECTION, else the
+    collection the retriever serves from (LIGHTRAG_QDRANT_COLLECTION; see served_collection.py)."""
+    return _served_collection.citation_collection(environ)
 
 
 CITATION_QDRANT_COLLECTION = _resolve_citation_collection()
@@ -6047,12 +6118,13 @@ citation_guard = CitationHallucinationGuard(qdrant_lookup=_qdrant_citation_looku
 async def _guard_citations(text: str, *, use_qdrant: bool = True, extra_precedents: Optional[Sequence[dict]] = None) -> dict:
     """اعتبارسنجی استنادات یک متن و بازگرداندن متن اصلاح‌شده + آمار."""
     try:
-        return await citation_guard.verify_async(
-            text,
-            qdrant_lookup=_qdrant_citation_lookup if use_qdrant else None,
-            use_qdrant=use_qdrant,
-            extra_precedents=extra_precedents,
-        )
+        with _answer_timing.stage("verify_ms"):
+            return await citation_guard.verify_async(
+                text,
+                qdrant_lookup=_qdrant_citation_lookup if use_qdrant else None,
+                use_qdrant=use_qdrant,
+                extra_precedents=extra_precedents,
+            )
     except Exception as exc:  # noqa: BLE001 - هرگز مسیر تولید را نمی‌شکند
         print(f"[SMARTJUDGE][CITATION-GUARD-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
         return {

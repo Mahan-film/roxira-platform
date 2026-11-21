@@ -1,0 +1,12 @@
+[Unit]
+Description=Roxira agent bridge (poll GitHub #965 for WAVE comments)
+
+[Service]
+Type=oneshot
+EnvironmentFile=-%h/.config/roxira-bridge/env
+Environment=NODE_USE_ENV_PROXY=1
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/python3 %h/.local/share/roxira-bridge/bridge.py --config %h/.config/roxira-bridge/bridge.toml
+# Hard cap: the wave timeout (45 min) plus margin.
+TimeoutStartSec=50min
+NoNewPrivileges=true

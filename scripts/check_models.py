@@ -105,6 +105,15 @@ def check(
         for position, entry in enumerate(entries):
             model_id = entry.get("id", "")
             is_primary = position == 0
+
+            is_retired, retired_reason = model_registry.check_retired_or_expiring(model_id, path=registry_path)
+            if is_retired:
+                rows.append(
+                    {"role": role, "id": model_id, "primary": is_primary, "status": "RETIRED", "reason": retired_reason}
+                )
+                has_primary_failure = True
+                continue
+
             if any(model_id.startswith(p) for p in NON_OPENROUTER_PREFIXES) or (
                 entry.get("catalogue_listed") is False
             ):

@@ -105,7 +105,12 @@ export class MoadianController {
     @Param('invoiceId', new ParseUUIDPipe()) invoiceId: string,
     @Body() body?: SubmitMoadianInvoiceDto,
   ): Promise<MoadianSubmissionResponseDto> {
-    return this.moadianService.submitInvoice(this.tenantIdOf(request), invoiceId, body ?? {});
+    return this.moadianService.submitInvoice(
+      this.tenantIdOf(request),
+      invoiceId,
+      body ?? {},
+      request.user?.sub,
+    );
   }
 
   @RequireAction(AccessAction.READ)

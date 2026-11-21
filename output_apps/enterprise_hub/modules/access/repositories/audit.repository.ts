@@ -8,6 +8,40 @@ import { InjectDataSource } from '@nestjs/typeorm';
 
 export const GENESIS_HASH = '0'.repeat(64);
 
+/** Keys that must never enter hash-chained fields (T206: party/user ids only, never names or IBANs). */
+const FORBIDDEN_CHAIN_PII_KEYS = new Set([
+  'partyname',
+  'customername',
+  'suppliername',
+  'username',
+  'fullname',
+  'firstname',
+  'lastname',
+  'iban',
+  'ibannumber',
+  'email',
+  'phone',
+  'mobile',
+  'nationalid',
+  'economiccode',
+  'address',
+]);
+
+/** Strip personal-data keys recursively before hashing or storing in `audit_log`. */
+export function sanitizeChainMetadata(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sanitizeChainMetadata);
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      const normalized = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (FORBIDDEN_CHAIN_PII_KEYS.has(normalized)) continue;
+      out[k] = sanitizeChainMetadata(v);
+    }
+    return out;
+  }
+  return value;
+}
+
 /** JSON with sorted keys: jsonb does not keep key order, so the hash must not depend on it. */
 export function stableStringify(v: unknown): string {
   if (Array.isArray(v)) return `[${v.map(stableStringify).join(',')}]`;
@@ -54,7 +88,7 @@ export class AuditRepository {
       action: data.action as string,
       resourceType: data.resourceType ?? null,
       resourceId: data.resourceId ?? null,
-      metadata: data.metadata ?? null,
+      metadata: data.metadata ? (sanitizeChainMetadata(data.metadata) as Record<string, unknown>) : null,
       ip: data.ip ?? null,
       userAgent: data.userAgent ?? null,
       createdAt,

@@ -10,6 +10,7 @@ import {
   ChartTemplateInfo,
   CountryPack,
   EInvoiceAdapter,
+  PaymentRailConfig,
   PayrollRulesAdapter,
   ReportPackEntry,
   StatutoryPort,
@@ -87,6 +88,17 @@ const reportPack: readonly ReportPackEntry[] = [
   { id: 'ledger-export', title: 'خروجی دفتر کل', period: 'range', route: `${TAX_REPORTS}/ledger.csv` },
 ];
 
+export const IRAN_PAYMENT_RAILS: readonly PaymentRailConfig[] = [
+  {
+    id: 'card',
+    name: 'کارت‌خوان / پایانه پوز',
+    methods: ['CARD', 'POS'],
+    clearingRole: 'pos_clearing',
+    defaultAccountCode: '1015',
+    feeRole: 'bank_fee',
+  },
+];
+
 /**
  * The Iranian pack: adapters over what already exists. It calls the chart constants, the statutory
  * service with `country = 'IR'`, the payroll rates and the Moadian mapper unchanged, so wrapping
@@ -125,6 +137,7 @@ export function createIranPack(deps: IranPackDeps): IranCountryPack {
     chartTemplates,
     taxRules,
     statutory,
+    paymentRails: IRAN_PAYMENT_RAILS,
     eInvoice: { scheme: 'moadian', map: mapInvoiceToMoadianPacket },
     payroll: { ratesFor: (tenantId, fiscalYear, month) => deps.statutory.ratesFor(tenantId, fiscalYear, month) },
     reportPack,

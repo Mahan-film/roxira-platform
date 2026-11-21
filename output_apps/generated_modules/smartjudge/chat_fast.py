@@ -15,6 +15,11 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Awaitable, Callable, Optional
 
+try:
+    import orjson as _orjson
+except ImportError:  # pragma: no cover - optional fast path
+    _orjson = None  # type: ignore[assignment]
+
 # ---------------------------------------------------------------------------
 # Sub-timings ([CHAT-TIMING] embed_ms / qdrant_ms / sql_ms / ttft_ms / llm_ms)
 # ---------------------------------------------------------------------------
@@ -61,16 +66,27 @@ class TTLCache:
 # ---------------------------------------------------------------------------
 # SSE framing
 # ---------------------------------------------------------------------------
+def json_dumps_compact(data: Any) -> str:
+    """Serialize ``data`` to compact UTF-8 JSON using orjson when available."""
+    if _orjson is not None:
+        return _orjson.dumps(data).decode("utf-8")
+    return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+
+
 def sse_frame(event: str, data: Any) -> str:
     """One Server-Sent-Events frame. JSON is single-line (ensure_ascii=False keeps Persian compact)."""
-    payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    payload = json_dumps_compact(data)
     return f"event: {event}\ndata: {payload}\n\n"
 
 
 # ---------------------------------------------------------------------------
 # Payload / prompt trimming
 # ---------------------------------------------------------------------------
-_KEEP_FIELDS = ("title", "category", "law_name", "article_no", "number", "subject", "binding_effect", "match_level", "repeal_status")
+_KEEP_FIELDS = (
+    "title", "category", "law_name", "article_no", "number", "subject",
+    "binding_effect", "match_level", "repeal_status", "source_tier", "tier",
+    "valid_from", "valid_to",
+)
 
 
 def _short(text: Any, limit: int) -> str:
@@ -86,6 +102,8 @@ def trim_sources(rows: Any, *, excerpt_chars: int = 220, max_rows: int = 6) -> l
             out.append(row)
             continue
         item = {k: row[k] for k in _KEEP_FIELDS if row.get(k) not in (None, "")}
+        if "source_tier" not in item:
+            item["source_tier"] = row.get("tier") or "unofficial"
         excerpt = _short(row.get("summary"), excerpt_chars)
         if excerpt:
             item["excerpt"] = excerpt

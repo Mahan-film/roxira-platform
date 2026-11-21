@@ -5,13 +5,14 @@
 #
 # Usage: scripts/dev/local_ci.sh [--base <git-ref>]   (default base: origin/main)
 # Env:   LOCAL_CI_SKIP_PYTEST=1 to skip the unit-test step.
+#        LOCAL_CI_REMOTE=<ssh host> to run on the CI box (scripts/dev/local_ci_remote.sh).
 set -euo pipefail
 
 BASE_REF="origin/main"
 while [ $# -gt 0 ]; do
   case "$1" in
     --base) BASE_REF="${2:?--base needs a ref}"; shift 2 ;;
-    -h|--help) sed -n '2,7p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,8p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -26,6 +27,12 @@ cd "$REPO_ROOT"
 # now, so plain repo discovery finds the same repo without them.
 # shellcheck disable=SC2046
 unset $(git rev-parse --local-env-vars)
+
+# #947 T227: LOCAL_CI_REMOTE=<ssh host> runs this script on that machine (the CI box) instead,
+# streams its output and returns its exit code. Unset (the default) changes nothing.
+if [ -n "${LOCAL_CI_REMOTE:-}" ]; then
+  exec bash "$REPO_ROOT/scripts/dev/local_ci_remote.sh" "$BASE_REF"
+fi
 
 # Self-bootstrap: if ruff or pytest are missing, create a private virtualenv once
 # (LOCAL_CI_VENV, default ~/venvs/roxira), install the CI tools there and use it.
@@ -147,7 +154,9 @@ step_frontend() {
   (
     cd output_apps/enterprise_hub/frontend
     npm ci
+    npm run lint:oxlint || echo "oxlint reported findings (non-blocking, as in CI)"
     npm run lint || echo "ESLint reported errors (non-blocking, as in CI)"
+    npm run typecheck:ts7 || echo "TypeScript 7 type-check reported errors (report-only, as in CI)"
     NEXT_TELEMETRY_DISABLED=1 npm run build
   )
 }
@@ -163,6 +172,8 @@ fi
 run_step "system inventory up to date" step_inventory
 run_step "no new hardcoded model ids" python3 scripts/ci/check_hardcoded_model_ids.py
 run_step "pinned GitHub Actions" python3 scripts/ci/check_pinned_actions.py
+# T207: money/tenant/model/secret guards, blocking, only on lines added since the base.
+run_step "agent guards (added lines)" python3 scripts/ci/check_agent_guards.py --base "$BASE_REF"
 
 # reviewer family: REPORT-ONLY for now (prints the finding, never fails the run).
 step_reviewer_family() {
@@ -182,10 +193,14 @@ fi
 
 run_step "provider API keys in tracked files" step_provider_keys
 
-if have gitleaks; then
+# Pinned, SHA-256-verified binary (scripts/dev/install_gitleaks.sh) so local and CI scan the same way.
+if GL_BIN="$(bash scripts/dev/install_gitleaks.sh 2>/dev/null)"; then
+  gitleaks() { "$GL_BIN" "$@"; }
   run_step "gitleaks (new commits)" step_gitleaks
+elif have gitleaks; then
+  run_step "gitleaks (new commits, unpinned local binary)" step_gitleaks
 else
-  skip_step "gitleaks" "not installed (brew install gitleaks)"
+  skip_step "gitleaks" "not installed and the pinned download failed"
 fi
 
 if changed_matches '^output_apps/enterprise_hub/frontend/'; then
@@ -199,6 +214,49 @@ else
   skip_step "frontend" "no changes under output_apps/enterprise_hub/frontend"
 fi
 
+# backend (T202): oxlint first (non-blocking, as in CI), tsc 5.9 blocking, TypeScript 7 report-only.
+# Jest and the Postgres specs stay in CI.
+step_backend() {
+  (
+    cd output_apps/enterprise_hub
+    npm ci --no-audit --no-fund
+    npm run lint:oxlint || echo "oxlint reported findings (non-blocking, as in CI)"
+    npx tsc --noEmit
+    npm run typecheck:ts7 || echo "TypeScript 7 type-check reported errors (report-only, as in CI)"
+  )
+}
+
+if printf '%s\n' "$CHANGED" | grep -Ev '^output_apps/enterprise_hub/frontend/' | grep -Eq '^output_apps/enterprise_hub/'; then
+  if have npm; then
+    run_step "backend oxlint + tsc + TS7" step_backend
+  else
+    skip_step "backend" "npm not installed"
+    FAIL+=("backend (npm missing)")
+  fi
+else
+  skip_step "backend" "no changes under output_apps/enterprise_hub (outside frontend)"
+fi
+
+# migration lint (T170): ids above origin/main's newest and unique (blocking), then Squawk on the
+# added migrations (blocking: not-null and prefer-robust-stmts; the rest report-only).
+step_migration_ids() {
+  python3 scripts/dev/check_migration_ids.py --base "$BASE_REF"
+}
+step_migration_squawk() {
+  # SHA-256-verified official release binary (pinned in install_squawk.sh) unless $SQUAWK is set.
+  if [ -z "${SQUAWK:-}" ]; then
+    SQUAWK="$(bash scripts/dev/install_squawk.sh)" || return 1
+    export SQUAWK
+  fi
+  python3 scripts/dev/lint_migrations_squawk.py --base "$BASE_REF"
+}
+if changed_matches '^output_apps/enterprise_hub/migrations/|^scripts/dev/(check_migration_ids|lint_migrations_squawk)\.py|^scripts/dev/install_squawk\.sh$'; then
+  run_step "migration ids above origin/main" step_migration_ids
+  run_step "Squawk on new migrations" step_migration_squawk
+else
+  skip_step "migration lint" "no changes under enterprise_hub/migrations"
+fi
+
 # fresh DB migrations: build the hub DB from zero on a throwaway Postgres 17 container
 # (scripts/dev/fresh_db_migrate.sh). Only when migrations or the data source changed.
 step_fresh_db() {
@@ -208,7 +266,7 @@ step_fresh_db() {
   bash scripts/dev/fresh_db_migrate.sh
 }
 
-if changed_matches '^output_apps/enterprise_hub/(migrations/|data-source\.ts$)|^scripts/dev/fresh_db_migrate\.sh$'; then
+if changed_matches '^output_apps/enterprise_hub/(migrations/|data-source\.ts$)|^scripts/dev/(fresh_db_migrate|rls_coverage)\.sh$|^scripts/dev/rls_allowlist\.txt$'; then
   if ! have docker || ! docker info >/dev/null 2>&1; then
     skip_step "fresh DB migrations" "docker not available (start docker, then run scripts/dev/fresh_db_migrate.sh)"
   elif ! have npm; then

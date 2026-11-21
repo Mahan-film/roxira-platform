@@ -2467,6 +2467,28 @@
     "read_only": true,
     "legacy_member": false
   },
+  "GET /enterprise-hub/treasury/statements/lines (BankStatementController.lines)": {
+    "policy": "banking:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": true,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
+  "GET /enterprise-hub/treasury/statements/settings (BankStatementController.settings)": {
+    "policy": "banking:read",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": true,
+    "hr": false,
+    "read_only": true,
+    "legacy_member": false
+  },
   "GET /enterprise/inquiries/ (InquiriesController.list)": {
     "policy": "platformAdmin"
   },
@@ -5001,6 +5023,28 @@
     "read_only": true,
     "legacy_member": false
   },
+  "POST /enterprise-hub/treasury/statements/import (BankStatementController.import)": {
+    "policy": "banking:create",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "POST /enterprise-hub/treasury/statements/lines/:id/confirm (BankStatementController.confirm)": {
+    "policy": "banking:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
   "POST /enterprise/inquiries/ (InquiriesController.create)": {
     "policy": "public"
   },
@@ -5348,6 +5392,17 @@
     "owner": true,
     "admin": true,
     "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "legacy_member": false
+  },
+  "PUT /enterprise-hub/treasury/statements/settings (BankStatementController.updateSettings)": {
+    "policy": "banking:post",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
     "sales": false,
     "cheque_reviewer": false,
     "hr": false,

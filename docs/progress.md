@@ -87,3 +87,16 @@ Do not edit past entries — add a new one instead.
 - Why: review/fix was the bottleneck; Claude quota ran out mid-day, so Gemini lanes own all building and fixing again.
 - Follow-up: docs/HANDOFF_2026-11-12.md "Open for the next hub"; make the M1 gate blocking; #663 nginx -t.
 
+
+## 2026-11-17 — hub (Opus 5.5) — WAVE 19/19b: research rows as GitHub issues, two-machine split, Linux CI box plan
+- What changed: merged #870–#874 #884 #885 #887 #888 #893 #857 #896 #897 (target infrastructure T211–T218, team split L1–L6); 44 research-row issues #898–#940 and #947 (T166–T227) with lane/prio labels and Done-when specs, older issues labelled per lane; WAVE 19b on #592; prompts v6b (#941); STATE.md rewritten under 100 lines; `docs/ops/LINUX_CI_BOX.md` for the owner's HP laptop as CI box.
+- Why: owner wants Antigravity to carry far more work, a colleague's machine working in parallel, and the hub spending tokens only on strategy and review.
+- Follow-up: review-desk verdicts on hub PRs #883 #886 #889 #891 #892 #894 #895; production steps in STATE.md; owner rotates three secrets and installs the CI box; R18 digest when it arrives.
+
+## 2026-11-19 — hub (Sonnet 5.5) — two-machine hub split, CI box live, autodeploy hot-fix, STATE.md refresh
+- What changed: merged #883 (off-site backups + restore drill), #891 (CI guards), #894 (tenant scope), #895 (oxlint/TS7), #962 (T211 Smart Judge speed), #968 (box-status, narrow sudoers). Open hub PRs are now #886 (needs coreutils in the WAL-G image) and #892 (conflicts with main), both handed to L1; #889 waits for merge.
+- Two machines: Mac runs the main hub and L1–L4; the Linux box `roxira-ci` runs a box hub (Claude Code, gh `mahansudo`) for L5–L7 built by Gemini CLI in tmux, plus the phone stack. WAVE 20 on #592 orders blocker fixes first; prompts are v6c for L1–L7.
+- CI box: runner `roxira-ci`, Xray proxy always on, egress lock so agent traffic uses the proxy only, no production keys on the box (`docs/ops/LINUX_CI_BOX.md`).
+- Production autodeploy stuck ~19 h on 2026-11-18 because `roxira-radar-daily` dirtied the checkout; hot-fixed with systemd drop-ins that move `DECISIONS.md` to `/var/lib/roxira/radar/`. Permanent fix and a Telegram alert are #961 T232 (L1).
+- Private repo stays plan A (Free); visibility flips after #947, #949 and #951. R18 raw report will land via a box-hub PR before the main hub digests it.
+- Follow-up: merge #889 on "no blocker"; production steps in STATE.md (#883 install, #886 WAL-G, T212 v7b switch); remove stale worktrees singly.

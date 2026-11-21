@@ -221,7 +221,7 @@ def _client(monkeypatch, llm):
 
 
 def test_chat_stream_endpoint_emits_meta_delta_done(monkeypatch):
-    async def llm(messages, tier, is_voice, max_tokens, temperature, on_delta=None):
+    async def llm(messages, tier, is_voice, max_tokens, temperature, on_delta=None, **kw):
         await on_delta("الف")
         await on_delta("ب")
         return cf.StreamOutcome(text="الفب", model="m"), "ok"
@@ -234,9 +234,31 @@ def test_chat_stream_endpoint_emits_meta_delta_done(monkeypatch):
     assert '"reply":"الفب"' in r.text
 
 
-def test_chat_stream_endpoint_503_keeps_http_status(monkeypatch):
+def test_chat_stream_endpoint_sends_first_frame_and_surfaces_503_error_event(monkeypatch):
+    m = _module()
+    if m._llm_gateway is not None:
+        monkeypatch.setattr(m._llm_gateway, "may_use_paid", lambda tier: True)
+
     async def llm(*a, **k):
         return cf.StreamOutcome(), "quota"
 
     r = _client(monkeypatch, llm).post("/api/v1/apps/judge/chat/stream", json={"message": "مهلت تجدیدنظرخواهی چقدر است؟"})
-    assert r.status_code == 503 and r.json()["code"] == "LLM_UNAVAILABLE"
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/event-stream")
+    events = [b.split("\n", 1)[0] for b in r.text.strip().split("\n\n")]
+    assert events[0] == "event: meta" and events[-1] == "event: error"
+    assert '"code":"LLM_UNAVAILABLE"' in r.text
+    assert '"status":"ERROR"' in r.text
+
+
+def test_chat_stream_first_frame_sent_before_llm_completes(monkeypatch):
+    gate = asyncio.Event()
+
+    async def llm(messages, tier, is_voice, max_tokens, temperature, on_delta=None, **kw):
+        gate.set()
+        await on_delta("پاسخ")
+        return cf.StreamOutcome(text="پاسخ", model="m"), "ok"
+
+    r = _client(monkeypatch, llm).post("/api/v1/apps/judge/chat/stream", json={"message": "مهلت تجدیدنظرخواهی چقدر است؟"})
+    assert r.status_code == 200 and gate.is_set()
+    assert r.text.startswith("event: meta\n")

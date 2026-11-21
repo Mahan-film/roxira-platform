@@ -7,9 +7,10 @@ import {
   ILike,
   In,
 } from 'typeorm';
-import { FiscalYearStatus, JournalEntryStatus, JournalEntryType } from '../enums/accounting.enum';
+import { FiscalYearStatus, FxRateType, JournalEntryStatus, JournalEntryType } from '../enums/accounting.enum';
 import { ChartOfAccountEntity } from '../entities/chart-of-account.entity';
 import { FiscalYearEntity } from '../entities/fiscal-year.entity';
+import { FxRateEntity } from '../entities/fx-rate.entity';
 import { JournalEntryLineEntity } from '../entities/journal-entry-line.entity';
 import { JournalEntryEntity } from '../entities/journal-entry.entity';
 import { PeriodLockEntity } from '../entities/period-lock.entity';
@@ -48,6 +49,13 @@ export interface JournalLineInput {
   costCenterCode?: string | null;
   projectCode?: string | null;
   branchId?: string | null;
+  txCurrencyCode?: string | null;
+  fxRateApplied?: string | null;
+  txDebitMinor?: bigint | null;
+  txCreditMinor?: bigint | null;
+  bookDebitMinor?: bigint | null;
+  bookCreditMinor?: bigint | null;
+  isRounding?: boolean;
 }
 
 /**
@@ -635,6 +643,13 @@ export class AccountingRepository {
       partyCode: line.partyCode ?? null,
       description: line.description ?? null,
       branchId: line.branchId ?? null,
+      txCurrencyCode: line.txCurrencyCode ?? line.currency ?? 'IRR',
+      fxRateApplied: line.fxRateApplied ?? line.fxRate ?? '1.0',
+      txDebit: minorToDecimal(line.txDebitMinor != null ? line.txDebitMinor : line.debitMinor),
+      txCredit: minorToDecimal(line.txCreditMinor != null ? line.txCreditMinor : line.creditMinor),
+      bookDebit: minorToDecimal(line.bookDebitMinor != null ? line.bookDebitMinor : line.debitMinor),
+      bookCredit: minorToDecimal(line.bookCreditMinor != null ? line.bookCreditMinor : line.creditMinor),
+      isRounding: line.isRounding ?? false,
     }));
     for (let offset = 0; offset < lineRows.length; offset += 200) {
       await manager
@@ -994,6 +1009,114 @@ export class AccountingRepository {
       }
 
       return query.getRawMany<LedgerRawRow>();
+    });
+  }
+
+  /**
+   * Upsert a daily FX rate for a tenant and currency pair.
+   */
+  async upsertFxRate(
+    tenantId: string,
+    data: {
+      baseCurrency: string;
+      quoteCurrency: string;
+      rateDate: string;
+      rateType: FxRateType;
+      rate: string;
+      source?: string | null;
+    },
+    outerManager?: EntityManager,
+  ): Promise<FxRateEntity> {
+    return this.scope.within(tenantId, outerManager, async (manager) => {
+      await manager
+        .createQueryBuilder()
+        .insert()
+        .into(FxRateEntity)
+        .values({
+          tenantId,
+          baseCurrency: data.baseCurrency.toUpperCase(),
+          quoteCurrency: data.quoteCurrency.toUpperCase(),
+          rateDate: data.rateDate,
+          rateType: data.rateType,
+          rate: data.rate,
+          source: data.source ?? null,
+        })
+        .orUpdate(
+          ['rate', 'source', 'updated_at'],
+          ['tenant_id', 'base_currency', 'quote_currency', 'rate_date', 'rate_type'],
+        )
+        .execute();
+
+      return (await manager.findOne(FxRateEntity, {
+        where: {
+          tenantId,
+          baseCurrency: data.baseCurrency.toUpperCase(),
+          quoteCurrency: data.quoteCurrency.toUpperCase(),
+          rateDate: data.rateDate,
+          rateType: data.rateType,
+        },
+      })) as FxRateEntity;
+    });
+  }
+
+  /**
+   * Find an FX rate for a tenant, currency pair, date and type.
+   */
+  async findFxRate(
+    tenantId: string,
+    baseCurrency: string,
+    quoteCurrency: string,
+    rateDate: string,
+    rateType: FxRateType = FxRateType.SPOT,
+    outerManager?: EntityManager,
+  ): Promise<FxRateEntity | null> {
+    return this.scope.within(tenantId, outerManager, async (manager) => {
+      return manager.findOne(FxRateEntity, {
+        where: {
+          tenantId,
+          baseCurrency: baseCurrency.toUpperCase(),
+          quoteCurrency: quoteCurrency.toUpperCase(),
+          rateDate,
+          rateType,
+        },
+      });
+    });
+  }
+
+  /**
+   * List FX rates for a tenant with optional filtering.
+   */
+  async listFxRates(
+    tenantId: string,
+    options: {
+      baseCurrency?: string;
+      quoteCurrency?: string;
+      rateDate?: string;
+      rateType?: FxRateType;
+    } = {},
+    outerManager?: EntityManager,
+  ): Promise<FxRateEntity[]> {
+    return this.scope.within(tenantId, outerManager, async (manager) => {
+      const qb = manager
+        .getRepository(FxRateEntity)
+        .createQueryBuilder('fx')
+        .where('fx.tenantId = :tenantId', { tenantId });
+
+      if (options.baseCurrency) {
+        qb.andWhere('fx.baseCurrency = :base', { base: options.baseCurrency.toUpperCase() });
+      }
+      if (options.quoteCurrency) {
+        qb.andWhere('fx.quoteCurrency = :quote', { quote: options.quoteCurrency.toUpperCase() });
+      }
+      if (options.rateDate) {
+        qb.andWhere('fx.rateDate = :rateDate', { rateDate: options.rateDate });
+      }
+      if (options.rateType) {
+        qb.andWhere('fx.rateType = :rateType', { rateType: options.rateType });
+      }
+
+      qb.orderBy('fx.rateDate', 'DESC').addOrderBy('fx.baseCurrency', 'ASC');
+      return qb.getMany();
     });
   }
 }

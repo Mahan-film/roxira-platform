@@ -89,7 +89,7 @@ describe('validateCountryPack', () => {
     ['three-letter country', { country: 'XXX' }, /ISO 3166/],
     ['bad semver', { version: '1' }, /x\.y\.z/],
     ['empty name', { name: ' ' }, /name is required/],
-    ['bad status', { status: 'beta' as never }, /status/],
+    ['bad status', { status: 'invalid' as never }, /status/],
     [
       'no language',
       { locale: { ...base().locale, languages: [] } },
