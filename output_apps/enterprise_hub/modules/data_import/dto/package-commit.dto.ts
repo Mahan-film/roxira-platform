@@ -33,6 +33,12 @@ const preserveRawBoolean = ({
   key: string;
 }): unknown => obj?.[key];
 
+const trimIfString = ({ value }: { value: unknown }): unknown =>
+  typeof value === 'string' ? value.trim() : value;
+
+const upperTrimIfString = ({ value }: { value: unknown }): unknown =>
+  typeof value === 'string' ? value.trim().toUpperCase() : value;
+
 @ValidatorConstraint({ name: 'isIsoCalendarDate', async: false })
 class IsIsoCalendarDateConstraint implements ValidatorConstraintInterface {
   validate(value: unknown): boolean {
@@ -95,51 +101,61 @@ export class PackageCommitTableDto {
 /** مبالغ کنترل معین افتتاحیه جهت تطابق در موتور مغایرت‌گیری. */
 export class TieOutControlTotalsDto {
   @IsOptional()
+  @Transform(trimIfString)
   @IsString()
   @Matches(CONTROL_AMOUNT_PATTERN, { message: CONTROL_AMOUNT_MESSAGE })
   trialBalance?: string;
 
   @IsOptional()
+  @Transform(trimIfString)
   @IsString()
   @Matches(CONTROL_AMOUNT_PATTERN, { message: CONTROL_AMOUNT_MESSAGE })
   accountsReceivable?: string;
 
   @IsOptional()
+  @Transform(trimIfString)
   @IsString()
   @Matches(CONTROL_AMOUNT_PATTERN, { message: CONTROL_AMOUNT_MESSAGE })
   accountsPayable?: string;
 
   @IsOptional()
+  @Transform(trimIfString)
   @IsString()
   @Matches(CONTROL_AMOUNT_PATTERN, { message: CONTROL_AMOUNT_MESSAGE })
   inventoryStock?: string;
 
   @IsOptional()
+  @Transform(trimIfString)
   @IsString()
   @Matches(CONTROL_AMOUNT_PATTERN, { message: CONTROL_AMOUNT_MESSAGE })
   bankBalance?: string;
 
   @IsOptional()
+  @Transform(trimIfString)
   @IsString()
   @Matches(CONTROL_AMOUNT_PATTERN, { message: CONTROL_AMOUNT_MESSAGE })
   TRIAL_BALANCE?: string;
 
   @IsOptional()
+  @Transform(trimIfString)
   @IsString()
   @Matches(CONTROL_AMOUNT_PATTERN, { message: CONTROL_AMOUNT_MESSAGE })
   ACCOUNTS_RECEIVABLE?: string;
 
   @IsOptional()
+  @Transform(trimIfString)
   @IsString()
   @Matches(CONTROL_AMOUNT_PATTERN, { message: CONTROL_AMOUNT_MESSAGE })
   ACCOUNTS_PAYABLE?: string;
 
   @IsOptional()
+  @Transform(trimIfString)
   @IsString()
   @Matches(CONTROL_AMOUNT_PATTERN, { message: CONTROL_AMOUNT_MESSAGE })
   INVENTORY_STOCK?: string;
 
   @IsOptional()
+  @Transform(trimIfString)
   @IsString()
   @Matches(CONTROL_AMOUNT_PATTERN, { message: CONTROL_AMOUNT_MESSAGE })
   BANK_BALANCE?: string;
@@ -195,6 +211,7 @@ export class PackageCommitDto {
 
   /** ارز پایه کنترل‌ها (پیش‌فرض IRR). */
   @IsOptional()
+  @Transform(upperTrimIfString)
   @IsString()
   @Validate(IsSupportedIsoCurrencyConstraint)
   currency?: string;

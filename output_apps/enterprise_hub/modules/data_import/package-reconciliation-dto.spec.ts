@@ -9,7 +9,10 @@ import {
 } from './analysis/reconciliation';
 import { EffectiveTieOutConfigRegistry } from './analysis/effective-tie-out-config.registry';
 import { ImportTieOutEngine } from './analysis/import-tie-out.engine';
-import { PackageCommitDto } from './dto/package-commit.dto';
+import {
+  mapControlTotalsDtoToRecord,
+  PackageCommitDto,
+} from './dto/package-commit.dto';
 import { AccountingOpeningBalancesRegistry } from './registry/accounting-opening-balances.registry';
 import { BankStatementRegistry } from './registry/bank-statement.registry';
 import { EntityRegistryService } from './registry/entity-registry.service';
@@ -92,15 +95,22 @@ describe('Fix #1216 Part 2: PackageCommitDto validation, bank-statement key and 
       }),
     ).rejects.toThrow(BadRequestException);
 
-    await expect(
-      validate({
-        ...base,
-        currency: 'KWD',
-        asOfDate: '2026-11-21',
-        confirmImbalance: true,
-        controlTotals: { accountsPayable: '12.345' },
-      }),
-    ).resolves.toMatchObject({ currency: 'KWD', asOfDate: '2026-11-21', confirmImbalance: true });
+    const valid = await validate({
+      ...base,
+      currency: ' kwd ',
+      asOfDate: '2026-11-21',
+      confirmImbalance: true,
+      controlTotals: { accountsReceivable: ' 12.345 ' },
+    });
+    expect(valid).toMatchObject({ currency: 'KWD', asOfDate: '2026-11-21', confirmImbalance: true });
+    expect(mapControlTotalsDtoToRecord(valid.controlTotals)).toEqual({
+      ACCOUNTS_RECEIVABLE: '12.345',
+    });
+    expect(
+      reconciliationCacheKey(base.tables, { controlTotals: { ACCOUNTS_RECEIVABLE: ' 12.345 ' } }),
+    ).toBe(
+      reconciliationCacheKey(base.tables, { controlTotals: { ACCOUNTS_RECEIVABLE: '12.345' } }),
+    );
   });
 
   it('caches reconciliation report by selections + options and invalidates when options change', async () => {

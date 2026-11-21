@@ -111,7 +111,7 @@ export function reconciliationCacheKey(
     ? Object.entries(options.controlTotals)
         .filter(([, v]) => v !== undefined)
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([k, v]) => [k, String(v)])
+        .map(([k, v]) => [k, String(v).trim()])
     : null;
   const payload = {
     baseKey,
