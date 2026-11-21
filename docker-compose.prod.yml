@@ -199,6 +199,18 @@ services:
   redis_prod:
     image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
     container_name: roxira_redis_prod
+    # T217 (#931): AOF persistence for queue durability (appendfsync everysec),
+    # maxmemory 200mb with noeviction under the 256m container limit so BullMQ jobs
+    # are never silently evicted. Cache/ephemeral keys use logical DB 1 or dedicated cache.
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --no-appendfsync-on-rewrite yes
+      --auto-aof-rewrite-percentage 100
+      --auto-aof-rewrite-min-size 64mb
+      --maxmemory 200mb
+      --maxmemory-policy noeviction
     restart: always
     mem_limit: 256m
     mem_reservation: 128m

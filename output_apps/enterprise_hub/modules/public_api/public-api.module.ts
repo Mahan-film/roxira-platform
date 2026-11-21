@@ -29,8 +29,9 @@ import { ApiTokensService } from './services/api-tokens.service';
       inject: [ConfigService],
       useFactory: (config: ConfigService) =>
         new Redis({
-          host: config.get<string>('REDIS_HOST', '127.0.0.1'),
-          port: config.get<number>('REDIS_PORT', 6379),
+          host: config.get<string>('REDIS_CACHE_HOST') || config.get<string>('REDIS_HOST', '127.0.0.1'),
+          port: Number(config.get<number | string>('REDIS_CACHE_PORT')) || Number(config.get<number | string>('REDIS_PORT', 6379)),
+          db: Number(config.get<number | string>('REDIS_CACHE_DB', 1)),
           maxRetriesPerRequest: 3,
         }),
     },
