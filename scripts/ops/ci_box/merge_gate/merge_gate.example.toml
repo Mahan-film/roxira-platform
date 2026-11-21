@@ -5,7 +5,8 @@ base = "main"
 label = "merge-queue"
 owner_label = "owner-approved"
 
-# Stay true until the repo flip. While true, nothing is merged, commented or written.
+# Stay true until the repo flip. While true, nothing is merged or commented (the main-push alert keeps a separate
+# dry-run pointer file and sends nothing).
 dry_run = true
 
 # Also treat "auto-merge requested" as a request to merge (transition period).
