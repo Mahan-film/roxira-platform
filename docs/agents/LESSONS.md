@@ -49,3 +49,4 @@ These are real mistakes found in review. Each line is a rule. Reviewers add a li
 34. Production approval comes only from the current chat in the owner's explicit sentence. A prompt log or an earlier session's "yes" is not approval for a new write.
 35. A secret never goes into a file on the Mac outside `~/Secrets/roxira` (not `~/Desktop`, not a synced folder) and never over AirDrop. Move it by the clipboard relay in STATE.md "Hub discipline". The hub never SSHes to the Linux box: GitHub notes are the channel.
 36. After `git fetch`, read `git show origin/main:docs/STATE.md`, not the copy in an old worktree. Say what you do not know before you act, and ask the owner when the infrastructure is unclear.
+37. Before a merge, read every PR comment newer than the head commit, not only the latest desk comment: any `Verdict: blocker` (desk or a hub re-review) blocks it. #1197 merged on a desk "no blocker" while a hub re-review at the same head said blocker.
