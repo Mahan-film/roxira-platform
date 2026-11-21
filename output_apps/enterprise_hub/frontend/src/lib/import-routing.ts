@@ -62,3 +62,50 @@ export function routeImportFile(file: { name: string; size: number }, bulkEnable
 export function chunkResumeKey(file: { name: string; size: number; lastModified: number }): string {
   return `roxira.import.bulk-job:${file.name}:${file.size}:${file.lastModified}`;
 }
+
+/**
+ * Look up any in-progress bulk job id saved for this file so re-picking after reload resumes (#439).
+ */
+export function getSavedResumeJobId(
+  file: { name: string; size: number; lastModified: number },
+  storage: Pick<Storage, "getItem"> | null = typeof window !== "undefined" ? window.localStorage : null,
+): string | undefined {
+  if (!storage) return undefined;
+  try {
+    const val = storage.getItem(chunkResumeKey(file));
+    return val?.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Save an in-progress bulk job id for this file so re-picking after reload resumes (#439).
+ */
+export function saveResumeJobId(
+  file: { name: string; size: number; lastModified: number },
+  jobId: string,
+  storage: Pick<Storage, "setItem"> | null = typeof window !== "undefined" ? window.localStorage : null,
+): void {
+  if (!storage) return;
+  try {
+    storage.setItem(chunkResumeKey(file), jobId);
+  } catch {
+    // quota exceeded or disabled
+  }
+}
+
+/**
+ * Clear the saved bulk job id once upload finishes or is dismissed (#439).
+ */
+export function clearResumeJobId(
+  file: { name: string; size: number; lastModified: number },
+  storage: Pick<Storage, "removeItem"> | null = typeof window !== "undefined" ? window.localStorage : null,
+): void {
+  if (!storage) return;
+  try {
+    storage.removeItem(chunkResumeKey(file));
+  } catch {
+    // storage disabled
+  }
+}

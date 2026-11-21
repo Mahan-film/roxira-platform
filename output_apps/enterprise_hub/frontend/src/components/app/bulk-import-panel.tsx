@@ -28,6 +28,7 @@ import {
 } from "@/lib/api/bulk-import-client";
 import { listImportEntities, type ImportEntityDef } from "@/lib/api/data-import-suite-client";
 import { formatNumber } from "@/lib/fa-format";
+import { clearResumeJobId, getSavedResumeJobId, saveResumeJobId } from "@/lib/import-routing";
 import { cn } from "@/lib/utils";
 
 function errorText(error: unknown): string {
@@ -93,18 +94,29 @@ export function BulkImportPanel({
 
   async function upload(file: File, jobId?: string) {
     setError(null);
+    const resumeId = jobId ?? getSavedResumeJobId(file);
     const controller = new AbortController();
-    const key = jobId ?? `${file.name}-${file.size}-${Date.now()}`;
+    const key = resumeId ?? `${file.name}-${file.size}-${Date.now()}`;
     aborts.current[key] = controller;
     setUploads((u) => ({ ...u, [key]: { name: file.name, sent: 0, total: file.size } }));
     try {
       await uploadBulkFile(file, {
-        jobId,
+        jobId: resumeId,
         signal: controller.signal,
+        onEvent: (event) => {
+          if (event.type === "started") {
+            saveResumeJobId(file, event.jobId);
+          }
+        },
         onProgress: (sent, total) => setUploads((u) => (u[key] ? { ...u, [key]: { name: file.name, sent, total } } : u)),
       });
+      clearResumeJobId(file);
     } catch (e) {
-      setError(errorText(e));
+      const msg = errorText(e);
+      if (msg.includes("not found") || msg.includes("expired") || msg.includes("404")) {
+        clearResumeJobId(file);
+      }
+      setError(msg);
     } finally {
       delete aborts.current[key];
       setUploads((u) => {
@@ -243,6 +255,7 @@ export function BulkImportPanel({
             setError(`این فایل با فایل اصلی (${formatBytes(job.sizeBytes)}) یکی نیست.`);
             return;
           }
+          saveResumeJobId(file, job.id);
           void upload(file, job.id);
         }}
       />
