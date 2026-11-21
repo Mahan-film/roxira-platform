@@ -24,6 +24,7 @@ Never read `repomix-output.xml`, `database_snapshots/`, `*.sql` or `*.tar.gz`.
 | [strategy/MASTER_PLAN_2026-11-16.md](strategy/MASTER_PLAN_2026-11-16.md) | Current master plan and phases |
 | [strategy/ARCHITECTURE_DECISIONS_2026-11-16.md](strategy/ARCHITECTURE_DECISIONS_2026-11-16.md) | What we adopt and refuse; rows T166 to T210 |
 | [strategy/INFRA_TARGET_2026-11-17.md](strategy/INFRA_TARGET_2026-11-17.md) | Target infrastructure and the Rust-ready path; rows T211 to T218 |
+| [strategy/UPGRADE_PLAN_2026-11.md](strategy/UPGRADE_PLAN_2026-11.md) | Runtime and framework versions (current vs latest), upgrade order, Rust where it pays |
 | [strategy/R20_DIGEST.md](strategy/R20_DIGEST.md) | Two machines, agent dispatcher, private repo at $0: decisions D1-D6 and rows R20-1..8 (raw: [research/R20_TWO_MACHINE_RAW.md](strategy/research/R20_TWO_MACHINE_RAW.md)) |
 | [strategy/PRIVATE_REPO_PLAN_2026-11-17.md](strategy/PRIVATE_REPO_PLAN_2026-11-17.md) | Plan for making the repo private (plan A chosen) |
 | [strategy/ADR_GLOBAL_CORE.md](strategy/ADR_GLOBAL_CORE.md) | Global core design decision |
