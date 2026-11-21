@@ -6,8 +6,8 @@ import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
  *   - `fin_budget_encumbrances`: open/released PO commitments against account + cost-centre budgets.
  *   - `erp_purchase_orders`: optional `account_code` and `cost_center_code` for budget checks.
  */
-export class CreateBudgetEncumbrances1789900012800 implements MigrationInterface {
-  name = 'CreateBudgetEncumbrances1789900012800';
+export class CreateBudgetEncumbrances1789900024000 implements MigrationInterface {
+  name = 'CreateBudgetEncumbrances1789900024000';
 
   public async up(q: QueryRunner): Promise<void> {
     await q.query(`

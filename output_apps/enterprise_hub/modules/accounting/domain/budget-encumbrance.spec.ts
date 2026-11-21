@@ -53,4 +53,16 @@ describe('evaluateBudgetEncumbrance (T194)', () => {
     expect(decision.allowed).toBe(true);
     expect(decision.remainingMinor).toBe(30_000n);
   });
+
+  it('fails closed when no budget exists', () => {
+    const decision = evaluateBudgetEncumbrance({
+      budgetMinor: 0n,
+      actualSpendMinor: 0n,
+      committedMinor: 0n,
+      newAmountMinor: 1n,
+    });
+    expect(decision.status).toBe('BLOCK');
+    expect(decision.allowed).toBe(false);
+    expect(decision.projectedMinor).toBe(1n);
+  });
 });

@@ -32,6 +32,7 @@ export interface BudgetEncumbranceDecision {
  *   - > blockAtPercent (default 100%): BLOCK
  *   - >= warnAtPercent (default 80%): WARN (allowed)
  *   - < warnAtPercent: OK (allowed)
+ *   - no budget (<= 0): BLOCK (fail closed)
  */
 export function evaluateBudgetEncumbrance(
   input: BudgetEncumbranceInput,
@@ -41,16 +42,18 @@ export function evaluateBudgetEncumbrance(
   const projectedMinor =
     input.actualSpendMinor + input.committedMinor + input.newAmountMinor;
 
+  // Fail closed: no budget (or a zero/negative one) means nothing is authorised to spend.
   if (input.budgetMinor <= 0n) {
     return {
-      status: 'OK',
-      allowed: true,
+      status: 'BLOCK',
+      allowed: false,
       utilizationPercent: 0,
       budgetMinor: 0n,
       actualSpendMinor: input.actualSpendMinor,
       committedMinor: input.committedMinor,
       projectedMinor,
-      remainingMinor: 0n,
+      remainingMinor: -projectedMinor,
+      warning: 'No budget is defined for this account, cost centre and period; spending is blocked.',
     };
   }
 

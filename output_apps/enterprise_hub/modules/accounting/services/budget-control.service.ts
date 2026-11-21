@@ -183,6 +183,11 @@ export class BudgetControlService {
     const costCenterKey = input.costCenterCode?.trim() || '';
 
     return this.scope.within(tenantId, manager, async (m) => {
+      // Serialise check-and-write per (tenant, account, cost centre, period) so concurrent
+      // postings cannot both pass the check and overspend. Released at transaction end.
+      await m.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [
+        `budget-encumbrance|${tenantId}|${input.accountCode}|${costCenterKey}|${input.periodKey}`,
+      ]);
       const budgetRows = (await m.query(
         `SELECT b."budget_amount"
          FROM "fin_account_budgets" b
@@ -199,13 +204,10 @@ export class BudgetControlService {
         budgetRows.length > 0 ? fromDb(budgetRows[0].budget_amount) : 0n;
 
       if (budgetMinor <= 0n) {
-        return evaluateBudgetEncumbrance({
-          budgetMinor: 0n,
-          actualSpendMinor: 0n,
-          committedMinor: 0n,
-          newAmountMinor: input.amountMinor,
-          warnAtPercent: input.warnAtPercent,
-          blockAtPercent: input.blockAtPercent,
+        // Fail closed: a missing budget must not read as unlimited.
+        throw new BadRequestException({
+          code: 'BUDGET_MISSING',
+          message: `برای حساب ${input.accountCode} در دوره ${input.periodKey} بودجه‌ای تعریف نشده است؛ ثبت تعهد مجاز نیست.`,
         });
       }
 
