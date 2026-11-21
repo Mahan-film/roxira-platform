@@ -31,6 +31,14 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from typing import Any, Iterable, Optional, Protocol, Sequence
 
+from output_apps.generated_modules.smartjudge.authority_tiers import (
+    AUTHORITY_TIER_1,
+    AUTHORITY_TIER_2,
+    STATUS_ENACTED,
+    classify_authority_tier,
+    classify_chunk_status,
+)
+
 __all__ = [
     "LawArticle",
     "LawCode",
@@ -236,6 +244,9 @@ class LawArticle:
     status: str = STATUS_VALID
     repealed_by: Optional[str] = None
     jurisdiction: Optional[str] = None
+    authority_tier: Optional[int] = None
+    non_binding: bool = False
+    authority_status: Optional[str] = None
 
     @property
     def article_label(self) -> str:
@@ -246,6 +257,22 @@ class LawArticle:
 
     def finalize(self) -> "LawArticle":
         self.is_active, self.status = _resolve_status(self.is_active, self.status)
+        if self.authority_tier is None:
+            tier, nb = classify_authority_tier(
+                law_name=self.law_name,
+                text=self.text,
+                scope_tags=self.scope_tags,
+            )
+            self.authority_tier = tier
+            if nb:
+                self.non_binding = True
+        if self.authority_status is None:
+            self.authority_status = classify_chunk_status(
+                text=self.text,
+                law_name=self.law_name,
+                explicit_status=None if self.status == STATUS_VALID else self.status,
+                is_active=self.is_active,
+            )
         if not self.content_hash:
             self.content_hash = self.compute_hash()
         return self
@@ -254,6 +281,7 @@ class LawArticle:
         """Mark this article as repealed so retrieval filters it out."""
         self.is_active = False
         self.status = STATUS_REPEALED
+        self.authority_status = "repealed"
         if repealed_by:
             self.repealed_by = repealed_by
         return self
@@ -264,6 +292,26 @@ class LawArticle:
         return str(uuid.uuid5(_POINT_NAMESPACE, seed))
 
     def payload(self) -> dict[str, Any]:
+        tier = self.authority_tier
+        non_binding = self.non_binding
+        if tier is None:
+            tier, nb = classify_authority_tier(
+                law_name=self.law_name,
+                text=self.text,
+                scope_tags=self.scope_tags,
+            )
+            non_binding = non_binding or nb
+        auth_status = self.authority_status or classify_chunk_status(
+            text=self.text,
+            law_name=self.law_name,
+            explicit_status=None if self.status == STATUS_VALID else self.status,
+            is_active=self.is_active,
+        )
+        source_tier = (
+            "official"
+            if tier == AUTHORITY_TIER_1
+            else ("secondary" if tier == AUTHORITY_TIER_2 else "unofficial")
+        )
         return {
             "law_name": self.law_name,
             "article_no": self.article_no,
@@ -277,6 +325,10 @@ class LawArticle:
             "status": self.status,
             "repealed_by": self.repealed_by,
             "jurisdiction": self.jurisdiction,
+            "authority_tier": tier,
+            "non_binding": bool(non_binding),
+            "authority_status": auth_status,
+            "source_tier": source_tier,
         }
 
     def to_dict(self) -> dict[str, Any]:
