@@ -7,10 +7,11 @@ import { enableTenantRls } from './data/tenant-rls';
  * - Expands `status` check constraint to support 'EXPIRED'
  * - Ensures FORCE RLS on `erp_sales_quotations` and `erp_sales_quotation_lines`
  */
-export class AddQuotationInvoiceConversion1789900011100 implements MigrationInterface {
-  name = 'AddQuotationInvoiceConversion1789900011100';
+export class AddQuotationInvoiceConversion1789900023000 implements MigrationInterface {
+  name = 'AddQuotationInvoiceConversion1789900023000';
 
   public async up(q: QueryRunner): Promise<void> {
+    await q.query(`SET LOCAL lock_timeout = '3s'`);
     await q.query(
       `ALTER TABLE "erp_sales_quotations"
        ADD COLUMN IF NOT EXISTS "converted_invoice_id" uuid REFERENCES "invoices"("id") ON DELETE SET NULL`,
@@ -28,7 +29,10 @@ export class AddQuotationInvoiceConversion1789900011100 implements MigrationInte
     await q.query(
       `ALTER TABLE "erp_sales_quotations"
        ADD CONSTRAINT "CHK_erp_sales_quotations_status"
-       CHECK ("status" IN ('DRAFT','SENT','ACCEPTED','REJECTED','CONVERTED','EXPIRED'))`,
+       CHECK ("status" IN ('DRAFT','SENT','ACCEPTED','REJECTED','CONVERTED','EXPIRED')) NOT VALID`,
+    );
+    await q.query(
+      `ALTER TABLE "erp_sales_quotations" VALIDATE CONSTRAINT "CHK_erp_sales_quotations_status"`,
     );
 
     await enableTenantRls(q, 'erp_sales_quotations');
@@ -36,6 +40,7 @@ export class AddQuotationInvoiceConversion1789900011100 implements MigrationInte
   }
 
   public async down(q: QueryRunner): Promise<void> {
+    await q.query(`SET LOCAL lock_timeout = '3s'`);
     await q.query(`DROP INDEX IF EXISTS "IDX_erp_sales_quotations_tenant_invoice"`);
     await q.query(
       `ALTER TABLE "erp_sales_quotations" DROP COLUMN IF EXISTS "converted_invoice_id"`,
