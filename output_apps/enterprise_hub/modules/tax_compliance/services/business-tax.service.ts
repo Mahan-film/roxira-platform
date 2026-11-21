@@ -63,7 +63,7 @@ export class BusinessTaxService {
     const used = await readStatutory(this.statutory, tenantId, dto.fiscalYear, keys, country);
     const brackets = used.get('income_tax_art131_brackets')!.value as Bracket[];
     // The store holds whole rials (money kind); the computation works in minor units (rial x 100).
-    const ceiling = BigInt(used.get('income_exemption_ceiling_art57_art101')!.value as number) * 100n;
+    const ceiling = BigInt(String(used.get('income_exemption_ceiling_art57_art101')!.value)) * 100n;
     const maxExemptions = Number(used.get('civil_partnership_max_exemptions')!.value);
 
     const income = dto.units.reduce((sum, u) => sum + parseMinor(u.revenue) - parseMinor(u.deductibleExpenses), 0n);
