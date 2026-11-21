@@ -1,13 +1,19 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import {
   formatCurrencyMinor,
+  MoneyFormatError,
   parseCurrencyMinor,
 } from '../../accounting/money';
+import {
+  isSupportedCurrency,
+  UnsupportedCurrencyError,
+} from '../../country_packs/currency-exponents';
 import { NormalisedRecord } from '../registry/import-registry.types';
 import {
   EffectiveTieOutConfig,
   EffectiveTieOutConfigRegistry,
   TieOutCategory,
+  TieOutControlAccountRule,
 } from './effective-tie-out-config.registry';
 
 export interface TieOutItemReport {
@@ -33,6 +39,7 @@ export interface TieOutSummary {
   items: TieOutItemReport[];
   discrepancies: TieOutItemReport[];
   blockersFa: string[];
+  warningsFa?: string[];
 }
 
 export interface EvaluateTieOutsOptions {
@@ -41,6 +48,43 @@ export interface EvaluateTieOutsOptions {
   currency?: string;
   customConfig?: Partial<EffectiveTieOutConfig>;
   controlTotals?: Partial<Record<TieOutCategory, number | string | bigint>>;
+  /** Fail closed when a control account or subledger is present without its counterpart or controlTotal. */
+  requireSubledgerOrControl?: boolean;
+}
+
+const PERSIAN_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
+const ARABIC_DIGITS = '٠١٢٣٤٥٦٧٨٩';
+const PURCHASE_INVOICE_TYPE_RE = /^(purchase|vendor|bill|ap|خرید|فاکتور\s*خرید)$/i;
+const DECIMAL_QTY_RE = /^(-?)(\d+)(?:\.(\d+))?$/;
+
+function toAsciiNumericText(raw: string): string {
+  let out = raw.replace(/[۰-۹]/g, (d) => String(PERSIAN_DIGITS.indexOf(d)));
+  out = out.replace(/[٠-٩]/g, (d) => String(ARABIC_DIGITS.indexOf(d)));
+  return out
+    .replace(/٫/g, '.')
+    .replace(/[\u200c\u200e\u200f٬,\s]/g, '')
+    .trim();
+}
+
+function normaliseFaPatternText(raw: string): string {
+  return raw
+    .replace(/ي/g, 'ی')
+    .replace(/ك/g, 'ک')
+    .replace(/\u200c/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function matchesBoundedPattern(normalisedText: string, pattern: string): boolean {
+  const normPattern = normaliseFaPatternText(pattern);
+  if (!normPattern) return false;
+  const re = new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRegExp(normPattern)}(?![\\p{L}\\p{N}_])`, 'u');
+  return re.test(normalisedText);
 }
 
 /**
@@ -53,16 +97,91 @@ export function parseMoneyValue(
   if (typeof value === 'bigint') {
     return value;
   }
-  const clean =
-    typeof value === 'number'
-      ? value.toString()
-      : String(value)
-          .replace(/[٬,\s]/g, '')
-          .trim();
-  if (clean === '' || clean === '0' || clean === '-0') {
+  const normCurrency = currencyCode.trim().toUpperCase();
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      throw new BadRequestException(`مبلغ نامعتبر است: ${value}`);
+    }
+    if (value === 0) return 0n;
+    try {
+      return parseCurrencyMinor(value, normCurrency);
+    } catch (error) {
+      if (error instanceof MoneyFormatError || error instanceof UnsupportedCurrencyError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
+  }
+  const raw = toAsciiNumericText(String(value));
+  if (raw === '' || raw === '0' || raw === '-0') {
     return 0n;
   }
-  return parseCurrencyMinor(clean, currencyCode);
+  const isToman = normCurrency === 'IRR' && /تومان|toman|irt/i.test(raw) && !/ریال|rial|irr/i.test(raw);
+  const negative = /^\(.*\)$/.test(raw) || /^[-−]/.test(raw) || /[-−]$/.test(raw);
+  const stripped = raw
+    .replace(/(تومان|ریال|irr|irt|rial|toman)/gi, '')
+    .replace(/^[(\-−]+|[)\-−]+$/g, '');
+  if (stripped === '' || stripped === '0') {
+    return 0n;
+  }
+  const signed = negative ? `-${stripped}` : stripped;
+  try {
+    const parsed = parseCurrencyMinor(signed, normCurrency);
+    return isToman ? parsed * 10n : parsed;
+  } catch (error) {
+    if (error instanceof MoneyFormatError || error instanceof UnsupportedCurrencyError) {
+      throw new BadRequestException(error.message);
+    }
+    throw error;
+  }
+}
+
+/**
+ * ضرب دقیق مبلغ در واحد minor در تعداد اعشاری بدون ممیز شناور و بدون برش اعشار (گرد نیمه‌به‌بالا دور از صفر).
+ * مقدار صریح صفر همیشه 0n برمی‌گرداند و هرگز به 1 تبدیل نمی‌شود.
+ */
+export function multiplyMinorByDecimalQuantity(
+  unitMinor: bigint,
+  qtyRaw: unknown,
+  defaultWhenMissing: string,
+): bigint {
+  if (qtyRaw === undefined || qtyRaw === null || qtyRaw === '') {
+    return multiplyMinorByDecimalQuantity(unitMinor, defaultWhenMissing, defaultWhenMissing);
+  }
+  if (typeof qtyRaw === 'bigint') {
+    return unitMinor * qtyRaw;
+  }
+  let qtyText: string;
+  if (typeof qtyRaw === 'number') {
+    if (!Number.isFinite(qtyRaw)) {
+      throw new BadRequestException(`تعداد نامعتبر است: ${qtyRaw}`);
+    }
+    const rawStr = qtyRaw.toString();
+    qtyText = rawStr.includes('e') || rawStr.includes('E')
+      ? qtyRaw.toFixed(10).replace(/\.?0+$/, '')
+      : rawStr;
+  } else {
+    qtyText = toAsciiNumericText(String(qtyRaw));
+  }
+  const match = DECIMAL_QTY_RE.exec(qtyText);
+  if (!match) {
+    throw new BadRequestException(`تعداد نامعتبر است: "${String(qtyRaw)}"`);
+  }
+  const [, sign, intPart, fracPart = ''] = match;
+  const scaledQty = BigInt(`${intPart}${fracPart}`);
+  if (scaledQty === 0n) {
+    return 0n;
+  }
+  const signedQty = sign === '-' ? -scaledQty : scaledQty;
+  const numerator = unitMinor * signedQty;
+  if (fracPart.length === 0) {
+    return numerator;
+  }
+  const denom = 10n ** BigInt(fracPart.length);
+  const neg = numerator < 0n;
+  const abs = neg ? -numerator : numerator;
+  const rounded = (abs + denom / 2n) / denom;
+  return neg ? -rounded : rounded;
 }
 
 /**
@@ -106,77 +225,107 @@ export class ImportTieOutEngine {
       currency: requestedCurrency,
       customConfig,
       controlTotals,
+      requireSubledgerOrControl = false,
     } = options;
 
     const config = this.configRegistry.resolveConfig(asOfDate, customConfig);
-    const currency = (requestedCurrency ?? config.currency).toUpperCase();
+    const currency = (requestedCurrency ?? config.currency).trim().toUpperCase();
+    if (!isSupportedCurrency(currency)) {
+      throw new BadRequestException(
+        `کد ارز پشتیبانی نمی‌شود: "${currency}".`,
+      );
+    }
 
     const openingRecords =
       recordsByEntity.get('accounting-opening-balances') ?? [];
     const journalRecords =
       recordsByEntity.get('accounting-journal-lines') ?? [];
-    const invoiceRecords = recordsByEntity.get('sales-invoices') ?? [];
+    const rawSalesInvoices = recordsByEntity.get('sales-invoices') ?? [];
+    const arInvoiceRecords: NormalisedRecord[] = [];
+    const apInvoiceRecords: NormalisedRecord[] = [
+      ...(recordsByEntity.get('purchase-invoices') ?? []),
+      ...(recordsByEntity.get('vendor-bills') ?? []),
+      ...(recordsByEntity.get('ap-invoices') ?? []),
+      ...(recordsByEntity.get('accounts-payable') ?? []),
+    ];
+    for (const inv of rawSalesInvoices) {
+      const invType = String(inv.values.type ?? '').trim();
+      if (invType && PURCHASE_INVOICE_TYPE_RE.test(invType)) {
+        apInvoiceRecords.push(inv);
+      } else {
+        arInvoiceRecords.push(inv);
+      }
+    }
     const inventoryRecords = recordsByEntity.get('inventory-items') ?? [];
-    const bankRecords = recordsByEntity.get('bank-statement') ?? [];
+    const bankRecords = [
+      ...(recordsByEntity.get('bank-statement') ?? []),
+      ...(recordsByEntity.get('bank-statements') ?? []),
+    ];
+
+    const warningsFa: string[] = [];
+    const tbByCategory = this.classifyOpeningAccounts(
+      openingRecords,
+      config,
+      currency,
+      warningsFa,
+    );
 
     const items: TieOutItemReport[] = [];
 
-    // ۱. بررسی تراز آزمایشی (TB)
-    const tbItem = this.checkTrialBalance(
-      openingRecords,
-      journalRecords,
-      currency,
-      controlTotals?.TRIAL_BALANCE,
-    );
-    if (tbItem) {
-      items.push(tbItem);
-    }
+    const tbItem = this.checkTrialBalance(openingRecords, journalRecords, currency, controlTotals?.TRIAL_BALANCE);
+    if (tbItem) items.push(tbItem);
 
-    // ۲. بررسی کنترل حساب‌های دریافتنی (AR)
-    const arItem = this.checkAccountsReceivable(
-      openingRecords,
-      invoiceRecords,
-      config,
-      currency,
-      controlTotals?.ACCOUNTS_RECEIVABLE,
-    );
-    if (arItem) {
-      items.push(arItem);
-    }
-
-    // ۳. بررسی کنترل حساب‌های پرداختنی (AP)
-    const apItem = this.checkAccountsPayable(
-      openingRecords,
-      config,
-      currency,
-      controlTotals?.ACCOUNTS_PAYABLE,
-    );
-    if (apItem) {
-      items.push(apItem);
-    }
-
-    // ۴. بررسی کنترل موجودی کالا (Inventory Stock Value)
-    const invItem = this.checkInventoryStock(
-      openingRecords,
-      inventoryRecords,
-      config,
-      currency,
-      controlTotals?.INVENTORY_STOCK,
-    );
-    if (invItem) {
-      items.push(invItem);
-    }
-
-    // ۵. بررسی کنترل حساب بانکی (Bank Balance)
-    const bankItem = this.checkBankBalance(
-      openingRecords,
-      bankRecords,
-      config,
-      currency,
-      controlTotals?.BANK_BALANCE,
-    );
-    if (bankItem) {
-      items.push(bankItem);
+    const controlSpecs: Array<{
+      category: Exclude<TieOutCategory, 'TRIAL_BALANCE'>;
+      name: string;
+      hasSubledger: boolean;
+      subledgerUnits: bigint;
+      mismatchBlocker: (actual: string, expected: string, diff: string) => string;
+      missingWarning: string;
+    }> = [
+      {
+        category: 'ACCOUNTS_RECEIVABLE',
+        name: 'کنترل حساب‌های دریافتنی (معین مشتریان در برابر صورتحساب‌های باز)',
+        hasSubledger: arInvoiceRecords.length > 0,
+        subledgerUnits: this.sumInvoiceSubledger(arInvoiceRecords, currency),
+        mismatchBlocker: (a, e, d) => `مغایرت حساب‌های دریافتنی (AR): مانده معین افتتاحیه (${a}) با کنترل تعیین‌شده (${e}) مغایرت دارد؛ اختلاف: ${d}.`,
+        missingWarning: 'سرفصل یا زیرمعین حساب‌های دریافتنی (AR) بدون طرف مقابل یا مبلغ کنترل است؛ مغایرت‌گیری AR انجام نشد.',
+      },
+      {
+        category: 'ACCOUNTS_PAYABLE',
+        name: 'کنترل حساب‌های پرداختنی (معین بستانکاران تجاری)',
+        hasSubledger: apInvoiceRecords.length > 0,
+        subledgerUnits: this.sumInvoiceSubledger(apInvoiceRecords, currency),
+        mismatchBlocker: (a, e, d) => `مغایرت حساب‌های پرداختنی (AP): مانده معین پرداختنی در افتتاحیه (${a}) با کنترل تعیین‌شده (${e}) مغایرت دارد؛ اختلاف: ${d}.`,
+        missingWarning: 'سرفصل یا زیرمعین حساب‌های پرداختنی (AP) بدون طرف مقابل یا مبلغ کنترل است؛ مغایرت‌گیری AP انجام نشد.',
+      },
+      {
+        category: 'INVENTORY_STOCK',
+        name: 'کنترل موجودی انبار (سرفصل موجودی کالا در برابر لایه‌های انبار)',
+        hasSubledger: inventoryRecords.length > 0,
+        subledgerUnits: this.sumInventorySubledger(inventoryRecords, currency),
+        mismatchBlocker: (a, e, d) => `مغایرت موجودی انبار: مانده سرفصل موجودی کالا در افتتاحیه (${a}) با ارزش کنترل (${e}) مغایرت دارد؛ اختلاف: ${d}.`,
+        missingWarning: 'سرفصل یا زیرمعین موجودی انبار بدون طرف مقابل یا مبلغ کنترل است؛ مغایرت‌گیری انبار انجام نشد.',
+      },
+      {
+        category: 'BANK_BALANCE',
+        name: 'کنترل حساب بانکی (مانده معین بانک در برابر صورتحساب بانکی)',
+        hasSubledger: bankRecords.length > 0,
+        subledgerUnits: this.sumBankSubledger(bankRecords, currency),
+        mismatchBlocker: (a, e, d) => `مغایرت حساب بانکی: مانده حساب بانکی در افتتاحیه (${a}) با مانده صورتحساب بانک (${e}) مغایرت دارد؛ اختلاف: ${d}.`,
+        missingWarning: 'سرفصل یا صورتحساب بانکی بدون طرف مقابل یا مبلغ کنترل است؛ مغایرت‌گیری بانک انجام نشد.',
+      },
+    ];
+    for (const spec of controlSpecs) {
+      const item = this.evaluateControlTieOut({
+        ...spec,
+        tb: tbByCategory[spec.category],
+        currency,
+        controlTotal: controlTotals?.[spec.category],
+        requireSubledgerOrControl,
+        warningsFa,
+      });
+      if (item) items.push(item);
     }
 
     const discrepancies = items.filter((item) => !item.matched);
@@ -193,6 +342,7 @@ export class ImportTieOutEngine {
       items,
       discrepancies,
       blockersFa,
+      ...(warningsFa.length > 0 ? { warningsFa } : {}),
     };
   }
 
@@ -274,457 +424,219 @@ export class ImportTieOutEngine {
     };
   }
 
-  private checkAccountsReceivable(
+  private classifyOpeningAccounts(
     openingRecords: NormalisedRecord[],
-    invoiceRecords: NormalisedRecord[],
     config: EffectiveTieOutConfig,
     currency: string,
-    controlTotal?: number | string | bigint,
-  ): TieOutItemReport | null {
-    let tbArBalanceUnits = 0n;
-    let foundTbAr = false;
+    warningsFa: string[],
+  ): Record<
+    Exclude<TieOutCategory, 'TRIAL_BALANCE'>,
+    { found: boolean; balance: bigint }
+  > {
+    const result: Record<
+      Exclude<TieOutCategory, 'TRIAL_BALANCE'>,
+      { found: boolean; balance: bigint }
+    > = {
+      ACCOUNTS_RECEIVABLE: { found: false, balance: 0n },
+      ACCOUNTS_PAYABLE: { found: false, balance: 0n },
+      INVENTORY_STOCK: { found: false, balance: 0n },
+      BANK_BALANCE: { found: false, balance: 0n },
+    };
+
+    const categories: Array<{
+      category: Exclude<TieOutCategory, 'TRIAL_BALANCE'>;
+      rule: TieOutControlAccountRule;
+      creditNormal: boolean;
+    }> = [
+      { category: 'ACCOUNTS_RECEIVABLE', rule: config.accountsReceivable, creditNormal: false },
+      { category: 'ACCOUNTS_PAYABLE', rule: config.accountsPayable, creditNormal: true },
+      { category: 'INVENTORY_STOCK', rule: config.inventory, creditNormal: false },
+      { category: 'BANK_BALANCE', rule: config.bank, creditNormal: false },
+    ];
 
     for (const record of openingRecords) {
-      const code = String(
-        record.values.accountCode ?? record.values.code ?? '',
-      ).trim();
-      const desc = String(
-        record.values.description ??
-          record.values.accountName ??
-          record.values.name ??
-          '',
-      ).toLowerCase();
+      const code = String(record.values.accountCode ?? record.values.code ?? '').trim();
+      const rawDesc = String(
+        record.values.description ?? record.values.accountName ?? record.values.name ?? '',
+      );
+      const normDesc = normaliseFaPatternText(rawDesc);
 
-      const isMatch =
-        config.accountsReceivable.accountCodes.includes(code) ||
-        config.accountsReceivable.namePatterns.some((p) =>
-          desc.includes(p.toLowerCase()),
+      // Priority 1: exact account code match (never falls through to name substring match).
+      let matched = categories.filter((c) => code !== '' && c.rule.accountCodes.includes(code));
+      // Priority 2: bounded pattern match on normalized description when no exact code matched.
+      if (matched.length === 0 && normDesc !== '') {
+        matched = categories.filter((c) =>
+          c.rule.namePatterns.some((p) => matchesBoundedPattern(normDesc, p)),
         );
-
-      if (isMatch) {
-        foundTbAr = true;
-        const d =
-          record.values.debit !== undefined && record.values.debit !== null
-            ? parseMoneyValue(record.values.debit as number | string, currency)
-            : 0n;
-        const c =
-          record.values.credit !== undefined && record.values.credit !== null
-            ? parseMoneyValue(record.values.credit as number | string, currency)
-            : 0n;
-        tbArBalanceUnits += d - c; // حساب دارایی ماهیت بدهکار دارد
       }
+
+      if (matched.length === 0) {
+        continue;
+      }
+      if (matched.length > 1) {
+        const names = matched.map((m) => m.category).join(' / ');
+        warningsFa.push(
+          `حساب «${code || rawDesc}» با بیش از یک دسته کنترل (${names}) تطابق داشت و برای جلوگیری از شمارش مضاعف کنار گذاشته شد؛ کد حساب دقیق تعریف کنید.`,
+        );
+        continue;
+      }
+
+      const target = matched[0];
+      const debitRaw = record.values.debit;
+      const creditRaw = record.values.credit;
+      const d =
+        debitRaw !== undefined && debitRaw !== null && debitRaw !== ''
+          ? parseMoneyValue(debitRaw as number | string, currency)
+          : 0n;
+      const c =
+        creditRaw !== undefined && creditRaw !== null && creditRaw !== ''
+          ? parseMoneyValue(creditRaw as number | string, currency)
+          : 0n;
+      result[target.category].found = true;
+      result[target.category].balance += target.creditNormal ? c - d : d - c;
     }
 
-    let subledgerArUnits = 0n;
-    const hasSubledger = invoiceRecords.length > 0;
+    return result;
+  }
 
-    for (const inv of invoiceRecords) {
+  private sumInvoiceSubledger(records: NormalisedRecord[], currency: string): bigint {
+    let total = 0n;
+    for (const inv of records) {
       const totalVal =
+        inv.values.totalRial ??
         inv.values.totalAmount ??
         inv.values.totalPrice ??
         inv.values.total ??
         inv.values.amount;
-
       if (totalVal !== undefined && totalVal !== null && totalVal !== '') {
-        subledgerArUnits += parseMoneyValue(totalVal as number | string, currency);
-      } else {
-        const unitPriceVal = inv.values.unitPrice ?? inv.values.price;
-        const qtyVal = inv.values.quantity ?? inv.values.qty;
-        if (unitPriceVal !== undefined && unitPriceVal !== null) {
-          const unitUnits = parseMoneyValue(unitPriceVal as number | string, currency);
-          const parsedQty =
-            typeof qtyVal === 'number'
-              ? qtyVal
-              : typeof qtyVal === 'string'
-                ? Number(qtyVal)
-                : 1;
-          const qtyUnits = BigInt(
-            Math.trunc(Number.isFinite(parsedQty) ? parsedQty : 1),
-          );
-          subledgerArUnits += unitUnits * (qtyUnits === 0n ? 1n : qtyUnits);
-        }
+        total += parseMoneyValue(totalVal as number | string, currency);
+        continue;
+      }
+      const unitPriceVal = inv.values.unitPrice ?? inv.values.price;
+      if (unitPriceVal !== undefined && unitPriceVal !== null && unitPriceVal !== '') {
+        const unitMinor = parseMoneyValue(unitPriceVal as number | string, currency);
+        total += multiplyMinorByDecimalQuantity(
+          unitMinor,
+          inv.values.quantity ?? inv.values.qty,
+          '1',
+        );
       }
     }
-
-    if (!foundTbAr && !hasSubledger && controlTotal === undefined) {
-      return null;
-    }
-
-    let expectedUnits = 0n;
-    let actualUnits = 0n;
-
-    if (hasSubledger && foundTbAr) {
-      expectedUnits =
-        controlTotal !== undefined
-          ? parseMoneyValue(controlTotal, currency)
-          : tbArBalanceUnits;
-      actualUnits = subledgerArUnits;
-    } else if (hasSubledger) {
-      expectedUnits =
-        controlTotal !== undefined
-          ? parseMoneyValue(controlTotal, currency)
-          : 0n;
-      actualUnits = subledgerArUnits;
-    } else {
-      // فقط تراز افتتاحیه و کنترل توتال خارجی داریم
-      expectedUnits =
-        controlTotal !== undefined
-          ? parseMoneyValue(controlTotal, currency)
-          : 0n;
-      actualUnits = tbArBalanceUnits;
-    }
-
-    const diffUnits = actualUnits - expectedUnits;
-    const matched = diffUnits === 0n;
-
-    const expectedMoney = formatTieOutMoney(expectedUnits, currency);
-    const actualMoney = formatTieOutMoney(actualUnits, currency);
-    const diffMoney = formatTieOutMoney(
-      diffUnits < 0n ? -diffUnits : diffUnits,
-      currency,
-    );
-
-    let blockerFa: string | undefined;
-    if (!matched) {
-      blockerFa = `مغایرت حساب‌های دریافتنی (AR): مانده معین افتتاحیه (${actualMoney}) با کنترل تعیین‌شده (${expectedMoney}) مغایرت دارد؛ اختلاف: ${diffMoney}.`;
-    }
-
-    return {
-      category: 'ACCOUNTS_RECEIVABLE',
-      name: 'کنترل حساب‌های دریافتنی (معین مشتریان در برابر صورتحساب‌های باز)',
-      expectedMinor: expectedUnits.toString(),
-      expectedMoney,
-      actualMinor: actualUnits.toString(),
-      actualMoney,
-      differenceMinor: diffUnits.toString(),
-      differenceMoney: diffMoney,
-      currency,
-      matched,
-      blockerFa,
-    };
+    return total;
   }
 
-  private checkAccountsPayable(
-    openingRecords: NormalisedRecord[],
-    config: EffectiveTieOutConfig,
-    currency: string,
-    controlTotal?: number | string | bigint,
-  ): TieOutItemReport | null {
-    let tbApBalanceUnits = 0n;
-    let foundTbAp = false;
-
-    for (const record of openingRecords) {
-      const code = String(
-        record.values.accountCode ?? record.values.code ?? '',
-      ).trim();
-      const desc = String(
-        record.values.description ??
-          record.values.accountName ??
-          record.values.name ??
-          '',
-      ).toLowerCase();
-
-      const isMatch =
-        config.accountsPayable.accountCodes.includes(code) ||
-        config.accountsPayable.namePatterns.some((p) =>
-          desc.includes(p.toLowerCase()),
-        );
-
-      if (isMatch) {
-        foundTbAp = true;
-        const d =
-          record.values.debit !== undefined && record.values.debit !== null
-            ? parseMoneyValue(record.values.debit as number | string, currency)
-            : 0n;
-        const c =
-          record.values.credit !== undefined && record.values.credit !== null
-            ? parseMoneyValue(record.values.credit as number | string, currency)
-            : 0n;
-        tbApBalanceUnits += c - d; // حساب بدهی ماهیت بستانکار دارد
-      }
-    }
-
-    if (!foundTbAp && controlTotal === undefined) {
-      return null;
-    }
-
-    const expectedUnits =
-      controlTotal !== undefined
-        ? parseMoneyValue(controlTotal, currency)
-        : tbApBalanceUnits;
-    const actualUnits = tbApBalanceUnits;
-    const diffUnits = actualUnits - expectedUnits;
-    const matched = diffUnits === 0n;
-
-    const expectedMoney = formatTieOutMoney(expectedUnits, currency);
-    const actualMoney = formatTieOutMoney(actualUnits, currency);
-    const diffMoney = formatTieOutMoney(
-      diffUnits < 0n ? -diffUnits : diffUnits,
-      currency,
-    );
-
-    let blockerFa: string | undefined;
-    if (!matched) {
-      blockerFa = `مغایرت حساب‌های پرداختنی (AP): مانده معین پرداختنی در افتتاحیه (${actualMoney}) با کنترل تعیین‌شده (${expectedMoney}) مغایرت دارد؛ اختلاف: ${diffMoney}.`;
-    }
-
-    return {
-      category: 'ACCOUNTS_PAYABLE',
-      name: 'کنترل حساب‌های پرداختنی (معین بستانکاران تجاری)',
-      expectedMinor: expectedUnits.toString(),
-      expectedMoney,
-      actualMinor: actualUnits.toString(),
-      actualMoney,
-      differenceMinor: diffUnits.toString(),
-      differenceMoney: diffMoney,
-      currency,
-      matched,
-      blockerFa,
-    };
-  }
-
-  private checkInventoryStock(
-    openingRecords: NormalisedRecord[],
-    inventoryRecords: NormalisedRecord[],
-    config: EffectiveTieOutConfig,
-    currency: string,
-    controlTotal?: number | string | bigint,
-  ): TieOutItemReport | null {
-    let tbInvBalanceUnits = 0n;
-    let foundTbInv = false;
-
-    for (const record of openingRecords) {
-      const code = String(
-        record.values.accountCode ?? record.values.code ?? '',
-      ).trim();
-      const desc = String(
-        record.values.description ??
-          record.values.accountName ??
-          record.values.name ??
-          '',
-      ).toLowerCase();
-
-      const isMatch =
-        config.inventory.accountCodes.includes(code) ||
-        config.inventory.namePatterns.some((p) =>
-          desc.includes(p.toLowerCase()),
-        );
-
-      if (isMatch) {
-        foundTbInv = true;
-        const d =
-          record.values.debit !== undefined && record.values.debit !== null
-            ? parseMoneyValue(record.values.debit as number | string, currency)
-            : 0n;
-        const c =
-          record.values.credit !== undefined && record.values.credit !== null
-            ? parseMoneyValue(record.values.credit as number | string, currency)
-            : 0n;
-        tbInvBalanceUnits += d - c;
-      }
-    }
-
-    let subledgerInvUnits = 0n;
-    const hasSubledger = inventoryRecords.length > 0;
-
-    for (const item of inventoryRecords) {
+  private sumInventorySubledger(records: NormalisedRecord[], currency: string): bigint {
+    let total = 0n;
+    for (const item of records) {
       const totalCostVal = item.values.totalCost ?? item.values.totalValue;
       if (totalCostVal !== undefined && totalCostVal !== null && totalCostVal !== '') {
-        subledgerInvUnits += parseMoneyValue(totalCostVal as number | string, currency);
-      } else {
-        const costVal = item.values.unitCost ?? item.values.cost ?? item.values.fee;
-        const qtyVal = item.values.quantity ?? item.values.qty ?? 0;
-        if (costVal !== undefined && costVal !== null) {
-          const costUnits = parseMoneyValue(costVal as number | string, currency);
-          const parsedQty =
-            typeof qtyVal === 'number'
-              ? qtyVal
-              : typeof qtyVal === 'string'
-                ? Number(qtyVal)
-                : 0;
-          const qtyUnits = BigInt(
-            Math.trunc(Number.isFinite(parsedQty) ? parsedQty : 0),
-          );
-          subledgerInvUnits += costUnits * qtyUnits;
-        }
+        total += parseMoneyValue(totalCostVal as number | string, currency);
+        continue;
+      }
+      const costVal = item.values.unitCost ?? item.values.cost ?? item.values.fee;
+      if (costVal !== undefined && costVal !== null && costVal !== '') {
+        const costMinor = parseMoneyValue(costVal as number | string, currency);
+        total += multiplyMinorByDecimalQuantity(
+          costMinor,
+          item.values.quantity ?? item.values.qty,
+          '0',
+        );
       }
     }
-
-    if (!foundTbInv && !hasSubledger && controlTotal === undefined) {
-      return null;
-    }
-
-    let expectedUnits = 0n;
-    let actualUnits = 0n;
-
-    if (hasSubledger && foundTbInv) {
-      expectedUnits =
-        controlTotal !== undefined
-          ? parseMoneyValue(controlTotal, currency)
-          : tbInvBalanceUnits;
-      actualUnits = subledgerInvUnits;
-    } else if (hasSubledger) {
-      expectedUnits =
-        controlTotal !== undefined
-          ? parseMoneyValue(controlTotal, currency)
-          : 0n;
-      actualUnits = subledgerInvUnits;
-    } else {
-      expectedUnits =
-        controlTotal !== undefined
-          ? parseMoneyValue(controlTotal, currency)
-          : 0n;
-      actualUnits = tbInvBalanceUnits;
-    }
-
-    const diffUnits = actualUnits - expectedUnits;
-    const matched = diffUnits === 0n;
-
-    const expectedMoney = formatTieOutMoney(expectedUnits, currency);
-    const actualMoney = formatTieOutMoney(actualUnits, currency);
-    const diffMoney = formatTieOutMoney(
-      diffUnits < 0n ? -diffUnits : diffUnits,
-      currency,
-    );
-
-    let blockerFa: string | undefined;
-    if (!matched) {
-      blockerFa = `مغایرت موجودی انبار: مانده سرفصل موجودی کالا در افتتاحیه (${actualMoney}) با ارزش کنترل (${expectedMoney}) مغایرت دارد؛ اختلاف: ${diffMoney}.`;
-    }
-
-    return {
-      category: 'INVENTORY_STOCK',
-      name: 'کنترل موجودی انبار (سرفصل موجودی کالا در برابر لایه‌های انبار)',
-      expectedMinor: expectedUnits.toString(),
-      expectedMoney,
-      actualMinor: actualUnits.toString(),
-      actualMoney,
-      differenceMinor: diffUnits.toString(),
-      differenceMoney: diffMoney,
-      currency,
-      matched,
-      blockerFa,
-    };
+    return total;
   }
 
-  private checkBankBalance(
-    openingRecords: NormalisedRecord[],
-    bankRecords: NormalisedRecord[],
-    config: EffectiveTieOutConfig,
-    currency: string,
-    controlTotal?: number | string | bigint,
-  ): TieOutItemReport | null {
-    let tbBankBalanceUnits = 0n;
-    let foundTbBank = false;
-
-    for (const record of openingRecords) {
-      const code = String(
-        record.values.accountCode ?? record.values.code ?? '',
-      ).trim();
-      const desc = String(
-        record.values.description ??
-          record.values.accountName ??
-          record.values.name ??
-          '',
-      ).toLowerCase();
-
-      const isMatch =
-        config.bank.accountCodes.includes(code) ||
-        config.bank.namePatterns.some((p) => desc.includes(p.toLowerCase()));
-
-      if (isMatch) {
-        foundTbBank = true;
-        const d =
-          record.values.debit !== undefined && record.values.debit !== null
-            ? parseMoneyValue(record.values.debit as number | string, currency)
-            : 0n;
-        const c =
-          record.values.credit !== undefined && record.values.credit !== null
-            ? parseMoneyValue(record.values.credit as number | string, currency)
-            : 0n;
-        tbBankBalanceUnits += d - c;
-      }
-    }
-
-    let subledgerBankUnits = 0n;
-    const hasSubledger = bankRecords.length > 0;
-
-    if (hasSubledger) {
-      // پیدا کردن مانده نهایی صورتحساب بانک (از آخرین سطر با ستون مانده یا جمع گردش)
-      const rowsWithBalance = bankRecords.filter(
-        (r) =>
-          r.values.balance !== undefined &&
-          r.values.balance !== null &&
-          r.values.balance !== '',
-      );
-      if (rowsWithBalance.length > 0) {
-        const lastRow = rowsWithBalance[rowsWithBalance.length - 1];
-        subledgerBankUnits = parseMoneyValue(
-          lastRow.values.balance as number | string,
-          currency,
-        );
-      } else {
-        let sumDeposits = 0n;
-        let sumWithdrawals = 0n;
-        for (const r of bankRecords) {
-          const dep = r.values.deposit ?? 0;
-          const wth = r.values.withdrawal ?? 0;
-          if (dep) {
-            sumDeposits += parseMoneyValue(dep as number | string, currency);
-          }
-          if (wth) {
-            sumWithdrawals += parseMoneyValue(wth as number | string, currency);
-          }
+  private sumBankSubledger(bankRecords: NormalisedRecord[], currency: string): bigint {
+    if (bankRecords.length === 0) return 0n;
+    const rowsWithBalance = bankRecords.filter(
+      (r) => r.values.balance !== undefined && r.values.balance !== null && r.values.balance !== '',
+    );
+    if (rowsWithBalance.length > 0) {
+      // Pick chronologically latest dated row (last row on tie) to support both ascending & descending statements.
+      let closingRow = rowsWithBalance[rowsWithBalance.length - 1];
+      let latestDate = '';
+      for (const row of rowsWithBalance) {
+        const d = typeof row.values.date === 'string' ? row.values.date : '';
+        if (/^\d{4}-\d{2}-\d{2}$/.test(d) && d >= latestDate) {
+          latestDate = d;
+          closingRow = row;
         }
-        subledgerBankUnits = sumDeposits - sumWithdrawals;
+      }
+      return parseMoneyValue(closingRow.values.balance as number | string, currency);
+    }
+
+    let net = 0n;
+    for (const r of bankRecords) {
+      const hasDep = r.values.deposit !== undefined && r.values.deposit !== null && r.values.deposit !== '';
+      const hasWth = r.values.withdrawal !== undefined && r.values.withdrawal !== null && r.values.withdrawal !== '';
+      if (hasDep || hasWth) {
+        if (hasDep) net += parseMoneyValue(r.values.deposit as number | string, currency);
+        if (hasWth) net -= parseMoneyValue(r.values.withdrawal as number | string, currency);
+      } else if (r.values.amount !== undefined && r.values.amount !== null && r.values.amount !== '') {
+        net += parseMoneyValue(r.values.amount as number | string, currency);
       }
     }
+    return net;
+  }
 
-    if (!foundTbBank && !hasSubledger && controlTotal === undefined) {
-      return null;
+  private evaluateControlTieOut(params: {
+    category: Exclude<TieOutCategory, 'TRIAL_BALANCE'>;
+    name: string;
+    tb: { found: boolean; balance: bigint };
+    hasSubledger: boolean;
+    subledgerUnits: bigint;
+    currency: string;
+    controlTotal?: number | string | bigint;
+    requireSubledgerOrControl: boolean;
+    warningsFa: string[];
+    mismatchBlocker: (actual: string, expected: string, diff: string) => string;
+    missingWarning: string;
+  }): TieOutItemReport | null {
+    const { category, name, tb, hasSubledger, subledgerUnits, currency, controlTotal, requireSubledgerOrControl, warningsFa, mismatchBlocker, missingWarning } = params;
+    const hasControl = controlTotal !== undefined;
+    if (!tb.found && !hasSubledger && !hasControl) return null;
+
+    if (!hasControl && !(tb.found && hasSubledger)) {
+      warningsFa.push(missingWarning);
+      if (!requireSubledgerOrControl) return null;
+      const presentUnits = hasSubledger ? subledgerUnits : tb.balance;
+      return {
+        category,
+        name,
+        expectedMinor: '0',
+        expectedMoney: formatTieOutMoney(0n, currency),
+        actualMinor: presentUnits.toString(),
+        actualMoney: formatTieOutMoney(presentUnits, currency),
+        differenceMinor: presentUnits.toString(),
+        differenceMoney: formatTieOutMoney(presentUnits < 0n ? -presentUnits : presentUnits, currency),
+        currency,
+        matched: false,
+        blockerFa: missingWarning,
+      };
     }
 
-    let expectedUnits = 0n;
-    let actualUnits = 0n;
-
-    if (hasSubledger && foundTbBank) {
-      expectedUnits =
-        controlTotal !== undefined
-          ? parseMoneyValue(controlTotal, currency)
-          : tbBankBalanceUnits;
-      actualUnits = subledgerBankUnits;
-    } else if (hasSubledger) {
-      expectedUnits =
-        controlTotal !== undefined
-          ? parseMoneyValue(controlTotal, currency)
-          : 0n;
-      actualUnits = subledgerBankUnits;
-    } else {
-      expectedUnits =
-        controlTotal !== undefined
-          ? parseMoneyValue(controlTotal, currency)
-          : 0n;
-      actualUnits = tbBankBalanceUnits;
-    }
+    const expectedUnits = hasControl ? parseMoneyValue(controlTotal, currency) : tb.balance;
+    const actualUnits = !hasControl
+      ? subledgerUnits
+      : tb.found && hasSubledger
+        ? subledgerUnits !== expectedUnits
+          ? subledgerUnits
+          : tb.balance
+        : hasSubledger
+          ? subledgerUnits
+          : tb.found
+            ? tb.balance
+            : 0n;
 
     const diffUnits = actualUnits - expectedUnits;
     const matched = diffUnits === 0n;
-
     const expectedMoney = formatTieOutMoney(expectedUnits, currency);
     const actualMoney = formatTieOutMoney(actualUnits, currency);
-    const diffMoney = formatTieOutMoney(
-      diffUnits < 0n ? -diffUnits : diffUnits,
-      currency,
-    );
-
-    let blockerFa: string | undefined;
-    if (!matched) {
-      blockerFa = `مغایرت حساب بانکی: مانده حساب بانکی در افتتاحیه (${actualMoney}) با مانده صورتحساب بانک (${expectedMoney}) مغایرت دارد؛ اختلاف: ${diffMoney}.`;
-    }
+    const diffMoney = formatTieOutMoney(diffUnits < 0n ? -diffUnits : diffUnits, currency);
 
     return {
-      category: 'BANK_BALANCE',
-      name: 'کنترل حساب بانکی (مانده معین بانک در برابر صورتحساب بانکی)',
+      category,
+      name,
       expectedMinor: expectedUnits.toString(),
       expectedMoney,
       actualMinor: actualUnits.toString(),
@@ -733,7 +645,7 @@ export class ImportTieOutEngine {
       differenceMoney: diffMoney,
       currency,
       matched,
-      blockerFa,
+      blockerFa: matched ? undefined : mismatchBlocker(actualMoney, expectedMoney, diffMoney),
     };
   }
 }
