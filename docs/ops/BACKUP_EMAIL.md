@@ -27,8 +27,8 @@ secrets: they are only mailed encrypted. Without `BACKUP_AGE_RECIPIENT` nothing 
 ## Limits and caps
 
 Gmail: 25 MB per message after base64 (+37 %), about 500 mails/day. Defaults: 17 MB raw per part,
-`BACKUP_EMAIL_MAX_MAILS=10` per run, `BACKUP_EMAIL_MAX_DAY_MB=150` per UTC day (counted in
-`/var/lib/roxira-backup/email_day.json`). If the encrypted payload needs more than the cap, **no data parts are sent**
+`BACKUP_EMAIL_MAX_MAILS=20` per run, `BACKUP_EMAIL_MAX_DAY_MB=350` per UTC day (counted in
+`/var/lib/roxira-backup/email_day.json`; 20 × 17 MiB = 340 MiB fits within 350 MiB/day and uses ~4 % of Gmail's 500/day quota). If the encrypted payload needs more than the cap, **no data parts are sent**
 (a partial age stream cannot be decrypted, so truncating would only waste quota) and the report states
 `OVER_CAP` with the reason. Raise the caps or trim `BACKUP_EMAIL_EXTRA_PATHS`. Typical use: `weekly`
 (mail count about 10 per week) rather than `daily`.

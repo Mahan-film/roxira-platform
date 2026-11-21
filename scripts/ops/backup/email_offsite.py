@@ -14,7 +14,7 @@ BACKUP_SMTP_USER, BACKUP_SMTP_PASS, BACKUP_NOTIFY_TO, optional BACKUP_SMTP_HOST/
            (a partial age stream cannot be restored, so truncating would only burn quota).
 
 Environment tunables (defaults): BACKUP_EMAIL_PART_MB=17 (raw bytes per part; base64 adds ~37 %,
-Gmail limit is 25 MB per message), BACKUP_EMAIL_MAX_MAILS=10 (per run), BACKUP_EMAIL_MAX_DAY_MB=150
+Gmail limit is 25 MB per message), BACKUP_EMAIL_MAX_MAILS=20 (per run), BACKUP_EMAIL_MAX_DAY_MB=350
 (per UTC day, counted in a small state file), BACKUP_EMAIL_PAUSE_S=3 (between messages).
 """
 from __future__ import annotations
@@ -127,15 +127,15 @@ def join_parts(part_paths: list[Path], dest: Path) -> str:
 @dataclass
 class Caps:
     part_bytes: int = 17 * MB
-    max_mails: int = 10
-    max_day_bytes: int = 150 * MB
+    max_mails: int = 20
+    max_day_bytes: int = 350 * MB
 
     @classmethod
     def from_env(cls, env=os.environ) -> "Caps":
         return cls(
             part_bytes=int(float(env.get("BACKUP_EMAIL_PART_MB", "17")) * MB),
-            max_mails=int(env.get("BACKUP_EMAIL_MAX_MAILS", "10")),
-            max_day_bytes=int(float(env.get("BACKUP_EMAIL_MAX_DAY_MB", "150")) * MB),
+            max_mails=int(env.get("BACKUP_EMAIL_MAX_MAILS", "20")),
+            max_day_bytes=int(float(env.get("BACKUP_EMAIL_MAX_DAY_MB", "350")) * MB),
         )
 
 
