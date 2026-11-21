@@ -8,6 +8,7 @@
 import { ForbiddenException } from '@nestjs/common';
 import { proposeMatches } from '../../banking/matching/reconciliation-matcher';
 import { TaxEngineService } from '../../tax_compliance/engine/tax-engine.service';
+import { InMemoryWhtCertificateSequenceStore } from '../../tax_compliance/engine/tax-engine.test-helpers';
 import { nextMonthCharge } from '../assets/depreciation';
 import {
   buildClosingRevaluationEntries,
@@ -267,12 +268,13 @@ describe('R16 T9 bank import and reconciliation', () => {
 
 describe('R16 T10 tax engine (T180)', () => {
   const buildEngine = () => {
-    const engine = new TaxEngineService();
+    const engine = new TaxEngineService(new InMemoryWhtCertificateSequenceStore());
+    const rule = { country: 'DE', treatment: 'STANDARD', source: 'test fixture' } as const;
     engine.registerTaxRules([
-      { code: 'STD', rateBps: T10.rates.standardUntil20260630 * 100, effectiveFrom: '2020-01-01', effectiveTo: '2026-06-30', inputBox: 'VAT_IN', outputBox: 'VAT_OUT' },
-      { code: 'STD', rateBps: T10.rates.standardFrom20260701 * 100, effectiveFrom: '2026-07-01', effectiveTo: null, inputBox: 'VAT_IN', outputBox: 'VAT_OUT' },
-      { code: 'RC_19', rateBps: 1900, effectiveFrom: '2020-01-01', effectiveTo: null, reverseCharge: true, inputBox: 'RC_INPUT', outputBox: 'RC_OUTPUT' },
-      { code: 'NR_15', rateBps: 1500, effectiveFrom: '2020-01-01', effectiveTo: null, reverseCharge: true, inputBox: 'RC_INPUT', outputBox: 'RC_OUTPUT' },
+      { ...rule, code: 'STD', rateBps: T10.rates.standardUntil20260630 * 100, effectiveFrom: '2020-01-01', effectiveTo: '2026-06-30', inputBox: 'VAT_IN', outputBox: 'VAT_OUT' },
+      { ...rule, code: 'STD', rateBps: T10.rates.standardFrom20260701 * 100, effectiveFrom: '2026-07-01', effectiveTo: null, inputBox: 'VAT_IN', outputBox: 'VAT_OUT' },
+      { ...rule, code: 'RC_19', rateBps: 1900, effectiveFrom: '2020-01-01', effectiveTo: null, reverseCharge: true, inputBox: 'RC_INPUT', outputBox: 'RC_OUTPUT' },
+      { ...rule, code: 'NR_15', rateBps: 1500, effectiveFrom: '2020-01-01', effectiveTo: null, reverseCharge: true, inputBox: 'RC_INPUT', outputBox: 'RC_OUTPUT' },
     ]);
     engine.registerWithholdingRules([
       { code: 'WHT_5', rateBps: 500, timing: 'PAYMENT', certificatePrefix: 'WHT' },
@@ -287,9 +289,9 @@ describe('R16 T10 tax engine (T180)', () => {
     expect(T10.nonResident.net - T10.nonResident.withholding).toBe(T10.nonResident.bankPaid);
   });
 
-  it('A: credit note on 2026-07-10 for a 2026-06-20 invoice uses 19%, a new invoice uses 20%', () => {
+  it('A: credit note on 2026-07-10 for a 2026-06-20 invoice uses 19%, a new invoice uses 20%', async () => {
     const engine = buildEngine();
-    const cn = engine.calculate({
+    const cn = await engine.calculate({
       country: 'DE',
       taxCode: 'STD',
       netMinor: T10.creditNote.net,
@@ -300,7 +302,7 @@ describe('R16 T10 tax engine (T180)', () => {
     expect(cn.rateBps).toBe(1900);
     expect(cn.taxMinor).toBe(T10.creditNote.expectedVat);
 
-    const inv = engine.calculate({
+    const inv = await engine.calculate({
       country: 'DE',
       taxCode: 'STD',
       netMinor: T10.creditNote.net,
@@ -311,9 +313,9 @@ describe('R16 T10 tax engine (T180)', () => {
     expect(inv.taxMinor).toBe(m('200.00'));
   });
 
-  it('B: reverse charge posts Dr input VAT 190 / Cr output RC VAT 190 mapped to return boxes', () => {
+  it('B: reverse charge posts Dr input VAT 190 / Cr output RC VAT 190 mapped to return boxes', async () => {
     const engine = buildEngine();
-    const res = engine.calculate({
+    const res = await engine.calculate({
       country: 'DE',
       taxCode: 'RC_19',
       netMinor: T10.reverseCharge.net,
@@ -338,9 +340,9 @@ describe('R16 T10 tax engine (T180)', () => {
     );
   });
 
-  it('C: non-resident bill self-assesses 150 VAT and withholds 5% with certificate WHT-2026-0001', () => {
+  it('C: non-resident bill self-assesses 150 VAT and withholds 5% with certificate WHT-2026-0001', async () => {
     const engine = buildEngine();
-    const bill = engine.calculate({
+    const bill = await engine.calculate({
       country: 'DE',
       taxCode: 'NR_15',
       netMinor: T10.nonResident.net,
@@ -352,7 +354,7 @@ describe('R16 T10 tax engine (T180)', () => {
     expect(bill.taxMinor).toBe(T10.nonResident.selfAssessedVat);
     expect(bill.withholding.applied).toBe(false);
 
-    const payment = engine.calculate({
+    const payment = await engine.calculate({
       country: 'DE',
       taxCode: 'NR_15',
       netMinor: T10.nonResident.net,

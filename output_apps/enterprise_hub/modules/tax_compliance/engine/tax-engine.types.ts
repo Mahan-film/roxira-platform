@@ -2,11 +2,18 @@ export type TaxDocumentKind = 'INVOICE' | 'CREDIT_NOTE' | 'BILL';
 export type WithholdingTiming = 'INVOICE' | 'PAYMENT';
 export type WithholdingEvent = 'INVOICE' | 'BILL' | 'PAYMENT';
 
+/** STANDARD charges `rateBps`; ZERO_RATE and EXEMPT charge no tax and require `rateBps` 0 (kept distinct for return boxes). */
+export type TaxTreatment = 'STANDARD' | 'ZERO_RATE' | 'EXEMPT';
+
 /** Effective-dated tax rate rule; rates are integer basis points (19% = 1900, 10% = 1000). */
 export interface TaxRateRule {
   code: string;
-  country?: string;
+  /** Required country (or pack) code; rules never match other countries. */
+  country: string;
+  treatment: TaxTreatment;
   rateBps: number;
+  /** Required URL or citation for the rate; registration rejects rules without it. */
+  source: string;
   /** Inclusive ISO date (YYYY-MM-DD). */
   effectiveFrom: string;
   /** Inclusive ISO date (YYYY-MM-DD), or null/undefined if open-ended. */
@@ -27,7 +34,7 @@ export interface WithholdingRule {
 
 /** Persistent sequence store port for WHT certificate numbering (`PREFIX-YYYY-NNNN`). */
 export interface WhtCertificateSequenceStore {
-  next(prefix: string, year: number): number;
+  next(prefix: string, year: number): Promise<number>;
 }
 
 export interface TaxPostingAccounts {
@@ -77,6 +84,7 @@ export interface TaxCalculationResult {
   postingDate: string;
   deductibleDate: string;
   rateBps: number;
+  treatment: TaxTreatment;
   taxMinor: bigint;
   netTaxImpactMinor: bigint;
   reverseCharge: boolean;
@@ -97,6 +105,6 @@ export interface TaxCalculationResult {
 }
 
 export interface TaxEngine {
-  resolveRate(taxCode: string, taxPointDate: string, originalInvoiceTaxPointDate?: string | null): TaxRateRule;
-  calculate(input: TaxCalculationInput): TaxCalculationResult;
+  resolveRate(country: string, taxCode: string, effectiveDate: string): TaxRateRule;
+  calculate(input: TaxCalculationInput): Promise<TaxCalculationResult>;
 }

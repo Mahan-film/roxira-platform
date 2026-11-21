@@ -1,5 +1,6 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { roundMinorHalfUp } from '../../accounting/money';
+import { DEFAULT_PACK_TAX_RULES } from './default-tax-rules';
 import {
   TaxCalculationInput,
   TaxCalculationResult,
@@ -27,38 +28,23 @@ const FALLBACK_ACCOUNTS: Required<TaxPostingAccounts> = {
   whtReceivableAccount: '1420',
 };
 
-/** Built-in Iran tax codes preserved for golden compatibility. */
-export const IRAN_DEFAULT_TAX_RULES: readonly TaxRateRule[] = [
-  { code: 'IR_VAT_9', country: 'IR', rateBps: 900, effectiveFrom: '2015-03-21', effectiveTo: '2024-03-19', outputBox: 'IR_VAT_STD', inputBox: 'IR_VAT_IN' },
-  { code: 'IR_VAT_10', country: 'IR', rateBps: 1000, effectiveFrom: '2024-03-20', effectiveTo: null, outputBox: 'IR_VAT_STD', inputBox: 'IR_VAT_IN' },
-  { code: 'IR_EXEMPT', country: 'IR', rateBps: 0, effectiveFrom: '2000-01-01', effectiveTo: null, outputBox: 'IR_VAT_EXEMPT', inputBox: null },
-];
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/**
- * In-memory fallback sequence store for unit tests and stateless evaluation.
- * Production callers must inject a DB-backed `WhtCertificateSequenceStore` via `WHT_SEQUENCE_STORE`
- * or pass a pre-allocated `input.certificateNumber`.
- */
-export class InMemoryWhtCertificateSequenceStore implements WhtCertificateSequenceStore {
-  private readonly counters = new Map<string, number>();
-
-  next(prefix: string, year: number): number {
-    const key = `${prefix}:${year}`;
-    const nextSeq = (this.counters.get(key) ?? 0) + 1;
-    this.counters.set(key, nextSeq);
-    return nextSeq;
-  }
+function assertIsoDate(value: string, label: string): void {
+  if (!ISO_DATE.test(value)) throw new Error(`${label} must be an ISO date (YYYY-MM-DD), got "${value}"`);
 }
 
-/** Sequential certificate allocator (`PREFIX-YYYY-NNNN`) scoped by prefix and calendar year. */
+/**
+ * Sequential certificate allocator (`PREFIX-YYYY-NNNN`) scoped by prefix and calendar year.
+ * The store is mandatory and async so a DB-backed implementation can persist the counter.
+ */
 export class WhtCertificateSequencer {
-  constructor(
-    private readonly store: WhtCertificateSequenceStore = new InMemoryWhtCertificateSequenceStore(),
-  ) {}
+  constructor(private readonly store: WhtCertificateSequenceStore) {}
 
-  next(prefix: string, dateStr: string): string {
-    const year = Number(dateStr.slice(0, 4)) || new Date().getUTCFullYear();
-    const nextSeq = this.store.next(prefix, year);
+  async next(prefix: string, dateStr: string): Promise<string> {
+    const year = Number(dateStr.slice(0, 4));
+    if (!year) throw new Error(`Cannot derive certificate year from "${dateStr}"`);
+    const nextSeq = await this.store.next(prefix, year);
     return `${prefix}-${year}-${String(nextSeq).padStart(4, '0')}`;
   }
 }
@@ -67,12 +53,15 @@ export class WhtCertificateSequencer {
  * Country-neutral tax engine (T180). Evaluates effective-dated VAT rules by tax point (credit
  * notes inherit the original invoice's tax point), reverse charge (input + output RC VAT),
  * withholding at invoice or payment time with sequential certificates, and separate deductible dates.
+ *
+ * Rounding rule: tax and withholding are rounded half-up ONCE on the document total, in bigint
+ * minor units (`net * rateBps / 10_000`). Per-line rounding is NOT used; callers pass the document net.
  */
 @Injectable()
 export class TaxEngineService implements TaxEngine {
-  private readonly taxRules: TaxRateRule[];
+  private readonly taxRules: TaxRateRule[] = [];
   private readonly whtRules = new Map<string, WithholdingRule>();
-  private readonly certificates: WhtCertificateSequencer;
+  private readonly certificates: WhtCertificateSequencer | null;
   private readonly defaultAccounts: Required<TaxPostingAccounts>;
 
   constructor(
@@ -80,13 +69,49 @@ export class TaxEngineService implements TaxEngine {
     @Optional() @Inject(TAX_DEFAULT_ACCOUNTS) defaultAccounts?: Partial<TaxPostingAccounts>,
     @Optional() @Inject(TAX_INITIAL_RULES) initialRules?: readonly TaxRateRule[],
   ) {
-    this.taxRules = [...(initialRules ?? IRAN_DEFAULT_TAX_RULES)];
-    this.certificates = new WhtCertificateSequencer(sequenceStore ?? new InMemoryWhtCertificateSequenceStore());
+    // No in-memory fallback: a missing store only fails when a certificate is actually needed,
+    // so the app can still boot and compute VAT without withholding.
+    this.certificates = sequenceStore ? new WhtCertificateSequencer(sequenceStore) : null;
     this.defaultAccounts = { ...FALLBACK_ACCOUNTS, ...defaultAccounts };
+    this.registerTaxRules(initialRules ?? DEFAULT_PACK_TAX_RULES);
   }
 
   registerTaxRules(rules: readonly TaxRateRule[]): void {
-    this.taxRules.push(...rules);
+    for (const rule of rules) {
+      this.assertValidRule(rule);
+      const clash = this.taxRules.find(
+        (r) =>
+          r.country.toUpperCase() === rule.country.toUpperCase() &&
+          r.code === rule.code &&
+          r.effectiveFrom <= (rule.effectiveTo ?? '9999-12-31') &&
+          rule.effectiveFrom <= (r.effectiveTo ?? '9999-12-31'),
+      );
+      if (clash) {
+        throw new Error(
+          `Overlapping tax rule for ${rule.country}/${rule.code}: ${rule.effectiveFrom}..${rule.effectiveTo ?? 'open'} ` +
+            `overlaps ${clash.effectiveFrom}..${clash.effectiveTo ?? 'open'}`,
+        );
+      }
+      this.taxRules.push({ ...rule, country: rule.country.trim().toUpperCase() });
+    }
+  }
+
+  private assertValidRule(rule: TaxRateRule): void {
+    const id = `${rule.country}/${rule.code}`;
+    if (!rule.country?.trim()) throw new Error(`Tax rule "${rule.code}" requires a country`);
+    if (!rule.source?.trim()) throw new Error(`Tax rule ${id} requires a source (URL or citation)`);
+    assertIsoDate(rule.effectiveFrom, `Tax rule ${id} effectiveFrom`);
+    if (rule.effectiveTo != null) {
+      assertIsoDate(rule.effectiveTo, `Tax rule ${id} effectiveTo`);
+      if (rule.effectiveTo < rule.effectiveFrom) throw new Error(`Tax rule ${id} ends before it starts`);
+    }
+    if (!Number.isInteger(rule.rateBps) || rule.rateBps < 0) throw new Error(`Tax rule ${id} rateBps must be a non-negative integer`);
+    if (rule.treatment !== 'STANDARD' && rule.rateBps !== 0) {
+      throw new Error(`Tax rule ${id} treatment ${rule.treatment} requires rateBps 0`);
+    }
+    if (rule.treatment !== 'STANDARD' && rule.reverseCharge) {
+      throw new Error(`Tax rule ${id}: reverse charge requires STANDARD treatment`);
+    }
   }
 
   registerWithholdingRules(rules: readonly WithholdingRule[]): void {
@@ -95,46 +120,46 @@ export class TaxEngineService implements TaxEngine {
     }
   }
 
-  resolveRate(
-    taxCode: string,
-    taxPointDate: string,
-    originalInvoiceTaxPointDate?: string | null,
-    country?: string,
-  ): TaxRateRule {
-    const effectiveDate = originalInvoiceTaxPointDate ?? taxPointDate;
+  /** Resolves the single rule for country + code on `effectiveDate`; throws when none matches. */
+  resolveRate(country: string, taxCode: string, effectiveDate: string): TaxRateRule {
+    assertIsoDate(effectiveDate, 'effectiveDate');
     const normalizedCountry = country?.trim().toUpperCase();
-    const matches = this.taxRules.filter(
+    if (!normalizedCountry) throw new Error('country is required to resolve a tax rate');
+    const rule = this.taxRules.find(
       (r) =>
         r.code === taxCode &&
-        (!normalizedCountry || !r.country || r.country.toUpperCase() === normalizedCountry) &&
+        r.country === normalizedCountry &&
         r.effectiveFrom <= effectiveDate &&
         (r.effectiveTo == null || r.effectiveTo >= effectiveDate),
     );
-    if (matches.length === 0) {
-      throw new Error(`No tax rate rule found for code "${taxCode}" on ${effectiveDate}`);
+    if (!rule) {
+      throw new Error(`No tax rate rule found for ${normalizedCountry}/"${taxCode}" on ${effectiveDate}`);
     }
-    // Most recent effectiveFrom wins if rules overlap.
-    matches.sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom));
-    return matches[0];
+    return rule; // overlaps are rejected at registration, so at most one rule matches
   }
 
-  calculate(input: TaxCalculationInput): TaxCalculationResult {
+  async calculate(input: TaxCalculationInput): Promise<TaxCalculationResult> {
     const country = input.country.trim().toUpperCase();
     const docKind = input.documentKind ?? 'INVOICE';
+    if (docKind === 'CREDIT_NOTE' && !input.originalInvoiceTaxPointDate) {
+      throw new Error('CREDIT_NOTE requires originalInvoiceTaxPointDate');
+    }
     const effectiveTaxPointDate =
-      docKind === 'CREDIT_NOTE' && input.originalInvoiceTaxPointDate
-        ? input.originalInvoiceTaxPointDate
-        : input.taxPointDate;
+      docKind === 'CREDIT_NOTE' ? (input.originalInvoiceTaxPointDate as string) : input.taxPointDate;
     const postingDate = input.postingDate ?? input.taxPointDate;
     const deductibleDate = input.deductibleDate ?? postingDate;
 
-    const rule = this.resolveRate(input.taxCode, effectiveTaxPointDate, null, country);
+    const rule = this.resolveRate(country, input.taxCode, effectiveTaxPointDate);
     const rateBps =
-      docKind === 'CREDIT_NOTE' && input.originalInvoiceRateBps != null
+      docKind === 'CREDIT_NOTE' && input.originalInvoiceRateBps != null && rule.treatment === 'STANDARD'
         ? input.originalInvoiceRateBps
         : rule.rateBps;
-    const reverseCharge = Boolean(input.reverseCharge ?? rule.reverseCharge);
-    const taxMinor = roundMinorHalfUp(input.netMinor * BigInt(rateBps), 10_000n);
+    const reverseCharge = Boolean(rule.reverseCharge);
+    if (input.reverseCharge != null && input.reverseCharge !== reverseCharge) {
+      throw new Error(`reverseCharge input conflicts with rule ${rule.country}/${rule.code}; the rule decides`);
+    }
+    const taxMinor =
+      rule.treatment === 'STANDARD' ? roundMinorHalfUp(input.netMinor * BigInt(rateBps), 10_000n) : 0n;
     const accounts: Required<TaxPostingAccounts> = { ...this.defaultAccounts, ...input.accounts };
 
     const whtRule = input.withholdingCode ? this.whtRules.get(input.withholdingCode) : undefined;
@@ -151,13 +176,27 @@ export class TaxEngineService implements TaxEngine {
     const withheldMinor =
       shouldWithholdNow && whtRule ? roundMinorHalfUp(input.netMinor * BigInt(whtRule.rateBps), 10_000n) : 0n;
     const netPayableMinor = input.netMinor - withheldMinor;
-    const certificateNumber = shouldWithholdNow && whtRule
-      ? (input.certificateNumber ?? this.certificates.next(whtRule.certificatePrefix, postingDate))
-      : null;
+    let certificateNumber: string | null = null;
+    if (shouldWithholdNow && whtRule) {
+      if (input.certificateNumber) {
+        certificateNumber = input.certificateNumber;
+      } else if (!this.certificates) {
+        throw new Error('WHT certificate sequence store is not configured: inject WHT_SEQUENCE_STORE or pass certificateNumber');
+      } else {
+        certificateNumber = await this.certificates.next(whtRule.certificatePrefix, postingDate);
+      }
+    }
 
     const journalLines: TaxPostingLine[] = [];
     let inputMinor = 0n;
     let outputMinor = 0n;
+    const withholding = {
+      applied: shouldWithholdNow,
+      timing: whtRule?.timing ?? null,
+      withheldMinor,
+      netPayableMinor,
+      certificateNumber,
+    };
 
     if (event === 'PAYMENT') {
       journalLines.push({ accountCode: accounts.apOrArAccount, debitMinor: input.netMinor, creditMinor: 0n });
@@ -170,74 +209,61 @@ export class TaxEngineService implements TaxEngine {
         postingDate,
         deductibleDate,
         rateBps: 0,
+        treatment: rule.treatment,
         taxMinor: 0n,
         netTaxImpactMinor: 0n,
         reverseCharge: false,
         returnBoxes: { inputBox: null, outputBox: null, inputMinor: 0n, outputMinor: 0n },
-        withholding: {
-          applied: shouldWithholdNow,
-          timing: whtRule?.timing ?? null,
-          withheldMinor,
-          netPayableMinor,
-          certificateNumber,
-        },
+        withholding,
         journalLines,
       };
     }
 
     if (reverseCharge) {
-      journalLines.push({ accountCode: accounts.expenseOrRevenueAccount, debitMinor: input.netMinor, creditMinor: 0n });
-      journalLines.push({
-        accountCode: accounts.apOrArAccount,
-        debitMinor: 0n,
-        creditMinor: input.netMinor - withheldMinor,
-      });
-      if (withheldMinor > 0n) {
-        journalLines.push({ accountCode: accounts.whtPayableAccount, debitMinor: 0n, creditMinor: withheldMinor });
-      }
-      if (taxMinor > 0n) {
-        journalLines.push({
-          accountCode: accounts.inputVatAccount,
-          debitMinor: taxMinor,
-          creditMinor: 0n,
-          taxBox: rule.inputBox ?? 'RC_INPUT',
-          deductibleDate,
-        });
-        journalLines.push({
-          accountCode: accounts.outputRcVatAccount,
-          debitMinor: 0n,
-          creditMinor: taxMinor,
-          taxBox: rule.outputBox ?? 'RC_OUTPUT',
-        });
-        inputMinor = taxMinor;
-        outputMinor = taxMinor;
+      const inputBox = rule.inputBox ?? 'RC_INPUT';
+      const outputBox = rule.outputBox ?? 'RC_OUTPUT';
+      if (docKind === 'BILL') {
+        // Purchase: the buyer self-assesses (Dr input VAT / Cr output RC VAT), net VAT impact 0.
+        journalLines.push({ accountCode: accounts.expenseOrRevenueAccount, debitMinor: input.netMinor, creditMinor: 0n });
+        journalLines.push({ accountCode: accounts.apOrArAccount, debitMinor: 0n, creditMinor: input.netMinor - withheldMinor });
+        if (withheldMinor > 0n) {
+          journalLines.push({ accountCode: accounts.whtPayableAccount, debitMinor: 0n, creditMinor: withheldMinor });
+        }
+        if (taxMinor > 0n) {
+          journalLines.push({ accountCode: accounts.inputVatAccount, debitMinor: taxMinor, creditMinor: 0n, taxBox: inputBox, deductibleDate });
+          journalLines.push({ accountCode: accounts.outputRcVatAccount, debitMinor: 0n, creditMinor: taxMinor, taxBox: outputBox });
+          inputMinor = taxMinor;
+          outputMinor = taxMinor;
+        }
+      } else {
+        // Sales side (INVOICE / CREDIT_NOTE): the customer self-assesses, so the seller posts net only
+        // and reports the net turnover; the credit note mirrors the invoice with the sign flipped.
+        const isCredit = docKind === 'CREDIT_NOTE';
+        // `debitOnInvoice` is the side the line takes on an invoice; a credit note takes the opposite side.
+        const side = (amount: bigint, debitOnInvoice: boolean): Pick<TaxPostingLine, 'debitMinor' | 'creditMinor'> =>
+          debitOnInvoice !== isCredit ? { debitMinor: amount, creditMinor: 0n } : { debitMinor: 0n, creditMinor: amount };
+        journalLines.push({ accountCode: accounts.apOrArAccount, ...side(input.netMinor - withheldMinor, true) });
+        if (withheldMinor > 0n) {
+          journalLines.push({ accountCode: accounts.whtReceivableAccount, ...side(withheldMinor, true) });
+        }
+        journalLines.push({ accountCode: accounts.expenseOrRevenueAccount, ...side(input.netMinor, false) });
       }
       return {
         effectiveTaxPointDate,
         postingDate,
         deductibleDate,
         rateBps,
-        taxMinor,
+        treatment: rule.treatment,
+        taxMinor: docKind === 'BILL' ? taxMinor : 0n,
         netTaxImpactMinor: 0n,
         reverseCharge: true,
-        returnBoxes: {
-          inputBox: rule.inputBox ?? 'RC_INPUT',
-          outputBox: rule.outputBox ?? 'RC_OUTPUT',
-          inputMinor,
-          outputMinor,
-        },
-        withholding: {
-          applied: shouldWithholdNow,
-          timing: whtRule?.timing ?? null,
-          withheldMinor,
-          netPayableMinor,
-          certificateNumber,
-        },
+        returnBoxes: { inputBox, outputBox, inputMinor, outputMinor },
+        withholding,
         journalLines,
       };
     }
 
-    // Standard invoice / bill / credit note
+    // Non-reverse-charge, non-payment: credit note (sales, reverses invoice), bill (purchase), invoice (sales).
     const gross = input.netMinor + taxMinor;
     if (docKind === 'CREDIT_NOTE') {
       journalLines.push({ accountCode: accounts.expenseOrRevenueAccount, debitMinor: input.netMinor, creditMinor: 0n });
@@ -289,6 +315,7 @@ export class TaxEngineService implements TaxEngine {
       postingDate,
       deductibleDate,
       rateBps,
+      treatment: rule.treatment,
       taxMinor,
       netTaxImpactMinor: taxMinor,
       reverseCharge: false,
@@ -298,13 +325,7 @@ export class TaxEngineService implements TaxEngine {
         inputMinor,
         outputMinor,
       },
-      withholding: {
-        applied: shouldWithholdNow,
-        timing: whtRule?.timing ?? null,
-        withheldMinor,
-        netPayableMinor,
-        certificateNumber,
-      },
+      withholding,
       journalLines,
     };
   }
