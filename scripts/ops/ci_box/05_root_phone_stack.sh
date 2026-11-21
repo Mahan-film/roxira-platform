@@ -57,10 +57,11 @@ echo "== 1b. carrier qualify in the bundle's pjsip.conf"
 # qualify_frequency=20 makes Asterisk send OPTIONS to the carrier every 20 s, keeping the path open.
 # Written in place with `cat tmp > file`: the live file is a single-file bind mount, where sed -i
 # (rename) fails with "Resource busy". Never print the file: it holds the carrier password.
-# ensure_qualify <file> <aor>: exactly one qualify_frequency=20 right under [<aor>]; 0 = changed, 1 = already so.
+# ensure_qualify <file> <aor>: exactly one qualify_frequency=20 right under [<aor>].
+# Returns 0 = changed, 1 = already so, 2 = could not edit (the file is left untouched).
 ensure_qualify() {
   local f=$1 aor=$2 t rc=1
-  t=$(mktemp)
+  t=$(mktemp) || return 2
   awk -v aor="$aor" '
     /^[[:space:]]*\[/ {
       insec = ($0 ~ ("^[[:space:]]*\\[" aor "\\]"))
@@ -70,19 +71,23 @@ ensure_qualify() {
     }
     insec && /^[[:space:]]*qualify_frequency[[:space:]]*=/ { next }
     { print }
-  ' "$f" > "$t"
-  if ! cmp -s "$t" "$f"; then cat "$t" > "$f"; rc=0; fi
+  ' "$f" > "$t" && [ -s "$t" ] || { rm -f "$t"; return 2; }
+  if ! cmp -s "$t" "$f"; then cat "$t" > "$f" || rc=2; [ $rc = 2 ] || rc=0; fi
   rm -f "$t"
   return $rc
 }
 AOR=${PHONE_SIP_AOR:-sabanet_aor}
-PJSIP=$(find $STACK -maxdepth 4 -type f -name pjsip.conf -exec grep -lE "^[[:space:]]*\[$AOR\]" {} + 2>/dev/null | head -1)
+# grep exits 1 for a pjsip.conf without the section; `|| true` keeps set -e/pipefail from aborting here.
+PJSIP=$(find $STACK -maxdepth 4 -type f -name pjsip.conf -exec grep -lE "^[[:space:]]*\[$AOR\]" {} + 2>/dev/null | head -1 || true)
 if [ -z "$PJSIP" ]; then
   echo "WARN: no pjsip.conf with [$AOR] in the bundle; carrier qualify not set"
-elif ensure_qualify "$PJSIP" "$AOR"; then
-  echo "qualify_frequency=20 set under [$AOR] in ${PJSIP#$STACK/} (applies when the bridge container restarts)"
 else
-  echo "qualify_frequency=20 already under [$AOR] in ${PJSIP#$STACK/}"
+  qrc=0; ensure_qualify "$PJSIP" "$AOR" || qrc=$?
+  case $qrc in
+    0) echo "qualify_frequency=20 set under [$AOR] in ${PJSIP#$STACK/} (applies when the bridge container restarts)" ;;
+    1) echo "qualify_frequency=20 already under [$AOR] in ${PJSIP#$STACK/}" ;;
+    *) echo "WARN: could not edit ${PJSIP#$STACK/}; left unchanged, carrier qualify not set" ;;
+  esac
 fi
 COMPOSE=""
 for f in docker-compose.yml docker-compose.yaml compose.yaml compose.yml; do
