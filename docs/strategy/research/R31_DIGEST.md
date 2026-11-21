@@ -52,3 +52,35 @@ Date 2026-11-21. Full report: `docs/strategy/research/R31_RAW.md`. VERIFIED = pr
 | L5 | Dunning, refund and chargeback runbook plus past_due grace flow | Failed-payment fixture walks retry, grace, read-only, suspend; runbook in `docs/` |
 | L5 | Trial-abuse controls (card on file, one trial per tax id/domain, free-token cap) | Second trial with same domain is refused in test |
 | L5 | Adviser question pack: MY service tax, related-party customer, EU B2B, Gulf | Owner-ready list with defaults in `docs/owner/` |
+
+## Second opinion (Gemini Deep Research, 2026-11-21)
+
+Saved unchanged in `R31_GEMINI.md` (Stage 1 and Stage 2). Nothing above is replaced. Rule used: primary URL plus date wins, the rest is UNVERIFIED.
+
+### Premise conflict (decides most of the report)
+Gemini assumes an **EU-established seller**: its recommended Stripe-direct option, the EUR 10,000 cross-border B2C threshold and its cost breakevens all depend on that. This digest has a verified Commission page (vat-one-stop-shop.ec.europa.eu, 2026-11-21): the EUR 10,000 threshold applies only to suppliers established in one Member State; a non-EU seller registers for the non-Union OSS from the first B2C sale. Roxira's own entity is Malaysian for now (a German entity is a later step), so Gemini's Option B and its breakeven table do not transfer. Keep decision 3 (B2B only, VIES-gated, Paddle by default).
+
+### Agreements
+- Licences: OpenMeter and Kill Bill Apache-2.0 allowed; Lago and Flexprice AGPL excluded for a closed SaaS; Postgres metering first.
+- Smart Retries default of up to 8 tries in 2 weeks, hard declines not retried; Paddle chargeback fee 20 and kept; payouts monthly with a minimum; Stripe Managed Payments adds 3.5%; Malaysian service tax on digital services 8%, RM500,000 in 12 months, quarterly; Lemon Squeezy is closing, do not plan on it; trial-abuse controls (card on file, disposable-email block, token cap); Gulf through a merchant of record until experts confirm.
+
+### Conflicts
+| Topic | This digest | Gemini | Verdict |
+|---|---|---|---|
+| EUR 10,000 threshold | not usable for a non-EU seller (Commission page) | usable | This digest wins (primary URL, dated). |
+| Stripe Tax and Billing rates | Tax 0.5% of tax collected or EUR 0.45 per transaction, from EUR 80 a month; Billing 0.7% (stripe.com pages, 2026-11-21) | says it could not confirm them on the German pricing page | This digest wins (primary, dated). |
+| Stripe Managed Payments country list | seller-country list UNVERIFIED | says EU-27, UAE, Bahrain and Oman are absent from the tax-compliance list | UNVERIFIED; irrelevant to the plan until Malaysian eligibility is confirmed. |
+| Paddle payout FX spread | up to 1.5% (competitor blog) | 2-3% conversion plus 1.5% (competitor blogs) | UNVERIFIED both; Paddle publishes no percentage. |
+| German e-invoice duty | not verified for a non-EU vendor | issuing duty from 1 Jan 2027 above EUR 800,000 and 1 Jan 2028 for all (secondary) | UNVERIFIED for us; the duty is written for German-established businesses. |
+| MyInvois exemption RM 3m from 1 Sep 2026 | not in digest | secondary blogs | UNVERIFIED; R27 owns this. |
+
+### Only one side has it
+- **Gemini only:** Paddle and Stripe Managed Payments take the percentage fee on the tax-inclusive total (Gemini cites a Paddle adjustments page), so the effective rate on net revenue is higher; payment tokens stay with a merchant of record, which makes leaving it a churn event; SEPA Core gives a business debtor an 8-week reversal right; Stripe Tax calculates but does not file; prepaid AI credits raise a VAT timing question; double FX between EUR/MYR income and USD model costs. All UNVERIFIED except what the digest already marks; useful as test cases and questions, not as figures.
+- **This digest only:** HitPay Malaysia rates; EU withdrawal button from 19 Jun 2026; Visa VAMP and Mastercard GMAP thresholds; own-ledger invoices; the four owner decisions.
+
+### Row changes
+- No new row. Comments added: #1141 (T318: model fees on the tax-inclusive total, token portability, check both before choosing), #1145 (T322: SEPA reversal window in the dunning runbook), #1147 (T324: add prepaid-credit VAT timing and German e-invoice duty for a non-EU vendor to the adviser pack).
+
+### Owner decisions (not for agents)
+- O1 stays open: Paddle by default (this digest) versus Stripe direct (Gemini). The premise conflict above favours Paddle until a German entity exists.
+- Ask for nothing else; the Gemini cost model is illustrative and not a quote.
