@@ -75,7 +75,7 @@ def test_allowlist_exempts_reviewed_package(tmp_path):
 
 
 def test_forbidden_container_images_fail_gate(tmp_path):
-    """redis:7.4+, redis:8+, mongo:7+, and elasticsearch:8+ must be rejected; redis:7.2 passes."""
+    """redis:7.4+, redis:7.10+, redis:8+, mongo:7+, and elasticsearch:8+ must be rejected; redis:7.2 passes."""
     compose = tmp_path / "docker-compose.yml"
     compose.write_text(
         "\n".join(
@@ -85,6 +85,8 @@ def test_forbidden_container_images_fail_gate(tmp_path):
                 "    image: redis:7.2-alpine",
                 "  bad_redis_74:",
                 "    image: redis:7.4-alpine",
+                "  bad_redis_710:",
+                "    image: redis:7.10-alpine",
                 "  bad_redis_8:",
                 "    image: redis:8.0-alpine",
                 "  bad_mongo:",
@@ -98,8 +100,17 @@ def test_forbidden_container_images_fail_gate(tmp_path):
     al = tmp_path / "allowlist.txt"
     al.write_text("", encoding="utf-8")
     findings = crl.run_scan(tmp_path, al, lockfiles=[], dockerfiles=["docker-compose.yml"])
-    assert len(findings) == 4
+    assert len(findings) == 5
     joined = "\n".join(findings)
     assert "redis:7.4+" in joined
     assert "mongo:7+" in joined
     assert "elasticsearch:8+" in joined
+
+
+def test_allowlist_exempts_reviewed_container_image(tmp_path):
+    compose = tmp_path / "docker-compose.yml"
+    compose.write_text("services:\n  redis:\n    image: redis:7.10-alpine\n", encoding="utf-8")
+    al = tmp_path / "allowlist.txt"
+    al.write_text("redis:7.4+@RSAL/SSPL/AGPL # owner-reviewed\n", encoding="utf-8")
+    findings = crl.run_scan(tmp_path, al, lockfiles=[], dockerfiles=["docker-compose.yml"])
+    assert findings == []
