@@ -142,6 +142,27 @@ export class JournalEntryLineDto {
   @IsMoneyAmount()
   bookCredit?: number | string;
 
+  @ApiPropertyOptional({ description: 'کد ارز گزارش‌گیری (ISO 4217)', example: 'USD' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(8)
+  reportingCurrencyCode?: string;
+
+  @ApiPropertyOptional({ description: 'نرخ تبدیل ارز دفاتر به ارز گزارش‌گیری', example: '1.085000' })
+  @IsOptional()
+  @IsMoneyAmount(6)
+  reportingFxRate?: number | string;
+
+  @ApiPropertyOptional({ description: 'مبلغ بدهکار به ارز گزارش‌گیری', example: '1283.01' })
+  @IsOptional()
+  @IsMoneyAmount()
+  reportingDebit?: number | string;
+
+  @ApiPropertyOptional({ description: 'مبلغ بستانکار به ارز گزارش‌گیری', example: '0' })
+  @IsOptional()
+  @IsMoneyAmount()
+  reportingCredit?: number | string;
+
   @ApiPropertyOptional({ description: 'سطر تعدیل گردکردن ناشی از تسعیر ارز', default: false })
   @IsOptional()
   @Transform(({ value }) => {

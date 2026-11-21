@@ -58,6 +58,18 @@ export class JournalEntryLineResponseDto {
   @ApiPropertyOptional({ description: 'مبلغ بستانکار به ارز دفاتر' })
   bookCredit?: Money | null;
 
+  @ApiPropertyOptional({ description: 'کد ارز گزارش‌گیری', example: 'USD' })
+  reportingCurrencyCode?: string | null;
+
+  @ApiPropertyOptional({ description: 'نرخ تبدیل ارز دفاتر به ارز گزارش‌گیری', example: 1.085 })
+  reportingFxRate?: number | null;
+
+  @ApiPropertyOptional({ description: 'مبلغ بدهکار به ارز گزارش‌گیری' })
+  reportingDebit?: Money | null;
+
+  @ApiPropertyOptional({ description: 'مبلغ بستانکار به ارز گزارش‌گیری' })
+  reportingCredit?: Money | null;
+
   @ApiPropertyOptional({ description: 'نشانگر سطر تعدیل گردکردن', default: false })
   isRounding?: boolean;
 }

@@ -7,6 +7,12 @@
  */
 import { proposeMatches } from '../../banking/matching/reconciliation-matcher';
 import { nextMonthCharge } from '../assets/depreciation';
+import {
+  buildClosingRevaluationEntries,
+  buildCrossCurrencySettlement,
+  buildTriCurrencyInvoiceEntry,
+  FX_RATE_SCALE,
+} from '../fx-settlement';
 import { fromMinor, roundMinorHalfUp } from '../money';
 import {
   m,
@@ -56,9 +62,100 @@ describe('R16 T2 three currencies, rounding, settlement', () => {
     expect(bank - e.inv101Eur).toBe(e.realisedGainEur);
     expect(T2.settlement.usd - e.inv101Usd).toBe(e.reportingSettlementDiffUsd);
   });
-  it.skip('posts a GBP invoice on a EUR book with USD reporting — needs T179 (GBP is not a supported currency; no reporting currency)', () => undefined);
-  it.skip('posts the 0.01 EUR rounding residual so the entry balances — needs T179', () => undefined);
-  it.skip('reverses the unrealised gain on 2026-11-01 and settles without a clearing account — needs T179 (FX settlement)', () => undefined);
+  it('posts a GBP invoice on a EUR book with USD reporting (T179)', () => {
+    const entry = buildTriCurrencyInvoiceEntry({
+      entryNumber: 'INV-101',
+      date: '2026-10-15',
+      txCurrency: 'GBP',
+      bookCurrency: 'EUR',
+      reportingCurrency: 'USD',
+      txToBookRateScaled6: T2.gbpInvoice.gbpToEur,
+      bookToReportingRateScaled6: T2.gbpInvoice.eurToUsd,
+      receivableAccountCode: '1100',
+      roundingResidualAccountCode: '6990',
+      revenueLines: [{ accountCode: '4000', txAmountMinor: T2.gbpInvoice.amountGbp }],
+    });
+    expect(entry.lines).toHaveLength(2);
+    expect(entry.lines[0].txDebit).toBe(T2.gbpInvoice.amountGbp);
+    expect(entry.lines[0].bookDebit).toBe(e.inv101Eur);
+    expect(entry.lines[0].reportingDebit).toBe(e.inv101Usd);
+    expect(entry.lines[1].bookCredit).toBe(e.inv101Eur);
+    expect(entry.lines[1].reportingCredit).toBe(e.inv101Usd);
+  });
+  it('posts the 0.01 EUR rounding residual so the entry balances (T179)', () => {
+    const entry = buildTriCurrencyInvoiceEntry({
+      entryNumber: 'INV-102',
+      date: '2026-10-15',
+      txCurrency: 'GBP',
+      bookCurrency: 'EUR',
+      reportingCurrency: 'USD',
+      txToBookRateScaled6: T2.threeLineInvoice.gbpToEur,
+      bookToReportingRateScaled6: T2.gbpInvoice.eurToUsd,
+      receivableAccountCode: '1100',
+      roundingResidualAccountCode: '6990',
+      revenueLines: [
+        { accountCode: '4000', txAmountMinor: T2.threeLineInvoice.lineGbp },
+        { accountCode: '4000', txAmountMinor: T2.threeLineInvoice.lineGbp },
+        { accountCode: '4000', txAmountMinor: T2.threeLineInvoice.lineGbp },
+      ],
+    });
+    const roundingLine = entry.lines.find((l) => l.isRounding);
+    expect(roundingLine).toBeDefined();
+    expect(roundingLine?.accountCode).toBe('6990');
+    expect(roundingLine?.bookDebit).toBe(e.roundingResidualEur);
+    expect(entry.lines[0].bookDebit).toBe(e.headerEur);
+  });
+  it('reverses the unrealised gain on 2026-11-01 and settles without a clearing account (T179)', () => {
+    const reval = buildClosingRevaluationEntries({
+      entryNumber: 'REVAL-2026-10',
+      closingDate: '2026-10-31',
+      reversalDate: '2026-11-01',
+      txCurrency: 'GBP',
+      bookCurrency: 'EUR',
+      reportingCurrency: 'USD',
+      openTxAmountMinor: T2.gbpInvoice.amountGbp,
+      bookedBookAmountMinor: e.inv101Eur,
+      closingTxToBookRateScaled6: T2.closing.gbpToEur,
+      closingBookToReportingRateScaled6: T2.gbpInvoice.eurToUsd,
+      receivableAccountCode: '1100',
+      unrealisedFxGainAccountCode: '7100',
+      unrealisedFxLossAccountCode: '7200',
+    });
+    expect(reval.unrealisedGainBookMinor).toBe(e.unrealisedGainEur);
+    expect(reval.reversalEntry.date).toBe('2026-11-01');
+    expect(reval.reversalEntry.lines[0].bookCredit).toBe(e.unrealisedGainEur);
+
+    const settled = buildCrossCurrencySettlement({
+      entryNumber: 'SET-101',
+      date: '2026-11-05',
+      invoiceCurrency: 'GBP',
+      openTxAmountMinor: T2.gbpInvoice.amountGbp,
+      bookedBookAmountMinor: e.inv101Eur,
+      bookedReportingAmountMinor: e.inv101Usd,
+      bankCurrency: 'USD',
+      bankAmountMinor: T2.settlement.usd,
+      bankToBookRateScaled6: T2.settlement.usdToEur,
+      bankToReportingRateScaled6: FX_RATE_SCALE,
+      contractualInvoiceToBankRateScaled6: T2.settlement.contractualGbpToUsd,
+      bookCurrency: 'EUR',
+      reportingCurrency: 'USD',
+      bankAccountCode: '1010',
+      receivableAccountCode: '1100',
+      realisedFxGainAccountCode: '7110',
+      realisedFxLossAccountCode: '7210',
+    });
+    expect(settled.usesClearingAccount).toBe(false);
+    expect(settled.remainingReceivableTxMinor).toBe(0n);
+    expect(settled.realisedFxBookMinor).toBe(e.realisedGainEur);
+    expect(settled.realisedFxReportingMinor).toBe(e.reportingSettlementDiffUsd);
+    const bankLine = settled.entry.lines.find((l) => l.accountCode === '1010');
+    const arLine = settled.entry.lines.find((l) => l.accountCode === '1100');
+    const fxLine = settled.entry.lines.find((l) => l.accountCode === '7110');
+    expect(bankLine?.bookDebit).toBe(e.settlementBankEur);
+    expect(arLine?.bookCredit).toBe(e.inv101Eur);
+    expect(fxLine?.bookCredit).toBe(e.realisedGainEur);
+    expect(fxLine?.reportingCredit).toBe(e.reportingSettlementDiffUsd);
+  });
 });
 
 describe('R16 T3 period close and locks (T178)', () => {

@@ -148,6 +148,45 @@ export class JournalEntryLineEntity {
   })
   bookCredit: string | null;
 
+  /** کد ارز گزارش‌گیری (Reporting Currency, ISO 4217). */
+  @Column({
+    type: 'varchar',
+    length: 8,
+    name: 'reporting_currency_code',
+    nullable: true,
+  })
+  reportingCurrencyCode: string | null;
+
+  /** نرخ تبدیل ارز دفاتر به ارز گزارش‌گیری (دقت ۶ رقم اعشار). */
+  @Column({
+    type: 'numeric',
+    precision: 24,
+    scale: 6,
+    name: 'reporting_fx_rate',
+    nullable: true,
+  })
+  reportingFxRate: string | null;
+
+  /** مبلغ بدهکار به ارز گزارش‌گیری (Reporting Currency). */
+  @Column({
+    type: 'numeric',
+    precision: 20,
+    scale: 4,
+    name: 'reporting_debit',
+    nullable: true,
+  })
+  reportingDebit: string | null;
+
+  /** مبلغ بستانکار به ارز گزارش‌گیری (Reporting Currency). */
+  @Column({
+    type: 'numeric',
+    precision: 20,
+    scale: 4,
+    name: 'reporting_credit',
+    nullable: true,
+  })
+  reportingCredit: string | null;
+
   /** نشانگر سطر تعدیل گردکردن ناشی از تسعیر ارز. */
   @Column({
     type: 'boolean',
