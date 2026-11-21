@@ -33,10 +33,10 @@ DEFAULT_DOCKERFILES = [
 ]
 
 # Forbidden runtime licence patterns (case-insensitive, word-boundary aware).
-# Note: LGPL is intentionally NOT matched by (?<![A-Z])GPL.
+# Note: LGPL is intentionally NOT matched by (?<![A-Za-z])GPL.
 FORBIDDEN_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("AGPL", re.compile(r"\bAGPL(?:[-v ]?[0-9.]+)?", re.IGNORECASE)),
-    ("GPL", re.compile(r"(?<![A-Z])GPL(?:[-v ]?[0-9.]+)?", re.IGNORECASE)),
+    ("GPL", re.compile(r"(?<![A-Za-z])GPL(?:[-v ]?[0-9.]+)?", re.IGNORECASE)),
     ("SSPL", re.compile(r"\bSSPL(?:[-v ]?[0-9.]+)?", re.IGNORECASE)),
     ("RSAL", re.compile(r"\bRSAL(?:v?[0-9.]+)?", re.IGNORECASE)),
     ("CC-BY-NC", re.compile(r"\bCC-BY-NC(?:-[A-Z0-9.]+)*", re.IGNORECASE)),

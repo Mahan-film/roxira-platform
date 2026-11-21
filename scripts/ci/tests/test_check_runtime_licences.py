@@ -50,6 +50,8 @@ def test_dual_licence_or_permissive_passes_and_and_fails():
     assert crl.match_forbidden_licence("CC-BY-NC-4.0") == "CC-BY-NC"
     assert crl.match_forbidden_licence("Elastic-2.0") == "ELv2"
     assert crl.match_forbidden_licence("LGPL-3.0-or-later") is None
+    assert crl.match_forbidden_licence("lgpl-3.0") is None
+    assert crl.match_forbidden_licence("gpl-3.0") == "GPL"
 
 
 def test_allowlist_exempts_reviewed_package(tmp_path):
