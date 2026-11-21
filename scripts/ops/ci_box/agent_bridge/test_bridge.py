@@ -74,8 +74,11 @@ def test_valid_wave_runs_and_reports(env):
     args = calls["claude"][0]
     assert "--permission-mode" in args and "dontAsk" in args
     assert "--max-turns" not in args  # help text did not list it
-    tools = args[args.index("--allowedTools") + 1]
-    assert "Edit" not in tools and "Bash(git status*)" in tools
+    assert "--allowedTools" not in args and "--disallowedTools" not in args
+    perms = json.loads(args[args.index("--settings") + 1])["permissions"]
+    assert "Edit" not in perms["allow"] and "Bash(git status*)" in perms["allow"]
+    assert "Bash(systemctl --user status*)" in perms["allow"]
+    assert "Bash(gh pr merge*)" in perms["deny"]
     prompt = args[2]
     assert "<untrusted_task_data>" in prompt and "Check CI status" in prompt
     report = calls["posts"][0]
@@ -91,8 +94,9 @@ def test_write_mode_adds_edit_and_denies_merge(env):
     calls["comments"].append(comment(5, WAVE_BODY.replace("mode: read", "mode: write")))
     bridge.poll_once(cfg, state, stop)
     args = calls["claude"][0]
-    assert "Edit" in args[args.index("--allowedTools") + 1]
-    deny = args[args.index("--disallowedTools") + 1]
+    perms = json.loads(args[args.index("--settings") + 1])["permissions"]
+    assert "Edit" in perms["allow"]
+    deny = ",".join(perms["deny"])
     assert "gh pr merge*" in deny and "--no-verify" in deny and "--force" in deny
 
 
