@@ -28,6 +28,10 @@ export class CutoverRepository {
     private readonly scope?: TenantScope,
   ) {}
 
+  /**
+   * Uses the DI-injected `TenantScope` (registered in `DataImportModule`) when available,
+   * falling back to a `DataSource`-backed instance only for standalone repository unit tests.
+   */
   private get tenantScope(): TenantScope | undefined {
     if (this.scope) return this.scope;
     const ds = this.cutovers?.manager?.connection;
@@ -64,9 +68,16 @@ export class CutoverRepository {
     return scope.run(tenantId, work);
   }
 
-  /** Serialize concurrent go-live attempts per tenant inside an open transaction. */
+  /**
+   * Serialize concurrent go-live attempts per tenant inside an open transaction using a
+   * deterministic 64-bit key derived via built-in `md5` (works across all PostgreSQL builds
+   * with lower collision probability than 32-bit hashes).
+   */
   async acquireTenantCutoverLock(tenantId: string, manager: EntityManager): Promise<void> {
-    await manager.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`cutover:${tenantId}`]);
+    await manager.query(
+      `SELECT pg_advisory_xact_lock(('x' || substr(md5($1), 1, 16))::bit(64)::bigint)`,
+      [`cutover:${tenantId}`],
+    );
   }
 
   async findActive(
@@ -99,6 +110,8 @@ export class CutoverRepository {
           periodLockId: data.periodLockId,
           openingJournalEntryId: data.openingJournalEntryId ?? null,
           legacyNumberPrefix: data.legacyNumberPrefix,
+          // New cutovers always start active; UQ_data_import_cutovers_one_active_per_tenant
+          // guarantees at most one active row per tenant at the database layer.
           isGoLiveActive: true,
           executedBy: data.executedBy,
           metadata: data.metadata ?? null,
