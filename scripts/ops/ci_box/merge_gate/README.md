@@ -38,6 +38,17 @@ systemctl --user list-timers | grep merge-gate
 ```
 Once as root: `loginctl enable-linger mahanfilms` so the timer runs without a login session.
 
+## Direct-push alert (#1049)
+`check_main_push.py` (timer `roxira-check-main-push`, every 10 min, same user, config, proxy, state dir and `KILL`
+switch) alerts on Telegram when `main` gets a commit that is not part of a merged PR, or when its history was
+rewritten. It remembers the last seen SHA in `<state_dir>/last_main_sha`, so each push alerts once. First run only
+records the SHA. Dry-run (the default while `dry_run = true`) logs and sends nothing, writes no state.
+Telegram goes through `scripts/ops/notify/notify.py`; put `NOTIFY_BOT_TOKEN=...` and `NOTIFY_CHAT_ID=...` in
+`~/.config/roxira-merge-gate/notify.env` (mode 600, created empty by `install_user.sh`). Without them the alert is
+only logged. Try: `python3 check_main_push.py --config ~/.config/roxira-merge-gate/merge_gate.toml --dry-run`.
+Note: while `dry_run = true` the first-run state is not written, so every tick re-initialises quietly; it starts
+guarding after the flip.
+
 ## Known limits
 - `owner-approved` is not tied to a head SHA: removing the label after a suspicious push is the owner's job.
 - Only check-runs are read (not legacy commit statuses). Review comments from authors not in the allowlist are ignored.
