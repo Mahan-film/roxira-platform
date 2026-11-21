@@ -72,3 +72,34 @@ def test_allowlist_exempts_reviewed_package(tmp_path):
     al.write_text("reviewed-pkg@GPL # owner-reviewed exception\n", encoding="utf-8")
     findings = crl.run_scan(tmp_path, al, lockfiles=["package-lock.json"], dockerfiles=[])
     assert findings == []
+
+
+def test_forbidden_container_images_fail_gate(tmp_path):
+    """redis:7.4+, redis:8+, mongo:7+, and elasticsearch:8+ must be rejected; redis:7.2 passes."""
+    compose = tmp_path / "docker-compose.yml"
+    compose.write_text(
+        "\n".join(
+            [
+                "services:",
+                "  ok_redis:",
+                "    image: redis:7.2-alpine",
+                "  bad_redis_74:",
+                "    image: redis:7.4-alpine",
+                "  bad_redis_8:",
+                "    image: redis:8.0-alpine",
+                "  bad_mongo:",
+                "    image: mongo:7.0",
+                "  bad_es:",
+                "    image: elasticsearch:8.15.0",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    al = tmp_path / "allowlist.txt"
+    al.write_text("", encoding="utf-8")
+    findings = crl.run_scan(tmp_path, al, lockfiles=[], dockerfiles=["docker-compose.yml"])
+    assert len(findings) == 4
+    joined = "\n".join(findings)
+    assert "redis:7.4+" in joined
+    assert "mongo:7+" in joined
+    assert "elasticsearch:8+" in joined

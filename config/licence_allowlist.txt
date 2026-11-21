@@ -1,5 +1,6 @@
 # Reviewed runtime licence exceptions for scripts/ci/check_runtime_licences.py (T252 / #991).
 # Format: <package-name>  or  <package-name>@<LICENCE-TAG>  # reason and review date
+# Example: example-pkg@GPL  # owner-reviewed, 2026-11-21
 #
 # Forbidden runtime licences: GPL, AGPL, SSPL, RSAL, CC-BY-NC, ELv2.
 # Keep this file empty unless an owner-reviewed exception is documented here.
