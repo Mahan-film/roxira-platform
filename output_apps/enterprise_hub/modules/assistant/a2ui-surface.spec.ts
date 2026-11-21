@@ -52,6 +52,17 @@ describe('T167 A2UI spike for assistant answers', () => {
     }
   });
 
+  it('rejects malformed rawSurface with missing or non-array components', () => {
+    expect(() =>
+      validateAndBindA2UISurface({
+        rawSurface: { surfaceId: 's-malformed' } as any,
+        toolResult: rawToolResult,
+        maskedFields,
+        context: { surface: 'home_hub', a2uiHomeHubEnabled: true },
+      }),
+    ).toThrow(/must contain an array of components/i);
+  });
+
   it('never leaks a masked value into the model payload or bound surface', () => {
     const modelPayload = prepareModelSafeToolResult(rawToolResult, maskedFields);
     const serialized = JSON.stringify(modelPayload);

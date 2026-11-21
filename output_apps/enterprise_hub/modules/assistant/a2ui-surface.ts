@@ -25,7 +25,8 @@ export class A2UIError extends Error {
     public readonly code:
       | 'A2UI_UNKNOWN_COMPONENT'
       | 'A2UI_DISABLED'
-      | 'A2UI_SURFACE_NOT_ALLOWED',
+      | 'A2UI_SURFACE_NOT_ALLOWED'
+      | 'A2UI_MALFORMED_SURFACE',
     message: string,
   ) {
     super(message);
@@ -155,6 +156,13 @@ export function validateAndBindA2UISurface(params: {
 
   const maskSet = new Set(maskedFields);
   const safeToolResult = maskSensitiveFields(toolResult, maskSet);
+
+  if (!rawSurface || !Array.isArray(rawSurface.components)) {
+    throw new A2UIError(
+      'A2UI_MALFORMED_SURFACE',
+      'A2UI rawSurface must contain an array of components.',
+    );
+  }
 
   const boundComponents: A2UIBoundNode[] = rawSurface.components.map((node) => {
     if (!WHITELIST_SET.has(node.type)) {
