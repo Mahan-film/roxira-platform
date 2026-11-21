@@ -177,6 +177,24 @@ PUT_CHANGED=0
 put "$TMP/gen/tinyproxy.filter" "$TINY_ETC/roxira-builder.filter" 644 root:root
 put "$TMP/gen/tinyproxy.conf" "$TINY_ETC/roxira-builder.conf" 644 root:root
 put "$HERE/roxira-builder-proxy.service" "$SYSTEMD/roxira-builder-proxy.service" 644 root:root
+# Ubuntu ships an AppArmor profile for /usr/bin/tinyproxy that only allows /etc/tinyproxy/tinyproxy.conf. Without this
+# override the second instance dies with: Could not open config file ... (kernel log: apparmor="DENIED"). The packaged
+# profile includes <local/tinyproxy>, so we allow read of OUR two files only.
+AA_LOCAL=/etc/apparmor.d/local/tinyproxy
+if [ -f /etc/apparmor.d/tinyproxy ] && command -v apparmor_parser >/dev/null 2>&1; then
+  if grep -qs 'roxira-builder.conf' "$AA_LOCAL"; then
+    info "   apparmor local override already present"
+  elif [ "$APPLY" = 1 ]; then
+    printf '%s\n%s\n%s\n' '# box hub: let the second, allowlist-only tinyproxy instance read its own files' \
+      "file r $TINY_ETC/roxira-builder.conf," "file r $TINY_ETC/roxira-builder.filter," >>"$AA_LOCAL"
+    apparmor_parser -r /etc/apparmor.d/tinyproxy
+    PUT_CHANGED=1
+    info "   apparmor override written and profile reloaded"
+  else
+    info "   [dry-run] would append 2 'file r' lines for roxira-builder.{conf,filter} to $AA_LOCAL and run apparmor_parser -r"
+  fi
+  undo "remove the roxira-builder lines from $AA_LOCAL ; apparmor_parser -r /etc/apparmor.d/tinyproxy"
+fi
 if [ "$APPLY" = 1 ]; then
   systemctl daemon-reload
   systemctl enable --now roxira-builder-proxy.service
