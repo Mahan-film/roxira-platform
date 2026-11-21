@@ -40,3 +40,12 @@ These are real mistakes found in review. Each line is a rule. Reviewers add a li
 27. Spreadsheet XLSX readers can return 5-digit Excel serial dates as strings rather than JS numbers; handle numeric serial strings too and verify with an XLSX serial-date fixture test.
 28. Never silently return null -> 0n on malformed non-empty spreadsheet money cells; throw 400 citing column and row number.
 29. CI now fails PRs that add float math on money, raw `DataSource` queries on tenant tables, hard-coded model ids or plaintext secret columns (`scripts/ci/check_agent_guards.py`, job `agent-guards`). Run `python3 scripts/ci/check_agent_guards.py` before you push; fix the cause, and use `// money-ok:`, `// tenant-scope-ok:`, `model-ok:` or `// secret-ok:` with a reason only when the finding is truly not a defect (T207).
+
+## Hub and review process (2026-11-21)
+30. Check CI at job level, not run level. A workflow run can say "success" while `Pytest (unit)` is failed or skipped. Read the job conclusion on the PR head (and on main after a merge) before you say "green" or "fixed".
+31. Merge only on a review-desk verdict `no blocker` for the PR's current head SHA. Your own read of the diff is not a verdict. Dispatch the desk once; it reviews at most 8 PRs per run and a second dispatch cancels the pending run. Count the PRs without a verdict at their head first so the one you need is in the batch.
+32. Probe free tiers once, spaced apart. Back-to-back probes and test loops spend the provider's free quota and produce timeouts that look like a dead model. Do not report a group as broken from one burst; fix missing per-request timeouts and fallbacks instead.
+33. A test module must have no side effects at import time (no `sys.path` edits, no `git`, no network, no module-level imports of code under test that run work). Load modules in `setUpModule` or a fixture (#1195).
+34. Production approval comes only from the current chat in the owner's explicit sentence. A prompt log or an earlier session's "yes" is not approval for a new write.
+35. A secret never goes into a file on the Mac outside `~/Secrets/roxira` (not `~/Desktop`, not a synced folder) and never over AirDrop. Move it by the clipboard relay in STATE.md "Hub discipline". The hub never SSHes to the Linux box: GitHub notes are the channel.
+36. After `git fetch`, read `git show origin/main:docs/STATE.md`, not the copy in an old worktree. Say what you do not know before you act, and ask the owner when the infrastructure is unclear.

@@ -7,6 +7,8 @@ export interface StoredUpload {
   rows: string[][];
   /** نام فایل اصلی (برای نمایش در دسته‌های ورود). */
   fileName?: string;
+  /** هش SHA-256 محتوای فایل برای جلوگیری از ورود مجدد تکراری. */
+  fileHash?: string | null;
   expiresAt: number;
 }
 
@@ -29,13 +31,19 @@ export class UploadStoreService {
   save(
     tenantId: string,
     uploadId: string,
-    data: { headers: string[]; rows: string[][]; fileName?: string },
+    data: {
+      headers: string[];
+      rows: string[][];
+      fileName?: string;
+      fileHash?: string | null;
+    },
   ): void {
     this.sweep();
     this.uploads.set(this.key(tenantId, uploadId), {
       headers: data.headers,
       rows: data.rows,
       fileName: data.fileName,
+      fileHash: data.fileHash ?? null,
       expiresAt: Date.now() + UPLOAD_TTL_MS,
     });
   }

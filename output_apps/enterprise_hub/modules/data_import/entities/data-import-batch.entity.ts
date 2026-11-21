@@ -9,6 +9,7 @@ import { Column, Entity, Index, PrimaryColumn } from 'typeorm';
  */
 @Entity({ name: 'data_import_batches' })
 @Index('IDX_data_import_batches_tenant_created', ['tenantId', 'createdAt'])
+@Index('IDX_data_import_batches_tenant_file_hash', ['tenantId', 'fileHash'])
 export class DataImportBatchEntity {
   @PrimaryColumn({ type: 'uuid' })
   id: string;
@@ -21,6 +22,9 @@ export class DataImportBatchEntity {
 
   @Column({ type: 'varchar', length: 255, name: 'file_name' })
   fileName: string;
+
+  @Column({ type: 'varchar', length: 128, name: 'file_hash', nullable: true })
+  fileHash?: string | null;
 
   @Column({ type: 'integer', default: 0 })
   inserted: number;

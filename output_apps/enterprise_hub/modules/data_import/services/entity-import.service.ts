@@ -5,7 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import * as path from 'path';
 import {
   ALLOWED_UPLOAD_EXTENSIONS,
@@ -111,11 +111,16 @@ export class EntityImportService {
       mapping,
     });
 
+    const fileHash = file?.buffer
+      ? createHash('sha256').update(file.buffer).digest('hex')
+      : null;
+
     const uploadId = randomUUID();
     this.uploadStore.save(tenantId, uploadId, {
       headers: parsed.headers,
       rows: parsed.rows,
       fileName: file?.originalname,
+      fileHash,
     });
 
     return {
@@ -148,6 +153,24 @@ export class EntityImportService {
     }
     this.assertMappingFields(adapter, dto.mapping);
 
+    // Idempotent re-import check: if the exact same file was already imported and not undone,
+    // return the existing batch with 0 new rows (Done when: the same file twice creates 0 new rows).
+    if (upload.fileHash && typeof this.batchRepository.findByFileHash === 'function') {
+      const existingBatch = await this.batchRepository.findByFileHash(
+        tenantId,
+        upload.fileHash,
+      );
+      if (existingBatch) {
+        this.uploadStore.remove(tenantId, dto.uploadId);
+        return {
+          batchId: existingBatch.id,
+          inserted: 0,
+          skippedDuplicates: upload.rows.length,
+          failed: [],
+        };
+      }
+    }
+
     await this.quota.assertWithinQuota(tenantId);
 
     const { records, errors } = this.buildRecords(adapter, {
@@ -179,6 +202,7 @@ export class EntityImportService {
       id: batchId,
       entity: adapter.key,
       fileName: upload.fileName ?? 'upload',
+      fileHash: upload.fileHash,
       inserted: result.inserted.length,
     });
     if (result.inserted.length > 0) {
@@ -267,6 +291,7 @@ export class EntityImportService {
       batchId: batch.id,
       entity: batch.entity,
       fileName: batch.fileName,
+      fileHash: batch.fileHash ?? null,
       inserted: batch.inserted,
       createdAt: batch.createdAt,
       undone: batch.undone,

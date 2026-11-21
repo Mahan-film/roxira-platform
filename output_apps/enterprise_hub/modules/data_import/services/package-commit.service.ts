@@ -68,6 +68,29 @@ export class PackageCommitService {
       return sum + (analysis?.rowCount ?? 0);
     }, 0);
 
+    // Idempotent re-import check: if this database package was already committed and not undone,
+    // return the existing batch with 0 new rows (Done when: the same file twice creates 0 new rows).
+    if (state.fileHash && typeof this.batchRepository.findByFileHash === 'function') {
+      const existingBatch = await this.batchRepository.findByFileHash(
+        tenantId,
+        state.fileHash,
+      );
+      if (existingBatch) {
+        await this.progress.set(tenantId, packageId, {
+          phase: 'committed',
+          done: total,
+          total,
+          inserted: {},
+          skipped: { package: total },
+          errors: [],
+        });
+        state.status = 'committed';
+        state.batchId = existingBatch.id;
+        await this.store.writeState(state);
+        return { batchId: existingBatch.id };
+      }
+    }
+
     await this.progress.set(tenantId, packageId, {
       phase: 'committing',
       done: 0,
@@ -83,6 +106,7 @@ export class PackageCommitService {
       id: batchId,
       entity: 'package',
       fileName: state.fileName,
+      fileHash: state.fileHash,
       inserted: 0,
     });
 

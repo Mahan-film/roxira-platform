@@ -56,3 +56,32 @@ CSID lifetimes; Phase 2 fines; UAE quarterly return rule; ASP requirements (ISO 
 6. **ASP adapter and bring-your-own ASP.** Send, receive, status webhook; one provider sandbox; per-entity TIN. Done when a sandbox invoice round-trips and a tenant switches provider by setting only.
 7. **Oman PINT OM variant.** Config diff on the UAE mapper. Done when the OTA spec is read and a sample passes; blocked until the spec is public.
 8. **Gulf watch list.** Monthly check of ZATCA, MoF UAE, OTA, NBR, GTA with a changelog in the pack config. Done when a dated entry exists per authority and a stale entry fails CI.
+
+## Second opinion (Gemini Deep Research, 2026-11-21)
+
+Saved in `R28_GEMINI.md`. **Incomplete:** Stage 1 only (report and source titles, no URLs) plus the table of open questions from Stage 2; the verification table and decision pack of Stage 2 were not pasted. Because Gemini gives no URLs, every conflict below goes to this digest where it has a URL and date, and the rest is UNVERIFIED. Nothing above is replaced.
+
+### Agreements
+- KSA Wave 25: above SAR 187,500, integrate by 1 Feb 2027 (announced 24 Jul 2026). Phase 2 is UBL 2.1 with ECDSA secp256k1 signing, hash chain (ICV, PIH), clearance for standard and 24 h reporting for simplified, 9-tag QR. A solution list entry is not an approval.
+- UAE timeline: ASP by 30 Oct 2026 and live 1 Jan 2027 for AED 50m and above; ASP by 31 Mar 2027 and live 1 Jul 2027 below; government 1 Oct 2027; B2C out of scope. Decision 197/2026 removed the in-country storage rule and moved issuing to 14 business days; Decision 168/2026 removed pre-approval. Penalties of Decision 173/2026 as in the CHANGED section above. Small Business Relief to 2029 (Decision 131/2026).
+- Oman Decision 189/2026: 1 Apr 2027 above OMR 5m, 1 Oct 2027 for the rest. Qatar draft law only, Kuwait nothing, Bahrain no date.
+- Never become an ASP; take 3-decimal currency, bilingual master data, immutable ledger, Hijri display only, and certificate-expiry monitoring as core work. CSID lifetime is not settled (Gemini lists 1, 2 and 5 years): read `notAfter`, never hard-code.
+
+### Conflicts
+| Topic | This digest | Gemini | Verdict |
+|---|---|---|---|
+| Country order | KSA first (own adapter, free SDK), UAE second via one ASP, after DE rows | UAE first (lighter, SME wave 31 Mar 2027), KSA second, start through one multi-country API and swap KSA to native later | Not a fact conflict: it is an owner decision (below). |
+| PINT AE version | sources show v1.0.1 and v1.0.3 | v1.0.4, guidelines v2.0 (26 Oct 2026), mandatory fields v1.1 | UNVERIFIED; keep the version in config. |
+| KSA Phase 2 fines | UNVERIFIED | ladders up to SAR 50,000 and "the H2 2026 amnesty does not cover e-invoicing" | UNVERIFIED (no URL). |
+| ASP requirements | UNVERIFIED | 2 years of operation, ISO 27001 and 22301, AED 50,000 capital, large insurance limits, 100 free exchanges per end user a year | UNVERIFIED, but it supports rejecting option C. |
+
+### Only one side has it
+- **Gemini only (all UNVERIFIED, no URL):** Zakat scaling for a Gregorian year (2.5% divided by the Hijri day count times the fiscal-year days, about 2.5777% for 365 days); document-level VAT rounding that triggers rejection (BR-CO-14, BR-CO-15) when line VAT is rounded and summed; Oman PINT OM "baisa gap" with a plus or minus 0.001 tolerance and 3-decimal line amounts; PDF/A-3 embedding details and PDF/A-3B versus 3A doubts; QR payload limit of 700 characters and UTF-8 byte lengths; UAE e-invoicing also covers non-VAT-registered B2B firms; UAE VAT changes of Oct 2026 (Decisions 13 and 149 of 2026); cost model for build versus buy (illustrative, no quotes).
+- **This digest only:** KSA SAR 1,000 B2B simplified rule and Arabic or Hindi numerals (guideline v2); seventeen risks in RAW; the Phase 1 generation-only mode; the HR and legal-assistant exclusions.
+
+### Row changes
+- No new row. Comments added: #1133 (T310: UTF-8 byte-length QR test and PDF/A-3 check, UNVERIFIED), #1132 (T309: document-level VAT rounding test, Zakat scaling as an effective-dated config test), #1138 (T315: baisa-gap tolerance as config, UNVERIFIED).
+
+### Owner decisions (not for agents)
+- Country order and path: Gemini argues UAE before KSA and one multi-country API first; this digest keeps KSA first after the DE rows. No change until the owner decides.
+- Ask for the missing Stage 2 (verification table, decision pack) if the owner wants a full second opinion.
