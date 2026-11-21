@@ -10,7 +10,7 @@ needs is in git or in the owner's own secrets folder. Nothing depends on one Cla
 | Rules for every agent | `CLAUDE.md`, `AGENTS.md`, `docs/agents/LESSONS.md` | no (git) |
 | Current state and plan | `docs/README.md` (index), `docs/STATE.md`, `docs/STRATEGY_NOW.md`, `docs/FACTORY.md`, `docs/ARCHITECTURE.md` | no (git) |
 | Hub memory (decisions, owner feedback, traps) | `docs/hub/memory/*.md` (scrubbed copy) | no (git) |
-| Box hub rules (Linux laptop) | `docs/hub/BOX_HUB_CLAUDE.md` | no (git) |
+| Box hub rules + full brief (Linux laptop) | `docs/hub/BOX_HUB_CLAUDE.md`, `docs/hub/BOX_HUB_MASTER_BRIEF.md` | no (git) |
 | Work queue | GitHub issues with `lane:Lx` labels; WAVE comments on #592; agent bridge #965 | no (GitHub) |
 | Research | `docs/strategy/research/*_RAW.md` + digests (`R18`, `R20`, ...) | no (git) |
 | Secrets | `~/Secrets/roxira/roxira.env` on the owner's Mac (never in git) | macOS user |

@@ -1,5 +1,7 @@
 # Box hub rules (roxira-ci, user mahanfilms) — from the main hub, 2026-11-20
 
+Full brief (APIs, infrastructure, connections, target design, workload, work order): `docs/hub/BOX_HUB_MASTER_BRIEF.md`; read it first.
+
 You are the **box hub** for the Roxira repo on the Linux laptop `roxira-ci`. The **main hub** is Claude on the owner's Mac. You coordinate only through GitHub: WAVE comments (main hub) and `BOX:` reports (you) on issue #592. Start every session with `docs/STATE.md`, `docs/TEAM_START.md`, `docs/TEAM_SPLIT_2026-11-17.md`, `docs/ops/LINUX_CI_BOX.md` and the latest WAVE/BOX: comments on #592. Background memory from the main hub: `~/.claude/roxira-memory.md` (large; grep it, do not read it all).
 
 ## Owner rules (always)
@@ -13,6 +15,6 @@ You are the **box hub** for the Roxira repo on the Linux laptop `roxira-ci`. The
 - Narrow sudo only: `sudo box-status`, `sudo box-proxy status|test`, `sudo phone-stack ...` once installed. Anything else needs the owner to run one line in a normal terminal.
 
 ## Your jobs
-1. Hub round for L5-L7: dispatch the review desk once (`gh workflow run review-desk.yml`, no `-f pr`), merge green PRs whose newest `Verdict:` on the current head says no blocker (`gh pr merge N --auto --squash`), and give the owner one paste-ready message per lane for the rest.
+1. Hub round for L5-L7: dispatch the review desk once (`gh workflow run review-desk.yml`, no `-f pr`), merge green PRs whose newest `Verdict:` on the current head says no blocker (`gh pr merge N --auto`), and give the owner one paste-ready message per lane for the rest.
 2. L7 work on this box (phone stack, CI runner, nightly evals) per the latest WAVE.
 3. Builders: Antigravity (lanes L5-L7, run as mahanfilms); fallback Gemini CLI lanes `scripts/ops/ci_box/gemini_lanes.sh`.
