@@ -199,8 +199,22 @@ def is_bot(user: dict | None, extra_self: tuple[str, ...] = ()) -> bool:
     return user.get("type") == "Bot" or login.endswith("[bot]") or login.lower() in selfs
 
 
+def trusted_ids() -> set[int]:
+    """Operator allowlist of numeric GitHub user ids (env ORCH_TRUSTED_USER_IDS, comma separated). Numeric ids, not
+    logins: a login can be renamed or re-registered, an id cannot. Lets the two owner accounts be trusted even when
+    GitHub reports them as CONTRIBUTOR, without trusting that association in general."""
+    out: set[int] = set()
+    for part in os.environ.get("ORCH_TRUSTED_USER_IDS", "").split(","):
+        part = part.strip()
+        if part.isdigit():
+            out.add(int(part))
+    return out
+
+
 def trusted(item: dict, selfs: tuple[str, ...] = ()) -> bool:
-    return not is_bot(item.get("user"), selfs) and item.get("author_association") in TRUSTED_ASSOC and MARKER not in (item.get("body") or "")
+    user = item.get("user") or {}
+    known = item.get("author_association") in TRUSTED_ASSOC or user.get("id") in trusted_ids()
+    return not is_bot(user, selfs) and known and MARKER not in (item.get("body") or "")
 
 
 # ---------------------------------------------------------------- ordering and issue parsing

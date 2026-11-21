@@ -43,3 +43,15 @@ def test_failure_raises(monkeypatch):
     except orch.GhError:
         return
     raise AssertionError("GhError not raised")
+
+
+def test_allowlisted_numeric_id_is_trusted_but_contributor_is_not(monkeypatch):
+    item = {"user": {"login": "x", "id": 42, "type": "User"}, "author_association": "CONTRIBUTOR", "body": "t"}
+    monkeypatch.delenv("ORCH_TRUSTED_USER_IDS", raising=False)
+    assert not orch.trusted(item)
+    monkeypatch.setenv("ORCH_TRUSTED_USER_IDS", "7, 42,abc")
+    assert orch.trusted(item)
+    other = dict(item, user={"login": "y", "id": 43, "type": "User"})
+    assert not orch.trusted(other)
+    bot = dict(item, user={"login": "z[bot]", "id": 42, "type": "Bot"})
+    assert not orch.trusted(bot)
