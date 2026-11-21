@@ -13,6 +13,10 @@ set -euo pipefail
 ALLOWED_SIGNERS_FILE="${ALLOWED_SIGNERS_FILE:-/etc/roxira/allowed_signers}"
 TAG_PATTERN="${DEPLOY_TAG_PATTERN:-deploy/*}"
 
+if [[ -n "${REPO_DIR:-}" ]]; then
+  cd "$REPO_DIR"
+fi
+
 if [[ ! -s "$ALLOWED_SIGNERS_FILE" ]]; then
   echo "signed_tag_guard: allowed signers file missing or empty: $ALLOWED_SIGNERS_FILE" >&2
   exit 1
@@ -30,8 +34,14 @@ fi
 
 for tag in "${tags[@]}"; do
   [[ -n "$tag" ]] || continue
-  if git -c gpg.format=ssh -c "gpg.ssh.allowedSignersFile=$ALLOWED_SIGNERS_FILE" tag -v "$tag" >/dev/null 2>&1; then
+  if git -c gpg.format=ssh -c "gpg.ssh.allowedSignersFile=${ALLOWED_SIGNERS_FILE}" tag -v "$tag" >/dev/null 2>&1; then
     commit_sha="$(git rev-list -n 1 "$tag")"
+    if git rev-parse --verify origin/main >/dev/null 2>&1; then
+      if ! git merge-base --is-ancestor "$commit_sha" origin/main 2>/dev/null; then
+        echo "signed_tag_guard: ignoring signed tag not on origin/main: $tag ($commit_sha)" >&2
+        continue
+      fi
+    fi
     printf '%s %s\n' "$tag" "$commit_sha"
     exit 0
   else

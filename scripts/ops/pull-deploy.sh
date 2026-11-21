@@ -27,11 +27,11 @@ if [[ -e .deploy-freeze ]]; then
 fi
 
 if [[ -n ${PULL_DEPLOY_SSH_KEY:-} ]]; then
-  export GIT_SSH_COMMAND="ssh -i ${PULL_DEPLOY_SSH_KEY} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+  export GIT_SSH_COMMAND="ssh -i \"${PULL_DEPLOY_SSH_KEY}\" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
 fi
 
 if [[ ${PULL_DEPLOY_SIGNED_TAG_GUARD:-0} == "1" ]]; then
-  git fetch -q --tags origin main
+  git fetch -q --tags --force origin main
 else
   git fetch -q origin main
 fi

@@ -110,10 +110,42 @@ fi
 # deploy_local.sh's local_root is resolved from the cwd, so run from the repo.
 cd "$REPO"
 
-git -C "$REPO" fetch -q origin main || { log "git fetch origin main failed"; RESULT="failed"; exit 1; }
+# R20-4 (#1020): Optional read-only deploy key and SSH signed tag guard
+DEPLOY_SSH_KEY="${AUTODEPLOY_SSH_KEY:-${PULL_DEPLOY_SSH_KEY:-}}"
+if [ -n "$DEPLOY_SSH_KEY" ]; then
+  export GIT_SSH_COMMAND="ssh -i \"${DEPLOY_SSH_KEY}\" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+fi
+
+if [ "${AUTODEPLOY_SIGNED_TAG_GUARD:-${PULL_DEPLOY_SIGNED_TAG_GUARD:-0}}" = "1" ]; then
+  git -C "$REPO" fetch -q --tags --force origin main || { log "git fetch --tags --force origin main failed"; RESULT="failed"; exit 1; }
+else
+  git -C "$REPO" fetch -q origin main || { log "git fetch origin main failed"; RESULT="failed"; exit 1; }
+fi
 TARGET="$(git -C "$REPO" rev-parse origin/main)"
 TARGET_SHORT="$(git -C "$REPO" rev-parse --short=8 origin/main)"
 DEPLOYED_BEFORE="$(git -C "$REPO" rev-parse HEAD)"
+
+if [ "${AUTODEPLOY_SIGNED_TAG_GUARD:-${PULL_DEPLOY_SIGNED_TAG_GUARD:-0}}" = "1" ]; then
+  NEEDS_SIGNED_TAG=0
+  if [ "${AUTODEPLOY_REQUIRE_SIGNED_TAG:-${PULL_DEPLOY_REQUIRE_SIGNED_TAG:-0}}" = "1" ]; then
+    NEEDS_SIGNED_TAG=1
+  elif git -C "$REPO" diff --name-only "$DEPLOYED_BEFORE" "$TARGET" | grep -qE '^(output_apps/enterprise_hub/migrations/|docker-compose.*\.ya?ml$|scripts/ops/|\.github/workflows/)'; then
+    NEEDS_SIGNED_TAG=1
+  fi
+
+  if [ "$NEEDS_SIGNED_TAG" = "1" ]; then
+    GUARD_SCRIPT="${SIGNED_TAG_GUARD_SCRIPT:-$REPO/scripts/ops/signed_tag_guard.sh}"
+    if ! TAG_OUT="$(REPO_DIR="$REPO" "$GUARD_SCRIPT")"; then
+      log "autodeploy: signed-tag guard failed (no valid SSH-signed deploy/* tag); refusing deploy"
+      RESULT="failed"
+      exit 1
+    fi
+    SIGNED_TAG="${TAG_OUT%% *}"
+    TARGET="${TAG_OUT#* }"
+    TARGET_SHORT="$(git -C "$REPO" rev-parse --short=8 "$TARGET")"
+    log "autodeploy: signed-tag guard selected $SIGNED_TAG ($TARGET_SHORT)"
+  fi
+fi
 
 if [ "$TARGET" = "$DEPLOYED_BEFORE" ]; then
   log "already at $TARGET_SHORT; nothing to do"

@@ -103,3 +103,36 @@ def test_signed_tag_guard_fails_closed_without_signers_file(tmp_path: pathlib.Pa
     )
     assert res.returncode == 1
     assert "missing or empty" in res.stderr
+
+
+def test_signed_tag_not_on_origin_main_is_rejected(tmp_path: pathlib.Path) -> None:
+    prod, allowed_signers, key_path, signed_sha, _ = _init_repo_with_signed_and_unsigned_tags(tmp_path)
+
+    # In prod, create a detached commit not on main, sign a tag pointing to it
+    _run(["git", "config", "user.name", "Owner"], cwd=prod)
+    _run(["git", "config", "user.email", "owner@roxira"], cwd=prod)
+    _run(["git", "config", "gpg.format", "ssh"], cwd=prod)
+    _run(["git", "config", "user.signingkey", str(key_path)], cwd=prod)
+
+    _run(["git", "checkout", "--orphan", "rogue_branch"], cwd=prod)
+    (prod / "rogue.txt").write_text("rogue\n", encoding="utf-8")
+    _run(["git", "add", "rogue.txt"], cwd=prod)
+    _run(["git", "commit", "-m", "rogue commit"], cwd=prod)
+    _run(["git", "tag", "-s", "deploy/rogue-tag", "-m", "rogue signed tag"], cwd=prod)
+
+    # Checkout main again
+    _run(["git", "checkout", "main"], cwd=prod)
+
+    # Run signed_tag_guard.sh - rogue tag should be ignored because it is not an ancestor of origin/main
+    res = _run(
+        ["bash", str(GUARD_SCRIPT)],
+        cwd=prod,
+        env={
+            "ALLOWED_SIGNERS_FILE": str(allowed_signers),
+            "DEPLOY_TAG_PATTERN": "deploy/rogue-tag",
+        },
+        check=False,
+    )
+    assert res.returncode == 1
+    assert "ignoring signed tag not on origin/main" in res.stderr
+
