@@ -81,7 +81,8 @@ class LiveKitCompatibleVoiceAgent:
 
             sentence_buffer += text_chunk
             if any(d in sentence_buffer for d in delimiters) and len(sentence_buffer.strip()) > 15:
-                # تبدیل این جمله به صوت (ابتدا پاکسازی PII پیش از ارسال به سرویس TTS بیرونی)
+                # تبدیل این جمله به صوت (ابتدا پاکسازی PII پیش از ارسال به سرویس TTS بیرونی؛
+                # بازگردانی انجام نمی‌شود تا PII خام هرگز به سرویس TTS خارجی ارسال نشود)
                 sentence_to_speak, _, _ = _scrub_pii_with_counts(
                     sentence_buffer.strip(), context="voice_agent_tts"
                 )

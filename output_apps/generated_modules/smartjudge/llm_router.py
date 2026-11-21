@@ -717,12 +717,13 @@ async def complete(
         )
 
     scrub_pii = params.pop("scrub_pii", True)
+    requested_tier = tier
+    tier, models = _resolve_models(tier, sensitive)
+
     pii_mapping: dict[str, str] = {}
     if scrub_pii:
         messages, pii_mapping, _ = _scrub_messages(messages, context=feature or f"llm_{tier}")
 
-    requested_tier = tier
-    tier, models = _resolve_models(tier, sensitive)
     t0 = time.monotonic()
     base = {
         "tenant": tenant,
@@ -732,7 +733,8 @@ async def complete(
         "requested_tier": requested_tier,
     }
 
-    key = cache_key(models, messages, params) if _is_cacheable(params) else None
+    # Skip cache when PII was scrubbed to prevent cross-request placeholder/PII poisoning.
+    key = cache_key(models, messages, params) if (_is_cacheable(params) and not pii_mapping) else None
     if key:
         hit = await _cache_get(key)
         if hit:
