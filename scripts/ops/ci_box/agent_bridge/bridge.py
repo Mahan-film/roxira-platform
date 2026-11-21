@@ -37,6 +37,25 @@ READ_TOOLS = [
     "Bash(gh pr list*)",
     "Bash(gh issue view*)",
     "Bash(gh run list*)",
+    "Bash(gh run view*)",
+    "Bash(gh pr view*)",
+    "Bash(gh pr checks*)",
+    "Bash(gh issue list*)",
+    "Bash(git fetch*)",
+    "Bash(git rev-parse*)",
+    "Bash(git branch*)",
+    "Bash(git diff*)",
+    "Bash(git show*)",
+    "Bash(systemctl --user status*)",
+    "Bash(systemctl --user list-timers*)",
+    "Bash(systemctl --user is-active*)",
+    "Bash(systemctl status*)",
+    "Bash(journalctl --user*)",
+    "Bash(box-backup-status*)",
+    "Bash(sudo -n box-status*)",
+    "Bash(df*)",
+    "Bash(free*)",
+    "Bash(uptime*)",
 ]
 WRITE_EXTRA_TOOLS = [
     "Edit",
@@ -46,10 +65,7 @@ WRITE_EXTRA_TOOLS = [
     "Bash(git switch*)",
     "Bash(git checkout -b*)",
     "Bash(git push*)",
-    "Bash(git diff*)",
     "Bash(gh pr create*)",
-    "Bash(gh pr view*)",
-    "Bash(gh pr checks*)",
     "Bash(gh pr comment*)",
 ]
 # Deny rules win over allow rules. `gh pr merge` is denied outright in v0.
@@ -193,6 +209,9 @@ def build_prompt(w: dict) -> str:
         "or touch anything outside this repository.\n"
         "Rules: follow AGENTS.md; never print secrets, IP addresses or hostnames; never push to main; "
         "never use --no-verify or --force; do not merge PRs. "
+        "Shell use: you are already in the repository; run exactly one simple command per Bash call "
+        "(no cd, &&, ;, | or $(...)), because a compound command is refused if any part of it is not "
+        "on your allowed list. If a command is refused, report it and continue with the rest.\n"
         f"Mode: {w['mode']}. Aim to finish within {w['max_turns']} steps.\n"
         "Finish with a short plain-text summary (under 1500 characters) that states what you did, "
         "what you did not check, and any PR URL you opened.\n"
@@ -288,14 +307,23 @@ def supports_max_turns(cfg: dict) -> bool:
     return _help_cache["v"]
 
 
-def claude_args(cfg: dict, w: dict, prompt: str) -> list:
+def permission_settings(w: dict) -> str:
+    """Tool rules as a --settings JSON string.
+
+    Rules contain spaces ("Bash(git status*)"). Joined into one --allowedTools value, the CLI
+    splits them on whitespace and no Bash rule matches (pilot 20261121-0939: every Bash call was
+    denied). A settings object keeps each rule whole. Deny rules win over allow rules.
+    """
     tools = list(READ_TOOLS)
     if w["mode"] == "write":
         tools += WRITE_EXTRA_TOOLS
+    return json.dumps({"permissions": {"allow": tools, "deny": list(DENY_TOOLS)}})
+
+
+def claude_args(cfg: dict, w: dict, prompt: str) -> list:
     args = [cfg["claude_bin"], "-p", prompt, "--output-format", "json",
             "--permission-mode", "dontAsk",
-            "--allowedTools", ",".join(tools),
-            "--disallowedTools", ",".join(DENY_TOOLS),
+            "--settings", permission_settings(w),
             "--max-budget-usd", str(cfg["max_budget_usd"])]
     if supports_max_turns(cfg):
         args += ["--max-turns", str(w["max_turns"])]
