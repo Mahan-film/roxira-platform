@@ -59,6 +59,7 @@ jobs:
     outputs:
       light: ${{ steps.pick.outputs.light }}
       docker: ${{ steps.pick.outputs.docker }}
+      image_registry: ${{ steps.pick.outputs.image_registry }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -75,6 +76,7 @@ jobs:
           BOX_LIGHT: ${{ vars.CI_BOX_LABELS_LIGHT }}
           BOX_DOCKER: ${{ vars.CI_BOX_LABELS_DOCKER }}
           HOSTED: ${{ vars.CI_HOSTED_RUNNER }}
+          IMAGE_REGISTRY: ${{ vars.CI_IMAGE_REGISTRY }}
         run: |
           bash scripts/ci/pick_runner.sh | tee -a "$GITHUB_OUTPUT"
           grep '^where=' "$GITHUB_OUTPUT" | tail -1 | sed 's/^where=/Runner: /' >> "$GITHUB_STEP_SUMMARY"
@@ -585,7 +587,9 @@ jobs:
     services:
       postgres:
         # Same major version as production (docker-compose.prod.yml, fresh_db_migrate.sh).
-        image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/docker/library' }}/postgres:17
+        # Hosted runners use mirror.gcr.io/library to avoid anonymous public.ecr.aws data limits (#1076);
+        # the self-hosted CI box uses public.ecr.aws/docker/library (mirror.gcr.io is blocked there).
+        image: ${{ needs.pick-runner.outputs.image_registry || vars.CI_IMAGE_REGISTRY || 'mirror.gcr.io/library' }}/postgres:17
         env:
           # Throwaway service container: the pg specs connect without a password.
           POSTGRES_HOST_AUTH_METHOD: trust
@@ -701,7 +705,7 @@ jobs:
     continue-on-error: true
     services:
       postgres:
-        image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/docker/library' }}/postgres:17
+        image: ${{ needs.pick-runner.outputs.image_registry || vars.CI_IMAGE_REGISTRY || 'mirror.gcr.io/library' }}/postgres:17
         env:
           POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: rxfresh
@@ -713,7 +717,7 @@ jobs:
           --health-timeout 5s
           --health-retries 20
       redis:
-        image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/docker/library' }}/redis:7
+        image: ${{ needs.pick-runner.outputs.image_registry || vars.CI_IMAGE_REGISTRY || 'mirror.gcr.io/library' }}/redis:7
         ports:
           # Host port 16379: 6379 is taken on the CI box (phone stack); same on hosted runners.
           - 16379:6379

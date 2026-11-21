@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Pick the runner for each CI slot (#949 T228, #1024 R20-8). Runs on a hosted `ubuntu-slim`
 # job before every other CI job and prints GitHub step outputs:
-#   light=<JSON runs-on>   lint, unit tests, scanners (no Docker)
-#   docker=<JSON runs-on>  service containers, compose, builds, Playwright
-#   where=<one line>       human summary for the step summary
+#   light=<JSON runs-on>        lint, unit tests, scanners (no Docker)
+#   docker=<JSON runs-on>       service containers, compose, builds, Playwright
+#   image_registry=<prefix>     container image registry prefix for service containers
+#   where=<one line>            human summary for the step summary
 #
 # Inputs (environment, all optional; the workflow passes repo variables and the event):
 #   EVENT        github.event_name
@@ -49,14 +50,27 @@ valid_box() {
 valid_hosted() {
   printf '%s' "$1" | grep -Eq '^"ubuntu-[a-z0-9.-]+"$'
 }
+valid_registry() {
+  printf '%s' "$1" | grep -Eq '^[a-z0-9][a-z0-9.-]*(/[a-z0-9._-]+)*$'
+}
 valid_hosted "$hosted" || hosted='"ubuntu-latest"'
 valid_box "$box_light" || box_light=""
 valid_box "$box_docker" || box_docker=""
+custom_registry="${IMAGE_REGISTRY:-}"
+valid_registry "$custom_registry" || custom_registry=""
 
 emit() {
   # emit <light> <docker> <why>
+  local reg="$custom_registry"
+  if [ -z "$reg" ]; then
+    case "$2" in
+      *'"self-hosted"'*) reg="public.ecr.aws/docker/library" ;;
+      *) reg="mirror.gcr.io/library" ;;
+    esac
+  fi
   printf 'light=%s\n' "$1"
   printf 'docker=%s\n' "$2"
+  printf 'image_registry=%s\n' "$reg"
   printf 'where=%s\n' "$3"
 }
 
