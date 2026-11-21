@@ -51,3 +51,4 @@
 - [Never name the country](feedback-never-name-the-country.md) — say "default/current pack"; network blocks = "blocked from this network"
 - [CI box + phone stack](project-ci-box-and-phone-stack.md) — roxira-ci Ubuntu 26.04 @<ip>, Docker Hub 403, SSH via Terminal tab, users runner/phone/mahanfilms
 - [R18 digest 2026-11-20](project-r18-digest-2026-11-20.md) — T234-T258 = #973-#997, WAVE 21, Option 2 phased; docs PR #998
+- [Mac account switch 2026-11-21](project-account-switch-2026-11-21.md) — colleague (main owner) takes the Mac hub; old account → laptop; approvals O-1

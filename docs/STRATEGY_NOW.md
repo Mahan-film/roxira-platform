@@ -1,4 +1,4 @@
-# Strategy now (one page, 2026-11-20)
+# Strategy now (one page, 2026-11-20; updated 2026-11-21)
 
 This page is a map, not a new source of truth. Every claim links to the document it comes from. "Unverified" means I could not confirm it on `origin/main` (head `e56805260` when written). For the live state read [STATE.md](STATE.md); for how work is built read [FACTORY.md](FACTORY.md).
 
@@ -54,6 +54,8 @@ Source: [TEAM_SPLIT_2026-11-17.md](TEAM_SPLIT_2026-11-17.md), [STATE.md](STATE.m
 | Mac | L1 ops/CI/infra, L2 frontend + currency, L3 security/data, L4 Smart Judge (Antigravity) | main hub (Claude Code) | strategy, WAVE posts, merges of L1-L4 and hub PRs, all production steps |
 | Linux box `roxira-ci` | L5 core ledger, L6 DE then Gulf, L7 box + phone kit | box hub (Claude Code, second account) | merges L5-L7 after "no blocker", CI runner, phone stack; never touches production |
 
+Briefs: [MAIN_HUB_MASTER_BRIEF.md](hub/MAIN_HUB_MASTER_BRIEF.md) (Mac), [BOX_HUB_MASTER_BRIEF.md](hub/BOX_HUB_MASTER_BRIEF.md) (laptop). Mac-to-laptop tasks go through #965 without the owner.
+
 Fallback builder when Antigravity quota runs out: Gemini CLI via `scripts/ops/ci_box/gemini_lanes.sh`. Full flow, rules and troubleshooting: [FACTORY.md](FACTORY.md).
 
 ## 6. Decisions log
@@ -70,6 +72,9 @@ Fallback builder when Antigravity quota runs out: Gemini CLI via `scripts/ops/ci
 | 2026-11-18 | Printed secrets of 2026-11-17 not rotated now (owner, optional later) | [STATE.md](STATE.md) |
 | 2026-11-19 | Gemini CLI fallback builder on the box | [TEAM_SPLIT_2026-11-17.md](TEAM_SPLIT_2026-11-17.md) |
 | 2026-11-20 | Smart Judge v2: Option 2, phased, on the current server | [R18_SMART_JUDGE.md](strategy/research/R18_SMART_JUDGE.md) |
+| 2026-11-20 | R20: one deterministic dispatcher on the laptop, GitHub as queue, private repo at USD 0 after replacements | [R20_DIGEST.md](strategy/R20_DIGEST.md) |
+| 2026-11-20 | Hub bridge through GitHub (#965 WAVE:/REPORT:), not Remote Control (two Claude accounts) | [R21_AGENT_BRIDGE.md](research/R21_AGENT_BRIDGE.md) |
+| 2026-11-21 | Mac Claude account moves to the colleague (main owner); the current account runs the laptop hub. Approval rule = open item O-1 | [STATE.md](STATE.md), [MAIN_HUB_MASTER_BRIEF.md](hub/MAIN_HUB_MASTER_BRIEF.md) |
 
 ## 7. Open owner decisions (names only)
 Source: [OWNER_ASKS_FA.md](owner/OWNER_ASKS_FA.md) (read it each session; the list there is Persian). Last updated there 2026-11-17, so it may lag [STATE.md](STATE.md).
