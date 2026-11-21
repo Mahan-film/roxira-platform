@@ -10,11 +10,14 @@ A PR is squash-merged, with `sha=<head>` as guard, only when all of these hold o
 1. label `merge-queue` (or auto-merge requested, while `allow_auto_merge_flag = true`);
 2. not a draft, base is `main`, no conflicts;
 3. every check in `required_checks` is success/skipped/neutral (missing or running = wait, failed = refuse);
-4. the latest `Cross-family review ... @ <sha>` comment (author in `review_comment_authors`) names this head
+4. the latest `Cross-family review ... @ <sha>` comment (author id in `review_comment_author_ids`, else login in `review_comment_authors`) names this head
    and has `Verdict: no blocker`, or an allowlisted human (numeric id in `approver_ids`) APPROVED this head;
-5. no file matches `protected_globs`, unless label `owner-approved` is present and its latest `labeled`
+5. no hold: no label in `block_labels` (`needs-human`, `do-not-merge`), no `[needs owner]` in the title, no unresolved
+   `BLOCKER:` comment from an allowlisted human id (cleared by a later `UNBLOCK:`);
+6. no file matches `protected_globs`, unless label `owner-approved` is present and its latest `labeled`
    timeline event was made by an id in `owner_approver_ids`;
-6. branch not behind main; if behind, the gate calls update-branch and waits for checks on the next tick.
+7. branch not behind main (`require_up_to_date`, default true); if behind, the gate calls update-branch and waits for
+   checks on the next tick.
 
 One merge per tick (oldest PR number first). A comment is posted on the PR when it is merged, and when it is
 refused (once per head SHA and reason). Waiting states (checks running) are silent.
@@ -42,12 +45,16 @@ Once as root: `loginctl enable-linger mahanfilms` so the timer runs without a lo
 `check_main_push.py` (timer `roxira-check-main-push`, every 10 min, same user, config, proxy, state dir and `KILL`
 switch) alerts on Telegram when `main` gets a commit that is not part of a merged PR, or when its history was
 rewritten. It remembers the last seen SHA in `<state_dir>/last_main_sha`, so each push alerts once. First run only
-records the SHA. Dry-run (the default while `dry_run = true`) logs and sends nothing, writes no state.
+records the SHA. Dry-run (the default while `dry_run = true`) logs and sends nothing.
 Telegram goes through `scripts/ops/notify/notify.py`; put `NOTIFY_BOT_TOKEN=...` and `NOTIFY_CHAT_ID=...` in
 `~/.config/roxira-merge-gate/notify.env` (mode 600, created empty by `install_user.sh`). Without them the alert is
 only logged. Try: `python3 check_main_push.py --config ~/.config/roxira-merge-gate/merge_gate.toml --dry-run`.
-Note: while `dry_run = true` the first-run state is not written, so every tick re-initialises quietly; it starts
-guarding after the flip.
+In dry-run it keeps its own pointer `last_main_sha.dryrun` (detection and alert text run for real, nothing is sent, the live
+pointer is untouched; the first live run initialises it). Spec, comparison report and go-live list: `docs/ops/MERGE_GATE_SPEC.md`.
+
+## Dry-run comparison with history
+`python3 compare_history.py --config ~/.config/roxira-merge-gate/merge_gate.toml --limit 30` replays the last N merged PRs
+through the gate rules (read-only, GET only) and prints what would have been blocked and why. See the spec.
 
 ## Known limits
 - `owner-approved` is not tied to a head SHA: removing the label after a suspicious push is the owner's job.

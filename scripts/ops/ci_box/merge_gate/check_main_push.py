@@ -7,8 +7,9 @@ merged PR (the gate squash-merges, so its commits do). Otherwise one Telegram al
 repo's notify helper (scripts/ops/notify/notify.py: NOTIFY_BOT_TOKEN / NOTIFY_CHAT_ID from the
 environment only, nothing in code). Python stdlib only.
 
-Dry-run is the default (dry_run = true in the config, or --dry-run): it logs and exits, sends nothing
-and writes no state. Exit codes: 0 ok / nothing to do, 1 direct push found or GitHub failed.
+Dry-run is the default (dry_run = true in the config, or --dry-run): it does everything except the Telegram
+send, and keeps its pointer in `last_main_sha.dryrun` so the live pointer is untouched.
+Exit codes: 0 ok / nothing to do, 1 direct push found or GitHub failed.
 """
 from __future__ import annotations
 
@@ -53,11 +54,12 @@ def is_direct(api, repo: str, sha: str) -> bool:
 def check(cfg: dict, api, state_dir: Path, dry: bool, send: Callable[[str], bool]) -> int:
     repo, base = cfg["repo"], cfg["base"]
     head = api("GET", f"repos/{repo}/commits/{base}")["sha"]
-    state = state_dir / STATE_FILE
+    # Dry-run keeps its own state file so it exercises compare + alert text for real without touching the
+    # live pointer (the first live run initialises it at go-live).
+    state = state_dir / (STATE_FILE + (".dryrun" if dry else ""))
     if not state.exists():
         log.info("initialising state at %s", head[:8])
-        if not dry:
-            state.write_text(head + "\n")
+        state.write_text(head + "\n")
         return 0
     last = state.read_text().strip()
     if last == head:
@@ -71,8 +73,7 @@ def check(cfg: dict, api, state_dir: Path, dry: bool, send: Callable[[str], bool
         # Unknown old SHA usually means a force-push rewrote main: that must not pass silently.
         log.error("compare failed: %s", e)
         direct, reason = [head], "(history rewritten or compare failed)"
-    if not dry:
-        state.write_text(head + "\n")  # never re-alert on the same commits
+    state.write_text(head + "\n")  # never re-alert on the same commits (dry-run: own file)
     if not direct:
         log.info("OK: %s..%s all came from merged PRs", last[:8], head[:8])
         return 0

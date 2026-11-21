@@ -41,7 +41,17 @@ protected_globs = [
 ]
 
 # Only comments by these logins count as review-desk verdicts.
-review_comment_authors = ["github-actions[bot]"]
+review_comment_authors = ["github-actions[bot]"]   # used only while the id list below is empty
+# Numeric ids of the review-desk accounts (gh api users/<login> --jq .id). When set they replace the login check.
+review_comment_author_ids = []
+
+# Explicit holds: a PR with one of these labels, or a title containing one of these markers, is never merged.
+block_labels = ["needs-human", "do-not-merge"]
+block_title_markers = ["[needs owner]"]
+
+# true = the PR must contain the tip of main (merge-queue behaviour, one merge per CI cycle);
+# false = merge a green head even when behind (what the old ruleset did).
+require_up_to_date = true
 
 # Numeric GitHub user ids (gh api users/<login> --jq .id). Empty = feature off.
 approver_ids = []        # human APPROVE on the exact head counts as a review
