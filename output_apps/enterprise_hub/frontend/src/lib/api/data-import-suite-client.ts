@@ -309,6 +309,10 @@ export interface ImportPackageCommitRequest {
   tables: ImportPackageCommitTable[];
   /** فقط مدیر/مالک: ثبت با وجود عدم‌تراز. سرور دوباره می‌سنجد. */
   confirmImbalance?: boolean;
+  /** مبالغ کنترل افتتاحیه جهت بررسی تطابق. */
+  controlTotals?: Partial<Record<string, string>>;
+  asOfDate?: string;
+  currency?: string;
 }
 
 export interface ImportTableReconciliation {
@@ -326,6 +330,31 @@ export interface ImportTableReconciliation {
   warningsFa: string[];
 }
 
+export interface ImportTieOutItem {
+  category: string;
+  name: string;
+  expectedMinor: string;
+  expectedMoney: string;
+  actualMinor: string;
+  actualMoney: string;
+  differenceMinor: string;
+  differenceMoney: string;
+  currency: string;
+  matched: boolean;
+  blockerFa?: string;
+  warningFa?: string;
+}
+
+export interface ImportTieOutSummary {
+  passed: boolean;
+  totalChecks: number;
+  passedChecks: number;
+  discrepanciesCount: number;
+  items: ImportTieOutItem[];
+  discrepancies: ImportTieOutItem[];
+  blockersFa: string[];
+}
+
 export interface ImportReconciliationReport {
   key: string;
   tables: ImportTableReconciliation[];
@@ -333,6 +362,7 @@ export interface ImportReconciliationReport {
   balanced: boolean;
   blockersFa: string[];
   warningsFa: string[];
+  tieOut?: ImportTieOutSummary;
 }
 
 export type ImportSupportStatus =
