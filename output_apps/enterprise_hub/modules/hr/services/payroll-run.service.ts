@@ -11,6 +11,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
 import { fromMinor, toMinor } from '../../accounting/money';
@@ -26,6 +27,7 @@ import {
   PAYROLL_RUN_ENTRY_PREFIX,
   PAYSLIP_NUMBER_PREFIX,
 } from '../constants/hr.constants';
+import { CountryPackRegistry } from '../../country_packs/country-pack.registry';
 import {
   CreatePayrollRunDto,
   InsuranceListQueryDto,
@@ -137,6 +139,7 @@ export class PayrollRunService {
     private readonly accountingService: AccountingService,
     private readonly statutory: StatutoryService,
     private readonly postingRules: PostingRulesService,
+    @Optional() private readonly countryPackRegistry?: CountryPackRegistry,
   ) {}
 
   private async requireRates(
@@ -144,6 +147,30 @@ export class PayrollRunService {
     year: number,
     month?: number,
   ): Promise<PayrollYearRates> {
+    const pack = this.countryPackRegistry?.resolve();
+    if (pack?.payroll) {
+      const packRates = (await pack.payroll.ratesFor(
+        tenantId,
+        year,
+        month,
+      )) as Partial<PayrollYearRates> | null | undefined;
+      if (packRates && typeof packRates === 'object' && Object.keys(packRates).length > 0) {
+        const valid =
+          typeof packRates.year === 'number' &&
+          typeof packRates.minDailyWage === 'number' &&
+          typeof packRates.minMonthlyWage === 'number' &&
+          typeof packRates.monthlyWorkHours === 'number' &&
+          typeof packRates.employeeInsuranceRate === 'number' &&
+          typeof packRates.employerInsuranceRate === 'number' &&
+          typeof packRates.unemploymentInsuranceRate === 'number' &&
+          Array.isArray(packRates.annualTaxBrackets) &&
+          Boolean(packRates.insuranceRates && typeof packRates.insuranceRates === 'object');
+        if (!valid) {
+          throw new BadRequestException('Country pack payroll adapter returned invalid PayrollYearRates');
+        }
+        return packRates as PayrollYearRates;
+      }
+    }
     if (!(await this.statutory.hasYear(tenantId, year))) {
       throw new BadRequestException(
         `نرخ‌های قانونی حقوق برای سال ${year} تعریف نشده است.`,
