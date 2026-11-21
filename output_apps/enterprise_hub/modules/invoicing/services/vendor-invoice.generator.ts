@@ -453,7 +453,7 @@ export class VendorInvoiceGenerator {
     const items: InvoiceItemDto[] = doc.lines.map((l) => ({
       description: l.description,
       quantity: l.quantity,
-      unitPrice: Number(l.unitPriceMinor),
+      unitPrice: Number(l.unitPriceMinor), // money-ok: CreateInvoiceDto.items wire DTO expects number
       discount: 0,
       vatRate: Number(l.taxRateDecimal),
       sku: l.sku ?? undefined,
