@@ -15,6 +15,7 @@ import { EntityImportService } from '../services/entity-import.service';
 import { PackageImportService } from '../services/package-import.service';
 import { ChunkedUploadService } from '../services/chunked-upload.service';
 import { SepidarPersistenceService } from '../services/sepidar-persistence.service';
+import { CutoverWizardService } from '../services/cutover-wizard.service';
 import { DataImportController } from './data-import.controller';
 
 const SECRET = 'data-import-test-secret-1234567890';
@@ -25,6 +26,28 @@ const { stub, providers: accessProviders } = accessTestProviders();
 describe('DataImportController (access control)', () => {
   let app: INestApplication;
   let jwt: JwtService;
+  const cutoverMock = {
+    getStatus: jest.fn().mockResolvedValue({ active: false }),
+    evaluatePreflight: jest.fn().mockReturnValue({ passed: true, checksRun: 1, blockersFa: [] }),
+    executeGoLive: jest.fn().mockResolvedValue({
+      cutoverId: VALID_UUID,
+      cutoverDate: '2026-01-01',
+      preCutoverLockDate: '2025-12-31',
+      openingJournalEntryId: 1,
+      openingEntryNumber: 'OB-CUTOVER-2026-01-01',
+      periodLockId: 1,
+      legacyNumberPrefix: 'LEGACY-',
+      executedBy: 'owner',
+    }),
+    verifyPreCutoverLock: jest.fn().mockResolvedValue({
+      locked: true,
+      dryCheck: true,
+      testDate: '2025-12-31',
+      activeCutoverId: VALID_UUID,
+      preCutoverLockDate: '2025-12-31',
+      periodLockId: 1,
+    }),
+  };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -109,6 +132,7 @@ describe('DataImportController (access control)', () => {
             }),
           },
         },
+        { provide: CutoverWizardService, useValue: cutoverMock },
         ...accessProviders,
         ...GLOBAL_GUARD_PROVIDERS,
       ],
@@ -339,6 +363,53 @@ describe('DataImportController (access control)', () => {
           ],
         })
         .expect(400);
+    });
+  });
+
+  describe('Cutover Wizard routes (#1217 RBAC & validation)', () => {
+    const goLiveUrl = '/enterprise-hub/data-import/cutover/go-live';
+    const verifyUrl = '/enterprise-hub/data-import/cutover/verify-lock';
+    const validGoLiveBody = {
+      cutoverDate: '2026-01-01',
+      preCutoverLockDate: '2025-12-31',
+      openingBalances: [
+        { accountCode: '1010', debit: '1000000' },
+        { accountCode: '3010', credit: '1000000' },
+      ],
+    };
+
+    it('requires data_import:admin on POST /cutover/go-live (blocks accountant with 403, passes real JWT sub for owner)', async () => {
+      cutoverMock.executeGoLive.mockClear();
+
+      await request(app.getHttpServer())
+        .post(goLiveUrl)
+        .set(
+          'Authorization',
+          `Bearer ${token({ sub: 'accountant', role: UserRole.USER, tenantId: 'tenant-1', tenantRole: TenantRole.MEMBER })}`,
+        )
+        .send(validGoLiveBody)
+        .expect(403);
+      expect(cutoverMock.executeGoLive).not.toHaveBeenCalled();
+
+      await request(app.getHttpServer())
+        .post(goLiveUrl)
+        .set(
+          'Authorization',
+          `Bearer ${token({ sub: 'owner', role: UserRole.USER, tenantId: 'tenant-1', tenantRole: TenantRole.OWNER })}`,
+        )
+        .send(validGoLiveBody)
+        .expect(200);
+      expect(cutoverMock.executeGoLive).toHaveBeenCalledWith(
+        'tenant-1',
+        'owner',
+        expect.objectContaining({ cutoverDate: '2026-01-01' }),
+      );
+    });
+
+    it('rejects empty body on /cutover/go-live and /cutover/verify-lock with 400', async () => {
+      const ownerBearer = `Bearer ${token({ sub: 'owner', role: UserRole.USER, tenantId: 'tenant-1', tenantRole: TenantRole.OWNER })}`;
+      await request(app.getHttpServer()).post(goLiveUrl).set('Authorization', ownerBearer).send({}).expect(400);
+      await request(app.getHttpServer()).post(verifyUrl).set('Authorization', ownerBearer).send({}).expect(400);
     });
   });
 });

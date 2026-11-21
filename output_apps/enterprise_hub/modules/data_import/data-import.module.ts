@@ -28,6 +28,7 @@ import { DataImportBatchItemEntity } from './entities/data-import-batch-item.ent
 import { DataImportBatchEntity } from './entities/data-import-batch.entity';
 import { CutoverEntity } from './entities/cutover.entity';
 import { CutoverRepository } from './repositories/cutover.repository';
+import { CutoverWizardService } from './services/cutover-wizard.service';
 import { PackageImportProcessor } from './processors/package-import.processor';
 import { AccountingAccountsRegistry } from './registry/accounting-accounts.registry';
 import { AccountingJournalLinesRegistry } from './registry/accounting-journal-lines.registry';
@@ -136,6 +137,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     EffectiveTieOutConfigRegistry,
     ImportTieOutEngine,
     CutoverRepository,
+    CutoverWizardService,
     PackageCommitService,
     PackageImportService,
     PackageImportProcessor,
@@ -226,6 +228,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     EffectiveTieOutConfigRegistry,
     ImportTieOutEngine,
     CutoverRepository,
+    CutoverWizardService,
   ],
 })
 export class DataImportModule {}

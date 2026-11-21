@@ -5,9 +5,11 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
+  Optional,
   Param,
   ParseUUIDPipe,
   ParseIntPipe,
@@ -64,6 +66,16 @@ import {
 } from '../dto/package-response.dto';
 import { PreviewResponseDto } from '../dto/preview-response.dto';
 import {
+  CutoverGoLiveRequestDto,
+  CutoverGoLiveResponseDto,
+  CutoverPreflightRequestDto,
+  CutoverPreflightResponseDto,
+  CutoverStatusResponseDto,
+  VerifyCutoverLockDto,
+  VerifyCutoverLockResponseDto,
+} from '../dto/cutover-wizard.dto';
+import { CutoverWizardService } from '../services/cutover-wizard.service';
+import {
   DataImportService,
   UploadedFilePayload,
 } from '../services/data-import.service';
@@ -102,6 +114,7 @@ export class DataImportController {
     private readonly packageImportService: PackageImportService,
     private readonly chunkedUpload: ChunkedUploadService,
     private readonly sepidarPersistenceService: SepidarPersistenceService,
+    @Optional() private readonly cutoverWizardService?: CutoverWizardService,
   ) {}
 
   @Post('sepidar/persist')
@@ -418,6 +431,74 @@ export class DataImportController {
     @Body() dto: PackageFromUploadsDto,
   ): Promise<PackageCreatedDto> {
     return this.packageImportService.createFromUploads(this.tenantIdOf(request), dto.uploadIds);
+  }
+
+  @Get('cutover/status')
+  @RequireAction(AccessAction.READ)
+  @ApiOperation({ summary: 'وضعیت فعلی کات‌اوور و قفل دوره پیش از انتقال' })
+  @ApiResponse({ status: HttpStatus.OK, type: CutoverStatusResponseDto })
+  async getCutoverStatus(
+    @Req() request: AuthenticatedRequest,
+  ): Promise<CutoverStatusResponseDto> {
+    if (!this.cutoverWizardService) {
+      throw new BadRequestException('سرویس کات‌اوور فعال نیست.');
+    }
+    return this.cutoverWizardService.getStatus(this.tenantIdOf(request));
+  }
+
+  @Post('cutover/preflight')
+  @HttpCode(HttpStatus.OK)
+  @RequireAction(AccessAction.READ)
+  @ApiOperation({ summary: 'ارزیابی پیش‌پرواز مغایرت‌گیری کنترل‌های کات‌اوور (بدون ثبت)' })
+  @ApiResponse({ status: HttpStatus.OK, type: CutoverPreflightResponseDto })
+  evaluateCutoverPreflight(
+    @Body() dto: CutoverPreflightRequestDto,
+  ): CutoverPreflightResponseDto {
+    if (!this.cutoverWizardService) {
+      throw new BadRequestException('سرویس کات‌اوور فعال نیست.');
+    }
+    return this.cutoverWizardService.evaluatePreflight(dto);
+  }
+
+  @Post('cutover/go-live')
+  @HttpCode(HttpStatus.OK)
+  @RequireAction(AccessAction.ADMIN)
+  @ApiOperation({ summary: 'اجرای اتمیک کات‌اوور: سند افتتاحیه + قفل دوره پیش از کات‌اوور (فقط مدیر/مالک)' })
+  @ApiResponse({ status: HttpStatus.OK, type: CutoverGoLiveResponseDto })
+  async executeCutoverGoLive(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: CutoverGoLiveRequestDto,
+  ): Promise<CutoverGoLiveResponseDto> {
+    if (!this.cutoverWizardService) {
+      throw new BadRequestException('سرویس کات‌اوور فعال نیست.');
+    }
+    const actorId = request.user?.sub?.trim();
+    if (!actorId) {
+      throw new ForbiddenException('شناسه کاربر معتبر برای اجرای کات‌اوور الزامی است.');
+    }
+    return this.cutoverWizardService.executeGoLive(
+      this.tenantIdOf(request),
+      actorId,
+      dto,
+    );
+  }
+
+  @Post('cutover/verify-lock')
+  @HttpCode(HttpStatus.OK)
+  @RequireAction(AccessAction.READ)
+  @ApiOperation({ summary: 'بررسی فقط-خواندنی قفل دوره پیش از کات‌اوور برای یک تاریخ معین (بدون ثبت سند)' })
+  @ApiResponse({ status: HttpStatus.OK, type: VerifyCutoverLockResponseDto })
+  async verifyCutoverLock(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: VerifyCutoverLockDto,
+  ): Promise<VerifyCutoverLockResponseDto> {
+    if (!this.cutoverWizardService) {
+      throw new BadRequestException('سرویس کات‌اوور فعال نیست.');
+    }
+    return this.cutoverWizardService.verifyPreCutoverLock(
+      this.tenantIdOf(request),
+      dto,
+    );
   }
 
   /** شناسه مستأجر فقط از پیلود JWT تأییدشده. */
