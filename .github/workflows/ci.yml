@@ -16,6 +16,17 @@ on:
   # rule. agent-task.yml dispatches this workflow directly on the new branch via
   # `gh workflow run ci.yml --ref <branch>` so agent PRs still get a real CI run.
   workflow_dispatch:
+    inputs:
+      runner:
+        # #949: fall back to GitHub-hosted runners when the box is offline (or force the box).
+        description: "Runner: default (repo variable CI_RUNNER_MODE), auto, hosted or box"
+        type: choice
+        options: [default, auto, hosted, box]
+        default: default
+  # #949: nightly full run on main (every change filter on). It replaces the merge queue's
+  # pre-merge run once the repo is private on GitHub Free, where merge queues do not exist.
+  schedule:
+    - cron: "40 21 * * *"
   # GitHub merge queue: the queue creates a temporary gh-readonly-queue/* branch and
   # requests checks on it. Required status checks must be reported for this event too.
   merge_group:
@@ -36,26 +47,61 @@ env:
   TRIVY_VERSION: "0.75.0"
 
 jobs:
+  # #949 / #1024: choose GitHub-hosted or the box (roxira-ci) per slot. Logic and rules live in
+  # scripts/ci/pick_runner.sh (tested in src/ops/test_pick_runner.py). Fork pull requests always
+  # get hosted runners. continue-on-error plus the `|| '"ubuntu-latest"'` fallback in every
+  # runs-on below mean a broken picker can never skip (and so silently pass) a required check.
+  pick-runner:
+    name: Pick runner
+    runs-on: ubuntu-slim
+    timeout-minutes: 3
+    continue-on-error: true
+    outputs:
+      light: ${{ steps.pick.outputs.light }}
+      docker: ${{ steps.pick.outputs.docker }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          sparse-checkout: scripts/ci/pick_runner.sh
+          sparse-checkout-cone-mode: false
+      - id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
+          INPUT: ${{ inputs.runner }}
+          MODE: ${{ vars.CI_RUNNER_MODE }}
+          HEARTBEAT: ${{ vars.CI_BOX_HEARTBEAT }}
+          BOX_LIGHT: ${{ vars.CI_BOX_LABELS_LIGHT }}
+          BOX_DOCKER: ${{ vars.CI_BOX_LABELS_DOCKER }}
+          HOSTED: ${{ vars.CI_HOSTED_RUNNER }}
+        run: |
+          bash scripts/ci/pick_runner.sh | tee -a "$GITHUB_OUTPUT"
+          grep '^where=' "$GITHUB_OUTPUT" | tail -1 | sed 's/^where=/Runner: /' >> "$GITHUB_STEP_SUMMARY"
+
   changes:
     name: Detect changes
-    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    needs: pick-runner
+    runs-on: ${{ fromJSON(needs.pick-runner.outputs.light || '"ubuntu-latest"') }}
     timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: read
     outputs:
-      python: ${{ steps.filter.outputs.python }}
-      compose: ${{ steps.filter.outputs.compose }}
-      frontend: ${{ steps.filter.outputs.frontend }}
-      backend: ${{ steps.filter.outputs.backend }}
-      projects: ${{ steps.filter.outputs.projects }}
-      templates: ${{ steps.filter.outputs.templates }}
-      e2e: ${{ steps.filter.outputs.e2e }}
-      migrations: ${{ steps.filter.outputs.migrations }}
+      python: ${{ github.event_name == 'schedule' && 'true' || steps.filter.outputs.python }}
+      compose: ${{ github.event_name == 'schedule' && 'true' || steps.filter.outputs.compose }}
+      frontend: ${{ github.event_name == 'schedule' && 'true' || steps.filter.outputs.frontend }}
+      backend: ${{ github.event_name == 'schedule' && 'true' || steps.filter.outputs.backend }}
+      projects: ${{ github.event_name == 'schedule' && 'true' || steps.filter.outputs.projects }}
+      templates: ${{ github.event_name == 'schedule' && 'true' || steps.filter.outputs.templates }}
+      e2e: ${{ github.event_name == 'schedule' && 'true' || steps.filter.outputs.e2e }}
+      migrations: ${{ github.event_name == 'schedule' && 'true' || steps.filter.outputs.migrations }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
         id: filter
+        # The nightly run has no diff base; every filter is forced on in `outputs` above.
+        if: github.event_name != 'schedule'
         with:
           # workflow_dispatch (used to run CI on agent-task.yml's PR branches, since a
           # PR opened with GITHUB_TOKEN doesn't trigger pull_request events) has no
@@ -105,7 +151,8 @@ jobs:
 
   gitleaks:
     name: Secret scan (new commits only)
-    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    needs: pick-runner
+    runs-on: ${{ fromJSON(needs.pick-runner.outputs.light || '"ubuntu-latest"') }}
     timeout-minutes: 10
     steps:
       # Blobless clone: full commit graph, blobs fetched lazily only for the scanned range.
@@ -154,7 +201,8 @@ jobs:
 
   trivy-fs:
     name: Trivy filesystem scan (report-only)
-    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    needs: pick-runner
+    runs-on: ${{ fromJSON(needs.pick-runner.outputs.light || '"ubuntu-latest"') }}
     timeout-minutes: 15
     continue-on-error: true
     steps:
@@ -162,10 +210,14 @@ jobs:
       - name: Install Trivy
         run: |
           curl -sSfL --retry 5 --retry-all-errors --retry-delay 10 "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
-            | tar -xz -C /usr/local/bin trivy
-          trivy --version
+            | tar -xz -C "$RUNNER_TEMP" trivy
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/trivy" --version
       - name: Scan filesystem
-        run: trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --exit-code 0 --format table . > "$RUNNER_TEMP/trivy-fs.txt"
+        # mirror.gcr.io (Trivy's default DB source) is blocked from the CI box network; ghcr.io works everywhere.
+        run: |
+          trivy fs --db-repository ghcr.io/aquasecurity/trivy-db:2 --java-db-repository ghcr.io/aquasecurity/trivy-java-db:1 \
+            --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --exit-code 0 --format table . > "$RUNNER_TEMP/trivy-fs.txt"
       - name: Upload Trivy report
         if: always()
         continue-on-error: true
@@ -176,10 +228,13 @@ jobs:
           if-no-files-found: warn
 
   semgrep:
-    name: Semgrep CE (report-only)
-    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
-    timeout-minutes: 10
-    continue-on-error: true
+    # #949 T228: required check (replaces CodeQL once the repo is private). Custom rules fail the
+    # PR only on findings the PR adds (--baseline-commit = merge base), so the 28 existing
+    # findings never block. p/default on changed files stays report-only until triaged.
+    name: Semgrep CE (new findings)
+    needs: pick-runner
+    runs-on: ${{ fromJSON(needs.pick-runner.outputs.light || '"ubuntu-latest"') }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -190,12 +245,24 @@ jobs:
           cache: pip
           cache-dependency-path: .github/workflows/ci.yml
       - run: pip install "semgrep==${SEMGREP_VERSION}"
-      - name: Run custom rules
-        run: semgrep --config .semgrep/roxira.yml --metrics=off output_apps src scripts
-      # Replaces CodeQL / GitHub code scanning once the repo is private. Only files this PR
-      # touches; report-only until the findings are triaged (flip by adding --error).
-      - name: Semgrep p/default on changed files
+      - name: Custom rules (blocking on new findings in a PR)
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+        run: |
+          if [ -n "$BASE_SHA" ]; then
+            base="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+            echo "blocking on findings new since $base"
+            semgrep scan --config .semgrep/roxira.yml --metrics=off --disable-version-check \
+              --baseline-commit "$base" --error output_apps src scripts
+          else
+            echo "no diff base ($EVENT): full report, not blocking"
+            semgrep scan --config .semgrep/roxira.yml --metrics=off --disable-version-check output_apps src scripts
+          fi
+      - name: Semgrep p/default on changed files (report-only)
         if: github.event_name == 'pull_request'
+        continue-on-error: true
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -211,7 +278,8 @@ jobs:
   osv-scanner:
     name: OSV-Scanner (report-only)
     if: github.event_name == 'pull_request'
-    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    needs: pick-runner
+    runs-on: ${{ fromJSON(needs.pick-runner.outputs.light || '"ubuntu-latest"') }}
     timeout-minutes: 10
     continue-on-error: true
     steps:
@@ -232,7 +300,8 @@ jobs:
   agent-guards:
     name: Agent guards (money, tenant scope, model ids, secrets)
     if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
-    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    needs: pick-runner
+    runs-on: ${{ fromJSON(needs.pick-runner.outputs.light || '"ubuntu-latest"') }}
     timeout-minutes: 5
     permissions:
       contents: read
@@ -250,9 +319,9 @@ jobs:
 
   ruff:
     name: Ruff (non-blocking)
-    needs: changes
+    needs: [pick-runner, changes]
     if: needs.changes.outputs.python == 'true'
-    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ fromJSON(needs.pick-runner.outputs.light || '"ubuntu-latest"') }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -305,7 +374,8 @@ jobs:
     # Always runs (no change filter), like Frontend gate, so it can be a required
     # check on every PR. This is the F821/F822/F823 guard for issue #122: a deleted
     # function whose call sites remained must fail instead of shipping.
-    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    needs: pick-runner
+    runs-on: ${{ fromJSON(needs.pick-runner.outputs.light || '"ubuntu-latest"') }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -323,7 +393,8 @@ jobs:
 
   system-inventory:
     name: System inventory up to date
-    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    needs: pick-runner
+    runs-on: ${{ fromJSON(needs.pick-runner.outputs.light || '"ubuntu-latest"') }}
     timeout-minutes: 5
     permissions:
       contents: read
@@ -341,9 +412,9 @@ jobs:
 
   pytest:
     name: Pytest (unit)
-    needs: changes
+    needs: [pick-runner, changes]
     if: needs.changes.outputs.python == 'true'
-    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ fromJSON(needs.pick-runner.outputs.light || '"ubuntu-latest"') }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -360,9 +431,9 @@ jobs:
 
   template-check:
     name: Generated template check (report-only)
-    needs: changes
+    needs: [pick-runner, changes]
     if: needs.changes.outputs.projects == 'true'
-    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ fromJSON(needs.pick-runner.outputs.light || '"ubuntu-latest"') }}
     timeout-minutes: 5
     continue-on-error: true
     steps:
@@ -374,9 +445,9 @@ jobs:
 
   template-build:
     name: Static RTL template build (report-only)
-    needs: changes
+    needs: [pick-runner, changes]
     if: needs.changes.outputs.templates == 'true'
-    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ fromJSON(needs.pick-runner.outputs.docker || '"ubuntu-latest"') }}
     timeout-minutes: 10
     continue-on-error: true
     defaults:
@@ -420,9 +491,9 @@ jobs:
 
   compose:
     name: Compose config
-    needs: changes
+    needs: [pick-runner, changes]
     if: needs.changes.outputs.compose == 'true'
-    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ fromJSON(needs.pick-runner.outputs.docker || '"ubuntu-latest"') }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -442,9 +513,9 @@ jobs:
 
   migration-lint:
     name: Migration ids + Squawk (new migrations only)
-    needs: changes
+    needs: [pick-runner, changes]
     if: needs.changes.outputs.migrations == 'true' && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
-    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ fromJSON(needs.pick-runner.outputs.light || '"ubuntu-latest"') }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -467,9 +538,9 @@ jobs:
 
   frontend:
     name: Frontend lint + build
-    needs: changes
+    needs: [pick-runner, changes]
     if: needs.changes.outputs.frontend == 'true'
-    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ fromJSON(needs.pick-runner.outputs.docker || '"ubuntu-latest"') }}
     timeout-minutes: 15
     defaults:
       run:
@@ -504,9 +575,9 @@ jobs:
 
   backend:
     name: Backend (tsc + jest + Postgres specs)
-    needs: changes
+    needs: [pick-runner, changes]
     if: needs.changes.outputs.backend == 'true'
-    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ fromJSON(needs.pick-runner.outputs.docker || '"ubuntu-latest"') }}
     timeout-minutes: 15
     defaults:
       run:
@@ -534,6 +605,17 @@ jobs:
       DATABASE_NAME: rxfresh
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: psql client on the CI box (shim to the Postgres service container)
+        # GitHub-hosted images ship psql; the box host may not (08_root_ci_pool.sh installs it).
+        if: runner.environment == 'self-hosted'
+        env:
+          PG_CTR: ${{ job.services.postgres.id }}
+        run: |
+          if command -v psql >/dev/null 2>&1; then psql --version; exit 0; fi
+          mkdir -p "$RUNNER_TEMP/pgbin"
+          printf '#!/bin/sh\nexec docker exec -i -e PGHOST -e PGPORT -e PGUSER -e PGDATABASE -e PGPASSWORD %s psql "$@"\n' "$PG_CTR" > "$RUNNER_TEMP/pgbin/psql"
+          chmod +x "$RUNNER_TEMP/pgbin/psql"
+          echo "$RUNNER_TEMP/pgbin" >> "$GITHUB_PATH"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -571,9 +653,9 @@ jobs:
     # T202: TypeScript 7 (native compiler) type-check, installed as the alias `typescript7` so the
     # build and ts-jest keep TypeScript 5.9. REPORT-ONLY: continue-on-error, not a required check.
     name: TypeScript 7 type-check (report-only)
-    needs: changes
+    needs: [pick-runner, changes]
     if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true'
-    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ fromJSON(needs.pick-runner.outputs.docker || '"ubuntu-latest"') }}
     timeout-minutes: 15
     continue-on-error: true
     strategy:
@@ -612,9 +694,9 @@ jobs:
     # Issue #116 / docs/testing/M1_GATE.md. REPORT-ONLY: continue-on-error, and it is not a required check.
     # Make it required (branch protection) only after the laptop developer says the gate is stable.
     name: M1 gate (Playwright)
-    needs: changes
+    needs: [pick-runner, changes]
     if: needs.changes.outputs.e2e == 'true'
-    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ fromJSON(needs.pick-runner.outputs.docker || '"ubuntu-latest"') }}
     timeout-minutes: 30
     continue-on-error: true
     services:
@@ -633,7 +715,8 @@ jobs:
       redis:
         image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/docker/library' }}/redis:7
         ports:
-          - 6379:6379
+          # Host port 16379: 6379 is taken on the CI box (phone stack); same on hosted runners.
+          - 16379:6379
     env:
       DATABASE_HOST: 127.0.0.1
       DATABASE_PORT: "5432"
@@ -642,7 +725,7 @@ jobs:
       DATABASE_PASSWORD: ci-trust-auth
       DATABASE_NAME: rxfresh
       REDIS_HOST: 127.0.0.1
-      REDIS_PORT: "6379"
+      REDIS_PORT: "16379"
       # Throwaway per-run secret for this job's own backend; never a real key.
       JWT_SECRET: ci-m1-gate-throwaway-secret-0123456789abcdef
       JWT_SECRET_KEY: ci-m1-gate-throwaway-secret-0123456789abcdef
@@ -651,6 +734,17 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: psql client on the CI box (shim to the Postgres service container)
+        # GitHub-hosted images ship psql; the box host may not (08_root_ci_pool.sh installs it).
+        if: runner.environment == 'self-hosted'
+        env:
+          PG_CTR: ${{ job.services.postgres.id }}
+        run: |
+          if command -v psql >/dev/null 2>&1; then psql --version; exit 0; fi
+          mkdir -p "$RUNNER_TEMP/pgbin"
+          printf '#!/bin/sh\nexec docker exec -i -e PGHOST -e PGPORT -e PGUSER -e PGDATABASE -e PGPASSWORD %s psql "$@"\n' "$PG_CTR" > "$RUNNER_TEMP/pgbin/psql"
+          chmod +x "$RUNNER_TEMP/pgbin/psql"
+          echo "$RUNNER_TEMP/pgbin" >> "$GITHUB_PATH"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -697,12 +791,18 @@ jobs:
           NODE_PATH="$PWD/node_modules" node ../../scripts/ci/mint_e2e_session.js "$RUNNER_TEMP/session.m1-accountant.json"
       - name: Install Playwright (chromium)
         working-directory: e2e
+        env:
+          # The browser CDN is blocked from the CI box network; the box hub seeds this dir through its
+          # proxy (scripts/ops/ci_box/jit_pool/seed_playwright.sh). Empty on hosted runners.
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.environment == 'self-hosted' && (vars.CI_BOX_PLAYWRIGHT_PATH || '/srv/data/ci-jit/ms-playwright') || '' }}
         run: |
           npm ci
-          npx playwright install --with-deps chromium
+          npx playwright install ${{ runner.environment == 'github-hosted' && '--with-deps ' || '' }}chromium \
+            || { [ -z "$PLAYWRIGHT_BROWSERS_PATH" ] || echo "::error::Playwright browsers missing on the box: run scripts/ops/ci_box/jit_pool/seed_playwright.sh as mahanfilms"; exit 1; }
       - name: Run the M1 gate
         working-directory: e2e
         env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.environment == 'self-hosted' && (vars.CI_BOX_PLAYWRIGHT_PATH || '/srv/data/ci-jit/ms-playwright') || '' }}
           E2E_BASE_URL: http://127.0.0.1:3001
           APP_E2E_SESSION_FILE_M1: ${{ runner.temp }}/session.m1.json
           APP_E2E_SESSION_FILE_ACCOUNTANT: ${{ runner.temp }}/session.m1-accountant.json
@@ -723,9 +823,9 @@ jobs:
 
   smoke-axe-gate:
     name: Smoke + axe gate (Playwright)
-    needs: changes
+    needs: [pick-runner, changes]
     if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
-    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ fromJSON(needs.pick-runner.outputs.docker || '"ubuntu-latest"') }}
     timeout-minutes: 15
     permissions:
       contents: read
@@ -751,12 +851,18 @@ jobs:
           echo "::error::frontend did not start"; tail -40 "$RUNNER_TEMP/frontend-smoke.log"; exit 1
       - name: Install Playwright (chromium)
         working-directory: e2e
+        env:
+          # The browser CDN is blocked from the CI box network; the box hub seeds this dir through its
+          # proxy (scripts/ops/ci_box/jit_pool/seed_playwright.sh). Empty on hosted runners.
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.environment == 'self-hosted' && (vars.CI_BOX_PLAYWRIGHT_PATH || '/srv/data/ci-jit/ms-playwright') || '' }}
         run: |
           npm ci
-          npx playwright install --with-deps chromium
+          npx playwright install ${{ runner.environment == 'github-hosted' && '--with-deps ' || '' }}chromium \
+            || { [ -z "$PLAYWRIGHT_BROWSERS_PATH" ] || echo "::error::Playwright browsers missing on the box: run scripts/ops/ci_box/jit_pool/seed_playwright.sh as mahanfilms"; exit 1; }
       - name: Run Playwright smoke + axe gate
         working-directory: e2e
         env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.environment == 'self-hosted' && (vars.CI_BOX_PLAYWRIGHT_PATH || '/srv/data/ci-jit/ms-playwright') || '' }}
           E2E_BASE_URL: http://127.0.0.1:3001
           CI: "true"
         run: npx playwright test tests/smoke/ --project=chromium --reporter=list,html
@@ -778,9 +884,9 @@ jobs:
     # changes, where the `frontend` job is skipped. It needs both the change
     # detector (to tell "skipped because nothing changed" from a real skip) and
     # the frontend job itself.
-    needs: [changes, frontend]
+    needs: [pick-runner, changes, frontend]
     if: always()
-    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ fromJSON(needs.pick-runner.outputs.light || '"ubuntu-latest"') }}
     timeout-minutes: 5
     steps:
       - name: Verify frontend result

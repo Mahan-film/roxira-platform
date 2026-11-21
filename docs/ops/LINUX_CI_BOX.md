@@ -10,12 +10,40 @@ Owner decision 2026-11-17: the HP laptop leaves Windows and becomes a headless L
 - **Network:** GitHub, npm, PyPI, nodejs.org, ghcr.io, quay.io and public.ecr.aws work. Docker Hub (`registry-1.docker.io`), `download.docker.com` and `mirror.gcr.io` are blocked from this network (HTTP 403). Docker therefore comes from Ubuntu's own packages (`docker.io` 29.1, `docker-compose-v2` 2.40), and CI images move to `public.ecr.aws/docker/library/*` (#956).
 - **Proxy:** Xray is installed with the owner's config (tested 2026-11-18: Docker Hub reachable through it) and is **always on** (owner decision 2026-11-19): all agent traffic on this box goes through it. Install a new config with `python3 scripts/ops/ci_box/v2ray2xray.py <link-file> | ssh mahan@roxira-ci 'sudo box-proxy install'` (the link file stays on the Mac, mode 600, never in git); `sudo box-proxy on|off|status|test` starts it and routes system-Docker pulls through `http://127.0.0.1:10809` (SOCKS on 10808). Do not turn it off. Git on the box uses HTTPS through the proxy (`gh config set git_protocol https && gh auth setup-git`); SSH egress to GitHub is blocked for `mahanfilms`.
 - **Data disk:** the 1 TB HDD was wiped (owner approved) and is mounted at `/srv/data` (ext4, label `data`, 907 GB): `backups/`, `restore-drill/`, `qdrant-snapshots/`, `shared/`, `ci-artifacts/` and `ci-cache/` (runner), `phone/`.
-- **CI runner:** GitHub runner 2.338 as user `runner`, **rootless Docker** (`DOCKER_HOST=unix:///run/user/1001/docker.sock`, not in the system `docker` group), persistent user service `actions-runner.service` (linger on), work dir `/srv/data/ci-cache/_work`, labels `self-hosted, Linux, X64, hp, linux-box`. No workflow uses it yet; #949 moves jobs over with the fork guard. Ephemeral mode was dropped: it would need a long-lived registration credential on the box.
+- **CI runner:** GitHub runner 2.338 as user `runner`, **rootless Docker** (`DOCKER_HOST=unix:///run/user/1001/docker.sock`, not in the system `docker` group), persistent user service `actions-runner.service` (linger on), work dir `/srv/data/ci-cache/_work`, labels `self-hosted, Linux, X64, hp, linux-box`. `ci.yml` reaches it through the runner picker below (#949); the JIT pool (#1024) replaces it after two green runs. Ephemeral mode was dropped at first because it needed a long-lived registration credential on the box; JIT configs (#1024) avoid that.
 - **Firewall:** ufw on, SSH only from 192.168.0.0/16. Automatic security updates on.
 - **Box hub (Claude Code as `mahanfilms`):** no general sudo. `scripts/ops/ci_box/04_root_box_status.sh` (run once as root) installs a root-owned read-only `/usr/local/bin/box-status` (xray, docker, runner user service, disk, temperature, pending updates) and `/etc/sudoers.d/box-hub`, which allows only `sudo box-status`, `sudo box-proxy status` and `sudo box-proxy test`. The phone stack gets the same pattern later (a root-owned `phone-stack up|down|status|logs` wrapper, after #959).
 - **Hub access:** Claude on the Mac cannot open LAN connections itself (macOS Local Network permission), so the hub runs SSH through the app's Terminal tab and reads results from files.
 
 Setup scripts (no secrets): `scripts/ops/ci_box/` — root parts 01–03 (run with `sudo setsid bash … </dev/null >log 2>&1`; a piped `sudo … | tee` under `ssh -t` stops apt on Ubuntu 26.04), runner parts 10–11 as user `runner`.
+
+## Runner selection (#949 T228, #1024 R20-8)
+`ci.yml` starts with a `Pick runner` job on GitHub-hosted `ubuntu-slim`. It runs `scripts/ci/pick_runner.sh` (tests: `src/ops/test_pick_runner.py`) and gives every other job one of two slots:
+
+| Slot | Jobs | Box labels (repo variable, default) |
+|---|---|---|
+| `light` | detect changes, gitleaks, Semgrep, OSV, Trivy, agent guards, ruff, undefined names, inventory, pytest, template check, migration lint, frontend gate | `CI_BOX_LABELS_LIGHT`, `["self-hosted","hp"]` |
+| `docker` | compose, frontend build, backend + Postgres, TypeScript 7, template build, M1 gate, smoke + axe | `CI_BOX_LABELS_DOCKER`, `["self-hosted","hp"]` |
+
+Repository variables (set with `gh variable set NAME -b VALUE -R Mahan-film/roxira-platform`):
+
+| Variable | Values | Effect |
+|---|---|---|
+| `CI_RUNNER_MODE` | `hosted` (unset = hosted), `box`, `auto` | `hosted`: nothing changes. `box`: trusted events use the box labels and queue while it is busy or offline. `auto`: per slot, the box when `CI_BOX_HEARTBEAT` is under 5 min old and the slot has an online runner, else hosted. |
+| `CI_BOX_HEARTBEAT` | `<epoch> <light-online> <docker-online>` | written every ~2 min by the box (`jit_pool.py heartbeat`, #1024). |
+| `CI_BOX_LABELS_LIGHT` / `CI_BOX_LABELS_DOCKER` | JSON label array that contains `"self-hosted"` | after #1024: `["self-hosted","jit","slot-light"]` and `["self-hosted","jit","slot-docker"]`. |
+| `CI_HOSTED_RUNNER` | JSON string, default `"ubuntu-latest"` | the hosted fallback. |
+
+Manual fallback: `gh workflow run ci.yml -R Mahan-film/roxira-platform --ref <branch> -f runner=hosted` (or `-f runner=box`).
+
+Rules the picker enforces:
+- Only `push`, `schedule`, `workflow_dispatch`, `merge_group` and `pull_request` from a branch of this repo can reach the box. A fork pull request always gets hosted runners. A fork PR runs its own copy of the workflow, so the real barrier is the repo setting "require approval for all external contributors" (on, checked 2026-11-21); after the flip only collaborators can open PRs.
+- A busy box runner still counts as online: the job queues. Falling back on "busy" would spend the private-repo allowance on every overlap.
+- The picker is `continue-on-error` and every `runs-on` ends in `|| '"ubuntu-latest"'`, so a broken picker never skips a required check (the merge gate treats `skipped` as green).
+- Only `ci.yml` uses the picker. The other workflows keep `vars.CI_RUNS_ON || 'ubuntu-latest'`. **Never set `CI_RUNS_ON`**: it would send `deploy-prod.yml` (production key) and the `issues`, `issue_comment` and `pull_request_target` workflows to the box.
+- Playwright installs system packages (`--with-deps`) only on hosted runners; the box gets them from the root script in #1024. Trivy installs into `$RUNNER_TEMP`, so no job needs root.
+- `ci.yml` also runs nightly at 21:40 UTC with every change filter on; after the flip this replaces the merge queue's pre-merge run. `merge_group` stays until the flip; it never fires on a private Free repo.
+- Semgrep CE is now a blocking check named `Semgrep CE (new findings)`: custom rules fail a PR only on findings it adds (`--baseline-commit`); `p/default` stays report-only.
 
 ## Hardware and roles
 | Part | Value | Use |
