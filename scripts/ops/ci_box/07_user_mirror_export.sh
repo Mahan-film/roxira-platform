@@ -65,6 +65,7 @@ put "$LIB/box-mirror.sh" 755 <<'JOB'
 #!/bin/bash
 # Nightly: git clone --mirror on first run, git remote update --prune afterwards.
 set -euo pipefail
+REPO="${REPO:-Mahan-film/roxira-platform}"   # the units set no REPO; default to the canonical repo
 DEST="${MIRROR_DIR:-/srv/data/mirror/roxira-platform.git}"
 STATE="${XDG_STATE_HOME:-$HOME/.local/state}/roxira-box"
 mkdir -p "$STATE" "$(dirname "$DEST")"
@@ -93,6 +94,7 @@ put "$LIB/box-github-export.sh" 755 <<'JOB'
 # Weekly: issues (incl. PR stubs), pulls, comments, review comments, labels, milestones as JSON.
 # Pages are flattened into one JSON array per file. Keeps the newest 8 dated directories.
 set -euo pipefail
+REPO="${REPO:-Mahan-film/roxira-platform}"   # the units set no REPO; default to the canonical repo
 ROOT="${EXPORT_DIR:-/srv/data/github-export}"
 KEEP=8
 STATE="${XDG_STATE_HOME:-$HOME/.local/state}/roxira-box"
