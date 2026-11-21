@@ -26,12 +26,40 @@ if [[ -e .deploy-freeze ]]; then
   exit 0
 fi
 
-git fetch -q origin main
+if [[ -n ${PULL_DEPLOY_SSH_KEY:-} ]]; then
+  export GIT_SSH_COMMAND="ssh -i ${PULL_DEPLOY_SSH_KEY} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+fi
+
+if [[ ${PULL_DEPLOY_SIGNED_TAG_GUARD:-0} == "1" ]]; then
+  git fetch -q --tags origin main
+else
+  git fetch -q origin main
+fi
 sha=$(git rev-parse origin/main)
 head_sha=$(git rev-parse HEAD)
 
+if [[ ${PULL_DEPLOY_SIGNED_TAG_GUARD:-0} == "1" ]]; then
+  needs_signed_tag=0
+  if [[ ${PULL_DEPLOY_REQUIRE_SIGNED_TAG:-0} == "1" ]]; then
+    needs_signed_tag=1
+  elif git diff --name-only "$head_sha" "$sha" | grep -qE '^(output_apps/enterprise_hub/migrations/|docker-compose.*\.ya?ml$|scripts/ops/|\.github/workflows/)'; then
+    needs_signed_tag=1
+  fi
+
+  if (( needs_signed_tag )); then
+    guard_script="${SIGNED_TAG_GUARD_SCRIPT:-$(dirname "$0")/signed_tag_guard.sh}"
+    if ! tag_out=$("$guard_script"); then
+      log "pull deploy: signed-tag guard failed (no valid SSH-signed deploy/* tag); refusing deploy"
+      exit 1
+    fi
+    signed_tag="${tag_out%% *}"
+    sha="${tag_out#* }"
+    log "pull deploy: signed-tag guard selected $signed_tag ($sha)"
+  fi
+fi
+
 if [[ $sha == "$head_sha" ]]; then
-  log "pull deploy: origin/main is already deployed ($sha)"
+  log "pull deploy: target is already deployed ($sha)"
   exit 0
 fi
 
