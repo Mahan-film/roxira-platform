@@ -64,16 +64,6 @@ import {
 } from '../dto/package-response.dto';
 import { PreviewResponseDto } from '../dto/preview-response.dto';
 import {
-  CutoverGoLiveRequestDto,
-  CutoverGoLiveResponseDto,
-  CutoverPreflightRequestDto,
-  CutoverPreflightResponseDto,
-  CutoverStatusResponseDto,
-  VerifyCutoverLockDto,
-  VerifyCutoverLockResponseDto,
-} from '../dto/cutover-wizard.dto';
-import { CutoverWizardService } from '../services/cutover-wizard.service';
-import {
   DataImportService,
   UploadedFilePayload,
 } from '../services/data-import.service';
@@ -112,7 +102,6 @@ export class DataImportController {
     private readonly packageImportService: PackageImportService,
     private readonly chunkedUpload: ChunkedUploadService,
     private readonly sepidarPersistenceService: SepidarPersistenceService,
-    private readonly cutoverWizardService: CutoverWizardService,
   ) {}
 
   @Post('sepidar/persist')
@@ -429,53 +418,6 @@ export class DataImportController {
     @Body() dto: PackageFromUploadsDto,
   ): Promise<PackageCreatedDto> {
     return this.packageImportService.createFromUploads(this.tenantIdOf(request), dto.uploadIds);
-  }
-
-  @Post('cutover/preflight')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'بررسی پیش‌پرواز کات‌اوور و تطبیق‌های تراز (TB, AR, AP, Stock, Bank)' })
-  @ApiResponse({ status: HttpStatus.OK, type: CutoverPreflightResponseDto })
-  @RequireAction(AccessAction.CREATE)
-  async evaluateCutoverPreflight(
-    @Req() request: AuthenticatedRequest,
-    @Body() dto: CutoverPreflightRequestDto,
-  ): Promise<CutoverPreflightResponseDto> {
-    return this.cutoverWizardService.evaluatePreflight(this.tenantIdOf(request), dto);
-  }
-
-  @Post('cutover/go-live')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'اجرای نهایی کات‌اوور، ثبت سند افتتاحیه و قفل دوره ماقبل (Go-Live)' })
-  @ApiResponse({ status: HttpStatus.OK, type: CutoverGoLiveResponseDto })
-  @RequireAction(AccessAction.CREATE)
-  async executeCutoverGoLive(
-    @Req() request: AuthenticatedRequest,
-    @Body() dto: CutoverGoLiveRequestDto,
-  ): Promise<CutoverGoLiveResponseDto> {
-    const actor = request.user?.sub ?? 'cutover-admin';
-    return this.cutoverWizardService.executeGoLive(this.tenantIdOf(request), actor, dto);
-  }
-
-  @Post('cutover/verify-lock')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'راستی‌آزمایی قفل دوره پیش از کات‌اوور با تلاش ثبت سند' })
-  @ApiResponse({ status: HttpStatus.OK, type: VerifyCutoverLockResponseDto })
-  @RequireAction(AccessAction.CREATE)
-  async verifyCutoverLock(
-    @Req() request: AuthenticatedRequest,
-    @Body() dto: VerifyCutoverLockDto,
-  ): Promise<VerifyCutoverLockResponseDto> {
-    return this.cutoverWizardService.verifyPeriodLockPostingAttempt(this.tenantIdOf(request), dto);
-  }
-
-  @Get('cutover/status')
-  @ApiOperation({ summary: 'دریافت وضعیت فعلی کات‌اوور مستأجر' })
-  @ApiResponse({ status: HttpStatus.OK, type: CutoverStatusResponseDto })
-  @RequireAction(AccessAction.READ)
-  async getCutoverStatus(
-    @Req() request: AuthenticatedRequest,
-  ): Promise<CutoverStatusResponseDto> {
-    return this.cutoverWizardService.getCutoverStatus(this.tenantIdOf(request));
   }
 
   /** شناسه مستأجر فقط از پیلود JWT تأییدشده. */
