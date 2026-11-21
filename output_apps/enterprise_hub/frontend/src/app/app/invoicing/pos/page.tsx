@@ -230,12 +230,6 @@ export default function PosCounterPage() {
       .catch(() => undefined);
 
     getMyTenant(controller.signal)
-      .then((tenant) => {
-        if (typeof tenant.defaultVatRate === "number" && Number.isFinite(tenant.defaultVatRate)) {
-          setCachedTenantVatRate(tenantId, tenant.defaultVatRate);
-          setVatRateState({ tenantId, rate: tenant.defaultVatRate });
-        }
-      })
       .catch(() => undefined);
 
     void getQueuedSales(tenantId).then((items) => {
