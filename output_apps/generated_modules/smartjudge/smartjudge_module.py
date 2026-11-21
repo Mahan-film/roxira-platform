@@ -2726,18 +2726,12 @@ async def judge_chat_stream(request: Request, payload: dict = Body(...),
     async def _events():
         yield _chat_fast.sse_frame("meta", {"replay": False})
         sent_delta = False
-        while True:
-            getter = asyncio.create_task(q.get())
-            fin, _ = await asyncio.wait({task, getter}, return_when=asyncio.FIRST_COMPLETED)
-            if getter in fin:
+        async for frame in _chat_fast.iter_sse_queue_with_keepalive(
+            task, q, ping_interval_s=_chat_fast.SSE_PING_INTERVAL_S
+        ):
+            if frame.startswith("event: delta\n"):
                 sent_delta = True
-                yield _chat_fast.sse_frame("delta", {"content": getter.result()})
-                continue
-            getter.cancel()
-            while not q.empty():
-                sent_delta = True
-                yield _chat_fast.sse_frame("delta", {"content": q.get_nowait()})
-            break
+            yield frame
         try:
             result = task.result()
         except Exception as exc:  # noqa: BLE001
@@ -2771,7 +2765,11 @@ async def judge_chat_stream(request: Request, payload: dict = Body(...),
     return StreamingResponse(_events(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
 
-_SSE_HEADERS = {"Cache-Control": "no-store", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
+_SSE_HEADERS = {
+    "Cache-Control": "no-cache, no-transform",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",
+}
 
 
 # W24: this used to default to OPENROUTER_TIERS["VIP"]["primary_model"], which
