@@ -117,9 +117,13 @@ export class AccountingController {
     if (idempotencyKey && idempotencyKey.length > 128) {
       throw new BadRequestException('Idempotency-Key must be at most 128 characters.');
     }
+    const userRole = (request.user as { role?: string })?.role;
+    const userId = (request.user as { sub?: string; id?: string })?.sub ?? (request.user as { sub?: string; id?: string })?.id;
     return this.accountingService.createJournalEntry(
       this.tenantIdOf(request),
       idempotencyKey ? { ...dto, idempotencyKey } : dto,
+      undefined,
+      { actorRole: userRole, actorUserId: userId },
     );
   }
 

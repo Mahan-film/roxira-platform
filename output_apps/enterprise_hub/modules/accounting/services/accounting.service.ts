@@ -267,6 +267,8 @@ export class AccountingService {
       baseTotalDebit: this.toBaseCurrency(asNumber(debitMinor), entryCurrency),
       baseTotalCredit: this.toBaseCurrency(asNumber(creditMinor), entryCurrency),
       lines,
+      tag: entity.tag ?? null,
+      firmUserId: entity.firmUserId ?? null,
     };
   }
 
@@ -688,8 +690,14 @@ export class AccountingService {
     tenantId: string,
     dto: CreateJournalEntryDto,
     manager?: EntityManager,
+    options?: {
+      reversesEntryId?: number;
+      entryType?: JournalEntryType;
+      actorRole?: string;
+      actorUserId?: string;
+    },
   ): Promise<JournalEntryResponseDto> {
-    return this.postEntry(tenantId, dto, {}, manager);
+    return this.postEntry(tenantId, dto, options ?? {}, manager);
   }
 
   /** Posts an entry of a fiscal close or an opening; only the close service calls this. */
@@ -849,10 +857,19 @@ export class AccountingService {
   private async postEntry(
     tenantId: string,
     dto: CreateJournalEntryDto,
-    options: { reversesEntryId?: number; entryType?: JournalEntryType },
+    options: {
+      reversesEntryId?: number;
+      entryType?: JournalEntryType;
+      actorRole?: string;
+      actorUserId?: string;
+    },
     manager?: EntityManager,
   ): Promise<JournalEntryResponseDto> {
     await this.ensureDefaultAccounts(tenantId, manager);
+
+    const isPartner = options.actorRole === 'partner_advisor';
+    const tag = dto.tag ?? (isPartner || dto.isAdjustmentPeriod ? 'PARTNER_ADJUSTMENT' : null);
+    const firmUserId = dto.firmUserId ?? (isPartner ? options.actorUserId ?? null : null);
 
     const status = dto.status ?? JournalEntryStatus.POSTED;
     const normalizedLines = dto.lines.map((line) => this.normalizeLine(line, dto.branchId));
@@ -970,6 +987,8 @@ export class AccountingService {
             entryType: options.entryType,
             idempotencyKey,
             idempotencyFingerprint,
+            tag: tag ?? null,
+            firmUserId: firmUserId ?? null,
           },
           lineInputs,
           manager,

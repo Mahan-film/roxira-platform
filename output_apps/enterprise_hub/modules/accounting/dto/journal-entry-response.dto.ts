@@ -136,6 +136,12 @@ export class JournalEntryResponseDto {
   @ApiProperty({ type: [JournalEntryLineResponseDto], description: 'سطرهای سند' })
   lines: JournalEntryLineResponseDto[];
 
+  @ApiPropertyOptional({ description: 'برچسب سند', nullable: true })
+  tag?: string | null;
+
+  @ApiPropertyOptional({ description: 'شناسه کاربر مؤسسه حسابداری', nullable: true })
+  firmUserId?: string | null;
+
   @ApiPropertyOptional({ description: 'هشدار خط‌مشی (مثلاً بودجه)' })
   warning?: string;
 }

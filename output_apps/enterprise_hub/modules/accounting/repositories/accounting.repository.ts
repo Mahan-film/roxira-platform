@@ -426,6 +426,8 @@ export class AccountingRepository {
       entryType?: JournalEntryType;
       idempotencyKey?: string | null;
       idempotencyFingerprint?: string | null;
+      tag?: string | null;
+      firmUserId?: string | null;
     },
     lineInputs: JournalLineInput[],
     outerManager?: EntityManager,
@@ -464,6 +466,8 @@ export class AccountingRepository {
             entryType: header.entryType ?? JournalEntryType.NORMAL,
             idempotencyKey: header.idempotencyKey ?? null,
             idempotencyFingerprint: header.idempotencyFingerprint ?? null,
+            tag: header.tag ?? null,
+            firmUserId: header.firmUserId ?? null,
           })
           .orIgnore()
           .returning('id')

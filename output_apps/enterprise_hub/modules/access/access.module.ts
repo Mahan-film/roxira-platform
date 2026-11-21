@@ -42,6 +42,7 @@ import { CostMaskingService } from './services/cost-masking.service';
 import { CostMaskingInterceptor } from './cost-masking.interceptor';
 import { UserLoginScheduleEntity } from './entities/user-login-schedule.entity';
 import { LoginSchedulesRepository } from './repositories/login-schedules.repository';
+import { AccountantFirmService } from './services/accountant-firm.service';
 
 /**
  * Organisation access control. Sits below AuthModule (Auth imports this one;
@@ -65,12 +66,12 @@ import { LoginSchedulesRepository } from './repositories/login-schedules.reposit
     AccessService, AuditService, LedgerAuditService, MembersService, RolesService, StructureService,
     EntitlementsService, InvitationsService, OrganizationsService,
     LoginSchedulesRepository,
-    LoginWindowService, CostMaskingService,
+    LoginWindowService, CostMaskingService, AccountantFirmService,
     AccessGuard, AuditInterceptor, CostMaskingInterceptor,
   ],
   exports: [
     AccessService, AuditService, LedgerAuditService, MembershipsRepository, OrganizationsService, InvitationsService,
-    EntitlementsService, LoginSchedulesRepository, LoginWindowService, CostMaskingService, AccessGuard, AuditInterceptor, CostMaskingInterceptor,
+    EntitlementsService, LoginSchedulesRepository, LoginWindowService, CostMaskingService, AccountantFirmService, AccessGuard, AuditInterceptor, CostMaskingInterceptor,
   ],
 })
 export class AccessModule {}

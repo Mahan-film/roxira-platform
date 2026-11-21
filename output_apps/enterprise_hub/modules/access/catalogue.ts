@@ -189,6 +189,22 @@ export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
   },
 ];
 
+export const PARTNER_ADVISOR_ROLE = 'partner_advisor';
+
+/** Scoped role for external accounting firm advisors serving multiple tenants (T196 / R16 Test 12). */
+export const PARTNER_ADVISOR_ROLE_DEF: SystemRoleDefinition = {
+  key: PARTNER_ADVISOR_ROLE as unknown as SystemRole,
+  permissions: [
+    ...perms(M.ACCOUNTING, READ, CREATE, POST, EXPORT),
+    ...perms(M.INVOICING, READ),
+    ...perms(M.TAX, READ),
+    ...perms(M.BANKING, READ),
+    ...perms(M.CHEQUES, READ),
+    ...perms(M.ASSISTANT, READ),
+  ],
+  fieldVisibility: { cost: true, margin: true, salary: false },
+};
+
 const ROLE_INDEX = new Map(SYSTEM_ROLES.map((r) => [r.key as string, r]));
 
 export const DEFAULT_FIELD_VISIBILITY: FieldVisibilityMap = Object.freeze({
@@ -197,13 +213,18 @@ export const DEFAULT_FIELD_VISIBILITY: FieldVisibilityMap = Object.freeze({
   salary: false,
 });
 
-export const isSystemRole = (key: string): key is SystemRole => ROLE_INDEX.has(key);
+export const isSystemRole = (key: string): boolean =>
+  key === PARTNER_ADVISOR_ROLE || ROLE_INDEX.has(key);
 
-export const systemRolePermissions = (key: string): readonly Permission[] =>
-  ROLE_INDEX.get(key)?.permissions ?? [];
+export const systemRolePermissions = (key: string): readonly Permission[] => {
+  if (key === PARTNER_ADVISOR_ROLE) return PARTNER_ADVISOR_ROLE_DEF.permissions;
+  return ROLE_INDEX.get(key)?.permissions ?? [];
+};
 
-export const systemRoleFieldVisibility = (key: string): FieldVisibilityMap =>
-  ROLE_INDEX.get(key)?.fieldVisibility ?? DEFAULT_FIELD_VISIBILITY;
+export const systemRoleFieldVisibility = (key: string): FieldVisibilityMap => {
+  if (key === PARTNER_ADVISOR_ROLE) return PARTNER_ADVISOR_ROLE_DEF.fieldVisibility;
+  return ROLE_INDEX.get(key)?.fieldVisibility ?? DEFAULT_FIELD_VISIBILITY;
+};
 
 export function resolveCustomRoleFieldVisibility(
   raw?: Partial<Record<string, boolean>> | null,

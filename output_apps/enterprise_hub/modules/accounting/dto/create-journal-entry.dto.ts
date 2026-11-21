@@ -242,4 +242,29 @@ export class CreateJournalEntryDto {
   @IsOptional()
   @IsIn([JournalEntryStatus.DRAFT, JournalEntryStatus.TEMPORARY, JournalEntryStatus.POSTED])
   status?: JournalEntryStatus;
+
+  @ApiPropertyOptional({
+    description: 'برچسب سند (مانند PARTNER_ADJUSTMENT برای اسناد تعدیلی حسابدار مؤسسه)',
+    example: 'PARTNER_ADJUSTMENT',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  tag?: string;
+
+  @ApiPropertyOptional({
+    description: 'شناسه کاربر مؤسسه حسابداری ثبت‌کننده سند',
+    example: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+  })
+  @IsOptional()
+  @IsUUID()
+  firmUserId?: string;
+
+  @ApiPropertyOptional({
+    description: 'نشانگر سند دوره تعدیل (Adjustment Period)',
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isAdjustmentPeriod?: boolean;
 }
