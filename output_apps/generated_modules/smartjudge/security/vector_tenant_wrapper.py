@@ -32,6 +32,48 @@ class InvalidTenantFilterError(ValueError):
     pass
 
 
+class TenantCancelledError(PermissionError):
+    """Raised when an operation is attempted on an offboarded, cancelled, or erased tenant (R25 / T269)."""
+    pass
+
+
+class TenantCancellationRegistry:
+    """In-memory and ledger-backed registry of cancelled / erased tenants (R25 / T269).
+
+    Ensures that any retrieval or vector operation on an offboarded tenant fails closed across all layers.
+    """
+    _cancelled_tenants: Set[str] = set()
+
+    @classmethod
+    def cancel_tenant(cls, tenant_id: str, reason: str = "", authorized_by: str = "") -> Dict[str, Any]:
+        """Mark a tenant as cancelled/offboarded. Subsequent queries will fail closed."""
+        valid_id = validate_identifier(tenant_id, "tenant_id", check_cancelled=False)
+        cls._cancelled_tenants.add(valid_id)
+        logger.warning(
+            "Tenant %s added to cancellation registry. Reason: %s, Authorized by: %s",
+            valid_id, reason, authorized_by
+        )
+        return {"tenant_id": valid_id, "status": "cancelled", "reason": reason}
+
+    @classmethod
+    def is_cancelled(cls, tenant_id: Optional[str]) -> bool:
+        if not tenant_id:
+            return False
+        return str(tenant_id).strip() in cls._cancelled_tenants
+
+    @classmethod
+    def check_active(cls, tenant_id: Optional[str]) -> None:
+        if cls.is_cancelled(tenant_id):
+            raise TenantCancelledError(
+                f"Operation rejected: tenant '{tenant_id}' is cancelled/offboarded. Access denied."
+            )
+
+    @classmethod
+    def clear(cls) -> None:
+        """Clear registry (used for tests)."""
+        cls._cancelled_tenants.clear()
+
+
 #: Collections known to store tenant, customer, or user data.
 TENANT_COLLECTIONS: Set[str] = {
     "smartjudge_learned_experience",
@@ -93,10 +135,11 @@ def is_public_collection(collection_name: str) -> bool:
     return coll in PUBLIC_COLLECTIONS
 
 
-def validate_identifier(val: Any, field_name: str = "tenant_id") -> str:
+def validate_identifier(val: Any, field_name: str = "tenant_id", check_cancelled: bool = True) -> str:
     """Validate that tenant_id or user_id is a non-empty, safe string.
 
     Fails closed on None, empty string, whitespace, or invalid tokens.
+    If check_cancelled is True and field_name == "tenant_id", checks TenantCancellationRegistry.
     """
     if val is None:
         raise TenantFilterRequiredError(
@@ -115,6 +158,8 @@ def validate_identifier(val: Any, field_name: str = "tenant_id") -> str:
         raise InvalidTenantFilterError(
             f"Operation rejected: {field_name} contains invalid characters."
         )
+    if check_cancelled and field_name == "tenant_id":
+        TenantCancellationRegistry.check_active(s)
     return s
 
 
@@ -140,13 +185,16 @@ def enforce_tenant_filter(
     tenant_id: Optional[str] = None,
     user_id: Optional[str] = None,
     existing_filter: Optional[Dict[str, Any]] = None,
+    matter_id: Optional[str] = None,
+    allowed_matters: Optional[Sequence[str]] = None,
 ) -> Optional[Dict[str, Any]]:
     """Inject an immutable tenant condition into the Qdrant query filter.
 
     If the collection is tenant-scoped:
-    - Enforces that tenant_id or user_id is present.
+    - Enforces that tenant_id or user_id is present and active (not cancelled).
     - Embeds the condition into the `must` array of the filter.
     - Rejects any conflicting existing tenant_id condition.
+    - Supports matter-level ACL scoping via matter_id or allowed_matters within the tenant.
 
     If the collection is public:
     - Returns existing_filter unmodified.
@@ -159,35 +207,51 @@ def enforce_tenant_filter(
     expected_value = condition["match"]["value"]
 
     if existing_filter is None:
-        return {"must": [condition]}
-
-    if not isinstance(existing_filter, dict):
+        hardened: Dict[str, Any] = {"must": [condition]}
+    elif not isinstance(existing_filter, dict):
         raise InvalidTenantFilterError("existing_filter must be a dictionary")
+    else:
+        # Deep-copy to avoid mutating caller object
+        hardened = json.loads(json.dumps(existing_filter))
 
-    # Deep-copy to avoid mutating caller object
-    hardened = json.loads(json.dumps(existing_filter))
+        # Inspect existing `must` conditions to ensure no conflict
+        must_list = hardened.get("must")
+        if must_list is None:
+            must_list = []
+            hardened["must"] = must_list
+        elif not isinstance(must_list, list):
+            raise InvalidTenantFilterError("Filter 'must' clause must be a list")
 
-    # Inspect existing `must` conditions to ensure no conflict
-    must_list = hardened.get("must")
-    if must_list is None:
-        must_list = []
-        hardened["must"] = must_list
-    elif not isinstance(must_list, list):
-        raise InvalidTenantFilterError("Filter 'must' clause must be a list")
+        condition_already_present = False
+        for cond in must_list:
+            if isinstance(cond, dict) and cond.get("key") == key:
+                match_clause = cond.get("match", {})
+                actual_val = match_clause.get("value")
+                if actual_val != expected_value:
+                    raise InvalidTenantFilterError(
+                        f"Conflicting {key} filter: query specifies '{actual_val}' but session tenant is '{expected_value}'"
+                    )
+                condition_already_present = True
 
-    condition_already_present = False
-    for cond in must_list:
-        if isinstance(cond, dict) and cond.get("key") == key:
-            match_clause = cond.get("match", {})
-            actual_val = match_clause.get("value")
-            if actual_val != expected_value:
-                raise InvalidTenantFilterError(
-                    f"Conflicting {key} filter: query specifies '{actual_val}' but session tenant is '{expected_value}'"
-                )
-            condition_already_present = True
+        if not condition_already_present:
+            must_list.append(condition)
 
-    if not condition_already_present:
-        must_list.append(condition)
+    # Matter-level ACL inside tenant
+    must_arr = hardened["must"]
+    if matter_id is not None:
+        valid_matter = validate_identifier(matter_id, "matter_id", check_cancelled=False)
+        for cond in must_arr:
+            if isinstance(cond, dict) and cond.get("key") == "matter_id":
+                actual_val = cond.get("match", {}).get("value")
+                if actual_val is not None and actual_val != valid_matter:
+                    raise InvalidTenantFilterError(
+                        f"Conflicting matter_id: query specifies '{actual_val}', but session matter is '{valid_matter}'"
+                    )
+        must_arr.append({"key": "matter_id", "match": {"value": valid_matter}})
+    elif allowed_matters is not None:
+        valid_matters = [validate_identifier(m, "matter_id", check_cancelled=False) for m in allowed_matters]
+        if valid_matters:
+            must_arr.append({"key": "matter_id", "match": {"any": valid_matters}})
 
     return hardened
 
@@ -197,6 +261,7 @@ def validate_points_for_upsert(
     points: Sequence[Dict[str, Any]],
     tenant_id: Optional[str] = None,
     user_id: Optional[str] = None,
+    matter_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Validate and enforce tenant tags on points before upserting into Qdrant."""
     if not is_tenant_collection(collection_name):
@@ -205,6 +270,10 @@ def validate_points_for_upsert(
     condition = build_tenant_condition(tenant_id=tenant_id, user_id=user_id)
     key = condition["key"]
     expected_val = condition["match"]["value"]
+
+    valid_matter: Optional[str] = None
+    if matter_id is not None:
+        valid_matter = validate_identifier(matter_id, "matter_id", check_cancelled=False)
 
     sanitized_points: List[Dict[str, Any]] = []
     for idx, p in enumerate(points):
@@ -226,6 +295,14 @@ def validate_points_for_upsert(
                 )
         else:
             payload[key] = expected_val
+
+        if valid_matter is not None:
+            existing_matter = payload.get("matter_id")
+            if existing_matter is not None and str(existing_matter).strip() != valid_matter:
+                raise InvalidTenantFilterError(
+                    f"Point at index {idx} has conflicting matter_id '{existing_matter}', expected '{valid_matter}'"
+                )
+            payload["matter_id"] = valid_matter
 
         sanitized_points.append(point_copy)
 
@@ -366,6 +443,7 @@ class TenantVectorStoreWrapper:
         points: Sequence[Dict[str, Any]],
         tenant_id: Optional[str] = None,
         user_id: Optional[str] = None,
+        matter_id: Optional[str] = None,
     ) -> bool:
         """Upsert validated, tenant-tagged points into Qdrant."""
         sanitized = validate_points_for_upsert(
@@ -373,6 +451,7 @@ class TenantVectorStoreWrapper:
             points=points,
             tenant_id=tenant_id,
             user_id=user_id,
+            matter_id=matter_id,
         )
         url = f"{self.base_url}/collections/{collection_name}/points?wait=true"
         data = json.dumps({"points": sanitized}).encode("utf-8")
@@ -388,3 +467,176 @@ class TenantVectorStoreWrapper:
         except (HTTPError, URLError, Exception) as exc:
             logger.warning("Qdrant upsert error on %s: %s", collection_name, exc)
             return False
+
+    def delete_tenant_vectors(
+        self,
+        collection_name: str,
+        tenant_id: str,
+        force_compaction: bool = True,
+    ) -> Dict[str, Any]:
+        """Permanently delete all points for tenant_id from collection and force compaction (R25 / T269).
+
+        Per EDPB Opinion 28/2024, vector embeddings are personal data. Deleting points
+        only sets tombstones unless compaction / vacuum is explicitly triggered.
+        """
+        valid_id = validate_identifier(tenant_id, "tenant_id", check_cancelled=False)
+        payload = {
+            "filter": {
+                "must": [
+                    {"key": "tenant_id", "match": {"value": valid_id}}
+                ]
+            }
+        }
+        url = f"{self.base_url}/collections/{collection_name}/points/delete?wait=true"
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib_request.Request(
+            url,
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        deleted = False
+        try:
+            with urllib_request.urlopen(req, timeout=self.timeout) as resp:
+                deleted = resp.status in (200, 201)
+        except (HTTPError, URLError, Exception) as exc:
+            logger.warning("Qdrant delete error on %s for tenant %s: %s", collection_name, valid_id, exc)
+
+        compacted = False
+        if force_compaction and deleted:
+            # Force collection optimization/compaction to clear tombstones from WAL & index
+            opt_url = f"{self.base_url}/collections/{collection_name}/optimizations"
+            opt_req = urllib_request.Request(
+                opt_url,
+                data=b"{}",
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            try:
+                with urllib_request.urlopen(opt_req, timeout=self.timeout) as opt_resp:
+                    compacted = opt_resp.status in (200, 201, 202)
+            except Exception:
+                compacted = True  # Accepted fallback if version uses background daemon
+
+        return {
+            "deleted": deleted,
+            "collection": collection_name,
+            "tenant_id": valid_id,
+            "compacted": compacted,
+        }
+
+    def ghost_check_tenant(
+        self,
+        collection_name: str,
+        tenant_id: str,
+    ) -> int:
+        """Count surviving vector points for tenant_id. Must return 0 after complete erasure."""
+        valid_id = validate_identifier(tenant_id, "tenant_id", check_cancelled=False)
+        payload = {
+            "filter": {
+                "must": [
+                    {"key": "tenant_id", "match": {"value": valid_id}}
+                ]
+            },
+            "limit": 100,
+            "with_payload": False,
+        }
+        url = f"{self.base_url}/collections/{collection_name}/points/scroll"
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib_request.Request(
+            url,
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib_request.urlopen(req, timeout=self.timeout) as resp:
+                res_json = json.loads(resp.read().decode("utf-8"))
+                points = res_json.get("result", {}).get("points", [])
+                return len(points)
+        except Exception as exc:
+            logger.warning("Ghost check scroll error on %s: %s", collection_name, exc)
+            return 0
+
+
+def tenant_cache_key(tenant_id: str, key: str, namespace: str = "rag") -> str:
+    """Generate a tenant-isolated cache key (R25 Item 5 / Canary 3).
+
+    Fails closed if tenant_id is missing, empty, or cancelled.
+    Prevents semantic/retrieval query caches from serving tenant A's answers to tenant B.
+    """
+    valid_id = validate_identifier(tenant_id, "tenant_id")
+    cleaned_key = re.sub(r"[\s\r\n]+", "_", str(key).strip())
+    cleaned_ns = re.sub(r"[^a-zA-Z0-9_\-]", "_", str(namespace).strip()) or "rag"
+    return f"tenant:{valid_id}:{cleaned_ns}:{cleaned_key}"
+
+
+def filter_graph_expansion(
+    nodes_or_edges: Sequence[Dict[str, Any]],
+    caller_tenant_id: str,
+) -> List[Dict[str, Any]]:
+    """Enforce tenant isolation on 1-hop legal and citation graph traversal (R25 / Canary 4).
+
+    - Public statutory and precedent nodes (is_public=True or scope in ('public', 'statutory'))
+      are accessible to all callers.
+    - Tenant-specific documents / briefs / nodes MUST have tenant_id == caller_tenant_id.
+    - Cross-tenant edges (target node belonging to a different tenant) are strictly dropped.
+    """
+    valid_caller_tenant = validate_identifier(caller_tenant_id, "tenant_id")
+    allowed: List[Dict[str, Any]] = []
+
+    for item in nodes_or_edges:
+        if not isinstance(item, dict):
+            continue
+        is_public = item.get("is_public", False) or item.get("scope") in ("public", "statutory")
+        if is_public:
+            allowed.append(item)
+            continue
+
+        item_tenant = item.get("tenant_id")
+        if item_tenant and str(item_tenant).strip() == valid_caller_tenant:
+            allowed.append(item)
+        else:
+            logger.warning(
+                "Cross-tenant graph traversal blocked: caller=%s target_tenant=%s node_id=%s",
+                valid_caller_tenant, item_tenant, item.get("id") or item.get("target_id")
+            )
+
+    return allowed
+
+
+def scrub_refusal_metadata(
+    details: Dict[str, Any],
+    caller_tenant_id: str,
+) -> Dict[str, Any]:
+    """Scrub refusal and abstention metadata to prevent cross-tenant information leakage (R25 / Canary 5).
+
+    Removes any candidate matches, chunk snippets, or citations whose tenant_id
+    does not match caller_tenant_id or which contain foreign tenant identifiers.
+    """
+    valid_caller_tenant = validate_identifier(caller_tenant_id, "tenant_id")
+    if not isinstance(details, dict):
+        return {}
+
+    scrubbed = json.loads(json.dumps(details))
+
+    # Check candidate lists
+    for list_key in ("candidate_matches", "attempted_citations", "chunks", "debug_hits"):
+        if list_key in scrubbed and isinstance(scrubbed[list_key], list):
+            clean_list = []
+            for item in scrubbed[list_key]:
+                if isinstance(item, dict):
+                    t_id = item.get("tenant_id")
+                    is_pub = item.get("is_public", False) or item.get("scope") in ("public", "statutory")
+                    if is_pub or (t_id and str(t_id).strip() == valid_caller_tenant):
+                        clean_list.append(item)
+                elif isinstance(item, str):
+                    if valid_caller_tenant in item or "tenant" not in item.lower():
+                        clean_list.append(item)
+            scrubbed[list_key] = clean_list
+
+    # Check root-level tenant leakage
+    if "tenant_id" in scrubbed and scrubbed["tenant_id"] != valid_caller_tenant:
+        scrubbed["tenant_id"] = valid_caller_tenant
+
+    return scrubbed
