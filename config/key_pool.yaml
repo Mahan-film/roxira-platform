@@ -341,7 +341,7 @@ groups:
       openrouter-free: [{id: "nvidia/nemotron-3-ultra-550b-a55b:free"}]
       nvidia-nim: [{id: openai/gpt-oss-120b}]
       cloudflare-ai: [{id: "@cf/openai/gpt-oss-120b"}]
-    fallback: [gemini-best]
+    fallback: [gemini-best, agent-free-paid]
 
   agent-light-free:
     description: Cheap models for light code, docs and dev tasks. Free providers only, falls back to strong then paid.
