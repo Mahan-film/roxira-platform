@@ -1,5 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import {
+  IsBoolean,
   IsInt,
   IsNumber,
   IsOptional,
@@ -80,4 +82,14 @@ export class UpdateTenantSettingsDto {
   @Min(1)
   @Max(12)
   fiscalYearStartMonth?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'حالت بدون رصد کارکنان (BetrVG §87(1)6): داشبوردهای فعالیت فردی و آمار مصرف هوش مصنوعی کاربران را مخفی می‌کند.',
+    example: true,
+  })
+  @IsOptional()
+  @Transform(({ obj, key }) => (obj as Record<string, unknown>)[key])
+  @IsBoolean()
+  noEmployeeTelemetry?: boolean;
 }

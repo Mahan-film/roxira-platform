@@ -1,11 +1,12 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   Bot,
   ClipboardList,
+  EyeOff,
   FileUp,
   KeyRound,
   Puzzle,
@@ -21,6 +22,7 @@ import { EnterpriseRouteGuard } from "@/components/auth/enterprise-route-guard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { getMyTenant, updateMyTenantSettings } from "@/lib/api/tenants-client";
 import { cn } from "@/lib/utils";
 
 interface SettingTab {
@@ -96,6 +98,44 @@ function SettingsHubContent() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get("tab") ?? "members";
   const [activeTabId, setActiveTabId] = useState<string>(initialTab);
+  const [noEmployeeTelemetry, setNoEmployeeTelemetry] = useState<boolean>(false);
+  const [telemetryLoading, setTelemetryLoading] = useState<boolean>(true);
+  const [telemetrySaving, setTelemetrySaving] = useState<boolean>(false);
+  const [telemetryMessage, setTelemetryMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    getMyTenant(controller.signal)
+      .then((tenant) => {
+        setNoEmployeeTelemetry(Boolean(tenant.noEmployeeTelemetry));
+      })
+      .catch(() => {
+        // Non-blocking: keep default false if tenant fetch fails
+      })
+      .finally(() => {
+        setTelemetryLoading(false);
+      });
+    return () => controller.abort();
+  }, []);
+
+  async function handleToggleNoEmployeeTelemetry() {
+    const next = !noEmployeeTelemetry;
+    setTelemetrySaving(true);
+    setTelemetryMessage(null);
+    try {
+      const updated = await updateMyTenantSettings({ noEmployeeTelemetry: next });
+      setNoEmployeeTelemetry(Boolean(updated.noEmployeeTelemetry));
+      setTelemetryMessage(
+        updated.noEmployeeTelemetry
+          ? "حالت بدون رصد کارکنان فعال شد."
+          : "حالت بدون رصد کارکنان غیرفعال شد.",
+      );
+    } catch {
+      setTelemetryMessage("ذخیره تنظیمات با خطا مواجه شد.");
+    } finally {
+      setTelemetrySaving(false);
+    }
+  }
 
   const activeTab = SETTING_TABS.find((t) => t.id === activeTabId) ?? SETTING_TABS[0];
   const ActiveIcon = activeTab.icon;
@@ -161,6 +201,44 @@ function SettingsHubContent() {
             برای پیکربندی و مشاهده جزئیات کامل، دکمه «ورود به بخش {activeTab.label}» را بزنید.
           </div>
         </CardContent>
+      </Card>
+
+      {/* Works-council / no-employee-telemetry mode (T265) */}
+      <Card className="border border-border bg-card">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-xl bg-amber-500/15 text-amber-300">
+              <EyeOff className="size-5" aria-hidden="true" />
+            </div>
+            <div>
+              <CardTitle className="text-base">
+                حالت بدون رصد کارکنان (Works-Council / BetrVG §87(1)6)
+              </CardTitle>
+              <CardDescription className="text-xs">
+                با فعال‌سازی این گزینه، داشبوردهای فعالیت فردی و آمار مصرف هوش مصنوعی کاربران در سطح سازمان مخفی و مسدود می‌شوند.
+              </CardDescription>
+            </div>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant={noEmployeeTelemetry ? "default" : "outline"}
+            disabled={telemetryLoading || telemetrySaving}
+            onClick={handleToggleNoEmployeeTelemetry}
+            aria-pressed={noEmployeeTelemetry}
+          >
+            {telemetrySaving
+              ? "در حال ذخیره…"
+              : noEmployeeTelemetry
+                ? "فعال (کلیک برای غیرفعال‌سازی)"
+                : "غیرفعال (کلیک برای فعال‌سازی)"}
+          </Button>
+        </CardHeader>
+        {telemetryMessage && (
+          <CardContent className="pt-0">
+            <p className="text-xs text-muted-foreground">{telemetryMessage}</p>
+          </CardContent>
+        )}
       </Card>
 
       {/* Grid of all setting cards */}

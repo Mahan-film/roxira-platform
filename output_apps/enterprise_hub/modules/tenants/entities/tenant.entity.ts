@@ -79,6 +79,13 @@ export class TenantEntity {
   @Column({ type: 'boolean', default: false, name: 'require_2fa' })
   require2fa: boolean;
 
+  /**
+   * T265 (R26): Works-council safe mode (BetrVG §87(1)6). When true, hides
+   * per-user activity dashboards and individual AI usage analytics.
+   */
+  @Column({ type: 'boolean', default: false, name: 'no_employee_telemetry' })
+  noEmployeeTelemetry: boolean;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

@@ -1,6 +1,6 @@
 import { apiRequest } from "@/lib/api/http-client";
 import { API_PROXY_BASE_PATH, TENANTS_RESOURCE_PATH } from "@/lib/api/config";
-import type { TenantMe } from "@/types/tenants";
+import type { TenantMe, UpdateTenantSettingsPayload } from "@/types/tenants";
 
 // از پروکسی هم‌مبدأ next.config.ts (`rewrites`) عبور می‌کند تا مشکل CORS رخ
 // ندهد و آدرس واقعی سرویس NestJS در کد سمت مرورگر افشا نشود.
@@ -11,5 +11,15 @@ export async function getMyTenant(signal?: AbortSignal): Promise<TenantMe> {
   return apiRequest<TenantMe>(`${TENANTS_ENDPOINT}/me`, {
     method: "GET",
     signal,
+  });
+}
+
+/** به‌روزرسانی تنظیمات سازمان — PATCH /tenants/me/settings */
+export async function updateMyTenantSettings(
+  payload: UpdateTenantSettingsPayload,
+): Promise<TenantMe> {
+  return apiRequest<TenantMe>(`${TENANTS_ENDPOINT}/me/settings`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
   });
 }
