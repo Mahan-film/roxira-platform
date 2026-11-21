@@ -172,141 +172,120 @@ export class EntityImportService {
       message: `${error.field}: ${error.message}`,
     }));
 
-    const runTx =
-      typeof this.batchRepository.runInTenantTransaction === 'function'
-        ? this.batchRepository.runInTenantTransaction.bind(this.batchRepository)
-        : <T>(_t: string, work: (m: undefined) => Promise<T>) => work(undefined);
-
-    const outcome = await runTx(tenantId, async (txManager) => {
-      const batchId = randomUUID();
-      if (upload.fileHash && typeof this.batchRepository.tryReserveBatch === 'function') {
-        const reserved = await this.batchRepository.tryReserveBatch(
+    // Reserve batch header before processing; adapters execute on domain service connections
+    // so recovery relies on explicit compensation (adapter.undo) and batch release on failure.
+    const batchId = randomUUID();
+    if (upload.fileHash && typeof this.batchRepository.tryReserveBatch === 'function') {
+      const reserved = await this.batchRepository.tryReserveBatch(tenantId, {
+        id: batchId,
+        entity: adapter.key,
+        fileName: upload.fileName ?? 'upload',
+        fileHash: upload.fileHash,
+        mappingHash,
+        inserted: 0,
+      });
+      if (!reserved) {
+        const existing = await this.batchRepository.findByFileHash(
           tenantId,
-          {
-            id: batchId,
-            entity: adapter.key,
-            fileName: upload.fileName ?? 'upload',
-            fileHash: upload.fileHash,
-            mappingHash,
-            inserted: 0,
-          },
-          txManager,
+          upload.fileHash,
+          adapter.key,
+          mappingHash,
         );
-        if (!reserved) {
-          const existing = await this.batchRepository.findByFileHash(
-            tenantId,
-            upload.fileHash,
-            adapter.key,
-            mappingHash,
-            txManager,
-          );
+        if (existing && existing.inserted > 0) {
+          this.uploadStore.remove(tenantId, dto.uploadId);
           return {
-            duplicateBatchId: existing?.id ?? batchId,
-            batchId: existing?.id ?? batchId,
+            batchId: existing.id,
             inserted: 0,
             skippedDuplicates: upload.rows.length,
-            failed: [] as Array<{ row: number; message: string }>,
+            failed: [],
           };
         }
-      } else {
-        if (upload.fileHash && typeof this.batchRepository.findByFileHash === 'function') {
-          const existing = await this.batchRepository.findByFileHash(
-            tenantId,
-            upload.fileHash,
-            adapter.key,
-            mappingHash,
-            txManager,
-          );
-          if (existing) {
-            return {
-              duplicateBatchId: existing.id,
-              batchId: existing.id,
-              inserted: 0,
-              skippedDuplicates: upload.rows.length,
-              failed: [] as Array<{ row: number; message: string }>,
-            };
-          }
-        }
-        await this.batchRepository.createBatch(
-          tenantId,
-          {
-            id: batchId,
-            entity: adapter.key,
-            fileName: upload.fileName ?? 'upload',
-            fileHash: upload.fileHash,
-            mappingHash,
-            inserted: 0,
-          },
-          txManager,
-        );
       }
+    } else {
+      if (upload.fileHash && typeof this.batchRepository.findByFileHash === 'function') {
+        const existing = await this.batchRepository.findByFileHash(
+          tenantId,
+          upload.fileHash,
+          adapter.key,
+          mappingHash,
+        );
+        if (existing && existing.inserted > 0) {
+          this.uploadStore.remove(tenantId, dto.uploadId);
+          return {
+            batchId: existing.id,
+            inserted: 0,
+            skippedDuplicates: upload.rows.length,
+            failed: [],
+          };
+        }
+      }
+      await this.batchRepository.createBatch(tenantId, {
+        id: batchId,
+        entity: adapter.key,
+        fileName: upload.fileName ?? 'upload',
+        fileHash: upload.fileHash,
+        mappingHash,
+        inserted: 0,
+      });
+    }
 
-      const { unique, skipped } = await this.filterDuplicates(adapter, tenantId, records);
-      let committedIds: ImportOwnerId[] = [];
-      try {
-        const result = await adapter.commit(tenantId, unique, {
-          bankAccountId: dto.bankAccountId,
-          manager: txManager,
-        });
-        committedIds = result.inserted.map((row) => row.ownerId);
-        for (const failure of result.failed) {
-          failed.push({ row: failure.rowNumber, message: failure.message });
-        }
-        if (result.inserted.length > 0) {
-          await this.batchRepository.addItems(
-            tenantId,
-            batchId,
-            adapter.key,
-            result.inserted.map((row) => ({
-              ownerId: row.ownerId,
-              rowNumber: row.rowNumber,
-            })),
-            txManager,
-          );
-        }
+    const { unique, skipped } = await this.filterDuplicates(adapter, tenantId, records);
+    let committedIds: ImportOwnerId[] = [];
+    try {
+      const result = await adapter.commit(tenantId, unique, {
+        bankAccountId: dto.bankAccountId,
+      });
+      committedIds = result.inserted.map((row) => row.ownerId);
+      for (const failure of result.failed) {
+        failed.push({ row: failure.rowNumber, message: failure.message });
+      }
+      if (result.inserted.length > 0) {
+        await this.batchRepository.addItems(
+          tenantId,
+          batchId,
+          adapter.key,
+          result.inserted.map((row) => ({
+            ownerId: row.ownerId,
+            rowNumber: row.rowNumber,
+          })),
+        );
         if (typeof this.batchRepository.setInserted === 'function') {
           await this.batchRepository.setInserted(
             tenantId,
             batchId,
             result.inserted.length,
-            txManager,
           );
         }
-        return {
-          duplicateBatchId: null as string | null,
-          batchId,
-          inserted: result.inserted.length,
-          skippedDuplicates: skipped,
-          failed,
-        };
-      } catch (error) {
-        if (committedIds.length > 0 && typeof adapter.undo === 'function') {
-          await adapter.undo(tenantId, Array.from(new Set(committedIds))).catch((undoErr) => {
-            this.logger.warn(
-              `[DATA-IMPORT] compensating undo failed after batch error: ${
-                undoErr instanceof Error ? undoErr.message : String(undoErr)
-              }`,
-            );
-          });
-        }
-        if (!txManager && typeof this.batchRepository.removeBatch === 'function') {
-          await this.batchRepository.removeBatch(tenantId, batchId).catch(() => undefined);
-        }
-        throw error;
+      } else {
+        // Release reservation in the same unit of work if 0 rows were inserted:
+        await this.batchRepository.removeBatch(tenantId, batchId);
       }
-    });
 
-    this.uploadStore.remove(tenantId, dto.uploadId);
-    if (!outcome.duplicateBatchId) {
-      await this.quota.recordImport(tenantId);
+      this.uploadStore.remove(tenantId, dto.uploadId);
+      if (result.inserted.length > 0) {
+        await this.quota.recordImport(tenantId);
+      }
+
+      return {
+        batchId: result.inserted.length > 0 ? batchId : null,
+        inserted: result.inserted.length,
+        skippedDuplicates: skipped,
+        failed,
+      };
+    } catch (error) {
+      if (committedIds.length > 0 && typeof adapter.undo === 'function') {
+        await adapter.undo(tenantId, Array.from(new Set(committedIds))).catch((undoErr) => {
+          this.logger.warn(
+            `[DATA-IMPORT] compensating undo failed after batch error: ${
+              undoErr instanceof Error ? undoErr.message : String(undoErr)
+            }`,
+          );
+        });
+      }
+      // Release reservation in the same unit of work on failure:
+      await this.batchRepository.removeBatch(tenantId, batchId).catch(() => undefined);
+      throw error;
     }
-
-    return {
-      batchId: outcome.batchId,
-      inserted: outcome.inserted,
-      skippedDuplicates: outcome.skippedDuplicates,
-      failed: outcome.failed,
-    };
   }
 
   /** بازگردانی کامل یک دسته ورود (حذف دقیق ردیف‌های همان دسته). */

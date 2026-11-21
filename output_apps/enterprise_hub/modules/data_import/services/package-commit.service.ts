@@ -119,18 +119,21 @@ export class PackageCommitService {
     }
 
     if (existingBatchId) {
-      await this.progress.set(tenantId, packageId, {
-        phase: 'committed',
-        done: total,
-        total,
-        inserted: {},
-        skipped: { package: total },
-        errors: [],
-      });
-      state.status = 'committed';
-      state.batchId = existingBatchId;
-      await this.store.writeState(state);
-      return { batchId: existingBatchId };
+      const existing = await this.batchRepository.findById(tenantId, existingBatchId);
+      if (existing && existing.inserted > 0) {
+        await this.progress.set(tenantId, packageId, {
+          phase: 'committed',
+          done: total,
+          total,
+          inserted: {},
+          skipped: { package: total },
+          errors: [],
+        });
+        state.status = 'committed';
+        state.batchId = existingBatchId;
+        await this.store.writeState(state);
+        return { batchId: existingBatchId };
+      }
     }
 
     await this.progress.set(tenantId, packageId, {
@@ -248,11 +251,17 @@ export class PackageCommitService {
         }
       }
     } catch (error) {
-      // The batch (with the items recorded so far) stays so the owner can undo the partial import.
-      await this.batchRepository.setInserted(tenantId, batchId, totalInserted);
+      if (totalInserted === 0) {
+        // Release reservation in the same unit of work so a failed package doesn't block re-import:
+        await this.batchRepository.removeBatch(tenantId, batchId).catch(() => undefined);
+        state.batchId = undefined;
+        state.error = 'ثبت بسته با خطا متوقف شد؛ هیچ ردیفی درج نشد و رزرو دسته آزاد شد.';
+      } else {
+        await this.batchRepository.setInserted(tenantId, batchId, totalInserted);
+        state.batchId = batchId;
+        state.error = 'ثبت بسته با خطا متوقف شد؛ ردیف‌های ثبت‌شده تا اینجا را می‌توانید بازگردانی کنید.';
+      }
       state.status = 'failed';
-      state.batchId = batchId;
-      state.error = 'ثبت بسته با خطا متوقف شد؛ ردیف‌های ثبت‌شده تا اینجا را می‌توانید بازگردانی کنید.';
       await this.store.writeState(state);
       await this.progress.set(tenantId, packageId, {
         phase: 'failed',

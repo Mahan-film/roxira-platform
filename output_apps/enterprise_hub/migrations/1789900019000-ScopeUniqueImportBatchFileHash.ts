@@ -18,9 +18,31 @@ export class ScopeUniqueImportBatchFileHash1789900019000
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`SET LOCAL lock_timeout = '5s'`);
     await queryRunner.query(`SET LOCAL statement_timeout = '30s'`);
+    // Note: data_import_batches table size is moderate per tenant (< 100k rows in typical production).
+    // Bounded lock_timeout (5s) avoids holding table locks; TypeORM transaction mode all precludes CONCURRENTLY.
     await queryRunner.query(`
       ALTER TABLE "data_import_batches"
       ADD COLUMN IF NOT EXISTS "mapping_hash" text NULL
+    `);
+    // Backfill null mapping_hash to empty string for old batches so re-imports match cleanly.
+    await queryRunner.query(`
+      UPDATE "data_import_batches"
+      SET "mapping_hash" = ''
+      WHERE "mapping_hash" IS NULL
+    `);
+    // Pre-dedupe step: if legacy active batches share (tenant_id, entity, file_hash, mapping_hash),
+    // mark older duplicates as undone = true so CREATE UNIQUE INDEX succeeds deterministically.
+    await queryRunner.query(`
+      UPDATE "data_import_batches" b
+      SET "undone" = true
+      WHERE b."undone" = false
+        AND b."file_hash" IS NOT NULL
+        AND b."id" NOT IN (
+          SELECT DISTINCT ON ("tenant_id", "entity", "file_hash", COALESCE("mapping_hash", '')) "id"
+          FROM "data_import_batches"
+          WHERE "undone" = false AND "file_hash" IS NOT NULL
+          ORDER BY "tenant_id", "entity", "file_hash", COALESCE("mapping_hash", ''), "created_at" DESC, "id" DESC
+        )
     `);
     await queryRunner.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS "UQ_data_import_batches_active_idempotency"

@@ -214,6 +214,8 @@ describe('Import Idempotency, Batch Tagging & Undo (T326 R32)', () => {
       expect(commitResult.skippedDuplicates).toBe(2);
       // Commit was called with empty array (0 unique rows)
       expect(mockAdapter.commit).toHaveBeenCalledWith(tenantId, [], expect.any(Object));
+      // Batch reservation is released when 0 rows are inserted so subsequent imports are not blocked
+      expect(batchRepo.removeBatch).toHaveBeenCalledWith(tenantId, expect.any(String));
     });
   });
 

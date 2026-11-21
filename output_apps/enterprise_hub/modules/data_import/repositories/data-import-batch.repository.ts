@@ -12,7 +12,7 @@ export function hashImportMapping(
 ): string {
   const entries = Object.entries(mapping ?? {})
     .filter(([, field]) => typeof field === 'string' && field.trim() !== '')
-    .sort(([a], [b]) => a.localeCompare(b));
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   return createHash('sha256').update(JSON.stringify(entries)).digest('hex');
 }
 
@@ -31,10 +31,20 @@ export function hashPackageSelections(
       e: s.entity,
       m: Object.entries(s.mapping ?? {})
         .filter(([, v]) => v !== null && v !== '')
-        .sort(([a], [b]) => a.localeCompare(b)),
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
       u: s.moneyToRial ?? 1,
     }))
-    .sort((a, b) => a.n.localeCompare(b.n) || a.e.localeCompare(b.e));
+    .sort((a, b) =>
+      a.n < b.n
+        ? -1
+        : a.n > b.n
+          ? 1
+          : a.e < b.e
+            ? -1
+            : a.e > b.e
+              ? 1
+              : 0,
+    );
   return createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
 }
 
@@ -271,10 +281,14 @@ export class DataImportBatchRepository {
           .where('b.tenant_id = :tenantId', { tenantId })
           .andWhere('b.entity = :entity', { entity })
           .andWhere('b.file_hash = :fileHash', { fileHash })
-          .andWhere(`COALESCE(b.mapping_hash, '') = :mappingHash`, {
-            mappingHash: mappingHash ?? '',
-          })
+          .andWhere(
+            `(COALESCE(b.mapping_hash, '') = :mappingHash OR b.mapping_hash IS NULL)`,
+            {
+              mappingHash: mappingHash ?? '',
+            },
+          )
           .andWhere('b.undone = false')
+          .andWhere('b.inserted > 0')
           .getOne(),
       manager,
     );
