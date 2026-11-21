@@ -127,13 +127,13 @@ describePg('Fixed assets on PostgreSQL', () => {
     const first = await assets.runMonth(T1, { year: 1405, month: 1 });
     expect(first).toMatchObject({ entryNumber: 'DEP-140501-1', entryNumbers: ['DEP-140501-1', 'DEP-140501-2'], totalCharged: '120.00' });
     expect(first.charged).toEqual([{ code: 'FA-1', amount: '100.00' }, { code: 'FA-2', amount: '20.00' }]);
-    expect(await balance(T1, '5060')).toBe('120.00');
-    expect(await balance(T1, '1120')).toBe('-120.00');
+    expect(await balance(T1, '5060')).toBe('120.0000');
+    expect(await balance(T1, '1120')).toBe('-120.0000');
 
     const again = await assets.runMonth(T1, { year: 1405, month: 1 });
     expect(again.entryNumber).toBeNull();
     expect(again.skipped.map((s) => s.reason)).toEqual(['ALREADY_DONE', 'ALREADY_DONE']);
-    expect(await balance(T1, '5060')).toBe('120.00');
+    expect(await balance(T1, '5060')).toBe('120.0000');
   });
 
   it('refuses to skip a month, and concurrent runs charge once', async () => {
@@ -141,7 +141,7 @@ describePg('Fixed assets on PostgreSQL', () => {
     expect(gap.skipped.map((s) => s.reason)).toEqual(['PREVIOUS_MONTH_MISSING', 'PREVIOUS_MONTH_MISSING']);
     const [a, b] = await Promise.all([assets.runMonth(T1, { year: 1405, month: 2 }), assets.runMonth(T1, { year: 1405, month: 2 })]);
     expect([a, b].filter((r) => r.entryNumber !== null)).toHaveLength(1);
-    expect(await balance(T1, '5060')).toBe('239.60');
+    expect(await balance(T1, '5060')).toBe('239.6000');
   });
 
   it('stops at the depreciable amount and marks the asset fully depreciated', async () => {
@@ -190,7 +190,7 @@ describePg('Fixed assets on PostgreSQL', () => {
       const sixth = await assets.runMonth(T3, { year: 1405, month: 6 });
       expect(sixth.charged).toEqual([{ code: 'Z-SL', amount: '0.01' }]);
       expect(await asset('Z-SL')).toMatchObject({ status: 'FULLY_DEPRECIATED', monthsDepreciated: 6, netBookValue: '0.00' });
-      expect(await balance(T3, '5060')).toBe('0.01');
+      expect(await balance(T3, '5060')).toBe('0.0100');
     });
 
     it('a full straight-line life adds up to cost minus salvage', async () => {

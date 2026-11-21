@@ -218,7 +218,7 @@ describePg('Report Builder on PostgreSQL (NOSUPERUSER NOBYPASSRLS, FORCE RLS)', 
       aggregates: [{ column: 'debit', func: 'sum' }],
     });
     expect(grouped.totalRows).toBe(2);
-    expect(grouped.rows.find((r) => r.account_code === '1010')?.sum_debit).toBe('5000000.00');
+    expect(grouped.rows.find((r) => r.account_code === '1010')?.sum_debit).toBe('5000000.0000');
 
     // 5. Nothing was dropped or written.
     const after = await ownerDs.query(`SELECT count(*)::int AS n FROM "fin_chart_of_accounts"`);

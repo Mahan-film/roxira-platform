@@ -83,7 +83,7 @@ describePg('Fiscal close on PostgreSQL', () => {
     expect(result.entryNumbers).toEqual([
       `FC-${y1.id}-1-1`, `FC-${y1.id}-1-2`, `FC-${y1.id}-1-3`, `FO-${y1.id}-1`,
     ]);
-    expect(await balances(T1)).toEqual({ '1010': '1300.15', '3010': '-1000.00', '3040': '-300.15' });
+    expect(await balances(T1)).toEqual({ '1010': '1300.1500', '3010': '-1000.0000', '3040': '-300.1500' });
 
     // The closed year is locked and system entries cannot be reversed one by one.
     await expect(
@@ -101,7 +101,7 @@ describePg('Fiscal close on PostgreSQL', () => {
     // A second close after the reopen gets fresh numbers and lands on the same balances.
     const again = await years.close(T1, 'u', y1.id, {});
     expect(again.entryNumbers[0]).toBe(`FC-${y1.id}-2-1`);
-    expect(await balances(T1)).toEqual({ '1010': '1300.15', '3010': '-1000.00', '3040': '-300.15' });
+    expect(await balances(T1)).toEqual({ '1010': '1300.1500', '3010': '-1000.0000', '3040': '-300.1500' });
   }, 60000);
 
   it('keeps tenants apart and enforces RLS for a role that cannot bypass it', async () => {

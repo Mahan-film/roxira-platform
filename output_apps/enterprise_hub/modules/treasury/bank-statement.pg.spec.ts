@@ -220,8 +220,8 @@ describePg('Bank statement import on PostgreSQL (non-superuser, FORCE RLS)', () 
     expect(tx1?.match).toMatchObject({ rule: 'reference', auto: false, fee: '0.00' });
     expect(tx1?.match?.allocations).toEqual([{ invoiceId: ID101, invoiceNumber: 'INV-101', amount: '1190.00' }]);
     expect(await voucher(T1, `BSM-${tx1?.id}`)).toEqual([
-      ['1012', '1190.00', '0.00', null],
-      ['1020', '0.00', '1190.00', 'C1'],
+      ['1012', '1190.0000', '0.0000', null],
+      ['1020', '0.0000', '1190.0000', 'C1'],
     ]);
 
     expect(tx2).toMatchObject({ status: 'unmatched', amount: '970.00', match: null });
@@ -241,10 +241,10 @@ describePg('Bank statement import on PostgreSQL (non-superuser, FORCE RLS)', () 
     expect((match.explanation as { text: string }).text).toContain('bank fee');
 
     expect(await voucher(T1, `BSM-${tx2LineId}`)).toEqual([
-      ['1012', '970.00', '0.00', null],
-      ['5210', '30.00', '0.00', null],
-      ['1020', '0.00', '600.00', 'C2'],
-      ['1020', '0.00', '400.00', 'C2'],
+      ['1012', '970.0000', '0.0000', null],
+      ['5210', '30.0000', '0.0000', null],
+      ['1020', '0.0000', '600.0000', 'C2'],
+      ['1020', '0.0000', '400.0000', 'C2'],
     ]);
     expect(await counts(T1)).toEqual({ ...before, matches: before.matches + 1, entries: before.entries + 1 });
 
@@ -306,9 +306,9 @@ describePg('Bank statement import on PostgreSQL (non-superuser, FORCE RLS)', () 
     const ok = await service.confirmMatch(T1, USER, id, { allocations: [{ invoiceId: ID104, amount: '500.00' }], fee: '10.00', note: 'bank charged 10' });
     expect(ok).toMatchObject({ rule: 'manual', auto: false, fee: '10.00' });
     expect(await voucher(T1, `BSM-${id}`)).toEqual([
-      ['1012', '490.00', '0.00', null],
-      ['5210', '10.00', '0.00', null],
-      ['1020', '0.00', '500.00', 'C3'],
+      ['1012', '490.0000', '0.0000', null],
+      ['5210', '10.0000', '0.0000', null],
+      ['1020', '0.0000', '500.0000', 'C3'],
     ]);
   });
 

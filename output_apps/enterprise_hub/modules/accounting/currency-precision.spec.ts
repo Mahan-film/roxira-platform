@@ -8,6 +8,7 @@ import {
   MoneyFormatError,
   formatCurrencyMinor,
   parseCurrencyMinor,
+  parseMinor,
   roundAndParseCurrencyMinor,
   roundToCurrencyExponent,
 } from './money';
@@ -135,6 +136,16 @@ describe('T169 Currency precision (core)', () => {
 
       expect(queries[0]).toContain("SET LOCAL lock_timeout = '5s'");
       expect(queries.some((q) => q.includes(expectedTable) && q.includes('numeric(20,4)'))).toBe(true);
+    });
+  });
+
+  describe('parseMinor compatibility with numeric(20,4) zero-padded DB strings', () => {
+    it('accepts trailing zero padding beyond MONEY_SCALE and rejects non-zero extra digits', () => {
+      expect(parseMinor('5000000.0000')).toBe(500000000n);
+      expect(parseMinor('-12.3400')).toBe(-1234n);
+      expect(parseMinor('0.0000')).toBe(0n);
+      expect(() => parseMinor('12.345')).toThrow(MoneyFormatError);
+      expect(() => parseMinor('0.0001')).toThrow(MoneyFormatError);
     });
   });
 });

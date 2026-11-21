@@ -153,7 +153,7 @@ describePg.each(['UTC', 'Asia/Tehran'])('Recurring vouchers on PostgreSQL (TZ=%s
       `SELECT balance FROM fin_chart_of_accounts WHERE tenant_id = $1 AND code = '5010'`,
       [T2],
     );
-    expect(balanceAfterPost[0].balance).toBe('10000000.00');
+    expect(balanceAfterPost[0].balance).toBe('10000000.0000');
 
     const reversed = await service.runDue(T2, reversalDate);
     expect(reversed).toMatchObject({ created: 0, reversed: 1, skipped: [] });
@@ -188,7 +188,7 @@ describePg.each(['UTC', 'Asia/Tehran'])('Recurring vouchers on PostgreSQL (TZ=%s
       `SELECT balance FROM fin_chart_of_accounts WHERE tenant_id = $1 AND code = '5010'`,
       [T2],
     );
-    expect(balanceAfterReverse[0].balance).toBe('0.00');
+    expect(balanceAfterReverse[0].balance).toBe('0.0000');
   });
 
   it('reports a locked period in skipped, keeps the due date and posts it after the unlock', async () => {

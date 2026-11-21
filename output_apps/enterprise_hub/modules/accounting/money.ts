@@ -12,7 +12,7 @@ const FACTOR_BIG = BigInt(FACTOR);
 /** numeric(18,2): 16 integer digits. */
 const MAX_INTEGER_DIGITS = 16;
 const DECIMAL_PATTERN = new RegExp(
-  `^(-?)(\\d{1,${MAX_INTEGER_DIGITS}})(?:\\.(\\d{1,${MONEY_SCALE}}))?$`,
+  `^(-?)(\\d{1,${MAX_INTEGER_DIGITS}})(?:\\.(\\d+))?$`,
 );
 /** Largest JSON number whose minor units are still an exactly representable integer. */
 const MAX_SAFE_NUMBER = Number.MAX_SAFE_INTEGER / FACTOR;
@@ -25,8 +25,9 @@ export class MoneyFormatError extends Error {}
 
 /**
  * Minor units of a decimal string ("1234.5", "90000000000000000.01"). Strings are the exact
- * transport for amounts a JSON number cannot carry; more than `MONEY_SCALE` decimals is an error
- * (never silently rounded).
+ * transport for amounts a JSON number cannot carry; non-zero digits beyond `MONEY_SCALE` are an
+ * error (never silently rounded), while trailing zero padding (e.g. PostgreSQL numeric(20,4)
+ * `"5000000.0000"`) is accepted as exact.
  */
 export function parseMinor(value: string): bigint {
   const match = DECIMAL_PATTERN.exec(value.trim());
@@ -35,7 +36,16 @@ export function parseMinor(value: string): bigint {
       `Invalid amount "${value}": expected a decimal with at most ${MONEY_SCALE} decimals.`,
     );
   }
-  const [, sign, integer, fraction = ''] = match;
+  const [, sign, integer, rawFraction = ''] = match;
+  if (rawFraction.length > MONEY_SCALE) {
+    const extra = rawFraction.slice(MONEY_SCALE);
+    if (!/^0+$/.test(extra)) {
+      throw new MoneyFormatError(
+        `Invalid amount "${value}": expected a decimal with at most ${MONEY_SCALE} decimals.`,
+      );
+    }
+  }
+  const fraction = rawFraction.slice(0, MONEY_SCALE);
   const minor =
     BigInt(integer) * FACTOR_BIG + BigInt(fraction.padEnd(MONEY_SCALE, '0'));
   return sign === '-' ? -minor : minor;
