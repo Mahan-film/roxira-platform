@@ -9,6 +9,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  InternalServerErrorException,
   Optional,
   Param,
   ParseUUIDPipe,
@@ -441,7 +442,7 @@ export class DataImportController {
     @Req() request: AuthenticatedRequest,
   ): Promise<CutoverStatusResponseDto> {
     if (!this.cutoverWizardService) {
-      throw new BadRequestException('سرویس کات‌اوور فعال نیست.');
+      throw new InternalServerErrorException('سرویس کات‌اوور فعال نیست.');
     }
     return this.cutoverWizardService.getStatus(this.tenantIdOf(request));
   }
@@ -455,7 +456,7 @@ export class DataImportController {
     @Body() dto: CutoverPreflightRequestDto,
   ): CutoverPreflightResponseDto {
     if (!this.cutoverWizardService) {
-      throw new BadRequestException('سرویس کات‌اوور فعال نیست.');
+      throw new InternalServerErrorException('سرویس کات‌اوور فعال نیست.');
     }
     return this.cutoverWizardService.evaluatePreflight(dto);
   }
@@ -470,7 +471,7 @@ export class DataImportController {
     @Body() dto: CutoverGoLiveRequestDto,
   ): Promise<CutoverGoLiveResponseDto> {
     if (!this.cutoverWizardService) {
-      throw new BadRequestException('سرویس کات‌اوور فعال نیست.');
+      throw new InternalServerErrorException('سرویس کات‌اوور فعال نیست.');
     }
     const actorId = request.user?.sub?.trim();
     if (!actorId) {
@@ -493,7 +494,7 @@ export class DataImportController {
     @Body() dto: VerifyCutoverLockDto,
   ): Promise<VerifyCutoverLockResponseDto> {
     if (!this.cutoverWizardService) {
-      throw new BadRequestException('سرویس کات‌اوور فعال نیست.');
+      throw new InternalServerErrorException('سرویس کات‌اوور فعال نیست.');
     }
     return this.cutoverWizardService.verifyPreCutoverLock(
       this.tenantIdOf(request),
