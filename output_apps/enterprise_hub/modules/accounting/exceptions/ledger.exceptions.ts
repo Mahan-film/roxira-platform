@@ -49,3 +49,19 @@ export class VoucherVersionConflictError extends Error {
     super(`Voucher ${entryId} was changed by another user.`);
   }
 }
+
+/** 422 Unprocessable Entity: manual journal posting into a control account is forbidden (T226). */
+export class ControlAccountPostingException extends HttpException {
+  constructor(readonly accountCodes: string[]) {
+    super(
+      {
+        statusCode: 422,
+        code: 'CONTROL_ACCOUNT_MANUAL_POSTING_FORBIDDEN',
+        error: 'CONTROL_ACCOUNT_MANUAL_POSTING_FORBIDDEN',
+        message: `ثبت دستی روی حساب کنترلی مجاز نیست: ${accountCodes.join(', ')}. این حساب‌ها فقط از طریق اسناد سیستمی گردش می‌پذیرند (مگر در دورهٔ تعدیلات با نقش مجاز).`,
+      },
+      422,
+    );
+  }
+}
+

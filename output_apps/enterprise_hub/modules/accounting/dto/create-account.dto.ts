@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsBoolean, IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { Currency } from '../../currency/enums/currency.enum';
 import { AccountLevel, AccountType, ReportLine } from '../enums/accounting.enum';
 
@@ -49,4 +50,18 @@ export class CreateAccountDto {
   @IsOptional()
   @IsEnum(ReportLine)
   reportLine?: ReportLine;
+
+  @ApiPropertyOptional({
+    description: 'فقط قابل ثبت توسط زیرسیستم‌ها (اسناد دستی مسدود است)',
+    default: false,
+  })
+  @IsOptional()
+  @Transform(({ obj, key, value }) => {
+    const raw = obj && key in obj ? (obj as Record<string, unknown>)[key] : value;
+    if (raw === 'true' || raw === true) return true;
+    if (raw === 'false' || raw === false) return false;
+    return raw;
+  })
+  @IsBoolean()
+  systemPostedOnly?: boolean;
 }

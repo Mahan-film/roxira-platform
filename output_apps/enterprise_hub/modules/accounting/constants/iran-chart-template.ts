@@ -16,6 +16,7 @@ export interface ChartTemplateAccount {
   standardKolCode: string | null;
   /** Contra account: its balance reduces the line it sits on (allowance, accumulated depreciation, returns). */
   contra: boolean;
+  systemPostedOnly?: boolean;
 }
 
 export interface ChartTemplate {
@@ -148,6 +149,22 @@ const TAFSILIS: ReadonlyArray<[string, string, string, AccountType, ReportLine]>
   ['101301', 'تنخواه مرکزی', '1013', ASSET, L.PETTY_CASH],
 ];
 
+/**
+ * Control accounts (AR, AP, inventory, and fixed assets) are system-posted only (T226).
+ * Manual journal postings on them are rejected with role exception for adjustment period only.
+ */
+export const CONTROL_REPORT_LINES: ReadonlySet<ReportLine> = new Set([
+  ReportLine.RECEIVABLE,
+  ReportLine.PAYABLE,
+  ReportLine.INVENTORY,
+  ReportLine.FIXED_ASSET,
+  ReportLine.ACCUMULATED_DEPRECIATION,
+]);
+
+export function isControlReportLine(reportLine?: ReportLine | null): boolean {
+  return reportLine != null && CONTROL_REPORT_LINES.has(reportLine);
+}
+
 function build(moeins: readonly Moein[]): ChartTemplateAccount[] {
   const usedKols = new Set(moeins.map(([code]) => code.slice(0, 2)));
   const kols = KOLS.filter(([code]) => usedKols.has(code));
@@ -161,6 +178,7 @@ function build(moeins: readonly Moein[]): ChartTemplateAccount[] {
       reportLine: null,
       standardKolCode: null,
       contra: false,
+      systemPostedOnly: false,
     })),
     ...kols.map(([code, name, accountType]) => ({
       code,
@@ -171,6 +189,7 @@ function build(moeins: readonly Moein[]): ChartTemplateAccount[] {
       reportLine: null,
       standardKolCode: null,
       contra: false,
+      systemPostedOnly: false,
     })),
     ...[...moeins]
       .sort(([a], [b]) => a.localeCompare(b))
@@ -183,6 +202,7 @@ function build(moeins: readonly Moein[]): ChartTemplateAccount[] {
         reportLine,
         standardKolCode,
         contra,
+        systemPostedOnly: reportLine != null && CONTROL_REPORT_LINES.has(reportLine),
       })),
     ...TAFSILIS.map(([code, name, parentCode, accountType, reportLine]) => ({
       code,
@@ -194,9 +214,11 @@ function build(moeins: readonly Moein[]): ChartTemplateAccount[] {
       // A tafsili reports under its moein's standard kol.
       standardKolCode: moeins.find(([moein]) => moein === parentCode)?.[4] ?? null,
       contra: false,
+      systemPostedOnly: reportLine != null && CONTROL_REPORT_LINES.has(reportLine),
     })),
   ];
 }
+
 
 export const CHART_TEMPLATES: readonly ChartTemplate[] = [
   {

@@ -233,12 +233,17 @@ export class AccountingJournalLinesRegistry implements EntityImportAdapter {
         new Date().toISOString();
 
       try {
-        const entry = await this.accountingService.createJournalEntry(tenantId, {
-          entryNumber: `PKG-${voucher}-${randomUUID().slice(0, 8)}`,
-          date,
-          description: 'ورود بسته دیتابیس (سطرهای دفتر روزنامه)',
-          lines,
-        });
+        const entry = await this.accountingService.createJournalEntry(
+          tenantId,
+          {
+            entryNumber: `PKG-${voucher}-${randomUUID().slice(0, 8)}`,
+            date,
+            description: 'ورود بسته دیتابیس (سطرهای دفتر روزنامه)',
+            lines,
+          },
+          undefined,
+          { isSystem: false },
+        );
         for (const record of group) {
           inserted.push({ rowNumber: record.rowNumber, ownerId: entry.id });
         }

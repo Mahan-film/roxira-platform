@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
-import { IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateNested } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { IsBoolean, IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateNested } from 'class-validator';
 import { FiscalYearStatus } from '../enums/accounting.enum';
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
@@ -40,6 +40,21 @@ export class ReopenFiscalYearDto {
   reason: string;
 }
 
+export class SetAdjustmentPeriodDto {
+  @ApiProperty({
+    description: 'باز یا بسته کردن دورهٔ تعدیلات برای ثبت اسناد تعدیلی روی حساب‌های کنترلی',
+    example: true,
+  })
+  @Transform(({ obj, key, value }) => {
+    const raw = obj && key in obj ? (obj as Record<string, unknown>)[key] : value;
+    if (raw === true || raw === 'true') return true;
+    if (raw === false || raw === 'false') return false;
+    return raw;
+  })
+  @IsBoolean()
+  open: boolean;
+}
+
 export class FiscalPeriodDto {
   @ApiProperty({ example: 1 }) index: number;
   @ApiProperty({ example: 'دوره ۱' }) name: string;
@@ -54,6 +69,8 @@ export class FiscalYearResponseDto {
   @ApiProperty() startDate: string;
   @ApiProperty() endDate: string;
   @ApiProperty({ enum: FiscalYearStatus }) status: FiscalYearStatus;
+  @ApiPropertyOptional({ description: 'آیا دورهٔ تعدیلات این سال مالی باز است' })
+  adjustmentPeriodOpen?: boolean;
   @ApiProperty({ nullable: true }) closedAt: Date | null;
   @ApiProperty({ nullable: true }) closedBy: string | null;
   @ApiPropertyOptional({ type: [FiscalPeriodDto] }) periods?: FiscalPeriodDto[];

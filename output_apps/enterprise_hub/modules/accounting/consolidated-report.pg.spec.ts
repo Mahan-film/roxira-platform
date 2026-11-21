@@ -116,37 +116,52 @@ describePg('Consolidated multi-company report on PostgreSQL (T53 / #713)', () =>
     }
 
     // Tenant A: 1020 debit 500,000, 4010 credit 500,000
-    await accounting.createJournalEntry(TENANT_A, {
-      entryNumber: 'JA-01',
-      date: '2026-04-10',
-      description: 'Sale in Company A',
-      lines: [
-        { accountCode: '1020', debit: '500000.00' },
-        { accountCode: '4010', credit: '500000.00' },
-      ],
-    } as never);
+    await accounting.createJournalEntry(
+      TENANT_A,
+      {
+        entryNumber: 'JA-01',
+        date: '2026-04-10',
+        description: 'Sale in Company A',
+        lines: [
+          { accountCode: '1020', debit: '500000.00' },
+          { accountCode: '4010', credit: '500000.00' },
+        ],
+      } as never,
+      undefined,
+      { isSystem: true },
+    );
 
     // Tenant B: 1020 debit 300,000, 4010 credit 300,000
-    await accounting.createJournalEntry(TENANT_B, {
-      entryNumber: 'JB-01',
-      date: '2026-05-12',
-      description: 'Sale in Company B',
-      lines: [
-        { accountCode: '1020', debit: '300000.00' },
-        { accountCode: '4010', credit: '300000.00' },
-      ],
-    } as never);
+    await accounting.createJournalEntry(
+      TENANT_B,
+      {
+        entryNumber: 'JB-01',
+        date: '2026-05-12',
+        description: 'Sale in Company B',
+        lines: [
+          { accountCode: '1020', debit: '300000.00' },
+          { accountCode: '4010', credit: '300000.00' },
+        ],
+      } as never,
+      undefined,
+      { isSystem: true },
+    );
 
     // Tenant C: 1020 debit 9,000,000, 4010 credit 9,000,000 (User 1 is not a member)
-    await accounting.createJournalEntry(TENANT_C, {
-      entryNumber: 'JC-01',
-      date: '2026-05-20',
-      description: 'Sale in Company C',
-      lines: [
-        { accountCode: '1020', debit: '9000000.00' },
-        { accountCode: '4010', credit: '9000000.00' },
-      ],
-    } as never);
+    await accounting.createJournalEntry(
+      TENANT_C,
+      {
+        entryNumber: 'JC-01',
+        date: '2026-05-20',
+        description: 'Sale in Company C',
+        lines: [
+          { accountCode: '1020', debit: '9000000.00' },
+          { accountCode: '4010', credit: '9000000.00' },
+        ],
+      } as never,
+      undefined,
+      { isSystem: true },
+    );
   }, 120000);
 
   afterAll(async () => {

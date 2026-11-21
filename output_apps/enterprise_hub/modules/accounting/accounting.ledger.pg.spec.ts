@@ -178,6 +178,8 @@ describePg('Ledger on PostgreSQL', () => {
                 { accountCode: '1020', debit: 5 },
                 { accountCode: '1010', debit: 10 },
               ]),
+          undefined,
+          { isSystem: true },
         ),
       );
       await expect(Promise.all(posts)).resolves.toHaveLength(20);
@@ -393,7 +395,7 @@ describePg('Ledger on PostgreSQL', () => {
           { accountCode: '1010', debit: '0.10' },
           { accountCode: '1020', debit: '0.20' },
           { accountCode: '4010', credit: '0.30' },
-        ])),
+        ]), undefined, { isSystem: true }),
       ).resolves.toBeDefined();
       await expectBalancesMatchLines();
     });

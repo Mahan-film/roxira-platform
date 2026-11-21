@@ -166,15 +166,20 @@ describePg('Treasury on PostgreSQL (non-superuser, FORCE RLS)', () => {
 
   it('M1 flow: one receipt against two invoices clears the customer balance and balances the ledger', async () => {
     // the invoices put 1500 on the customer's receivable (what invoice posting does)
-    await accounting.createJournalEntry(T1, {
-      entryNumber: 'INV-M1',
-      date: '2026-11-01T00:00:00.000Z',
-      description: 'فروش',
-      lines: [
-        { accountCode: '1020', debit: '1500.00', credit: '0.00', partyCode: 'C1' },
-        { accountCode: '4010', debit: '0.00', credit: '1500.00' },
-      ],
-    } as never);
+    await accounting.createJournalEntry(
+      T1,
+      {
+        entryNumber: 'INV-M1',
+        date: '2026-11-01T00:00:00.000Z',
+        description: 'فروش',
+        lines: [
+          { accountCode: '1020', debit: '1500.00', credit: '0.00', partyCode: 'C1' },
+          { accountCode: '4010', debit: '0.00', credit: '1500.00' },
+        ],
+      } as never,
+      undefined,
+      { isSystem: true },
+    );
     expect(await partyBalance(T1, '1020', 'C1')).toBe(1500);
 
     const created = await service.createDocument(
@@ -231,15 +236,20 @@ describePg('Treasury on PostgreSQL (non-superuser, FORCE RLS)', () => {
   });
 
   it('a cheque line registers a cheque and the receivable is credited exactly once', async () => {
-    await accounting.createJournalEntry(T1, {
-      entryNumber: 'INV-CHQ',
-      date: '2026-11-01T00:00:00.000Z',
-      description: 'فروش',
-      lines: [
-        { accountCode: '1020', debit: '1000.00', credit: '0.00', partyCode: 'C6' },
-        { accountCode: '4010', debit: '0.00', credit: '1000.00' },
-      ],
-    } as never);
+    await accounting.createJournalEntry(
+      T1,
+      {
+        entryNumber: 'INV-CHQ',
+        date: '2026-11-01T00:00:00.000Z',
+        description: 'فروش',
+        lines: [
+          { accountCode: '1020', debit: '1000.00', credit: '0.00', partyCode: 'C6' },
+          { accountCode: '4010', debit: '0.00', credit: '1000.00' },
+        ],
+      } as never,
+      undefined,
+      { isSystem: true },
+    );
     invoices['ffffffff-ffff-4fff-8fff-ffffffffffff'] = { number: 'F-6', payable: 1000 };
     const doc = await service.createDocument(
       T1,

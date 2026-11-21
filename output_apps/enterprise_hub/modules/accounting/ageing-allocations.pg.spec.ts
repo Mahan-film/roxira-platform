@@ -44,15 +44,20 @@ describePg('Ageing by treasury allocations on PostgreSQL (#237)', () => {
 
   /** Posts a sale to the ledger and stores the invoice row that points at the entry. */
   const sale = async (tenantId: string, number: string, day: string, amount: number, partyCode: string) => {
-    const entry = await accounting.createJournalEntry(tenantId, {
-      entryNumber: `INV-${number}`,
-      date: `${day}T12:00:00.000Z`,
-      description: `فروش ${number}`,
-      lines: [
-        { accountCode: '1020', debit: String(amount), credit: '0', partyCode },
-        { accountCode: '4010', debit: '0', credit: String(amount) },
-      ],
-    } as never);
+    const entry = await accounting.createJournalEntry(
+      tenantId,
+      {
+        entryNumber: `INV-${number}`,
+        date: `${day}T12:00:00.000Z`,
+        description: `فروش ${number}`,
+        lines: [
+          { accountCode: '1020', debit: String(amount), credit: '0', partyCode },
+          { accountCode: '4010', debit: '0', credit: String(amount) },
+        ],
+      } as never,
+      undefined,
+      { isSystem: true },
+    );
     const inserted = await testDb.owner.getRepository(InvoiceEntity).insert({
       tenantId,
       taxInvoiceNumber: number,
@@ -163,15 +168,20 @@ describePg('Ageing by treasury allocations on PostgreSQL (#237)', () => {
     await sale(T1, 'F-200', '2026-07-01', 300_000, 'C2');
     await sale(T1, 'F-201', '2026-10-15', 200_000, 'C2');
     // A manual receipt voucher: no treasury document, so it settles the oldest item first.
-    await accounting.createJournalEntry(T1, {
-      entryNumber: 'MAN-1',
-      date: '2026-10-28T12:00:00.000Z',
-      description: 'وصول دستی',
-      lines: [
-        { accountCode: '1010', debit: '100000', credit: '0' },
-        { accountCode: '1020', debit: '0', credit: '100000', partyCode: 'C2' },
-      ],
-    } as never);
+    await accounting.createJournalEntry(
+      T1,
+      {
+        entryNumber: 'MAN-1',
+        date: '2026-10-28T12:00:00.000Z',
+        description: 'وصول دستی',
+        lines: [
+          { accountCode: '1010', debit: '100000', credit: '0' },
+          { accountCode: '1020', debit: '0', credit: '100000', partyCode: 'C2' },
+        ],
+      } as never,
+      undefined,
+      { isSystem: true },
+    );
     const rows = (await reports.ageing(T1, { side: 'receivable', to: '2026-11-01', partyCode: 'C2' })).rows;
     expect(rows[0].amounts).toEqual([20_000_000n, 0n, 0n, 20_000_000n]);
 

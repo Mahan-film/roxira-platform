@@ -22,6 +22,7 @@ import {
   CreateFiscalYearDto,
   FiscalYearResponseDto,
   ReopenFiscalYearDto,
+  SetAdjustmentPeriodDto,
 } from '../dto/fiscal-year.dto';
 import { ChartTemplateService } from '../services/chart-template.service';
 import { FiscalYearService } from '../services/fiscal-year.service';
@@ -87,6 +88,24 @@ export class FiscalYearController {
     @Body() dto: CloseFiscalYearDto,
   ): Promise<CloseResultDto> {
     return this.fiscalYears.close(requireTenantId(request), this.actorOf(request), id, dto);
+  }
+
+  @RequireAction(AccessAction.ADMIN)
+  @Post('fiscal-years/:id/adjustment-period')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'باز یا بسته کردن دورهٔ تعدیلات سال مالی' })
+  @ApiResponse({ status: HttpStatus.OK, type: FiscalYearResponseDto })
+  setAdjustmentPeriod(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: SetAdjustmentPeriodDto,
+  ): Promise<FiscalYearResponseDto> {
+    return this.fiscalYears.setAdjustmentPeriod(
+      requireTenantId(request),
+      this.actorOf(request),
+      id,
+      dto.open,
+    );
   }
 
   @RequireAction(AccessAction.ADMIN)

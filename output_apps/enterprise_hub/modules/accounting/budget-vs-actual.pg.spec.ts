@@ -70,15 +70,20 @@ describePg('Budget vs Actual report on PostgreSQL (T52)', () => {
     } as never);
 
     // Post an actual entry in Tenant A: 1,200,000 rials to 5110 (over budget!)
-    await accounting.createJournalEntry(TENANT_A, {
-      entryNumber: 'J-B02',
-      date: '2026-06-15',
-      description: 'COGS',
-      lines: [
-        { accountCode: '5110', debit: '1200000.00' },
-        { accountCode: '1030', credit: '1200000.00' },
-      ],
-    } as never);
+    await accounting.createJournalEntry(
+      TENANT_A,
+      {
+        entryNumber: 'J-B02',
+        date: '2026-06-15',
+        description: 'COGS',
+        lines: [
+          { accountCode: '5110', debit: '1200000.00' },
+          { accountCode: '1030', credit: '1200000.00' },
+        ],
+      } as never,
+      undefined,
+      { isSystem: true },
+    );
   }, 120000);
 
   afterAll(async () => {

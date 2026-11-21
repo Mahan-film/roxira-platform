@@ -461,6 +461,7 @@ export class PettyCashService {
           ],
         } as never,
         manager,
+        { isSystem: true },
       );
       for (const row of expenses) {
         await this.repository.saveTransaction(

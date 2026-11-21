@@ -209,11 +209,11 @@ export class AccountingRepository {
     });
   }
 
-  /** Sets level, parent and report line on existing accounts; names, types and balances stay. */
+  /** Sets level, parent, report line and system_posted_only on existing accounts; names, types and balances stay. */
   async updateAccountMetadata(
     tenantId: string,
     code: string,
-    data: Pick<ChartOfAccountEntity, 'level' | 'parentCode' | 'reportLine'>,
+    data: Partial<Pick<ChartOfAccountEntity, 'level' | 'parentCode' | 'reportLine' | 'systemPostedOnly'>>,
     manager?: EntityManager,
   ): Promise<void> {
     return this.scope.within(tenantId, manager, async (m) => {
@@ -765,6 +765,7 @@ export class AccountingRepository {
 
   /**
    * True when `date` falls inside an OPEN fiscal year whose server-side adjustment period is open.
+   * Used by T226 control-account enforcement so the server decides adjustment-period eligibility.
    */
   async isDateInAdjustmentPeriod(
     tenantId: string,

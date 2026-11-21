@@ -411,6 +411,7 @@ export class BankingService {
           ],
         },
         manager,
+        { isSystem: true },
       );
       const bankLine = entry.lines.find((item) => item.accountId === ledger.id);
       if (!bankLine) {

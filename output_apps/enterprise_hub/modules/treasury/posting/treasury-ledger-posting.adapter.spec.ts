@@ -104,6 +104,7 @@ describe('TreasuryLedgerPostingAdapter', () => {
           description: 'Test posting',
         }),
         MANAGER,
+        { isSystem: true },
       );
     });
 
@@ -175,6 +176,7 @@ describe('TreasuryLedgerPostingAdapter', () => {
           description: 'Test posting',
         }),
         MANAGER,
+        { isSystem: true },
       );
       expect(postedLines()).toEqual([
         {

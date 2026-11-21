@@ -35,7 +35,9 @@ import {
   DEFAULT_CHART_OF_ACCOUNTS,
   FX_SCALE,
 } from '../constants/accounting.constants';
+import { isControlReportLine } from '../constants/iran-chart-template';
 import {
+  ControlAccountPostingException,
   DuplicateEntryNumberError,
   IdempotentReplayError,
   LockedPeriodError,
@@ -81,6 +83,7 @@ import {
   FxRateType,
   JournalEntryStatus,
   JournalEntryType,
+  ReportLine,
 } from '../enums/accounting.enum';
 import {
   CreateFxRateDto,
@@ -102,6 +105,32 @@ export interface AccountingImportAccountInput {
   level?: AccountLevel;
   /** Must already exist (earlier in the same file or before the import). */
   parentCode?: string;
+  reportLine?: ReportLine | null;
+  systemPostedOnly?: boolean;
+}
+
+/** گزینه‌های ثبت سند و کنترل‌های دسترسی حساب‌های کنترلی. */
+export interface PostEntryOptions {
+  reversesEntryId?: number;
+  entryType?: JournalEntryType;
+  /** آیا ثبت خودکار/سیستمی از طرف زیرسیستم‌ها است یا خیر (پیش‌فرض: false / fail closed). */
+  isSystem?: boolean;
+  /** نقش تأییدشده کاربر در سازمان از AccessGuard (`request.access?.roleKey`). */
+  actorRole?: string | null;
+  /** شناسه کاربر تأییدشده (`request.access?.userId`). */
+  actorUserId?: string | null;
+}
+
+const ALLOWED_ADJUSTMENT_ROLES = new Set([
+  'owner',
+  'admin',
+  'accountant',
+  'partner_advisor',
+]);
+
+export function isAllowedAdjustmentRole(role?: string | null): boolean {
+  if (!role) return false;
+  return ALLOWED_ADJUSTMENT_ROLES.has(role.trim().toLowerCase());
 }
 
 /** ورودی سطر افتتاحیه از مسیر ورود داده. */
@@ -181,6 +210,7 @@ export class AccountingService {
       level: entity.level ?? null,
       parentCode: entity.parentCode ?? null,
       reportLine: entity.reportLine ?? null,
+      systemPostedOnly: entity.systemPostedOnly ?? false,
     };
   }
 
@@ -453,6 +483,8 @@ export class AccountingService {
         accountType: account.accountType,
         currency: Currency.IRR,
         balance: '0',
+        reportLine: account.reportLine ?? null,
+        systemPostedOnly: isControlReportLine(account.reportLine),
       })),
       manager,
     );
@@ -485,6 +517,9 @@ export class AccountingService {
       }
     }
 
+    const isControl = isControlReportLine(dto.reportLine);
+    const systemPostedOnly = isControl ? true : (dto.systemPostedOnly ?? false);
+
     const created = await this.accountingRepository.createAccount(tenantId, {
       code: dto.code,
       name: dto.name,
@@ -494,6 +529,7 @@ export class AccountingService {
       level: dto.level ?? null,
       parentCode: dto.parentCode?.trim() || null,
       reportLine: dto.reportLine ?? null,
+      systemPostedOnly,
     });
 
     return this.toAccountDto(created);
@@ -527,6 +563,8 @@ export class AccountingService {
           throw new BadRequestException(`حساب بالادست ${input.parentCode} یافت نشد.`);
         }
       }
+      const isControl = isControlReportLine(input.reportLine);
+      const systemPostedOnly = isControl ? true : (input.systemPostedOnly ?? false);
       const created = await this.accountingRepository.createAccount(tenantId, {
         code: input.code,
         name: input.name,
@@ -535,6 +573,8 @@ export class AccountingService {
         balance: '0',
         level: input.level ?? null,
         parentCode: input.parentCode ?? null,
+        reportLine: input.reportLine ?? null,
+        systemPostedOnly,
       });
       createdIds.push(created.id);
     }
@@ -599,12 +639,17 @@ export class AccountingService {
       description: input.description,
     }));
 
-    const entry = await this.createJournalEntry(tenantId, {
-      entryNumber,
-      date,
-      description: 'مانده‌های افتتاحیه (ورود داده)',
-      lines,
-    });
+    const entry = await this.createJournalEntry(
+      tenantId,
+      {
+        entryNumber,
+        date,
+        description: 'مانده‌های افتتاحیه (ورود داده)',
+        lines,
+      },
+      undefined,
+      { isSystem: true },
+    );
     return entry.id;
   }
 
@@ -692,12 +737,7 @@ export class AccountingService {
     tenantId: string,
     dto: CreateJournalEntryDto,
     manager?: EntityManager,
-    options?: {
-      reversesEntryId?: number;
-      entryType?: JournalEntryType;
-      actorRole?: string | null;
-      actorUserId?: string | null;
-    },
+    options?: PostEntryOptions,
   ): Promise<JournalEntryResponseDto> {
     return this.postEntry(tenantId, dto, options ?? {}, manager);
   }
@@ -709,7 +749,7 @@ export class AccountingService {
     entryType: JournalEntryType,
     manager: EntityManager,
   ): Promise<JournalEntryResponseDto> {
-    return this.postEntry(tenantId, dto, { entryType }, manager);
+    return this.postEntry(tenantId, dto, { entryType, isSystem: true }, manager);
   }
 
   /** Exact check in integer minor units: debit equals credit and the total is above zero. */
@@ -800,10 +840,47 @@ export class AccountingService {
     return [...lines, roundingLine];
   }
 
-  /** Looks the account codes up and refuses unknown codes and header (group or kol) accounts. */
+  /**
+   * Enforces control-account posting policy (T226): manual postings touching `system_posted_only`
+   * accounts are rejected unless the entry date falls in an open server-side adjustment period
+   * AND the verified caller role is an authorized finance role.
+   */
+  private async assertControlAccountsAllowed(
+    tenantId: string,
+    accounts: ChartOfAccountEntity[],
+    date: Date,
+    options?: PostEntryOptions,
+    manager?: EntityManager,
+  ): Promise<void> {
+    if (options?.isSystem === true) {
+      return;
+    }
+    const controlViolations = accounts.filter((acc) => acc.systemPostedOnly);
+    if (controlViolations.length === 0) {
+      return;
+    }
+    const roleAllowed = isAllowedAdjustmentRole(options?.actorRole);
+    const inAdjustmentPeriod =
+      roleAllowed &&
+      (await this.accountingRepository.isDateInAdjustmentPeriod?.(
+        tenantId,
+        date,
+        manager,
+      )) === true;
+    if (!(inAdjustmentPeriod && roleAllowed)) {
+      const violatingCodes = Array.from(
+        new Set(controlViolations.map((a) => a.code)),
+      );
+      throw new ControlAccountPostingException(violatingCodes);
+    }
+  }
+
+  /** Looks the account codes up, enforces control account policies, and refuses unknown codes or headers. */
   private async resolveLineInputs(
     tenantId: string,
     normalizedLines: NormalisedJournalLine[],
+    date: Date,
+    options?: PostEntryOptions,
     manager?: EntityManager,
   ): Promise<JournalLineInput[]> {
     const uniqueCodes = Array.from(
@@ -832,6 +909,17 @@ export class AccountingService {
         `سند روی حساب گروه یا کل ثبت نمی‌شود؛ حساب معین یا تفصیلی انتخاب کنید: ${headers.map((a) => a.code).join(', ')}`,
       );
     }
+
+    const nonRoundingAccounts = normalizedLines
+      .filter((l) => !l.isRounding)
+      .map((l) => accountByCode.get(l.accountCode)!);
+    await this.assertControlAccountsAllowed(
+      tenantId,
+      nonRoundingAccounts,
+      date,
+      options,
+      manager,
+    );
 
     return normalizedLines.map((line) => ({
       accountId: accountByCode.get(line.accountCode)!.id,
@@ -886,12 +974,7 @@ export class AccountingService {
   private async postEntry(
     tenantId: string,
     dto: CreateJournalEntryDto,
-    options: {
-      reversesEntryId?: number;
-      entryType?: JournalEntryType;
-      actorRole?: string | null;
-      actorUserId?: string | null;
-    },
+    options: PostEntryOptions,
     manager?: EntityManager,
   ): Promise<JournalEntryResponseDto> {
     await this.ensureDefaultAccounts(tenantId, manager);
@@ -965,7 +1048,7 @@ export class AccountingService {
       }
       // Resolved once, after the number is known to be free (same order as before).
       if (lineInputs == null) {
-        lineInputs = await this.resolveLineInputs(tenantId, normalizedLines, manager);
+        lineInputs = await this.resolveLineInputs(tenantId, normalizedLines, date, options, manager);
       }
       if (this.budgetControl && status === JournalEntryStatus.POSTED) {
         const warnings: string[] = [];
@@ -1161,7 +1244,7 @@ export class AccountingService {
     tenantId: string,
     id: number,
     dto: UpdateJournalEntryDto,
-    options?: { actorRole?: string | null; actorUserId?: string | null },
+    options?: PostEntryOptions,
   ): Promise<JournalEntryResponseDto> {
     await this.ensureDefaultAccounts(tenantId);
     return this.accountingRepository.transaction(tenantId, async (manager) => {
@@ -1192,7 +1275,7 @@ export class AccountingService {
       } catch (error) {
         this.mapPeriodLock(error);
       }
-      const lineInputs = await this.resolveLineInputs(tenantId, normalizedLines, manager);
+      const lineInputs = await this.resolveLineInputs(tenantId, normalizedLines, date, options, manager);
       try {
         await this.accountingRepository.replaceEntryContent(
           tenantId,
@@ -1223,7 +1306,7 @@ export class AccountingService {
     target: JournalEntryStatus,
     expectedVersion?: number | null,
     actor?: string,
-    options?: { actorRole?: string | null; actorUserId?: string | null },
+    options?: PostEntryOptions,
   ): Promise<JournalEntryResponseDto> {
     if (target === JournalEntryStatus.POSTED) {
       assertNotAiIdentity(actor, 'post a journal entry');
@@ -1257,6 +1340,16 @@ export class AccountingService {
         } catch (error) {
           this.mapPeriodLock(error);
         }
+        const nonRoundingAccounts = full.lines
+          .filter((l) => !l.isRounding && l.account)
+          .map((l) => l.account);
+        await this.assertControlAccountsAllowed(
+          tenantId,
+          nonRoundingAccounts,
+          new Date(entry.date),
+          options,
+          manager,
+        );
         await this.assertPartnerAdvisorAdjustmentPeriod(
           tenantId,
           new Date(entry.date),
@@ -1406,7 +1499,11 @@ export class AccountingService {
             `برگشت سند ${original.entryNumber}` + (reason ? `: ${reason}` : ''),
           lines,
         } as CreateJournalEntryDto,
-        { reversesEntryId: original.id, entryType: original.entryType },
+        {
+          reversesEntryId: original.id,
+          entryType: original.entryType,
+          isSystem: true,
+        },
         manager,
       );
     } catch (error) {
@@ -1736,6 +1833,19 @@ export class AccountingService {
     const account = await this.accountingRepository.findAccountById(
       tenantId,
       id,
+    );
+    return account ? this.toAccountDto(account) : null;
+  }
+
+  /** حساب دفتر کل با کد حساب (فقط همین مستأجر). */
+  async findAccountByCode(
+    tenantId: string,
+    code: string,
+  ): Promise<AccountResponseDto | null> {
+    await this.ensureDefaultAccounts(tenantId);
+    const account = await this.accountingRepository.findAccountByCode(
+      tenantId,
+      code,
     );
     return account ? this.toAccountDto(account) : null;
   }
