@@ -16,9 +16,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 DIR = ROOT / "scripts/ops/ci_box/box_backup"
 scan = None
-HAVE_RESTIC = shutil.which("restic") is not None
-LINUX = sys.platform.startswith("linux")  # the scripts use GNU stat/sha256sum/shuf/flock
-E2E = os.environ.get("BOX_BACKUP_E2E") == "1"  # real restic round trips take about 40 s: opt in
+
+
+def linux():
+    return sys.platform.startswith("linux")  # the scripts use GNU stat/sha256sum/shuf/flock
+
+
+def e2e_enabled():
+    """Real restic round trips take about 40 s: opt in with BOX_BACKUP_E2E=1 (and restic installed)."""
+    return os.environ.get("BOX_BACKUP_E2E") == "1" and shutil.which("restic") is not None
 FAKE_SECRET = "sk-" + "A1b2C3d4E5f6G7h8I9j0K1l2"  # assembled so this file itself never matches a scanner
 
 
@@ -31,7 +37,7 @@ def setUpModule():
 
 class Fixture(unittest.TestCase):
     def setUp(self):
-        if not LINUX:
+        if not linux():
             self.skipTest("Linux only")
         self.tmp = Path(tempfile.mkdtemp(prefix="boxbk."))
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
@@ -164,8 +170,12 @@ class DryRunAndSkip(Fixture):
         self.assertIn("skipped", r.stdout)
 
 
-@unittest.skipUnless(HAVE_RESTIC and E2E, "set BOX_BACKUP_E2E=1 (and have restic installed) for the real round trips")
 class BackupAndDrill(Fixture):
+    def setUp(self):
+        if not e2e_enabled():
+            self.skipTest("set BOX_BACKUP_E2E=1 (and have restic installed) for the real round trips")
+        super().setUp()
+
     def test_backup_is_idempotent_secret_free_and_restorable(self):
         r = self.sh("box_backup.sh", "--apply")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
