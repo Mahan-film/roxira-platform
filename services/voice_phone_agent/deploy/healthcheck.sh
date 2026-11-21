@@ -33,4 +33,14 @@ reg=$(docker exec "$BRIDGE" asterisk -rx 'pjsip show registrations' 2>/dev/null 
 [ -n "$reg" ] || reg=none
 [ "$reg" = Registered ] && ok "sip registration $reg" || bad "sip registration $reg"
 
+# Carrier contact qualify (OPTIONS every qualify_frequency s keep the carrier's UDP/NAT path open;
+# without it inbound INVITEs are dropped by the host firewall). Only the status word is printed:
+# the Contact lines carry the carrier address, so they never leave this pipe.
+AOR=${PHONE_SIP_AOR:-sabanet_aor}
+qual=$(docker exec "$BRIDGE" asterisk -rx 'pjsip show contacts' 2>/dev/null \
+  | grep -E "^[[:space:]]*Contact:[[:space:]]+$AOR/" \
+  | grep -owE 'Avail|Unavail|NonQual|Unknown|Created|Removed' | head -1)
+[ -n "$qual" ] || qual=none
+[ "$qual" = Avail ] && ok "carrier contact qualify $qual" || bad "carrier contact qualify $qual"
+
 exit $fail

@@ -4,6 +4,7 @@
 #   sudo bash /home/mahanfilms/roxira-platform/scripts/ops/ci_box/05_root_phone_stack.sh
 # What it does (prints file names and variable NAMES only, never contents or values):
 #   1. extracts ~phone/voice-ai-bundle.tar.gz into /srv/data/phone/voice-ai (owner root, mode 700)
+#      and keeps qualify_frequency=20 under the carrier AOR in its pjsip.conf (carrier NAT path)
 #   2. moves ~phone/voice-ai-agent.env to /srv/data/phone/agent/.env (mode 600, owner phone)
 #   3. builds the agent from origin/main services/voice_phone_agent into /srv/data/phone/agent
 #      (npm ci && npm run build), creates the edge-tts venv, installs ffmpeg
@@ -48,6 +49,40 @@ if [ -f "$BUNDLE" ]; then
   chown -R root:root $STACK; chmod -R go-w,a+rX $STACK; chmod 700 $STACK
 else
   echo "no bundle at ~$U (already extracted?)"; [ -d $STACK ] || { echo "and $STACK missing"; exit 1; }
+fi
+
+echo "== 1b. carrier qualify in the bundle's pjsip.conf"
+# Carrier INVITEs come back over the UDP conntrack/NAT entry the REGISTER opened; ufw input is DROP,
+# so once that entry expires inbound calls are dropped (pjsip keep_alive_interval covers TCP only).
+# qualify_frequency=20 makes Asterisk send OPTIONS to the carrier every 20 s, keeping the path open.
+# Written in place with `cat tmp > file`: the live file is a single-file bind mount, where sed -i
+# (rename) fails with "Resource busy". Never print the file: it holds the carrier password.
+# ensure_qualify <file> <aor>: exactly one qualify_frequency=20 right under [<aor>]; 0 = changed, 1 = already so.
+ensure_qualify() {
+  local f=$1 aor=$2 t rc=1
+  t=$(mktemp)
+  awk -v aor="$aor" '
+    /^[[:space:]]*\[/ {
+      insec = ($0 ~ ("^[[:space:]]*\\[" aor "\\]"))
+      print
+      if (insec && !done) { print "qualify_frequency=20"; done = 1 }
+      next
+    }
+    insec && /^[[:space:]]*qualify_frequency[[:space:]]*=/ { next }
+    { print }
+  ' "$f" > "$t"
+  if ! cmp -s "$t" "$f"; then cat "$t" > "$f"; rc=0; fi
+  rm -f "$t"
+  return $rc
+}
+AOR=${PHONE_SIP_AOR:-sabanet_aor}
+PJSIP=$(find $STACK -maxdepth 4 -type f -name pjsip.conf -exec grep -lE "^[[:space:]]*\[$AOR\]" {} + 2>/dev/null | head -1)
+if [ -z "$PJSIP" ]; then
+  echo "WARN: no pjsip.conf with [$AOR] in the bundle; carrier qualify not set"
+elif ensure_qualify "$PJSIP" "$AOR"; then
+  echo "qualify_frequency=20 set under [$AOR] in ${PJSIP#$STACK/} (applies when the bridge container restarts)"
+else
+  echo "qualify_frequency=20 already under [$AOR] in ${PJSIP#$STACK/}"
 fi
 COMPOSE=""
 for f in docker-compose.yml docker-compose.yaml compose.yaml compose.yml; do

@@ -58,6 +58,9 @@ export const cfg = {
   roomPrefix: str('ROOM_PREFIX', 'call-'),
   sipIdentityPrefix: str('SIP_IDENTITY_PREFIX', 'sip_'),
   agentIdentity: str('AGENT_IDENTITY', 'ai-agent-bot'),
+  // Called numbers for the local bridge's inbound trunk (comma list). Empty = LiveKit's default
+  // trunk, which accepts any called number (allowed only from 127.0.0.1/32, see sip.ts).
+  sipTrunkNumbers: str('SIP_TRUNK_NUMBERS').split(',').map((s) => s.trim()).filter(Boolean),
 
   // Only for blocked foreign APIs (STT/TTS/LLM). Never used for LiveKit or Smart Judge.
   proxyUrl: str('PROXY_URL', 'http://127.0.0.1:10808'),
