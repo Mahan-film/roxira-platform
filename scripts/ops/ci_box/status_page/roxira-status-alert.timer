@@ -1,0 +1,11 @@
+[Unit]
+Description=Roxira box failure alerts (every 5 minutes, off the hour and off the collector)
+
+[Timer]
+OnCalendar=*:3/5
+RandomizedDelaySec=20
+AccuracySec=30s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

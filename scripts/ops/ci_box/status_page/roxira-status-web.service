@@ -1,0 +1,14 @@
+[Unit]
+Description=Roxira box status page (static files, python http.server, loopback by default)
+
+[Service]
+Environment=STATUS_BIND=127.0.0.1 STATUS_PORT=8088
+EnvironmentFile=-%h/.config/roxira-status/status.env
+# Serves ONLY the www directory (index.html, status.json). Never bind a public address; LAN only, if at all.
+ExecStart=/usr/bin/python3 -m http.server ${STATUS_PORT} --bind ${STATUS_BIND} --directory %h/.local/share/roxira-status/www
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target
