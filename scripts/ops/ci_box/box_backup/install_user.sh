@@ -27,7 +27,8 @@ for u in roxira-box-backup.service roxira-box-backup.timer roxira-box-backup-not
 done
 run systemctl --user daemon-reload
 run systemctl --user enable --now roxira-box-backup.timer
-echo "installed. Next (owner): create $cfg/restic.pass (mode 600), the repository directory, then:"
+[ "$DRY" = 1 ] && echo "dry-run complete, nothing changed." || echo "installed."
+echo "Next (owner): create $cfg/restic.pass (mode 600), the repository directory, then:"
 echo "  $lib/box_backup.sh --dry-run     # see what would be backed up"
 echo "  systemctl --user start roxira-box-backup.service && $lib/box_backup.sh --status"
 echo "  $lib/restore_drill.sh            # restore drill into a scratch dir"
