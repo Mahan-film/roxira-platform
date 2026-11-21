@@ -24,13 +24,22 @@ sudo bash /home/mahanfilms/roxira-platform/scripts/ops/ci_box/05_root_phone_stac
 # then as mahanfilms (sudoers allows only this wrapper):
 sudo phone-stack up
 sudo phone-stack status     # OK/FAIL lines: 4 containers, 2 units, LiveKit, TTS sidecar,
-                            # synthetic TTS path, SIP registration (one word)
+                            # synthetic TTS path, SIP registration and carrier
+                            # contact qualify (one word each)
 sudo phone-stack logs 200   # filtered: no env, keys, numbers or IPs
 sudo phone-stack down
 ```
 
 To update the agent: merge to main, `git fetch`, run `05_root_phone_stack.sh` again (it keeps `.env` and
 the extracted bundle), then `sudo phone-stack up`.
+
+SIP routing (#1039): on every start the agent makes sure LiveKit has the inbound trunk
+`roxira-local-bridge` (calls only from `127.0.0.1/32`, i.e. the local Asterisk bridge) and an individual
+dispatch rule with the agent's room prefix bound to it, reusing existing ones and retrying until LiveKit
+answers; both live only in LiveKit's Redis. Optional `SIP_TRUNK_NUMBERS` (comma list) limits the trunk to
+those called numbers; empty means LiveKit's default trunk (any called number). The installer also keeps
+`qualify_frequency=20` under `[sabanet_aor]` in the bundle's `pjsip.conf`: the OPTIONS pings keep the
+carrier's UDP path through the host firewall open, so inbound INVITEs are not dropped.
 
 Open: a pinned-digest compose file in git that mounts the bundle's configs (after the first run shows
 the bundle's images and service names).

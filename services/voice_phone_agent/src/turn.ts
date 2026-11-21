@@ -33,34 +33,65 @@ function bigrams(s: string): string[] {
   return out;
 }
 
-/** Share of `part`'s letter pairs that also occur in `whole` (0..1); robust to STT misspellings. */
-export function containment(part: string, whole: string): number {
-  const p = bigrams(part);
-  if (!p.length) return 0;
-  const w = new Set(bigrams(whole));
-  return p.filter((b) => w.has(b)).length / p.length;
+/** Same word, allowing an STT misspelling ("حوشمند" for "هوشمند"); words of 1-2 letters must match exactly. */
+export function sameWord(a: string, b: string): boolean {
+  const x = norm(a);
+  const y = norm(b);
+  if (x === y) return true;
+  if (x.length < 3 || y.length < 3 || Math.abs(x.length - y.length) > 2) return false;
+  const bx = bigrams(x);
+  const by = new Set(bigrams(y));
+  const common = bx.filter((g) => by.has(g)).length;
+  return (2 * common) / (bx.length + by.size) >= 0.6;
 }
+
+const ECHO_MAX_LEAD = 3; // transcript words before the echo starts ("یکی", "در اینجا")
+const ECHO_MAX_SKIP = 3; // agent words the STT may drop inside the echo
+const ECHO_MIN_WORDS = 4;
 
 /**
  * Remove the agent's own voice coming back on the line (handset on speaker, line echo) from the start
  * of a transcript. Real call 2026-11-15: "یکی به غازی حوشمند خوش آمدید. آخرین آرای وحدت رویه چی هستش؟"
- * where the first part is the greeting. Leading words that look like recent agent speech are dropped;
- * two non-matching words in a row end the echo. Only strips when at least 4 words match.
+ * where the first part is the greeting.
+ *
+ * The leading words must line up, IN ORDER, with a stretch of the agent's words (word-to-word, small
+ * misspellings allowed, a few agent words may be missing); two non-matching words in a row end the echo.
+ * Only strips when at least 4 words line up, 2 of them longer than 3 letters, and most of the stripped
+ * span matched. Real call 2026-11-21: the old bag-of-letter-pairs check matched the caller's own
+ * question against 45 s of agent speech ("الان توی یک درگیری ..." has the same common words and
+ * letter pairs as any long answer) and threw the first half of the question away.
  */
 export function stripEcho(text: string, agentTexts: string[]): { text: string; removed: string } {
-  const agent = agentTexts.join(' ');
-  if (!agent.trim()) return { text, removed: '' };
-  const agentWords = new Set(words(norm(agent)));
+  const agent = words(agentTexts.join(' '));
+  if (!agent.length) return { text, removed: '' };
   const w = words(text);
   let cut = 0;
-  let miss = 0;
-  for (let i = 0; i < w.length; i++) {
-    const x = norm(w[i]);
-    const echoLike = agentWords.has(x) || (bigrams(x).length >= 2 && containment(x, agent) >= 0.67);
-    if (echoLike) { cut = i + 1; miss = 0; } else if (++miss >= 2) break;
+  for (let lead = 0; lead <= Math.min(ECHO_MAX_LEAD, w.length - 1); lead++) {
+    for (let j = 0; j < agent.length; j++) {
+      if (!sameWord(w[lead], agent[j])) continue;
+      // greedy in-order alignment of w[lead..] against agent[j..]
+      let k = j + 1;
+      let matched = 1;
+      let long = norm(w[lead]).length > 3 ? 1 : 0;
+      let last = lead;
+      let miss = 0;
+      for (let i = lead + 1; i < w.length && miss < 2; i++) {
+        let hit = -1;
+        for (let d = 0; d <= ECHO_MAX_SKIP && k + d < agent.length; d++) {
+          if (sameWord(w[i], agent[k + d])) { hit = k + d; break; }
+        }
+        if (hit < 0) { miss++; continue; }
+        matched++;
+        if (norm(w[i]).length > 3) long++;
+        last = i;
+        k = hit + 1;
+        miss = 0;
+      }
+      const span = last + 1 - lead;
+      if (matched >= ECHO_MIN_WORDS && long >= 2 && matched / span >= 0.6 && last + 1 > cut) cut = last + 1;
+    }
   }
-  // >= 4 words: a caller may open by repeating a 3-word term from the last answer ("رأی وحدت رویه ...")
-  if (cut < 4 || containment(w.slice(0, cut).join(' '), agent) < 0.6) return { text, removed: '' };
+  if (!cut) return { text, removed: '' };
   const rest = w.slice(cut).join(' ');
   const q = /[؟?]\s*$/.test(text) && rest ? '؟' : '';
   return { text: rest ? rest + q : '', removed: w.slice(0, cut).join(' ') };

@@ -9,6 +9,8 @@ Plugs into the data/eval/ harness next to scripts/eval_ruling_drafts.py.
     python3 scripts/eval_chat_golden.py --validate                 # offline: file shape only
     python3 scripts/eval_chat_golden.py --base-url http://127.0.0.1:8000
     python3 scripts/eval_chat_golden.py --offline-answers answers.json   # {id: reply}
+    python3 scripts/eval_chat_golden.py --set data/eval/chat_golden/phone_owner_2026-11-21.json --voice --base-url ...
+        # --voice asks in voice mode (is_voice_mode), like the phone line
     python3 scripts/eval_chat_golden.py --retrieval-only                 # no LLM: retrieval recall
         # needs Qdrant + the query embedder; read-only (search/scroll only). On the server:
         # docker exec roxira_app_prod python scripts/eval_chat_golden.py --retrieval-only
@@ -116,10 +118,18 @@ def run_retrieval(set_path: Path, top_k: int = 5) -> int:
     return 0 if hits == scored else 1
 
 
-def ask(base_url: str, question: str) -> str:
+def chat_payload(question: str, voice: bool = False) -> dict:
+    """Request body; voice=True asks like the phone line does (short spoken answer, voice prompt)."""
+    body = {"message": question, "tier": "FREE"}
+    if voice:
+        body.update(is_voice_mode=True, channel="voice")
+    return body
+
+
+def ask(base_url: str, question: str, voice: bool = False) -> str:
     req = urllib.request.Request(
         base_url.rstrip("/") + "/api/v1/apps/judge/chat",
-        data=json.dumps({"message": question, "tier": "FREE"}).encode(),
+        data=json.dumps(chat_payload(question, voice)).encode(),
         headers={"Content-Type": "application/json"},
     )
     with urllib.request.urlopen(req, timeout=90) as resp:  # noqa: S310 - operator-supplied URL
@@ -134,6 +144,7 @@ def main() -> int:
     ap.add_argument("--offline-answers")
     ap.add_argument("--retrieval-only", action="store_true", help="check expected articles are retrieved; no LLM")
     ap.add_argument("--retrieval-set", default=str(DEFAULT_RETRIEVAL_SET))
+    ap.add_argument("--voice", action="store_true", help="ask in voice mode, like the phone line")
     args = ap.parse_args()
     if args.retrieval_only:
         return run_retrieval(Path(args.retrieval_set))
@@ -146,7 +157,7 @@ def main() -> int:
     if answers is None and not args.base_url:
         print("need --base-url or --offline-answers (or --validate)", file=sys.stderr)
         return 2
-    results = [score_case(c, answers[c["id"]] if answers else ask(args.base_url, c["question"]))
+    results = [score_case(c, answers[c["id"]] if answers else ask(args.base_url, c["question"], args.voice))
                for c in cases if answers is None or c["id"] in answers]
     for r in results:
         print(("PASS " if r["pass"] else "FAIL ") + r["id"], r["missing"] or "", r["forbidden"] or "")

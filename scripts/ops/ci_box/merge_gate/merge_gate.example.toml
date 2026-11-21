@@ -1,0 +1,48 @@
+# Copy to ~/.config/roxira-merge-gate/merge_gate.toml (install_user.sh does this) and edit.
+# Never put a token here: gh uses its own login (account mahansudo).
+repo = "Mahan-film/roxira-platform"
+base = "main"
+label = "merge-queue"
+owner_label = "owner-approved"
+
+# Stay true until the repo flip. While true, nothing is merged, commented or written.
+dry_run = true
+
+# Also treat "auto-merge requested" as a request to merge (transition period).
+allow_auto_merge_flag = true
+
+# Local HTTP proxy for gh (empty = none).
+proxy = "http://127.0.0.1:3128"
+
+# State dir holds state.json, the flock file `lock` and the kill switch file `KILL`.
+# `touch <state_dir>/KILL` stops the gate; remove it to resume.
+state_dir = "~/.local/state/roxira-merge-gate"
+
+# Check-run names (job `name:` in .github/workflows/ci.yml) that must be success/skipped/neutral
+# on the exact head SHA. Verify with: gh api repos/<repo>/commits/<sha>/check-runs --jq '.check_runs[].name'
+required_checks = [
+  "Detect changes",
+  "Secret scan (new commits only)",
+  "Semgrep CE (new findings)",
+  "Agent guards (money, tenant scope, model ids, secrets)",
+  "Pytest (unit)",
+  "Compose config",
+  "Frontend lint + build",
+  "Backend (tsc + jest + Postgres specs)",
+  "Frontend gate",
+]
+
+protected_globs = [
+  "migrations/**",
+  "**/migrations/**",
+  ".github/workflows/**",
+  "scripts/ops/deploy*.sh",
+  "docker-compose.prod.yml",
+]
+
+# Only comments by these logins count as review-desk verdicts.
+review_comment_authors = ["github-actions[bot]"]
+
+# Numeric GitHub user ids (gh api users/<login> --jq .id). Empty = feature off.
+approver_ids = []        # human APPROVE on the exact head counts as a review
+owner_approver_ids = []  # may add the `owner-approved` label for protected paths

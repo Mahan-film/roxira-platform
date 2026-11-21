@@ -1,0 +1,26 @@
+# PREPARED, NOT ENABLED (row T204). Overlay for docker-compose.prod.yml: postgres_prod with WAL-G archiving.
+# Enable and roll back: docs/ops/WALG.md. Only postgres_prod (enterprise_db) is covered; roxira_twenty_db is not.
+#   docker compose -f docker-compose.prod.yml -f docker-compose.walg.yml up -d --build postgres_prod
+# Rollback = the same command without the second -f (the container is recreated on the old image, archive_mode off).
+services:
+  postgres_prod:
+    image: roxira-postgres-walg:17-walg3.0.9
+    build:
+      context: ./docker/postgres-walg
+    # Names only live in /etc/roxira/walg.env (root, 0600): see deploy/backup/walg.env.example. Never commit values.
+    env_file:
+      - /etc/roxira/walg.env
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_timeout=60
+      - -c
+      - max_wal_size=1GB
+      - -c
+      - archive_command=/usr/local/bin/walg-archive %p
+    volumes:
+      - /var/lib/roxira-backup/walg:/walg-state

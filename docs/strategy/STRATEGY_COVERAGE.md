@@ -44,7 +44,7 @@ Each becomes a WAVE row once its prerequisite exists.
 - Activation and weekly active companies from real pilots (needs telemetry).
 
 ## Research round 2
-The owner has the prompts in `Desktop/Roxira/deep_research_round2.html` (copy buttons) and `.txt`. Each prompt has two stages: the research itself, then a self-review with fact re-checks and a decision pack.
+Prompts: `DEEP_RESEARCH_ROUND2.md` (round 1, R1–R7: `DEEP_RESEARCH_ROUND1.md`). Each prompt has two stages: the research itself, then a self-review with fact re-checks and a decision pack.
 
 | Prompt | Covers rows |
 |---|---|

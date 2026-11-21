@@ -1,0 +1,13 @@
+[Unit]
+Description=Roxira nightly WAL-G base backup + retention (prepared, not enabled: docs/ops/WALG.md)
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/roxira_platform
+ExecStart=/opt/roxira_platform/scripts/ops/walg/walg_nightly.sh
+Nice=15
+IOSchedulingClass=idle
+TimeoutStartSec=2h
