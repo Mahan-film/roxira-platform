@@ -204,11 +204,11 @@ describe('groupInvoiceRows', () => {
   });
 
   it('fails an unsupported currency and defaults a blank one to IRR', () => {
-    const unsupported = groupInvoiceRows([row({ currency: 'GBP' })], TENANT_PARTIES);
+    const unsupported = groupInvoiceRows([row({ currency: 'JPY' })], TENANT_PARTIES);
     const blank = groupInvoiceRows([row({ rowNumber: 3, currency: '' })], TENANT_PARTIES);
     const lower = groupInvoiceRows([row({ rowNumber: 4, currency: 'usd', fxRate: 920000 })], TENANT_PARTIES);
 
-    expect(unsupported[0].rowErrors.get(2)).toContain('ارز «GBP»');
+    expect(unsupported[0].rowErrors.get(2)).toContain('ارز «JPY»');
     expect(blank[0].currency).toBe(Currency.IRR);
     expect(blank[0].valid).toBe(true);
     expect(lower[0].currency).toBe(Currency.USD);
