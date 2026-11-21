@@ -249,3 +249,26 @@ def test_kill_switch_and_lock(tmp_path, monkeypatch):
     (tmp_path / "s" / "KILL").write_text("")
     monkeypatch.setattr(mg, "GhApi", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not run")))
     assert mg.main(["--config", str(cfg)]) == 0
+
+
+def test_json_pages_splits_paginate_output():
+    assert mg.json_pages("") == []
+    assert mg.json_pages('[1,2][3]') == [[1, 2], [3]]
+    assert mg.json_pages('[1]\n[2]\n') == [[1], [2]]
+    assert mg.json_pages('{"total_count":1,"check_runs":[]}\n{"a":2}') == [
+        {"total_count": 1, "check_runs": []}, {"a": 2}]
+
+
+def test_gh_api_paginate_flattens_pages(monkeypatch):
+    class R:
+        returncode = 0
+        stdout = '[{"n":1},{"n":2}]\n[{"n":3}]'
+        stderr = ""
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        seen["cmd"] = cmd
+        return R()
+    monkeypatch.setattr(mg.subprocess, "run", fake_run)
+    assert mg.GhApi()("GET", "x", paginate=True) == [{"n": 1}, {"n": 2}, {"n": 3}]
+    assert "--slurp" not in seen["cmd"] and "--paginate" in seen["cmd"]

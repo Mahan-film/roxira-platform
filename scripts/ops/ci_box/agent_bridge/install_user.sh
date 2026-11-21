@@ -17,7 +17,14 @@ install -m 0644 "$here/roxira-bridge.service" "$here/roxira-bridge.timer" "$unit
 systemctl --user daemon-reload
 # The first timer run sets a baseline (WAVE comments older than that run are ignored), so post
 # the first WAVE only after the journal shows "baseline set".
-systemctl --user enable --now roxira-bridge.timer
+if grep -q '<port>' "$conf/env"; then
+  # A run with the placeholder fails with "gh api failed: error connecting to http".
+  systemctl --user enable roxira-bridge.timer
+  echo "Timer enabled but NOT started: set the proxy port in $conf/env, then:"
+  echo "  systemctl --user start roxira-bridge.timer"
+else
+  systemctl --user enable --now roxira-bridge.timer
+fi
 
 echo
 echo "Installed. Next:"

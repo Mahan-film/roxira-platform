@@ -115,6 +115,21 @@ def protected_hits(files: list[dict], globs: list[str]) -> list[str]:
     return hits
 
 
+def json_pages(text: str) -> list:
+    """Split `gh api --paginate` output (JSON documents back to back) into a list of pages."""
+    dec = json.JSONDecoder()
+    pages: list = []
+    i, n = 0, len(text)
+    while i < n:
+        while i < n and text[i].isspace():
+            i += 1
+        if i >= n:
+            break
+        doc, i = dec.raw_decode(text, i)
+        pages.append(doc)
+    return pages
+
+
 class GhApi:
     """Thin wrapper over `gh api`. Raises GhError on failure."""
 
@@ -127,7 +142,8 @@ class GhApi:
     def __call__(self, method: str, path: str, fields: dict | None = None, paginate: bool = False):
         cmd = ["gh", "api", "-X", method, path]
         if paginate:
-            cmd += ["--paginate", "--slurp"]
+            # No --slurp: it needs gh >= 2.48 and Ubuntu 26.04 ships 2.46. Pages are split below.
+            cmd += ["--paginate"]
         for k, v in (fields or {}).items():
             cmd += ["-f", f"{k}={v}"]
         try:
@@ -137,13 +153,12 @@ class GhApi:
         if r.returncode != 0:
             raise GhError((r.stderr or r.stdout).strip()[:500])
         out = r.stdout.strip()
-        data = json.loads(out) if out else None
-        if paginate and isinstance(data, list):
-            flat: list = []
-            for page in data:
-                flat.extend(page if isinstance(page, list) else [page])
-            return flat
-        return data
+        if not paginate:
+            return json.loads(out) if out else None
+        flat: list = []
+        for page in json_pages(out):
+            flat.extend(page if isinstance(page, list) else [page])
+        return flat
 
 
 class State:
