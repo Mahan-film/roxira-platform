@@ -1,0 +1,15 @@
+[Unit]
+Description=restic backup of the box's own data (user level)
+After=network-online.target
+OnFailure=roxira-box-backup-notify.service
+
+[Service]
+Type=oneshot
+# Off-box traffic (S3/B2) goes through the local proxy; the installer rewrites these two lines from ROXIRA_PROXY.
+Environment=HTTPS_PROXY=http://127.0.0.1:10809
+Environment=HTTP_PROXY=http://127.0.0.1:10809
+Environment=NO_PROXY=localhost,127.0.0.1
+ExecStart=%h/.local/lib/roxira-box-backup/box_backup.sh --apply
+TimeoutStartSec=2h
+Nice=15
+IOSchedulingClass=idle

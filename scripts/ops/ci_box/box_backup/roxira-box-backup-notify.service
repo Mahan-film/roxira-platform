@@ -1,0 +1,9 @@
+[Unit]
+Description=Telegram notice when the box backup fails (no-op without notify.env)
+
+[Service]
+Type=oneshot
+Environment=HTTPS_PROXY=http://127.0.0.1:10809
+Environment=HTTP_PROXY=http://127.0.0.1:10809
+Environment=NO_PROXY=localhost,127.0.0.1
+ExecStart=%h/.local/lib/roxira-box-backup/notify_failure.sh roxira-box-backup.service
