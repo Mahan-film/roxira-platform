@@ -12,6 +12,7 @@ secret, a physical action, sudo on the laptop or a production write. Never name 
 - The Mac hub never administers the Linux box and never SSHes into it. Box work belongs to the box hub; GitHub is the control plane (notes on #592, answers on #965).
 - Secrets: never write a key into a file under the repo, ~/Desktop, ~/Documents or any synced folder, never print it. Move it only by clipboard relay
   (Mac `ssh roxira-prod '... | cut -d= -f2-' | pbcopy`; box `read -rs` into the env file, mode 600; then `pbcopy </dev/null`). AirDrop does not work with Linux.
+- Private flip: the sentence "go private" comes only from the owners. Policy for private code and production paths is AGENTS.md section 4a.
 - Production writes need the owner's explicit sentence in the chat. Approved so far: create and rotate the `box-lanes` virtual key. It was rotated on
   2026-11-21 at 17:02 UTC; every earlier value is dead. Do NOT rotate again unless a value was exposed. Delivery to the box (gateway.env) is still pending.
 
