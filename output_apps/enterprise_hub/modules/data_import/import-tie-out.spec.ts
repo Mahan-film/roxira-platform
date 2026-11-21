@@ -1,14 +1,17 @@
 import 'reflect-metadata';
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { strToU8, zipSync } from 'fflate';
 import {
   EffectiveTieOutConfigRegistry,
 } from './analysis/effective-tie-out-config.registry';
 import {
   formatTieOutMoney,
   ImportTieOutEngine,
+  multiplyMinorByDecimalQuantity,
+  parseMoneyValue,
 } from './analysis/import-tie-out.engine';
 import { AccountingJournalLinesRegistry } from './registry/accounting-journal-lines.registry';
 import { AccountingOpeningBalancesRegistry } from './registry/accounting-opening-balances.registry';
@@ -519,6 +522,141 @@ describe('T325 R32: Import Tie-Out Engine (TB, AR/AP, Stock Value, Bank)', () =>
       expect(resolved.id).toBe('gulf-pack-2026');
       expect(resolved.currency).toBe('AED');
       expect(resolved.accountsReceivable.accountCodes).toEqual(['1200']);
+    });
+  });
+
+  describe('Fix #1216 Part 1: AP mismatch, fractional/zero qty, 3-decimal currencies, bank tie-out, disambiguation & 400 errors', () => {
+    it('fails AP tie-out when AP subledger differs from TB AP without controlTotal and never fakes matched=true when controlless', () => {
+      const mismatch = harness.tieOutEngine.evaluateTieOuts({
+        recordsByEntity: new Map([
+          [
+            'accounting-opening-balances',
+            [
+              { rowNumber: 2, values: { accountCode: '2010', description: 'حساب‌های پرداختنی', debit: 0, credit: 2000000 } },
+              { rowNumber: 3, values: { accountCode: '3010', description: 'سرمایه', debit: 2000000, credit: 0 } },
+            ],
+          ],
+          ['purchase-invoices', [{ rowNumber: 2, values: { totalAmount: '1500000' } }]],
+        ]),
+      });
+      expect(mismatch.passed).toBe(false);
+      expect(mismatch.items.find((i) => i.category === 'ACCOUNTS_PAYABLE')).toMatchObject({
+        matched: false,
+        expectedMinor: '2000000',
+        actualMinor: '1500000',
+        differenceMinor: '-500000',
+      });
+
+      const controlless = harness.tieOutEngine.evaluateTieOuts({
+        recordsByEntity: new Map([
+          [
+            'accounting-opening-balances',
+            [
+              { rowNumber: 2, values: { accountCode: '1020', description: 'بانک', debit: 1000000, credit: 0 } },
+              { rowNumber: 3, values: { accountCode: '1030', description: 'دریافتنی', debit: 500000, credit: 0 } },
+              { rowNumber: 4, values: { accountCode: '1050', description: 'موجودی کالا', debit: 300000, credit: 0 } },
+              { rowNumber: 5, values: { accountCode: '2010', description: 'پرداختنی', debit: 0, credit: 200000 } },
+              { rowNumber: 6, values: { accountCode: '3010', description: 'سرمایه', debit: 0, credit: 1600000 } },
+            ],
+          ],
+        ]),
+      });
+      expect(controlless.passed).toBe(true);
+      expect(controlless.items.map((i) => i.category)).toEqual(['TRIAL_BALANCE']);
+      expect(controlless.warningsFa?.length).toBe(4);
+    });
+
+    it('computes fractional and explicit zero quantities accurately in AR, Inventory, and 3-decimal currencies (KWD/OMR)', () => {
+      expect(multiplyMinorByDecimalQuantity(1000n, 2.5, '1')).toBe(2500n);
+      expect(multiplyMinorByDecimalQuantity(1000n, 0.5, '1')).toBe(500n);
+      expect(multiplyMinorByDecimalQuantity(1000n, 0, '1')).toBe(0n);
+      expect(multiplyMinorByDecimalQuantity(10125n, '2.5', '1')).toBe(25313n);
+
+      const summary = harness.tieOutEngine.evaluateTieOuts({
+        currency: 'KWD',
+        recordsByEntity: new Map([
+          [
+            'accounting-opening-balances',
+            [
+              { rowNumber: 2, values: { accountCode: '1030', debit: '30.375', credit: '0' } },
+              { rowNumber: 3, values: { accountCode: '1050', debit: '12.656', credit: '0' } },
+              { rowNumber: 4, values: { accountCode: '3010', debit: '0', credit: '43.031' } },
+            ],
+          ],
+          [
+            'sales-invoices',
+            [
+              { rowNumber: 2, values: { unitPrice: '10.125', quantity: 2.5 } },
+              { rowNumber: 3, values: { unitPrice: '10.125', quantity: 0.5 } },
+              { rowNumber: 4, values: { unitPrice: '99.999', quantity: 0 } },
+            ],
+          ],
+          [
+            'inventory-items',
+            [
+              { rowNumber: 2, values: { unitCost: '10.125', quantity: 1.25 } },
+              { rowNumber: 3, values: { unitCost: '5.000', quantity: 0 } },
+            ],
+          ],
+        ]),
+      });
+
+      expect(summary.items.find((i) => i.category === 'ACCOUNTS_RECEIVABLE')).toMatchObject({
+        matched: false,
+        expectedMoney: '30.375 KWD',
+        actualMoney: '30.376 KWD',
+        differenceMoney: '0.001 KWD',
+      });
+      expect(summary.items.find((i) => i.category === 'INVENTORY_STOCK')).toMatchObject({
+        matched: true,
+        expectedMoney: '12.656 KWD',
+        actualMoney: '12.656 KWD',
+      });
+    });
+
+    it('runs bank-statement tie-out in reconcilePackage, disambiguates overlapping names, and throws 400 on bad amounts/currencies', async () => {
+      const zipBuf = Buffer.from(
+        zipSync({
+          'opening.csv': strToU8(
+            'کد حساب,شرح,بدهکار,بستانکار\n1020,بانک - وصولی دریافتنی,8000000,0\n9999,بانک انبار,1000000,0\n3010,سرمایه,0,9000000\n',
+          ),
+          'bank.csv': strToU8(
+            'تاریخ,شرح,واریز,برداشت,مانده\n1403/07/01,واریز,8000000,0,8000000\n1403/07/02,برداشت,0,500000,7500000\n',
+          ),
+        }),
+      );
+      const created = await harness.service.createPackage(TENANT_ID, {
+        originalname: 'tb_and_bank.zip',
+        buffer: zipBuf,
+      });
+
+      const report = await harness.service.reconcile(TENANT_ID, created.packageId, {
+        tables: [
+          {
+            name: 'opening',
+            entity: 'accounting-opening-balances',
+            mapping: { 'کد حساب': 'accountCode', شرح: 'description', بدهکار: 'debit', بستانکار: 'credit' },
+          },
+          {
+            name: 'bank',
+            entity: 'bank-statement',
+            mapping: { تاریخ: 'date', شرح: 'description', واریز: 'deposit', برداشت: 'withdrawal', مانده: 'balance' },
+          },
+        ],
+      });
+      expect(report.balanced).toBe(false);
+      expect(report.tieOut?.items.find((i) => i.category === 'BANK_BALANCE')).toMatchObject({
+        matched: false,
+        expectedMinor: '8000000',
+        actualMinor: '7500000',
+        differenceMinor: '-500000',
+      });
+      expect(report.tieOut?.items.find((i) => i.category === 'ACCOUNTS_RECEIVABLE')).toBeUndefined();
+      expect(report.tieOut?.warningsFa?.some((w) => w.includes('9999'))).toBe(true);
+
+      expect(() => parseMoneyValue('not-a-number', 'IRR')).toThrow(BadRequestException);
+      expect(() => parseMoneyValue('10.5', 'IRR')).toThrow(BadRequestException);
+      expect(() => harness.tieOutEngine.evaluateTieOuts({ recordsByEntity: new Map(), currency: 'FAKE' })).toThrow(BadRequestException);
     });
   });
 });
