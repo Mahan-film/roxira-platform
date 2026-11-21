@@ -46,18 +46,21 @@ ci.yml "Pick runner" (hosted ubuntu-slim) reads CI_RUNNER_MODE + CI_BOX_HEARTBEA
    template with SHA-256 check, light image, both launchers enabled). Prints names and statuses only.
 2. Box hub (mahanfilms, no root): `bash scripts/ops/ci_box/jit_pool/install_user.sh`
    (timer + `~/.config/roxira-jit/jit_pool.toml`, `dry_run = true`).
-3. `python3 ~/roxira-jit/jit_pool.py --status` shows both launchers `alive`; set `dry_run = false`.
-4. Point the picker at the slots (box mode only; nothing changes for `hosted`):
+3. Box hub: `bash scripts/ops/ci_box/jit_pool/seed_playwright.sh` (Chromium for the Playwright jobs;
+   the browser CDN is blocked from this network for `runner`, so `mahanfilms` fetches it through its
+   proxy into `/srv/data/ci-jit/ms-playwright`; re-run after each Playwright upgrade).
+4. `python3 ~/roxira-jit/jit_pool.py --status` shows both launchers `alive`; set `dry_run = false`.
+5. Point the picker at the slots (box mode only; nothing changes for `hosted`):
    `gh variable set CI_BOX_LABELS_LIGHT -b '["self-hosted","jit","slot-light"]' -R Mahan-film/roxira-platform`
    `gh variable set CI_BOX_LABELS_DOCKER -b '["self-hosted","jit","slot-docker"]' -R Mahan-film/roxira-platform`
-5. Two real runs: `gh workflow run ci.yml -R Mahan-film/roxira-platform --ref <branch> -f runner=box`
+6. Two real runs: `gh workflow run ci.yml -R Mahan-film/roxira-platform --ref <branch> -f runner=box`
    on two PR branches; both green, with job runner names `jit-light-*` / `jit-docker-*` and
    different container ids in the launcher log (`journalctl --user -u roxira-jit@light` as runner,
    or `sudo box-status`).
-6. Fallback test: `touch ~/.config/roxira-jit/HOLD` (or stop a launcher); with
+7. Fallback test: `touch ~/.config/roxira-jit/HOLD` (or stop a launcher); with
    `CI_RUNNER_MODE=auto`, the next CI run shows "Runner: hosted (auto ...)" in its summary and
    finishes on GitHub-hosted runners. `rm ~/.config/roxira-jit/HOLD` to resume.
-7. Retire the old runner after the two green runs: `touch /srv/data/ci-jit/control/retire-old-runner`
+8. Retire the old runner after the two green runs: `touch /srv/data/ci-jit/control/retire-old-runner`
    (the runner's own launcher disables `actions-runner.service`), then delete its registration:
    `gh api -X DELETE repos/Mahan-film/roxira-platform/actions/runners/<id of roxira-ci>`.
 

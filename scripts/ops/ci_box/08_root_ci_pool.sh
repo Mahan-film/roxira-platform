@@ -6,7 +6,8 @@
 # Does:
 #   1. spool + control dirs /srv/data/ci-jit/{spool/light,spool/docker,control}: owner runner, ACL
 #      rwx for mahanfilms (the controller writes single-use JIT configs; runner consumes them).
-#      ACLs instead of a shared group, so no running session needs a re-login.
+#      ACLs instead of a shared group, so no running session needs a re-login. Also
+#      /srv/data/ci-jit/ms-playwright (browsers seeded by mahanfilms via seed_playwright.sh).
 #   2. code: scripts/ops/ci_box/jit_pool/* -> /usr/local/lib/roxira-jit (root-owned; job code
 #      running as `runner` cannot change the launcher).
 #   3. CI resource cap for everything user `runner` runs, including rootless Docker containers
@@ -66,6 +67,13 @@ for d in "$BASE" "$BASE/spool" "$BASE/spool/light" "$BASE/spool/docker" "$BASE/c
     run setfacl -m "u:$CTRL:rwx" -m "d:u:$CTRL:rw" -m "d:u:$RUNNER:rw" "$d"
   fi
 done
+# Playwright browsers seeded by mahanfilms through its proxy (seed_playwright.sh); runner reads + runs them.
+d="$BASE/ms-playwright"
+if [ -d "$d" ] && getfacl -p "$d" 2>/dev/null | grep -q "^default:user:$RUNNER:r-x"; then ok "$d"; else
+  todo "$d (owner $RUNNER, ACL $CTRL rwx, default ACL $CTRL rwx + $RUNNER r-x)"
+  run install -d -o "$RUNNER" -g "$RUNNER" -m 0755 "$d"
+  run setfacl -m "u:$CTRL:rwx" -m "d:u:$CTRL:rwx" -m "d:u:$RUNNER:rx" "$d"
+fi
 if [ -d /srv/data/ci-cache/jit ]; then ok "/srv/data/ci-cache/jit"; else
   todo "/srv/data/ci-cache/jit (owner $RUNNER, 0750)"
   run install -d -o "$RUNNER" -g "$RUNNER" -m 0750 /srv/data/ci-cache/jit
@@ -127,5 +135,5 @@ fi
 
 echo
 if [ "$DRY" = 1 ]; then echo "dry-run done: nothing changed. Run again without --dry-run to apply."; else
-  echo "done. Next (mahanfilms): python3 ~/roxira-jit/jit_pool.py --status, then set dry_run = false in ~/.config/roxira-jit/jit_pool.toml"
+  echo "done. Next (mahanfilms): bash scripts/ops/ci_box/jit_pool/seed_playwright.sh; python3 ~/roxira-jit/jit_pool.py --status; then dry_run = false in ~/.config/roxira-jit/jit_pool.toml"
 fi
