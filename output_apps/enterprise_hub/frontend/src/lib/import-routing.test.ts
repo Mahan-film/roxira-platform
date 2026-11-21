@@ -7,7 +7,10 @@ import {
   FALLBACK_ACCEPT,
   acceptFromFormats,
   chunkResumeKey,
+  clearResumeJobId,
+  getSavedResumeJobId,
   routeImportFile,
+  saveResumeJobId,
 } from "./import-routing.ts";
 
 const MB = 1024 * 1024;
@@ -60,4 +63,36 @@ test("the resume key identifies the same file, not just the same name", () => {
   const a = chunkResumeKey({ name: "a.csv", size: 10, lastModified: 1 });
   assert.equal(a, chunkResumeKey({ name: "a.csv", size: 10, lastModified: 1 }));
   assert.notEqual(a, chunkResumeKey({ name: "a.csv", size: 11, lastModified: 1 }));
+});
+
+test("picking the same file again after a reload resumes the bulk job via saved job id (#439)", () => {
+  const file = { name: "database-dump.sql", size: 50 * MB, lastModified: 1732200000000 };
+  const store = new Map<string, string>();
+  const mockStorage: Storage = {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => store.set(key, String(value)),
+    removeItem: (key: string) => { store.delete(key); },
+    clear: () => store.clear(),
+    key: (index: number) => Array.from(store.keys())[index] ?? null,
+    length: store.size,
+  };
+
+  // Initially, before any upload starts:
+  assert.equal(getSavedResumeJobId(file, mockStorage), undefined);
+
+  // When bulk upload starts, the job id is saved under chunkResumeKey:
+  saveResumeJobId(file, "bulk-job-9876", mockStorage);
+  assert.equal(store.get(chunkResumeKey(file)), "bulk-job-9876");
+
+  // Re-picking the same file after reload retrieves the active job id to resume:
+  const resumedJobId = getSavedResumeJobId(file, mockStorage);
+  assert.equal(resumedJobId, "bulk-job-9876");
+
+  // A different file or modified file does not resume the old job:
+  const modifiedFile = { name: "database-dump.sql", size: 50 * MB, lastModified: 1732299999999 };
+  assert.equal(getSavedResumeJobId(modifiedFile, mockStorage), undefined);
+
+  // Once upload finishes, the resume entry is cleared:
+  clearResumeJobId(file, mockStorage);
+  assert.equal(getSavedResumeJobId(file, mockStorage), undefined);
 });
