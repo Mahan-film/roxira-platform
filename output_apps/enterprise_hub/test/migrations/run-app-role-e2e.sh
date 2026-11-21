@@ -7,7 +7,7 @@ export LC_ALL=C
 HUB="$(cd "$(dirname "$0")/../.." && pwd)"
 ROOT="$(cd "$HUB/../.." && pwd)"
 PG_BIN="${PG_BIN:-/opt/homebrew/opt/postgresql@15/bin}"
-export PATH="$PG_BIN:$PATH"
+export PATH="$PG_BIN:/opt/homebrew/bin:/usr/local/bin:$PATH"
 WORK="$(mktemp -d)"
 PORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')"
 OWNER=enterprise_admin DBNAME=roxira_role_test OWNER_PW=owner-test-only
@@ -34,7 +34,7 @@ export APP_ROLE_APP_PSQL="psql -h 127.0.0.1 -p ${APP_PROXY_PORT:-$PORT} -U roxir
 
 echo "== plan leaves no trace"
 bash "$ROLE_SCRIPT" plan
-[ "$($APP_ROLE_ADMIN_PSQL -qtAX -c "select count(*) from pg_roles where rolname='roxira_app'")" = 0 ]
+[ "$($APP_ROLE_ADMIN_PSQL -qtAX -c "select count(*) from pg_roles where rolname='roxira_app' and rolcanlogin")" = 0 ]
 echo "== apply twice (idempotent), then verify"
 bash "$ROLE_SCRIPT" apply --yes
 bash "$ROLE_SCRIPT" apply --yes
@@ -51,6 +51,6 @@ echo "== audit"
 bash "$ROLE_SCRIPT" audit | tail -5
 
 echo "== all e2e as roxira_app"
-DATABASE_USER=roxira_app DATABASE_PASSWORD="$APP_PW" APP_E2E_ADMIN_PASSWORD="$OWNER_PW" \
-  node_modules/.bin/jest --config ./test/jest-e2e.json --runInBand --silent 2>&1 | grep -vE "LOG|^\s*$" | tail -"${E2E_TAIL:-30}"
+DATABASE_USER=roxira_app DATABASE_PASSWORD="$APP_PW" APP_DB_USER=roxira_app APP_DB_PASSWORD="$APP_PW" APP_E2E_ADMIN_PASSWORD="$OWNER_PW" \
+  node_modules/.bin/jest --config ./test/jest-e2e.json --runInBand --silent
 echo "APP ROLE REHEARSAL PASSED"

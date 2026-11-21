@@ -12,10 +12,14 @@ export const ADMIN_PASSWORD = process.env.ROXIRA_TEST_PG_ADMIN_PASSWORD ?? proce
 // The app role defaults to roxira_app (NOSUPERUSER NOBYPASSRLS).
 export const APP_USER =
   process.env.ROXIRA_TEST_PG_APP_USER ??
+  process.env.APP_DB_USER ??
   (process.env.ROXIRA_TEST_PG_USER && process.env.ROXIRA_TEST_PG_USER !== 'postgres'
     ? process.env.ROXIRA_TEST_PG_USER
     : 'roxira_app');
-export const APP_PASSWORD = process.env.ROXIRA_TEST_PG_APP_PASSWORD ?? 'app-role-test-only';
+export const APP_PASSWORD =
+  process.env.ROXIRA_TEST_PG_APP_PASSWORD ??
+  process.env.APP_DB_PASSWORD ??
+  'app-role-test-only';
 
 export const PGB_HOST = process.env.ROXIRA_TEST_PGB_HOST ?? PG_HOST;
 export const PGB_PORT = process.env.ROXIRA_TEST_PGB_PORT ? Number(process.env.ROXIRA_TEST_PGB_PORT) : PG_PORT;

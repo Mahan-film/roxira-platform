@@ -49,6 +49,7 @@ class FakeAccountingController {
 suite('Org access control (e2e, real Postgres)', () => {
   let app: INestApplication;
   let db: DataSource;
+  let adminDb: DataSource | null = null;
   const emails: Array<{ to: string; link: string }> = [];
   const alerts: string[] = [];
   const mail = {
@@ -77,8 +78,8 @@ suite('Org access control (e2e, real Postgres)', () => {
           type: 'postgres',
           host: process.env.DATABASE_HOST ?? '127.0.0.1',
           port: Number(process.env.DATABASE_PORT ?? 5432),
-          username: process.env.DATABASE_USER,
-          password: process.env.DATABASE_PASSWORD,
+          username: process.env.APP_DB_USER ?? process.env.DATABASE_USER,
+          password: process.env.APP_DB_PASSWORD ?? process.env.DATABASE_PASSWORD,
           database: process.env.DATABASE_NAME,
           autoLoadEntities: true,
           synchronize: false,
@@ -98,10 +99,24 @@ suite('Org access control (e2e, real Postgres)', () => {
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     await app.init();
     db = app.get(DataSource);
-    await db.query(`DELETE FROM users WHERE username LIKE 'ac-%'`);
+    if (process.env.APP_E2E_ADMIN_PASSWORD) {
+      adminDb = await new DataSource({
+        type: 'postgres',
+        host: process.env.DATABASE_HOST ?? '127.0.0.1',
+        port: Number(process.env.DATABASE_PORT ?? 5432),
+        username: 'enterprise_admin',
+        password: process.env.APP_E2E_ADMIN_PASSWORD,
+        database: process.env.DATABASE_NAME ?? 'enterprise_db',
+      }).initialize();
+    }
+    const cleanDb = adminDb ?? db;
+    await cleanDb.query(`DELETE FROM users WHERE username LIKE 'ac-%'`);
   });
 
   afterAll(async () => {
+    if (adminDb) {
+      await adminDb.destroy();
+    }
     await app?.close();
   });
 
@@ -128,12 +143,17 @@ suite('Org access control (e2e, real Postgres)', () => {
       accessToken: string; refreshToken: string; userId: string; tenantId: string;
     };
   };
-  const enable = (tenantId: string, ...modules: string[]) =>
-    db.query(
-      `INSERT INTO tenant_module_entitlements (tenant_id, module, enabled) SELECT $1, m, true FROM unnest($2::text[]) m
-       ON CONFLICT (tenant_id, module) DO UPDATE SET enabled = true`,
-      [tenantId, modules],
-    );
+  const enable = (tenantId: string, ...modules: string[]) => {
+    const fixtureDb = adminDb ?? db;
+    return fixtureDb.manager.transaction(async (m) => {
+      await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [tenantId]);
+      return m.query(
+        `INSERT INTO tenant_module_entitlements (tenant_id, module, enabled) SELECT $1, m, true FROM unnest($2::text[]) m
+         ON CONFLICT (tenant_id, module) DO UPDATE SET enabled = true`,
+        [tenantId, modules],
+      );
+    });
+  };
   const invite = async (owner: { accessToken: string }, body: object) => {
     const res = await call('post', '/v1/org/invitations', owner.accessToken, body).expect(201);
     return (res.body.link as string).split('/account/invite/')[1].split('?')[0];
@@ -370,7 +390,11 @@ suite('Org access control (e2e, real Postgres)', () => {
 
     // platform operator
     const op = await signup('ent-op');
-    await db.query(`UPDATE users SET role='ADMIN' WHERE id=$1`, [op.user.id]);
+    const fixtureDb = adminDb ?? db;
+    await fixtureDb.manager.transaction(async (m) => {
+      await m.query(`SELECT set_config('app.user_id', $1, true)`, [op.user.id]);
+      await m.query(`UPDATE users SET role='ADMIN' WHERE id=$1`, [op.user.id]);
+    });
     const opTok = (await http().post('/v1/auth/login').set('X-Forwarded-For', freshIp()).send({ identifier: 'ac-ent-op', password: PW }).expect(200)).body.accessToken;
     await call('put', `/v1/admin/entitlements/${owner.tenantId}`, opTok, { changes: [{ module: 'crm', enabled: true }] }).expect(200);
     await call('put', `/v1/admin/entitlements/${owner.tenantId}`, opTok, { changes: [{ module: 'members', enabled: false }] }).expect(400);
@@ -487,7 +511,11 @@ suite('Org access control (e2e, real Postgres)', () => {
   it('invitations: expired, revoked and reused links are refused; unknown tokens look identical', async () => {
     const owner = await founder('exp-owner', 'Expiry Inc');
     const t1 = await invite(owner, { roleKey: 'sales' });
-    await db.query(`UPDATE tenant_invitations SET expires_at = now() - interval '1 minute' WHERE tenant_id=$1`, [owner.tenantId]);
+    const fixtureDb = adminDb ?? db;
+    await fixtureDb.manager.transaction(async (m) => {
+      await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [owner.tenantId]);
+      await m.query(`UPDATE tenant_invitations SET expires_at = now() - interval '1 minute' WHERE tenant_id=$1`, [owner.tenantId]);
+    });
     await http().get(`/v1/invitations/${t1}`).expect(410);
     const t2 = await invite(owner, { roleKey: 'sales' });
     const pending = (await call('get', '/v1/org/invitations', owner.accessToken)).body as Array<{ id: string }>;
@@ -501,7 +529,11 @@ suite('Org access control (e2e, real Postgres)', () => {
     const owner = await founder('leg-owner', 'Legacy Inc');
     await enable(owner.tenantId, 'crm', 'accounting');
     const s = await signup('leg-member');
-    await db.query(`INSERT INTO tenant_memberships (tenant_id,user_id,role_key) VALUES ($1,$2,'legacy_member')`, [owner.tenantId, s.user.id]);
+    const fixtureDb = adminDb ?? db;
+    await fixtureDb.manager.transaction(async (m) => {
+      await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [owner.tenantId]);
+      await m.query(`INSERT INTO tenant_memberships (tenant_id,user_id,role_key) VALUES ($1,$2,'legacy_member')`, [owner.tenantId, s.user.id]);
+    });
     const fresh = (await http().post('/v1/auth/refresh').send({ refreshToken: s.refreshToken }).expect(200)).body;
     await call('get', '/v1/t-crm', fresh.accessToken).expect(200);
     await call('get', '/v1/t-acc', fresh.accessToken).expect(403);
@@ -511,7 +543,11 @@ suite('Org access control (e2e, real Postgres)', () => {
   it('module catalogue: dependencies are enforced, owners can only request, and the trial switch needs no migration', async () => {
     const owner = await founder('cat-owner', 'Catalogue Inc');
     const op = await signup('cat-op');
-    await db.query(`UPDATE users SET role='ADMIN' WHERE id=$1`, [op.user.id]);
+    const fixtureDb = adminDb ?? db;
+    await fixtureDb.manager.transaction(async (m) => {
+      await m.query(`SELECT set_config('app.user_id', $1, true)`, [op.user.id]);
+      await m.query(`UPDATE users SET role='ADMIN' WHERE id=$1`, [op.user.id]);
+    });
     const opTok = (await http().post('/v1/auth/login').set('X-Forwarded-For', freshIp()).send({ identifier: 'ac-cat-op', password: PW }).expect(200)).body.accessToken;
     const set = (changes: object[]) => call('put', `/v1/admin/entitlements/${owner.tenantId}`, opTok, { changes });
 
@@ -558,16 +594,7 @@ suite('Org access control (e2e, real Postgres)', () => {
     expect(ok.checked).toBeGreaterThanOrEqual(3);
     // an attacker with table-owner rights disables the trigger and edits history
     // the restricted app role cannot do this, so the rehearsal passes the owner's password
-    const ownerDb = process.env.APP_E2E_ADMIN_PASSWORD
-      ? await new DataSource({
-          type: 'postgres',
-          host: process.env.DATABASE_HOST,
-          port: Number(process.env.DATABASE_PORT),
-          username: 'enterprise_admin',
-          password: process.env.APP_E2E_ADMIN_PASSWORD,
-          database: process.env.DATABASE_NAME,
-        }).initialize()
-      : db;
+    const ownerDb = adminDb ?? db;
     await ownerDb.transaction(async (m) => {
       await m.query(`SELECT set_config('app.tenant_id', $1, true)`, [owner.tenantId]);
       await m.query(`ALTER TABLE audit_log DISABLE TRIGGER audit_log_no_change`);
@@ -579,7 +606,6 @@ suite('Org access control (e2e, real Postgres)', () => {
       await m.query(`ALTER TABLE audit_log FORCE ROW LEVEL SECURITY`);
       await m.query(`ALTER TABLE audit_log ENABLE TRIGGER audit_log_no_change`);
     });
-    if (ownerDb !== db) await ownerDb.destroy();
     const bad = (await call('get', '/v1/org/audit/verify', owner.accessToken).expect(200)).body;
     expect(bad.ok).toBe(false);
     expect(bad.brokenAtId).toBeTruthy();
