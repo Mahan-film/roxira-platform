@@ -16,7 +16,7 @@ Adopt the report's **Option 2**: a phased Smart Judge v2 on the current shared s
 | Global GraphRAG community summaries | Weak on unanswerable questions; we use 1-hop citation expansion (T243). |
 
 ## Kept from the stage 2 review
-- Every vendor claim the report marks UNVERIFIABLE is checked live first (T240), the way R19 caught the false pgBackRest claim.
+- Every vendor claim the report marks UNVERIFIABLE is checked live first (T240 — results in `docs/strategy/research/R18_VERIFIED.md`), the way R19 caught the false pgBackRest claim.
 - Licence policy: only MIT, Apache, BSD or PostgreSQL licences at runtime, enforced in CI by T252.
 - PII is scrubbed before any external model call (T239).
 - Open human-expert question: disclaimer wording goes to the lawyer later; the default wording ships in T258.
