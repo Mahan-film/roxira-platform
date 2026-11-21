@@ -27,6 +27,7 @@ export interface InvoicePartyInfo {
   economicCode?: string;
   registrationNumber?: string;
   address?: string;
+  postalCode?: string;
   phone?: string;
   email?: string;
 }
@@ -40,6 +41,10 @@ export interface InvoiceItem {
   itemId?: number | null;
   /** شناسه یکتای کالا (SKU) در زمان صدور صورتحساب. */
   sku?: string | null;
+  /** شناسه ۱۳ رقمی کالا/خدمت در سامانه مودیان (SSTID). */
+  taxCode?: string | null;
+  /** Legacy alias for taxCode (SSTID). */
+  sstid?: string | null;
   description: string;
   quantity: number;
   unitPrice: number;

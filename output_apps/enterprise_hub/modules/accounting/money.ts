@@ -181,3 +181,40 @@ export function rialsToMillionRials(rials: bigint): string {
   return `${negative ? '-' : ''}${integer}.${fraction}`;
 }
 
+/** Integer division rounded half up; handles negative numerators symmetrically. */
+export function divRoundHalfUp(numerator: bigint, divisor: bigint): bigint {
+  if (divisor === 0n) {
+    throw new RangeError('Division by zero');
+  }
+  if (numerator < 0n) {
+    return -((-numerator * 2n + divisor) / (divisor * 2n));
+  }
+  return (numerator * 2n + divisor) / (divisor * 2n);
+}
+
+/**
+ * Scaled integer of a JSON number or decimal string, parsed and rounded half up without float
+ * multiplication. Throws RangeError on non-finite or non-decimal values.
+ */
+export function numberToScaled(value: number | string, decimals: number): bigint {
+  let text: string;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || Math.abs(value) > Number.MAX_SAFE_INTEGER) {
+      throw new RangeError(`Invalid decimal number for scaling: ${value}`);
+    }
+    text = value.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits: 20 });
+  } else {
+    text = value.trim();
+  }
+  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(text);
+  if (!match) {
+    throw new RangeError(`Invalid decimal value for scaling: "${String(value)}"`);
+  }
+  const [, sign, integer, fraction = ''] = match;
+  let units = BigInt(integer + fraction.slice(0, decimals).padEnd(decimals, '0'));
+  if (fraction.length > decimals && fraction[decimals] >= '5') {
+    units += 1n;
+  }
+  return sign === '-' && units !== 0n ? -units : units;
+}
+

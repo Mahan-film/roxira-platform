@@ -15,7 +15,10 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { SubmitMoadianInvoiceDto } from '../dto/submit-moadian-invoice.dto';
+import {
+  MoadianInvoiceIdParamDto,
+  SubmitMoadianInvoiceDto,
+} from '../dto/submit-moadian-invoice.dto';
 import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
 import { requireTenantId } from '../../tenants/tenant-context';
 import {
@@ -29,6 +32,7 @@ import {
   MoadianInboxAgeQueryDto,
   MoadianInboxAgeReportDto,
 } from '../dto/moadian-compliance.dto';
+import { MoadianPreFlightResult } from '../utils/moadian-preflight.validator';
 import { MoadianService } from '../services/moadian.service';
 import { MoadianCompliancePolicyService } from '../services/moadian-compliance-policy.service';
 
@@ -54,8 +58,20 @@ export class MoadianController {
     summary: 'وضعیت پرچم اتصال زنده و ثبت‌بودن اطلاعات اتصال',
     description: 'حتی وقتی MOADIAN_ENABLED خاموش است پاسخ می‌دهد.',
   })
-  async getStatus(@Req() request: AuthenticatedRequest): Promise<{ enabled: boolean; configured: boolean }> {
+  async getStatus(@Req() request: AuthenticatedRequest): Promise<{ enabled: boolean; configured: boolean; defaultSstid: string | null }> {
     return this.moadianService.getStatus(this.tenantIdOf(request));
+  }
+
+  @RequireAction(AccessAction.READ)
+  @Post('invoices/:invoiceId/pre-flight')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'اعتبارسنجی پیش از ارسال صورتحساب به سامانه مودیان' })
+  @ApiResponse({ status: HttpStatus.OK })
+  async preFlight(
+    @Param() params: MoadianInvoiceIdParamDto,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<MoadianPreFlightResult> {
+    return this.moadianService.preFlightValidate(this.tenantIdOf(request), params.invoiceId);
   }
 
   @RequireAction(AccessAction.ADMIN)

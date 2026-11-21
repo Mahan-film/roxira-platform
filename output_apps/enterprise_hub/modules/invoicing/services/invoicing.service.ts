@@ -67,6 +67,14 @@ import {
 } from './invoice-import';
 import { VatRateResolver } from './vat-rate.resolver';
 import { allocateDiscount, fromUnits, percentOf, toUnits } from './invoice-discount';
+import {
+  computeLineMath,
+  LINE_PRICE_EXTRA_DECIMALS,
+  LINE_QUANTITY_DECIMALS,
+  LINE_RATE_DECIMALS,
+  numberToScaled,
+  sumGrossMinor,
+} from './invoice-line-math';
 
 /** What a caller adds to `create` beyond the invoice itself (POS sales, invoices from deliveries). */
 export interface CreateInvoiceOptions {
@@ -96,11 +104,13 @@ export interface InvoiceDiscountInput {
 
 interface PreparedLine {
   item: InvoiceItemDto;
+  unitPrice: number;
   itemId: number | null;
   sku: string | null;
   description: string;
   gross: number;
   lineDiscount: number;
+  taxCode?: string | null;
 }
 
 /** مجموع‌های محاسبه‌شده سمت سرور برای اقلام صورتحساب. */
@@ -377,6 +387,7 @@ export class InvoicingService {
       let sku = item.sku?.trim() || null;
       let derivedDescription: string | undefined;
       let derivedSku: string | undefined;
+      let derivedTaxCode: string | null = null;
 
       if (
         this.inventoryRepository &&
@@ -403,6 +414,7 @@ export class InvoicingService {
         itemId = stockItem.id;
         derivedSku = stockItem.sku;
         derivedDescription = stockItem.name;
+        derivedTaxCode = stockItem.taxCode ?? null;
       }
 
       if (derivedSku) {
@@ -429,11 +441,13 @@ export class InvoicingService {
 
       prepared.push({
         item,
+        unitPrice: item.unitPrice,
         itemId,
         sku,
         description,
         gross: item.quantity * item.unitPrice,
         lineDiscount: this.lineDiscount(item, scale),
+        taxCode: item.taxCode ?? derivedTaxCode ?? null,
       });
     }
 
@@ -442,22 +456,34 @@ export class InvoicingService {
     prepared.forEach((line, index) => {
       const share = fromUnits(shares[index], scale);
       const discount = this.roundTo(line.lineDiscount + share, scale);
-      const taxable = Math.max(0, line.gross - discount);
       const vatRate = this.normalizeVatRate(line.item.vatRate, defaultVatRate);
-      const tax = this.roundTo(taxable * vatRate, scale);
-      const total = this.roundTo(taxable + tax, scale);
+      // For IRR (scale 0), fractional unit prices (< 1 IRR) are preserved unrounded in JSONB (InvoiceEntity.items
+      // stores jsonb where decimal numbers retain arbitrary precision without integer truncation).
+      const isFractionalRial = scale === 0 && line.item.unitPrice < 1;
+      const storedUnitPrice = isFractionalRial
+        ? line.item.unitPrice
+        : this.roundTo(line.item.unitPrice, scale);
+      const math = computeLineMath({
+        quantity: numberToScaled(line.item.quantity, LINE_QUANTITY_DECIMALS),
+        unitPrice: numberToScaled(storedUnitPrice, scale + LINE_PRICE_EXTRA_DECIMALS),
+        discount: toUnits(discount, scale),
+        vatRate: numberToScaled(vatRate, LINE_RATE_DECIMALS),
+      });
+      const tax = fromUnits(math.tax, scale);
+      const total = fromUnits(math.total, scale);
 
       normalized.push({
         itemId: line.itemId,
         sku: line.sku,
         description: line.description,
         quantity: line.item.quantity,
-        unitPrice: this.roundTo(line.item.unitPrice, scale),
+        unitPrice: storedUnitPrice,
         discount,
         ...(invoiceDiscount ? { invoiceDiscountShare: share } : {}),
         vatRate,
         tax,
         total,
+        ...(line.taxCode ? { taxCode: line.taxCode } : {}),
         ...(line.item.originalLine !== undefined ? { originalLine: line.item.originalLine } : {}),
       });
     });
@@ -530,23 +556,30 @@ export class InvoicingService {
     currency: Currency = Currency.IRR,
   ): InvoiceTotals {
     const scale = this.moneyScale(currency);
-    let totalAmount = 0;
-    let totalDiscount = 0;
-    let totalTax = 0;
-    let finalPayable = 0;
+    const lineMaths = items.map((item) =>
+      computeLineMath({
+        quantity: numberToScaled(item.quantity, LINE_QUANTITY_DECIMALS),
+        unitPrice: numberToScaled(item.unitPrice, scale + LINE_PRICE_EXTRA_DECIMALS),
+        discount: toUnits(item.discount, scale),
+        vatRate: numberToScaled(item.vatRate ?? 0, LINE_RATE_DECIMALS),
+      }),
+    );
+    const totalAmountMinor = sumGrossMinor(lineMaths);
+    let totalDiscountUnits = 0n;
+    let totalTaxUnits = 0n;
+    let finalPayableUnits = 0n;
 
     for (const item of items) {
-      totalAmount += item.quantity * item.unitPrice;
-      totalDiscount += item.discount;
-      totalTax += item.tax;
-      finalPayable += item.total;
+      totalDiscountUnits += toUnits(item.discount, scale);
+      totalTaxUnits += toUnits(item.tax, scale);
+      finalPayableUnits += toUnits(item.total, scale);
     }
 
     return {
-      totalAmount: this.roundTo(totalAmount, scale),
-      totalDiscount: this.roundTo(totalDiscount, scale),
-      totalTax: this.roundTo(totalTax, scale),
-      finalPayable: this.roundTo(finalPayable, scale),
+      totalAmount: fromUnits(totalAmountMinor, scale),
+      totalDiscount: fromUnits(totalDiscountUnits, scale),
+      totalTax: fromUnits(totalTaxUnits, scale),
+      finalPayable: fromUnits(finalPayableUnits, scale),
     };
   }
 
