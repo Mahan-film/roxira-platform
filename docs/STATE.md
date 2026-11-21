@@ -28,7 +28,7 @@ secret, a physical action, sudo on the laptop or a production write. Never name 
 ## Live
 - **Production (`ssh roxira-prod`, `/opt/roxira_platform`):** Compose stack, autodeploy every 5 min, hourly backups. A dedicated no-shell account
   `boxtunnel` holds ONE forwarding-only key (permitopen to the gateway port only) for the box tunnel (created 2026-11-21).
-- Gateway virtual keys: `mac-agents` (3 USD/day), `laptop-mahansudo-srv` (2); `box-lanes` (1 USD/day) is in PR #1180, not yet created.
+- Gateway virtual keys: `mac-agents` (3 USD/day), `laptop-mahansudo-srv` (2); `box-lanes` (1 USD/day, agent groups only) EXISTS (verified 2026-11-21); its value is delivered by the owner relay (note on #592).
 - Paid fallback balances checked: both OpenRouter keys have limits (5 and 4 USD) and almost no usage. Nothing to charge now.
 
 ## Merged 2026-11-21
@@ -37,13 +37,13 @@ secret, a physical action, sudo on the laptop or a production write. Never name 
 #1074 currency precision, #955 user RLS for Smart Judge, #1073 #1075 Smart Judge normalisation and router hygiene, #1044 #972 #892.
 
 ## Open PRs
-- Hub: #1081 lane runner pack (auto-merge queued), #1180 box-lanes key, #1097 mission prompt + TECH_RADAR, #1182 this handoff.
+- Hub: #1081 lane runner pack, #1180 box-lanes key, #1097 mission prompt + TECH_RADAR and #1182 handoff are all merged. The review desk reviews only 8 PRs per run: dispatch it once and let it finish (re-dispatching cancels the pending run).
 - Red or blocked: #1072 (CI image pull), #889 (conflicts + migration number + raw DataSource, row #1093).
 - Lane PRs with real review blockers (lanes answer them in marathon rounds): #728 #763 #805 #831 #850 #854 #868 #943 #963 #964 #999; #771 conflicts.
 
 ## Production steps waiting (each needs the owner's explicit sentence)
-1. After #1180 merges: `python3 scripts/infra/key_pool/virtual_keys.py` on srv1 (value stays in `generated/virtual-keys.env`); deliver it to the box
-   with the hidden-prompt relay (Mac `ssh roxira-prod ... | pbcopy`, box `read -rs`), never in chat.
+1. Deliver the existing `box-lanes` key to the box with the hidden-prompt relay (exact commands in the HUB -> BOX note on #592), then replace the temporary
+   tunnel `authorized_keys` line with the lane user's own public key.
 2. WAL-G enable (Postgres restart window); after #831 the T200 restricted DB role; after #926 the v7b switch; #1020 deploy key + signed tag.
 3. Disk on srv1 was at 80%: clean old Qdrant collections and images before 85%.
 
