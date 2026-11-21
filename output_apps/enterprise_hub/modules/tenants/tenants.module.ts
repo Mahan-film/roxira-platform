@@ -10,6 +10,7 @@ import { AuthRepository } from '../auth/repositories/auth.repository';
 import { TenantsController } from './controllers/tenants.controller';
 import { LegalEntityEntity } from './entities/legal-entity.entity';
 import { TenantEntity } from './entities/tenant.entity';
+import { EmployeeTelemetryGuard } from './guards/employee-telemetry.guard';
 import { LegalEntitiesRepository } from './repositories/legal-entities.repository';
 import { TenantsRepository } from './repositories/tenants.repository';
 import { LegalEntitiesService } from './services/legal-entities.service';
@@ -48,7 +49,7 @@ import { TenantsService } from './services/tenants.service';
     }),
   ],
   controllers: [TenantsController],
-  providers: [TenantsService, TenantsRepository, LegalEntitiesService, LegalEntitiesRepository, TenantScope, AuthRepository, JwtAuthGuard],
-  exports: [TenantsService, TenantsRepository, LegalEntitiesService],
+  providers: [TenantsService, TenantsRepository, LegalEntitiesService, LegalEntitiesRepository, TenantScope, AuthRepository, JwtAuthGuard, EmployeeTelemetryGuard],
+  exports: [TenantsService, TenantsRepository, LegalEntitiesService, EmployeeTelemetryGuard],
 })
 export class TenantsModule {}

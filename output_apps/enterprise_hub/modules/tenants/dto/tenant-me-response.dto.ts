@@ -47,6 +47,12 @@ export class TenantMeResponseDto {
   @ApiProperty({ description: 'ماه شروع سال مالی (۱ تا ۱۲)', example: 1 })
   fiscalYearStartMonth: number;
 
+  @ApiProperty({
+    description: 'حالت بدون رصد کارکنان (Works-Council / BetrVG §87(1)6)',
+    example: false,
+  })
+  noEmployeeTelemetry: boolean;
+
   static fromEntity(
     tenant: TenantEntity,
     tenantRole: TenantRole | null,
@@ -64,6 +70,7 @@ export class TenantMeResponseDto {
       timezone: tenant.timezone ?? 'Asia/Tehran',
       locale: tenant.locale ?? 'fa-IR',
       fiscalYearStartMonth: tenant.fiscalYearStartMonth ?? 1,
+      noEmployeeTelemetry: Boolean(tenant.noEmployeeTelemetry ?? false),
     };
   }
 }

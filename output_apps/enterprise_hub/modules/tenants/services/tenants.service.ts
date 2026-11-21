@@ -52,6 +52,7 @@ export class TenantsService {
     if (dto.timezone !== undefined) fields.timezone = dto.timezone;
     if (dto.locale !== undefined) fields.locale = dto.locale;
     if (dto.fiscalYearStartMonth !== undefined) fields.fiscalYearStartMonth = dto.fiscalYearStartMonth;
+    if (dto.noEmployeeTelemetry !== undefined) fields.noEmployeeTelemetry = dto.noEmployeeTelemetry;
 
     const tenant = await this.tenantsRepository.updateSettings(tenantId, fields);
     if (!tenant) {
