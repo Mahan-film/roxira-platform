@@ -49,6 +49,7 @@ import { TaxTransmissionAdapterFactory } from './transmission/tax-transmission-a
 import { TaxTransmissionService } from './services/tax-transmission.service';
 import { MoadianService } from './services/moadian.service';
 import { TaxComplianceService } from './services/tax-compliance.service';
+import { TaxEngineService } from './engine/tax-engine.service';
 import { MoadianCompliancePolicyService } from './services/moadian-compliance-policy.service';
 import { TenantPolicyModule } from '../tenants/policy/policy.module';
 import { AccessModule } from '../access/access.module';
@@ -116,10 +117,12 @@ import { CountryPacksModule } from '../country_packs/country-packs.module';
     MoadianCompliancePolicyService,
     KartableReconciliationRepository,
     KartableReconciliationService,
+    TaxEngineService,
   ],
   exports: [
     TaxTransmissionService,
     TaxComplianceService,
+    TaxEngineService,
     VatReturnService,
     MoadianCompliancePolicyService,
     TaxInspectorService,

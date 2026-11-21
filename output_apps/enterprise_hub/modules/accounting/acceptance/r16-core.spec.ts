@@ -6,6 +6,7 @@
  * `it.skip` names the row that adds the missing capability; none calls an API that does not exist.
  */
 import { proposeMatches } from '../../banking/matching/reconciliation-matcher';
+import { TaxEngineService } from '../../tax_compliance/engine/tax-engine.service';
 import { nextMonthCharge } from '../assets/depreciation';
 import { fromMinor, roundMinorHalfUp } from '../money';
 import {
@@ -154,15 +155,110 @@ describe('R16 T9 bank import and reconciliation', () => {
 });
 
 describe('R16 T10 tax engine (T180)', () => {
+  const buildEngine = () => {
+    const engine = new TaxEngineService();
+    engine.registerTaxRules([
+      { code: 'STD', rateBps: T10.rates.standardUntil20260630 * 100, effectiveFrom: '2020-01-01', effectiveTo: '2026-06-30', inputBox: 'VAT_IN', outputBox: 'VAT_OUT' },
+      { code: 'STD', rateBps: T10.rates.standardFrom20260701 * 100, effectiveFrom: '2026-07-01', effectiveTo: null, inputBox: 'VAT_IN', outputBox: 'VAT_OUT' },
+      { code: 'RC_19', rateBps: 1900, effectiveFrom: '2020-01-01', effectiveTo: null, reverseCharge: true, inputBox: 'RC_INPUT', outputBox: 'RC_OUTPUT' },
+      { code: 'NR_15', rateBps: 1500, effectiveFrom: '2020-01-01', effectiveTo: null, reverseCharge: true, inputBox: 'RC_INPUT', outputBox: 'RC_OUTPUT' },
+    ]);
+    engine.registerWithholdingRules([
+      { code: 'WHT_5', rateBps: 500, timing: 'PAYMENT', certificatePrefix: 'WHT' },
+    ]);
+    return engine;
+  };
+
   it('fixture: 19% of 1,000.00 = 190.00; reverse charge nets to 0; WHT 5% leaves a 950.00 bank payment', () => {
     expect((T10.creditNote.net * 19n) / 100n).toBe(T10.creditNote.expectedVat);
     expect(T10.reverseCharge.vat - T10.reverseCharge.vat).toBe(0n);
     expect((T10.nonResident.net * 15n) / 100n).toBe(T10.nonResident.selfAssessedVat);
     expect(T10.nonResident.net - T10.nonResident.withholding).toBe(T10.nonResident.bankPaid);
   });
-  it.skip('A: credit note on 2026-07-10 for a 2026-06-20 invoice uses 19%, a new invoice uses 20% — needs T180 (dated rates)', () => undefined);
-  it.skip('B: reverse charge posts Dr input VAT 190 / Cr output RC VAT 190 mapped to return boxes — needs T180', () => undefined);
-  it.skip('C: non-resident bill self-assesses 150 VAT and withholds 5% with certificate WHT-2026-0001 — needs T180', () => undefined);
+
+  it('A: credit note on 2026-07-10 for a 2026-06-20 invoice uses 19%, a new invoice uses 20%', () => {
+    const engine = buildEngine();
+    const cn = engine.calculate({
+      country: 'DE',
+      taxCode: 'STD',
+      netMinor: T10.creditNote.net,
+      taxPointDate: T10.creditNote.date,
+      documentKind: 'CREDIT_NOTE',
+      originalInvoiceTaxPointDate: T10.creditNote.originalInvoiceDate,
+    });
+    expect(cn.rateBps).toBe(1900);
+    expect(cn.taxMinor).toBe(T10.creditNote.expectedVat);
+
+    const inv = engine.calculate({
+      country: 'DE',
+      taxCode: 'STD',
+      netMinor: T10.creditNote.net,
+      taxPointDate: T10.creditNote.date,
+      documentKind: 'INVOICE',
+    });
+    expect(inv.rateBps).toBe(2000);
+    expect(inv.taxMinor).toBe(m('200.00'));
+  });
+
+  it('B: reverse charge posts Dr input VAT 190 / Cr output RC VAT 190 mapped to return boxes', () => {
+    const engine = buildEngine();
+    const res = engine.calculate({
+      country: 'DE',
+      taxCode: 'RC_19',
+      netMinor: T10.reverseCharge.net,
+      taxPointDate: '2026-06-20',
+      documentKind: 'BILL',
+    });
+    expect(res.reverseCharge).toBe(true);
+    expect(res.netTaxImpactMinor).toBe(0n);
+    expect(res.returnBoxes).toEqual({
+      inputBox: 'RC_INPUT',
+      outputBox: 'RC_OUTPUT',
+      inputMinor: T10.reverseCharge.vat,
+      outputMinor: T10.reverseCharge.vat,
+    });
+    expect(res.journalLines).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ debitMinor: T10.reverseCharge.net, creditMinor: 0n }),
+        expect.objectContaining({ debitMinor: 0n, creditMinor: T10.reverseCharge.net }),
+        expect.objectContaining({ debitMinor: T10.reverseCharge.vat, creditMinor: 0n, taxBox: 'RC_INPUT' }),
+        expect.objectContaining({ debitMinor: 0n, creditMinor: T10.reverseCharge.vat, taxBox: 'RC_OUTPUT' }),
+      ]),
+    );
+  });
+
+  it('C: non-resident bill self-assesses 150 VAT and withholds 5% with certificate WHT-2026-0001', () => {
+    const engine = buildEngine();
+    const bill = engine.calculate({
+      country: 'DE',
+      taxCode: 'NR_15',
+      netMinor: T10.nonResident.net,
+      taxPointDate: '2026-06-20',
+      documentKind: 'BILL',
+      withholdingCode: 'WHT_5',
+      withholdingEvent: 'BILL',
+    });
+    expect(bill.taxMinor).toBe(T10.nonResident.selfAssessedVat);
+    expect(bill.withholding.applied).toBe(false);
+
+    const payment = engine.calculate({
+      country: 'DE',
+      taxCode: 'NR_15',
+      netMinor: T10.nonResident.net,
+      taxPointDate: '2026-06-20',
+      postingDate: '2026-06-25',
+      documentKind: 'BILL',
+      withholdingCode: 'WHT_5',
+      withholdingEvent: 'PAYMENT',
+    });
+    expect(payment.withholding).toEqual({
+      applied: true,
+      timing: 'PAYMENT',
+      withheldMinor: T10.nonResident.withholding,
+      netPayableMinor: T10.nonResident.bankPaid,
+      certificateNumber: T10.nonResident.certificate,
+    });
+  });
 });
 
 describe('R16 T11 e-invoice adapters', () => {
