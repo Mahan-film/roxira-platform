@@ -52,10 +52,13 @@ export class CreateSafeDataImportCutovers1789900020000
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`SET LOCAL lock_timeout = '5s'`);
+    await queryRunner.query(`SET LOCAL statement_timeout = '30s'`);
+    // Reversible without data loss: drop the unique partial index and RLS policy
+    // added by this migration, while preserving the table and any existing cutover
+    // records (the table may pre-date this migration after the #1215 code revert).
     await disableTenantRls(queryRunner, 'data_import_cutovers');
     await queryRunner.query(`
       DROP INDEX IF EXISTS "UQ_data_import_cutovers_one_active_per_tenant"
     `);
-    await queryRunner.query(`DROP TABLE IF EXISTS "data_import_cutovers"`);
   }
 }
