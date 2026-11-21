@@ -30,6 +30,7 @@ export interface ImportedPartyRef {
   id: number;
   code: string;
   name: string;
+  phone?: string | null;
   nationalId?: string | null;
   economicCode?: string | null;
 }
