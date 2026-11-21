@@ -66,6 +66,18 @@ export interface ReconcilePackageOptions {
   tieOutEngine?: ImportTieOutEngine;
 }
 
+export const BANK_STATEMENT_ENTITY_KEY = 'bank-statement';
+
+const ENTITY_KEY_ALIASES: Readonly<Record<string, string>> = {
+  'bank-statements': BANK_STATEMENT_ENTITY_KEY,
+  bank_statement: BANK_STATEMENT_ENTITY_KEY,
+  bank_statements: BANK_STATEMENT_ENTITY_KEY,
+};
+
+function canonicalEntityKey(entity: string): string {
+  return ENTITY_KEY_ALIASES[entity] ?? entity;
+}
+
 const DEBIT_CREDIT: Record<string, { debit: string; credit: string }> = {
   'accounting-journal-lines': { debit: 'debitRial', credit: 'creditRial' },
   'accounting-opening-balances': { debit: 'debit', credit: 'credit' },
@@ -78,12 +90,37 @@ export function selectionKey(selections: ReconcileSelection[]): string {
     .filter((s) => !s.skip)
     .map((s) => ({
       n: s.name,
-      e: s.entity,
+      e: canonicalEntityKey(s.entity),
       m: Object.entries(s.mapping ?? {}).sort(([a], [b]) => a.localeCompare(b)),
       u: s.moneyToRial ?? 1,
     }))
     .sort((a, b) => a.n.localeCompare(b.n));
   return createHash('sha256').update(JSON.stringify(canonical)).digest('hex').slice(0, 32);
+}
+
+/** Deterministic cache key covering table selections plus tie-out options (date, currency, control totals). */
+export function reconciliationCacheKey(
+  selections: ReconcileSelection[],
+  options?: Pick<ReconcilePackageOptions, 'asOfDate' | 'currency' | 'controlTotals' | 'customConfig'>,
+): string {
+  const baseKey = selectionKey(selections);
+  if (!options || (!options.asOfDate && !options.currency && !options.controlTotals && !options.customConfig)) {
+    return baseKey;
+  }
+  const controlTotals = options.controlTotals
+    ? Object.entries(options.controlTotals)
+        .filter(([, v]) => v !== undefined)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => [k, String(v)])
+    : null;
+  const payload = {
+    baseKey,
+    asOfDate: options.asOfDate ?? null,
+    currency: options.currency ? options.currency.trim().toUpperCase() : null,
+    controlTotals,
+    customConfig: options.customConfig ?? null,
+  };
+  return createHash('sha256').update(JSON.stringify(payload)).digest('hex').slice(0, 32);
 }
 
 export function reconcilePackage(
@@ -102,7 +139,8 @@ export function reconcilePackage(
 
   for (const selection of selections.filter((s) => !s.skip)) {
     const table = tables.find((t) => t.name === selection.name);
-    const adapter = adapters.find((a) => a.key === selection.entity);
+    const entityKey = canonicalEntityKey(selection.entity);
+    const adapter = adapters.find((a) => a.key === entityKey);
     if (!table || !adapter) {
       warningsFa.push(`جدول یا موجودیت «${selection.name}» برای مغایرت‌گیری یافت نشد.`);
       continue;
@@ -202,6 +240,10 @@ export function reconcilePackage(
 
   if (!tieOut.passed) {
     blockersFa.push(...tieOut.blockersFa);
+  }
+  const tieOutWarnings = (tieOut as { warningsFa?: string[] }).warningsFa;
+  if (Array.isArray(tieOutWarnings) && tieOutWarnings.length > 0) {
+    warningsFa.push(...tieOutWarnings);
   }
 
   const balanced = blockersFa.length === 0;

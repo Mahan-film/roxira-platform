@@ -10,6 +10,7 @@ import {
   ReconcileSelection,
   ReconciliationReport,
   reconcilePackage,
+  reconciliationCacheKey,
   selectionKey,
 } from '../analysis/reconciliation';
 import { ImportTieOutEngine } from '../analysis/import-tie-out.engine';
@@ -69,6 +70,10 @@ export class PackageReconciliationService {
     if (!state.analysis || (state.status !== 'ready' && state.status !== 'committing')) {
       throw new BadRequestException('این بسته آمادهٔ مغایرت‌گیری نیست؛ ابتدا تحلیل باید کامل شود.');
     }
+    const cacheKey = reconciliationCacheKey(selections, options);
+    if (state.reconciliation?.key === cacheKey) {
+      return state.reconciliation.report as ReconciliationReport;
+    }
     const parsed = await this.analysisService.openPackage(state);
     try {
       const report = reconcilePackage(
@@ -81,6 +86,11 @@ export class PackageReconciliationService {
           ...options,
         },
       );
+      const fresh = await this.store.getState(tenantId, packageId);
+      if (fresh) {
+        fresh.reconciliation = { key: cacheKey, report };
+        await this.store.writeState(fresh);
+      }
       return report;
     } finally {
       parsed.close();
