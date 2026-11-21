@@ -6,6 +6,7 @@ import 'reflect-metadata';
 import * as path from 'path';
 import { DataSource } from 'typeorm';
 import { TenantScope } from '../access/services/tenant-scope';
+import { AuditLogEntity } from '../access/entities/audit-log.entity';
 import { PeriodLockEntity } from '../accounting/entities/period-lock.entity';
 import { CutoverEntity } from './entities/cutover.entity';
 import { CutoverRepository } from './repositories/cutover.repository';
@@ -138,6 +139,10 @@ describePg('CutoverRepository FORCE RLS, unique active index & atomic rollback o
       m.getRepository(PeriodLockEntity).find({ where: { tenantId: TENANT_A } }),
     );
     expect(locksAfterRollback).toHaveLength(0);
+    const auditsAfterRollback = await scope.run(TENANT_A, (m) =>
+      m.getRepository(AuditLogEntity).find({ where: { tenantId: TENANT_A } }),
+    );
+    expect(auditsAfterRollback).toHaveLength(0);
 
     // Concurrent go-live for the same tenant: advisory lock + unique partial index allow strictly one.
     const results = await Promise.allSettled([

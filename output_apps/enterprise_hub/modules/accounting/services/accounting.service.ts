@@ -1501,15 +1501,18 @@ export class AccountingService {
       },
       manager,
     );
-    await this.ledgerAudit?.record({
-      kind: 'period.locked',
-      tenantId,
-      actor,
-      lockId: created.id,
-      periodStart: dto.periodStart,
-      periodEnd: dto.periodEnd,
-      reason: created.reason,
-    });
+    await this.ledgerAudit?.record(
+      {
+        kind: 'period.locked',
+        tenantId,
+        actor,
+        lockId: created.id,
+        periodStart: dto.periodStart,
+        periodEnd: dto.periodEnd,
+        reason: created.reason,
+      },
+      manager,
+    );
     return this.toLockDto(created);
   }
 

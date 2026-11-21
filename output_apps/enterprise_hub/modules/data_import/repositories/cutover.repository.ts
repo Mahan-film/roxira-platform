@@ -53,7 +53,7 @@ export class CutoverRepository {
     if (scope) {
       return scope.run(tenantId, (m) => work(m.getRepository(CutoverEntity)));
     }
-    return work(this.cutovers);
+    throw new Error('TenantScope is required for tenant table cutover repository');
   }
 
   /** Run multi-step cutover operations in one tenant-scoped PostgreSQL transaction. */
