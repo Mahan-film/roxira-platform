@@ -19,7 +19,7 @@ def pick(**env: str) -> dict:
         ["bash", str(SCRIPT)], env=base, capture_output=True, text=True, check=True
     ).stdout
     result = dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
-    assert set(result) == {"light", "docker", "where"}
+    assert set(result) == {"light", "docker", "image_registry", "where"}
     return result
 
 
@@ -112,4 +112,32 @@ def test_auto_max_age_is_configurable():
 
 
 def test_unknown_mode_is_hosted():
-    assert pick(EVENT="push", MODE="everything")["light"] == HOSTED
+    r = pick(EVENT="push", MODE="everything")
+    assert r["light"] == HOSTED
+    assert r["image_registry"] == "mirror.gcr.io/library"
+
+
+def test_image_registry_matches_docker_runner_slot():
+    hosted = pick(EVENT="push", MODE="hosted")
+    assert hosted["image_registry"] == "mirror.gcr.io/library"
+
+    box = pick(EVENT="push", MODE="box")
+    assert box["image_registry"] == "public.ecr.aws/docker/library"
+
+    # Auto split-slot: light on box, docker on hosted -> hosted registry
+    split_hosted_docker = pick(EVENT="push", MODE="auto", HEARTBEAT=f"{NOW - 30} 1 0")
+    assert split_hosted_docker["docker"] == HOSTED
+    assert split_hosted_docker["image_registry"] == "mirror.gcr.io/library"
+
+    # Auto split-slot: light on hosted, docker on box -> box registry
+    split_box_docker = pick(EVENT="push", MODE="auto", HEARTBEAT=f"{NOW - 30} 0 1")
+    assert split_box_docker["docker"] == BOX
+    assert split_box_docker["image_registry"] == "public.ecr.aws/docker/library"
+
+
+def test_image_registry_override_and_validation():
+    override = pick(EVENT="push", MODE="hosted", IMAGE_REGISTRY="ghcr.io/mahan-film/mirror")
+    assert override["image_registry"] == "ghcr.io/mahan-film/mirror"
+
+    bad = pick(EVENT="push", MODE="hosted", IMAGE_REGISTRY="ghcr.io/bad space")
+    assert bad["image_registry"] == "mirror.gcr.io/library"
