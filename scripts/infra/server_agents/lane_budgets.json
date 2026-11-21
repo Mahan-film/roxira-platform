@@ -9,6 +9,9 @@
     "fe": {"usd_per_day": 2.0, "tokens_per_day": 8000000, "attempts_per_day": 20},
     "data": {"usd_per_day": 1.0, "tokens_per_day": 4000000, "attempts_per_day": 10},
     "test": {"usd_per_day": 1.0, "tokens_per_day": 4000000, "attempts_per_day": 15},
-    "review": {"usd_per_day": 0.5, "tokens_per_day": 3000000, "attempts_per_day": 40}
+    "review": {"usd_per_day": 0.5, "tokens_per_day": 3000000, "attempts_per_day": 40},
+    "l5": {"usd_per_day": 0.25, "tokens_per_day": 4000000, "attempts_per_day": 15},
+    "l6": {"usd_per_day": 0.25, "tokens_per_day": 4000000, "attempts_per_day": 15},
+    "l7": {"usd_per_day": 0.5, "tokens_per_day": 4000000, "attempts_per_day": 15}
   }
 }
