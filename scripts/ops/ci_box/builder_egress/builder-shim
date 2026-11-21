@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# OPENCODE_BIN for lane-run when ROXIRA_BUILDER=1: runs the builder as another uid through the root wrapper verb
+# `run-builder` (docs/ops/BUILDER_EGRESS.md). Called by run_task.sh as: builder-shim run -m <model> <prompt>
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+exec python3 -I "$HERE/builder_io.py" shim "$@"

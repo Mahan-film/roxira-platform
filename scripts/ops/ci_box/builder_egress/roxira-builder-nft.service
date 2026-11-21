@@ -1,0 +1,13 @@
+[Unit]
+Description=Roxira builder uid egress lock (nftables table inet roxira_builder)
+After=network-pre.target roxira-builder-proxy.service
+Wants=roxira-builder-proxy.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/roxira-lane/roxira_builder.nft
+ExecStop=-/usr/sbin/nft delete table inet roxira_builder
+
+[Install]
+WantedBy=multi-user.target
