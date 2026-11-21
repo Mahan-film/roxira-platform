@@ -136,8 +136,15 @@ describePg('ops_error_events FORCE RLS and alert queries on real PostgreSQL (T19
   });
 
   it('digest query, scanTenantIds and purge work under TenantScope', async () => {
+    await db.rawQuery(
+      `INSERT INTO tenants (id, name, slug, is_active)
+       VALUES ($1, 'Test Tenant 1', 'test-tenant-ops-1', true)
+       ON CONFLICT (id) DO UPDATE SET is_active = true`,
+      [TEST_T1],
+    );
     const ids = await repo.scanTenantIds();
     expect(ids).toContain(PLATFORM_OPS_TENANT_ID);
+    expect(ids).toContain(TEST_T1);
 
     const top = await repo.topLast24h(TEST_T1, 10);
     expect(top[0].total).toBeGreaterThanOrEqual(12);
