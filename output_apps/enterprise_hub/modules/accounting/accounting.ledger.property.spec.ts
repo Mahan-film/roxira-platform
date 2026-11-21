@@ -35,6 +35,10 @@ import {
   JournalLineInput,
   TrialBalanceRawRow,
 } from './repositories/accounting.repository';
+import {
+  LockedPeriodError,
+  PeriodLockedException,
+} from './exceptions/ledger.exceptions';
 import { AccountingService } from './services/accounting.service';
 
 const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
@@ -320,6 +324,18 @@ class PropertyTestAccountingRepository {
     lineInputs: JournalLineInput[],
     _manager?: EntityManager,
   ): Promise<JournalEntryEntity> {
+    const isoDate = new Date(header.date).toISOString().slice(0, 10);
+    const activeLock = this.periodLocks.find(
+      (lock) =>
+        lock.tenantId === tenantId &&
+        lock.unlockedAt == null &&
+        isoDate >= lock.periodStart &&
+        isoDate <= lock.periodEnd,
+    );
+    if (activeLock) {
+      throw new LockedPeriodError(isoDate);
+    }
+
     const entry = {
       id: ++this.entrySeq,
       tenantId,
@@ -837,6 +853,98 @@ describe('Ledger Property Tests (fast-check)', () => {
           },
         ),
         { numRuns: 20 },
+      );
+    });
+  });
+
+  // =========================================================================
+  // Property 6: FX conversion round-trip stays within one minor unit (T173)
+  // =========================================================================
+  describe('Property 6: FX conversion round-trip stays within one minor unit', () => {
+    const RATE_SCALE = 1_000_000n; // 6 decimal places of FX rate precision
+
+    function fxForward(amountMinor: bigint, rateScaled: bigint): bigint {
+      const half = RATE_SCALE / 2n;
+      return (amountMinor * rateScaled + half) / RATE_SCALE;
+    }
+
+    function fxInverse(baseMinor: bigint, rateScaled: bigint): bigint {
+      const half = rateScaled / 2n;
+      return (baseMinor * RATE_SCALE + half) / rateScaled;
+    }
+
+    it('converting minor -> base -> minor with exact BigInt rates stays within 1 minor unit', () => {
+      fc.assert(
+        fc.property(
+          // Non-negative amounts up to 10^12 minor units
+          fc.bigInt({ min: 0n, max: 1_000_000_000_000n }),
+          // FX rates >= 1.000000 (e.g. USD/EUR/AED -> IRR or fine-grained base currency)
+          fc.bigInt({ min: RATE_SCALE, max: 1_000_000n * RATE_SCALE }),
+          (amountMinor, rateScaled) => {
+            const baseMinor = fxForward(amountMinor, rateScaled);
+            const roundTripped = fxInverse(baseMinor, rateScaled);
+            const diff =
+              roundTripped >= amountMinor
+                ? roundTripped - amountMinor
+                : amountMinor - roundTripped;
+            expect(diff <= 1n).toBe(true);
+          },
+        ),
+        { numRuns: 200 },
+      );
+    });
+  });
+
+  // =========================================================================
+  // Property 7: No posting into a locked period succeeds (T173)
+  // =========================================================================
+  describe('Property 7: No posting into a locked period succeeds', () => {
+    it('every balanced voucher dated inside an active period lock is rejected with PeriodLockedException', async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          balancedVoucherDtoArbitrary,
+          fc.integer({ min: 1, max: 28 }),
+          fc.integer({ min: 0, max: 5 }),
+          async (voucher, startDay, spanDays) => {
+            const tenantId = `tenant-lock-${Math.random().toString(36).slice(2, 8)}`;
+            const { service, repository } = await createLedgerFixture(tenantId);
+
+            const endDay = Math.min(28, startDay + spanDays);
+            const pad = (d: number) => String(d).padStart(2, '0');
+            const periodStart = `2026-06-${pad(startDay)}`;
+            const periodEnd = `2026-06-${pad(endDay)}`;
+            const lockedDay = startDay + Math.floor((endDay - startDay) / 2);
+            const lockedDate = `2026-06-${pad(lockedDay)}`;
+
+            repository.periodLocks.push({
+              id: 1,
+              tenantId,
+              periodStart,
+              periodEnd,
+              lockedBy: 'auditor-1',
+              lockedAt: new Date('2026-07-01T00:00:00Z'),
+              unlockedAt: null,
+              unlockedBy: null,
+              reason: 'Period closed',
+            } as unknown as PeriodLockEntity);
+
+            const payload: CreateJournalEntryDto = {
+              entryNumber: `JV-LOCK-${Math.random().toString(36).slice(2, 7)}`,
+              date: lockedDate,
+              description: voucher.description,
+              lines: voucher.lines,
+            };
+
+            await expect(
+              service.createJournalEntry(tenantId, payload),
+            ).rejects.toThrow(PeriodLockedException);
+
+            // Invariant: ledger remains completely untouched
+            expect(repository.entries.length).toBe(0);
+            expect(repository.lines.length).toBe(0);
+          },
+        ),
+        { numRuns: 25 },
       );
     });
   });

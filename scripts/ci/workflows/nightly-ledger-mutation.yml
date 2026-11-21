@@ -1,0 +1,45 @@
+name: Nightly Ledger Mutation Report (T173)
+
+on:
+  schedule:
+    - cron: '30 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stryker-ledger:
+    name: Stryker mutation report (report-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: output_apps/enterprise_hub/package-lock.json
+
+      - name: Install enterprise_hub dependencies
+        working-directory: output_apps/enterprise_hub
+        run: npm ci
+
+      - name: Run Stryker mutation testing (report-only, no gate)
+        working-directory: output_apps/enterprise_hub
+        continue-on-error: true
+        run: |
+          npx --yes -p @stryker-mutator/core@^9 -p @stryker-mutator/jest-runner@^9 \
+            stryker run stryker.ledger.config.json
+
+      - name: Upload mutation report artifact
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ledger-mutation-report
+          path: output_apps/enterprise_hub/reports/mutation/ledger/
+          if-no-files-found: warn
+          retention-days: 14
