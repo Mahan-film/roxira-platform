@@ -2,6 +2,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import { AccessModule } from '../access/access.module';
+import { TenantScope } from '../access/services/tenant-scope';
 import { AuthModule } from '../auth/auth.module';
 import { ClientErrorsModule } from '../client-errors/client-errors.module';
 import { OpsErrorsController } from './controllers/ops-errors.controller';
@@ -28,6 +29,7 @@ import { OpsErrorsQueryService } from './services/ops-errors-query.service';
   ],
   controllers: [OpsErrorsController],
   providers: [
+    TenantScope,
     OpsErrorEventsRepository,
     OpsErrorCaptureService,
     OpsErrorAlertService,
