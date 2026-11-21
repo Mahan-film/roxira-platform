@@ -17,13 +17,21 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "scripts/infra/server_agents"))
-import orch  # noqa: E402
-import taskq  # noqa: E402
+orch = taskq = var = None
 
-_spec = importlib.util.spec_from_file_location("verify_agent_report", ROOT / "scripts/dev/verify_agent_report.py")
-var = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(var)
+
+def setUpModule():
+    """Load the modules under test lazily so importing this file has no side effects."""
+    global orch, taskq, var
+    sys.path.insert(0, str(ROOT / "scripts/infra/server_agents"))
+    import orch as _orch
+    import taskq as _taskq
+
+    orch, taskq = _orch, _taskq
+    spec = importlib.util.spec_from_file_location("verify_agent_report", ROOT / "scripts/dev/verify_agent_report.py")
+    var = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(var)
+
 
 GH = """#!{py}
 import json, os, re, sys
