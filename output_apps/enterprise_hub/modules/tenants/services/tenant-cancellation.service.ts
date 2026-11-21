@@ -132,7 +132,23 @@ export class TenantCancellationService {
       `);
 
       const tables = (tableRows || []).map((r) => r.table_name);
-      const targetTables = tables.length > 0 ? tables : [...CORE_TENANT_TABLES];
+      const rawTargetTables = tables.length > 0 ? tables : [...CORE_TENANT_TABLES];
+
+      // 1b. Discover FK dependencies and topologically sort so children are deleted before parents.
+      const fkRows: { child_table: string; parent_table: string }[] =
+        (await manager.query(`
+          SELECT DISTINCT
+            child.relname AS child_table,
+            parent.relname AS parent_table
+          FROM pg_constraint con
+          JOIN pg_class child ON con.conrelid = child.oid
+          JOIN pg_class parent ON con.confrelid = parent.oid
+          JOIN pg_namespace ns ON child.relnamespace = ns.oid
+          WHERE con.contype = 'f'
+            AND ns.nspname = 'public'
+            AND child.relname <> parent.relname
+        `)) || [];
+      const targetTables = this.sortTablesChildrenFirst(rawTargetTables, fkRows);
 
       // 2. Prevent posted lines trigger block by marking journal entries PURGED first if exists.
       // Do not swallow errors: if this UPDATE fails, abort and roll back the purge transaction.
@@ -186,6 +202,61 @@ export class TenantCancellationService {
     }
 
     return { purgedCount: purgedIds.length, tenantIds: purgedIds };
+  }
+
+  /**
+   * Topologically sorts tables so referencing (child) tables are deleted before
+   * referenced (parent) tables, preventing FK constraint violations during purge.
+   * Any cyclic remainder is appended deterministically in alphabetical order.
+   */
+  private sortTablesChildrenFirst(
+    tables: string[],
+    fkEdges: { child_table: string; parent_table: string }[],
+  ): string[] {
+    const uniqueTables = Array.from(new Set(tables)).sort();
+    const tableSet = new Set(uniqueTables);
+    const inDegree = new Map<string, number>();
+    const parentsOf = new Map<string, Set<string>>();
+
+    for (const t of uniqueTables) {
+      inDegree.set(t, 0);
+      parentsOf.set(t, new Set());
+    }
+
+    for (const { child_table, parent_table } of fkEdges) {
+      if (!tableSet.has(child_table) || !tableSet.has(parent_table)) continue;
+      if (child_table === parent_table) continue;
+      const parents = parentsOf.get(child_table)!;
+      if (!parents.has(parent_table)) {
+        parents.add(parent_table);
+        inDegree.set(parent_table, (inDegree.get(parent_table) ?? 0) + 1);
+      }
+    }
+
+    const ready = uniqueTables.filter((t) => (inDegree.get(t) ?? 0) === 0).sort();
+    const ordered: string[] = [];
+
+    while (ready.length > 0) {
+      const current = ready.shift()!;
+      ordered.push(current);
+      for (const parent of parentsOf.get(current) ?? []) {
+        const nextDeg = (inDegree.get(parent) ?? 0) - 1;
+        inDegree.set(parent, nextDeg);
+        if (nextDeg === 0) {
+          ready.push(parent);
+          ready.sort();
+        }
+      }
+    }
+
+    if (ordered.length < uniqueTables.length) {
+      const orderedSet = new Set(ordered);
+      for (const t of uniqueTables) {
+        if (!orderedSet.has(t)) ordered.push(t);
+      }
+    }
+
+    return ordered;
   }
 
   private mapToStatusDto(tenant: any): TenantCancellationStatusResponseDto {

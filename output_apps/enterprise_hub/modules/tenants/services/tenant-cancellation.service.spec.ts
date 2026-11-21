@@ -233,6 +233,42 @@ describe('TenantCancellationService', () => {
       );
     });
 
+    it('deletes child tables before parent tables according to FK constraints', async () => {
+      tenantsRepo.findById.mockResolvedValue({ id: 't1', status: TenantStatus.CANCELLED_READONLY });
+      const deletedOrder: string[] = [];
+
+      mockManager.query.mockImplementation(async (sql: string) => {
+        if (sql.includes('FOR UPDATE SKIP LOCKED')) {
+          return [{ id: 't1' }];
+        }
+        if (sql.includes('information_schema.columns')) {
+          // Alphabetically parent comes before child
+          return [
+            { table_name: 'fin_journal_entries' },
+            { table_name: 'fin_journal_entry_lines' },
+            { table_name: 'crm_contacts' },
+          ];
+        }
+        if (sql.includes('pg_constraint')) {
+          return [
+            { child_table: 'fin_journal_entry_lines', parent_table: 'fin_journal_entries' },
+          ];
+        }
+        const m = sql.match(/^DELETE FROM "([^"]+)"/);
+        if (m) {
+          deletedOrder.push(m[1]);
+        }
+        return [];
+      });
+
+      const res = await service.purgeTenant('t1');
+
+      expect(res.success).toBe(true);
+      expect(deletedOrder.indexOf('fin_journal_entry_lines')).toBeLessThan(
+        deletedOrder.indexOf('fin_journal_entries'),
+      );
+    });
+
     it('propagates error if tenantScope.run fails', async () => {
       tenantsRepo.findById.mockResolvedValue({ id: 't1', status: TenantStatus.CANCELLED_READONLY });
       mockTenantScope.run.mockRejectedValueOnce(new Error('Database error'));
