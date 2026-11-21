@@ -65,7 +65,7 @@ function getMasterKey(customKey?: Buffer): Buffer {
   }
   const envKey = process.env.WOOCOMMERCE_KEY_ENCRYPTION_KEY;
   if (!envKey || envKey.trim().length < 32) {
-    throw new Error('WOOCOMMERCE_KEY_ENCRYPTION_KEY must be configured with at least 32 characters (fail closed)');
+    throw new Error('WooCommerce encryption key is not configured (fail closed)');
   }
   return createHash('sha256').update(envKey.trim()).digest();
 }
