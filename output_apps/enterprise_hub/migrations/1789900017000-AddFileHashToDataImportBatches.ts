@@ -6,15 +6,15 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * در صورتی که فایلی با همان هش محتوا مجدداً برای یک مستأجر ارسال شود، هیچ ردیف جدیدی
  * ایجاد نمی‌شود و گزارش اجرای قبلی بازگردانده می‌شود.
  */
-export class AddFileHashToDataImportBatches1789900016000
+export class AddFileHashToDataImportBatches1789900017000
   implements MigrationInterface
 {
-  name = 'AddFileHashToDataImportBatches1789900016000';
+  name = 'AddFileHashToDataImportBatches1789900017000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE "data_import_batches"
-      ADD COLUMN "file_hash" character varying(64) NULL
+      ADD COLUMN "file_hash" character varying(128) NULL
     `);
     await queryRunner.query(`
       CREATE INDEX "IDX_data_import_batches_tenant_file_hash"

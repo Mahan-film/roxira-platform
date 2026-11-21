@@ -145,8 +145,8 @@ describePg('Data Import & Damages FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSR
   it('isolates DataImportBatchRepository across tenants under NOSUPERUSER NOBYPASSRLS', async () => {
     const batchIdA = randomUUID();
     const batchIdB = randomUUID();
-    const hashA = 'sha256-a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2';
-    const hashB = 'sha256-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff';
+    const hashA = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2';
+    const hashB = 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff';
 
     await batchRepo.createBatch(TENANT_A, {
       id: batchIdA,
