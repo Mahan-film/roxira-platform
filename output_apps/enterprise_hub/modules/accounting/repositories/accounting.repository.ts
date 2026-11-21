@@ -763,6 +763,30 @@ export class AccountingRepository {
     });
   }
 
+  /**
+   * True when `date` falls inside an OPEN fiscal year whose server-side adjustment period is open.
+   */
+  async isDateInAdjustmentPeriod(
+    tenantId: string,
+    date: Date,
+    manager?: EntityManager,
+  ): Promise<boolean> {
+    return this.scope.within(tenantId, manager, async (m) => {
+      const match = await m
+        .getRepository(FiscalYearEntity)
+        .createQueryBuilder('fy')
+        .where('fy.tenantId = :tenantId', { tenantId })
+        .andWhere('fy.status = :status', { status: FiscalYearStatus.OPEN })
+        .andWhere('fy.adjustmentPeriodOpen = true')
+        .andWhere(
+          'CAST(CAST(:date AS timestamp) AS date) BETWEEN fy.startDate AND fy.endDate',
+          { date },
+        )
+        .getOne();
+      return match !== null;
+    });
+  }
+
   private dayOf(date: Date): string {
     return date.toISOString().slice(0, 10);
   }

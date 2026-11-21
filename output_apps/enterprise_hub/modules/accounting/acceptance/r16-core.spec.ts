@@ -283,11 +283,12 @@ describe('R16 T11 e-invoice adapters', () => {
 });
 
 describe('R16 T12 accountant access', () => {
-  const firmUserId = 'a1111111-1111-1111-1111-111111111111';
+  const adminUserId = 'd0000001-0000-4000-8000-000000000001';
+  const firmUserId = 'a1111111-1111-4111-8111-111111111111';
   const tenantIds = [
-    't0000001-0000-0000-0000-000000000001',
-    't0000002-0000-0000-0000-000000000002',
-    't0000003-0000-0000-0000-000000000003',
+    '10000001-0000-4000-8000-000000000001',
+    '20000002-0000-4000-8000-000000000002',
+    '30000003-0000-4000-8000-000000000003',
   ];
 
   it('partner adviser adjustment journal is tagged PARTNER_ADJUSTMENT with the firm user id', async () => {
@@ -296,6 +297,7 @@ describe('R16 T12 accountant access', () => {
       countAccounts: async () => 1,
       findEntryByIdempotencyKey: async () => null,
       findEntryByNumber: async () => null,
+      isDateInAdjustmentPeriod: async () => true,
       findAccountsByCodes: async () => [
         { id: 1, code: '1001', level: 'moin' },
         { id: 2, code: '2001', level: 'moin' },
@@ -334,7 +336,6 @@ describe('R16 T12 accountant access', () => {
 
     const dto = {
       description: 'Q4 year-end accrual adjustment',
-      isAdjustmentPeriod: true,
       lines: [
         { accountCode: '1001', debit: 1000, credit: 0 },
         { accountCode: '2001', debit: 0, credit: 1000 },
@@ -397,8 +398,25 @@ describe('R16 T12 accountant access', () => {
 
     const mockMemberships = {
       findByTenantUser: jest.fn(async (tenantId: string, userId: string) => {
-        return storedMemberships.get(`${tenantId}:${userId}`) ?? { id: `m-${tenantId}`, tenantId, userId, status: 'ACTIVE' };
+        return (
+          storedMemberships.get(`${tenantId}:${userId}`) ?? {
+            id: `m-${tenantId}`,
+            tenantId,
+            userId,
+            roleKey: PARTNER_ADVISOR_ROLE,
+            status: 'ACTIVE',
+          }
+        );
       }),
+      listForUser: jest.fn(async () =>
+        tenantIds.map((tenantId) => ({
+          membershipId: `adm-${tenantId}`,
+          tenantId,
+          tenantName: `Org ${tenantId}`,
+          roleKey: 'admin',
+          status: 'ACTIVE',
+        })),
+      ),
       save: jest.fn(async (m: any) => {
         storedMemberships.set(`${m.tenantId}:${m.userId}`, m);
         return m;
@@ -406,7 +424,22 @@ describe('R16 T12 accountant access', () => {
     };
 
     const mockAccess = {
-      invalidateUser: jest.fn((userId: string) => {
+      resolve: jest.fn(async (_u: string, tenantId: string) => ({
+        userId: adminUserId,
+        tenantId,
+        membershipId: `adm-${tenantId}`,
+        roleKey: 'admin',
+        customRoleId: null,
+        permissions: new Set(systemRolePermissions('admin')),
+        entitledModules: new Set([AccessModule.MEMBERS]),
+        branchId: null,
+        branchScoped: false,
+        require2fa: false,
+        scope: { type: 'org', ids: [] },
+        amountLimits: {},
+        fieldVisibility: { cost: true, margin: true, salary: false },
+      })),
+      invalidateUser: jest.fn(async (userId: string) => {
         for (const k of Array.from(activeSessions)) {
           if (k.startsWith(`${userId}:`)) activeSessions.delete(k);
         }
@@ -438,7 +471,7 @@ describe('R16 T12 accountant access', () => {
     expect(await firmService.isSessionActive(sid, firmUserId)).toBe(true);
 
     const start = Date.now();
-    await firmService.revokeFirmUser('security-admin', firmUserId, tenantIds);
+    await firmService.revokeFirmUser(adminUserId, firmUserId, tenantIds);
     const elapsed = Date.now() - start;
 
     expect(elapsed).toBeLessThan(T12.revokeWithinSeconds * 1000); // < 60s

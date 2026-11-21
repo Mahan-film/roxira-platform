@@ -104,6 +104,8 @@ export enum SystemRole {
   OWNER = 'owner',
   ADMIN = 'admin',
   ACCOUNTANT = 'accountant',
+  /** External accounting-firm advisor serving multiple client tenants (T196 / R16 Test 12). */
+  PARTNER_ADVISOR = 'partner_advisor',
   SALES = 'sales',
   CHEQUE_REVIEWER = 'cheque_reviewer',
   HR = 'hr',
@@ -111,6 +113,8 @@ export enum SystemRole {
   /** What a plain MEMBER could do before roles existed. Kept so migrated staff lose nothing and gain nothing. */
   LEGACY_MEMBER = 'legacy_member',
 }
+
+export const PARTNER_ADVISOR_ROLE: SystemRole = SystemRole.PARTNER_ADVISOR;
 
 export interface SystemRoleDefinition {
   key: SystemRole;
@@ -179,6 +183,20 @@ export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
     fieldVisibility: { cost: true, margin: true, salary: false },
   },
   {
+    key: SystemRole.PARTNER_ADVISOR,
+    // Scoped firm-advisor role: view GL, request documents, adjustment-period journals (enforced server-side);
+    // no bank-detail edits (banking:read only) and no payments (cheques:read only).
+    permissions: [
+      ...perms(M.ACCOUNTING, READ, CREATE, POST, EXPORT),
+      ...perms(M.INVOICING, READ),
+      ...perms(M.TAX, READ),
+      ...perms(M.BANKING, READ),
+      ...perms(M.CHEQUES, READ),
+      ...perms(M.ASSISTANT, READ),
+    ],
+    fieldVisibility: { cost: true, margin: true, salary: false },
+  },
+  {
     key: SystemRole.LEGACY_MEMBER,
     deprecated: true,
     permissions: [
@@ -189,21 +207,9 @@ export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
   },
 ];
 
-export const PARTNER_ADVISOR_ROLE = 'partner_advisor';
-
-/** Scoped role for external accounting firm advisors serving multiple tenants (T196 / R16 Test 12). */
-export const PARTNER_ADVISOR_ROLE_DEF: SystemRoleDefinition = {
-  key: PARTNER_ADVISOR_ROLE as unknown as SystemRole,
-  permissions: [
-    ...perms(M.ACCOUNTING, READ, CREATE, POST, EXPORT),
-    ...perms(M.INVOICING, READ),
-    ...perms(M.TAX, READ),
-    ...perms(M.BANKING, READ),
-    ...perms(M.CHEQUES, READ),
-    ...perms(M.ASSISTANT, READ),
-  ],
-  fieldVisibility: { cost: true, margin: true, salary: false },
-};
+export const PARTNER_ADVISOR_ROLE_DEF: SystemRoleDefinition = SYSTEM_ROLES.find(
+  (r) => r.key === SystemRole.PARTNER_ADVISOR,
+)!;
 
 const ROLE_INDEX = new Map(SYSTEM_ROLES.map((r) => [r.key as string, r]));
 
@@ -213,18 +219,13 @@ export const DEFAULT_FIELD_VISIBILITY: FieldVisibilityMap = Object.freeze({
   salary: false,
 });
 
-export const isSystemRole = (key: string): boolean =>
-  key === PARTNER_ADVISOR_ROLE || ROLE_INDEX.has(key);
+export const isSystemRole = (key: string): key is SystemRole => ROLE_INDEX.has(key);
 
-export const systemRolePermissions = (key: string): readonly Permission[] => {
-  if (key === PARTNER_ADVISOR_ROLE) return PARTNER_ADVISOR_ROLE_DEF.permissions;
-  return ROLE_INDEX.get(key)?.permissions ?? [];
-};
+export const systemRolePermissions = (key: string): readonly Permission[] =>
+  ROLE_INDEX.get(key)?.permissions ?? [];
 
-export const systemRoleFieldVisibility = (key: string): FieldVisibilityMap => {
-  if (key === PARTNER_ADVISOR_ROLE) return PARTNER_ADVISOR_ROLE_DEF.fieldVisibility;
-  return ROLE_INDEX.get(key)?.fieldVisibility ?? DEFAULT_FIELD_VISIBILITY;
-};
+export const systemRoleFieldVisibility = (key: string): FieldVisibilityMap =>
+  ROLE_INDEX.get(key)?.fieldVisibility ?? DEFAULT_FIELD_VISIBILITY;
 
 export function resolveCustomRoleFieldVisibility(
   raw?: Partial<Record<string, boolean>> | null,

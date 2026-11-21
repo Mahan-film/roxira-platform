@@ -25,6 +25,10 @@ export class FiscalYearEntity {
   @Column({ type: 'varchar', length: 8, default: FiscalYearStatus.OPEN })
   status: FiscalYearStatus;
 
+  /** When true, partner advisors and authorized finance roles may post adjustment journals. */
+  @Column({ type: 'boolean', name: 'adjustment_period_open', default: false })
+  adjustmentPeriodOpen: boolean;
+
   /** Bumped on each close, so a close after a reopen gets fresh entry numbers. */
   @Column({ type: 'integer', name: 'close_seq', default: 0 })
   closeSeq: number;
