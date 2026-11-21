@@ -1,0 +1,11 @@
+{
+  "_comment": "Per-lane daily caps for lane-run on the box (lane_budget.py format). Day = UTC day. usd = paid fallback spend of this machine's virtual key; free models cost 0. tokens stay unmetered (the log records null), so only attempts and usd bind today.",
+  "global": {"attempts_per_day": 30},
+  "default": {"usd_per_day": 0.25, "attempts_per_day": 6},
+  "lanes": {
+    "l5": {"usd_per_day": 0.5, "attempts_per_day": 12},
+    "l6": {"usd_per_day": 0.5, "attempts_per_day": 12},
+    "l7": {"usd_per_day": 0.5, "attempts_per_day": 12},
+    "smoke": {"usd_per_day": 0.05, "attempts_per_day": 5}
+  }
+}
