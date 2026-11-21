@@ -406,6 +406,36 @@ describe('DataImportController (access control)', () => {
       );
     });
 
+    it('allows ADMIN role on POST /cutover/go-live and blocks VIEWER with 403', async () => {
+      cutoverMock.executeGoLive.mockClear();
+
+      // VIEWER is blocked with 403
+      await request(app.getHttpServer())
+        .post(goLiveUrl)
+        .set(
+          'Authorization',
+          `Bearer ${token({ sub: 'viewer-user', role: UserRole.USER, tenantId: 'tenant-1', tenantRole: TenantRole.VIEWER })}`,
+        )
+        .send(validGoLiveBody)
+        .expect(403);
+      expect(cutoverMock.executeGoLive).not.toHaveBeenCalled();
+
+      // ADMIN is permitted and executes go-live successfully
+      await request(app.getHttpServer())
+        .post(goLiveUrl)
+        .set(
+          'Authorization',
+          `Bearer ${token({ sub: 'admin-user', role: UserRole.USER, tenantId: 'tenant-1', tenantRole: TenantRole.ADMIN })}`,
+        )
+        .send(validGoLiveBody)
+        .expect(200);
+      expect(cutoverMock.executeGoLive).toHaveBeenCalledWith(
+        'tenant-1',
+        'admin-user',
+        expect.objectContaining({ cutoverDate: '2026-01-01' }),
+      );
+    });
+
     it('rejects empty body on /cutover/go-live and /cutover/verify-lock with 400', async () => {
       const ownerBearer = `Bearer ${token({ sub: 'owner', role: UserRole.USER, tenantId: 'tenant-1', tenantRole: TenantRole.OWNER })}`;
       await request(app.getHttpServer()).post(goLiveUrl).set('Authorization', ownerBearer).send({}).expect(400);

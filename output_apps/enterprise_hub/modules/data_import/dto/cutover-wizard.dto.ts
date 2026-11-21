@@ -1,9 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   IsNotEmpty,
+  IsObject,
   IsOptional,
   IsString,
   Matches,
@@ -109,6 +111,7 @@ export class CutoverPreflightRequestDto {
   @ApiProperty({ type: [CutoverOpeningLineDto] })
   @IsArray()
   @ArrayMinSize(2)
+  @ArrayMaxSize(2000)
   @ValidateNested({ each: true })
   @Type(() => CutoverOpeningLineDto)
   openingBalances: CutoverOpeningLineDto[];
@@ -122,21 +125,29 @@ export class CutoverPreflightRequestDto {
   @ApiPropertyOptional({ type: [Object] })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(5000)
+  @IsObject({ each: true })
   salesInvoices?: Array<Record<string, unknown>>;
 
   @ApiPropertyOptional({ type: [Object] })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(5000)
+  @IsObject({ each: true })
   purchaseInvoices?: Array<Record<string, unknown>>;
 
   @ApiPropertyOptional({ type: [Object] })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(5000)
+  @IsObject({ each: true })
   inventoryItems?: Array<Record<string, unknown>>;
 
   @ApiPropertyOptional({ type: [Object] })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(5000)
+  @IsObject({ each: true })
   bankStatements?: Array<Record<string, unknown>>;
 }
 
