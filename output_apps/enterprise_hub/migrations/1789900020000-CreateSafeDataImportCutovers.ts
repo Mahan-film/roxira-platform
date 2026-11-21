@@ -39,13 +39,28 @@ export class CreateSafeDataImportCutovers1789900020000
       ALTER TABLE "data_import_cutovers"
       ADD COLUMN IF NOT EXISTS "executed_by" text NULL
     `);
+    // Pre-dedupe step (N2): if multiple active cutovers exist per tenant from replays,
+    // keep only the latest active one and mark older ones inactive so the unique index succeeds.
+    await queryRunner.query(`
+      UPDATE "data_import_cutovers" c
+      SET "is_go_live_active" = false
+      WHERE c."is_go_live_active" = true
+        AND c."id" NOT IN (
+          SELECT DISTINCT ON ("tenant_id") "id"
+          FROM "data_import_cutovers"
+          WHERE "is_go_live_active" = true
+          ORDER BY "tenant_id", "created_at" DESC, "id" DESC
+        )
+    `);
     await queryRunner.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS "UQ_data_import_cutovers_one_active_per_tenant"
       ON "data_import_cutovers" ("tenant_id")
       WHERE "is_go_live_active" = true
     `);
+    // N5: Do not drop the tenant index; ensure non-unique index exists for tenant listing
     await queryRunner.query(`
-      DROP INDEX IF EXISTS "IDX_data_import_cutovers_tenant"
+      CREATE INDEX IF NOT EXISTS "IDX_data_import_cutovers_tenant"
+      ON "data_import_cutovers" ("tenant_id")
     `);
     await enableTenantRls(queryRunner, 'data_import_cutovers');
   }
