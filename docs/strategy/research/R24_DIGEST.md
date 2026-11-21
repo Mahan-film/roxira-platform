@@ -56,3 +56,47 @@ owner says otherwise.
 ## Rows (see issues labelled research-row, R24)
 Kernel schema; canonical remuneration taxonomy + `PayrollExecutionProvider`; Core HR MVP; payrun lock +
 GL posting; retention/legal-hold engine; cancellation export; HR AI guardrails spec; per-country packs.
+
+## Second opinion (Gemini Deep Research, 2026-11-22)
+
+Saved unchanged in `R24_GEMINI.md` (Stage 1 and Stage 2 both present). Important limit: this digest's header already credits a Gemini two-stage report, and its decisions and Stage 2 corrections match the pasted text point by point, so the pasted output is very likely the same run (or a rerun) that this digest was built from. Agreement below is therefore not independent corroboration. No `R24_RAW.md` exists on main, so "digest only" was checked against the digest text alone. Stage 2 says live web lookup was disabled: its VERIFIED labels come from the model's memory, not from a page, so they count as UNVERIFIED. Rule used: where the two sides conflict, the claim with a primary URL and a date wins; everything else is UNVERIFIED until a lane reads the page. A third block in the same owner paste (the broad technical, regulatory and cost baseline) is a different research and belongs to R26.
+
+### Agreements
+- Bitemporal kernel (valid time, recorded time, evaluation date), copy PayrollEngine patterns (MIT) and do not embed the .NET runtime; pure TypeScript in NestJS/Postgres.
+- Money as integer minor units; bank file equals sum of net payslips.
+- Closed payruns immutable; retro delta posted in the open run; GL reversing and replacement entries in the open period.
+- Germany via DATEV Lohn-Datenservices behind `PayrollExecutionProvider`; no self-certification (ITSG, ERiC).
+- HR AI drafts only, tenant kill switch default OFF, PII scrubbing before prompts.
+- Domain-split RBAC, hashed payment files, IBAN-change alerts, GoBD Z3 export on cancellation.
+- The seven Stage 2 corrections and the blind-spot list are the same in both.
+
+### Conflicts
+| Topic | This digest | Gemini | Verdict |
+|---|---|---|---|
+| Malaysia worked public-holiday pay | "disputed", verify Employment Act s.60D before build | Stage 2 states flatly: 2 x basic / 26 on top of salary; Stage 1's 1 x was a "critical error" | UNVERIFIED both; no URL. Keep "verify before build" (digest wording stands). |
+| Country order | Default pack, then Gulf and Malaysia, Germany via partner | Stage 1 lists UAE, KSA, Malaysia; Stage 2 Option A: Malaysia first (months 1-6), Germany DATEV track in months 4-6, UAE and KSA in months 7-12 | Not a fact conflict; the owner decides (see below). |
+| Stage 2 status labels | Everything is REQUIRES PRIMARY CHECK | Mix of VERIFIED, CHANGED, REQUIRES PRIMARY CHECK | Digest is stricter and right: no web access in Stage 2. |
+
+### Only one side has it
+- **Gemini only (all UNVERIFIED, no primary URL in the text):**
+  - Option table A-D: one-off and monthly cost ranges (A about USD 3-8k; native German engine USD 150-400k+, 18-30 months), including global payroll APIs listed from about USD 29 per employee per month.
+  - Revisit triggers: German embedded API if over 30% of German leads lack a tax advisor or a certified partner passes audit at EUR 6 per employee per month or less; native German engine only above about EUR 1.5M yearly payroll revenue; Gulf in-region hosting node before the first Gulf tenant over 50 employees or when local storage is gazetted.
+  - Open-source licence table: Frappe HR GPL-3.0 (avoid embedding), Horilla LGPL-2.1 (check forks for AGPL), Odoo payroll enterprise-only (proprietary), PayrollEngine MIT.
+  - Malaysia: contract 24 h processor-to-controller breach notice; DPO threshold (over 20k subjects or over 10k sensitive records) and a resident DPO; apply for LHDN verification about 60 days before GA.
+  - Germany: DATEV Marktplatz onboarding for a non-German IP holder.
+  - Statutory parameters in Stage 1 (2026 ceilings, Minijob, GPSSA and GOSI rates, WPS thresholds). The digest deliberately carries none of them.
+- **Digest only:** the "never hardcode a rate" rule with a four-eyes activation gate (Gemini has it only as a safe default in open question 5, same effect); the explicit conflict with STATE.md on country order.
+
+### Row changes
+- No new row and no comment posted: the Gemini-only items are cost ranges, triggers and licence notes, not yet covered by an open row but not a change of any row scope. Open rows found: #1054 (kernel schema), #1055 (taxonomy and provider interface), #1056 (HR AI guardrails). Rows for Core HR MVP, payrun lock, retention, export and country packs were not found under the search "R24".
+- The licence table and the revisit triggers are worth carrying into #1055 and the country-pack rows when they are opened; both stay UNVERIFIED until a lane reads the sources.
+
+### Owner decisions (not for agents)
+1. Country order: Stage 2 says Malaysia first; STATE.md says default pack first, then DE/EU, then Gulf. Unchanged until the owner decides.
+2. Whether the Option A-D cost ranges and revisit triggers become planning numbers (all UNVERIFIED).
+3. Whether to build native Malaysia payroll (LHDN verification effort) versus a partner, since Gemini's recommendation depends on it.
+
+### Expert questions added (default in brackets)
+1. Malaysia tax agent: current LHDN PCB test-case requirements and verification turnaround. [exact integer-sen math, regression suite from published examples]
+2. Malaysia employment law: public-holiday pay for monthly-rated staff under s.60D. [implement as a config table, do not hardcode 1x or 2x]
+3. Malaysia PDPA: 72 h clock start and DPO threshold for a multi-tenant processor. [24 h notice to controllers]
