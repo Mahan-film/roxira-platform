@@ -31,6 +31,9 @@ import { StructureRepository } from './repositories/structure.repository';
 import { AccessService } from './services/access.service';
 import { AuditService } from './services/audit.service';
 import { LedgerAuditService } from './services/ledger-audit.service';
+import { TenantPlanEntity } from './entities/tenant-plan.entity';
+import { UsageCounterEntity } from './entities/usage-counter.entity';
+import { EntitlementService } from './services/entitlement.service';
 import { EntitlementsService } from './services/entitlements.service';
 import { InvitationsService } from './services/invitations.service';
 import { MembersService } from './services/members.service';
@@ -54,7 +57,7 @@ import { LoginSchedulesRepository } from './repositories/login-schedules.reposit
     TypeOrmModule.forFeature([
       MembershipEntity, BranchEntity, DepartmentEntity, CustomRoleEntity, InvitationEntity,
       EntitlementEntity, AuditLogEntity, ModuleRequestEntity, RefreshTokenEntity, UserEntity,
-      UserLoginScheduleEntity,
+      UserLoginScheduleEntity, TenantPlanEntity, UsageCounterEntity,
     ]),
     TenantsModule,
   ],
@@ -63,14 +66,14 @@ import { LoginSchedulesRepository } from './repositories/login-schedules.reposit
     MembershipsRepository, StructureRepository, RolesRepository, InvitationsRepository,
     EntitlementsRepository, ModuleRequestsRepository, TenantScope, AuditRepository, SessionCheckRepository, AuthRepository, RefreshTokenRepository, MailService,
     AccessService, AuditService, LedgerAuditService, MembersService, RolesService, StructureService,
-    EntitlementsService, InvitationsService, OrganizationsService,
+    EntitlementService, EntitlementsService, InvitationsService, OrganizationsService,
     LoginSchedulesRepository,
     LoginWindowService, CostMaskingService,
     AccessGuard, AuditInterceptor, CostMaskingInterceptor,
   ],
   exports: [
     AccessService, AuditService, LedgerAuditService, MembershipsRepository, OrganizationsService, InvitationsService,
-    EntitlementsService, LoginSchedulesRepository, LoginWindowService, CostMaskingService, AccessGuard, AuditInterceptor, CostMaskingInterceptor,
+    EntitlementService, EntitlementsService, LoginSchedulesRepository, LoginWindowService, CostMaskingService, AccessGuard, AuditInterceptor, CostMaskingInterceptor,
   ],
 })
 export class AccessModule {}

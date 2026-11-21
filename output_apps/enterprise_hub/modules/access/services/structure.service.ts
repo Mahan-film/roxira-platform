@@ -4,6 +4,7 @@ import { BranchEntity } from '../entities/branch.entity';
 import { DepartmentEntity } from '../entities/department.entity';
 import { StructureRepository } from '../repositories/structure.repository';
 import { AuditService } from './audit.service';
+import { EntitlementService } from './entitlement.service';
 
 type Req = Parameters<AuditService['record']>[0]['request'];
 
@@ -12,6 +13,7 @@ export class StructureService {
   constructor(
     private readonly repo: StructureRepository,
     private readonly audit: AuditService,
+    private readonly entitlements: EntitlementService,
   ) {}
 
   listBranches(ctx: AccessContext): Promise<BranchEntity[]> {
@@ -25,7 +27,14 @@ export class StructureService {
     if (dto.parentId && !(await this.repo.findBranch(ctx.tenantId, dto.parentId))) {
       throw new BadRequestException('Parent branch does not belong to this organisation.');
     }
-    const b = await this.repo.createBranch({ tenantId: ctx.tenantId, name: dto.name.trim(), code: dto.code ?? null, parentId: dto.parentId ?? null });
+    await this.entitlements.consume(ctx.tenantId, 'branches', 1);
+    let b: BranchEntity;
+    try {
+      b = await this.repo.createBranch({ tenantId: ctx.tenantId, name: dto.name.trim(), code: dto.code ?? null, parentId: dto.parentId ?? null });
+    } catch (err) {
+      await this.entitlements.release(ctx.tenantId, 'branches', 1).catch(() => undefined);
+      throw err;
+    }
     await this.audit.record({ tenantId: ctx.tenantId, actorUserId: ctx.userId, action: 'branch.create', resourceType: 'branch', resourceId: b.id, request });
     return b;
   }
@@ -43,6 +52,7 @@ export class StructureService {
   async deleteBranch(ctx: AccessContext, id: string, request?: Req): Promise<void> {
     if (!(await this.repo.findBranch(ctx.tenantId, id))) throw new NotFoundException('Branch not found.');
     await this.repo.deleteBranch(ctx.tenantId, id);
+    await this.entitlements.release(ctx.tenantId, 'branches', 1);
     await this.audit.record({ tenantId: ctx.tenantId, actorUserId: ctx.userId, action: 'branch.delete', resourceType: 'branch', resourceId: id, request });
   }
 
