@@ -1606,6 +1606,7 @@ export class InvoicingService {
             id: party.id,
             code: party.code,
             name: party.name,
+            phone: (party as { phone?: string | null }).phone ?? null,
             nationalId: party.nationalId,
             economicCode: party.economicCode,
           });
@@ -1656,6 +1657,10 @@ export class InvoicingService {
     };
     if (direction === InvoiceDirection.SALE && plan.party) {
       dto.buyerInfo = this.importedPartyInfo(plan.party);
+      const customerId = await this.resolveImportedCustomerId(tenantId, plan.party);
+      if (customerId !== null) {
+        dto.customerId = customerId;
+      }
     }
     if (plan.currency) {
       dto.currency = plan.currency;
@@ -1672,6 +1677,54 @@ export class InvoicingService {
       ...(party.nationalId?.trim() ? { nationalId: party.nationalId.trim() } : {}),
       ...(party.economicCode?.trim() ? { economicCode: party.economicCode.trim() } : {}),
     };
+  }
+
+  /**
+   * #548: Link an imported sales invoice to a non-walk-in CRM customerId so
+   * POS-path CREDIT returns succeed instead of failing with 400 walk-in error.
+   */
+  private async resolveImportedCustomerId(
+    tenantId: string,
+    party: ImportedPartyRef,
+  ): Promise<number | null> {
+    if (!this.crmRepository) {
+      return party.id ?? null;
+    }
+    if (party.id) {
+      const byId = await this.crmRepository
+        .findLeadById(tenantId, party.id)
+        .catch(() => null);
+      if (byId && !byId.isWalkIn) {
+        return byId.id;
+      }
+    }
+    if (party.phone?.trim() && this.customerIdentity) {
+      const resolved = await this.customerIdentity
+        .resolve(tenantId, { phone: party.phone, name: party.name })
+        .catch(() => null);
+      if (resolved && resolved.level !== 'anonymous') {
+        return resolved.lead.id;
+      }
+    }
+    if (typeof this.crmRepository.createLead === 'function') {
+      const created = await this.crmRepository
+        .createLead(tenantId, {
+          fullName: party.name,
+          company: party.name,
+          phone: party.phone?.trim() || null,
+          email: null,
+          marketingConsent: false,
+          isWalkIn: false,
+          source: 'IMPORT',
+          pipelineStage: 'WON' as never,
+          estimatedValue: 0,
+        } as never)
+        .catch(() => null);
+      if (created?.id) {
+        return created.id;
+      }
+    }
+    return null;
   }
 
   /** حذف صورتحساب‌های یک دسته ورود داده (undo). */
