@@ -53,11 +53,13 @@ if [ "$APPLY" = 1 ] && [ "$(id -u)" != 0 ]; then die "--apply needs root (sudo)"
 run() { # run a command, or print it in dry-run
   if [ "$APPLY" = 1 ]; then "$@"; else printf '   [dry-run] %s\n' "$*"; fi
 }
-put() { # SRC DEST MODE OWNER:GROUP  -> install when missing or different (idempotent)
+PUT_CHANGED=0
+put() { # SRC DEST MODE OWNER:GROUP  -> install when missing or different (idempotent); sets PUT_CHANGED=1 when it wrote
   local src="$1" dest="$2" mode="$3" own="$4"
   if [ -e "$dest" ] && cmp -s "$src" "$dest"; then info "   unchanged: $dest"; return 0; fi
   if [ "$APPLY" = 1 ]; then
     install -D -o "${own%%:*}" -g "${own##*:}" -m "$mode" "$src" "$dest"
+    PUT_CHANGED=1
     info "   installed: $dest"
   else
     printf '   [dry-run] would install %s (%s %s)\n' "$dest" "$mode" "$own"
@@ -169,12 +171,17 @@ if [ "$APPLY" = 1 ]; then
 else
   info "   [dry-run] would 'systemctl disable --now tinyproxy.service' (the packaged default instance) if it is enabled/active"
 fi
+PROXY_WAS_ACTIVE=0
+if [ "$APPLY" = 1 ] && systemctl is-active --quiet roxira-builder-proxy.service; then PROXY_WAS_ACTIVE=1; fi
+PUT_CHANGED=0
 put "$TMP/gen/tinyproxy.filter" "$TINY_ETC/roxira-builder.filter" 644 root:root
 put "$TMP/gen/tinyproxy.conf" "$TINY_ETC/roxira-builder.conf" 644 root:root
 put "$HERE/roxira-builder-proxy.service" "$SYSTEMD/roxira-builder-proxy.service" 644 root:root
 if [ "$APPLY" = 1 ]; then
   systemctl daemon-reload
   systemctl enable --now roxira-builder-proxy.service
+  # a changed filter/conf/unit only takes effect after a restart (the proxy is not a hot-reload service)
+  if [ "$PUT_CHANGED" = 1 ] && [ "$PROXY_WAS_ACTIVE" = 1 ]; then systemctl restart roxira-builder-proxy.service; fi
   for _ in 1 2 3 4 5 6 7 8 9 10; do
     ss -ltn "sport = :$PROXY_PORT" | grep -q LISTEN && break
     sleep 1
@@ -204,7 +211,12 @@ put "$HERE/roxira-builder-nft.service" "$SYSTEMD/roxira-builder-nft.service" 644
 if [ "$APPLY" = 1 ]; then
   systemctl daemon-reload
   systemctl enable roxira-builder-nft.service
-  systemctl restart roxira-builder-nft.service
+  # never 'restart': stop deletes the table and leaves a window with no lock. 'reload' runs one atomic 'nft -f'.
+  if systemctl is-active --quiet roxira-builder-nft.service; then
+    systemctl reload roxira-builder-nft.service
+  else
+    systemctl start roxira-builder-nft.service
+  fi
   "$NFT" list table inet roxira_builder >/dev/null
   info "   table loaded and persistent (roxira-builder-nft.service)"
 else
@@ -220,6 +232,6 @@ if id "$BUILDER" >/dev/null 2>&1; then
 fi
 info "   docker group members now (unchanged by this script): $(getent group docker | cut -d: -f4)"
 info "   next: sudo bash $(dirname "$HERE")/lane_runner/install_root.sh --lane-user $LANE_USER --apply   (adds the run-builder verb)"
-info "         then the probe: see docs/ops/BUILDER_EGRESS.md step 8"
+info "         then the probe: docs/ops/BUILDER_EGRESS.md, section "Probe plan""
 if [ "$APPLY" = 0 ]; then info "
 Nothing changed (dry run). Re-run with --apply as root."; fi

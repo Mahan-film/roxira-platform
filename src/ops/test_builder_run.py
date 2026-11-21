@@ -830,3 +830,37 @@ def test_pack_has_no_hostnames_ips_or_keys():
             assert not re.search(
                 r"(sk-[A-Za-z0-9]{10}|gsk_[A-Za-z0-9]{10}|BEGIN [A-Z ]*PRIVATE KEY)", t
             ), p
+
+
+def test_chown_tree_return_pass_accepts_hard_links(tmp_path):
+    work = tmp_path / "work"
+    work.mkdir()
+    (work / "f").write_text("1")
+    os.link(work / "f", work / "g")
+    fd = br._open_dir(str(work))
+    assert br.chown_tree(fd, UID, os.getgid(), refuse_links=False) == 2
+    with pytest.raises(br.RunnerError):
+        br.chown_tree(fd, UID, os.getgid())
+    os.close(fd)
+
+
+def test_import_size_limits_apply_to_changes_not_to_the_whole_tree(tmp_path, monkeypatch):
+    wt, work = tmp_path / "wt", tmp_path / "work"
+    wt.mkdir()
+    work.mkdir()
+    _tree(wt, {"bin/big.bin": "x" * 50, "a.txt": "1"})
+    bio.stage_tree(wt, work)
+    monkeypatch.setattr(bio, "MAX_FILE_BYTES", 10)
+    assert bio.import_tree(work, wt) == []  # the unchanged 50-byte file is fine
+    (work / "a.txt").write_text("2" * 11)
+    assert any("too large" in b for b in bio.import_tree(work, wt))
+    assert (wt / "a.txt").read_text() == "1"
+    monkeypatch.setattr(bio, "MAX_FILE_BYTES", 100)
+    monkeypatch.setattr(bio, "MAX_TOTAL_BYTES", 10)
+    assert any("too large" in b for b in bio.import_tree(work, wt))
+
+
+def test_sandbox_property_set_is_the_tested_one():
+    props = br.unit_properties(br.Cfg(), "9", "/w", "/r/task", "/r/env")
+    assert not any(p.startswith("ProcSubset") for p in props)
+    assert sum(p.startswith("EnvironmentFile=") for p in props) == 2

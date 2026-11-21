@@ -7,6 +7,7 @@ Wants=roxira-builder-proxy.service
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/sbin/nft -f /etc/roxira-lane/roxira_builder.nft
+ExecReload=/usr/sbin/nft -f /etc/roxira-lane/roxira_builder.nft
 ExecStop=-/usr/sbin/nft delete table inet roxira_builder
 
 [Install]

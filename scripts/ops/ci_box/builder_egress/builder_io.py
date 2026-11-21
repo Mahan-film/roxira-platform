@@ -30,9 +30,11 @@ from pathlib import Path
 
 TASKS_DIR_DEFAULT = "/srv/data/roxira-lane/tasks"
 ROOT_WRAPPER_DEFAULT = "/usr/local/sbin/roxira-lane-root"
-MAX_FILES = 20000
-MAX_FILE_BYTES = 10 * 1024 * 1024
-MAX_TOTAL_BYTES = 300 * 1024 * 1024
+MAX_FILES = 100000  # entries in the whole tree (the repo itself is ~6000 files)
+MAX_FILE_BYTES = (
+    10 * 1024 * 1024
+)  # a CHANGED or NEW file; unchanged repo files are never size-checked
+MAX_TOTAL_BYTES = 100 * 1024 * 1024  # all changed or new files together
 MODEL_RE = re.compile(r"keypool/(agent-light-free|agent-strong-free|best-all)")
 
 
@@ -96,7 +98,6 @@ def _scan(root: Path) -> tuple[dict[str, os.stat_result], list[str]]:
     """All entries under root (no symlink following) as {relpath: lstat}; plus violations."""
     found: dict[str, os.stat_result] = {}
     bad: list[str] = []
-    total = 0
     stack = [""]
     while stack:
         rel = stack.pop()
@@ -122,10 +123,6 @@ def _scan(root: Path) -> tuple[dict[str, os.stat_result], list[str]]:
                 elif stat.S_ISLNK(st.st_mode):
                     found[r] = st
                 elif stat.S_ISREG(st.st_mode):
-                    total += st.st_size
-                    if st.st_size > MAX_FILE_BYTES or total > MAX_TOTAL_BYTES:
-                        bad.append(f"{r} (too large)")
-                        continue
                     found[r] = st
                 else:
                     bad.append(f"{r} (special file)")
@@ -162,6 +159,7 @@ def import_tree(work: Path, wt: Path) -> list[str]:
     """Make wt (the real worktree) equal to work (what the builder left), as plain files. wt/.git is never touched.
     Returns violations (skipped entries); the caller treats any as a failed run."""
     found, bad = _scan(work)
+    changed_bytes = 0
     for rel in sorted(found, key=lambda r: r.count("/")):
         src, dst = work / rel, wt / rel
         st = found[rel]
@@ -182,6 +180,10 @@ def import_tree(work: Path, wt: Path) -> list[str]:
             if os.path.isfile(dst) and _same_file(src, dst):
                 if (os.lstat(dst).st_mode & 0o777) != mode:
                     os.chmod(dst, mode)
+                continue
+            changed_bytes += st.st_size
+            if st.st_size > MAX_FILE_BYTES or changed_bytes > MAX_TOTAL_BYTES:
+                bad.append(f"{rel} (too large)")
                 continue
             tmp = dst.with_name(f".{dst.name}.builder-import")
             shutil.copyfile(src, tmp, follow_symlinks=False)
@@ -266,7 +268,16 @@ def shim_main(argv: list[str], env: dict[str, str], cwd: Path) -> int:
             if k not in ("KEYPOOL_MASTER_KEY", "OPENCODE_CONFIG_CONTENT")
         }
         p = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, env=child_env)
-        old = signal.signal(signal.SIGTERM, lambda s, f: p.send_signal(signal.SIGTERM))
+
+        def _forward(_sig, _frm):
+            try:
+                p.send_signal(
+                    signal.SIGTERM
+                )  # sudo relays it to the root runner, which stops the unit
+            except OSError:
+                pass
+
+        old = signal.signal(signal.SIGTERM, _forward)
         try:
             rc = p.wait()
         finally:

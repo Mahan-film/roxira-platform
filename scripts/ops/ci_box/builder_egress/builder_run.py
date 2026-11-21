@@ -186,7 +186,6 @@ def unit_properties(cfg: Cfg, task_id: str, work: str, rt_task: str, env_run: st
         "PrivateDevices=yes",
         "PrivatePIDs=yes",
         "ProtectProc=invisible",
-        "ProcSubset=pid",
         "ProtectKernelTunables=yes",
         "ProtectKernelModules=yes",
         "ProtectKernelLogs=yes",
@@ -327,8 +326,9 @@ def open_subdir(task_fd: int, name: str, lane_uid: int) -> int:
     return fd
 
 
-def chown_tree(top_fd: int, uid: int, gid: int) -> int:
-    """No-follow recursive chown below a directory fd. Refuses hard-linked files (their other name could be elsewhere)."""
+def chown_tree(top_fd: int, uid: int, gid: int, refuse_links: bool = True) -> int:
+    """No-follow recursive chown below a directory fd. On the way TO the builder, hard-linked files are refused (their
+    other name could be elsewhere); on the way back they are accepted (the builder may have linked inside work/)."""
     n = 0
     os.fchown(top_fd, uid, gid)
     for _root, dirs, files, dfd in os.fwalk(
@@ -336,7 +336,7 @@ def chown_tree(top_fd: int, uid: int, gid: int) -> int:
     ):
         for name in dirs + files:
             st = os.lstat(name, dir_fd=dfd)
-            if stat.S_ISREG(st.st_mode) and st.st_nlink != 1:
+            if refuse_links and stat.S_ISREG(st.st_mode) and st.st_nlink != 1:
                 raise RunnerError(f"hard-linked file in work tree: {name}")
             os.chown(name, uid, gid, dir_fd=dfd, follow_symlinks=False)
             n += 1
@@ -490,7 +490,7 @@ def run(cfg: Cfg, lane_user: str, task_id: str) -> int:
                 cfg, systemd_run_argv(cfg, task_id, work_path, rt_task, env_run), task_id
             )
         finally:
-            chown_tree(work_fd, lane.pw_uid, lane.pw_gid)
+            chown_tree(work_fd, lane.pw_uid, lane.pw_gid, refuse_links=False)
         result = {
             "exit": rc,
             "duration_s": int(time.monotonic() - t0),

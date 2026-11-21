@@ -61,9 +61,10 @@ sudo -n /usr/local/sbin/roxira-lane-root run-builder <task-id>      # task-id: 1
   into the real worktree as plain files (no symlink changes, no `.git`, size limits; anything refused makes the run fail).
   `run_task.sh` then does its usual scope check, commit and diff as the lane user, so the builder never touches git
   metadata. Inside the builder there is no `.git`, so `git status`/`git diff` in its bash allowlist fail; it works on files.
-- The gateway key is a capped virtual key for the loopback gateway, not a provider key. The builder can read it from its own
-  environment (it must, to call the gateway); a stolen copy only works against the loopback tunnel, which the builder
-  alone can reach from this box, and is capped per day server-side. Rotate it like any virtual key.
+- The gateway key is a capped virtual key for the loopback gateway, not a provider key. The builder holds it in its own
+  process environment (it must, to call the gateway). Any local user can reach the loopback tunnel, so the key is only as
+  secret as the box's local users; the protection is the server-side restriction (agent groups only, daily cap) and
+  rotation like any virtual key, not secrecy from the builder.
 - A free-text prompt can still talk a model into abusing what the builder CAN do: edit files in `work/` and call the
   gateway and the allowlisted hosts. Everything else is outside its reach by uid, mount and firewall.
 
@@ -129,9 +130,11 @@ sudo -u roxira-builder env -i PATH=/usr/bin:/bin HOME=/var/lib/roxira-builder \
   bash /usr/local/libexec/roxira-lane/probe/egress_probe.sh
 ```
 
-1. **Negative control** (after step 3 only if you split it, or on any box before the lock is loaded): with the nft table
-   unloaded, "direct internet refused" and "xray port refused" must say FAIL. If they say PASS with no lock, the probe is
-   blind and its other PASS lines mean nothing.
+1. **Negative control** (proves the probe can fail): `sudo systemctl stop roxira-builder-nft`, run the probe, then
+   `sudo systemctl start roxira-builder-nft`. With the table gone, "xray port refused" must say FAIL (the xray inbound is
+   open to any local uid). "Direct internet refused" may still say PASS if the existing box lock already blocks a new
+   uid; that is fine and worth noting, but only the xray line is a reliable control. If the xray line says PASS with the
+   table unloaded, the probe is blind and its other PASS lines mean nothing.
 2. **With the lock loaded** every line must say PASS: non-allowlisted host refused through the proxy; direct internet
    refused; xray port refused; `api.github.com` and `registry.npmjs.org` reachable through the proxy; the gateway tunnel on
    loopback reachable (`BUILDER_PROBE_GATEWAY=0` skips it only while the tunnel is down); docker socket not connectable; no
@@ -145,7 +148,7 @@ sudo -u roxira-builder env -i PATH=/usr/bin:/bin HOME=/var/lib/roxira-builder \
 
 ## Not verified
 
-Verified offline (on the authoring box, no root): the unit tests (`src/ops/test_builder_run.py`, 145 pass together with
+Verified offline (on the authoring box, no root): the unit tests (`src/ops/test_builder_run.py`, all pass together with
 `test_builder_egress.py`); the generated nft file passes `nft -c` in a throwaway user namespace (with the user name
 `nobody`); the proxy configuration was started unprivileged with the packaged tinyproxy 1.11.3 and behaves as intended
 (allowlisted host through CONNECT works, other hosts, look-alike host names, and CONNECT to other ports are refused);
@@ -158,6 +161,9 @@ Not verified (needs root or the live box):
   treat the new uid or the proxy's dynamic uid differently?); the ruleset on top of the existing box lock.
 - The transient unit itself: `systemd-run` with `BindPaths` under a `TemporaryFileSystem=/srv`, the read-only bind to
   `/run/roxira-task`, `PrivatePIDs`, `IPAddressDeny` (cgroup BPF) and the stop-on-TERM path were checked for syntax only.
+- The shim's timeout path (`run_task.sh` kills it with TERM; the shim forwards TERM to `sudo`, which relays it to the root
+  runner, which stops the unit): the signal relay was checked with a plain `sudo` child, not with the real runner.
+  `RuntimeMaxSec=3600` is the backstop.
 - That the packaged tinyproxy runs under `DynamicUser=yes` with these hardening options, and that `FilterType ere`
   behaves identically through the unit (it was run unprivileged, not as a service).
 - `setfacl` on the data disk (ACL mount support), the ACL's effect on new task directories, the sudo path, the OpenCode
@@ -171,12 +177,12 @@ Not verified (needs root or the live box):
 
 ## What depends on the `docker` group today
 
-`mahanfilms` (the lane user) and `phone` (the phone stack, which uses `docker exec`) are in the `docker` group
+The lane user and the phone-stack user (which uses `docker exec`) are in the `docker` group
 (`docs/ops/LINUX_CI_BOX.md`). A docker-group user can start a root container and so bypasses every uid firewall rule.
 Consequences for this design:
 
 - Builders must never be in `docker` (the script refuses and the probe checks). They run as `roxira-builder`, not as either of these users.
-- `apply_root.sh` does not change any existing user's groups and refuses any option that mentions docker; removing `phone` or
-  the lane user from `docker` would break the phone stack and CI work. If that is ever wanted it is a separate, deliberate change.
+- `apply_root.sh` does not change any existing user's groups and refuses any option that mentions docker; removing the
+  phone-stack user or the lane user from `docker` would break the phone stack and CI work. If that is ever wanted it is a separate, deliberate change.
 - The lane stack (orch, taskq, publisher, push credential) stays under a docker-group user, so a compromise of that user
   is root-equivalent on the box. The builder separation protects the lane user from the builder, not from itself.
