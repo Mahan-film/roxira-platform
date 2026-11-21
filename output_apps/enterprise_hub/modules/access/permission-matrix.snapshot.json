@@ -1190,17 +1190,6 @@
     "read_only": true,
     "legacy_member": false
   },
-  "GET /enterprise-hub/data-import/cutover/status (DataImportController.getCutoverStatus)": {
-    "policy": "data_import:read",
-    "owner": true,
-    "admin": true,
-    "accountant": true,
-    "sales": false,
-    "cheque_reviewer": false,
-    "hr": false,
-    "read_only": true,
-    "legacy_member": false
-  },
   "GET /enterprise-hub/data-import/entities (DataImportController.listEntities)": {
     "policy": "data_import:read",
     "owner": true,
@@ -4003,39 +3992,6 @@
     "legacy_member": false
   },
   "POST /enterprise-hub/data-import/crm-leads/preview (DataImportController.previewCrmLeads)": {
-    "policy": "data_import:create",
-    "owner": true,
-    "admin": true,
-    "accountant": true,
-    "sales": false,
-    "cheque_reviewer": false,
-    "hr": false,
-    "read_only": false,
-    "legacy_member": false
-  },
-  "POST /enterprise-hub/data-import/cutover/go-live (DataImportController.executeCutoverGoLive)": {
-    "policy": "data_import:create",
-    "owner": true,
-    "admin": true,
-    "accountant": true,
-    "sales": false,
-    "cheque_reviewer": false,
-    "hr": false,
-    "read_only": false,
-    "legacy_member": false
-  },
-  "POST /enterprise-hub/data-import/cutover/preflight (DataImportController.evaluateCutoverPreflight)": {
-    "policy": "data_import:create",
-    "owner": true,
-    "admin": true,
-    "accountant": true,
-    "sales": false,
-    "cheque_reviewer": false,
-    "hr": false,
-    "read_only": false,
-    "legacy_member": false
-  },
-  "POST /enterprise-hub/data-import/cutover/verify-lock (DataImportController.verifyCutoverLock)": {
     "policy": "data_import:create",
     "owner": true,
     "admin": true,

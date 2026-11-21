@@ -15,7 +15,6 @@ import { EntityImportService } from '../services/entity-import.service';
 import { PackageImportService } from '../services/package-import.service';
 import { ChunkedUploadService } from '../services/chunked-upload.service';
 import { SepidarPersistenceService } from '../services/sepidar-persistence.service';
-import { CutoverWizardService } from '../services/cutover-wizard.service';
 import { DataImportController } from './data-import.controller';
 
 const SECRET = 'data-import-test-secret-1234567890';
@@ -107,39 +106,6 @@ describe('DataImportController (access control)', () => {
               inserted: {},
               skipped: {},
               errors: [],
-            }),
-          },
-        },
-        {
-          provide: CutoverWizardService,
-          useValue: {
-            evaluatePreflight: jest.fn().mockResolvedValue({
-              allGreen: true,
-              canGoLive: true,
-              items: [],
-              discrepancies: [],
-              blockersFa: [],
-            }),
-            executeGoLive: jest.fn().mockResolvedValue({
-              status: 'completed',
-              isGoLiveActive: true,
-              cutoverDate: '2026-03-21',
-              preCutoverLockDate: '2026-03-20',
-              periodLockId: 77,
-              legacyNumberPrefix: 'LEGACY-',
-              tieOutSummary: { passed: true, totalChecks: 1, passedChecks: 1, discrepanciesCount: 0, items: [], discrepancies: [], blockersFa: [] },
-            }),
-            verifyPeriodLockPostingAttempt: jest.fn().mockResolvedValue({
-              verified: true,
-              errorType: 'PeriodLockedException',
-              message: 'مسدود شد',
-            }),
-            getCutoverStatus: jest.fn().mockResolvedValue({
-              isGoLiveActive: true,
-              cutoverDate: '2026-03-21',
-              preCutoverLockDate: '2026-03-20',
-              periodLockId: 77,
-              legacyNumberPrefix: 'LEGACY-',
             }),
           },
         },
@@ -373,95 +339,6 @@ describe('DataImportController (access control)', () => {
           ],
         })
         .expect(400);
-    });
-  });
-
-  describe('Cutover Wizard Endpoints (R32 D4/D5)', () => {
-    const preflightUrl = '/enterprise-hub/data-import/cutover/preflight';
-    const goLiveUrl = '/enterprise-hub/data-import/cutover/go-live';
-    const verifyLockUrl = '/enterprise-hub/data-import/cutover/verify-lock';
-    const statusUrl = '/enterprise-hub/data-import/cutover/status';
-
-    it('POST /cutover/preflight rejects unauthenticated requests with 401', async () => {
-      await request(app.getHttpServer())
-        .post(preflightUrl)
-        .send({ cutoverDate: '2026-03-21' })
-        .expect(401);
-    });
-
-    it('POST /cutover/preflight allows tenant OWNER and validates date format', async () => {
-      await request(app.getHttpServer())
-        .post(preflightUrl)
-        .set(
-          'Authorization',
-          `Bearer ${token({
-            role: UserRole.USER,
-            tenantId: 'tenant-1',
-            tenantRole: TenantRole.OWNER,
-          })}`,
-        )
-        .send({ cutoverDate: 'invalid-date' })
-        .expect(400);
-
-      await request(app.getHttpServer())
-        .post(preflightUrl)
-        .set(
-          'Authorization',
-          `Bearer ${token({
-            role: UserRole.USER,
-            tenantId: 'tenant-1',
-            tenantRole: TenantRole.OWNER,
-          })}`,
-        )
-        .send({ cutoverDate: '2026-03-21' })
-        .expect(200);
-    });
-
-    it('POST /cutover/go-live allows tenant OWNER with valid payload (200)', async () => {
-      await request(app.getHttpServer())
-        .post(goLiveUrl)
-        .set(
-          'Authorization',
-          `Bearer ${token({
-            role: UserRole.USER,
-            tenantId: 'tenant-1',
-            tenantRole: TenantRole.OWNER,
-          })}`,
-        )
-        .send({
-          cutoverDate: '2026-03-21',
-          legacyNumberPrefix: 'LEGACY-',
-        })
-        .expect(200);
-    });
-
-    it('POST /cutover/verify-lock allows tenant OWNER (200)', async () => {
-      await request(app.getHttpServer())
-        .post(verifyLockUrl)
-        .set(
-          'Authorization',
-          `Bearer ${token({
-            role: UserRole.USER,
-            tenantId: 'tenant-1',
-            tenantRole: TenantRole.OWNER,
-          })}`,
-        )
-        .send({ attemptDate: '2026-03-20' })
-        .expect(200);
-    });
-
-    it('GET /cutover/status allows tenant OWNER (200)', async () => {
-      await request(app.getHttpServer())
-        .get(statusUrl)
-        .set(
-          'Authorization',
-          `Bearer ${token({
-            role: UserRole.USER,
-            tenantId: 'tenant-1',
-            tenantRole: TenantRole.OWNER,
-          })}`,
-        )
-        .expect(200);
     });
   });
 });
