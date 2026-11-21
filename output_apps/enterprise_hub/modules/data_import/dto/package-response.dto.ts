@@ -192,6 +192,31 @@ export class TableReconciliationDto {
   @ApiProperty({ type: [String] }) warningsFa: string[];
 }
 
+export class TieOutItemReportDto {
+  @ApiProperty() category: string;
+  @ApiProperty() name: string;
+  @ApiProperty() expectedMinor: string;
+  @ApiProperty() expectedMoney: string;
+  @ApiProperty() actualMinor: string;
+  @ApiProperty() actualMoney: string;
+  @ApiProperty() differenceMinor: string;
+  @ApiProperty() differenceMoney: string;
+  @ApiProperty() currency: string;
+  @ApiProperty() matched: boolean;
+  @ApiProperty({ required: false }) blockerFa?: string;
+  @ApiProperty({ required: false }) warningFa?: string;
+}
+
+export class TieOutSummaryDto {
+  @ApiProperty() passed: boolean;
+  @ApiProperty() totalChecks: number;
+  @ApiProperty() passedChecks: number;
+  @ApiProperty() discrepanciesCount: number;
+  @ApiProperty({ type: [TieOutItemReportDto] }) items: TieOutItemReportDto[];
+  @ApiProperty({ type: [TieOutItemReportDto] }) discrepancies: TieOutItemReportDto[];
+  @ApiProperty({ type: [String] }) blockersFa: string[];
+}
+
 export class ReconciliationReportDto {
   @ApiProperty() key: string;
   @ApiProperty({ type: [TableReconciliationDto] }) tables: TableReconciliationDto[];
@@ -199,4 +224,5 @@ export class ReconciliationReportDto {
   @ApiProperty() balanced: boolean;
   @ApiProperty({ type: [String] }) blockersFa: string[];
   @ApiProperty({ type: [String] }) warningsFa: string[];
+  @ApiProperty({ required: false, type: TieOutSummaryDto }) tieOut?: TieOutSummaryDto;
 }
