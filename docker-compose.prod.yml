@@ -5,8 +5,12 @@ services:
       dockerfile: Dockerfile.prod
     container_name: roxira_app_prod
     restart: always
+    # T254 (#993): Smart Judge total cap <= 4.5 GB (4512m) & <= 2.5 vCPU across
+    # enterprise_app (1200m/1.0), qdrant_prod (512m/0.5), roxira_embeddings (2800m/1.0).
+    # Rollback: remove `cpus:` and restore `roxira_embeddings` mem_limit to 3500m.
     mem_limit: 1200m
     mem_reservation: 600m
+    cpus: 1.0
     security_opt:
       - no-new-privileges:true
     # FastAPI AI Core (پورت ۸۰۰۰) فقط روی loopback هاست منتشر می‌شود تا
@@ -225,6 +229,7 @@ services:
     restart: always
     mem_limit: 512m
     mem_reservation: 256m
+    cpus: 0.5  # T254 (#993)
     security_opt:
       - no-new-privileges:true
     ports:
@@ -260,8 +265,11 @@ services:
     command: --model-id BAAI/bge-m3 --max-batch-tokens 2048 --max-client-batch-size 16 --max-concurrent-requests 8
     volumes:
       - /var/lib/roxira/tei-cache:/data
-    mem_limit: 3500m
+    # T254 (#993): Capped to 2800m / 1.0 vCPU so Smart Judge total <= 4.5 GB & 2.5 vCPU.
+    # Rollback: restore mem_limit: 3500m and remove cpus: 1.0.
+    mem_limit: 2800m
     mem_reservation: 1024m
+    cpus: 1.0
     oom_score_adj: 500  # T205: disposable: stateless, restarts on its own, dies first
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:80/health || exit 1"]
