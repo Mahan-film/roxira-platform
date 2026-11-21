@@ -193,8 +193,8 @@ describePg('Fixed-asset disposal on PostgreSQL', () => {
       ['5070', fromDb('10000000.00'), 0n],
     ]);
     const sums = await sumsOf(result.journalEntryId);
-    expect(sums.d).toBe(COST);
-    expect(sums.c).toBe(COST);
+    expect(sums.d).toBe('120000000.0000');
+    expect(sums.c).toBe('120000000.0000');
   });
 
   it('books the whole book value as loss when the proceeds are zero, and the voucher balances', async () => {
@@ -212,8 +212,8 @@ describePg('Fixed-asset disposal on PostgreSQL', () => {
       ['5070', fromDb(BOOK_VALUE), 0n],
     ]);
     const sums = await sumsOf(result.journalEntryId);
-    expect(sums.d).toBe(COST);
-    expect(sums.c).toBe(COST);
+    expect(sums.d).toBe('120000000.0000');
+    expect(sums.c).toBe('120000000.0000');
   });
 
   it('refuses a disposal inside a locked period with 423 and writes nothing, then succeeds after the unlock', async () => {

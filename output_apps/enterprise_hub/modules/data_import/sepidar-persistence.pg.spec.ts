@@ -141,7 +141,7 @@ describePg('Sepidar Data Persistence on PostgreSQL (NOSUPERUSER NOBYPASSRLS)', (
       const cash = await em.getRepository(ChartOfAccountEntity).findOne({
         where: { tenantId: TENANT_A, code: '1010' },
       });
-      expect(cash?.balance).toBe('50000000.00');
+      expect(cash?.balance).toBe('50000000.0000');
 
       const cheques = await em.getRepository(ChequeEntity).find({
         where: { tenantId: TENANT_A },
@@ -179,7 +179,7 @@ describePg('Sepidar Data Persistence on PostgreSQL (NOSUPERUSER NOBYPASSRLS)', (
       const cash = await em.getRepository(ChartOfAccountEntity).findOne({
         where: { tenantId: TENANT_B, code: '1010' },
       });
-      expect(cash?.balance).toBe('50000000.00');
+      expect(cash?.balance).toBe('50000000.0000');
     });
 
     // TENANT_A cannot read TENANT_B rows under RLS

@@ -542,7 +542,7 @@ describePg('Ledger on PostgreSQL', () => {
       expect(Number((await base.query(`SELECT balance FROM fin_chart_of_accounts WHERE code='1010' AND tenant_id=$1`, [T1]))[0].balance)).toBe(0.3);
 
       await base.runMigrations();
-      expect((await base.query(`SELECT data_type, numeric_precision, numeric_scale FROM information_schema.columns WHERE table_name='fin_chart_of_accounts' AND column_name='balance'`))[0]).toEqual({ data_type: 'numeric', numeric_precision: 18, numeric_scale: 2 });
+      expect((await base.query(`SELECT data_type, numeric_precision, numeric_scale FROM information_schema.columns WHERE table_name='fin_chart_of_accounts' AND column_name='balance'`))[0]).toEqual({ data_type: 'numeric', numeric_precision: 20, numeric_scale: 4 });
       await base.destroy();
     }, 120_000);
   });

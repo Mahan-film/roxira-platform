@@ -180,8 +180,8 @@ describePg.each(['UTC', 'Asia/Tehran'])('Recurring vouchers on PostgreSQL (TZ=%s
       [updated[0].reversal_entry_id],
     );
     expect(reversalLines).toEqual([
-      { account_id: expect.any(Number), debit: '10000000.00', credit: '0.00' },
-      { account_id: expect.any(Number), debit: '0.00', credit: '10000000.00' },
+      { account_id: expect.any(Number), debit: '10000000.0000', credit: '0.0000' },
+      { account_id: expect.any(Number), debit: '0.0000', credit: '10000000.0000' },
     ]);
 
     const balanceAfterReverse: Array<{ balance: string }> = await testDb.rawQuery(
