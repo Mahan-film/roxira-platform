@@ -78,6 +78,8 @@ export const RLS_PENDING_ALLOWLIST = new Set<string>([
   'erp_stock_documents',
   'erp_stock_items',
   'erp_stores',
+  // T199: ops data, nullable informational tenant_id, no tenant policy by design (platform-admin only)
+  'ops_error_events',
   'erp_warehouses',
   'inventory_fifo_batches',
 ]);

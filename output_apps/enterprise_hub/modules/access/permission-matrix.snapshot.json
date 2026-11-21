@@ -1886,6 +1886,9 @@
     "read_only": true,
     "legacy_member": true
   },
+  "GET /enterprise-hub/ops/error-events/ (OpsErrorsController.list)": {
+    "policy": "platformAdmin"
+  },
   "GET /enterprise-hub/parties/ (PartiesController.list)": {
     "policy": "crm:read|accounting:read",
     "owner": true,

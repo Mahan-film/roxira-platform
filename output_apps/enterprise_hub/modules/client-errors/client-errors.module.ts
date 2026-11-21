@@ -7,5 +7,6 @@ import { ClientErrorsService } from './services/client-errors.service';
 @Module({
   controllers: [ClientErrorsController],
   providers: [ClientErrorsService, ClientErrorAlertSender],
+  exports: [ClientErrorAlertSender],
 })
 export class ClientErrorsModule {}
