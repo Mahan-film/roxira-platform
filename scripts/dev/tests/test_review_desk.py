@@ -73,6 +73,22 @@ def test_skip_reason():
     assert rd.skip_reason(done, force=True) is None
 
 
+def test_new_push_marks_last_review_outdated_and_requeues():
+    old_head = "1111111111111111111111111111111111111111"
+    new_head = "2222222222222222222222222222222222222222"
+    pr = {
+        "isDraft": False,
+        "state": "OPEN",
+        "headRefOid": old_head,
+        "comments": [_c(f"Cross-family review (x) @ {old_head}\nVerdict: no blocker")],
+    }
+    assert rd.skip_reason(pr) == "already reviewed at head"
+    # A new push advances headRefOid; previous review is now outdated
+    pr["headRefOid"] = new_head
+    assert rd.skip_reason(pr) is None
+    assert not rd.reviewed_at_head(pr["comments"], new_head)
+
+
 # ---- cross-family rule ------------------------------------------------------------------------------
 
 
