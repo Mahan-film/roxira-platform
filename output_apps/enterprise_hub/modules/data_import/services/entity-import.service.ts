@@ -190,6 +190,8 @@ export class EntityImportService {
           upload.fileHash,
           adapter.key,
           mappingHash,
+          undefined,
+          true,
         );
         this.uploadStore.remove(tenantId, dto.uploadId);
         return {

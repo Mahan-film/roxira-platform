@@ -91,6 +91,8 @@ export class PackageCommitService {
           state.fileHash,
           'package',
           mappingHash,
+          undefined,
+          true,
         );
         const resolvedId = existing?.id ?? batchId;
         await this.progress.set(tenantId, packageId, {

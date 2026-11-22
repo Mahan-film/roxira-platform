@@ -272,11 +272,12 @@ export class DataImportBatchRepository {
     entity: string,
     mappingHash: string = '',
     manager?: EntityManager,
+    includePending = false,
   ): Promise<DataImportBatchEntity | null> {
     return this.withBatches(
       tenantId,
-      (repo) =>
-        repo
+      (repo) => {
+        let qb = repo
           .createQueryBuilder('b')
           .where('b.tenant_id = :tenantId', { tenantId })
           .andWhere('b.entity = :entity', { entity })
@@ -287,9 +288,12 @@ export class DataImportBatchRepository {
               mappingHash: mappingHash ?? '',
             },
           )
-          .andWhere('b.undone = false')
-          .andWhere('b.inserted > 0')
-          .getOne(),
+          .andWhere('b.undone = false');
+        if (!includePending) {
+          qb = qb.andWhere('b.inserted > 0');
+        }
+        return qb.getOne();
+      },
       manager,
     );
   }
