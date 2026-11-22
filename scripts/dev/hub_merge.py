@@ -2,7 +2,7 @@
 """The only documented way for a hub to merge a PR (issue #1282, T333).
 
     python3 scripts/dev/hub_merge.py <pr>                     # dry run (default): list refusals
-    python3 scripts/dev/hub_merge.py <pr> --apply             # squash-merge, head SHA guard
+    python3 scripts/dev/hub_merge.py <pr> --apply             # ENQUEUE (merge queue), head guard
     python3 scripts/dev/hub_merge.py <pr> --apply --owner-sentence "go: merge #123 (migration)"
     python3 scripts/dev/hub_merge.py --disarm-held [--apply]  # disable auto-merge on held PRs
 
@@ -37,10 +37,15 @@ It refuses, and prints every reason it finds, when:
   protected  a protected path is touched (migrations, auth, payment/billing, Dockerfile.prod,
              deploy scripts, workflows, production compose, nginx) and --owner-sentence is missing
 
-The owner sentence is posted on the PR (only with --apply), then the PR is squash-merged with
-`sha=<head>`, so a push after the evaluation makes GitHub refuse. It never enables auto-merge and
-never uses an admin merge. Dry run is the default: nothing is written unless --apply.
-Exit codes: 0 ok, 1 refused, 2 error.
+main is protected by a merge queue (ruleset type merge_queue, method SQUASH). --apply therefore
+never merges: it ENQUEUES. The owner sentence is posted on the PR (only with --apply), the head SHA
+is read again from GitHub immediately before the call (a moved head refuses), and the GraphQL
+`enqueuePullRequest` mutation is sent with `expectedHeadOid=<head>` so a push in between makes
+GitHub refuse. The queue then runs the merge-group CI and squashes. There is no `PUT /pulls/N/merge`
+call anywhere (it would bypass the queue and its CI), no auto-merge arming and no admin merge. A PR
+that is already in the queue is reported as such and exits 0. Output says "enqueued", never
+"merged". Dry run is the default: nothing is written unless --apply.
+Exit codes: 0 ok (enqueued, or already in the queue), 1 refused, 2 error.
 
 Rule code is reused from scripts/ops/ci_box/merge_gate/merge_gate.py (glob matching, desk header
 and verdict regexes, the GhApi wrapper, default holds and protected globs). Python stdlib only;
@@ -53,6 +58,7 @@ from __future__ import annotations
 import argparse
 import base64
 import importlib.util
+import json
 import re
 import subprocess
 import sys
@@ -172,9 +178,7 @@ def cites_head(body: str, head: str) -> bool:
     return bool(head) and any(head.startswith(t.lower()) for t in _HEX_RE.findall(body or ""))
 
 
-def blockers_newer_than(
-    items: list[dict], head_date: str, head: str | None = None
-) -> list[dict]:
+def blockers_newer_than(items: list[dict], head_date: str, head: str | None = None) -> list[dict]:
     """Items (issue comments, review bodies) at or after head_date that carry a blocker verdict
     line, or that cite the head SHA with one at any time.
 
@@ -381,6 +385,22 @@ def gh_cli(args: list[str]) -> str:
     return proc.stdout
 
 
+class HeadMoved(Exception):
+    """The PR head (or open state) changed between the evaluation and the enqueue call."""
+
+
+_QUEUE_QUERY = (
+    "query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name)"
+    "{pullRequest(number:$number){id state isDraft headRefOid isInMergeQueue "
+    "mergeQueueEntry{state position}}}}"
+)
+_ENQUEUE_MUTATION = (
+    "mutation($pullRequestId:ID!,$expectedHeadOid:GitObjectID!){enqueuePullRequest("
+    "input:{pullRequestId:$pullRequestId,expectedHeadOid:$expectedHeadOid})"
+    "{mergeQueueEntry{state position}}}"
+)
+
+
 class Hub:
     def __init__(
         self, api, repo: str = REPO, runner=gh_cli, state_text: str | None = None, desk_authors=None
@@ -484,9 +504,35 @@ class Hub:
         prot = mg.protected_hits(files, PROTECTED_GLOBS)
         return {"pr": pr, "head": head, "reasons": reasons, "protected": prot}
 
+    def graphql(self, query: str, **variables: str) -> dict:
+        """Run one GraphQL document through `gh api graphql`; returns its `data` object."""
+        args = ["api", "graphql", "-f", f"query={query}"]
+        for k, v in variables.items():
+            args += ["-f", f"{k}={v}"]
+        try:
+            doc = json.loads(self.runner(args) or "")
+        except (TypeError, ValueError) as e:
+            raise GhError("GitHub returned no JSON for a GraphQL call") from e
+        if not isinstance(doc, dict) or doc.get("errors") or not isinstance(doc.get("data"), dict):
+            raise GhError(f"GraphQL error: {str((doc or {}).get('errors') or doc)[:300]}")
+        return doc["data"]
+
+    def queue_state(self, n: int) -> dict:
+        """Fresh read (GraphQL) of the PR node id, head oid, state, draft flag and queue entry."""
+        owner, name = self.repo.split("/", 1)
+        data = self.graphql(_QUEUE_QUERY, owner=owner, name=name, number=str(n))
+        pr = ((data.get("repository") or {}).get("pullRequest")) or {}
+        if not pr.get("id"):
+            raise GhError(f"GraphQL did not return PR #{n}")
+        return pr
+
     def apply(self, res: dict, sentence: str | None) -> str:
-        """Post the owner sentence (if protected paths) and squash-merge at the head SHA. Raises
-        GhError."""
+        """Post the owner sentence (if protected paths), re-check the head, and ENQUEUE the PR.
+
+        Returns a status line ("enqueued ..." or "already in the merge queue ..."). Raises
+        HeadMoved when the head or state changed since the evaluation, GhError on any GitHub
+        refusal. Never merges directly.
+        """
         n, head = res["pr"]["number"], res["head"]
         if res["protected"]:
             body = (
@@ -494,8 +540,24 @@ class Hub:
                 f'at head {head[:7]}: "{sentence}"'
             )
             self.api("POST", self.p(f"issues/{n}/comments"), {"body": body})
-        out = self.api("PUT", self.p(f"pulls/{n}/merge"), {"sha": head, "merge_method": "squash"})
-        return str((out or {}).get("sha", ""))[:7]
+        # Immediately before the call: the head must still be the evaluated one.
+        cur = self.queue_state(n)
+        if (cur.get("headRefOid") or "").lower() != head.lower():
+            raise HeadMoved(
+                f"head moved: evaluated {head[:7]}, GitHub now has "
+                f"{(cur.get('headRefOid') or '?')[:7]}; re-run to evaluate the new head"
+            )
+        if cur.get("state") != "OPEN" or cur.get("isDraft"):
+            raise HeadMoved(f"PR is no longer an open, non-draft PR (state {cur.get('state')})")
+        entry = cur.get("mergeQueueEntry")
+        if cur.get("isInMergeQueue") or entry:
+            pos = (entry or {}).get("position")
+            return f"already in the merge queue (position {pos}), nothing to do"
+        out = self.graphql(_ENQUEUE_MUTATION, pullRequestId=cur["id"], expectedHeadOid=head)
+        got = ((out.get("enqueuePullRequest") or {}).get("mergeQueueEntry")) or {}
+        if not got:
+            raise GhError("enqueuePullRequest returned no merge queue entry")
+        return f"enqueued (queue position {got.get('position')}, state {got.get('state')})"
 
     def held_armed(self, only: int | None = None) -> list[dict]:
         """Open PRs that are held (list, label or title) and have auto-merge armed."""
@@ -532,7 +594,9 @@ def main(
     ap = argparse.ArgumentParser(description="Hub merge guard (dry run unless --apply)")
     ap.add_argument("pr", nargs="?", type=int, help="PR number")
     ap.add_argument("--repo", default=REPO)
-    ap.add_argument("--apply", action="store_true", help="really merge / disarm (default: dry run)")
+    ap.add_argument(
+        "--apply", action="store_true", help="really enqueue / disarm (default: dry run)"
+    )
     ap.add_argument(
         "--owner-sentence", help="the owner's sentence from chat, required for protected paths"
     )
@@ -576,12 +640,15 @@ def main(
         if not args.apply:
             print(
                 f"DRY RUN: #{n} at head {head[:7]} passes every rule; "
-                "would squash-merge (add --apply)"
+                "would enqueue in the merge queue (add --apply)"
             )
             return 0
-        sha = hub.apply(res, sentence)
-        print(f"merged #{n} (squash) at head {head[:7]}, commit {sha}")
+        status = hub.apply(res, sentence)
+        print(f"#{n} at head {head[:7]}: {status}")
         return 0
+    except HeadMoved as e:
+        print(f"REFUSE #{args.pr}: {e}")
+        return 1
     except (GhError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2

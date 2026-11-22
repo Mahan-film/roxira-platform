@@ -45,10 +45,9 @@ def load(n):
 
 
 class FakeApi:
-    def __init__(self, fx, merge_error=False, open_prs=None, state_doc=None):
+    def __init__(self, fx, open_prs=None, state_doc=None):
         self.fx = fx
         self.calls = []
-        self.merge_error = merge_error
         self.open_prs = open_prs or []
         self.state_doc = state_doc
 
@@ -56,10 +55,9 @@ class FakeApi:
         self.calls.append((method, path, fields))
         fx = self.fx
         n = fx["pr"]["number"]
-        if method == "PUT" and path.endswith(f"pulls/{n}/merge"):
-            if self.merge_error:
-                raise hm.GhError("405 head branch was modified")
-            return {"sha": "b" * 40}
+        if method == "PUT" or path.endswith("/merge"):
+            # main has a merge queue: a direct REST merge would bypass it and the merge-group CI.
+            raise AssertionError(f"direct merge call must never be made: {method} {path}")
         if method == "POST" and path.endswith(f"issues/{n}/comments"):
             return {"id": 1}
         if "/contents/docs/STATE.md" in path:
@@ -86,6 +84,47 @@ class FakeApi:
         return [c for c in self.calls if c[0] in ("POST", "PUT", "PATCH", "DELETE")]
 
 
+class FakeGh:
+    """Stands in for `gh` (the runner): answers the two GraphQL documents hub_merge sends and
+    records every call, so a test can prove which mutation was (not) sent."""
+
+    def __init__(self, fx, head=None, in_queue=False, state="OPEN", draft=False, error=None):
+        self.calls = []
+        self.fx = fx
+        self.head = head or fx["pr"]["head"]["sha"]
+        self.in_queue, self.state, self.draft, self.error = in_queue, state, draft, error
+
+    def __call__(self, args):
+        self.calls.append(args)
+        if args[:3] != ["api", "graphql", "-f"]:
+            return ""  # disarm calls (gh pr merge --disable-auto) are not GraphQL here
+        query = args[3]
+        if "enqueuePullRequest" in query:
+            if self.error:
+                raise hm.GhError(self.error)
+            return json.dumps(
+                {
+                    "data": {
+                        "enqueuePullRequest": {
+                            "mergeQueueEntry": {"state": "QUEUED", "position": 3}
+                        }
+                    }
+                }
+            )
+        pr = {
+            "id": "PR_node1",
+            "state": self.state,
+            "isDraft": self.draft,
+            "headRefOid": self.head,
+            "isInMergeQueue": self.in_queue,
+            "mergeQueueEntry": {"state": "QUEUED", "position": 2} if self.in_queue else None,
+        }
+        return json.dumps({"data": {"repository": {"pullRequest": pr}}})
+
+    def mutations(self):
+        return [c for c in self.calls if len(c) > 3 and "mutation" in c[3]]
+
+
 def codes(res):
     return sorted({c for c, _ in res["reasons"]})
 
@@ -98,7 +137,7 @@ def run_main(fx, argv, runner=None, **kw):
     api = FakeApi(fx, **kw)
     out, err = io.StringIO(), io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        rc = hm.main(argv, api=api, runner=runner or (lambda a: ""), state_text=STATE)
+        rc = hm.main(argv, api=api, runner=runner or FakeGh(fx), state_text=STATE)
     return rc, out.getvalue(), err.getvalue(), api
 
 
@@ -152,18 +191,23 @@ class RecordedPrs(unittest.TestCase):
         self.assertIn("DRY RUN", out)
         self.assertEqual(api.writes(), [])
 
-    def test_1197_apply_posts_sentence_then_merges_at_exact_head(self):
+    def test_1197_apply_posts_sentence_then_enqueues_at_exact_head(self):
         fx = load(1197)
         drop_comment(fx, 7070667182)
-        rc, out, _, api = run_main(fx, ["1197", "--apply", "--owner-sentence", SENTENCE])
+        gh = FakeGh(fx)
+        rc, out, _, api = run_main(fx, ["1197", "--apply", "--owner-sentence", SENTENCE], runner=gh)
         self.assertEqual(rc, 0, out)
         w = api.writes()
-        self.assertEqual([x[0] for x in w], ["POST", "PUT"])
+        self.assertEqual([x[0] for x in w], ["POST"])  # only the sentence goes through REST
         self.assertIn(SENTENCE, w[0][2]["body"])
         self.assertTrue(w[0][2]["body"].startswith("Owner approval"))
-        self.assertEqual(w[1][1], "repos/Mahan-film/roxira-platform/pulls/1197/merge")
-        self.assertEqual(w[1][2], {"sha": fx["pr"]["head"]["sha"], "merge_method": "squash"})
-        self.assertIn("merged #1197", out)
+        (mut,) = gh.mutations()
+        self.assertIn("enqueuePullRequest", mut[3])
+        self.assertIn(f"expectedHeadOid={fx['pr']['head']['sha']}", mut)
+        self.assertIn("pullRequestId=PR_node1", mut)
+        self.assertIn("#1197", out)
+        self.assertIn("enqueued", out)
+        self.assertNotIn("merged #", out)
 
     def test_1199_desk_blocker_at_exact_head_refuses(self):
         fx = load(1199)
@@ -461,9 +505,10 @@ class Findings(unittest.TestCase):
         self.assertEqual(
             hm.loose_blocker_lines("a\n  * Verdict: blocker\nb"), ["* Verdict: blocker"]
         )
-        self.assertEqual(hm.loose_blocker_lines("Verdict: no blocker, but a blocker remains"), [
-            "Verdict: no blocker, but a blocker remains"
-        ])
+        self.assertEqual(
+            hm.loose_blocker_lines("Verdict: no blocker, but a blocker remains"),
+            ["Verdict: no blocker, but a blocker remains"],
+        )
         self.assertEqual(hm.loose_blocker_lines(""), [])
 
     # 2. protected globs cover the files that exist in this repo
@@ -500,10 +545,20 @@ class Findings(unittest.TestCase):
     def test_same_name_failure_in_another_suite_is_not_hidden(self):
         fx = self.base()
         fx["check_runs"] += [
-            {"id": 10, "name": "build", "status": "completed", "conclusion": "failure",
-             "check_suite": {"id": 1}},
-            {"id": 11, "name": "build", "status": "completed", "conclusion": "success",
-             "check_suite": {"id": 2}},
+            {
+                "id": 10,
+                "name": "build",
+                "status": "completed",
+                "conclusion": "failure",
+                "check_suite": {"id": 1},
+            },
+            {
+                "id": 11,
+                "name": "build",
+                "status": "completed",
+                "conclusion": "success",
+                "check_suite": {"id": 2},
+            },
         ]
         res = evaluate(fx)
         self.assertEqual(codes(res), ["checks"])
@@ -512,10 +567,20 @@ class Findings(unittest.TestCase):
     def test_rerun_in_the_same_suite_still_supersedes(self):
         fx = self.base()
         fx["check_runs"] += [
-            {"id": 10, "name": "build", "status": "completed", "conclusion": "failure",
-             "check_suite": {"id": 1}},
-            {"id": 12, "name": "build", "status": "completed", "conclusion": "success",
-             "check_suite": {"id": 1}},
+            {
+                "id": 10,
+                "name": "build",
+                "status": "completed",
+                "conclusion": "failure",
+                "check_suite": {"id": 1},
+            },
+            {
+                "id": 12,
+                "name": "build",
+                "status": "completed",
+                "conclusion": "success",
+                "check_suite": {"id": 1},
+            },
         ]
         self.assertEqual(codes(evaluate(fx)), [])
 
@@ -672,9 +737,11 @@ class Cli(unittest.TestCase):
 
     def test_clean_non_protected_pr_merges_without_a_sentence_and_posts_nothing(self):
         fx = self.clean_docs_pr()
-        rc, out, _, api = run_main(fx, ["1197", "--apply"])
+        gh = FakeGh(fx)
+        rc, out, _, api = run_main(fx, ["1197", "--apply"], runner=gh)
         self.assertEqual(rc, 0, out)
-        self.assertEqual([x[0] for x in api.writes()], ["PUT"])
+        self.assertEqual(api.writes(), [])
+        self.assertEqual(len(gh.mutations()), 1)
 
     def test_sentence_validation(self):
         fx = self.clean_docs_pr()
@@ -686,11 +753,61 @@ class Cli(unittest.TestCase):
         rc, _, err, api = run_main(fx, ["1197", "--apply", "--owner-sentence", "go"])
         self.assertEqual((rc, api.writes()), (2, []))
 
-    def test_github_refusing_the_merge_is_exit_2(self):
+    def test_github_refusing_the_enqueue_is_exit_2(self):
         fx = self.clean_docs_pr()
-        rc, _, err, _ = run_main(fx, ["1197", "--apply"], merge_error=True)
+        gh = FakeGh(fx, error="Pull request is not mergeable: required checks have not passed")
+        rc, _, err, _ = run_main(fx, ["1197", "--apply"], runner=gh)
         self.assertEqual(rc, 2)
-        self.assertIn("405", err)
+        self.assertIn("not mergeable", err)
+
+    def test_apply_never_makes_a_direct_merge_call(self):
+        # FakeApi raises AssertionError on any PUT or `/merge` path, so reaching rc 0 proves the
+        # REST merge endpoint (which skips the merge queue and the merge-group CI) is never used.
+        fx = self.clean_docs_pr()
+        gh = FakeGh(fx)
+        rc, out, _, api = run_main(fx, ["1197", "--apply"], runner=gh)
+        self.assertEqual(rc, 0, out)
+        self.assertFalse([c for c in api.calls if c[0] == "PUT" or c[1].endswith("/merge")])
+        self.assertFalse(any("--admin" in c or "--auto" in c for c in gh.calls))
+        self.assertFalse(any(c[:2] == ["pr", "merge"] for c in gh.calls))
+        src = (HERE.parent / "hub_merge.py").read_text()
+        self.assertNotIn('"PUT"', src)
+        self.assertNotIn('/merge"', src)
+
+    def test_moved_head_refuses_and_sends_no_mutation(self):
+        fx = self.clean_docs_pr()
+        gh = FakeGh(fx, head="c" * 40)  # someone pushed after the evaluation
+        rc, out, _, api = run_main(fx, ["1197", "--apply"], runner=gh)
+        self.assertEqual(rc, 1)
+        self.assertIn("head moved", out)
+        self.assertEqual(gh.mutations(), [])
+        self.assertEqual(api.writes(), [])
+
+    def test_pr_closed_or_draft_after_evaluation_refuses(self):
+        fx = self.clean_docs_pr()
+        for kw in ({"state": "CLOSED"}, {"draft": True}):
+            gh = FakeGh(fx, **kw)
+            rc, out, _, _ = run_main(fx, ["1197", "--apply"], runner=gh)
+            self.assertEqual(rc, 1, out)
+            self.assertEqual(gh.mutations(), [])
+
+    def test_already_in_the_queue_says_so_and_exits_0_without_a_mutation(self):
+        fx = self.clean_docs_pr()
+        gh = FakeGh(fx, in_queue=True)
+        rc, out, _, api = run_main(fx, ["1197", "--apply"], runner=gh)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("already in the merge queue", out)
+        self.assertNotIn("merged", out.replace("merge queue", ""))
+        self.assertEqual(gh.mutations(), [])
+        self.assertEqual(api.writes(), [])
+
+    def test_dry_run_sends_no_graphql_at_all(self):
+        fx = self.clean_docs_pr()
+        gh = FakeGh(fx)
+        rc, out, _, _ = run_main(fx, ["1197"], runner=gh)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("would enqueue", out)
+        self.assertEqual(gh.calls, [])
 
     def test_refusal_mentions_armed_auto_merge(self):
         fx = self.clean_docs_pr()
