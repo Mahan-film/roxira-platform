@@ -3,8 +3,9 @@
 
 Scans runtime Node lockfiles (package-lock.json) and container image references
 in Dockerfiles and docker-compose manifests. Fails on forbidden runtime licences:
-GPL, AGPL, SSPL, RSAL, CC-BY-NC, ELv2 (Elastic-2.0), unless explicitly listed in
-config/licence_allowlist.txt with a documented reason.
+GPL, AGPL, SSPL, RSAL, CC-BY-NC, ELv2 (Elastic-2.0), and packages lacking
+licence metadata, unless explicitly listed in config/licence_allowlist.txt with a
+documented reason.
 
 Usage:
   python3 scripts/ci/check_runtime_licences.py [--root <dir>] [--allowlist <file>]
@@ -55,7 +56,7 @@ FORBIDDEN_IMAGE_PATTERNS: list[tuple[str, str, re.Pattern[str]]] = [
         "redis:7.4+",
         "RSAL/SSPL/AGPL",
         re.compile(
-            r"(?:image:\s*|FROM\s+)(?:docker\.io/library/)?redis:(?:7\.(?:[4-9]|[1-9][0-9])|[8-9]|[1-9][0-9])(?:\.[0-9]+)?",
+            r"(?:image:\s*[\"']?|FROM\s+)(?:docker\.io/library/)?redis:(?:7\.(?:[4-9]|[1-9][0-9])|[8-9]|[1-9][0-9])(?:\.[0-9]+)?",
             re.IGNORECASE,
         ),
     ),
@@ -63,7 +64,7 @@ FORBIDDEN_IMAGE_PATTERNS: list[tuple[str, str, re.Pattern[str]]] = [
         "mongo:7+",
         "SSPL",
         re.compile(
-            r"(?:image:\s*|FROM\s+)(?:docker\.io/library/)?mongo:(?:[7-9]|[1-9][0-9]|latest)(?:\.[0-9]+)?",
+            r"(?:image:\s*[\"']?|FROM\s+)(?:docker\.io/library/)?mongo:(?:[7-9]|[1-9][0-9]|latest)(?:\.[0-9]+)?",
             re.IGNORECASE,
         ),
     ),
@@ -71,7 +72,7 @@ FORBIDDEN_IMAGE_PATTERNS: list[tuple[str, str, re.Pattern[str]]] = [
         "elasticsearch:8+",
         "ELv2/SSPL",
         re.compile(
-            r"(?:image:\s*|FROM\s+)(?:docker\.elastic\.co/elasticsearch/|docker\.io/library/)?elasticsearch:(?:[8-9]|[1-9][0-9]|latest)(?:\.[0-9]+)?",
+            r"(?:image:\s*[\"']?|FROM\s+)(?:docker\.elastic\.co/elasticsearch/|docker\.io/library/)?elasticsearch:(?:[8-9]|[1-9][0-9]|latest)(?:\.[0-9]+)?",
             re.IGNORECASE,
         ),
     ),
@@ -134,11 +135,26 @@ def scan_npm_lockfile(lock_path: pathlib.Path, rel: str, allowlist: set[str]) ->
         elif isinstance(lic, dict):
             lic_str = str(lic.get("type", ""))
         else:
-            lic_str = str(lic or "")
+            lic_str = str(lic or "").strip()
+
+        pkg_name = pkg_path.split("node_modules/")[-1]
+
+        # Fail closed on missing licence metadata unless explicitly allowlisted
+        if not lic_str:
+            if (
+                pkg_name.lower() in allowlist
+                or f"{pkg_name}@missing-metadata".lower() in allowlist
+                or f"{pkg_name}@no-licence".lower() in allowlist
+                or rel.lower() in allowlist
+                or f"{rel}@missing-metadata".lower() in allowlist
+            ):
+                continue
+            findings.append(f"{rel}: runtime package `{pkg_name}` has no licence metadata")
+            continue
+
         tag = match_forbidden_licence(lic_str)
         if not tag:
             continue
-        pkg_name = pkg_path.split("node_modules/")[-1]
         if pkg_name.lower() in allowlist or f"{pkg_name}@{tag}".lower() in allowlist:
             continue
         findings.append(f"{rel}: runtime package `{pkg_name}` has forbidden licence `{lic_str}` (matched {tag})")

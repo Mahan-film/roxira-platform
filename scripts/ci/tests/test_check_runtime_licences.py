@@ -1,23 +1,35 @@
 """Unit tests for scripts/ci/check_runtime_licences.py (T252 / #991)."""
 from __future__ import annotations
 
+import importlib.util
 import json
 import pathlib
 import sys
+import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO_ROOT / "scripts" / "ci"))
-
-import check_runtime_licences as crl  # noqa: E402
 
 
-def test_current_repo_passes_runtime_licence_gate():
+@pytest.fixture(scope="module")
+def crl():
+    """Load check_runtime_licences module dynamically without mutating sys.path (Rule 33)."""
+    script_path = REPO_ROOT / "scripts" / "ci" / "check_runtime_licences.py"
+    spec = importlib.util.spec_from_file_location("check_runtime_licences", script_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["check_runtime_licences"] = module
+    spec.loader.exec_module(module)
+    yield module
+    sys.modules.pop("check_runtime_licences", None)
+
+
+def test_current_repo_passes_runtime_licence_gate(crl):
     """CI job must be green on main."""
     findings = crl.run_scan(REPO_ROOT, REPO_ROOT / "config" / "licence_allowlist.txt")
     assert findings == [], f"Unexpected runtime licence findings: {findings}"
 
 
-def test_agpl_runtime_package_fails_gate(tmp_path):
+def test_agpl_runtime_package_fails_gate(tmp_path, crl):
     """Adding an AGPL runtime package to a lockfile must make the gate red."""
     lock = tmp_path / "package-lock.json"
     lock.write_text(
@@ -42,7 +54,35 @@ def test_agpl_runtime_package_fails_gate(tmp_path):
     assert "AGPL" in findings[0]
 
 
-def test_dual_licence_or_permissive_passes_and_and_fails():
+def test_missing_licence_metadata_fails_unless_allowlisted(tmp_path, crl):
+    """Packages with no licence metadata fail closed unless explicitly allowlisted."""
+    lock = tmp_path / "package-lock.json"
+    lock.write_text(
+        json.dumps(
+            {
+                "name": "test-app",
+                "lockfileVersion": 3,
+                "packages": {
+                    "node_modules/mystery-pkg": {"version": "1.0.0"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    al = tmp_path / "allowlist.txt"
+    al.write_text("", encoding="utf-8")
+    findings = crl.run_scan(tmp_path, al, lockfiles=["package-lock.json"], dockerfiles=[])
+    assert len(findings) == 1
+    assert "mystery-pkg" in findings[0]
+    assert "no licence metadata" in findings[0]
+
+    # Now allowlist the missing metadata package
+    al.write_text("mystery-pkg@missing-metadata # reviewed MIT\n", encoding="utf-8")
+    findings_allowed = crl.run_scan(tmp_path, al, lockfiles=["package-lock.json"], dockerfiles=[])
+    assert findings_allowed == []
+
+
+def test_dual_licence_or_permissive_passes_and_and_fails(crl):
     assert crl.match_forbidden_licence("(MIT OR GPL-2.0)") is None
     assert crl.match_forbidden_licence("MIT OR Apache-2.0") is None
     assert crl.match_forbidden_licence("(MIT AND AGPL-3.0-only)") == "AGPL"
@@ -54,7 +94,7 @@ def test_dual_licence_or_permissive_passes_and_and_fails():
     assert crl.match_forbidden_licence("gpl-3.0") == "GPL"
 
 
-def test_allowlist_exempts_reviewed_package(tmp_path):
+def test_allowlist_exempts_reviewed_package(tmp_path, crl):
     lock = tmp_path / "package-lock.json"
     lock.write_text(
         json.dumps(
@@ -74,7 +114,7 @@ def test_allowlist_exempts_reviewed_package(tmp_path):
     assert findings == []
 
 
-def test_forbidden_container_images_fail_gate(tmp_path):
+def test_forbidden_container_images_fail_gate(tmp_path, crl):
     """redis:7.4+, redis:7.10+, redis:8+, mongo:7+, and elasticsearch:8+ must be rejected; redis:7.2 passes."""
     compose = tmp_path / "docker-compose.yml"
     compose.write_text(
@@ -84,9 +124,9 @@ def test_forbidden_container_images_fail_gate(tmp_path):
                 "  ok_redis:",
                 "    image: redis:7.2-alpine",
                 "  bad_redis_74:",
-                "    image: redis:7.4-alpine",
+                "    image: 'redis:7.4-alpine'",
                 "  bad_redis_710:",
-                "    image: redis:7.10-alpine",
+                "    image: \"redis:7.10-alpine\"",
                 "  bad_redis_8:",
                 "    image: redis:8.0-alpine",
                 "  bad_mongo:",
@@ -107,7 +147,7 @@ def test_forbidden_container_images_fail_gate(tmp_path):
     assert "elasticsearch:8+" in joined
 
 
-def test_allowlist_exempts_reviewed_container_image(tmp_path):
+def test_allowlist_exempts_reviewed_container_image(tmp_path, crl):
     compose = tmp_path / "docker-compose.yml"
     compose.write_text("services:\n  redis:\n    image: redis:7.10-alpine\n", encoding="utf-8")
     al = tmp_path / "allowlist.txt"
