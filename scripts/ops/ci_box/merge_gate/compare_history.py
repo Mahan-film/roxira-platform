@@ -6,7 +6,7 @@ drift) and prints a table plus a summary. Read-only: only GET requests go out (a
 
 Rules replayed per merged PR, as of the moment it was merged:
   hold        label / title marker / unresolved BLOCKER comment (labels are the current ones)
-  protected   changed files vs protected_globs, owner label added by an allowlisted id
+  protected   changed files vs protected_globs (B7), owner `OWNER-OK #<PR> <sha7>` comment by an allowlisted id
   review      latest review-desk comment (comments after merged_at are ignored) names the head SHA and
               says "no blocker", or an allowlisted human approved that head
   checks      required_checks on the head SHA (current check-runs; a rerun after the merge can skew this)
@@ -86,8 +86,8 @@ def replay(cfg: dict, api: Callable, brief: dict) -> dict:
     res["hold"] = (not why, why)
     files = api("GET", f"repos/{repo}/pulls/{n}/files?per_page=100", None, True)
     hits = mg.protected_hits(files, cfg["protected_globs"])
-    ok = not hits or gate.owner_approved(n, labels)
-    res["protected"] = (ok, "" if ok else "protected paths without owner approval: " + ", ".join(hits[:3]))
+    ok = not hits or gate.owner_ok(n, head)
+    res["protected"] = (ok, "" if ok else "owner sentence required (protected paths): " + ", ".join(hits[:3]))
     ok, why = gate.review_ok(n, head)
     res["review"] = (ok, "" if ok else why)
     status, why = gate.checks_status(head)

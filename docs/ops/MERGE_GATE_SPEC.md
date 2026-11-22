@@ -1,7 +1,8 @@
 # Box merge gate: spec, dry-run comparison, go-live list
 
-Why: on a private Free repo there is no branch protection, no ruleset, no merge queue and no auto-merge
-(`PRIVATE_FLIP_CHECKLIST.md`, section 1). Draft PRs and JIT runners do work. The replacement is a polling gate on the
+Why: on a private Free repo there is no branch protection, no ruleset, no merge queue and no auto-merge (verified on a
+throwaway private Free repo: the API answers HTTP 403 with an upgrade message; `PRIVATE_FLIP_CHECKLIST.md`, section 1).
+Draft PRs and JIT runner registration do work. The replacement is a polling gate on the
 CI box (`scripts/ops/ci_box/merge_gate/`, issues #1018/#1029, #951) plus a direct-push alert (#1049/#1088).
 Operation, install and kill switch: that directory's `README.md`. This page is the rule spec, the way to measure the gate
 before it is switched on, and the go-live list. **The gate is in dry-run and must stay there until the owner says "go".**
@@ -18,9 +19,42 @@ evaluation makes GitHub refuse the merge. One merge per tick (every 5 min, oldes
 | 3 | Required checks green on the head: every name in `required_checks` is `success`/`skipped`/`neutral`; missing or running = wait; failed = refuse. Latest run per name wins | yes | names must equal the real check-run names; the live toml lacks `Semgrep CE (new findings)` (code default and example have it). Only check-runs are read, not legacy commit statuses |
 | 4 | Review: the latest `Cross-family review ... @ <sha>` comment names this head and says `Verdict: no blocker`, written by a review-desk account; or an allowlisted human APPROVED this head. Only the latest desk comment counts: a later "no blocker" on the same head overrides an earlier "blocker", and a later comment for another head voids it | yes | authors matched by **numeric id** when `review_comment_author_ids` is set (this PR); until it is set on the box the check falls back to the login, which can be renamed. Human approval ids (`approver_ids`) are empty on the box. The desk runs about every 2 h, so a new head waits for its review |
 | 5 | No hold: label `needs-human` or `do-not-merge`; `[needs owner]` in the title; an unresolved `BLOCKER:` comment from an allowlisted human id (cleared by a later `UNBLOCK:` from one) | yes, added in this PR (`block_labels`, `block_title_markers`, `hold_reason`) | the BLOCKER/UNBLOCK convention needs `approver_ids` or `owner_approver_ids` filled; label holds work without ids. A blocker verdict from the review desk already fails rule 4 |
-| 6 | Protected paths (`migrations/**`, `.github/workflows/**`, `scripts/ops/deploy*.sh`, `docker-compose.prod.yml`) need label `owner-approved`, whose latest `labeled` event was made by an id in `owner_approver_ids` | yes | `owner-approved` is not tied to a head SHA: a push after the label keeps it (owner removes the label to revoke). `owner_approver_ids` is empty on the box, so today every protected PR is refused |
-| 7 | Rebase before merge: the head contains the tip of `main`; if behind, the gate calls `update-branch` and waits for the checks on the new head | yes (`require_up_to_date`, default true) | it merges `main` into the branch (a rebase would need a force-push); the PR is squash-merged so history stays linear. Each merge makes every other open PR behind, so with several ready PRs the gate merges one per CI cycle (about 6 min). Set `require_up_to_date = false` to mirror the old ruleset (strict off); owner decision, see section 2 |
+| 6 | Protected paths (decision B7, `protected_globs`: migrations, payment and billing, auth, `Dockerfile.prod`, prod compose, deploy scripts and units, workflow files, the gate's own code, tests and spec) are class **owner sentence required**: the gate never merges such a PR without an owner marker comment `OWNER-OK #<PR> <head sha7>` from an id in `owner_approver_ids`; it reports once per head and waits. Details in section 1a | yes (`OWNER` status, `owner_ok`) | the marker is tied to the head SHA (a push voids it). `owner_approver_ids` is empty on the box, so today every protected PR waits (fails closed). The label `owner-approved` is retired and ignored |
+| 7 | Rebase before merge: the head contains the tip of `main`; if behind, the gate calls `update-branch` and waits for the checks on the new head | yes (`require_up_to_date`, default true) | it merges `main` into the branch (a rebase would need a force-push); the PR is squash-merged so history stays linear. The new head voids the review (rule 4) and any `OWNER-OK` (rule 6), so every update costs a new review cycle. Set `require_up_to_date = false` to mirror the old ruleset (strict off); trade-off and DECISION in section 6 |
 | 8 | Kill switch, lock, dry-run | yes (`KILL` file, flock, `dry_run`) | |
+
+### 1a. Rule 6 in detail: owner sentence required (decision B7)
+
+Source: hub answer B7 on #592 and AGENTS.md section 4a: changes to migrations, payment, auth, `Dockerfile.prod` and deploy
+scripts are never merged by a hub alone; they wait for an owner sentence in chat (main autodeploys, so a merge is a
+production write). Everything else merges on "no blocker".
+
+- **Classification.** Any changed file (or the old path of a rename) matching one of `protected_globs` makes the PR class
+  `OWNER`. The list is configuration (code default and `merge_gate.example.toml` are kept equal by a test; the list in the live
+  toml replaces the default, so it must be synced when the default changes). Default groups: migrations; payment, billing and
+  auth; `Dockerfile.prod`, `docker-compose.prod.yml`, deploy scripts, `scripts/ops/autodeploy/**` and `deploy/**`;
+  `.github/workflows/**`; the gate's own code, config example, tests and this spec. If GitHub's file list may be truncated
+  (3000 files) the PR is also class `OWNER`.
+- **Behaviour.** The gate never merges an `OWNER` PR without the marker. Without it: one PR comment per head SHA
+  (`merge-gate: not merged: owner sentence required: ...`), nothing else, then it waits. The comment never contains a line that
+  starts with the marker, so the gate cannot approve itself.
+- **Marker.** A comment line that starts with `OWNER-OK #<PR number> <head sha>` (hex, 7 to 40 characters, a prefix of the
+  exact head; case-insensitive; nothing after it on the line). Quoted lines (`> OWNER-OK ...`) and mid-line text do not count.
+  The author's numeric id must be in `owner_approver_ids` (config only, never in git; empty list = no marker is ever valid).
+  Those ids must belong to accounts that no agent, automation or box token can act as; otherwise the marker proves nothing.
+- **Head-bound.** The marker names the head. A later push (including `update-branch`) makes it stale and the PR is `OWNER`
+  again until the owner writes a new one on the final head. There is no revoke command: push, or put the PR on hold
+  (`do-not-merge`, `needs-human`, `BLOCKER:` comment).
+- **Not a shortcut.** After a valid marker the other rules still apply (review on the head, required checks, base, conflicts,
+  holds, rule 7). The marker is the owner sentence, not a review.
+- **Offline tests:** `src/ops/test_box_merge_gate_b7.py` (globs, marker forms, wrong author/PR/head, fail-closed, once per head,
+  dry-run, self-approval impossible, history replay).
+
+**DECISION B7-1 (for the hub; not decided here): who types the marker.** B7 says "an owner sentence in chat". The gate can only
+see GitHub. Option (a, recommended): the owner writes the marker line on the PR from their own account; the hub only tells the
+owner the exact line (the gate's comment contains it inline). Option (b): the hub posts it after the owner's sentence; this needs
+the hub account's id in `owner_approver_ids`, which means a hub alone can release B7 PRs (against the B7 text) and can be
+impersonated by anything holding that token. Without (a) or (b) chosen, protected PRs simply wait.
 
 Not enforced and not planned here: reviewer identity beyond the id allowlist, CODEOWNERS, signed commits, "no direct push"
 (the alert below detects it, it cannot prevent it on Free).
@@ -43,6 +77,9 @@ python3 scripts/ops/ci_box/merge_gate/compare_history.py --config ~/.config/roxi
 About 7 API calls per PR, roughly 4 minutes for 30 PRs through the proxy. Blind spot: PRs closed without merge are not
 replayed, so "gate would have merged something humans rejected" is not measured; for that, watch the live dry-run log
 (`journalctl --user -u roxira-merge-gate`) for `would squash-merge` lines on PRs you do not want merged.
+
+Under B7 the `protected` column of this report means "would have needed an owner sentence" (the replay accepts a marker
+written before the merge). The result below predates B7: it counts the old, shorter glob list.
 
 Result on 2026-11-21 (last 30 merged PRs, live config, before the new rules were on the box): gate would merge 1,
 would have blocked 29. By rule (a PR can fail several): behind 26, review 12, checks 6, protected 4. If rule 7 is relaxed
@@ -92,9 +129,10 @@ Fix (as the lane user, dry-run first is built in): `bash <repo>/scripts/ops/ci_b
 
 1. This PR merged, then `install_user.sh` re-run on the box (new gate code, alert timer, `notify.py`, empty `notify.env`).
 2. Live `merge_gate.toml` brought in line: `Semgrep CE (new findings)` in `required_checks`; `review_comment_author_ids`
-   = the numeric ids of the review-desk accounts (`gh api users/<login> --jq .id`); `owner_approver_ids` = the owner's
-   numeric id; `approver_ids` = any human reviewer ids; decision on `require_up_to_date`. Ids stay in the box config,
-   never in git.
+   = the numeric ids of the review-desk accounts (`gh api users/<login> --jq .id`); `owner_approver_ids` = the owners' own
+   numeric ids (accounts no agent or box token can act as; decision B7-1); `approver_ids` = any human reviewer ids;
+   `protected_globs` copied from the example (the live list replaces the default); decision on `require_up_to_date`
+   (section 6). Ids stay in the box config, never in git. The label `owner-approved` is no longer used.
 3. `required_checks` names re-verified against a recent head: `gh api repos/<repo>/commits/<sha>/check-runs --jq '.check_runs[].name'`.
 4. `gh` login on the box is the merge account and the token can merge (`gh auth status`); merge works at all on a private
    repo from this account (test on a throwaway repo or the first live PR with the kill switch at hand).
@@ -103,7 +141,8 @@ Fix (as the lane user, dry-run first is built in): `bash <repo>/scripts/ops/ci_b
 7. `loginctl enable-linger` is on for the lane user (timers survive logout): `loginctl show-user <user> -p Linger`.
 8. Runner capacity: CI on the box is the path that produces the checks (JIT pool, `CI_RUNNER_MODE`); otherwise the gate
    waits on hosted minutes.
-9. The rest of `PRIVATE_FLIP_CHECKLIST.md` (P1-P15) is done; the main hub, not this gate, decides the flip.
+9. The rest of `PRIVATE_FLIP_CHECKLIST.md` (P1-P15) is done. The gate is proven on 20 real PRs (hub answer B3; definition in
+   checklist section 0). The flip itself is the owners' call alone.
 10. Rollback known: `touch ~/.local/state/roxira-merge-gate/KILL` stops merging at once; `dry_run = true` returns to logging.
 
 ## 5. What the owner says "go" to
@@ -111,3 +150,37 @@ Fix (as the lane user, dry-run first is built in): `bash <repo>/scripts/ops/ci_b
 One sentence, in the hub chat: **"go: merge gate live"**. It authorises exactly: set `dry_run = false` in the live toml
 (both the gate and the alert share it), watch one tick in the journal, and report on #592. It does not authorise the
 repository flip, which stays with the main hub or the owner.
+
+## 6. Decision for the hub: `require_up_to_date` (rule 7)
+
+**DECISION B7-2 (for the hub; this page only recommends).**
+
+Numbers (section 2, 30 merged PRs, 2026-11-21): 26 of 30 were behind `main` at their head. With the switch on the gate
+would merge 1 of 30; with it off, 10 of 30 (the other 20 fail review, checks or protected paths, which is the gate working).
+So nearly every PR is behind when it is ready: the switch is not an edge case, it decides the throughput of the whole gate.
+
+| | `true` (code default today) | `false` |
+|---|---|---|
+| What it guarantees | the head contains every commit on `main`, so the green checks ran on what will be merged (what the merge queue's merge-group commit gave) | the head was green on its own base; the merge result is not tested before it lands |
+| Cost | every merge makes all other open PRs behind: each needs `update-branch`, a fresh CI run and, because the head changes, a new review-desk cycle (about 2 h); one merge per cycle, and a PR can chase `main` indefinitely while others merge. With 26 of 30 behind this stalls most of the flow | none; ready PRs merge one per tick (5 min) |
+| Risk | slow, and agents re-review the same diff repeatedly | two PRs that are each green but break together can land back to back; `main` autodeploys, so a semantic conflict reaches production unless caught after the merge |
+| Protected-path PRs | each update voids the owner's `OWNER-OK`, the owner must re-approve the final head | the marker stays valid unless the author pushes |
+
+Recommendation: default **`false`**, plus a cheap guard that does not need a new head: the gate merges only while the most
+recent completed CI run on `main` is not red (a "main is green" precondition, one extra GET per tick), and the post-merge CI
+run plus the direct-push alert (section 3) stay on. Optional hardening, if the hub wants it: treat a behind PR as up to date
+only when the files changed on `main` since its merge base do not overlap the PR's files (a compare call), else wait.
+`true` stays available as a one-line config change if semantic conflicts are seen. The precondition and the overlap check are
+not implemented in this change.
+
+Keeping branches current without the gate rewriting history (applies whichever default is chosen):
+
+1. **Agent-side (recommended).** The agent that owns a branch rebases or merges `main` into it before asking for review
+   (label `merge-queue`) and when the gate comment says "behind". History of a branch is only ever rewritten by its owner.
+2. **`update-branch` by the gate (exists today, active when the switch is `true`).** GitHub merges `main` into the branch; no
+   history is rewritten, no force-push, and `expected_head_sha` makes the call fail rather than overwrite a push that raced it.
+   It still pushes to an agent's branch unasked and voids review and `OWNER-OK` for that head. Safe, but noisy.
+3. **Rebase plus force-push by the gate: not enabled, and not to be added without an owner rule.** If the owners want it, the
+   rule should say at least: opt-in per PR by a label an owner id set; `agent/*` branches only; `--force-with-lease` against the
+   head the gate evaluated; never on a PR that is class `OWNER` or has an `OWNER-OK`; stop on any conflict and hold the PR; the
+   previous head SHA is written in a PR comment before the push so the old state can be found.

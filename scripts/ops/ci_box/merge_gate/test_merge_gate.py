@@ -170,26 +170,29 @@ def test_rerun_uses_latest_run_and_skipped_is_green(tmp_path):
     assert g.tick() == "7"
 
 
-def test_protected_path_blocks_without_owner_label(tmp_path):
+def test_protected_path_blocks_without_owner_sentence(tmp_path):
     g, api = make(tmp_path, files=[{"filename": ".github/workflows/ci.yml"}])
     g.tick()
     assert not api.did("PUT", "/merge")
-    assert "protected" in api.did("POST", "/comments")[0][2]["body"]
+    assert "owner sentence required" in api.did("POST", "/comments")[0][2]["body"]
 
 
-def test_protected_path_with_owner_label_by_allowlisted_actor(tmp_path):
-    tl = [{"event": "labeled", "label": {"name": "owner-approved"}, "actor": {"id": 1}}]
-    g, api = make(tmp_path, files=[{"filename": "x/migrations/1.sql"}], timeline=tl,
-                  prs=[pr(labels=("merge-queue", "owner-approved"))])
+def owner_ok(uid=1, n=7, sha=HEAD[:7]):
+    return {"user": {"id": uid}, "body": f"go ahead\nOWNER-OK #{n} {sha}\n"}
+
+
+def test_protected_path_with_owner_sentence_by_allowlisted_id(tmp_path):
+    g, api = make(tmp_path, files=[{"filename": "x/migrations/1.sql"}],
+                  comments=[review("no blocker"), owner_ok()])
     assert g.tick() == "7"
 
 
-def test_owner_label_by_stranger_rejected(tmp_path):
-    tl = [{"event": "labeled", "label": {"name": "owner-approved"}, "actor": {"id": 5}}]
-    g, api = make(tmp_path, files=[{"filename": "docker-compose.prod.yml"}], timeline=tl,
-                  prs=[pr(labels=("merge-queue", "owner-approved"))])
-    g.tick()
-    assert not api.did("PUT", "/merge")
+def test_owner_sentence_by_stranger_wrong_pr_or_old_head_rejected(tmp_path):
+    for c in (owner_ok(uid=5), owner_ok(n=8), owner_ok(sha="d" * 7)):
+        g, api = make(tmp_path, files=[{"filename": "docker-compose.prod.yml"}],
+                      comments=[review("no blocker"), c])
+        g.tick()
+        assert not api.did("PUT", "/merge")
 
 
 def test_rename_out_of_protected_path_is_caught(tmp_path):

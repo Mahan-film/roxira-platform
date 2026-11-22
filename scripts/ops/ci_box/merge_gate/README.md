@@ -14,8 +14,10 @@ A PR is squash-merged, with `sha=<head>` as guard, only when all of these hold o
    and has `Verdict: no blocker`, or an allowlisted human (numeric id in `approver_ids`) APPROVED this head;
 5. no hold: no label in `block_labels` (`needs-human`, `do-not-merge`), no `[needs owner]` in the title, no unresolved
    `BLOCKER:` comment from an allowlisted human id (cleared by a later `UNBLOCK:`);
-6. no file matches `protected_globs`, unless label `owner-approved` is present and its latest `labeled`
-   timeline event was made by an id in `owner_approver_ids`;
+6. no file matches `protected_globs` (decision B7: migrations, payment, auth, Dockerfile.prod, deploy scripts,
+   workflows, the gate itself), unless an owner comment line `OWNER-OK #<PR> <head sha7>` exists, written by an id in
+   `owner_approver_ids` for this exact head. Without it the PR is class "owner sentence required": never merged, one
+   comment per head, then it waits. Empty `owner_approver_ids` = such PRs are never merged by the gate;
 7. branch not behind main (`require_up_to_date`, default true); if behind, the gate calls update-branch and waits for
    checks on the next tick.
 
@@ -57,7 +59,7 @@ pointer is untouched; the first live run initialises it). Spec, comparison repor
 through the gate rules (read-only, GET only) and prints what would have been blocked and why. See the spec.
 
 ## Known limits
-- `owner-approved` is not tied to a head SHA: removing the label after a suspicious push is the owner's job.
+- `OWNER-OK` is tied to the head SHA (a later push voids it); there is no revoke command, push or add `do-not-merge`.
 - Only check-runs are read (not legacy commit statuses). Review comments from authors not in the allowlist are ignored.
 
 ## Tests

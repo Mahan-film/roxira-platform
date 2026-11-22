@@ -12,8 +12,10 @@ A PR is merged (squash, guarded by its head SHA) only when ALL hold:
      review on that head from an allowlisted numeric user id;
   4b. no hold: label `needs-human` / `do-not-merge` (block_labels), no `[needs owner]` in the title, and
      no unresolved `BLOCKER:` comment from an allowlisted human (numeric id; cleared by a later `UNBLOCK:`);
-  5. protected paths (migrations, workflows, deploy scripts, prod compose) are untouched, unless the
-     label `owner-approved` was added by an allowlisted user (checked through the timeline API);
+  5. protected paths (decision B7: migrations, payment, auth, Dockerfile.prod, deploy scripts, workflows and
+     the gate itself; `protected_globs`) are untouched, unless an owner wrote `OWNER-OK #<PR> <head sha7>` in a
+     PR comment (author numeric id in `owner_approver_ids`, bound to the exact head). Such a PR is class
+     OWNER: the gate never merges it without that sentence, it only reports it once per head;
   6. the branch is up to date with the base (else the branch is updated and the PR waits a tick).
 One merge per tick. State + lock + kill switch live in the state dir. Dry-run logs only.
 """
@@ -37,7 +39,6 @@ DEFAULTS = {
     "repo": "Mahan-film/roxira-platform",
     "base": "main",
     "label": "merge-queue",
-    "owner_label": "owner-approved",
     "dry_run": True,
     "allow_auto_merge_flag": True,
     "proxy": "",
@@ -53,12 +54,36 @@ DEFAULTS = {
         "Backend (tsc + jest + Postgres specs)",
         "Frontend gate",
     ],
+    # Decision B7: a PR touching any of these is never merged without an owner sentence (see OWNER_OK_RE).
+    # Globs: `*` = part of one path segment, `**` = any depth. The list in the live toml REPLACES this one.
     "protected_globs": [
+        # migrations
         "migrations/**",
         "**/migrations/**",
-        ".github/workflows/**",
-        "scripts/ops/deploy*.sh",
+        # payment, billing, auth
+        "**/payment/**",
+        "**/payments/**",
+        "**/*payment*",
+        "**/zibal*",
+        "**/billing/**",
+        "**/auth/**",
+        "**/*auth/**",
+        "**/auth_*/**",
+        "**/auth.*",
+        # production image, compose, deploy scripts and units (main autodeploys)
+        "Dockerfile.prod",
+        "**/Dockerfile.prod",
         "docker-compose.prod.yml",
+        "scripts/ops/deploy*.sh",
+        "scripts/ops/*deploy*.sh",
+        "scripts/ops/autodeploy/**",
+        "deploy/**",
+        # workflows and the gate itself (its code, config example, tests, spec)
+        ".github/workflows/**",
+        "scripts/ops/ci_box/merge_gate/**",
+        "scripts/ci/merge_gate*.py",
+        "src/ops/test_*merge_gate*.py",
+        "docs/ops/MERGE_GATE_SPEC.md",
     ],
     "review_comment_authors": ["github-actions[bot]"],
     # Numeric user ids of the review-desk accounts. When non-empty they REPLACE the login check
@@ -78,7 +103,15 @@ REVIEW_HEADER_RE = re.compile(
 )
 VERDICT_RE = re.compile(r"^\s*\**\s*verdict\s*\**\s*:\s*\**\s*(no blocker|blocker)", re.IGNORECASE)
 
-MERGE, BEHIND, WAIT, REFUSE, SKIP = "merge", "behind", "wait", "refuse", "skip"
+# Owner approval marker (decision B7): a line that starts with `OWNER-OK #<PR number> <head sha, 7-40 hex>`.
+OWNER_OK_RE = re.compile(
+    r"^OWNER-OK\s+#(?P<n>\d+)\s+(?P<sha>[0-9a-fA-F]{7,40})\s*$", re.MULTILINE | re.IGNORECASE
+)
+# GitHub lists at most 3000 files per PR; at that size the list may be cut, so it cannot prove "no protected path".
+PR_FILES_CAP = 3000
+
+# OWNER = "owner sentence required": never merged, reported once per head, waits for the marker.
+MERGE, BEHIND, WAIT, REFUSE, SKIP, OWNER = "merge", "behind", "wait", "refuse", "skip", "owner"
 
 
 class GhError(RuntimeError):
@@ -290,16 +323,22 @@ class Gate:
                     return True, f"human approval from user id {uid}"
         return False, f"no review-desk 'Verdict: no blocker' (or allowlisted approval) for head {head[:7]}"
 
-    def owner_approved(self, n: int, labels: set[str]) -> bool:
-        if self.cfg["owner_label"] not in labels:
+    def owner_ok(self, n: int, head: str) -> bool:
+        """True when an owner (numeric id in `owner_approver_ids`) wrote `OWNER-OK #<n> <sha>` for this exact head.
+
+        Fails closed: no owner ids configured = never true. The marker names the head, so any later push voids it.
+        """
+        owners = set(self.cfg["owner_approver_ids"])
+        if not owners:
             return False
-        events = self.api("GET", self.p(f"issues/{n}/timeline?per_page=100"), paginate=True)
-        last = None
-        for e in events:
-            if e.get("event") == "labeled" and (e.get("label") or {}).get("name") == self.cfg["owner_label"]:
-                last = e
-        actor = ((last or {}).get("actor") or {}).get("id")
-        return actor is not None and actor in set(self.cfg["owner_approver_ids"])
+        head = head.lower()
+        for c in self.api("GET", self.p(f"issues/{n}/comments?per_page=100"), paginate=True):
+            if (c.get("user") or {}).get("id") not in owners:
+                continue
+            for m in OWNER_OK_RE.finditer(c.get("body") or ""):
+                if int(m.group("n")) == n and head.startswith(m.group("sha").lower()):
+                    return True
+        return False
 
     # ---- one PR -----------------------------------------------------------
     def evaluate(self, pr: dict) -> tuple[str, str, str]:
@@ -320,13 +359,13 @@ class Gate:
             return REFUSE, "hold", f"on hold: {hold}"
         files = self.api("GET", self.p(f"pulls/{n}/files?per_page=100"), paginate=True)
         hits = protected_hits(files, self.cfg["protected_globs"])
-        if hits and not self.owner_approved(n, labels):
-            return REFUSE, "protected", (
-                "touches protected paths ("
+        if len(files) >= PR_FILES_CAP:
+            hits = hits or [f"file list may be truncated at {PR_FILES_CAP}"]
+        if hits and not self.owner_ok(n, head):
+            return OWNER, "owner", (
+                "owner sentence required: touches protected paths ("
                 + ", ".join(hits[:5])
-                + ") and has no `"
-                + self.cfg["owner_label"]
-                + "` label added by an allowlisted user"
+                + f"). Not merged by the gate; waits for an owner comment line starting `OWNER-OK #{n} {head[:7]}`"
             )
         ok, why = self.review_ok(n, head)
         if not ok:
@@ -374,7 +413,7 @@ class Gate:
                 continue
             n, head = pr["number"], pr["head"]["sha"]
             log.info("#%s %s: %s", n, status, why)
-            if status == REFUSE:
+            if status in (REFUSE, OWNER):
                 self.comment(n, head, code, f"not merged: {why}")
             elif status == MERGE and to_merge is None:
                 to_merge = pr

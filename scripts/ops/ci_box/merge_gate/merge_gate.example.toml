@@ -3,7 +3,6 @@
 repo = "Mahan-film/roxira-platform"
 base = "main"
 label = "merge-queue"
-owner_label = "owner-approved"
 
 # Stay true until the repo flip. While true, nothing is merged or commented (the main-push alert keeps a separate
 # dry-run pointer file and sends nothing).
@@ -33,12 +32,37 @@ required_checks = [
   "Frontend gate",
 ]
 
+# Decision B7: a PR touching any of these is class "owner sentence required". The gate never merges it; it
+# comments once per head and waits for an owner comment line `OWNER-OK #<PR number> <head sha7>` written by an id
+# in owner_approver_ids. This list REPLACES the code default, so keep the live toml in sync with this example.
 protected_globs = [
+  # migrations
   "migrations/**",
   "**/migrations/**",
-  ".github/workflows/**",
-  "scripts/ops/deploy*.sh",
+  # payment, billing, auth
+  "**/payment/**",
+  "**/payments/**",
+  "**/*payment*",
+  "**/zibal*",
+  "**/billing/**",
+  "**/auth/**",
+  "**/*auth/**",
+  "**/auth_*/**",
+  "**/auth.*",
+  # production image, compose, deploy scripts and units (main autodeploys)
+  "Dockerfile.prod",
+  "**/Dockerfile.prod",
   "docker-compose.prod.yml",
+  "scripts/ops/deploy*.sh",
+  "scripts/ops/*deploy*.sh",
+  "scripts/ops/autodeploy/**",
+  "deploy/**",
+  # workflows and the gate itself
+  ".github/workflows/**",
+  "scripts/ops/ci_box/merge_gate/**",
+  "scripts/ci/merge_gate*.py",
+  "src/ops/test_*merge_gate*.py",
+  "docs/ops/MERGE_GATE_SPEC.md",
 ]
 
 # Only comments by these logins count as review-desk verdicts.
@@ -56,4 +80,6 @@ require_up_to_date = true
 
 # Numeric GitHub user ids (gh api users/<login> --jq .id). Empty = feature off.
 approver_ids = []        # human APPROVE on the exact head counts as a review
-owner_approver_ids = []  # may add the `owner-approved` label for protected paths
+# Human owners whose `OWNER-OK #<PR> <sha7>` comment releases a protected-path PR. Must be accounts that no agent,
+# automation or box token can act as; empty = no protected PR is ever merged by the gate (fails closed).
+owner_approver_ids = []
