@@ -56,3 +56,29 @@ def test_voice_flag_asks_like_the_phone_line():
     assert ecg.chat_payload("سؤال") == {"message": "سؤال", "tier": "FREE"}
     assert ecg.chat_payload("سؤال", voice=True) == {
         "message": "سؤال", "tier": "FREE", "is_voice_mode": True, "channel": "voice"}
+
+
+def test_ask_sends_a_named_user_agent(monkeypatch):
+    """Cloudflare answers the default Python-urllib agent with 403 (error 1010) on the public URL."""
+    ecg = _ecg()
+    seen = {}
+
+    class _Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return json.dumps({"reply": "ok"}).encode()
+
+    def fake_urlopen(req, timeout=0):
+        seen["ua"] = req.get_header("User-agent")
+        seen["body"] = json.loads(req.data)
+        return _Resp()
+
+    monkeypatch.setattr(ecg.urllib.request, "urlopen", fake_urlopen)
+    assert ecg.ask("https://example.invalid", "سؤال", voice=True) == "ok"
+    assert seen["ua"] == ecg.EVAL_USER_AGENT
+    assert seen["body"]["is_voice_mode"] is True
