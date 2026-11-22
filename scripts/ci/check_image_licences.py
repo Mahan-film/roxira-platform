@@ -6,6 +6,14 @@ for container images known to use non-permissive licences (RSALv2, SSPLv1,
 AGPL-3.0, ELv2) — including Redis 7.4+, Redis 8+, and unpinned `redis:7` /
 `redis:latest` tags which resolve to RSALv2/SSPLv1 builds.
 
+Scope:
+- Target files scanned: `*compose*.yml`, `*compose*.yaml`, `.github/workflows/*.yml`,
+  `.github/workflows/*.yaml`, and `scripts/infra/e2e/sandbox_up.sh`.
+- Exclusions: files in `EXCLUDED_PENDING_MIGRATION` (`docker-compose.prod.yml`,
+  `docker-compose.modern-stack.yml`, `sandbox_up.sh`) pending scheduled cutover #992.
+- Note: Dockerfile FROM lines and arbitrary standalone shell scripts are outside
+  current target file scope.
+
 Exit code 0 if clean, 1 if any disallowed image is found.
 """
 

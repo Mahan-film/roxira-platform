@@ -2,16 +2,28 @@
 
 from __future__ import annotations
 
+import importlib.util
 import pathlib
 import sys
+import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "scripts" / "ci"))
-
-import check_image_licences as gate  # noqa: E402
 
 
-def test_blocks_rsal_sspl_agpl_images() -> None:
+@pytest.fixture(scope="module")
+def gate():
+    """Load gate module dynamically without modifying sys.path at import time (Rule 33)."""
+    script_path = REPO_ROOT / "scripts" / "ci" / "check_image_licences.py"
+    spec = importlib.util.spec_from_file_location("check_image_licences", script_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["check_image_licences"] = module
+    spec.loader.exec_module(module)
+    yield module
+    sys.modules.pop("check_image_licences", None)
+
+
+def test_blocks_rsal_sspl_agpl_images(gate) -> None:
     blocked = [
         "redis:7.4.11-alpine",
         "redis:8-alpine",
@@ -31,7 +43,7 @@ def test_blocks_rsal_sspl_agpl_images() -> None:
         assert reason is not None, f"expected {img} to be blocked"
 
 
-def test_allows_permissive_images() -> None:
+def test_allows_permissive_images(gate) -> None:
     allowed = [
         "valkey/valkey:8-alpine",
         "valkey/valkey:8-alpine@sha256:9971099af41c36e887aabdfe22b80c0fe45df949163dfc9cb434febc57cfc3fc",
@@ -48,6 +60,6 @@ def test_allows_permissive_images() -> None:
         assert reason is None, f"expected {img} to be allowed, got: {reason}"
 
 
-def test_repo_passes_image_licence_gate() -> None:
+def test_repo_passes_image_licence_gate(gate) -> None:
     findings = gate.scan_repo(REPO_ROOT)
     assert findings == [], f"unexpected disallowed images in repo: {findings}"

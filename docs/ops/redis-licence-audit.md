@@ -17,6 +17,8 @@
 | `docker/research-stack/docker-compose.yml:23` | `valkey` | `docker.io/valkey/valkey:8-alpine` | BSD-3-Clause | **Kept on main** | `docker.io/valkey/valkey:8-alpine` | BSD-3-Clause |
 | `output_apps/docker-compose.prod.yml:19` | `redis` | `valkey/valkey:8` | BSD-3-Clause | **Kept on main** | `valkey/valkey:8` | BSD-3-Clause |
 
+> **Exclusion rationale:** Production and dev compose references (`docker-compose.prod.yml:196`, `docker-compose.modern-stack.yml:21`, and `scripts/infra/e2e/sandbox_up.sh:107`) are excluded on purpose via `EXCLUDED_PENDING_MIGRATION` in `scripts/ci/check_image_licences.py` until the #992 cutover to avoid unexpected autodeploy container recreation. They are kept untouched in this PR.
+
 ---
 
 ## 2. Valkey Digest Pinning & CLI Parity
@@ -53,6 +55,8 @@ Healthchecks (`docker-compose.prod.yml:213`), automated backups (`scripts/ops/ba
   - `test_resp_aof_command_stream_compatibility`: Validates stream commands (`SET`, `HSET`, BullMQ queue `LPUSH`).
   - `test_redis_cli_command_parity_contract`: Asserts command parity for ping, bgsave, and lastsave.
   - `test_safe_volume_copy_and_rollback_lifecycle`: Validates non-destructive backup copying and rollbacks.
+
+> **Live volume validation status:** While format specifications (RDB v11, multi-part AOF, redis-cli symlink) are verified structurally and in unit test harnesses (`tests/test_valkey_data_compatibility.py`), full live volume compatibility remains unverified until a real volume-copy test runs during the #992 cutover window.
 
 ---
 
