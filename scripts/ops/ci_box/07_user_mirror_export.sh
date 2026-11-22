@@ -163,6 +163,10 @@ if [ -n "$latest" ]; then
   echo "latest:       $latest"; sed -n '3,$p' "$latest/MANIFEST.txt" | sed 's/^/  /'
   printf 'kept dirs:    %s\n' "$(find "$EXPORT" -maxdepth 1 -mindepth 1 -type d -name '20??-??-??' | wc -l)"
 fi
+echo "== user data backup (restic, scripts/ops/ci_box/box_backup)"
+printf 'last run:     %s\n' "$(cat "$STATE/backup.last" 2>/dev/null || echo never)"
+printf 'off-box:      %s\n' "$(cat "$STATE/backup.offbox.last" 2>/dev/null || echo 'not configured')"
+printf 'last drill:   %s\n' "$(cat "$STATE/backup-drill.last" 2>/dev/null || echo never)"
 echo "== disk"
 du -sh "$MIRROR" "$EXPORT" 2>/dev/null
 df -h /srv/data 2>/dev/null | tail -1

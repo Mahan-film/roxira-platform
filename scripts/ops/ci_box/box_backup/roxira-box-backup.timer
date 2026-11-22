@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily box data backup (off the :00 grid; the root job runs 03:15, mirror 02:30)
+
+[Timer]
+OnCalendar=*-*-* 03:47:00
+RandomizedDelaySec=7min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
