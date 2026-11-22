@@ -227,6 +227,10 @@ def check_ladder(rep: Report, repo_dir: Path, spec: dict) -> dict:
             "and bypass lane-run (stop file, caps, key, group allowlist). Set TASKQ_RUNNER, TASKQ_BUDGETS=lane_budgets.box.json and "
             "ROXIRA_AGENTS_HOME=<lane state dir> in the unit that runs orch",
             "systemctl --user cat roxira-orch.service | grep -E 'TASKQ_RUNNER|TASKQ_BUDGETS|ROXIRA_AGENTS_HOME'", owner=True)
+    ids = [x for x in os.environ.get("ORCH_TRUSTED_USER_IDS", "").split(",") if x.strip().isdigit()]
+    rep.add("trusted-ids", "ORCH_TRUSTED_USER_IDS names the accounts whose issues orch may act on (numeric ids) [owner]", "PASS" if ids else "WARN",
+            f"{len(ids)} id(s) set in this shell" if ids else "not set in this shell: owner accounts that GitHub reports as CONTRIBUTOR are skipped as untrusted "
+            "and orch claims nothing", "gh api users/<login> --jq .id   (owner), then set the list in the orch unit", owner=True)
     return pol
 
 
