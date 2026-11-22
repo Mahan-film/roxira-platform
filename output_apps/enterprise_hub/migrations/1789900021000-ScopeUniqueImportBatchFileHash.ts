@@ -32,6 +32,12 @@ export class ScopeUniqueImportBatchFileHash1789900021000
     `);
     // Pre-dedupe step: if legacy active batches share (tenant_id, entity, file_hash, mapping_hash),
     // mark older duplicates as undone = true so CREATE UNIQUE INDEX succeeds deterministically.
+    // Note on data safety: Setting undone = true only releases the active idempotency slot.
+    // The data_import_batch_items rows of older duplicates are intentionally retained because
+    // those records were genuinely imported. undoBatch checks batch.undone and rejects already-undone
+    // batches, preventing any double-deletion or deletion of rows from superseded batches.
+    // Crash recovery: if a crash occurs between tryReserveBatch and setInserted, the reservation holds
+    // inserted = 0; subsequent imports or stale-reaper routines can detect or safely release the reservation.
     await queryRunner.query(`
       UPDATE "data_import_batches" b
       SET "undone" = true

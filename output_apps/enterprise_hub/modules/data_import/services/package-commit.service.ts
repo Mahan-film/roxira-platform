@@ -92,7 +92,19 @@ export class PackageCommitService {
           'package',
           mappingHash,
         );
-        existingBatchId = existing?.id ?? batchId;
+        const resolvedId = existing?.id ?? batchId;
+        await this.progress.set(tenantId, packageId, {
+          phase: 'committed',
+          done: total,
+          total,
+          inserted: {},
+          skipped: { package: total },
+          errors: [],
+        });
+        state.status = 'committed';
+        state.batchId = resolvedId;
+        await this.store.writeState(state);
+        return { batchId: resolvedId };
       }
     } else {
       if (state.fileHash && typeof this.batchRepository.findByFileHash === 'function') {
@@ -119,7 +131,7 @@ export class PackageCommitService {
     }
 
     if (existingBatchId) {
-      const existing = await this.batchRepository.findById(tenantId, existingBatchId);
+      const existing = await this.batchRepository.findBatch(tenantId, existingBatchId);
       if (existing && existing.inserted > 0) {
         await this.progress.set(tenantId, packageId, {
           phase: 'committed',

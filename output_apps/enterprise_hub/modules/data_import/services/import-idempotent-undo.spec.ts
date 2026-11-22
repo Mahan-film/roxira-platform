@@ -55,6 +55,7 @@ describe('Import Idempotency, Batch Tagging & Undo (T326 R32)', () => {
   };
 
   beforeEach(() => {
+    jest.clearAllMocks();
     registry = {
       all: jest.fn().mockReturnValue([mockAdapter, accountingAdapter]),
       get: jest.fn((key: string) => {
@@ -139,9 +140,8 @@ describe('Import Idempotency, Batch Tagging & Undo (T326 R32)', () => {
           mappingHash: expectedMappingHash,
           inserted: 0,
         }),
-        undefined,
       );
-      expect(batchRepo.setInserted).toHaveBeenCalledWith(tenantId, commit1.batchId, 2, undefined);
+      expect(batchRepo.setInserted).toHaveBeenCalledWith(tenantId, commit1.batchId, 2);
       expect(batchRepo.addItems).toHaveBeenCalledWith(
         tenantId,
         commit1.batchId,
@@ -150,7 +150,6 @@ describe('Import Idempotency, Batch Tagging & Undo (T326 R32)', () => {
           { ownerId: 101, rowNumber: 1 },
           { ownerId: 102, rowNumber: 2 },
         ],
-        undefined,
       );
 
       // 2. Second import of the EXACT same file: preview
@@ -212,10 +211,48 @@ describe('Import Idempotency, Batch Tagging & Undo (T326 R32)', () => {
 
       expect(commitResult.inserted).toBe(0);
       expect(commitResult.skippedDuplicates).toBe(2);
+      expect(typeof commitResult.batchId).toBe('string');
       // Commit was called with empty array (0 unique rows)
       expect(mockAdapter.commit).toHaveBeenCalledWith(tenantId, [], expect.any(Object));
       // Batch reservation is released when 0 rows are inserted so subsequent imports are not blocked
       expect(batchRepo.removeBatch).toHaveBeenCalledWith(tenantId, expect.any(String));
+    });
+
+    it('stops and does NOT call adapter.commit when tryReserveBatch returns false even if existing.inserted is 0', async () => {
+      const tenantId = '11111111-1111-4111-8111-111111111111';
+      const fileBuffer = Buffer.from('name,mobile\nReza,09123456789', 'utf8');
+      const mockFile = {
+        originalname: 'leads-in-flight.csv',
+        mimetype: 'text/csv',
+        buffer: fileBuffer,
+      };
+
+      const preview = await service.preview(tenantId, mockFile, 'crm-leads');
+
+      // tryReserveBatch returns false because another commit currently holds the reservation
+      batchRepo.tryReserveBatch = jest.fn().mockResolvedValueOnce(false);
+      // findByFileHash finds the in-flight batch which still has inserted = 0
+      (batchRepo.findByFileHash as jest.Mock).mockResolvedValueOnce({
+        id: 'in-flight-batch-id',
+        tenantId,
+        entity: 'crm-leads',
+        fileName: 'leads-in-flight.csv',
+        inserted: 0,
+        undone: false,
+        createdAt: new Date(),
+      });
+
+      const commitResult = await service.commit(tenantId, {
+        uploadId: preview.uploadId,
+        entity: 'crm-leads',
+        mapping: { name: 'name', mobile: 'mobile' },
+      });
+
+      expect(commitResult.batchId).toBe('in-flight-batch-id');
+      expect(commitResult.inserted).toBe(0);
+      expect(commitResult.skippedDuplicates).toBe(1);
+      // Crucial: adapter.commit was NEVER called!
+      expect(mockAdapter.commit).not.toHaveBeenCalled();
     });
   });
 
@@ -368,9 +405,8 @@ describe('Import Idempotency, Batch Tagging & Undo (T326 R32)', () => {
       expect(batchRepo.createBatch).toHaveBeenCalledWith(
         tenantId,
         expect.objectContaining({ entity: 'crm-leads', inserted: 0 }),
-        undefined,
       );
-      expect(batchRepo.setInserted).toHaveBeenCalledWith(tenantId, commitResult.batchId, 1, undefined);
+      expect(batchRepo.setInserted).toHaveBeenCalledWith(tenantId, commitResult.batchId, 1);
     });
 
     it('scopes fileHash lookup by entity and mappingHash so another entity or mapping imports cleanly (#1216)', async () => {

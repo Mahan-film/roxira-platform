@@ -191,15 +191,13 @@ export class EntityImportService {
           adapter.key,
           mappingHash,
         );
-        if (existing && existing.inserted > 0) {
-          this.uploadStore.remove(tenantId, dto.uploadId);
-          return {
-            batchId: existing.id,
-            inserted: 0,
-            skippedDuplicates: upload.rows.length,
-            failed: [],
-          };
-        }
+        this.uploadStore.remove(tenantId, dto.uploadId);
+        return {
+          batchId: existing?.id ?? batchId,
+          inserted: 0,
+          skippedDuplicates: upload.rows.length,
+          failed: [],
+        };
       }
     } else {
       if (upload.fileHash && typeof this.batchRepository.findByFileHash === 'function') {
@@ -258,7 +256,9 @@ export class EntityImportService {
         }
       } else {
         // Release reservation in the same unit of work if 0 rows were inserted:
-        await this.batchRepository.removeBatch(tenantId, batchId);
+        if (typeof this.batchRepository.removeBatch === 'function') {
+          await this.batchRepository.removeBatch(tenantId, batchId);
+        }
       }
 
       this.uploadStore.remove(tenantId, dto.uploadId);
@@ -267,7 +267,7 @@ export class EntityImportService {
       }
 
       return {
-        batchId: result.inserted.length > 0 ? batchId : null,
+        batchId,
         inserted: result.inserted.length,
         skippedDuplicates: skipped,
         failed,
@@ -283,7 +283,9 @@ export class EntityImportService {
         });
       }
       // Release reservation in the same unit of work on failure:
-      await this.batchRepository.removeBatch(tenantId, batchId).catch(() => undefined);
+      if (typeof this.batchRepository.removeBatch === 'function') {
+        await this.batchRepository.removeBatch(tenantId, batchId).catch(() => undefined);
+      }
       throw error;
     }
   }

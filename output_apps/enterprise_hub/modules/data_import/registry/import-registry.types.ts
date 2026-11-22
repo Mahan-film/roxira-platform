@@ -83,7 +83,7 @@ export interface UndoOutcome {
 export interface AdapterCommitContext {
   /** Target bank account for `bank-statement` rows. */
   bankAccountId?: number;
-  /** Optional tenant-scoped transaction manager for atomic batch + row commit. */
+  /** Reserved for future atomic adapters: optional tenant-scoped transaction manager. */
   manager?: EntityManager;
 }
 
