@@ -17,4 +17,8 @@ echo "seeding chromium for playwright $ver into $dest"
 umask 022
 cd "$(mktemp -d)"
 PLAYWRIGHT_BROWSERS_PATH="$dest" npx -y "playwright@$ver" install chromium
+# `playwright install` in CI writes a marker into .links even when the browser exists; runner may
+# write there (browsers themselves stay read-only for runner).
+mkdir -p "$dest/.links"
+setfacl -m "u:runner:rwx" -m "d:u:runner:rw" "$dest/.links"
 ls -1 "$dest"
