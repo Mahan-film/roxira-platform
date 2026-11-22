@@ -3,7 +3,9 @@
 Recorded fixtures (scripts/dev/tests/fixtures/hub_merge/pr<N>.json) replay #1197, #1199 and #1074
 as they
 stood before they were merged. gh is replaced by a fake api callable: no network, no git, no
-subprocess.
+subprocess
+(the one exception, test_every_tracked_prod_path_is_protected, runs a read-only `git ls-files` and
+skips when git is unavailable).
 The module under test is loaded in setUpModule (lesson 33: no work at import time).
 Run: python3 scripts/dev/tests/test_hub_merge.py   (or python3 -m unittest by path)
 """
@@ -14,6 +16,7 @@ import importlib.util
 import io
 import json
 import pathlib
+import subprocess
 import unittest
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -61,6 +64,8 @@ class FakeApi:
             return {"id": 1}
         if "/contents/docs/STATE.md" in path:
             return {"content": base64.b64encode((self.state_doc or STATE).encode()).decode()}
+        if "/commits/" in path and "/status" in path:
+            return fx.get("status", {"state": "pending", "total_count": 0, "statuses": []})
         if "/check-runs" in path:
             return [{"check_runs": fx["check_runs"]}]
         if path.endswith(f"commits/{fx['pr']['head']['sha']}"):
@@ -384,10 +389,18 @@ class Rules(unittest.TestCase):
             "nginx/default.conf",
             "ops/nginx/site.conf",
             "ops/roxira-nginx.conf",
+            "output_apps/docker-compose.prod.yml",
+            "output_apps/nginx_config/.factory_htpasswd",
+            "deploy/systemd/roxira-backup.service",
+            "deploy/systemd/roxira-backup.timer",
+            "deploy/launchd/ir.roxira.lawwatch.plist",
+            ".github/actions/x/action.yml",
+            ".github/CODEOWNERS",
+            "scripts/dev/hub_merge.py",
+            "scripts/ops/ci_box/merge_gate/merge_gate.py",
         ]
         miss = [
             "docs/STATE.md",
-            "scripts/dev/hub_merge.py",
             "scripts/dev/tests/test_hub_merge.py",
             "output_apps/enterprise_hub/modules/accounting/money.ts",
         ]
@@ -397,6 +410,257 @@ class Rules(unittest.TestCase):
             self.assertEqual(hm.mg.protected_hits([{"filename": p}], hm.PROTECTED_GLOBS), [], p)
         renamed = [{"filename": "docs/x.md", "previous_filename": "migrations/old.sql"}]
         self.assertEqual(hm.mg.protected_hits(renamed, hm.PROTECTED_GLOBS), ["migrations/old.sql"])
+
+
+class Findings(unittest.TestCase):
+    """Review findings of PR #1295 (each test fails on the previous behaviour)."""
+
+    def base(self):
+        fx = load(1197)
+        drop_comment(fx, 7070667182)
+        return fx
+
+    # 1. blocker scan recognises prefixed verdict lines
+    def test_prefixed_blocker_forms_all_refuse(self):
+        forms = [
+            "- Verdict: blocker",
+            "## Verdict: blocker",
+            "1. Verdict: blocker",
+            "> Verdict: blocker",
+            "`Verdict: blocker`",
+            "Hub verdict: blocker",
+            "Hub re-review verdict: blocker",
+            "Verdict (re-review): blocker",
+            "Verdict - blocker",
+            "VERDICT: BLOCKER",
+            "**Verdict:** blocker",
+            "Re-review done.\n\n> - Verdict: Blocker (see above)",
+            "Verdict: blocker (no blockers in tests)",
+        ]
+        for body in forms:
+            fx = self.base()
+            fx["comments"].append(comment(10, body, "2026-11-21T23:30:00Z"))
+            self.assertEqual(codes(evaluate(fx)), ["blocker"], body)
+
+    def test_negated_or_unrelated_verdict_lines_do_not_refuse(self):
+        forms = [
+            "Verdict: no blocker",
+            "Verdict: no-blocker",
+            "- Verdict: No Blocker (0 blockers)",
+            "Verdict: non-blocker",
+            "verdict: not a blocker",
+            "Verdict: approved",
+            'Owner approval, relayed by hub_merge.py: "Verdict: blocker is resolved, go"',
+        ]
+        for body in forms:
+            fx = self.base()
+            fx["comments"].append(comment(10, body, "2026-11-21T23:30:00Z"))
+            self.assertEqual(codes(evaluate(fx)), [], body)
+
+    def test_loose_blocker_lines_unit(self):
+        self.assertEqual(
+            hm.loose_blocker_lines("a\n  * Verdict: blocker\nb"), ["* Verdict: blocker"]
+        )
+        self.assertEqual(hm.loose_blocker_lines("Verdict: no blocker, but a blocker remains"), [
+            "Verdict: no blocker, but a blocker remains"
+        ])
+        self.assertEqual(hm.loose_blocker_lines(""), [])
+
+    # 2. protected globs cover the files that exist in this repo
+    def test_every_tracked_prod_path_is_protected(self):
+        root = HERE.parents[2]
+        try:
+            out = subprocess.run(
+                ["git", "ls-files"], cwd=root, capture_output=True, text=True, timeout=60
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            self.skipTest("git unavailable")
+        files = out.stdout.splitlines()
+        if out.returncode != 0 or not files:
+            self.skipTest("not a git checkout")
+        known = []
+        for f in files:
+            base = f.rsplit("/", 1)[-1]
+            if (
+                (base.startswith("docker-compose") and "prod" in base and base.endswith(".yml"))
+                or "htpasswd" in base
+                or f.startswith(("deploy/systemd/", "deploy/launchd/", ".github/actions/"))
+                or f == ".github/CODEOWNERS"
+                or f.startswith("scripts/ops/ci_box/")
+                or f == "scripts/dev/hub_merge.py"
+            ):
+                known.append(f)
+        self.assertTrue(any("docker-compose" in f for f in known), "fixture sanity")
+        unprotected = [
+            f for f in known if not hm.mg.protected_hits([{"filename": f}], hm.PROTECTED_GLOBS)
+        ]
+        self.assertEqual(unprotected, [])
+
+    # 3. latest run is per (suite, name)
+    def test_same_name_failure_in_another_suite_is_not_hidden(self):
+        fx = self.base()
+        fx["check_runs"] += [
+            {"id": 10, "name": "build", "status": "completed", "conclusion": "failure",
+             "check_suite": {"id": 1}},
+            {"id": 11, "name": "build", "status": "completed", "conclusion": "success",
+             "check_suite": {"id": 2}},
+        ]
+        res = evaluate(fx)
+        self.assertEqual(codes(res), ["checks"])
+        self.assertIn("build (failure)", res["reasons"][0][1])
+
+    def test_rerun_in_the_same_suite_still_supersedes(self):
+        fx = self.base()
+        fx["check_runs"] += [
+            {"id": 10, "name": "build", "status": "completed", "conclusion": "failure",
+             "check_suite": {"id": 1}},
+            {"id": 12, "name": "build", "status": "completed", "conclusion": "success",
+             "check_suite": {"id": 1}},
+        ]
+        self.assertEqual(codes(evaluate(fx)), [])
+
+    # 4. required checks must exist; legacy statuses count
+    def test_missing_required_check_refuses_even_when_something_else_is_green(self):
+        fx = self.base()
+        fx["check_runs"] = [r for r in fx["check_runs"] if r["name"] != "Pytest (unit)"]
+        fx["check_runs"].append(
+            {"id": 1, "name": "Cross-family review", "status": "completed", "conclusion": "success"}
+        )
+        res = evaluate(fx)
+        self.assertEqual(codes(res), ["checks"])
+        self.assertIn("Pytest (unit)", res["reasons"][0][1])
+        self.assertIn("missing", res["reasons"][0][1])
+
+    def test_only_the_desk_check_is_not_enough(self):
+        fx = self.base()
+        fx["check_runs"] = [
+            {"id": 1, "name": "review-desk", "status": "completed", "conclusion": "success"}
+        ]
+        res = evaluate(fx)
+        self.assertEqual(codes(res), ["checks"])
+        self.assertIn("required checks missing", res["reasons"][0][1])
+
+    def test_legacy_commit_status_failure_and_pending_refuse(self):
+        fx = self.base()
+        fx["status"] = {
+            "state": "failure",
+            "total_count": 2,
+            "statuses": [
+                {"context": "ci/x", "state": "failure"},
+                {"context": "ci/y", "state": "success"},
+            ],
+        }
+        res = evaluate(fx)
+        self.assertEqual(codes(res), ["checks"])
+        self.assertIn("ci/x (failure)", res["reasons"][0][1])
+        fx["status"] = {
+            "state": "pending",
+            "total_count": 1,
+            "statuses": [{"context": "ci/z", "state": "pending"}],
+        }
+        self.assertIn("ci/z (pending)", evaluate(fx)["reasons"][0][1])
+        fx["status"] = {
+            "state": "success",
+            "total_count": 1,
+            "statuses": [{"context": "ci/z", "state": "success"}],
+        }
+        self.assertEqual(codes(evaluate(fx)), [])
+
+    # 5. cutoff is the push, not a future-dated commit
+    def test_future_dated_commit_does_not_hide_a_later_blocker(self):
+        fx = self.base()
+        fx["head_commit_date"] = "2026-11-22T12:00:00Z"  # clock ahead / GIT_COMMITTER_DATE
+        fx["check_runs"][0]["started_at"] = "2026-11-21T22:53:00Z"  # the real push
+        fx["comments"].append(comment(10, "Verdict: blocker", "2026-11-22T11:00:00Z"))
+        self.assertEqual(codes(evaluate(fx)), ["blocker"])
+
+    def test_future_dated_commit_without_check_runs_timestamps_is_unchanged(self):
+        fx = self.base()
+        fx["head_commit_date"] = "2026-11-22T12:00:00Z"
+        fx["comments"].append(comment(10, "Verdict: blocker", "2026-11-22T11:00:00Z"))
+        self.assertEqual(codes(evaluate(fx)), [])  # documents the fallback: no better cutoff known
+
+    def test_blocker_citing_the_head_sha_counts_at_any_time(self):
+        fx = self.base()
+        head = fx["pr"]["head"]["sha"]
+        fx["comments"].append(
+            comment(10, f"Re-review of {head[:7]}\nVerdict: blocker", "2026-11-21T10:00:00Z")
+        )
+        self.assertEqual(codes(evaluate(fx)), ["blocker"])
+        fx = self.base()
+        fx["comments"].append(
+            comment(10, "Re-review of 1234567\nVerdict: blocker", "2026-11-21T10:00:00Z")
+        )
+        self.assertEqual(codes(evaluate(fx)), [])  # another sha, older than the push
+
+    def test_push_cutoff_unit(self):
+        runs = [{"started_at": "2026-11-21T01:00:00Z"}, {"created_at": "2026-11-21T02:00:00Z"}, {}]
+        self.assertEqual(hm.push_cutoff("2026-11-21T05:00:00Z", runs), "2026-11-21T01:00:00Z")
+        self.assertEqual(hm.push_cutoff("2026-11-20T05:00:00Z", runs), "2026-11-20T05:00:00Z")
+
+    # 6. human BLOCKER:/UNBLOCK: hold and CHANGES_REQUESTED reviews
+    def test_human_blocker_comment_refuses_and_unblock_clears_it(self):
+        fx = self.base()
+        owner = comment(10, "BLOCKER: do not merge yet", "2026-11-21T10:00:00Z", login="owner")
+        owner["author_association"] = "OWNER"
+        fx["comments"].append(owner)
+        res = evaluate(fx)
+        self.assertEqual(codes(res), ["blocker"])
+        self.assertIn("BLOCKER:", res["reasons"][0][1])
+        unblock = comment(11, "unblock: ok now", "2026-11-21T11:00:00Z", login="owner")
+        unblock["author_association"] = "OWNER"
+        fx["comments"].append(unblock)
+        self.assertEqual(codes(evaluate(fx)), [])
+
+    def test_unblock_from_a_stranger_does_not_clear_and_stranger_blocker_is_ignored(self):
+        fx = self.base()
+        owner = comment(10, "BLOCKER: hold", "2026-11-21T10:00:00Z", login="owner")
+        owner["author_association"] = "COLLABORATOR"
+        stranger = comment(11, "UNBLOCK: fine", "2026-11-21T11:00:00Z", login="rando")
+        stranger["author_association"] = "NONE"
+        fx["comments"] += [owner, stranger]
+        self.assertEqual(codes(evaluate(fx)), ["blocker"])
+        fx = self.base()
+        spam = comment(10, "BLOCKER: haha", "2026-11-21T10:00:00Z", login="rando")
+        spam["author_association"] = "NONE"
+        fx["comments"].append(spam)
+        self.assertEqual(codes(evaluate(fx)), [])
+        # a missing association fails closed
+        fx = self.base()
+        fx["comments"].append(comment(10, "BLOCKER: hold", "2026-11-21T10:00:00Z"))
+        self.assertEqual(codes(evaluate(fx)), ["blocker"])
+
+    def test_changes_requested_review_without_a_verdict_line_refuses(self):
+        fx = self.base()
+        fx["reviews"] = [
+            {
+                "id": 5,
+                "user": {"login": "someone"},
+                "state": "CHANGES_REQUESTED",
+                "submitted_at": "2026-11-21T23:30:00Z",
+                "body": "Please fix the naming.",
+            }
+        ]
+        res = evaluate(fx)
+        self.assertEqual(codes(res), ["blocker"])
+        self.assertIn("CHANGES_REQUESTED", res["reasons"][0][1])
+
+    def test_changes_requested_on_an_older_head_is_ignored_but_not_on_this_head(self):
+        fx = self.base()
+        review = {
+            "id": 5,
+            "user": {"login": "someone"},
+            "state": "CHANGES_REQUESTED",
+            "submitted_at": "2026-11-21T10:00:00Z",
+            "body": "",
+            "commit_id": "f" * 40,
+        }
+        fx["reviews"] = [review]
+        self.assertEqual(codes(evaluate(fx)), [])
+        review["commit_id"] = fx["pr"]["head"]["sha"]
+        self.assertEqual(codes(evaluate(fx)), ["blocker"])
+        review["state"] = "DISMISSED"
+        self.assertEqual(codes(evaluate(fx)), [])
 
 
 class Cli(unittest.TestCase):

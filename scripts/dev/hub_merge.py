@@ -18,13 +18,22 @@ It refuses, and prints every reason it finds, when:
   held       the PR number is in the Held list of docs/STATE.md on main (read through the API,
              lesson 36); a missing Held list also refuses (fail closed)
   blocker    ANY issue comment or PR review body, from anyone, created or edited at or after the
-             head COMMIT date, has a line `Verdict: blocker` (desk or hub re-review). A later
+             push cutoff (the earlier of the head COMMIT date and the first check-run at the head),
+             or citing the head SHA at any time, has a verdict line that says blocker in any
+             prefixed form (`- Verdict: blocker`, `## Verdict: blocker`, `Hub verdict: blocker`,
+             `Verdict - blocker`, ...; anything not negated by no/not/non fails closed). A later
              "no blocker" does not clear it: push a new commit, or merge by hand on the owner's
-             sentence in chat
+             sentence in chat. Also: a CHANGES_REQUESTED review at or after the cutoff or on the
+             head
+  human      the latest `BLOCKER:` / `UNBLOCK:` comment from a trusted human decides (a `BLOCKER:`
+             from anyone not marked as an outsider counts; an `UNBLOCK:` only from an owner,
+             member or collaborator), at any time
   desk       no `Cross-family review ... @ <40-hex head sha>` comment by the review-desk login
              whose last verdict line is `no blocker` (the latest one for THIS head decides)
-  checks     any check-run at the head (every job, not only required ones; latest run per name)
-             failed, was cancelled or is pending, or there are no check-runs at all
+  checks     any check-run at the head (every job, not only required ones; latest run per suite
+             and name) failed, was cancelled or is pending; any required check name of the box gate
+             is missing; a legacy commit status at the head is failing or pending; or there are no
+             check-runs at all
   protected  a protected path is touched (migrations, auth, payment/billing, Dockerfile.prod,
              deploy scripts, workflows, production compose, nginx) and --owner-sentence is missing
 
@@ -84,13 +93,26 @@ PROTECTED_GLOBS = [
     "**/deploy*.sh",
     "docker-compose.prod*.yml",
     "docker-compose*.prod.yml",
+    "**/docker-compose*prod*.yml",
     "nginx/**",
     "**/nginx/**",
+    "**/nginx*/**",
     "**/*nginx*.conf",
+    "**/*htpasswd*",
+    # Everything that ships to a server or runs the gate: systemd/launchd units, Actions
+    # (workflows, local actions, CODEOWNERS), this guard and the box gate itself.
+    "deploy/**",
+    ".github/**",
+    "scripts/dev/hub_merge.py",
+    "scripts/ops/ci_box/**",
 ]
 
 STATE_PATH = "docs/STATE.md"
 MIN_SENTENCE = 10
+REQUIRED_CHECKS = list(mg.DEFAULTS["required_checks"])
+APPROVER_IDS = set(mg.DEFAULTS["approver_ids"]) | set(mg.DEFAULTS["owner_approver_ids"])
+TRUSTED_ASSOC = {"OWNER", "MEMBER", "COLLABORATOR"}
+OUTSIDER_ASSOC = {"NONE", "CONTRIBUTOR", "FIRST_TIMER", "FIRST_TIME_CONTRIBUTOR", "MANNEQUIN"}
 _HELD_NUM_RE = re.compile(r"(?<!row )#(\d+)")
 
 
@@ -110,28 +132,124 @@ def verdicts(body: str) -> list[str]:
     return out
 
 
-def blockers_newer_than(items: list[dict], head_date: str) -> list[dict]:
+# Loose scan used ONLY for blockers (fail closed): a line that starts, after list / heading /
+# quote / code marks and at most four plain words, with the word "verdict" ("- Verdict: blocker",
+# "## Verdict: blocker", "> Verdict: blocker", "Hub re-review verdict: blocker",
+# "Verdict (re-review): blocker", "Verdict - blocker"). The strict VERDICT_RE stays for the clean
+# desk verdict.
+_LOOSE_VERDICT_RE = re.compile(
+    r"^[\s>*#\-\d.`_|]*(?:[\w()/'-]+[ \t]+){0,4}verdict\b(?P<rest>.*)$", re.IGNORECASE
+)
+_BLOCKER_RE = re.compile(r"blockers?", re.IGNORECASE)
+_NEGATION_RE = re.compile(
+    r"\b(?:no|not|non|zero|0|without|none)(?:[\s-]+(?:a|an|new|remaining|open|more|other|further|"
+    r"real|longer))*[\s-]*$",
+    re.IGNORECASE,
+)
+_HEX_RE = re.compile(r"\b[0-9a-fA-F]{7,40}\b")
+
+
+def loose_blocker_lines(body: str) -> list[str]:
+    """Lines of a body that are a verdict line carrying a `blocker` that is not negated.
+
+    Any blocker word on the line not directly preceded by no/not/non/zero/0/without/none counts, so
+    "Verdict: blocker (no blockers in tests)" is a hit and "Verdict: no-blocker" is not.
+    """
+    out = []
+    for line in (body or "").splitlines():
+        m = _LOOSE_VERDICT_RE.match(line)
+        if not m:
+            continue
+        rest = m.group("rest")
+        if any(not _NEGATION_RE.search(rest[: b.start()]) for b in _BLOCKER_RE.finditer(rest)):
+            out.append(line.strip())
+    return out
+
+
+def cites_head(body: str, head: str) -> bool:
+    """True when the body names the head commit (any 7+ hex prefix of the full head SHA)."""
+    head = (head or "").lower()
+    return bool(head) and any(head.startswith(t.lower()) for t in _HEX_RE.findall(body or ""))
+
+
+def blockers_newer_than(
+    items: list[dict], head_date: str, head: str | None = None
+) -> list[dict]:
     """Items (issue comments, review bodies) at or after head_date that carry a blocker verdict
-    line.
+    line, or that cite the head SHA with one at any time.
 
     Each item needs: id, author, body, times (list of ISO timestamps: created / edited / submitted).
-    "Newer" is the latest of the item's timestamps >= the head COMMIT date, so an old comment
-    edited into
-    a blocker after the push counts. Ties count as newer. An item without a parseable time counts
-    as newer.
+    "Newer" is the latest of the item's timestamps >= the cutoff, so an old comment edited into a
+    blocker after the push counts. Ties count as newer. An item without a parseable time counts as
+    newer.
     """
     cutoff = parse_ts(head_date)
     hits = []
     for it in items:
-        if "blocker" not in verdicts(it.get("body", "")):
+        if not loose_blocker_lines(it.get("body", "")):
             continue
         try:
             newer = max(parse_ts(t) for t in it["times"] if t) >= cutoff
         except (ValueError, KeyError):
             newer = True
-        if newer:
+        if newer or (head and cites_head(it.get("body", ""), head)):
             hits.append(it)
     return hits
+
+
+def push_cutoff(head_date: str, runs: list[dict]) -> str:
+    """The earlier of the head COMMIT date and the first check-run at the head.
+
+    A commit made on a machine whose clock is ahead (or with GIT_COMMITTER_DATE in the future) would
+    otherwise hide a blocker posted after the push but before that date.
+    """
+    best = parse_ts(head_date)
+    for r in runs:
+        for key in ("created_at", "started_at"):
+            try:
+                t = parse_ts(r[key])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if t < best:
+                best = t
+    return best.isoformat().replace("+00:00", "Z")
+
+
+def human_hold(comments: list[dict], approver_ids: set | None = None) -> str:
+    """Non-empty reason when the latest `BLOCKER:` / `UNBLOCK:` comment from a trusted human is a
+    BLOCKER (rule 4b of the box gate, at any time).
+
+    A `BLOCKER:` from anyone not marked as an outsider counts (fail closed); an `UNBLOCK:` clears it
+    only from an owner, member or collaborator (or an allowlisted numeric id).
+    """
+    ids = approver_ids or set()
+    blocked = ""
+    for c in sorted(comments, key=lambda c: (c.get("created_at") or "", c.get("id", 0))):
+        user = c.get("user") or {}
+        assoc = (c.get("author_association") or "").upper()
+        trusted = assoc in TRUSTED_ASSOC or user.get("id") in ids
+        body = (c.get("body") or "").lstrip().upper()
+        if body.startswith("BLOCKER:") and (trusted or assoc not in OUTSIDER_ASSOC):
+            blocked = f"comment {c.get('id')} by {user.get('login')}"
+        elif body.startswith("UNBLOCK:") and trusted:
+            blocked = ""
+    return blocked
+
+
+def changes_requested(reviews: list[dict], cutoff: str, head: str) -> list[dict]:
+    """Reviews in state CHANGES_REQUESTED submitted at or after the cutoff or on the head commit."""
+    t0 = parse_ts(cutoff)
+    out = []
+    for r in reviews:
+        if (r.get("state") or "").upper() != "CHANGES_REQUESTED":
+            continue
+        try:
+            newer = parse_ts(r["submitted_at"]) >= t0
+        except (KeyError, TypeError, ValueError):
+            newer = True
+        if newer or (r.get("commit_id") or "").lower() == head.lower():
+            out.append(r)
+    return out
 
 
 def desk_status(comments: list[dict], head: str, authors: list[str]) -> tuple[bool, str]:
@@ -161,19 +279,51 @@ def desk_status(comments: list[dict], head: str, authors: list[str]) -> tuple[bo
     return True, "desk: no blocker at the exact head"
 
 
+def _suite(r: dict):
+    return (r.get("check_suite") or {}).get("id") or (r.get("app") or {}).get("id")
+
+
 def checks_problems(runs: list[dict]) -> tuple[list[str], list[str]]:
-    """(failed, pending) over ALL check-runs at the head (job level), latest run per name by id."""
-    latest: dict[str, dict] = {}
+    """(failed, pending) over ALL check-runs at the head (job level).
+
+    The latest run is kept per (check suite, name): only a rerun inside the same suite supersedes an
+    earlier run, so a failed `build` of one workflow is not hidden by a green `build` of another.
+    """
+    latest: dict[tuple, dict] = {}
     for r in runs:
         name = r.get("name")
-        if name and (name not in latest or r.get("id", 0) > latest[name].get("id", 0)):
-            latest[name] = r
+        key = (_suite(r), name)
+        if name and (key not in latest or r.get("id", 0) > latest[key].get("id", 0)):
+            latest[key] = r
     failed, pending = [], []
-    for name, r in sorted(latest.items()):
+    for (_, name), r in sorted(latest.items(), key=lambda kv: (str(kv[0][0]), kv[0][1])):
         if r.get("status") != "completed":
             pending.append(f"{name} ({r.get('status')})")
         elif r.get("conclusion") not in GREEN:
             failed.append(f"{name} ({r.get('conclusion')})")
+    return failed, pending
+
+
+def missing_required(runs: list[dict], required: list[str]) -> list[str]:
+    """Required check names (box gate DEFAULTS) with no check-run at the head."""
+    have = {r.get("name") for r in runs}
+    return [n for n in required if n not in have]
+
+
+def status_problems(combined: dict | None) -> tuple[list[str], list[str]]:
+    """(failed, pending) from the combined legacy commit status at the head. No statuses is fine."""
+    failed, pending = [], []
+    for s in (combined or {}).get("statuses") or []:
+        label = f"{s.get('context')} ({s.get('state')})"
+        if s.get("state") in ("failure", "error"):
+            failed.append(label)
+        elif s.get("state") != "success":
+            pending.append(label)
+    if (combined or {}).get("total_count") and not (failed or pending):
+        if combined.get("state") not in (None, "success"):
+            (failed if combined["state"] in ("failure", "error") else pending).append(
+                f"combined status ({combined['state']})"
+            )
     return failed, pending
 
 
@@ -265,6 +415,12 @@ class Hub:
         reasons += hold_reasons(pr, self.held())
 
         head_date = self.api("GET", self.p(f"commits/{head}"))["commit"]["committer"]["date"]
+        pages = self.api("GET", self.p(f"commits/{head}/check-runs?per_page=100"), paginate=True)
+        runs: list[dict] = []
+        for item in pages:
+            if isinstance(item, dict):
+                runs.extend(item.get("check_runs", [item]))
+        cutoff = push_cutoff(head_date, runs)
         comments = self.api("GET", self.p(f"issues/{n}/comments?per_page=100"), paginate=True)
         reviews = self.api("GET", self.p(f"pulls/{n}/reviews?per_page=100"), paginate=True)
         items = [
@@ -286,31 +442,43 @@ class Hub:
             }
             for r in reviews
         ]
-        for it in blockers_newer_than(items, head_date):
+        for it in blockers_newer_than(items, cutoff, head):
             reasons.append(
                 (
                     "blocker",
                     f"{it['kind']} {it['id']} by {it['author']} says Verdict: blocker and is not "
-                    f"older than the head commit ({head_date}); a later no-blocker does not "
-                    "clear it",
+                    f"older than the push cutoff ({cutoff}) or cites the head; a later no-blocker "
+                    "does not clear it",
                 )
             )
+        for r in changes_requested(reviews, cutoff, head):
+            reasons.append(
+                (
+                    "blocker",
+                    f"review {r.get('id')} by {(r.get('user') or {}).get('login')} is "
+                    f"CHANGES_REQUESTED at or after the push cutoff ({cutoff})",
+                )
+            )
+        hold = human_hold(comments, APPROVER_IDS)
+        if hold:
+            reasons.append(("blocker", f"unresolved `BLOCKER:` {hold} (no later `UNBLOCK:`)"))
         clean, why = desk_status(comments, head, self.desk_authors)
         if not clean:
             reasons.append(("desk", why))
 
-        pages = self.api("GET", self.p(f"commits/{head}/check-runs?per_page=100"), paginate=True)
-        runs: list[dict] = []
-        for item in pages:
-            if isinstance(item, dict):
-                runs.extend(item.get("check_runs", [item]))
         if not runs:
             reasons.append(("checks", f"no check-runs at head {head[:7]}"))
         failed, pending = checks_problems(runs)
+        combined = self.api("GET", self.p(f"commits/{head}/status?per_page=100"))
+        s_failed, s_pending = status_problems(combined)
+        failed, pending = failed + s_failed, pending + s_pending
         if failed:
             reasons.append(("checks", "failed check-runs: " + ", ".join(failed)))
         if pending:
             reasons.append(("checks", "pending check-runs: " + ", ".join(pending)))
+        missing = missing_required(runs, REQUIRED_CHECKS)
+        if missing and runs:
+            reasons.append(("checks", "required checks missing at the head: " + ", ".join(missing)))
 
         files = self.api("GET", self.p(f"pulls/{n}/files?per_page=100"), paginate=True)
         prot = mg.protected_hits(files, PROTECTED_GLOBS)
