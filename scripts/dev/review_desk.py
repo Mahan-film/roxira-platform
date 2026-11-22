@@ -11,10 +11,14 @@ chunks, asks a reviewer model for Blocker/Major/Minor findings with file:line, a
 
     Cross-family review (<model id> via <provider>, family <family>) @ <head sha>
     **Blocker** / **Major** / **Minor** ...
-    Verdict: blocker | Verdict: no blocker
+    Verdict: blocker | Verdict: no blocker | Verdict: inconclusive
 
 which scripts/dev/verify_agent_report.py and the hub's merge rule read. A PR is skipped when its latest
 `Cross-family review` comment already names the current head.
+`inconclusive` means a critical file was not fully reviewed (truncated, over the size cap, or summarised
+although it is source): no merge tool accepts it, only `Verdict: no blocker` passes. A critical file that
+is too big for one request is split by hunk instead of cut. Re-run PRs with `--pr N --force` (or
+`--prs 1,2 --force`).
 
 Models: role `review_desk` in config/models.yaml (order = priority; direct provider APIs first, OpenRouter
 last). Base URLs and key slot NAMES: config/key_pool.yaml `providers:`. No model id lives in this file.
@@ -179,6 +183,9 @@ REVIEW_HEADER_RE = re.compile(
 )
 
 
+LATEST_VERDICT_RE = re.compile(r"(?i)^verdict:\s*(no blocker|inconclusive|blocker)\b")
+
+
 def latest_review(comments: list[dict]) -> dict | None:
     """Latest `Cross-family review` comment as {sha, verdict, model}; None when there is none."""
     revs = [c for c in comments if (c.get("body") or "").lstrip().startswith(HEADER_PREFIX)]
@@ -189,9 +196,9 @@ def latest_review(comments: list[dict]) -> dict | None:
     m = REVIEW_HEADER_RE.match(first)
     verdict = None
     for ln in body.splitlines():
-        s = ln.strip().lower()
-        if s.startswith("verdict:"):
-            verdict = "no blocker" if "no blocker" in s else ("blocker" if "blocker" in s else None)
+        v = LATEST_VERDICT_RE.match(ln.strip())
+        if v:
+            verdict = v.group(1).lower()
     return {
         "sha": (m.group("sha").lower() if m else ""),
         "model": (m.group("model") if m and m.group("model") else ""),
@@ -325,6 +332,9 @@ CRITICAL_KEYWORDS = (
     ".env",
     "crypto",
     "encrypt",
+    "tie-out",  # import tie-out engine: checks imported totals against the ledger (#1219)
+    "tie_out",
+    "reconcil",
 )
 
 
@@ -389,33 +399,39 @@ def is_critical(path: str, ladder: dict | None = None) -> bool:
     return False
 
 
-def number_lines(fd: FileDiff, max_chars: int) -> str:
-    """Render one file's hunks with new-file line numbers so the model can cite path:line."""
-    out = [
-        f"### FILE {fd.path}  (+{fd.added} -{fd.removed}{', new file' if fd.new else ''}{', deleted' if fd.deleted else ''})"
-    ]
+def _file_header(fd: FileDiff, part: tuple[int, int] | None = None) -> str:
+    note = f"{', new file' if fd.new else ''}{', deleted' if fd.deleted else ''}"
+    if part:
+        note += f", part {part[0]} of {part[1]}"
+    return f"### FILE {fd.path}  (+{fd.added} -{fd.removed}{note})"
+
+
+_META_PREFIXES = (
+    "diff --git",
+    "index ",
+    "--- ",
+    "+++ ",
+    "new file mode",
+    "deleted file mode",
+    "similarity index",
+    "rename from",
+    "rename to",
+    "old mode",
+    "new mode",
+)
+
+
+def _rows(fd: FileDiff) -> list[tuple[bool, str]]:
+    """One file's hunk lines with new-file line numbers: (starts a hunk, rendered row)."""
+    out: list[tuple[bool, str]] = []
     new_ln = 0
-    size = len(out[0])
     for line in fd.text.splitlines():
+        hunk = False
         if line.startswith("@@"):
             m = re.match(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)", line)
             new_ln = int(m.group(1)) if m else 0
-            row = line
-        elif line.startswith(
-            (
-                "diff --git",
-                "index ",
-                "--- ",
-                "+++ ",
-                "new file mode",
-                "deleted file mode",
-                "similarity index",
-                "rename from",
-                "rename to",
-                "old mode",
-                "new mode",
-            )
-        ):
+            row, hunk = line, True
+        elif line.startswith(_META_PREFIXES):
             continue
         elif line.startswith("+"):
             row = f"{new_ln:>5} +{line[1:]}"
@@ -427,6 +443,15 @@ def number_lines(fd: FileDiff, max_chars: int) -> str:
         else:
             row = f"{new_ln:>5}  {line[1:] if line.startswith(' ') else line}"
             new_ln += 1
+        out.append((hunk, row))
+    return out
+
+
+def number_lines(fd: FileDiff, max_chars: int) -> str:
+    """Render one file's hunks with new-file line numbers so the model can cite path:line."""
+    out = [_file_header(fd)]
+    size = len(out[0])
+    for _, row in _rows(fd):
         size += len(row) + 1
         if size > max_chars:
             out.append(
@@ -437,6 +462,43 @@ def number_lines(fd: FileDiff, max_chars: int) -> str:
     return "\n".join(out)
 
 
+def split_by_hunk(fd: FileDiff, max_chars: int) -> list[str]:
+    """Render one file WITHOUT cutting it: blocks of whole hunks of at most ~max_chars each (a hunk bigger
+    than that is cut on a line boundary; its rows keep their own line numbers). One block when it fits."""
+    budget = max(max_chars - 200, 1_000)
+    pieces: list[list[str]] = []  # whole hunks, or line slices of a hunk that alone exceeds the budget
+    for is_hunk, row in _rows(fd):
+        if is_hunk or not pieces:
+            pieces.append([])
+        pieces[-1].append(row)
+    blocks: list[list[str]] = []
+    size = 0
+    for hunk in pieces:
+        pieces_of_hunk, cur, cur_size = [], [], 0
+        for row in hunk:
+            if cur and cur_size + len(row) + 1 > budget:
+                pieces_of_hunk.append(cur)
+                cur, cur_size = [], 0
+            cur.append(row)
+            cur_size += len(row) + 1
+        pieces_of_hunk.append(cur)
+        for piece in pieces_of_hunk:
+            n = sum(len(r) + 1 for r in piece)
+            if blocks and size + n <= budget:
+                blocks[-1].extend(piece)
+                size += n
+            else:
+                blocks.append(list(piece))
+                size = n
+    if not blocks:
+        return [_file_header(fd)]
+    total = len(blocks)
+    return [
+        "\n".join([_file_header(fd, (i, total) if total > 1 else None), *rows])
+        for i, rows in enumerate(blocks, 1)
+    ]
+
+
 @dataclass
 class DiffPlan:
     chunks: list[list[str]]  # rendered file blocks per chunk
@@ -444,6 +506,34 @@ class DiffPlan:
     not_reviewed: list[str] = field(default_factory=list)
     critical: list[str] = field(default_factory=list)
     truncated: list[str] = field(default_factory=list)
+    skipped_critical: list[str] = field(default_factory=list)  # critical source summarised, not shown
+
+    def coverage_gaps(self) -> list[str]:
+        """Critical paths the reviewer did not see in full: cut, over the size cap, or summarised source.
+        Any entry makes the verdict `inconclusive` (see final_verdict)."""
+        gaps: list[str] = []
+        for p in [*self.truncated, *self.not_reviewed, *self.skipped_critical]:
+            if p in self.critical and p not in gaps:
+                gaps.append(p)
+        return gaps
+
+
+BY_DESIGN_GLOBS = [
+    "*.lock",
+    "*.svg",
+    "*.map",
+    "*.snap",
+    "*.min.js",
+    "*.min.css",
+    "*/__snapshots__/*",
+]
+
+
+def unreviewable_by_design(path: str) -> bool:
+    """Lockfiles, source maps, snapshots and images: summarised on purpose, even on a critical path."""
+    return path.rsplit("/", 1)[-1] in SUMMARISE_NAMES or any(
+        fnmatch.fnmatch(path, g) for g in BY_DESIGN_GLOBS
+    )
 
 
 def plan_diff(
@@ -465,6 +555,11 @@ def plan_diff(
             plan.summarised.append(
                 f"{fd.path}: +{fd.added} -{fd.removed} ({kind}, content not reviewed)"
             )
+            if fd.path in plan.critical and not fd.binary and not unreviewable_by_design(fd.path):
+                plan.skipped_critical.append(fd.path)
+            continue
+        if fd.path in plan.critical:  # never cut a critical file: split it by hunk
+            blocks.extend((fd.path, b) for b in split_by_hunk(fd, file_chars))
             continue
         rendered = number_lines(fd, file_chars)
         if "[... file truncated" in rendered:
@@ -479,7 +574,8 @@ def plan_diff(
             plan.chunks.append(cur)
             cur, size = [], 0
         if len(plan.chunks) >= max_chunks:
-            plan.not_reviewed.append(path)
+            if path not in plan.not_reviewed:
+                plan.not_reviewed.append(path)
             continue
         cur.append(text)
         size += len(text)
@@ -579,6 +675,11 @@ def build_messages(
             "of it; the other parts (and the rest of a file marked 'continued') are reviewed separately, "
             "so do not report them as missing."
         )
+    if any(", part " in b.splitlines()[0] for b in chunk):
+        notes.append(
+            "A file marked 'part k of n' was split by hunk: its other parts are reviewed separately, "
+            "so do not report them as missing."
+        )
     if plan.summarised:
         notes.append("Summarised, not shown: " + "; ".join(plan.summarised[:30]))
     if plan.truncated:
@@ -620,7 +721,17 @@ class Review:
     blocker: list[str] = field(default_factory=list)
     major: list[str] = field(default_factory=list)
     minor: list[str] = field(default_factory=list)
-    verdict: str | None = None
+    verdict: str | None = None  # blocker | no blocker (inconclusive is set by final_verdict only)
+
+
+def final_verdict(rev: Review, plan: DiffPlan) -> str:
+    """The verdict the desk posts. A found blocker stays `blocker`; otherwise any critical path that was not
+    fully reviewed makes it `inconclusive`, which no merge tool accepts (only `no blocker` passes)."""
+    if rev.blocker or rev.verdict == "blocker":
+        return "blocker"
+    if plan.coverage_gaps():
+        return "inconclusive"
+    return rev.verdict or "inconclusive"
 
 
 def strip_thinking(text: str) -> str:
@@ -721,11 +832,22 @@ def format_comment(
         lines.append("- truncated (start only): " + ", ".join(f"`{p}`" for p in plan.truncated))
     if plan.not_reviewed:
         lines.append("- NOT reviewed (size cap): " + ", ".join(f"`{p}`" for p in plan.not_reviewed))
+    verdict = final_verdict(rev, plan)
+    gaps = plan.coverage_gaps()
+    if gaps:
+        lines.append(
+            "- INCONCLUSIVE: critical path(s) not fully reviewed: "
+            + ", ".join(f"`{p}`" for p in gaps)
+            + ". This is not a pass and no merge tool accepts it. Split the PR so each critical file is "
+            "smaller, then re-run the desk with force."
+            if verdict == "inconclusive"
+            else "- critical path(s) not fully reviewed: " + ", ".join(f"`{p}`" for p in gaps)
+        )
     if splits:
         lines.append("- chunk split to fit the provider's request size limit: " + "; ".join(splits))
     lines.append("- providers tried: " + ", ".join(trail))
     lines.append("")
-    lines.append(f"Verdict: {rev.verdict}")
+    lines.append(f"Verdict: {verdict}")
     return redact("\n".join(lines))
 
 
@@ -1163,11 +1285,12 @@ def review_pr(
     comment = format_comment(
         head, served, rev, plan, author_fams=fams, trail=trail, splits=split_notes
     )
+    verdict = final_verdict(rev, plan)
     if dry_run:
-        return Outcome(n, "dry-run", rev.verdict, comment, served)
+        return Outcome(n, "dry-run", verdict, comment, served)
     now_head = json.loads(gh(["pr", "view", str(n), "--json", "headRefOid"]))["headRefOid"]
     if now_head != head:
-        return Outcome(n, "skipped:head moved during review", rev.verdict, comment, served)
+        return Outcome(n, "skipped:head moved during review", verdict, comment, served)
     with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as fh:
         fh.write(comment)
         tmp = fh.name
@@ -1175,7 +1298,7 @@ def review_pr(
         gh(["pr", "comment", str(n), "--body-file", tmp])
     finally:
         os.unlink(tmp)
-    return Outcome(n, "posted", rev.verdict, comment, served)
+    return Outcome(n, "posted", verdict, comment, served)
 
 
 def check_models(log=print) -> int:
@@ -1225,13 +1348,38 @@ def check_models(log=print) -> int:
     return 1 if bad else 0
 
 
+MAX_NAMED_PRS = 20
+
+
+def parse_pr_list(text: str | None) -> list[int]:
+    """`--prs` value: comma list of PR numbers ("1197, #1219"). Empty = none. Raises ValueError on junk."""
+    out: list[int] = []
+    for tok in (text or "").split(","):
+        tok = tok.strip().removeprefix("#")
+        if not tok:
+            continue
+        if not tok.isascii() or not tok.isdigit() or int(tok) < 1:
+            raise ValueError(f"--prs: not a PR number: {tok[:20]!r}")
+        out.append(int(tok))
+    out = list(dict.fromkeys(out))
+    if len(out) > MAX_NAMED_PRS:
+        raise ValueError(f"--prs: at most {MAX_NAMED_PRS} PRs per run")
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument("--pr", type=int, action="append", help="review only this PR (repeatable)")
+    ap.add_argument("--prs", help="review only these PRs: comma list, e.g. 1197,1219")
     ap.add_argument("--dry-run", action="store_true", help="print the comment, do not post")
-    ap.add_argument("--max", type=int, default=5, help="review at most N PRs this run (default 5)")
+    ap.add_argument(
+        "--max",
+        type=int,
+        default=None,
+        help="review at most N PRs this run (default: the PRs named by --pr/--prs, else 5)",
+    )
     ap.add_argument(
         "--force", action="store_true", help="review even if the head already has a review"
     )
@@ -1247,14 +1395,20 @@ def main(argv: list[str] | None = None) -> int:
     load_env_file(os.environ.get("REVIEW_DESK_SECRETS", SECRETS_FILE))
     if a.check_models:
         return check_models()
-    if a.pr:
-        numbers = a.pr
+    try:
+        named = [*(a.pr or []), *parse_pr_list(a.prs)]
+    except ValueError as exc:
+        ap.error(str(exc))
+    named = list(dict.fromkeys(named))
+    if named:
+        numbers = named
     else:
         numbers = [p["number"] for p in list_open_prs() if not p.get("isDraft")]
+    limit = a.max if a.max is not None else (len(named) if named else 5)
     done = failed = 0
     for n in numbers:
-        if done >= a.max:
-            print(f"PR #{n}: not reviewed this run (--max {a.max} reached)", file=sys.stderr)
+        if done >= limit:
+            print(f"PR #{n}: not reviewed this run (--max {limit} reached)", file=sys.stderr)
             continue
         try:
             out = review_pr(
