@@ -21,6 +21,7 @@ import {
   listFiscalYears,
 } from "@/lib/api/accounting-reports-client";
 import { getOnboarding, saveOnboardingProfile, setOnboardingStep } from "@/lib/api/onboarding-client";
+import { updateMyTenantSettings } from "@/lib/api/tenants-client";
 import { formatJalaliDate, formatNumber } from "@/lib/fa-format";
 import { todayJalaliIso } from "@/lib/jalali-date-input";
 import {
@@ -72,14 +73,30 @@ function StepFooter({ state, step, busy, mark, doneLabel, leading, className }: 
   );
 }
 
+const REGISTERED_COUNTRY_PACKS = [
+  { countryCode: "IR", label: "ایران (IR)", currencyCode: "IRR", currencyLabel: "ریال ایران (IRR)" },
+  { countryCode: "MY", label: "مالزی (MY)", currencyCode: "MYR", currencyLabel: "رینگیت مالزی (MYR)" },
+] as const;
+
 function ProfileStep({ state, busy, mark, run, setState, goNext }: StepProps) {
   const [form, setForm] = useState({
     name: state.companyName,
     economicCode: state.economicCode ?? "",
     nationalId: state.nationalId ?? "",
+    countryCode: "IR" as (typeof REGISTERED_COUNTRY_PACKS)[number]["countryCode"],
+    bookCurrencyCode: "IRR" as (typeof REGISTERED_COUNTRY_PACKS)[number]["currencyCode"],
   });
   const [touched, setTouched] = useState(false);
   const errors = profileErrors(form);
+
+  const handleCountryChange = (nextCountry: string) => {
+    const pack = REGISTERED_COUNTRY_PACKS.find((p) => p.countryCode === nextCountry) ?? REGISTERED_COUNTRY_PACKS[0];
+    setForm({
+      ...form,
+      countryCode: pack.countryCode,
+      bookCurrencyCode: pack.currencyCode,
+    });
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -87,6 +104,10 @@ function ProfileStep({ state, busy, mark, run, setState, goNext }: StepProps) {
     if (Object.keys(errors).length > 0) return;
     let saved: OnboardingState | null = null;
     const ok = await run(async () => {
+      await updateMyTenantSettings({
+        countryCode: form.countryCode,
+        bookCurrencyCode: form.bookCurrencyCode,
+      });
       saved = await saveOnboardingProfile(profilePayload(form));
     });
     if (ok && saved) {
@@ -102,6 +123,39 @@ function ProfileStep({ state, busy, mark, run, setState, goNext }: StepProps) {
         <Input id="onb-name" value={form.name} maxLength={150} onChange={(e) => setForm({ ...form, name: e.target.value })} aria-invalid={touched && Boolean(errors.name)} />
         {touched && errors.name && <p className="text-xs text-rose-400">{errors.name}</p>}
       </div>
+      <div className="grid gap-1.5">
+        <Label htmlFor="onb-country">کشور (بسته کشوری)</Label>
+        <select
+          id="onb-country"
+          value={form.countryCode}
+          onChange={(e) => handleCountryChange(e.target.value)}
+          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+        >
+          {REGISTERED_COUNTRY_PACKS.map((pack) => (
+            <option key={pack.countryCode} value={pack.countryCode}>
+              {pack.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="grid gap-1.5">
+        <Label htmlFor="onb-currency">ارز مبنا</Label>
+        <select
+          id="onb-currency"
+          value={form.bookCurrencyCode}
+          onChange={(e) => setForm({ ...form, bookCurrencyCode: e.target.value as typeof form.bookCurrencyCode })}
+          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+        >
+          {REGISTERED_COUNTRY_PACKS.filter((p) => p.countryCode === form.countryCode).map((pack) => (
+            <option key={pack.currencyCode} value={pack.currencyCode}>
+              {pack.currencyLabel}
+            </option>
+          ))}
+        </select>
+      </div>
+      <p className="text-xs text-warning sm:col-span-2" role="note">
+        کشور و ارز مبنا پس از ثبت نخستین سند قطعی قفل می‌شوند و قابل تغییر نیستند.
+      </p>
       <div className="grid gap-1.5">
         <Label htmlFor="onb-economic">شماره اقتصادی (۱۱ تا ۱۴ رقم)</Label>
         <Input id="onb-economic" dir="ltr" inputMode="numeric" value={form.economicCode} onChange={(e) => setForm({ ...form, economicCode: e.target.value })} aria-invalid={touched && Boolean(errors.economicCode)} />
