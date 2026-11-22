@@ -34,7 +34,8 @@ class Sent(list):
 
 def run(tmp_path, api, dry=False, last=A):
     if last:
-        (tmp_path / cmp_.STATE_FILE).write_text(last + "\n")
+        name = cmp_.STATE_FILE + (".dryrun" if dry else "")
+        (tmp_path / name).write_text(last + "\n")
     sent = Sent()
     return cmp_.check(CFG, api, tmp_path, dry, sent), sent
 
@@ -65,15 +66,18 @@ def test_direct_push_alerts_once_and_names_only_the_direct_commit(tmp_path):
     assert cmp_.check(CFG, FakeApi(C), tmp_path, False, sent2) == 0 and not sent2
 
 
-def test_dry_run_sends_nothing_and_writes_no_state(tmp_path):
+def test_dry_run_detects_but_sends_nothing_and_keeps_live_state_untouched(tmp_path):
+    (tmp_path / cmp_.STATE_FILE).write_text(A + "\n")
     rc, sent = run(tmp_path, FakeApi(C, commits=[C]), dry=True)
     assert rc == 1 and not sent
     assert (tmp_path / cmp_.STATE_FILE).read_text().strip() == A
+    assert (tmp_path / (cmp_.STATE_FILE + ".dryrun")).read_text().strip() == C
 
 
-def test_dry_run_first_run_writes_no_state(tmp_path):
+def test_dry_run_first_run_only_writes_the_dryrun_pointer(tmp_path):
     assert cmp_.check(CFG, FakeApi(B), tmp_path, True, Sent()) == 0
     assert not (tmp_path / cmp_.STATE_FILE).exists()
+    assert (tmp_path / (cmp_.STATE_FILE + ".dryrun")).read_text().strip() == B
 
 
 def test_failed_compare_is_treated_as_rewritten_history(tmp_path):

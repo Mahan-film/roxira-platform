@@ -10,6 +10,8 @@ A PR is merged (squash, guarded by its head SHA) only when ALL hold:
   3. every required check is green on the exact head SHA;
   4. a review-desk comment for that exact head SHA says `Verdict: no blocker`, or a human APPROVED
      review on that head from an allowlisted numeric user id;
+  4b. no hold: label `needs-human` / `do-not-merge` (block_labels), no `[needs owner]` in the title, and
+     no unresolved `BLOCKER:` comment from an allowlisted human (numeric id; cleared by a later `UNBLOCK:`);
   5. protected paths (migrations, workflows, deploy scripts, prod compose) are untouched, unless the
      label `owner-approved` was added by an allowlisted user (checked through the timeline API);
   6. the branch is up to date with the base (else the branch is updated and the PR waits a tick).
@@ -43,6 +45,7 @@ DEFAULTS = {
     "required_checks": [
         "Detect changes",
         "Secret scan (new commits only)",
+        "Semgrep CE (new findings)",
         "Agent guards (money, tenant scope, model ids, secrets)",
         "Pytest (unit)",
         "Compose config",
@@ -58,6 +61,14 @@ DEFAULTS = {
         "docker-compose.prod.yml",
     ],
     "review_comment_authors": ["github-actions[bot]"],
+    # Numeric user ids of the review-desk accounts. When non-empty they REPLACE the login check
+    # (logins can be renamed, ids cannot). Real ids live in the box config only, never in git.
+    "review_comment_author_ids": [],
+    "block_labels": ["needs-human", "do-not-merge"],
+    "block_title_markers": ["[needs owner]"],
+    # Rule 6. true = the PR must contain the tip of the base (what the merge queue guaranteed; one merge per
+    # CI cycle). false = like the old ruleset (strict up-to-date off): a green head merges even when behind.
+    "require_up_to_date": True,
     "approver_ids": [],
     "owner_approver_ids": [],
 }
@@ -218,15 +229,43 @@ class Gate:
             return WAIT, "required checks not finished: " + ", ".join(pending)
         return MERGE, ""
 
+    def is_review_author(self, comment: dict) -> bool:
+        user = comment.get("user") or {}
+        ids = set(self.cfg.get("review_comment_author_ids") or [])
+        if ids:
+            return user.get("id") in ids
+        return user.get("login") in set(self.cfg["review_comment_authors"])
+
+    def hold_reason(self, pr: dict, labels: set[str]) -> str:
+        """Explicit human holds: labels, title marker, unresolved BLOCKER: comment from an allowlisted id."""
+        hit = sorted(labels & set(self.cfg["block_labels"]))
+        if hit:
+            return "label " + ", ".join(f"`{x}`" for x in hit)
+        title = (pr.get("title") or "").lower()
+        for m in self.cfg["block_title_markers"]:
+            if m.lower() in title:
+                return f"title contains `{m}`"
+        humans = set(self.cfg["approver_ids"]) | set(self.cfg["owner_approver_ids"])
+        if not humans:
+            return ""
+        state = ""
+        for c in self.api("GET", self.p(f"issues/{pr['number']}/comments?per_page=100"), paginate=True):
+            if (c.get("user") or {}).get("id") not in humans:
+                continue
+            body = (c.get("body") or "").lstrip().upper()
+            if body.startswith("BLOCKER:"):
+                state = "blocked"
+            elif body.startswith("UNBLOCK:"):
+                state = ""
+        return "unresolved `BLOCKER:` comment from an allowlisted user" if state else ""
+
     def review_ok(self, n: int, head: str) -> tuple[bool, str]:
         head = head.lower()
         comments = self.api("GET", self.p(f"issues/{n}/comments?per_page=100"), paginate=True)
-        authors = set(self.cfg["review_comment_authors"])
         revs = [
             c
             for c in comments
-            if (c.get("body") or "").lstrip().startswith("Cross-family review")
-            and (c.get("user") or {}).get("login") in authors
+            if (c.get("body") or "").lstrip().startswith("Cross-family review") and self.is_review_author(c)
         ]
         if revs:
             body = revs[-1]["body"].lstrip()
@@ -276,6 +315,9 @@ class Gate:
             return REFUSE, "base", f"base branch is {pr['base']['ref']}, not {self.cfg['base']}"
         if pr.get("mergeable_state") == "dirty":
             return REFUSE, "conflict", "merge conflicts with the base branch"
+        hold = self.hold_reason(pr, labels)
+        if hold:
+            return REFUSE, "hold", f"on hold: {hold}"
         files = self.api("GET", self.p(f"pulls/{n}/files?per_page=100"), paginate=True)
         hits = protected_hits(files, self.cfg["protected_globs"])
         if hits and not self.owner_approved(n, labels):
@@ -292,6 +334,8 @@ class Gate:
         status, why = self.checks_status(head)
         if status != MERGE:
             return status, "checks", why
+        if not self.cfg.get("require_up_to_date", True):
+            return MERGE, "", "all gates passed (up-to-date not required)"
         cmp = self.api("GET", self.p(f"compare/{self.cfg['base']}...{head}"))
         if cmp.get("behind_by", 0) > 0:
             return BEHIND, "behind", f"behind {self.cfg['base']} by {cmp['behind_by']} commits"
