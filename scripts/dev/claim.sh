@@ -83,3 +83,9 @@ echo "claimed #$issue"
 echo "worktree: $wt"
 echo "branch:   $branch"
 echo "draft PR: $pr"
+# Next free migration id (newest on main and in every open PR, +1000). Never fails a claim.
+if nmid="$(python3 "$wt/scripts/dev/next_migration_id.py" --repo "$wt")"; then
+  echo "next migration id: $nmid (only if your task adds a migration)"
+else
+  echo "next migration id: unavailable, run scripts/dev/next_migration_id.py later"
+fi
