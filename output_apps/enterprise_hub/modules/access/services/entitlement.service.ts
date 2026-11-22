@@ -164,7 +164,14 @@ export class EntitlementService implements OnModuleInit {
         [tenantId, meter, periodKey],
       )) as Array<{ used: string | number }>;
 
-      const used = counterRows[0] ? Number(counterRows[0].used) : 0;
+      let used = counterRows[0] ? Number(counterRows[0].used) : 0;
+      if (!counterRows[0] && meter === 'branches') {
+        const branchCountRows = (await manager.query(
+          `SELECT COUNT(*)::bigint AS used FROM tenant_branches WHERE tenant_id = $1`,
+          [tenantId],
+        )) as Array<{ used: string | number }>;
+        used = branchCountRows[0] ? Number(branchCountRows[0].used) : 0;
+      }
       const allowed = used + n <= limit;
       return {
         allowed,
@@ -200,12 +207,21 @@ export class EntitlementService implements OnModuleInit {
       const limit = this.resolveLimit(planKey, overrides, meter);
       const periodKey = computePeriodKey(meter, now, rolloverDay);
 
-      await manager.query(
-        `INSERT INTO usage_counters (tenant_id, meter, period_key, used)
-         VALUES ($1, $2, $3, 0)
-         ON CONFLICT (tenant_id, meter, period_key) DO NOTHING`,
-        [tenantId, meter, periodKey],
-      );
+      if (meter === 'branches') {
+        await manager.query(
+          `INSERT INTO usage_counters (tenant_id, meter, period_key, used)
+           VALUES ($1, $2, $3, (SELECT COUNT(*)::bigint FROM tenant_branches WHERE tenant_id = $1))
+           ON CONFLICT (tenant_id, meter, period_key) DO NOTHING`,
+          [tenantId, meter, periodKey],
+        );
+      } else {
+        await manager.query(
+          `INSERT INTO usage_counters (tenant_id, meter, period_key, used)
+           VALUES ($1, $2, $3, 0)
+           ON CONFLICT (tenant_id, meter, period_key) DO NOTHING`,
+          [tenantId, meter, periodKey],
+        );
+      }
 
       const rawUpdate = await manager.query(
         `UPDATE usage_counters

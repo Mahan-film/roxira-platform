@@ -79,4 +79,26 @@ describePg('EntitlementService & Usage Metering on PostgreSQL (T145)', () => {
     expect(finalCheck.used).toBe(5);
     expect(finalCheck.allowed).toBe(false);
   });
+
+  it('seeds branches capacity meter from pre-existing tenant_branches rows', async () => {
+    await testDb.scope.within(T1, undefined, async (manager) => {
+      await manager.query(
+        `INSERT INTO tenant_branches (tenant_id, name) VALUES ($1, 'HQ'), ($1, 'West')`,
+        [T1],
+      );
+    });
+    await service.setPlan(T1, 'starter', { branches: 2 }, 1);
+
+    const checkBefore = await service.check(T1, 'branches', 1);
+    expect(checkBefore.used).toBe(2);
+    expect(checkBefore.limit).toBe(2);
+    expect(checkBefore.allowed).toBe(false);
+
+    await expect(service.consume(T1, 'branches', 1)).rejects.toThrow(/limit reached/i);
+
+    await service.release(T1, 'branches', 1);
+    const consumed = await service.consume(T1, 'branches', 1);
+    expect(consumed.used).toBe(2);
+    expect(consumed.remaining).toBe(0);
+  });
 });

@@ -8,8 +8,8 @@ import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
  * - usage_counters: per-tenant, per-meter, per-period usage counter with atomic updates.
  * Both tables have tenant_id, FORCE RLS, and grants to roxira_app.
  */
-export class CreatePlanEntitlementsAndUsageCounters1789900012600 implements MigrationInterface {
-  name = 'CreatePlanEntitlementsAndUsageCounters1789900012600';
+export class CreatePlanEntitlementsAndUsageCounters1789900032000 implements MigrationInterface {
+  name = 'CreatePlanEntitlementsAndUsageCounters1789900032000';
 
   public async up(q: QueryRunner): Promise<void> {
     await q.query(`
@@ -53,6 +53,13 @@ export class CreatePlanEntitlementsAndUsageCounters1789900012600 implements Migr
     await q.query(`
       DO $$
       BEGIN
+        IF to_regclass('public.tenant_branches') IS NOT NULL THEN
+          INSERT INTO "usage_counters" ("tenant_id", "meter", "period_key", "used")
+          SELECT "tenant_id", 'branches', 'current', COUNT(*)::bigint
+            FROM "tenant_branches"
+           GROUP BY "tenant_id"
+          ON CONFLICT ("tenant_id", "meter", "period_key") DO NOTHING;
+        END IF;
         IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'roxira_app') THEN
           GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "tenant_plans", "usage_counters" TO roxira_app;
         END IF;
