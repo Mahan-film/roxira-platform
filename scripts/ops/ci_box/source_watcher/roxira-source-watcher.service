@@ -1,0 +1,14 @@
+[Unit]
+Description=Roxira source watcher (R22 pilot, dry-run unless SOURCE_WATCHER_ARGS=--commit)
+ConditionPathExists=!%h/.config/roxira-source-watcher/STOP
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/roxira-source-watcher/env
+ExecStart=/usr/bin/python3 %h/.local/share/roxira-source-watcher/source_watcher.py run --config %h/.config/roxira-source-watcher/sources.json $SOURCE_WATCHER_ARGS
+# Low priority (box brief section 7: priority 5): never compete with the phone stack or CI.
+Nice=15
+CPUWeight=10
+MemoryHigh=384M
+MemoryMax=512M
+TimeoutStartSec=900

@@ -1,0 +1,124 @@
+{
+ "_note": "Public pages only. Pilot lists the front page of each host; refine list_urls and link_regex after the first dry-run report. qavanin.ir and other challenge hosts are deliberately absent (docs/legal/SOURCES_ACCESS.md). A host with ca_file pins an extra CA for that host; verification is never disabled.",
+ "delay_s": 3.0,
+ "max_requests_per_run": 40,
+ "sources": [
+  {
+   "id": "rrk",
+   "list_urls": [
+    "https://rrk.ir/"
+   ],
+   "tier": "official",
+   "doc_type": "gazette_item",
+   "issuer": "Official Gazette"
+  },
+  {
+   "id": "dotic",
+   "list_urls": [
+    "https://dotic.ir/"
+   ],
+   "tier": "official",
+   "doc_type": "legislation_news",
+   "issuer": "Presidency legal deputy (DOTIC)"
+  },
+  {
+   "id": "majlis_rc",
+   "list_urls": [
+    "https://rc.majlis.ir/"
+   ],
+   "tier": "official",
+   "doc_type": "law",
+   "issuer": "Parliament Research Center"
+  },
+  {
+   "id": "divan_edalat",
+   "list_urls": [
+    "https://divan-edalat.ir/"
+   ],
+   "tier": "official",
+   "doc_type": "admin_court_ruling",
+   "issuer": "Administrative Justice Court"
+  },
+  {
+   "id": "cbi",
+   "list_urls": [
+    "https://cbi.ir/"
+   ],
+   "tier": "official",
+   "doc_type": "circular",
+   "issuer": "Central Bank"
+  },
+  {
+   "id": "shora_gc",
+   "list_urls": [
+    "https://shora-gc.ir/"
+   ],
+   "tier": "official",
+   "doc_type": "guardian_council",
+   "issuer": "Guardian Council"
+  },
+  {
+   "id": "dolat",
+   "list_urls": [
+    "https://dolat.ir/"
+   ],
+   "tier": "official",
+   "doc_type": "cabinet_decision",
+   "issuer": "Cabinet"
+  },
+  {
+   "id": "mimt",
+   "list_urls": [
+    "https://mimt.gov.ir/"
+   ],
+   "tier": "official",
+   "doc_type": "trade_circular",
+   "issuer": "Ministry of Industry, Mine and Trade"
+  },
+  {
+   "id": "icbar",
+   "list_urls": [
+    "https://icbar.org/"
+   ],
+   "tier": "official",
+   "doc_type": "bar_circular",
+   "issuer": "Central Bar Association"
+  },
+  {
+   "id": "iranbar",
+   "list_urls": [
+    "https://iranbar.org/"
+   ],
+   "tier": "official",
+   "doc_type": "bar_circular",
+   "issuer": "Iran Bar Association"
+  },
+  {
+   "id": "eadl",
+   "list_urls": [
+    "https://eadl.ir/"
+   ],
+   "tier": "official",
+   "doc_type": "judiciary",
+   "issuer": "Judiciary (eadl)"
+  },
+  {
+   "id": "adliran",
+   "list_urls": [
+    "https://adliran.ir/"
+   ],
+   "tier": "official",
+   "doc_type": "judiciary",
+   "issuer": "Judiciary (adliran)"
+  },
+  {
+   "id": "setad",
+   "list_urls": [
+    "https://setadiran.ir/"
+   ],
+   "tier": "official",
+   "doc_type": "auction_listing",
+   "issuer": "Setad (public listing pages only, no login)"
+  }
+ ]
+}

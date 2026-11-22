@@ -1,0 +1,10 @@
+[Unit]
+Description=Roxira source watcher, three runs a day outside the 00:30-04:30 night window
+
+[Timer]
+OnCalendar=*-*-* 07:40,13:40,19:40
+RandomizedDelaySec=20min
+Persistent=false
+
+[Install]
+WantedBy=timers.target
