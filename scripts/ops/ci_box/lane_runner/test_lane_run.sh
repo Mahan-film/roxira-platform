@@ -45,6 +45,35 @@ now="$(python3 -c 'import datetime;print(datetime.datetime.now(datetime.timezone
 for _ in 1 2; do printf '{"ts":"%s","lane":"L7","status":"ok","cost_usd":0,"tokens":null}\n' "$now" >>"$T/state/logs/lane-run.jsonl"; done
 expect_rc "over-budget lane stops" 4 "$HERE/lane-run" --lane L7 --public --task x --dry-run
 
+# ladder steps: a per-call --tier picks the group; the key's groups pass, best-all is refused locally (not a 401)
+expect_rc "tier light dry-run (config says strong)" 0 "$HERE/lane-run" --lane L5 --public --task x --tier light --dry-run
+grep -q 'group=agent-light-free' "$T/out" && ok "light -> agent-light-free" || bad "light group: $(cat "$T/out")"
+expect_rc "tier paid dry-run" 0 "$HERE/lane-run" --lane L5 --public --task x --tier paid --dry-run
+grep -q 'group=agent-free-paid' "$T/out" && ok "paid -> agent-free-paid" || bad "paid group"
+expect_rc "tier best refused: group not on the box key" 3 "$HERE/lane-run" --lane L5 --public --task x --tier best --dry-run
+grep -q 'not allowed for this box key' "$T/out" && ok "best refusal names the key rule" || bad "best refusal text"
+printf 'ALLOWED_GROUPS=agent-light-free\n' >>"$LANE_RUN_CONF"
+expect_rc "ALLOWED_GROUPS narrows the groups" 3 "$HERE/lane-run" --lane L5 --public --task x --tier paid --dry-run
+printf 'ALLOWED_GROUPS=agent-free,agent-light-free,agent-strong-free,agent-free-paid\n' >>"$LANE_RUN_CONF"
+
+# kill switch file stops before any model call; budget file must exist (a missing file would mean no caps)
+touch "$T/state/STOP"
+expect_rc "STOP file stops the run" 4 "$HERE/lane-run" --lane L6 --public --task x --dry-run
+grep -q 'stop file present' "$T/out" && grep -q '"status": "stopped"' "$T/state/logs/lane-run.jsonl" && ok "stop is logged" || bad "stop log"
+expect_rc "--budget still works while stopped" 0 "$HERE/lane-run" --budget --lane L6
+rm -f "$T/state/STOP"
+cp "$LANE_RUN_CONF" "$T/conf.bak"
+printf 'BUDGETS=%s\n' "$T/missing.json" >>"$LANE_RUN_CONF"
+expect_rc "missing budgets file refuses to run uncapped" 2 "$HERE/lane-run" --lane L6 --public --task x --dry-run
+cp "$T/conf.bak" "$LANE_RUN_CONF"
+# a symlinked lane-run (as installed in ~/.local/bin) must still find the repo's budgets file
+mkdir -p "$T/bin" && ln -s "$HERE/lane-run" "$T/bin/lane-run"
+cp "$LANE_RUN_CONF" "$T/conf.bak"
+grep -v '^BUDGETS=' "$T/conf.bak" >"$LANE_RUN_CONF"
+"$T/bin/lane-run" --budget --lane l5 >"$T/out" 2>&1
+grep -q '"attempts_per_day": 12.0' "$T/out" && ok "symlink finds the lane caps" || bad "symlink caps: $(cat "$T/out")"
+cp "$T/conf.bak" "$LANE_RUN_CONF"
+
 # installers: dry-run touches nothing
 before="$(find "$HOME" | wc -l)"
 bash "$HERE/install_user.sh" >"$T/out" 2>&1; rc=$?

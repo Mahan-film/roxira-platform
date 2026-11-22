@@ -5,7 +5,7 @@
 set -euo pipefail
 for a in "$@"; do
   if [ "$a" = "--model" ]; then
-    echo "[taskq-runner] direct-provider steps are not available on the box; queue tasks with --ladder free (or best,free)" >&2
+    echo "[taskq-runner] direct-provider steps are not available on the box; set TASKQ_LADDER=light,free,paid (or pass --ladder) and see docs/ops/BOX_LANE_POLICY.md" >&2
     exit 3
   fi
 done
