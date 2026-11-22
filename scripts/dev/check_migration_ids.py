@@ -7,15 +7,21 @@ with origin/main:
   1. the id is strictly greater than the newest id on origin/main;
   2. no two added files share an id (and none reuses an id already on origin/main);
   3. the class name and `name = '...'` end with the file id.
---open-prs (needs gh and network) also fails when an added id is used by a migration file with a
-different path in another open PR. The same path in another open PR is allowed: that is a stacked
-PR carrying its parent's file (identical means the same file name, which includes the id; the check
-does not compare file contents). When GitHub cannot be asked, the open-PR check is skipped with a
-WARNING on stderr, unless --require-open-prs is given (CI sets it): then that is a failure.
-Limits of the open-PR lookup: the newest 200 open PRs, and gh lists at most 100 files per PR.
+--open-prs (needs gh and network) also fails when an added id is used by a migration file in another
+open PR, unless it is the same path with the same content (a stacked PR carrying its parent's file:
+the blob SHA is compared, so two different files that share a name and an id still fail). The PR
+being checked is left out by NUMBER (GITHUB_REF refs/pull/N/merge, a merge-queue ref
+gh-readonly-queue/.../pr-N-<sha>, or --own-pr; locally `gh pr view` names it), never by branch name:
+fork PRs reuse names such as patch-1. When GitHub cannot be asked, the open-PR check is skipped
+with a WARNING on stderr, unless --require-open-prs is given (CI sets it): then that is a failure.
+Lookup limits are failures, not silent: `gh pr list` returns at most --pr-limit PRs (reaching the
+limit counts as "cannot be asked") and at most 100 files per PR (a PR with more files, or whose
+changedFiles is above the listed files, is read again with `gh api --paginate`).
+A PR checked now can still collide with a PR that appears later; the merge_group run re-checks
+against the then-open PRs, so the gate job must be a required check (see ci.yml migration-gate).
 
 Usage: python3 scripts/dev/check_migration_ids.py [--base origin/main] [--dir DIR]
-           [--open-prs [--require-open-prs] [--own-branch NAME]]
+           [--open-prs [--require-open-prs] [--own-pr N] [--pr-limit N]]
 Exit 0 = ok, 1 = problem, 2 = usage/git error.
 """
 from __future__ import annotations
@@ -30,6 +36,13 @@ import sys
 
 MIGRATION_DIR = "output_apps/enterprise_hub/migrations"
 FILE_RE = re.compile(r"^(\d{13})-([A-Za-z0-9_]+)\.ts$")
+PR_LIMIT = 300  # `gh pr list` stops here; reaching it means some open PRs were not listed
+FILES_CAP = 100  # `gh pr list --json files` returns at most this many files per PR
+# One tab-separated line per migration file of a PR: path, blob sha (removed files are skipped).
+API_FILES_JQ = (
+    '.[] | select(.status != "removed") | select(.filename | startswith("'
+    + MIGRATION_DIR + '/")) | [.filename, .sha] | @tsv'
+)
 
 
 def git(*args: str, cwd: str | None = None, check: bool = True) -> str:
@@ -59,58 +72,110 @@ def base_ids(base: str, mig_dir: str, cwd: str | None = None) -> set[str]:
     return {s[0] for s in map(split, out.splitlines()) if s}
 
 
-def open_pr_entries(
-    cwd: str | None, exclude_branch: str | None = None
-) -> tuple[list[tuple[int, str, str]] | None, str]:
-    """(PR number, id, path) for every migration file in the open PRs, or (None, reason).
-
-    A PR whose head branch is `exclude_branch` is left out. Non-JSON or failed gh output counts
-    as "cannot be asked" so the caller can decide between a warning and a failure.
-    """
+def run_gh(args: list[str], cwd: str | None) -> tuple[str | None, str]:
+    """(stdout, "") or (None, reason). A missing gh, a timeout or a non-zero exit is a reason."""
     if not shutil.which("gh"):
         return None, "gh not installed"
     try:
-        p = subprocess.run(
-            ["gh", "pr", "list", "--state", "open", "--limit", "200",
-             "--json", "number,headRefName,files"],
-            cwd=cwd, capture_output=True, text=True, timeout=120,
-        )
+        p = subprocess.run(["gh", *args], cwd=cwd, capture_output=True, text=True, timeout=120)
     except (OSError, subprocess.SubprocessError) as e:
         return None, f"gh failed: {e}"
     if p.returncode != 0:
         return None, "gh failed: " + (p.stderr.strip().splitlines() or ["?"])[-1]
+    return p.stdout, ""
+
+
+def pr_migration_files(cwd: str | None, number: int) -> tuple[dict[str, str] | None, str]:
+    """path -> blob sha for every migration file of one PR, all pages, or (None, reason)."""
+    out, why = run_gh(
+        ["api", "--paginate", f"repos/{{owner}}/{{repo}}/pulls/{number}/files?per_page=100",
+         "--jq", API_FILES_JQ], cwd)
+    if out is None:
+        return None, why
+    files: dict[str, str] = {}
+    for line in out.splitlines():
+        path, _, sha = line.partition("\t")
+        if split(path) and sha:
+            files[path] = sha
+    return files, ""
+
+
+def open_pr_entries(
+    cwd: str | None, own_pr: int | None = None, limit: int = PR_LIMIT
+) -> tuple[list[tuple[int, str, str]] | None, str]:
+    """(PR number, id, path) for every migration file in the open PRs, or (None, reason).
+
+    PR number `own_pr` is left out. Reaching `limit` PRs, or any failed or unusable gh output,
+    counts as "cannot be asked" so the caller can decide between a warning and a failure. A PR
+    whose file list may be cut off (100 files, or changedFiles above what was listed) is read
+    again, in full, with `gh api --paginate`.
+    """
+    out, why = run_gh(
+        ["pr", "list", "--state", "open", "--limit", str(limit),
+         "--json", "number,changedFiles,files"], cwd)
+    if out is None:
+        return None, why
     try:
-        prs = json.loads(p.stdout or "[]")
-        out: list[tuple[int, str, str]] = []
+        prs = json.loads(out or "[]")
+        if len(prs) >= limit:
+            return None, f"{len(prs)} open PRs reached the lookup limit ({limit}); some are not listed"
+        entries: list[tuple[int, str, str]] = []
         for pr in prs:
-            if exclude_branch and pr.get("headRefName") == exclude_branch:
+            number = int(pr["number"])
+            if own_pr is not None and number == own_pr:
                 continue
-            for f in pr.get("files") or []:
+            files = pr.get("files") or []
+            changed = pr.get("changedFiles")
+            if len(files) >= FILES_CAP or (isinstance(changed, int) and changed > len(files)):
+                full, why = pr_migration_files(cwd, number)
+                if full is None:
+                    return None, f"PR #{number} has more files than gh lists and the full list failed: {why}"
+                entries.extend((number, split(path)[0], path) for path in full)  # type: ignore[index]
+                continue
+            for f in files:
                 path = f.get("path", "")
                 s = split(path)
                 if s and path.startswith(MIGRATION_DIR + "/"):
-                    out.append((int(pr["number"]), s[0], path))
+                    entries.append((number, s[0], path))
     except (ValueError, TypeError, KeyError, AttributeError) as e:
         return None, f"gh returned unusable output: {e}"
-    return out, ""
+    return entries, ""
 
 
-def open_pr_ids(cwd: str | None, own_branch: str) -> tuple[dict[str, list[str]] | None, str]:
-    """id -> ['PR #n (path)'] over other open PRs, or (None, reason) when it cannot be asked."""
-    entries, why = open_pr_entries(cwd, own_branch)
+def open_pr_ids(
+    cwd: str | None, own_pr: int | None, limit: int = PR_LIMIT
+) -> tuple[dict[str, list[tuple[int, str]]] | None, str]:
+    """id -> [(PR number, path)] over the other open PRs, or (None, reason) when it cannot be asked."""
+    entries, why = open_pr_entries(cwd, own_pr, limit)
     if entries is None:
         return None, why
-    seen: dict[str, list[str]] = {}
+    seen: dict[str, list[tuple[int, str]]] = {}
     for number, mid, path in entries:
-        seen.setdefault(mid, []).append(f"PR #{number} ({path})")
+        seen.setdefault(mid, []).append((number, path))
     return seen, ""
 
 
-def current_branch(cwd: str | None = None) -> str:
-    """Own head branch: GITHUB_HEAD_REF on a pull_request run (the checkout is detached), else git."""
-    return os.environ.get("GITHUB_HEAD_REF") or git(
-        "rev-parse", "--abbrev-ref", "HEAD", cwd=cwd, check=False
-    ).strip()
+def own_pr_number(env: dict[str, str] | None = None) -> int | None:
+    """This run's PR number from GITHUB_REF: refs/pull/N/merge, or a merge-queue branch ref."""
+    ref = (env if env is not None else os.environ).get("GITHUB_REF", "")
+    m = re.fullmatch(r"refs/pull/(\d+)/(?:merge|head)", ref) or re.fullmatch(
+        r"refs/heads/gh-readonly-queue/.+/pr-(\d+)-[0-9a-f]+", ref)
+    return int(m.group(1)) if m else None
+
+
+def local_pr_number(cwd: str | None = None) -> int | None:
+    """Local run: the open PR of the current branch (gh resolves it, fork-aware), else None."""
+    out, _why = run_gh(["pr", "view", "--json", "number", "--jq", ".number"], cwd)
+    try:
+        return int(out.strip()) if out else None
+    except ValueError:
+        return None
+
+
+def local_sha(path: str, cwd: str | None = None) -> str | None:
+    """Git blob sha of the file on disk (what `gh api .../files` calls `sha` for the other PR)."""
+    p = subprocess.run(["git", "hash-object", "--", path], cwd=cwd, capture_output=True, text=True)
+    return p.stdout.strip() or None if p.returncode == 0 else None
 
 
 def check(
@@ -119,7 +184,8 @@ def check(
     open_prs: bool,
     cwd: str | None = None,
     require_open_prs: bool = False,
-    own_branch: str | None = None,
+    own_pr: int | None = None,
+    pr_limit: int = PR_LIMIT,
 ) -> list[str]:
     added = added_files(base, mig_dir, cwd)
     if not added:
@@ -156,20 +222,38 @@ def check(
         if nm and not nm.group(1).endswith(mid):
             problems.append(f"{f}: name = '{nm.group(1)}' must end with the file id {mid}")
     if open_prs:
-        own = own_branch if own_branch is not None else current_branch(cwd)
-        theirs, why = open_pr_ids(cwd, own)
+        if own_pr is None and os.environ.get("GITHUB_ACTIONS") != "true":
+            own_pr = local_pr_number(cwd)
+        theirs, why = open_pr_ids(cwd, own_pr, pr_limit)
         if theirs is None:
             if require_open_prs:
                 problems.append(f"open-PR id check could not run ({why}); CI requires it")
             else:
                 print(f"WARNING: --open-prs check skipped: {why}", file=sys.stderr)
         else:
+            blobs: dict[int, dict[str, str] | None] = {}
             for f in added:
                 mid = split(f)[0]  # type: ignore[index]
-                for other in theirs.get(mid, []):
-                    if other.endswith(f"({f})"):
-                        continue  # same file in a stacked PR: allowed
-                    problems.append(f"{f}: id {mid} is also used by {other}; one of the two must change")
+                for number, path in theirs.get(mid, []):
+                    if path != f:
+                        problems.append(
+                            f"{f}: id {mid} is also used by PR #{number} ({path}); one of the two must change")
+                        continue
+                    # Same path: allowed only as a stacked PR carrying the identical file.
+                    if number not in blobs:
+                        blobs[number] = pr_migration_files(cwd, number)[0]
+                    theirs_sha = (blobs[number] or {}).get(path)
+                    mine = local_sha(f, cwd)
+                    if theirs_sha is None or mine is None:
+                        msg = f"{f}: cannot compare its content with PR #{number}"
+                        if require_open_prs:
+                            problems.append(msg + "; CI requires it")
+                        else:
+                            print(f"WARNING: {msg}", file=sys.stderr)
+                    elif theirs_sha != mine:
+                        problems.append(
+                            f"{f}: PR #{number} has a file with the same name and id but different content; "
+                            f"a stacked PR must carry the identical file, otherwise one of the two must change")
     return problems
 
 
@@ -181,14 +265,17 @@ def main() -> int:
     ap.add_argument("--require-open-prs", action="store_true",
                     help="fail instead of warning when open PRs cannot be listed "
                          "(default: on when GITHUB_ACTIONS=true)")
-    ap.add_argument("--own-branch", default=None,
-                    help="head branch of this PR, left out of the lookup "
-                         "(default: GITHUB_HEAD_REF, else the current git branch)")
+    ap.add_argument("--own-pr", type=int, default=None,
+                    help="number of this PR, left out of the lookup (default: from GITHUB_REF, "
+                         "else `gh pr view` for the current branch)")
+    ap.add_argument("--pr-limit", type=int, default=PR_LIMIT,
+                    help="open PRs to list; reaching it counts as 'cannot be asked'")
     ap.add_argument("--repo", default=None, help="repo directory (default: cwd)")
     a = ap.parse_args()
     require = a.require_open_prs or os.environ.get("GITHUB_ACTIONS") == "true"
     try:
-        problems = check(a.base, a.dir, a.open_prs, a.repo, require, a.own_branch)
+        own_pr = a.own_pr if a.own_pr is not None else own_pr_number()
+        problems = check(a.base, a.dir, a.open_prs, a.repo, require, own_pr, a.pr_limit)
     except (RuntimeError, subprocess.SubprocessError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2

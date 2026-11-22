@@ -544,6 +544,48 @@ jobs:
           export SQUAWK
           python3 scripts/dev/lint_migrations_squawk.py --base origin/main
 
+  migration-gate:
+    name: Migration gate
+    # Always runs, like Frontend gate, so it can be a required check even on PRs with no
+    # migrations, where migration-lint is skipped. A required check that is skipped is not
+    # satisfied by the ruleset, and migration-lint itself is not required (a failure there
+    # would not stop an auto-merge). The merge queue runs this again against the then-open PRs,
+    # which closes the window where two PRs claim one id at the same moment.
+    needs: [pick-runner, changes, migration-lint]
+    if: always()
+    runs-on: ${{ fromJSON(needs.pick-runner.outputs.light || '"ubuntu-latest"') }}
+    timeout-minutes: 5
+    steps:
+      - name: Verify migration result
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          LINT_RESULT: ${{ needs.migration-lint.result }}
+          MIGRATIONS_CHANGED: ${{ needs.changes.outputs.migrations }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          echo "changes=$CHANGES_RESULT migration-lint=$LINT_RESULT migrations_changed=$MIGRATIONS_CHANGED event=$EVENT"
+          if [ "$CHANGES_RESULT" != "success" ]; then
+            echo "::error::Detect changes job ended as '$CHANGES_RESULT'; cannot verify migrations."
+            exit 1
+          fi
+          case "$LINT_RESULT" in
+            success)
+              echo "Migration ids + Squawk passed."
+              ;;
+            skipped)
+              # migration-lint only runs on pull_request and merge_group events with migration changes.
+              if [ "$MIGRATIONS_CHANGED" = "true" ] && { [ "$EVENT" = "pull_request" ] || [ "$EVENT" = "merge_group" ]; }; then
+                echo "::error::migration-lint was skipped even though migrations changed."
+                exit 1
+              fi
+              echo "No migration check needed for this event; migration-lint skipped as expected."
+              ;;
+            *)
+              echo "::error::migration-lint ended as '$LINT_RESULT' (failure or cancelled)."
+              exit 1
+              ;;
+          esac
+
   frontend:
     name: Frontend lint + build
     needs: [pick-runner, changes]

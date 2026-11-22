@@ -5,10 +5,11 @@ stdout is only the 13-digit id, so a script can use it: id="$(python3 scripts/de
 Warnings go to stderr. When GitHub cannot be asked, the id is computed from origin/main alone and a
 WARNING says so (exit 0); with --require-open-prs (CI) that is an error (exit 1). Open PRs include
 this branch's own PR, so a second call after you added a migration gives the id after yours.
-Limits: the newest 200 open PRs, and gh lists at most 100 files per PR.
+Lookup limits (see check_migration_ids.py): reaching --pr-limit open PRs counts as "cannot be asked"; a PR
+with more than 100 files is read in full with `gh api --paginate`.
 
 Usage: python3 scripts/dev/next_migration_id.py [--base origin/main] [--dir DIR] [--require-open-prs]
-           [--repo DIR]
+           [--pr-limit N] [--repo DIR]
 Exit 0 = printed an id, 1 = open PRs required but unavailable, 2 = usage/git error.
 """
 from __future__ import annotations
@@ -26,13 +27,14 @@ STEP = 1000
 
 
 def next_id(
-    base: str, mig_dir: str, cwd: str | None = None, require_open_prs: bool = False
+    base: str, mig_dir: str, cwd: str | None = None, require_open_prs: bool = False,
+    pr_limit: int = cmi.PR_LIMIT,
 ) -> tuple[str | None, str, str]:
     """(id or None, warning, source) where source says which ids were counted."""
     ids = set(cmi.base_ids(base, mig_dir, cwd))
     source = base
     warning = ""
-    entries, why = cmi.open_pr_entries(cwd)
+    entries, why = cmi.open_pr_entries(cwd, None, pr_limit)
     if entries is None:
         warning = f"open PRs not checked ({why}); the id counts {base} only and may collide"
         if require_open_prs:
@@ -51,11 +53,13 @@ def main() -> int:
     ap.add_argument("--require-open-prs", action="store_true",
                     help="fail instead of warning when open PRs cannot be listed "
                          "(default: on when GITHUB_ACTIONS=true)")
+    ap.add_argument("--pr-limit", type=int, default=cmi.PR_LIMIT,
+                    help="open PRs to list; reaching it counts as 'cannot be asked'")
     ap.add_argument("--repo", default=None, help="repo directory (default: cwd)")
     a = ap.parse_args()
     require = a.require_open_prs or os.environ.get("GITHUB_ACTIONS") == "true"
     try:
-        nid, warning, _source = next_id(a.base, a.dir, a.repo, require)
+        nid, warning, _source = next_id(a.base, a.dir, a.repo, require, a.pr_limit)
     except (RuntimeError, subprocess.SubprocessError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
