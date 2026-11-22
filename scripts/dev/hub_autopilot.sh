@@ -7,6 +7,7 @@
 # 3. prints new REPORT comments on issue 592 since the last run (for the hub to verify) and PRs
 #    waiting on a blocker fix, so a scheduled hub session only spends tokens on judgment.
 set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="${ROXIRA_REPO:-Mahan-film/roxira-platform}"
 STATE="${HUB_AUTOPILOT_STATE:-$HOME/.cache/roxira/hub_autopilot.last}"
 DRY=0; [ "${1:-}" = "--dry-run" ] && DRY=1
@@ -40,17 +41,15 @@ while read -r n head; do
       fi
       ;;
   esac
-  info=$(gh pr view "$n" --repo "$REPO" --json headRefOid,comments,statusCheckRollup,mergeable,autoMergeRequest --jq '
-    .headRefOid as $h
-    | ([.statusCheckRollup[]|(.conclusion//.state//.status)]|map(select(.!="SUCCESS" and .!="SKIPPED" and .!="NEUTRAL"))|length) as $bad
-    | ([.comments[]|select(.body|startswith("Cross-family"))]|last) as $c
-    | (if $c==null then "none" elif ($c.body|contains($h)) then (if ($c.body|test("Verdict: no blocker")) then "ok" else "blocker" end) else "stale" end) as $v
-    | "\($bad) \($v) \(.mergeable) \(.autoMergeRequest!=null)"')
+  info=$(gh pr view "$n" --repo "$REPO" --json headRefOid,comments,statusCheckRollup,mergeable,autoMergeRequest \
+    --jq "$(cat "$HERE/hub_autopilot_verdict.jq")")
   read -r bad verdict mergeable queued <<<"$info"
   if [ "$bad" = 0 ] && [ "$verdict" = ok ] && [ "$mergeable" = MERGEABLE ] && [ "$queued" = false ]; then
     if [ $DRY -eq 1 ]; then echo "would queue #$n"; else gh pr merge "$n" --repo "$REPO" --auto --squash >/dev/null 2>&1 && echo "queued #$n" || echo "WARN could not queue #$n"; fi
   elif [ "$verdict" = blocker ]; then
     echo "blocker  #$n (lane fixes it)"
+  elif [ "$verdict" = inconclusive ]; then
+    echo "inconclusive  #$n (critical file not fully reviewed: split the PR, never queued)"
   fi
 done
 

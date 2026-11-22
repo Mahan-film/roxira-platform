@@ -347,24 +347,93 @@ class FileDiff:
     new: bool = False
     deleted: bool = False
     binary: bool = False
+    old_path: str = ""  # the path before a rename/copy, or the `--- a/` path
+    unparsed: bool = False  # no trustworthy path: treated as critical (fail closed)
+
+
+_C_ESCAPES = {"a": 7, "b": 8, "f": 12, "n": 10, "r": 13, "t": 9, "v": 11, '"': 34, "\\": 92}
+
+
+def unquote_path(s: str) -> str:
+    """Undo git's C-style quoting of a path (octal bytes for non-ASCII, \\t, \\", \\\\)."""
+    if len(s) < 2 or not (s.startswith('"') and s.endswith('"')):
+        return s
+    raw, out, i = s[1:-1], bytearray(), 0
+    while i < len(raw):
+        if raw[i] == "\\" and i + 1 < len(raw):
+            octal = re.match(r"[0-7]{1,3}", raw[i + 1 :])
+            if octal:
+                out.append(int(octal.group(0), 8) & 0xFF)
+                i += 1 + len(octal.group(0))
+                continue
+            if raw[i + 1] in _C_ESCAPES:
+                out.append(_C_ESCAPES[raw[i + 1]])
+                i += 2
+                continue
+        out += raw[i].encode("utf-8")
+        i += 1
+    return out.decode("utf-8", "replace")
+
+
+def _side_path(token: str, prefix: str) -> str | None:
+    """`a/<path>` or `b/<path>` from a `---`/`+++` line (git adds a trailing tab when the path has a space)."""
+    tok = unquote_path(token if token.startswith('"') else token.rstrip("\t"))
+    return tok[len(prefix) :] if tok.startswith(prefix) and len(tok) > len(prefix) else None
+
+
+def _header_path(rest: str) -> str | None:
+    """Path from `diff --git a/<p> b/<p>` when both sides name one file; None when it cannot be told apart."""
+    quoted = re.fullmatch(r'("(?:[^"\\]|\\.)*") ("(?:[^"\\]|\\.)*")', rest)
+    if quoted:
+        a, b = _side_path(quoted.group(1), "a/"), _side_path(quoted.group(2), "b/")
+        return b if a is not None and a == b else None
+    if not rest.startswith("a/"):
+        return None
+    body = rest[2:]
+    half, odd = divmod(len(body) - 3, 2)  # body == p + " b/" + p
+    if odd or half < 1 or body[half:] != " b/" + body[:half]:
+        return None
+    return body[:half]
 
 
 def split_diff(diff: str) -> list[FileDiff]:
+    """Split a unified diff per file. The path comes from the `rename to` / `+++ b/` / `--- a/` lines (read only
+    before the first hunk, so file content cannot forge them), else from an unambiguous header; a file whose
+    path cannot be told is marked `unparsed`, which plan_diff treats as critical."""
     files: list[FileDiff] = []
     cur: FileDiff | None = None
     buf: list[str] = []
+    in_hunk = False
     for line in diff.splitlines():
         if line.startswith("diff --git "):
             if cur:
                 cur.text = "\n".join(buf)
                 files.append(cur)
-            m = re.match(r"diff --git a/(.*) b/(.*)$", line)
-            cur = FileDiff(path=m.group(2) if m else line[11:], text="")
+            path = _header_path(line[11:])
+            cur = FileDiff(path=path or line[11:], text="", unparsed=path is None)
             buf = [line]
+            in_hunk = False
             continue
         if cur is None:
             continue
         buf.append(line)
+        if not in_hunk:
+            if line.startswith("@@"):
+                in_hunk = True
+            elif line.startswith(("rename to ", "copy to ")):
+                cur.path, cur.unparsed = unquote_path(line.split(" to ", 1)[1]), False
+            elif line.startswith(("rename from ", "copy from ")):
+                cur.old_path = unquote_path(line.split(" from ", 1)[1])
+            elif line.startswith("+++ "):
+                p = _side_path(line[4:], "b/")
+                if p is not None:
+                    cur.path, cur.unparsed = p, False
+            elif line.startswith("--- "):
+                p = _side_path(line[4:], "a/")
+                if p is not None:
+                    cur.old_path = p
+                    if cur.unparsed:  # a deleted file has no `+++ b/` line
+                        cur.path, cur.unparsed = p, False
         if line.startswith("new file mode"):
             cur.new = True
         elif line.startswith("deleted file mode"):
@@ -399,11 +468,33 @@ def is_critical(path: str, ladder: dict | None = None) -> bool:
     return False
 
 
+def safe_text(text: str) -> str:
+    """A path or finding as one plain line: control characters and line separators (a git path may hold a
+    newline) become `?`, so file names cannot forge a `Verdict:` line in the comment or the prompt."""
+    return re.sub(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]", "?", text)
+
+
+def load_ladder(path: pathlib.Path | None = None) -> dict:
+    """config/autonomy_ladder.json, which names the L3/L4 (critical) paths. Raises ValueError when it is
+    missing or malformed, so the desk stops instead of reviewing with no critical set."""
+    path = path or LADDER
+    try:
+        ladder = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"autonomy ladder unreadable ({path.name}: {type(exc).__name__})") from exc
+    levels = ladder.get("levels") if isinstance(ladder, dict) else None
+    if not isinstance(levels, dict) or not all(
+        isinstance(levels.get(k), list) and levels[k] for k in ("L3", "L4")
+    ):
+        raise ValueError(f"autonomy ladder malformed ({path.name}: levels.L3/L4 must be non-empty lists)")
+    return ladder
+
+
 def _file_header(fd: FileDiff, part: tuple[int, int] | None = None) -> str:
     note = f"{', new file' if fd.new else ''}{', deleted' if fd.deleted else ''}"
     if part:
         note += f", part {part[0]} of {part[1]}"
-    return f"### FILE {fd.path}  (+{fd.added} -{fd.removed}{note})"
+    return f"### FILE {safe_text(fd.path)}  (+{fd.added} -{fd.removed}{note})"
 
 
 _META_PREFIXES = (
@@ -548,7 +639,11 @@ def plan_diff(
     plan = DiffPlan(chunks=[])
     blocks: list[tuple[str, str]] = []
     for fd in split_diff(diff):
-        if is_critical(fd.path, ladder):
+        if (
+            fd.unparsed  # no trustworthy path: fail closed
+            or is_critical(fd.path, ladder)
+            or (fd.old_path and is_critical(fd.old_path, ladder))  # moved out of a critical path
+        ):
             plan.critical.append(fd.path)
         if fd.binary or should_summarise(fd.path):
             kind = "binary" if fd.binary else "lockfile/generated"
@@ -825,23 +920,23 @@ def format_comment(
     if plan.summarised:
         lines.append(
             "- summarised, not reviewed: "
-            + "; ".join(plan.summarised[:15])
+            + "; ".join(safe_text(x) for x in plan.summarised[:15])
             + (" ..." if len(plan.summarised) > 15 else "")
         )
     if plan.truncated:
-        lines.append("- truncated (start only): " + ", ".join(f"`{p}`" for p in plan.truncated))
+        lines.append("- truncated (start only): " + ", ".join(f"`{safe_text(p)}`" for p in plan.truncated))
     if plan.not_reviewed:
-        lines.append("- NOT reviewed (size cap): " + ", ".join(f"`{p}`" for p in plan.not_reviewed))
+        lines.append("- NOT reviewed (size cap): " + ", ".join(f"`{safe_text(p)}`" for p in plan.not_reviewed))
     verdict = final_verdict(rev, plan)
     gaps = plan.coverage_gaps()
     if gaps:
         lines.append(
             "- INCONCLUSIVE: critical path(s) not fully reviewed: "
-            + ", ".join(f"`{p}`" for p in gaps)
+            + ", ".join(f"`{safe_text(p)}`" for p in gaps)
             + ". This is not a pass and no merge tool accepts it. Split the PR so each critical file is "
             "smaller, then re-run the desk with force."
             if verdict == "inconclusive"
-            else "- critical path(s) not fully reviewed: " + ", ".join(f"`{p}`" for p in gaps)
+            else "- critical path(s) not fully reviewed: " + ", ".join(f"`{safe_text(p)}`" for p in gaps)
         )
     if splits:
         lines.append("- chunk split to fit the provider's request size limit: " + "; ".join(splits))
@@ -1221,11 +1316,11 @@ def review_pr(
     cands, skipped = candidates(fams)
     if not cands:
         return Outcome(n, "failed:no cross-family model left")
-    diff = gh(["pr", "diff", str(n)])
     try:
-        ladder = json.loads(LADDER.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        ladder = None
+        ladder = load_ladder()
+    except ValueError as exc:  # fail closed: without the ladder the L3/L4 paths would silently stop counting
+        return Outcome(n, f"failed:{exc}")
+    diff = gh(["pr", "diff", str(n)])
     plan = plan_diff(diff, chunk_chars=chunk_chars, ladder=ladder)
     if not plan.chunks:
         plan.chunks = [["(no reviewable text diff: every file was summarised)"]]
