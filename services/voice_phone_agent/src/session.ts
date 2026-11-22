@@ -6,7 +6,7 @@ import {
   type RemoteParticipant, type RemoteTrack, type RemoteTrackPublication,
 } from '@livekit/rtc-node';
 import { IN_RATE, concat, wav } from './audio.js';
-import { JudgeError, askJudge, type Turn } from './brain.js';
+import { JudgeError, askJudge, type JudgeInfo, type Turn } from './brain.js';
 import { cfg } from './config.js';
 import { logger, type Log } from './log.js';
 import { Player } from './player.js';
@@ -41,6 +41,8 @@ class StreamedClip {
 export interface Prompts {
   greeting: Int16Array; filler: Int16Array; repeat: Int16Array;
   error: Int16Array; busy: Int16Array; goodbye: Int16Array;
+  /** said after an answer without any source; empty = off */
+  noSource: Int16Array;
 }
 
 export class CallSession {
@@ -226,7 +228,8 @@ export class CallSession {
       let answer = '';
       let chain: Promise<void> = Promise.resolve();
       let first = true;
-      for await (const sentence of askJudge(text, this.history, ctl.signal)) {
+      const info: JudgeInfo = { noSource: false };
+      for await (const sentence of askJudge(text, this.history, ctl.signal, info)) {
         if (ctl.signal.aborted) break;
         if (first) { m.first_sentence_ms = Date.now() - t0; first = false; }
         answer += sentence + ' ';
@@ -253,6 +256,13 @@ export class CallSession {
       }
       await chain;
       if (ctl.signal.aborted) return;
+      if (info.noSource && answer.trim() && this.prompts.noSource.length) {
+        // the caller must know this answer rests on no law, ruling or regulation
+        this.player.enqueue(this.prompts.noSource);
+        this.noteSaid(cfg.noSourceText);
+        answer += cfg.noSourceText + ' ';
+        m.no_source = 1;
+      }
       this.clearPending();
       m.total_ms = Date.now() - t0;
       this.log.info('agent:', answer.trim().slice(0, 300), m);

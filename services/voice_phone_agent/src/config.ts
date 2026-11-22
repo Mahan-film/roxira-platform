@@ -144,6 +144,10 @@ export const cfg = {
   errorText: str('ERROR_TEXT', 'متأسفانه الان پاسخ آماده نشد. لطفاً سؤال‌تان را دوباره بپرسید.'),
   busyText: str('BUSY_TEXT', 'همه خطوط مشغول است. لطفاً چند دقیقه دیگر دوباره تماس بگیرید. خدانگهدار.'),
   goodbyeText: str('GOODBYE_TEXT', 'از تماس شما سپاسگزاریم. خدانگهدار.'),
+  // Said after an answer that cites no law, ruling or regulation (Smart Judge `done` event, see
+  // brain.noSourceAnswer). Empty = off. Wording is a draft for the hub / lawyer to confirm (R18 T258).
+  noSourceText: str('NO_SOURCE_TEXT', 'توجه کنید: برای این پاسخ متن قانونی مشخصی در منابع من پیدا نشد؛ '
+    + 'آن را یک راهنمایی کلی بدانید و پیش از هر اقدامی با وکیل مشورت کنید.'),
 };
 
 export type Cfg = typeof cfg;
