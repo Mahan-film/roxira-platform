@@ -83,6 +83,16 @@ describe('IdempotencyRepository & WebhooksRepository (TenantScope enforcement)',
   });
 
   describe('WebhooksRepository', () => {
+    const originalEncKey = process.env.WEBHOOK_ENC_KEY;
+
+    beforeAll(() => {
+      process.env.WEBHOOK_ENC_KEY = 'test-secret-key-for-unit-tests-32b!';
+    });
+
+    afterAll(() => {
+      process.env.WEBHOOK_ENC_KEY = originalEncKey;
+    });
+
     it('encrypts secret on write with AES-256-GCM and decrypts with tenantId AAD', async () => {
       const plainSecret = 'mock-webhook-secret-value-test-key';
       let capturedEntity: any = null;

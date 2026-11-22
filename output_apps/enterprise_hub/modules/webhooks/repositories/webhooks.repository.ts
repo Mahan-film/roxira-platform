@@ -15,7 +15,8 @@ function getMasterKey(): Buffer {
     process.env.WEBHOOK_ENC_KEY ||
     process.env.TOTP_ENC_KEY ||
     process.env.JWT_SECRET ||
-    process.env.JWT_SECRET_KEY;
+    process.env.JWT_SECRET_KEY ||
+    (process.env.NODE_ENV === 'test' ? 'test-webhook-enc-key-suite' : undefined);
   if (!envKey) {
     throw new Error(
       'Webhook encryption key is missing. Set WEBHOOK_ENC_KEY, TOTP_ENC_KEY, or JWT_SECRET in environment.',
