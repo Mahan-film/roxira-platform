@@ -51,10 +51,14 @@ class TenantCancellationRegistry:
     def get_storage_path(cls) -> Path:
         if cls._storage_path:
             return cls._storage_path
-        env_p = os.environ.get("TENANT_CANCELLATION_FILE")
+        env_p = os.environ.get("TENANT_CANCELLATION_FILE") or os.environ.get("TENANT_CANCELLATION_REGISTRY_PATH")
         if env_p:
             return Path(env_p)
-        return Path("/tmp/roxira_cancelled_tenants.json")
+        base_dir = Path(__file__).resolve().parents[4]
+        data_dir = base_dir / "data"
+        if not data_dir.is_dir():
+            data_dir = Path.cwd() / "data"
+        return data_dir / "tenant_cancellations.json"
 
     @classmethod
     def set_storage_path(cls, p: Optional[Path]) -> None:
@@ -566,8 +570,9 @@ class TenantVectorStoreWrapper:
             try:
                 with urllib_request.urlopen(opt_req, timeout=self.timeout) as opt_resp:
                     compacted = opt_resp.status in (200, 201, 202)
-            except Exception:
-                compacted = True  # Accepted fallback if version uses background daemon
+            except Exception as exc:
+                logger.error("Compaction optimization failed for %s on tenant %s: %s", collection_name, valid_id, exc)
+                compacted = False
 
         return {
             "deleted": deleted,
@@ -662,8 +667,8 @@ def scrub_refusal_metadata(
 ) -> Dict[str, Any]:
     """Scrub refusal and abstention metadata to prevent cross-tenant information leakage (R25 / Canary 5).
 
-    Removes any candidate matches, chunk snippets, or citations whose tenant_id
-    does not match caller_tenant_id or which contain foreign tenant identifiers.
+    Removes any candidate matches, chunk snippets, citations, or nested structures whose tenant_id
+    does not match caller_tenant_id or which contain foreign tenant identifiers (UUID or slug).
     """
     valid_caller_tenant = validate_identifier(caller_tenant_id, "tenant_id")
     if not isinstance(details, dict):
@@ -671,25 +676,55 @@ def scrub_refusal_metadata(
 
     scrubbed = json.loads(json.dumps(details))
 
-    # Check candidate lists
-    for list_key in ("candidate_matches", "attempted_citations", "chunks", "debug_hits"):
-        if list_key in scrubbed and isinstance(scrubbed[list_key], list):
-            clean_list = []
-            for item in scrubbed[list_key]:
-                if isinstance(item, dict):
-                    t_id = item.get("tenant_id")
-                    is_pub = item.get("is_public", False) or item.get("scope") in ("public", "statutory")
-                    if is_pub or (t_id and str(t_id).strip() == valid_caller_tenant):
-                        clean_list.append(item)
-                elif isinstance(item, str):
-                    uuids = re.findall(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", item)
-                    has_foreign_uuid = any(u.lower() != valid_caller_tenant.lower() for u in uuids)
-                    if not has_foreign_uuid and (valid_caller_tenant in item or "tenant" not in item.lower()):
-                        clean_list.append(item)
-            scrubbed[list_key] = clean_list
+    def has_foreign_identifier(text: str) -> bool:
+        if not isinstance(text, str):
+            return False
+        # Find UUIDs
+        uuids = re.findall(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", text)
+        for u in uuids:
+            if u.lower() != valid_caller_tenant.lower():
+                return True
+        # Find slug-style tenant identifiers (e.g. tenant-*, client-*, org-*)
+        slugs = re.findall(r"(?:tenant|client|org)[-_][a-zA-Z0-9_-]+", text, re.IGNORECASE)
+        for s in slugs:
+            if s.lower() != valid_caller_tenant.lower():
+                return True
+        return False
 
-    # Check root-level tenant leakage
-    if "tenant_id" in scrubbed and scrubbed["tenant_id"] != valid_caller_tenant:
-        scrubbed["tenant_id"] = valid_caller_tenant
+    def scrub_item(val: Any, is_root: bool = False) -> Any:
+        if isinstance(val, dict):
+            t_id = val.get("tenant_id")
+            is_pub = val.get("is_public", False) or val.get("scope") in ("public", "statutory")
+            if not is_root and t_id and str(t_id).strip() != valid_caller_tenant and not is_pub:
+                return None
+            res = {}
+            for k, v in val.items():
+                if k == "tenant_id":
+                    res[k] = valid_caller_tenant if not is_pub else v
+                else:
+                    cleaned_v = scrub_item(v, is_root=False)
+                    if cleaned_v is not None:
+                        res[k] = cleaned_v
+            return res
+        elif isinstance(val, list):
+            res_list = []
+            for item in val:
+                if isinstance(item, str):
+                    if not has_foreign_identifier(item):
+                        res_list.append(item)
+                else:
+                    cleaned_item = scrub_item(item, is_root=False)
+                    if cleaned_item is not None:
+                        res_list.append(cleaned_item)
+            return res_list
+        elif isinstance(val, str):
+            return None if has_foreign_identifier(val) else val
+        return val
 
-    return scrubbed
+    result = scrub_item(scrubbed, is_root=True)
+    if not isinstance(result, dict):
+        result = {}
+    if "tenant_id" in details:
+        result["tenant_id"] = valid_caller_tenant
+
+    return result

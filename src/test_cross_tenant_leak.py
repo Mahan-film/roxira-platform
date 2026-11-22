@@ -299,6 +299,31 @@ def test_canary_5_refusal_metadata_hygiene():
     assert len(scrubbed["attempted_citations"]) == 1
     assert scrubbed["attempted_citations"][0] == "Civil Code Art 10"
 
+    # 4. Slug-style tenant ID, mixed caller+foreign text strings, and nested foreign dicts must be purged
+    mixed_details = {
+        "candidate_matches": [],
+        "attempted_citations": [
+            "Valid general citation without tenant tokens",
+            f"Mixed string with caller {caller_tenant} and foreign {foreign_tenant}",
+            "Foreign slug without UUID: client-omega-corp secret",
+            "Nested org reference: org-foreign-holding",
+        ],
+        "nested_meta": {
+            "sub_entry": {
+                "tenant_id": foreign_tenant,
+                "notes": "secret notes of foreign tenant",
+            },
+            "clean_entry": {
+                "tenant_id": caller_tenant,
+                "notes": "notes for caller",
+            },
+        },
+    }
+    scrubbed_mixed = scrub_refusal_metadata(mixed_details, caller_tenant_id=caller_tenant)
+    assert scrubbed_mixed["attempted_citations"] == ["Valid general citation without tenant tokens"]
+    assert "sub_entry" not in scrubbed_mixed["nested_meta"]
+    assert scrubbed_mixed["nested_meta"]["clean_entry"]["tenant_id"] == caller_tenant
+
 
 # ==============================================================================
 # Canary 6: Post-Cancellation Ghost Check

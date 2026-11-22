@@ -142,6 +142,10 @@ def replay_tenant_erasure(
         del_res = wrapper.delete_tenant_vectors(coll, valid_id, force_compaction=True)
         if del_res.get("deleted"):
             result["qdrant_purged_collections"].append(coll)
+        if not del_res.get("compacted", False):
+            logger.error("Compaction was not completed for tenant %s on collection %s", valid_id, coll)
+            result["compaction_failed"] = True
+            surviving_ghosts += 1
         try:
             surviving_ghosts += wrapper.ghost_check_tenant(coll, valid_id)
         except Exception as e:
@@ -180,7 +184,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         t_id = rec["tenant_id"]
         try:
             res = replay_tenant_erasure(t_id, dry_run=args.dry_run)
-            if res.get("ghost_count", 0) > 0 and not args.dry_run:
+            if (res.get("ghost_count", 0) > 0 or res.get("compaction_failed", False)) and not args.dry_run:
                 failures += 1
         except Exception as exc:
             logger.error("Failed to replay erasure for tenant %s: %s", t_id, exc)
