@@ -396,7 +396,6 @@ def save_items(con: sqlite3.Connection, source_id: str, items: list[dict], now: 
             con.execute(
                 "UPDATE items SET last_seen=? WHERE source_id=? AND item_key=?", (now, source_id, k)
             )
-    con.commit()
 
 
 # ---- running a source ---------------------------------------------------------------------------------------------
@@ -561,25 +560,35 @@ def cmd_run(a) -> int:
         out = state_dir / "staged" / f"watcher_{now[:10]}.jsonl"
         out.parent.mkdir(parents=True, exist_ok=True)
         by_id = {s["id"]: s for s in cfg["sources"]}
-        with out.open("a", encoding="utf-8") as fh:
+        ok_reports = [r for r in reports if r["host_state"] == OK]
+        lines = [
+            json.dumps(to_record(by_id[r["source"]], it, now), ensure_ascii=False)
+            for r in ok_reports
+            for it in r["items"]
+            if it["state"] != "same"
+        ]
+        # Order matters: staged rows first (flushed + fsynced), DB state last. A crash in between
+        # re-emits the rows on the next run (at-least-once; consumers dedupe on doc_id + content_sha256)
+        # instead of marking items as seen that were never staged.
+        if lines:
+            with out.open("a", encoding="utf-8") as fh:
+                fh.write("\n".join(lines) + "\n")
+                fh.flush()
+                os.fsync(fh.fileno())
+        try:
             for r in reports:
-                for h in (r["host"],):
-                    con.execute(
-                        "INSERT INTO hosts VALUES(?,?,?,?) ON CONFLICT(host) DO UPDATE SET state=excluded.state, "
-                        "last_state_at=excluded.last_state_at, bad_runs=CASE WHEN excluded.state='ok' THEN 0 ELSE bad_runs+1 END",
-                        (h, r["host_state"], now, 0 if r["host_state"] == OK else 1),
-                    )
-                if r["host_state"] != OK:
-                    continue
+                con.execute(
+                    "INSERT INTO hosts VALUES(?,?,?,?) ON CONFLICT(host) DO UPDATE SET state=excluded.state, "
+                    "last_state_at=excluded.last_state_at, bad_runs=CASE WHEN excluded.state='ok' THEN 0 ELSE bad_runs+1 END",
+                    (r["host"], r["host_state"], now, 0 if r["host_state"] == OK else 1),
+                )
+            for r in ok_reports:
                 save_items(con, r["source"], r["items"], now)
-                for it in r["items"]:
-                    if it["state"] != "same":
-                        fh.write(
-                            json.dumps(to_record(by_id[r["source"]], it, now), ensure_ascii=False)
-                            + "\n"
-                        )
-        con.execute("INSERT INTO runs VALUES(?,?,?,?)", (now, 1, client.requests, text[:2000]))
-        con.commit()
+            con.execute("INSERT INTO runs VALUES(?,?,?,?)", (now, 1, client.requests, text[:2000]))
+            con.commit()
+        except BaseException:
+            con.rollback()
+            raise
     return 0
 
 

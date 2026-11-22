@@ -220,3 +220,37 @@ def test_empty_robots_file_is_ok():
     con.executescript(sw.SCHEMA)
     op = _opener({"https://a.test/robots.txt": (200, {}, b""), "https://a.test/": (200, {}, PAGE)})
     assert sw.run_source(_src(), _client(op), con)["host_state"] == sw.OK
+
+
+def test_crash_after_jsonl_loses_nothing(tmp_path, monkeypatch):
+    """Staged rows are on disk before the DB commit; a crash in between re-emits them next run."""
+    monkeypatch.setenv("SOURCE_WATCHER_STATE", str(tmp_path))
+    cfg = tmp_path / "c.json"
+    cfg.write_text(json.dumps({"sources": [_src()]}))
+    real = sw.Client
+    monkeypatch.setattr(
+        sw,
+        "Client",
+        lambda **k: real(
+            opener=_opener({"https://a.test/": (200, {}, PAGE)}), sleep=lambda s: None, **k
+        ),
+    )
+
+    def boom(*a, **k):
+        raise RuntimeError("crash")
+
+    with monkeypatch.context() as m:
+        m.setattr(sw, "save_items", boom)
+        try:
+            sw.main(["run", "--config", str(cfg), "--commit"])
+            raise AssertionError("no crash")
+        except RuntimeError:
+            pass
+    con = sqlite3.connect(tmp_path / "state.db")
+    assert con.execute("SELECT COUNT(*) FROM items").fetchone()[0] == 0
+    rows = [ln for f in (tmp_path / "staged").glob("*.jsonl") for ln in f.read_text().splitlines()]
+    assert len(rows) == 5  # on disk despite the crash
+    assert sw.main(["run", "--config", str(cfg), "--commit"]) == 0
+    assert con.execute("SELECT COUNT(*) FROM items").fetchone()[0] == 5
+    rows = [ln for f in (tmp_path / "staged").glob("*.jsonl") for ln in f.read_text().splitlines()]
+    assert len(rows) == 10  # replayed, at-least-once
