@@ -5,9 +5,14 @@
     "Schema and rules: scripts/infra/server_agents/lane_policy.py. Operator guide: docs/ops/BOX_LANE_POLICY.md.",
     "scopes: repo-relative directories or files, no globs (run_task.sh matches by path prefix). Co-located spec files cannot be allowlisted, so scopes are whole directories that contain no denied child.",
     "deny: no lane may touch these. A scope that is inside one OR a parent of one is refused. deny_names: refused wherever the name appears below a scope.",
-    "Change this file only through a reviewed PR; a hub or the owner decides what 'non-sensitive' means."
+    "Change this file only through a reviewed PR; a hub or the owner decides what 'non-sensitive' means.",
+    "Scopes may be single files (L7 lists box docs one by one: docs/ops also holds prompt, payment, key and unit-file docs)."
   ],
-  "ladder": ["light", "free", "paid"],
+  "ladder": [
+    "light",
+    "free",
+    "paid"
+  ],
   "ladder_notes": "light = group agent-light-free, free = agent-strong-free (keep only while the live gateway health check is green), paid = agent-free-paid (capped by the box key's daily USD limit). best (best-all), ds-flash and strong are not allowed on the box key.",
   "require_scope": true,
   "lanes": {
@@ -29,10 +34,17 @@
       ]
     },
     "L7": {
-      "purpose": "box, phone and nightly evals: documentation, eval notes and end-to-end test scaffolding only. Box and deploy scripts stay with the hubs.",
+      "purpose": "box, phone and nightly evals: box documentation, eval notes and end-to-end test scaffolding only. Box and deploy scripts stay with the hubs.",
       "scopes": [
-        "docs/ops/",
-        "docs/infra/",
+        "docs/ops/BOX_LANE_RUNNER.md",
+        "docs/ops/BOX_LANE_POLICY.md",
+        "docs/ops/BOX_LANE_READINESS.md",
+        "docs/ops/BOX_KILL_SWITCHES.md",
+        "docs/ops/BOX_RELIABILITY.md",
+        "docs/ops/BOX_STATUS_PAGE.md",
+        "docs/ops/BOX_BACKUP_RESTIC.md",
+        "docs/ops/LINUX_CI_BOX.md",
+        "docs/ops/BUILDER_EGRESS.md",
         "docs/eval/",
         "e2e/"
       ]
@@ -109,7 +121,19 @@
     "output_apps/enterprise_hub/frontend/src/middleware.ts",
     "output_apps/enterprise_hub/frontend/src/lib/api",
     "docs/strategy",
-    "docs/decisions"
+    "docs/decisions",
+    "docs/infra",
+    "docs/hub",
+    "docs/ops/SMARTJUDGE_PROMPTS.md",
+    "docs/ops/SMARTJUDGE_BEHAVIOR.md",
+    "docs/ops/CRYPTO_PAYMENTS.md",
+    "docs/ops/SECRETS_SOPS.md",
+    "docs/ops/AUTODEPLOY.md",
+    "docs/ops/API_KEYS.md",
+    "docs/ops/ADD_LLM_KEY.md",
+    "docs/ops/OPENCODE_KEYS.md",
+    "docs/ops/roxira-radar.service",
+    "docs/ops/roxira-radar.timer"
   ],
   "deny_names": [
     "migrations",

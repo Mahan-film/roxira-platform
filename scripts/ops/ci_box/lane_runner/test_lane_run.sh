@@ -74,6 +74,15 @@ grep -v '^BUDGETS=' "$T/conf.bak" >"$LANE_RUN_CONF"
 grep -q '"attempts_per_day": 12.0' "$T/out" && ok "symlink finds the lane caps" || bad "symlink caps: $(cat "$T/out")"
 cp "$T/conf.bak" "$LANE_RUN_CONF"
 
+# taskq-runner: the `free` step (no --tier) must reach the strong group even when the config says light; lane comes from taskq
+printf 'TIER=light\nMODEL_GROUP=agent-light-free\n' >>"$LANE_RUN_CONF"
+LANE_RUN_LANE=L6 "$HERE/taskq-runner.sh" --gateway --public --task x --dry-run >"$T/out" 2>&1
+grep -q 'lane=L6 tier=strong group=agent-strong-free' "$T/out" && ok "free step -> strong group on a light config, lane L6" || bad "free step: $(head -n 2 "$T/out")"
+"$HERE/taskq-runner.sh" --gateway --public --tier light --task x --dry-run >"$T/out" 2>&1
+grep -q 'tier=light group=agent-light-free' "$T/out" && ok "light step stays light" || bad "light step"
+expect_rc "taskq-runner refuses direct-provider steps" 3 "$HERE/taskq-runner.sh" --model ds-flash --task x
+cp "$T/conf.bak" "$LANE_RUN_CONF"
+
 # installers: dry-run touches nothing
 before="$(find "$HOME" | wc -l)"
 bash "$HERE/install_user.sh" >"$T/out" 2>&1; rc=$?

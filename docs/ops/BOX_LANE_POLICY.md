@@ -8,13 +8,13 @@ Rule source: AGENTS.md section 4a (lanes touch only non-sensitive paths after th
 ## 1. Ladder versus key
 
 The box key `box-lanes` (config/key_pool.yaml) may call only `agent-free`, `agent-light-free`, `agent-strong-free`,
-`agent-free-paid` and has a 1 USD/day paid cap. Trace of the default ladder `best,free,ds-flash,strong` (verified
+`agent-free-paid` and has a 1 USD/day paid cap. Trace of the default ladder `best,free,ds-flash,strong` (checked
 2026-11-22 with `lane-run --dry-run`, no model call):
 
 | Step | taskq passes | `lane-run` / `run_task.sh` group | Box key | What actually happens on the box |
 |---|---|---|---|---|
-| `best` | `--gateway --public --tier best` | `best-all` | **not allowed** | refused locally (exit 3) when the live config pins `MODEL_GROUP`, otherwise a 401/403 from the gateway. Either way an attempt is spent |
-| `free` | `--gateway --public` (tier strong) | `agent-strong-free` | allowed | with the live `lane-run.conf` (`TIER=light`, `MODEL_GROUP=agent-light-free`) it was **refused as a config mismatch** before this change; it works now (a per-call tier decides the group) |
+| `best` | `--gateway --public --tier best` | `best-all` | **not allowed** | refused locally (exit 3) when the config pins `MODEL_GROUP`, otherwise a 401/403 from the gateway. Either way an attempt is spent |
+| `free` | `--gateway --public` (no tier) | `agent-strong-free` intended | allowed | `taskq-runner.sh` passed no tier, so `lane-run` used the config's `TIER`: a config pinned to `light` turned `free` into a second `light` call, or a refusal when `MODEL_GROUP` was pinned too. Now `taskq-runner.sh` adds `--tier strong` when none is given, and a per-call tier decides the group |
 | `ds-flash` | `--model ds-flash` | direct OpenRouter | n/a | `taskq-runner.sh` exits 3: the box holds no provider keys. Attempt spent |
 | `strong` | `--model $TASKQ_STRONG_ALIAS` | direct OpenRouter | n/a | skipped unless the alias is set; then refused like `ds-flash` |
 
@@ -51,7 +51,8 @@ With the policy active:
   name (`migrations`, `auth`, `billing`, `pricing`, `payment`, `deploy`, `prompts`, ...) anywhere below it (the tree is
   walked), is a glob, contains `..`, or means the whole repo;
 - `orch.py` skips every issue of such a lane in `plan()` (shown as `scope policy refuses: ...`), before any claim, label or
-  comment; `taskq.py add` refuses with exit 2 the same way (so hand-queued tasks are covered too);
+  comment. The same gate refuses an unknown ladder step, a direct-provider step on the box, and a missing `TASKQ_RUNNER`
+  (without it the queue calls `run_task.sh` directly and bypasses `lane-run`: stop file, caps, key, group allowlist); `taskq.py add` refuses with exit 2 the same way (so hand-queued tasks are covered too);
 - a policy file that is set but unreadable fails closed (all lanes refused).
 
 Default scope table (directories that exist in the repo today; each one is checked against the deny-list by a test):
@@ -60,12 +61,12 @@ Default scope table (directories that exist in the repo today; each one is check
 |---|---|---|
 | L5 | core ledger | `output_apps/enterprise_hub/modules/accounting/acceptance/`, `.../accounting/__fixtures__/`, `docs/accounting/` |
 | L6 | country packs | `output_apps/enterprise_hub/modules/country_packs/de/`, `.../country_packs/xx/`, `output_apps/enterprise_hub/frontend/src/components/ui/`, `.../components/layout/` |
-| L7 | box, phone, evals | `docs/ops/`, `docs/infra/`, `docs/eval/`, `e2e/` |
+| L7 | box, phone, evals | the box docs in `docs/ops/` one by one (`BOX_*.md`, `LINUX_CI_BOX.md`, `BUILDER_EGRESS.md`), `docs/eval/`, `e2e/` |
 
 Deny-list (summary; the file is authoritative): agent rules and hooks (`AGENTS.md`, `CLAUDE.md`, `.claude`, `.github`,
 `.githooks`), secrets and data (`data`, `database_snapshots`, `backups`, `.env*`), key pool and model config, **deploy**
 (`deploy`, `ops`, `docker`, `nginx*`, `Dockerfile.prod`, compose files, `scripts/ops`, `scripts/infra`, `scripts/ci`,
-`scripts/dev`, `scripts/security`), **billing and pricing** (`src/billing`, `src/roxira_manager/billing`,
+`scripts/dev`, `scripts/security`; unit files and prompt, payment, key and secret docs inside `docs/ops`, `docs/infra`, `docs/hub`), **billing and pricing** (`src/billing`, `src/roxira_manager/billing`,
 `output_apps/ecosystem_core/src/billing`, the pricing API and plans pages), **tax rules** (`modules/tax_compliance`,
 `modules/posting_rules`, `country_packs/ir`), **Smart Judge prompts and logic** (the whole `output_apps/generated_modules/smartjudge`
 and `output_apps/smart_judge`), **auth** (`modules/auth`, `modules/access`, `modules/tenants`, frontend `components/auth`,
@@ -85,5 +86,9 @@ and `output_apps/smart_judge`), **auth** (`modules/auth`, `modules/access`, `mod
   whole checkout. A sparse checkout for the box is not part of this change.
 
 ## 3. Change control
+The unit that runs orch must set `ROXIRA_LANE_POLICY`, `TASKQ_RUNNER=<repo>/scripts/ops/ci_box/lane_runner/taskq-runner.sh`,
+`TASKQ_BUDGETS=<repo>/scripts/ops/ci_box/lane_runner/lane_budgets.box.json`, `ROXIRA_AGENTS_HOME=<lane state dir>`, `TASKQ_REVIEW=0`,
+`TASKQ_NOTIFY=0` (same as `roxira-lane-taskq.service`).
+
 Edit `config/box_lane_policy.json` only through a reviewed PR (it is itself on the deny-list, so no lane can change it).
 After an edit run `python3 -m pytest src/ops/test_lane_policy.py` and `python3 scripts/ops/ci_box/lane_runner/lane_readiness.py`.

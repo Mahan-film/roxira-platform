@@ -126,12 +126,12 @@ class ScopeTest(unittest.TestCase):
                     "output_apps/generated_modules/smartjudge/prompt_library.py", "output_apps/enterprise_hub/modules/tax_compliance/",
                     "src/billing/", "output_apps/enterprise_hub/frontend/src/components/auth/", "Dockerfile.prod", "deploy/systemd/",
                     "output_apps/enterprise_hub/modules/country_packs/payment_rails/", "data/", ".github/workflows/deploy-prod.yml"):
-            problems = lp.check_scopes(["docs/ops/", bad], self.pol, ROOT)
+            problems = lp.check_scopes(["docs/eval/", bad], self.pol, ROOT)
             self.assertTrue(problems, f"{bad} must be refused")
             self.assertTrue(any("denied" in p for p in problems), problems)
 
     def test_scope_that_is_a_parent_of_a_denied_path_is_refused(self):
-        for parent in ("output_apps/", "output_apps/enterprise_hub/", "output_apps/enterprise_hub/modules/", "docs/", "config/", "src/", "scripts/"):
+        for parent in ("output_apps/", "output_apps/enterprise_hub/", "output_apps/enterprise_hub/modules/", "docs/", "docs/ops/", "docs/infra/", "config/", "src/", "scripts/"):
             problems = lp.check_scopes([parent], self.pol, ROOT)
             self.assertTrue(problems, f"{parent} contains denied paths and must be refused")
 
@@ -153,9 +153,9 @@ class ScopeTest(unittest.TestCase):
         self.assertEqual(lp.check_scopes(["data/"], {}), [])
 
     def test_operator_env_overrides_the_table_but_is_still_checked(self):
-        env = {"ORCH_SCOPE_L7": "docs/ops/,output_apps/enterprise_hub/migrations/"}
+        env = {"ORCH_SCOPE_L7": "docs/eval/,output_apps/enterprise_hub/migrations/"}
         scopes = lp.lane_scopes("L7", self.pol, env)
-        self.assertEqual(scopes, ["docs/ops/", "output_apps/enterprise_hub/migrations/"])
+        self.assertEqual(scopes, ["docs/eval/", "output_apps/enterprise_hub/migrations/"])
         self.assertTrue(lp.check_scopes(scopes, self.pol, ROOT))
         self.assertEqual(lp.lane_scopes("L7", self.pol, {}), self.pol["lanes"]["L7"]["scopes"])
 
@@ -252,6 +252,29 @@ class OrchPolicyTest(unittest.TestCase):
         self.assertIn(["output_apps/enterprise_hub/modules/accounting/acceptance/",
                        "output_apps/enterprise_hub/modules/accounting/__fixtures__/", "docs/accounting/"], scopes)
 
+    def test_bad_ladder_or_missing_runner_is_refused_before_any_claim(self):
+        os.environ["TASKQ_LADDER"] = "light,gpt-9"
+        _, out = self.tick("--apply")
+        self.assertIn("ladder step 'gpt-9' is unknown", out)
+        self.assertEqual(self.writes(), [])
+        os.environ["TASKQ_LADDER"] = "ds-flash,light"
+        _, out = self.tick("--apply")
+        self.assertIn("direct provider call", out)
+        self.assertEqual(self.writes(), [])
+        os.environ.pop("TASKQ_LADDER")
+        os.environ.pop("TASKQ_RUNNER")
+        _, out = self.tick("--apply")
+        self.assertIn("TASKQ_RUNNER is not set", out)
+        self.assertEqual(self.writes(), [])
+        self.assertFalse((self.tmp / "calls.log").exists())
+
+    def test_default_ladder_without_policy_still_validates_but_allows_direct_steps(self):
+        os.environ.pop(lp.POLICY_ENV)
+        os.environ.pop("TASKQ_RUNNER")
+        self.assertEqual(orch.scope_problems("L5"), [])  # unchanged behaviour outside the box
+        os.environ["TASKQ_LADDER"] = "nonsense"
+        self.assertTrue(orch.scope_problems("L5"))
+
     def test_taskq_add_refuses_a_denied_or_missing_scope(self):
         task = self.tmp / "t.md"
         task.write_text("x")
@@ -263,7 +286,7 @@ class OrchPolicyTest(unittest.TestCase):
             self.assertIn("refused by the box lane policy", err.getvalue())
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            rc = taskq.main(["add", "--slug", "s", "--task-file", str(task), "--public", "--lane", "l7", "--scope", "docs/ops/"])
+            rc = taskq.main(["add", "--slug", "s", "--task-file", str(task), "--public", "--lane", "l7", "--scope", "docs/eval/"])
         self.assertEqual(rc, 0)
         row = taskq.connect().execute("SELECT ladder FROM tasks WHERE id=?", (int(out.getvalue().strip()),)).fetchone()
         self.assertEqual(json.loads(row["ladder"]), ["light", "free", "paid"])

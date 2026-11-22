@@ -219,6 +219,14 @@ def check_ladder(rep: Report, repo_dir: Path, spec: dict) -> dict:
             "set in this shell" if active else "not set in this shell: the unit that runs orch must set it, or the default ladder "
             "(best,free,ds-flash,strong) is used and burns refusals",
             f"systemctl --user cat roxira-orch.service | grep ROXIRA_LANE_POLICY   (unit not installed yet)", owner=True)
+    runner = os.environ.get("TASKQ_RUNNER", "")
+    good = Path(runner).name == "taskq-runner.sh"
+    rep.add("runner-env", "orch/taskq run through taskq-runner.sh (lane-run): TASKQ_RUNNER, TASKQ_BUDGETS, ROXIRA_AGENTS_HOME [owner]",
+            "PASS" if good else "WARN",
+            "TASKQ_RUNNER is taskq-runner.sh" if good else "TASKQ_RUNNER is not set to taskq-runner.sh in this shell: orch would call run_task.sh directly "
+            "and bypass lane-run (stop file, caps, key, group allowlist). Set TASKQ_RUNNER, TASKQ_BUDGETS=lane_budgets.box.json and "
+            "ROXIRA_AGENTS_HOME=<lane state dir> in the unit that runs orch",
+            "systemctl --user cat roxira-orch.service | grep -E 'TASKQ_RUNNER|TASKQ_BUDGETS|ROXIRA_AGENTS_HOME'", owner=True)
     return pol
 
 
@@ -265,10 +273,10 @@ def check_lane_run(rep: Report, repo_dir: Path, conf: dict, conf_path: Path) -> 
             f"cat {repo_dir}/scripts/ops/ci_box/lane_runner/lane_budgets.box.json")
 
 
-def check_switches(rep: Report, offline: bool) -> None:
-    state = Path(os.environ.get("ROXIRA_AGENTS_HOME") or Path.home() / ".local/state/roxira-lane")
-    kill = Path(os.environ.get("ORCH_KILL_FILE") or state / "orch" / "KILL")
-    stop = state / "STOP"
+def check_switches(rep: Report, conf: dict, offline: bool) -> None:
+    state = Path(conf.get("STATE_DIR") or Path.home() / ".local/state/roxira-lane")  # lane-run's state dir, from its config
+    stop = Path(conf.get("STOP_FILE") or state / "STOP")
+    kill = Path(os.environ.get("ORCH_KILL_FILE") or Path(os.environ.get("ROXIRA_AGENTS_HOME") or state) / "orch" / "KILL")
     rep.add("switch-files", "kill switches are in a known state (KILL/STOP files)", "PASS",
             f"orch KILL {'SET' if kill.exists() else 'off'}, lane STOP {'SET' if stop.exists() else 'off'} "
             "(SET is fine before the flip: remove deliberately when you go live)", "ls -l <state>/orch/KILL <state>/STOP  (see docs/ops/BOX_KILL_SWITCHES.md)")
@@ -314,7 +322,7 @@ def build(args: argparse.Namespace) -> Report:
     pol = check_ladder(rep, repo_dir, spec)
     check_scopes(rep, repo_dir, pol)
     check_lane_run(rep, repo_dir, conf, conf_path)
-    check_switches(rep, args.offline)
+    check_switches(rep, conf, args.offline)
     check_private(rep, args.repo, args.offline)
     return rep
 

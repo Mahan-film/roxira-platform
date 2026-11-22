@@ -374,9 +374,21 @@ def lane_scopes(lane: str) -> list[str]:
 
 
 def scope_problems(lane: str) -> list[str]:
-    """Why the lane may not run under the box policy (denied or missing scope, bad policy file). [] = fine or no policy."""
+    """Why the lane may not run (checked before any claim). Always: an invalid ladder. With the box policy active also: a
+    denied or missing scope, a bad policy file, a direct-provider ladder step, and a TASKQ_RUNNER that is not set (the
+    queue would then call run_task.sh directly and bypass lane-run: caps, stop file, key and group allowlist)."""
     try:
-        return lane_policy.problems_for_lane(lane, repo_root=HERE.parents[2])
+        steps = [s.strip() for s in taskq.default_ladder().split(",") if s.strip()]
+        out = [f"ladder step {s!r} is unknown ({', '.join(taskq.LADDER_STEPS)})" for s in steps if s not in taskq.LADDER_STEPS]
+        if not steps:
+            out.append("the ladder is empty")
+        if not lane_policy.load():
+            return out
+        out += [f"ladder step {s!r} is a direct provider call; the box holds no provider keys" for s in steps
+                if s in taskq.LADDER_STEPS and lane_policy.STEP_GROUP.get(s) is None]
+        if not os.environ.get("TASKQ_RUNNER"):
+            out.append("TASKQ_RUNNER is not set: with the box policy the queue must go through taskq-runner.sh (lane-run)")
+        return out + lane_policy.problems_for_lane(lane, repo_root=HERE.parents[2])
     except lane_policy.PolicyError as exc:
         return [str(exc)]
 
@@ -462,7 +474,10 @@ def execute(db: sqlite3.Connection, cand: dict, now: float) -> dict:
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             taskq.main(args)
-        tid = int(buf.getvalue().strip().splitlines()[-1])
+        added = buf.getvalue().strip().splitlines()
+        if not added:
+            raise GhError("taskq add refused the task (ladder or scope policy); nothing was queued")
+        tid = int(added[-1])
         rec["task_id"] = tid
         db.execute("UPDATE jobs SET status='running', task_id=?, updated=? WHERE key=?", (tid, time.time(), key))
         db.commit()

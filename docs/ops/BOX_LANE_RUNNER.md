@@ -48,7 +48,7 @@ lane-run --budget --lane L5
 - Per-call `--tier light|strong|paid|best` picks the gateway group (`agent-light-free`, `agent-strong-free`, `agent-free-paid`,
   `best-all`); a group outside `ALLOWED_GROUPS` (default: the box key's four groups, so `best-all` is out) is refused locally.
 - Stop file: `<state dir>/STOP` (or `STOP_FILE` in the config) makes every run exit 4 before any model call. A missing or unreadable
-  budgets file is an error (it used to mean no caps at all, e.g. when `lane-run` was started through a symlink).
+  budgets file is an error (it used to mean no caps at all).
 - Caps: `lane_budget.py` with `lane_budgets.box.json` (attempts per day and paid USD per day, UTC day). Counted from
   the box's own log. Tokens are not metered (see "Not verified"), so only attempts and USD bind.
 - Stagger: it never starts in the `:00` minute (it waits a lane-specific 90-330 s instead); the timer fires at `:07,:37`

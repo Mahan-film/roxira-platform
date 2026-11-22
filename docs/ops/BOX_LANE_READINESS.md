@@ -22,6 +22,7 @@ Exit 1 when any item FAILs. WARN and UNKNOWN need a human look. Test: `src/ops/t
 | 3 | The **box key** is agent-groups only with a paid cap of at most 1 USD/day | `grep -n -A4 'box-lanes:' config/key_pool.yaml` | `key-spec` |
 | 4 | Through the tunnel the key lists **exactly** `agent-free`, `agent-light-free`, `agent-strong-free`, `agent-free-paid` | `curl -s http://127.0.0.1:4181/health/liveliness`; then `GET /v1/models` with the key (names only) | `live-key` |
 | 5 | The **ladder** resolves only to groups the key allows and the environment that runs orch/taskq sets `ROXIRA_LANE_POLICY` (or `TASKQ_LADDER`) | `ROXIRA_LANE_POLICY=$PWD/config/box_lane_policy.json python3 scripts/infra/server_agents/orch.py tick` prints `ladder: light,free,paid` | `ladder`, `ladder-env` |
+| 5b | Orch goes through `lane-run`: the orch unit sets `TASKQ_RUNNER`, `TASKQ_BUDGETS`, `ROXIRA_AGENTS_HOME` (else the stop file, caps and key are bypassed) | `systemctl --user cat roxira-orch.service \| grep TASKQ_` | `runner-env` |
 | 6 | **Scopes**: every lane has a scope, none touches the deny-list, no `ORCH_SCOPE_*` override widens it | `python3 -m pytest src/ops/test_lane_policy.py -q` | `scopes`, `scopes-env` |
 | 7 | **Daily caps are loaded** for l5, l6, l7 and smoke (a missing file or a `0` means no cap) through the **installed** `lane-run` | `lane-run --budget --lane L5` shows non-zero caps | `caps-*` |
 | 8 | `lane-run.conf` names an allowed agent group; USD caps sit within the key cap (server cap binds first otherwise) | `grep -v '^#' ~/.config/roxira-lane/lane-run.conf` | `lane-conf`, `usd-caps` |
@@ -39,4 +40,4 @@ the stop file ready (`touch ~/.local/state/roxira-lane/STOP`).
   names none, so on the box the **attempts** cap and the server-side key cap are what bind (UNVERIFIED beyond the config).
 - Fallback of `agent-strong-free` includes `gemini-best`, a group the box key does not list. Whether LiteLLM re-checks
   key access on a fallback is UNVERIFIED.
-- Lane attribution: `taskq-runner.sh` used a fixed `L5` unless `LANE_RUN_LANE` is set; taskq now sets it from the task's lane.
+- Lane attribution: `taskq-runner.sh` booked every attempt on `L5` unless `LANE_RUN_LANE` was set; taskq now sets it from the task's lane.

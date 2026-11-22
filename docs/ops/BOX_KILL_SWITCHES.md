@@ -18,7 +18,7 @@ lane stack `~/.local/state/roxira-lane` (this is `ROXIRA_AGENTS_HOME` of the que
 | 4 | **Queue timer and pass** | `systemctl --user disable --now roxira-lane-taskq.timer` then `systemctl --user stop roxira-lane-taskq.service` | the 2x/hour `taskq run --once` pass and the running pass with its children (systemd kills the whole cgroup) | tasks stay `queued`/`running` in the db; use `taskq.py cancel` (below) so they are not retried |
 | 5 | **Gateway key (local)** | `mv ~/.config/roxira-lane/gateway.env ~/.config/roxira-lane/gateway.env.off` | `lane-run` dies with "gateway env file missing" before any call; undo by moving it back | an attempt already holding the key in its environment |
 | 6 | **Gateway key (server)** | owner on the server: delete or block the `box-lanes` virtual key in the gateway (`docs/infra/KEY_POOL.md`; whether `virtual_keys.py` deletes a key that was removed from `config/key_pool.yaml` is UNVERIFIED, so confirm with `/key/info` afterwards) | the key everywhere, including any process that already started. This is the only switch that also stops the paid fallback | nothing local; it needs the server owner and a PR |
-| 7 | **Merge gate** | `touch ~/.local/state/roxira-merge-gate/KILL` and `systemctl --user disable --now roxira-merge-gate.timer` (and `roxira-check-main-push.timer` if installed; it is not on the box today) | polling squash-merges and the direct-push alert (they share the KILL file). On the live box the gate is currently `dry_run = true`, so it merges nothing either way | merges done by a person. A single PR is held with the label `do-not-merge` or `needs-human` (the gate honours both) |
+| 7 | **Merge gate** | `touch ~/.local/state/roxira-merge-gate/KILL` and `systemctl --user disable --now roxira-merge-gate.timer` (and `roxira-check-main-push.timer` if installed) | polling squash-merges and the direct-push alert (they share the KILL file). With `dry_run = true` (the shipped default) it merges nothing either way | merges done by a person. A single PR is held with the label `do-not-merge` or `needs-human` (the gate honours both) |
 | 8 | **Agent bridge** | `touch ~/.config/roxira-bridge/STOP` and `systemctl --user disable --now roxira-bridge.timer` | polling of the WAVE comments on the bridge issue and the `claude -p` runs it starts | lane-run, orch, taskq (they do not use the bridge) |
 | 9 | **Builder egress (root)** | `sudo systemctl stop roxira-builder-proxy` | the builder user's only way out: its nft table allows loopback to the proxy only, so with the proxy down it has no network. The nft table stays loaded (fail closed) | the lane user's own network |
 | 10 | **Builder lock off (root, loosens)** | `sudo systemctl stop roxira-builder-nft` | removes table `roxira_builder`. The builder runner refuses to start without that table, so no NEW builder run starts. **Do not use it to "cut" a running builder: it removes that builder's firewall.** Stop the proxy (#9) first | anything already running keeps running, now without the lock |
@@ -32,7 +32,7 @@ Order for "stop the lanes now, keep the box alive": #1, #2, #4, then #3. For "I 
 ### 1. Lane stop file (new, `lane-run`)
 - Path: `<state dir>/STOP` (the state dir is `STATE_DIR` in `lane-run.conf`, default `~/.local/state/roxira-lane`);
   override the path with `STOP_FILE=` in `lane-run.conf`.
-- Every entry point goes through `lane-run`: queue steps (`taskq-runner.sh`), orch steps and `lane-run --smoke`. A
+- Every entry point goes through `lane-run`: queue steps (`taskq-runner.sh`), orch steps **when the orch environment sets `TASKQ_RUNNER`** to `taskq-runner.sh` (otherwise orch calls `run_task.sh` directly and this switch does not apply), and `lane-run --smoke`. A
   stopped call writes one `"status": "stopped"` line to `logs/lane-run.jsonl` (not counted as an attempt) and exits 4.
 - `lane-run --budget` still works while stopped.
 - Resume: `rm ~/.local/state/roxira-lane/STOP`.
@@ -41,7 +41,7 @@ Order for "stop the lanes now, keep the box alive": #1, #2, #4, then #3. For "I 
 ### 2. Orch KILL file
 - `orch.py stop` creates it, `orch.py resume` removes it, `orch.py status` shows it. `orch.py tick` exits 3 and
   prints `KILL SWITCH ... present` without touching GitHub.
-- Orch is not installed as a unit yet (no `roxira-orch.*` unit). When it is, also `systemctl --user disable --now roxira-orch.timer`.
+- Orch ships no systemd unit yet (see ORCH.md). When you install one, also `systemctl --user disable --now roxira-orch.timer`.
 - A tick that is mid-run finishes the current task (it cannot interrupt the model run); it then stops before the push.
   To end the run itself: #4 (the worker is a child of the same process tree) or `pkill -f 'opencode run'` as `<lane user>`.
 
@@ -52,7 +52,7 @@ Order for "stop the lanes now, keep the box alive": #1, #2, #4, then #3. For "I 
 - Verify: `systemctl --user is-active roxira-gateway-tunnel` prints `inactive`; the same curl gets no answer.
 
 ### 4. Queue timer and tasks
-- `roxira-lane-taskq.timer` is installed but **disabled** by design (BOX_LANE_RUNNER.md step 10). The command is
+- `roxira-lane-taskq.timer` is installed **disabled** by design (BOX_LANE_RUNNER.md step 10). The command is
   idempotent when it is already off.
 - Queued or running tasks: `ROXIRA_AGENTS_HOME=~/.local/state/roxira-lane python3 scripts/infra/server_agents/taskq.py list --status queued`
   then `... taskq.py cancel <id>` (cancel also SIGTERMs a running task's process group).
@@ -63,13 +63,13 @@ Order for "stop the lanes now, keep the box alive": #1, #2, #4, then #3. For "I 
   `agent-free-paid`. Every one of those groups can fall back to the paid group, so only #6 (or the cap) stops paid spend.
 
 ### 7. Merge gate
-- Today `dry_run = true` in its config. Going live is the owner's step at the private flip (see PRIVATE_FLIP_CHECKLIST.md).
+- `dry_run = true` is the shipped default. Going live is the owner's step at the private flip (see PRIVATE_FLIP_CHECKLIST.md).
 - Resume: `rm ~/.local/state/roxira-merge-gate/KILL` and `systemctl --user enable --now roxira-merge-gate.timer`.
 - Logs: `journalctl --user -u roxira-merge-gate -n 30`.
 
 ### 8. Agent bridge
-- It runs `claude -p` with a consumer login, a different path from the lanes. It is **enabled** today. If the box must
-  run no consumer-login agent at all, disable it.
+- It runs `claude -p` with a consumer login, a different path from the lanes. If the box must run no consumer-login
+  agent at all, disable it.
 - Resume: remove the STOP file, `systemctl --user enable --now roxira-bridge.timer`.
 
 ### 9, 10, 11. Root-side units
@@ -78,8 +78,7 @@ Order for "stop the lanes now, keep the box alive": #1, #2, #4, then #3. For "I 
   security control, not a kill switch: **do not stop it**.
 - Check state without root: `systemctl is-active roxira-builder-proxy roxira-builder-nft roxira-egress xray`.
 - Resume: `sudo systemctl start roxira-builder-proxy roxira-builder-nft`; `sudo box-proxy on`.
-- `box-proxy off` is the only way the box loses all outbound traffic at once; the owner's tools (status page, backups)
-  that need the proxy stop reporting while it is off.
+- `box-proxy off` is the only way the box loses all outbound traffic at once; every tool that needs the proxy stops working while it is off.
 
 ## Budget zero is not a switch
 
