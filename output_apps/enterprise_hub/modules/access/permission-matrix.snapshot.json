@@ -5345,6 +5345,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/tax-compliance/moadian/invoices/:invoiceId/submit (MoadianController.submit)": {
