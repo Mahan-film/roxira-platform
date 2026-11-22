@@ -11,6 +11,7 @@ import { Queue } from 'bullmq';
 import { EntityManager, FindOptionsWhere, ILike } from 'typeorm';
 import { fromMinor } from '../../accounting/money';
 import { CustomerIdentityService, WALK_IN_NAME } from '../../crm/services/customer-identity.service';
+import { PipelineStage } from '../../crm/enums/crm.enums';
 import { invoiceRuleFor } from '../country/invoice-country-rules';
 import { CrmRepository } from '../../crm/repositories/crm.repository';
 import { BASE_CURRENCY } from '../../currency/constants/currency.constants';
@@ -1606,7 +1607,7 @@ export class InvoicingService {
             id: party.id,
             code: party.code,
             name: party.name,
-            phone: (party as { phone?: string | null }).phone ?? null,
+            phone: party.phone ?? null,
             nationalId: party.nationalId,
             economicCode: party.economicCode,
           });
@@ -1693,7 +1694,10 @@ export class InvoicingService {
     if (party.id) {
       const byId = await this.crmRepository
         .findLeadById(tenantId, party.id)
-        .catch(() => null);
+        .catch((err) => {
+          this.logger.warn(`Failed to find CRM lead ${party.id} for tenant ${tenantId}: ${err?.message || err}`);
+          return null;
+        });
       if (byId && !byId.isWalkIn) {
         return byId.id;
       }
@@ -1701,7 +1705,10 @@ export class InvoicingService {
     if (party.phone?.trim() && this.customerIdentity) {
       const resolved = await this.customerIdentity
         .resolve(tenantId, { phone: party.phone, name: party.name })
-        .catch(() => null);
+        .catch((err) => {
+          this.logger.warn(`Failed to resolve customer identity for ${party.phone}: ${err?.message || err}`);
+          return null;
+        });
       if (resolved && resolved.level !== 'anonymous') {
         return resolved.lead.id;
       }
@@ -1716,10 +1723,13 @@ export class InvoicingService {
           marketingConsent: false,
           isWalkIn: false,
           source: 'IMPORT',
-          pipelineStage: 'WON' as never,
+          pipelineStage: PipelineStage.WON,
           estimatedValue: 0,
-        } as never)
-        .catch(() => null);
+        })
+        .catch((err) => {
+          this.logger.warn(`Failed to create CRM lead on import for tenant ${tenantId}: ${err?.message || err}`);
+          return null;
+        });
       if (created?.id) {
         return created.id;
       }

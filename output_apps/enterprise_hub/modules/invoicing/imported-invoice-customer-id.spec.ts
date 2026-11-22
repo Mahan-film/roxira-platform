@@ -22,6 +22,7 @@ describe('#548 imported sales invoices link customerId from party code', () => {
 
     expect(dto.customerId).toBe(42);
     expect(dto.buyerInfo?.name).toBe('Customer 1');
+    expect(crmRepo.findLeadById).toHaveBeenCalledWith('t-1', 42);
     expect(crmRepo.createLead).not.toHaveBeenCalled();
   });
 
@@ -44,12 +45,14 @@ describe('#548 imported sales invoices link customerId from party code', () => {
     });
 
     expect(dto.customerId).toBe(99);
+    expect(crmRepo.findLeadById).toHaveBeenCalledWith('t-1', 7);
     expect(crmRepo.createLead).toHaveBeenCalledWith(
       't-1',
       expect.objectContaining({
         fullName: 'Customer 2',
         isWalkIn: false,
         source: 'IMPORT',
+        pipelineStage: 'WON',
       }),
     );
   });

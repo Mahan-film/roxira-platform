@@ -4,6 +4,7 @@ import {
   Entity,
   Index,
   PrimaryGeneratedColumn,
+  ValueTransformer,
 } from 'typeorm';
 import { Currency } from '../../currency/enums/currency.enum';
 import { InvoiceJurisdiction } from '../enums/invoice-jurisdiction.enum';
@@ -76,6 +77,31 @@ export interface InvoicePostingMeta {
 }
 
 /**
+ * مبدل ستون‌های numeric درایور Postgres به number در لایه برنامه (LESSONS 8 / #1074).
+ * درایور pg ستون‌های numeric/decimal را به‌صورت رشته بازمی‌گرداند؛ این Transformer
+ * تبدیل ایمن را بدون از دست رفتن تایپ انجام می‌دهد.
+ */
+export const numericTransformer: ValueTransformer = {
+  to: (value: number | null | undefined): number | null | undefined => value,
+  from: (value: string | number | null | undefined): number => {
+    if (value === null || value === undefined) {
+      return 0;
+    }
+    return typeof value === 'number' ? value : Number(value);
+  },
+};
+
+export const nullableNumericTransformer: ValueTransformer = {
+  to: (value: number | null | undefined): number | null | undefined => value,
+  from: (value: string | number | null | undefined): number | null => {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    return typeof value === 'number' ? value : Number(value);
+  },
+};
+
+/**
  * موجودیت پایگاه‌داده صورتحساب مالیاتی هوشمند (Smart Invoicing).
  * فقط از طریق InvoicingRepository قابل دسترسی است (Rule #3 - AGENTS.md).
  */
@@ -133,20 +159,21 @@ export class InvoiceEntity {
   jurisdiction: InvoiceJurisdiction;
 
   /** نرخ تبدیل ارز اصلی به ارز پایه (واحد ارز پایه به‌ازای ۱ واحد ارز فاکتور). */
-  @Column({ type: 'decimal', precision: 18, scale: 8, default: 1 })
+  @Column({ type: 'numeric', precision: 18, scale: 8, default: 1, transformer: numericTransformer })
   exchangeRate: number;
 
   /** نرخ تبدیل ارز فاکتور به ریال (هسته حسابداری چندارزی). */
-  @Column({ type: 'decimal', precision: 24, scale: 6, name: 'fx_rate', default: 1 })
+  @Column({ type: 'numeric', precision: 24, scale: 6, name: 'fx_rate', default: 1, transformer: numericTransformer })
   fxRate: number;
 
   /** مبلغ فاکتور به ارز مبدأ (اختیاری) — ردیابی اسناد چندارزی. */
   @Column({
-    type: 'decimal',
+    type: 'numeric',
     precision: 24,
     scale: 6,
     name: 'amount_fx',
     nullable: true,
+    transformer: nullableNumericTransformer,
   })
   amountFx: number | null;
 
@@ -154,28 +181,28 @@ export class InvoiceEntity {
   @Column({ type: 'varchar', length: 3, default: 'USD' })
   baseCurrency: Currency;
 
-  @Column({ type: 'decimal', precision: 20, scale: 4 })
+  @Column({ type: 'numeric', precision: 20, scale: 4, transformer: numericTransformer })
   totalAmount: number;
 
-  @Column({ type: 'decimal', precision: 20, scale: 4 })
+  @Column({ type: 'numeric', precision: 20, scale: 4, transformer: numericTransformer })
   totalDiscount: number;
 
-  @Column({ type: 'decimal', precision: 20, scale: 4 })
+  @Column({ type: 'numeric', precision: 20, scale: 4, transformer: numericTransformer })
   totalTax: number;
 
-  @Column({ type: 'decimal', precision: 20, scale: 4 })
+  @Column({ type: 'numeric', precision: 20, scale: 4, transformer: numericTransformer })
   finalPayable: number;
 
   /** جمع ناخالص معادل ارز پایه. */
-  @Column({ type: 'decimal', precision: 20, scale: 4, default: 0 })
+  @Column({ type: 'numeric', precision: 20, scale: 4, default: 0, transformer: numericTransformer })
   baseTotalAmount: number;
 
   /** جمع مالیات معادل ارز پایه. */
-  @Column({ type: 'decimal', precision: 20, scale: 4, default: 0 })
+  @Column({ type: 'numeric', precision: 20, scale: 4, default: 0, transformer: numericTransformer })
   baseTotalTax: number;
 
   /** مبلغ نهایی قابل پرداخت معادل ارز پایه. */
-  @Column({ type: 'decimal', precision: 20, scale: 4, default: 0 })
+  @Column({ type: 'numeric', precision: 20, scale: 4, default: 0, transformer: numericTransformer })
   baseFinalPayable: number;
 
   @Index()
