@@ -22,6 +22,7 @@ export class CreateSafeDataImportCutovers1789900020000
       CREATE TABLE IF NOT EXISTS "data_import_cutovers" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "tenant_id" uuid NOT NULL,
+        -- Stored as ISO YYYY-MM-DD text matching table created by 1789900018000
         "cutover_date" text NOT NULL,
         "pre_cutover_lock_date" text NOT NULL,
         "period_lock_id" integer NOT NULL,
