@@ -18,6 +18,8 @@ export class CutoverEntity {
   @Column({ type: 'uuid', name: 'tenant_id' })
   tenantId: string;
 
+  // Note: cutoverDate and preCutoverLockDate are stored as ISO 'YYYY-MM-DD' text strings,
+  // preserving strict binary compatibility with the existing table created by migration 1789900018000.
   @Column({ type: 'text', name: 'cutover_date' })
   cutoverDate: string;
 
