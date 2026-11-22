@@ -143,7 +143,7 @@ ON CONFLICT (tenant_id, fingerprint, day) DO UPDATE SET
 
 def _dsn() -> str:
     """Return configured Postgres DSN for error capture, or empty string if unconfigured."""
-    return (os.environ.get("OPS_ERRORS_DSN") or os.environ.get("DATABASE_URL") or "").strip()
+    return (os.environ.get("OPS_ERRORS_DSN") or "").strip()
 
 
 def write_event(event: dict[str, Any]) -> None:

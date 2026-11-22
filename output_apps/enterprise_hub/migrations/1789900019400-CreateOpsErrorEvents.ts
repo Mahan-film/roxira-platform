@@ -16,7 +16,7 @@ export class CreateOpsErrorEvents1789900019400 implements MigrationInterface {
     await q.query(`
       CREATE TABLE IF NOT EXISTS "ops_error_events" (
         "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        "tenant_id" uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+        "tenant_id" uuid NOT NULL,
         "fingerprint" character varying(64) NOT NULL,
         "day" date NOT NULL,
         "source" character varying(16) NOT NULL DEFAULT 'backend',
