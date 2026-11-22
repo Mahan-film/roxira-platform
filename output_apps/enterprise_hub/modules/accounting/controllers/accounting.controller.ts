@@ -189,6 +189,10 @@ export class AccountingController {
       this.tenantIdOf(request),
       id,
       dto,
+      {
+        actorRole: this.actorRoleOf(request) ?? undefined,
+        actorUserId: this.actorUserIdOf(request) ?? undefined,
+      },
     );
   }
 

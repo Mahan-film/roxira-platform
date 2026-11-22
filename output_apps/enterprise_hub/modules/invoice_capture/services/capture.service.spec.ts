@@ -78,6 +78,12 @@ function setup(output: string = goodModelOutput()) {
       code,
       systemPostedOnly: ['1020', '2010', '1030', '1110', '1120'].includes(code),
     })),
+    findAccountsByCodes: jest.fn(async (_t: string, codes: string[]) =>
+      codes.map((code) => ({
+        code,
+        systemPostedOnly: ['1020', '2010', '1030', '1110', '1120'].includes(code),
+      })),
+    ),
     isPeriodLocked: jest.fn(async () => false),
     createJournalEntry: jest.fn(async (tenantId: string, dto: never) => {
       journal.push({ tenantId, dto });
@@ -280,7 +286,7 @@ describe('CaptureService', () => {
     }));
     const view = await service.create(TENANT_A, 'user-1', undefined, text);
     await expect(service.post(TENANT_A, 'user-1', view.id)).rejects.toMatchObject({
-      status: 409,
+      status: 422,
       response: expect.objectContaining({
         findings: expect.arrayContaining([
           expect.objectContaining({ code: 'CONTROL_ACCOUNT_NOT_ALLOWED' }),

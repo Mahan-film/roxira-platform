@@ -165,6 +165,34 @@ export function isControlReportLine(reportLine?: ReportLine | null): boolean {
   return reportLine != null && CONTROL_REPORT_LINES.has(reportLine);
 }
 
+/**
+ * Checks whether an account is an operational control account based on either its
+ * report line or standard chart code/name. For any control account, client-supplied
+ * `systemPostedOnly: false` must be strictly ignored.
+ */
+export function isControlAccount(account: {
+  reportLine?: ReportLine | null;
+  code?: string;
+  name?: string;
+}): boolean {
+  if (isControlReportLine(account.reportLine)) {
+    return true;
+  }
+  if (account.code) {
+    const code = account.code.trim();
+    if (
+      (code === '1020' && (!account.name || account.name.includes('دریافتنی'))) ||
+      (code === '1030' && (!account.name || account.name.includes('کالا'))) ||
+      (code === '2010' && (!account.name || account.name.includes('پرداختنی'))) ||
+      code === '1110' ||
+      code === '1120'
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function build(moeins: readonly Moein[]): ChartTemplateAccount[] {
   const usedKols = new Set(moeins.map(([code]) => code.slice(0, 2)));
   const kols = KOLS.filter(([code]) => usedKols.has(code));

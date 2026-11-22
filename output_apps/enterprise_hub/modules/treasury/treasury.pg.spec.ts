@@ -165,7 +165,7 @@ describePg('Treasury on PostgreSQL (non-superuser, FORCE RLS)', () => {
   });
 
   it('M1 flow: one receipt against two invoices clears the customer balance and balances the ledger', async () => {
-    // the invoices put 1500 on the customer's receivable (what invoice posting does)
+    // Invoices are posted with { isSystem: true } because they simulate operational sales subledger posting to control account 1020 (AR).
     await accounting.createJournalEntry(
       T1,
       {
@@ -236,6 +236,7 @@ describePg('Treasury on PostgreSQL (non-superuser, FORCE RLS)', () => {
   });
 
   it('a cheque line registers a cheque and the receivable is credited exactly once', async () => {
+    // Invoices are posted with { isSystem: true } because they simulate operational sales subledger posting to control account 1020 (AR).
     await accounting.createJournalEntry(
       T1,
       {

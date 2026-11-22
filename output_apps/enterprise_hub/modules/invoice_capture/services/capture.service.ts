@@ -428,21 +428,27 @@ export class CaptureService {
 
     // T226: Control accounts (AR, AP, inventory, fixed assets) are system-posted only.
     // User or LLM invoice items must never touch control accounts.
-    for (const item of enriched.draft.items) {
-      if (item.accountCode) {
-        const acc = await this.accounting.findAccountByCode(tenantId, item.accountCode);
-        if (acc?.systemPostedOnly) {
-          throw new ConflictException({
-            message: 'سند خطا دارد و ثبت نشد.',
-            findings: [
-              {
-                severity: 'error',
-                code: 'CONTROL_ACCOUNT_NOT_ALLOWED',
-                message: `ثبت ردیف فاکتور روی حساب کنترلی مجاز نیست: ${item.accountCode}`,
-              },
-            ],
-          });
-        }
+    // Batch lookup with findAccountsByCodes to prevent N+1 queries across line items.
+    const itemCodes = Array.from(
+      new Set(
+        enriched.draft.items
+          .map((item) => item.accountCode?.trim())
+          .filter((code): code is string => Boolean(code)),
+      ),
+    );
+    if (itemCodes.length > 0) {
+      const accounts = await this.accounting.findAccountsByCodes(tenantId, itemCodes);
+      const systemPosted = accounts.filter((acc) => acc.systemPostedOnly);
+      if (systemPosted.length > 0) {
+        throw new UnprocessableEntityException({
+          statusCode: 422,
+          message: 'سند خطا دارد و ثبت نشد.',
+          findings: systemPosted.map((acc) => ({
+            severity: 'error',
+            code: 'CONTROL_ACCOUNT_NOT_ALLOWED',
+            message: `ثبت ردیف فاکتور روی حساب کنترلی مجاز نیست: ${acc.code}`,
+          })),
+        });
       }
     }
 

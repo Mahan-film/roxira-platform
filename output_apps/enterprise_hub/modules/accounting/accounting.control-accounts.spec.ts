@@ -228,6 +228,21 @@ describe('T226 Control accounts are system-posted only', () => {
       expect(created.systemPostedOnly).toBe(true);
     });
 
+    it('ignores client systemPostedOnly: false when importing standard control account code without reportLine', async () => {
+      const freshRepo = new InMemoryControlRepo();
+      const freshService = new AccountingService(freshRepo as unknown as AccountingRepository, currencyStub);
+      await freshService.importAccounts(TENANT_ID, [
+        {
+          code: '1020',
+          name: 'حساب‌های دریافتنی تجاری',
+          accountType: AccountType.ASSET,
+          systemPostedOnly: false,
+        },
+      ]);
+      const created = await freshRepo.findAccountByCode(TENANT_ID, '1020');
+      expect(created?.systemPostedOnly).toBe(true);
+    });
+
     it('ignores client systemPostedOnly: false when importing control accounts', async () => {
       const freshRepo = new InMemoryControlRepo();
       const freshService = new AccountingService(freshRepo as unknown as AccountingRepository, currencyStub);

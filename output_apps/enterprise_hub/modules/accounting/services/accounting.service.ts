@@ -35,7 +35,7 @@ import {
   DEFAULT_CHART_OF_ACCOUNTS,
   FX_SCALE,
 } from '../constants/accounting.constants';
-import { isControlReportLine } from '../constants/iran-chart-template';
+import { isControlAccount, isControlReportLine } from '../constants/iran-chart-template';
 import {
   ControlAccountPostingException,
   DuplicateEntryNumberError,
@@ -517,7 +517,12 @@ export class AccountingService {
       }
     }
 
-    const isControl = isControlReportLine(dto.reportLine);
+    const isControl = isControlAccount({
+      reportLine: dto.reportLine,
+      code: dto.code,
+      name: dto.name,
+    });
+    // Ignore client-supplied systemPostedOnly: false for any control account; fail closed.
     const systemPostedOnly = isControl ? true : (dto.systemPostedOnly ?? false);
 
     const created = await this.accountingRepository.createAccount(tenantId, {
@@ -563,7 +568,12 @@ export class AccountingService {
           throw new BadRequestException(`حساب بالادست ${input.parentCode} یافت نشد.`);
         }
       }
-      const isControl = isControlReportLine(input.reportLine);
+      const isControl = isControlAccount({
+        reportLine: input.reportLine,
+        code: input.code,
+        name: input.name,
+      });
+      // Ignore client-supplied systemPostedOnly: false for any control account; fail closed.
       const systemPostedOnly = isControl ? true : (input.systemPostedOnly ?? false);
       const created = await this.accountingRepository.createAccount(tenantId, {
         code: input.code,
@@ -862,7 +872,7 @@ export class AccountingService {
     const roleAllowed = isAllowedAdjustmentRole(options?.actorRole);
     const inAdjustmentPeriod =
       roleAllowed &&
-      (await this.accountingRepository.isDateInAdjustmentPeriod?.(
+      (await this.accountingRepository.isDateInAdjustmentPeriod(
         tenantId,
         date,
         manager,
@@ -1848,6 +1858,24 @@ export class AccountingService {
       code,
     );
     return account ? this.toAccountDto(account) : null;
+  }
+
+  /** حساب‌های دفتر کل با فهرست کدهای حساب (فقط همین مستأجر) به‌صورت یکجا برای پیشگیری از N+1. */
+  async findAccountsByCodes(
+    tenantId: string,
+    codes: string[],
+    manager?: EntityManager,
+  ): Promise<AccountResponseDto[]> {
+    if (codes.length === 0) {
+      return [];
+    }
+    await this.ensureDefaultAccounts(tenantId, manager);
+    const accounts = await this.accountingRepository.findAccountsByCodes(
+      tenantId,
+      codes,
+      manager,
+    );
+    return accounts.map((account) => this.toAccountDto(account));
   }
 
   /**
