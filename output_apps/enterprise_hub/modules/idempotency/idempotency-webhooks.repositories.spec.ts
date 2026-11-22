@@ -3,7 +3,7 @@ import { TenantScope } from '../access/services/tenant-scope';
 import { IdempotencyKeyStatus } from './entities/idempotency-key.entity';
 import { IdempotencyRepository } from './repositories/idempotency.repository';
 import { WebhookDeliveryStatus } from '../webhooks/entities/webhook-delivery.entity';
-import { WebhooksRepository } from '../webhooks/repositories/webhooks.repository';
+import { WebhooksRepository, sealWebhookSecret } from '../webhooks/repositories/webhooks.repository';
 
 const T1 = '11111111-1111-4111-8111-111111111111';
 const SUB_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -80,6 +80,42 @@ describe('IdempotencyRepository & WebhooksRepository (TenantScope enforcement)',
       const repo = new IdempotencyRepository(scope);
       await expect(repo.findActive(T1, 'scope-abc', 'k-999')).rejects.toThrow(/permission denied/);
     });
+
+    it('preserves verbatim string responseBody and protects bigint precision (> 2^53)', async () => {
+      const verbatimJson = '{"amount":9007199254740993,"currency":"IRR"}';
+      const mockEntity = {
+        id: '55555555-5555-4555-8555-555555555555',
+        tenantId: T1,
+        scopeHash: 'scope-bigint',
+        idempotencyKey: 'k-bigint',
+        fingerprint: 'fp-bigint',
+        status: IdempotencyKeyStatus.COMPLETED,
+        responseStatus: 200,
+        responseBody: verbatimJson,
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + 86_400_000),
+      };
+
+      const selectQb = {
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(mockEntity),
+      };
+      const scope = makeScope({
+        getRepository: jest.fn(() => ({
+          createQueryBuilder: jest.fn(() => selectQb),
+        })) as any,
+      });
+
+      const repo = new IdempotencyRepository(scope);
+      const found = await repo.findActive(T1, 'scope-bigint', 'k-bigint');
+
+      expect(found).not.toBeNull();
+      // Verbatim string must NOT be rounded by JSON.parse
+      expect(found?.responseBody).toBe(verbatimJson);
+      expect(typeof found?.responseBody).toBe('string');
+      expect(found?.responseBody).toContain('9007199254740993');
+    });
   });
 
   describe('WebhooksRepository', () => {
@@ -129,11 +165,12 @@ describe('IdempotencyRepository & WebhooksRepository (TenantScope enforcement)',
     });
 
     it('routes subscription create/listActiveByEvent and delivery updates through TenantScope without Map fallback', async () => {
+      const validSealed = sealWebhookSecret('webhook-secret-unit-test', T1);
       const savedSub = {
         id: SUB_ID,
         tenantId: T1,
         url: 'https://hooks.example.com/events',
-        secretEncrypted: 'v1.iv.tag.ct',
+        secretEncrypted: validSealed,
         eventTypes: ['invoice.posted', 'journal.posted'],
         isActive: true,
         createdAt: new Date(),
@@ -174,6 +211,30 @@ describe('IdempotencyRepository & WebhooksRepository (TenantScope enforcement)',
         lastStatusCode: 200,
       });
       expect(updated).toBe(true);
+    });
+
+    it('rejects subscription creation when secretEncrypted has invalid format or tampering', async () => {
+      const scope = makeScope({});
+      const repo = new WebhooksRepository(scope);
+
+      // Malformed format
+      await expect(
+        repo.createSubscription(T1, {
+          url: 'https://hooks.example.com/events',
+          secretEncrypted: 'v1.invalid.format',
+          eventTypes: ['invoice.posted'],
+        }),
+      ).rejects.toThrow();
+
+      // Wrong tenant AAD
+      const foreignSealed = sealWebhookSecret('secret', '22222222-2222-4222-8222-222222222222');
+      await expect(
+        repo.createSubscription(T1, {
+          url: 'https://hooks.example.com/events',
+          secretEncrypted: foreignSealed,
+          eventTypes: ['invoice.posted'],
+        }),
+      ).rejects.toThrow();
     });
   });
 });

@@ -13,13 +13,10 @@ const WEBHOOK_SEAL_VERSION = 'v1';
 function getMasterKey(): Buffer {
   const envKey =
     process.env.WEBHOOK_ENC_KEY ||
-    process.env.TOTP_ENC_KEY ||
-    process.env.JWT_SECRET ||
-    process.env.JWT_SECRET_KEY ||
     (process.env.NODE_ENV === 'test' ? 'test-webhook-enc-key-suite' : undefined);
   if (!envKey) {
     throw new Error(
-      'Webhook encryption key is missing. Set WEBHOOK_ENC_KEY, TOTP_ENC_KEY, or JWT_SECRET in environment.',
+      'Webhook encryption key is missing. Set WEBHOOK_ENC_KEY in environment.',
     );
   }
   return createHash('sha256').update(envKey).digest();
@@ -107,7 +104,7 @@ export interface UpdateWebhookDeliveryAttemptInput {
 export class WebhooksRepository {
   constructor(private readonly scope: TenantScope) {}
 
-  createSubscription(
+  async createSubscription(
     tenantId: string,
     input: CreateWebhookSubscriptionInput,
     manager?: EntityManager,
@@ -116,15 +113,13 @@ export class WebhooksRepository {
     if (input.secret) {
       // Encrypt plaintext secret on write using AES-256-GCM with tenantId as AAD
       secretEncrypted = sealWebhookSecret(input.secret, tenantId);
-    } else if (!secretEncrypted) {
+    } else if (secretEncrypted) {
+      // Verify that secretEncrypted is valid, properly sealed with AES-256-GCM, and authentic to this tenantId
+      openWebhookSecret(secretEncrypted, tenantId);
+    } else {
       // Auto-generate 32-byte secret and encrypt
       const generated = randomBytes(32).toString('hex');
       secretEncrypted = sealWebhookSecret(generated, tenantId);
-    } else if (
-      !secretEncrypted.startsWith(`${WEBHOOK_SEAL_VERSION}.`) &&
-      !secretEncrypted.startsWith(`${WEBHOOK_SEAL_VERSION}:`)
-    ) {
-      throw new Error(`Invalid sealed webhook secret format: expected '${WEBHOOK_SEAL_VERSION}.' prefix`);
     }
 
     return this.scope.within(tenantId, manager, async (m) => {

@@ -188,15 +188,7 @@ export class IdempotencyRepository {
     e.fingerprint = String(raw.fingerprint);
     e.status = raw.status as IdempotencyKeyStatus;
     e.responseStatus = raw.response_status != null ? Number(raw.response_status) : null;
-    let body = raw.response_body;
-    if (typeof body === 'string') {
-      try {
-        body = JSON.parse(body);
-      } catch {
-        // preserve raw string
-      }
-    }
-    e.responseBody = (body ?? null) as never;
+    e.responseBody = raw.response_body != null ? String(raw.response_body) : null;
     e.createdAt = raw.created_at instanceof Date ? raw.created_at : new Date(String(raw.created_at));
     e.expiresAt = raw.expires_at instanceof Date ? raw.expires_at : new Date(String(raw.expires_at));
     return e;
