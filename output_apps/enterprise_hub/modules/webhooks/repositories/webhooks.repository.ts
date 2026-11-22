@@ -120,7 +120,10 @@ export class WebhooksRepository {
       // Auto-generate 32-byte secret and encrypt
       const generated = randomBytes(32).toString('hex');
       secretEncrypted = sealWebhookSecret(generated, tenantId);
-    } else if (!secretEncrypted.startsWith(`${WEBHOOK_SEAL_VERSION}.`)) {
+    } else if (
+      !secretEncrypted.startsWith(`${WEBHOOK_SEAL_VERSION}.`) &&
+      !secretEncrypted.startsWith(`${WEBHOOK_SEAL_VERSION}:`)
+    ) {
       throw new Error(`Invalid sealed webhook secret format: expected '${WEBHOOK_SEAL_VERSION}.' prefix`);
     }
 

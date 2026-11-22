@@ -126,17 +126,19 @@ describePg('T185 Part 1: Idempotency & Webhooks tables FORCE RLS (roxira_app)', 
   it('enforces FORCE RLS, DB UUIDs, and retention purge on sys_webhook_subscriptions and sys_webhook_deliveries', async () => {
     const subT1 = await webhooksRepo.createSubscription(T1, {
       url: 'https://client-a.example.com/webhooks',
-      secretEncrypted: 'v1:aes256gcm:encrypted-secret-a',
+      secret: 'webhook-client-a-secret',
       eventTypes: ['invoice.posted', 'asset.depreciated'],
     });
     expect(subT1.id).toMatch(UUID_RE);
+    expect(subT1.secretEncrypted.startsWith('v1.')).toBe(true);
 
     const subT2 = await webhooksRepo.createSubscription(T2, {
       url: 'https://client-b.example.com/webhooks',
-      secretEncrypted: 'v1:aes256gcm:encrypted-secret-b',
+      secret: 'webhook-client-b-secret',
       eventTypes: ['journal.posted'],
     });
     expect(subT2.id).toMatch(UUID_RE);
+    expect(subT2.secretEncrypted.startsWith('v1.')).toBe(true);
 
     // Tenant isolation: T2 cannot find, toggle, or delete T1's subscription
     expect(await webhooksRepo.findSubscriptionById(T2, subT1.id)).toBeNull();
