@@ -46,14 +46,14 @@ secret, a physical action, sudo on the laptop or a production write. Never name 
 #1081 #1180 #1097 #1182 (box lane runner, box-lanes key, mission prompt), #1165 (health.sh fix) and nine more green PRs, #1195 (test_orch import fix, main CI), #1204 (lessons),
 #1207 #1209 #1211 #1221 #1223 (Gemini second opinions R29 R28 R31 R30 R32), #1213 #1219 #1234 (AGENTS 4a private-code policy), #1238 (safe worktree prune script),
 #1215 (REVERT of the cutover wizard #1202: it could apply an irreversible period lock with an empty body; production shows 0 cutover rows, 0 new locks, 0 OB- journals).
-Queued after "no blocker": #1241 (R28 Stage 2 run 2), #1246 R24, #1247 R22, #1248 R23, #1250 R25, #1252 R26 (second opinions), #1197 (accountant access).
+Also merged: #1241 #1246 #1247 #1248 #1250 #1252 (second opinions R28 stage 2, R24, R22, R23, R25, R26), #1224, #1255 (handoff). #1197 (accountant access) merged against a hub blocker at the same head (global force-logout in revokeFirmUser): its three /org/advisors routes are being disabled in #1259; production had 0 advisors and 0 tagged entries. Audit row #1270 lists four PRs merged with a newer blocker (#1074 #1175 #1197 #1199).
 
 ## Open PRs
 - The review desk reviews only 8 PRs per run: dispatch it once and let it finish (re-dispatching cancels the pending run).
 - Cutover redo: #1229 has THREE BLOCKERS from an independent review (no confirmation step, no test that red tie-outs stop the lock, self-attested totals); #1226 and #1227 had none from it
   (the desk put a blocker on #1226: read both). Merging #1229 re-enables the reverted path: needs the owner's explicit sentence.
 - Held for the owner: #1161 (deploy key, signed tags), #1158 (Redis pin), #1046 (root CI script), #1072 (nginx/SSE), #889 (parked, row #1093), #1200 (Postgres/PgBouncer sizing),
-  #1225 (proprietary LICENSE: desk reviews, a lawyer sees it, hub never self-merges), #1205 (draft, box hub).
+  #1225 (proprietary LICENSE: desk reviews, a lawyer sees it, hub never self-merges). Box hub PRs: #1205 (queued, no blocker), #1228 #1232 (no blocker, wait), #1233 #1236 (root and backup scripts: need a verdict and the owners' sentence).
 - Lane PRs with real blockers (lanes answer them): #1201 #1198 #1159 #963 #964 #943 #868 #850 #831 #805 #771 #728; #999 and #1172 were updated to main and need a fresh verdict.
 
 ## Production steps waiting (each needs the owner's explicit sentence)
@@ -76,7 +76,8 @@ Queued after "no blocker": #1241 (R28 Stage 2 run 2), #1246 R24, #1247 R22, #124
 - Mac disk: 36 more clean worktrees removed 2026-11-22 (28 GiB free after the owner cleared caches). 51 dirty, 42 no-PR, 24 open-PR and 6 unpushed worktrees kept; use
   `scripts/ops/prune_worktrees.sh` (dry run first). Never bulk-delete.
 - Production keeps an EMPTY table `data_import_cutovers` from the reverted wizard (its migration file was deleted); #1226's migration is idempotent against it. A drop needs the owner's sentence.
-- Orch dry-run fails on the box until #1205 removes `gh --slurp` (gh 2.46).
+- Orch dry-run fails on the box until #1205 removes `gh --slurp` (gh 2.46). After #1205 and a passing tunnel smoke the box hub may run `orch --apply` only on lane L5 with ORCH_SCOPE allowlists and a tiny paid cap.
+- Merge check (lesson 37): read EVERY comment newer than the head commit; any `Verdict: blocker` (desk or hub re-review) blocks the merge.
 - Box SSH: port 22 open but the handshake is closed (optional; GitHub is the control plane). Mac launchd jobs `llm-tunnel`, `team-status`, `fleet` need a check.
 - 164 OSV findings (#1031), CSP report-only, PgBouncer sizing, Redis AOF, 21 tables without FORCE RLS until T200.
 
