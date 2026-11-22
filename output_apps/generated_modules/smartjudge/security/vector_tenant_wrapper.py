@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from pathlib import Path
 import re
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 from urllib import request as urllib_request
@@ -38,17 +39,57 @@ class TenantCancelledError(PermissionError):
 
 
 class TenantCancellationRegistry:
-    """In-memory and ledger-backed registry of cancelled / erased tenants (R25 / T269).
+    """In-memory and durable file-backed registry of cancelled / erased tenants (R25 / T269).
 
     Ensures that any retrieval or vector operation on an offboarded tenant fails closed across all layers.
+    Survives worker process restarts by persisting to durable storage.
     """
     _cancelled_tenants: Set[str] = set()
+    _storage_path: Optional[Path] = None
+
+    @classmethod
+    def get_storage_path(cls) -> Path:
+        if cls._storage_path:
+            return cls._storage_path
+        env_p = os.environ.get("TENANT_CANCELLATION_FILE")
+        if env_p:
+            return Path(env_p)
+        return Path("/tmp/roxira_cancelled_tenants.json")
+
+    @classmethod
+    def set_storage_path(cls, p: Optional[Path]) -> None:
+        cls._storage_path = p
+
+    @classmethod
+    def _load_persisted(cls) -> None:
+        p = cls.get_storage_path()
+        if p.is_file():
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        cls._cancelled_tenants.update(data)
+            except Exception as e:
+                logger.warning("Failed loading cancelled tenants file %s: %s", p, e)
+
+    @classmethod
+    def _save_persisted(cls) -> None:
+        p = cls.get_storage_path()
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            tmp = p.with_suffix(".tmp")
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(sorted(list(cls._cancelled_tenants)), f)
+            tmp.replace(p)
+        except Exception as e:
+            logger.warning("Failed persisting cancelled tenants to %s: %s", p, e)
 
     @classmethod
     def cancel_tenant(cls, tenant_id: str, reason: str = "", authorized_by: str = "") -> Dict[str, Any]:
         """Mark a tenant as cancelled/offboarded. Subsequent queries will fail closed."""
         valid_id = validate_identifier(tenant_id, "tenant_id", check_cancelled=False)
         cls._cancelled_tenants.add(valid_id)
+        cls._save_persisted()
         logger.warning(
             "Tenant %s added to cancellation registry. Reason: %s, Authorized by: %s",
             valid_id, reason, authorized_by
@@ -59,7 +100,11 @@ class TenantCancellationRegistry:
     def is_cancelled(cls, tenant_id: Optional[str]) -> bool:
         if not tenant_id:
             return False
-        return str(tenant_id).strip() in cls._cancelled_tenants
+        clean_id = str(tenant_id).strip()
+        if clean_id in cls._cancelled_tenants:
+            return True
+        cls._load_persisted()
+        return clean_id in cls._cancelled_tenants
 
     @classmethod
     def check_active(cls, tenant_id: Optional[str]) -> None:
@@ -72,6 +117,12 @@ class TenantCancellationRegistry:
     def clear(cls) -> None:
         """Clear registry (used for tests)."""
         cls._cancelled_tenants.clear()
+        p = cls.get_storage_path()
+        if p.is_file():
+            try:
+                p.unlink()
+            except OSError:
+                pass
 
 
 #: Collections known to store tenant, customer, or user data.
@@ -555,8 +606,8 @@ class TenantVectorStoreWrapper:
                 points = res_json.get("result", {}).get("points", [])
                 return len(points)
         except Exception as exc:
-            logger.warning("Ghost check scroll error on %s: %s", collection_name, exc)
-            return 0
+            logger.error("Ghost check scroll error on %s: %s", collection_name, exc)
+            raise RuntimeError(f"Ghost check failed for collection '{collection_name}': {exc}") from exc
 
 
 def tenant_cache_key(tenant_id: str, key: str, namespace: str = "rag") -> str:
@@ -631,7 +682,9 @@ def scrub_refusal_metadata(
                     if is_pub or (t_id and str(t_id).strip() == valid_caller_tenant):
                         clean_list.append(item)
                 elif isinstance(item, str):
-                    if valid_caller_tenant in item or "tenant" not in item.lower():
+                    uuids = re.findall(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", item)
+                    has_foreign_uuid = any(u.lower() != valid_caller_tenant.lower() for u in uuids)
+                    if not has_foreign_uuid and (valid_caller_tenant in item or "tenant" not in item.lower()):
                         clean_list.append(item)
             scrubbed[list_key] = clean_list
 

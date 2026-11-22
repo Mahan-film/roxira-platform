@@ -55,9 +55,10 @@ Operational standard for tenant data destruction across PostgreSQL, Qdrant vecto
      psql -d roxira_prod -c "UPDATE auth_refresh_tokens SET revoked = true WHERE user_id IN (SELECT id FROM users WHERE tenant_id = '$TENANT_ID');"
      psql -d roxira_prod -c "UPDATE users SET is_active = false WHERE tenant_id = '$TENANT_ID';"
      ```
-   - Register the cancellation in the application registry to immediately block hot-path RAG queries:
+   - Register the cancellation in the application registry to immediately block hot-path RAG queries (durable across restarts):
      ```python
      from output_apps.generated_modules.smartjudge.security.vector_tenant_wrapper import TenantCancellationRegistry
+     # Persists to durable cancellation storage and fails closed on all subsequent accesses
      TenantCancellationRegistry.cancel_tenant(tenant_id=TENANT_ID, reason="Contract termination", authorized_by="ops-admin")
      ```
 

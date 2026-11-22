@@ -142,7 +142,11 @@ def replay_tenant_erasure(
         del_res = wrapper.delete_tenant_vectors(coll, valid_id, force_compaction=True)
         if del_res.get("deleted"):
             result["qdrant_purged_collections"].append(coll)
-        surviving_ghosts += wrapper.ghost_check_tenant(coll, valid_id)
+        try:
+            surviving_ghosts += wrapper.ghost_check_tenant(coll, valid_id)
+        except Exception as e:
+            logger.error("Ghost check failed for %s on %s: %s", valid_id, coll, e)
+            surviving_ghosts += 1  # Fail closed: treat connection/check failure as unclean
 
     result["ghost_count"] = surviving_ghosts
     if surviving_ghosts > 0:
