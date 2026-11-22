@@ -366,6 +366,9 @@ export class MemorySequencerStore implements SequencerStore {
 
 export class PostgresSequencerStore implements SequencerStore {
   async nextNumber(k: DocumentCounterKey, manager: any): Promise<number> {
+    if (!k.tenantId || k.tenantId.trim() === '' || k.tenantId === '00000000-0000-0000-0000-000000000000') {
+      throw new BadRequestException('Valid tenantId is required for persistent document numbering.');
+    }
     if (!manager?.query) throw new BadRequestException('EntityManager query runner required for Postgres sequencer.');
     const rows: Array<{ last_number: string | number }> = await manager.query(
       `INSERT INTO "fin_document_counters" ("tenant_id", "document_type", "channel", "fiscal_year", "series", "last_number")
@@ -373,7 +376,7 @@ export class PostgresSequencerStore implements SequencerStore {
        ON CONFLICT ("tenant_id", "document_type", "channel", "fiscal_year", "series")
        DO UPDATE SET "last_number" = "fin_document_counters"."last_number" + 1, "updated_at" = now()
        RETURNING "last_number"`,
-      [k.tenantId ?? '00000000-0000-0000-0000-000000000000', k.documentType ?? 'INVOICE', k.channel ?? 'DEFAULT', k.fiscalYear ?? 0, k.series],
+      [k.tenantId, k.documentType ?? 'INVOICE', k.channel ?? 'DEFAULT', k.fiscalYear ?? 0, k.series],
     );
     return Number(rows[0].last_number);
   }
@@ -384,7 +387,7 @@ export class PostgresSequencerStore implements SequencerStore {
  */
 @Injectable()
 export class GaplessNumberSequencer {
-  constructor(private store: SequencerStore = new MemorySequencerStore()) {}
+  constructor(@Optional() private store: SequencerStore = new MemorySequencerStore()) {}
   setStore(store: SequencerStore): void { this.store = store; }
 
   nextNumber(keyOrSeries: string | DocumentCounterKey, manager?: any): { sequenceNumber: number; documentNumber: string } {
@@ -442,17 +445,50 @@ export class VendorInvoiceGenerator {
     @Optional() private readonly sequencer?: GaplessNumberSequencer,
   ) {}
 
+  async generateAsync(
+    request: VendorInvoiceRequest,
+    manager?: any,
+    sequenceNumber?: number,
+  ): Promise<VendorInvoiceDocument> {
+    if (sequenceNumber !== undefined) {
+      return this.generate(request, sequenceNumber);
+    }
+    if (!this.sequencer) {
+      throw new BadRequestException('A GaplessNumberSequencer or explicit sequenceNumber is required.');
+    }
+    const { sequenceNumber: seq } = await this.sequencer.nextNumberAsync(
+      {
+        tenantId: request.tenantId,
+        documentType: request.documentType,
+        channel: request.channel,
+        fiscalYear: request.fiscalYear,
+        series: request.series,
+      },
+      manager,
+    );
+    return this.generate(request, seq);
+  }
+
   generate(
     request: VendorInvoiceRequest,
     sequenceNumber?: number,
   ): VendorInvoiceDocument {
     assertValidIsoDate(request.issueDate, 'issueDate');
-    const seq = sequenceNumber !== undefined
-      ? sequenceNumber
-      : (this.sequencer ?? new GaplessNumberSequencer()).nextNumber({
-          tenantId: request.tenantId, documentType: request.documentType,
-          channel: request.channel, fiscalYear: request.fiscalYear, series: request.series,
-        }).sequenceNumber;
+    let seq = sequenceNumber;
+    if (seq === undefined) {
+      if (!this.sequencer) {
+        throw new BadRequestException(
+          'Explicit sequenceNumber or an injected sequencer is required; use generateAsync with a transactional manager for persistent numbering.',
+        );
+      }
+      seq = this.sequencer.nextNumber({
+        tenantId: request.tenantId,
+        documentType: request.documentType,
+        channel: request.channel,
+        fiscalYear: request.fiscalYear,
+        series: request.series,
+      }).sequenceNumber;
+    }
 
     if (seq <= 0) {
       throw new BadRequestException('Sequence number must be a positive integer.');

@@ -269,4 +269,70 @@ describe('VendorInvoiceGenerator (T321 / R31)', () => {
       expect(() => generator.generate({ ...MY_B2B_INVOICE_REQUEST, issueDate: '2026/11/21' }, 1)).toThrow(BadRequestException);
     });
   });
+
+  describe('9. PostgresSequencerStore & Persistent Numbering (T321)', () => {
+    it('requires a valid non-zero tenantId and rejects empty or fallback zero UUID', async () => {
+      const pgStore = new PostgresSequencerStore();
+      const mockManager = { query: jest.fn() };
+
+      await expect(
+        pgStore.nextNumber({ series: 'INV-2026' }, mockManager),
+      ).rejects.toThrow('Valid tenantId is required');
+
+      await expect(
+        pgStore.nextNumber(
+          { tenantId: '00000000-0000-0000-0000-000000000000', series: 'INV-2026' },
+          mockManager,
+        ),
+      ).rejects.toThrow('Valid tenantId is required');
+    });
+
+    it('increments sequence atomically in Postgres using manager query', async () => {
+      const pgStore = new PostgresSequencerStore();
+      const mockManager = {
+        query: jest.fn().mockResolvedValue([{ last_number: '42' }]),
+      };
+
+      const num = await pgStore.nextNumber(
+        { tenantId: '11111111-1111-4111-8111-111111111111', series: 'INV-2026' },
+        mockManager,
+      );
+
+      expect(num).toBe(42);
+      expect(mockManager.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO "fin_document_counters"'),
+        ['11111111-1111-4111-8111-111111111111', 'INVOICE', 'DEFAULT', 0, 'INV-2026'],
+      );
+    });
+
+    it('generates invoice asynchronously using generateAsync with Postgres sequencer', async () => {
+      const pgStore = new PostgresSequencerStore();
+      const pgSequencer = new GaplessNumberSequencer(pgStore);
+      const pgGenerator = new VendorInvoiceGenerator(registry, pgSequencer);
+      const mockManager = {
+        query: jest.fn().mockResolvedValue([{ last_number: 10 }]),
+      };
+
+      const doc = await pgGenerator.generateAsync(
+        {
+          ...MY_B2B_INVOICE_REQUEST,
+          tenantId: '11111111-1111-4111-8111-111111111111',
+        },
+        mockManager,
+      );
+
+      expect(doc.sequenceNumber).toBe(10);
+      expect(doc.documentNumber).toBe('INV-2026-000010');
+    });
+
+    it('throws when generator has no sequencer and no sequenceNumber is passed', () => {
+      const bareGenerator = new VendorInvoiceGenerator(registry);
+      expect(() =>
+        bareGenerator.generate({
+          ...MY_B2B_INVOICE_REQUEST,
+          tenantId: '11111111-1111-4111-8111-111111111111',
+        }),
+      ).toThrow(/Explicit sequenceNumber or an injected sequencer is required/);
+    });
+  });
 });

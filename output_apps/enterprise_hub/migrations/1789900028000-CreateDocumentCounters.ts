@@ -2,8 +2,8 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
 
 /** Gapless document sequence counters per tenant, doc type, channel, fiscal year, and series (T321 / R31). */
-export class CreateDocumentCounters1789900022000 implements MigrationInterface {
-  name = 'CreateDocumentCounters1789900022000';
+export class CreateDocumentCounters1789900028000 implements MigrationInterface {
+  name = 'CreateDocumentCounters1789900028000';
 
   public async up(q: QueryRunner): Promise<void> {
     await q.query(`CREATE TABLE IF NOT EXISTS "fin_document_counters" (
@@ -20,6 +20,7 @@ export class CreateDocumentCounters1789900022000 implements MigrationInterface {
   }
 
   public async down(q: QueryRunner): Promise<void> {
+    // Note: Reverts its own up() by removing the newly created table and its tenant RLS policy.
     await disableTenantRls(q, 'fin_document_counters');
     await q.query(`DROP TABLE IF EXISTS "fin_document_counters"`);
   }
