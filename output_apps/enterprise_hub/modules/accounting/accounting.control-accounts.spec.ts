@@ -5,7 +5,7 @@ import { Currency } from '../currency/enums/currency.enum';
 import { CurrencyService } from '../currency/services/currency.service';
 import { TreasuryLedgerPostingAdapter } from '../treasury/posting/treasury-ledger-posting.adapter';
 import { TreasuryDocKind } from '../treasury/enums/treasury.enum';
-import { CONTROL_REPORT_LINES, CHART_TEMPLATES, isControlReportLine } from './constants/iran-chart-template';
+import { CONTROL_REPORT_LINES, CHART_TEMPLATES, isControlReportLine, isControlAccount, LEGACY_CONTROL_ACCOUNTS } from './constants/iran-chart-template';
 import { AccountingController } from './controllers/accounting.controller';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { SetAdjustmentPeriodDto } from './dto/fiscal-year.dto';
@@ -257,6 +257,31 @@ describe('T226 Control accounts are system-posted only', () => {
       ]);
       const created = await freshRepo.findAccountByCode(TENANT_ID, '2019');
       expect(created?.systemPostedOnly).toBe(true);
+    });
+
+    it('accurately identifies control accounts and does not flag custom/non-control accounts without reportLine', async () => {
+      // Legacy unclassified accounts match strictly on BOTH code AND exact default Persian name
+      expect(isControlAccount({ code: '1020', reportLine: null, name: 'حساب‌های دریافتنی تجاری' })).toBe(true);
+      expect(isControlAccount({ code: '1030', reportLine: null, name: 'موجودی کالا' })).toBe(true);
+      expect(isControlAccount({ code: '2010', reportLine: null, name: 'حساب‌های پرداختنی تجاری' })).toBe(true);
+      expect(LEGACY_CONTROL_ACCOUNTS['1020']).toBe('حساب‌های دریافتنی تجاری');
+
+      // Custom account with legacy code or other codes without reportLine is NOT control
+      expect(isControlAccount({ code: '1020', reportLine: null, name: 'سایر حساب‌های متفرقه' })).toBe(false);
+      expect(isControlAccount({ code: '1020', reportLine: null, name: '' })).toBe(false);
+      expect(isControlAccount({ code: '1020', reportLine: null })).toBe(false);
+      expect(isControlAccount({ code: '1110', reportLine: null, name: 'x' })).toBe(false);
+      expect(isControlAccount({ code: '1120', reportLine: null, name: 'custom' })).toBe(false);
+
+      // Account { code: '1115', reportLine: undefined, name: 'x' } may be created with systemPostedOnly: false
+      const nonControl = await service.createAccount(TENANT_ID, {
+        code: '1115',
+        name: 'x',
+        accountType: AccountType.ASSET,
+        reportLine: undefined,
+        systemPostedOnly: false,
+      });
+      expect(nonControl.systemPostedOnly).toBe(false);
     });
   });
 

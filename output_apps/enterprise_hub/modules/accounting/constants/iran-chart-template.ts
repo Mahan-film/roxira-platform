@@ -166,6 +166,17 @@ export function isControlReportLine(reportLine?: ReportLine | null): boolean {
 }
 
 /**
+ * Standard legacy default-chart accounts with unclassified report_line, matched
+ * strictly on BOTH code and exact default Persian name (aligned with migration
+ * 1789900022000 backfill query).
+ */
+export const LEGACY_CONTROL_ACCOUNTS: Readonly<Record<string, string>> = {
+  '1020': 'حساب‌های دریافتنی تجاری',
+  '1030': 'موجودی کالا',
+  '2010': 'حساب‌های پرداختنی تجاری',
+};
+
+/**
  * Checks whether an account is an operational control account based on either its
  * report line or standard chart code/name. For any control account, client-supplied
  * `systemPostedOnly: false` must be strictly ignored.
@@ -180,13 +191,8 @@ export function isControlAccount(account: {
   }
   if (account.code) {
     const code = account.code.trim();
-    if (
-      (code === '1020' && (!account.name || account.name.includes('دریافتنی'))) ||
-      (code === '1030' && (!account.name || account.name.includes('کالا'))) ||
-      (code === '2010' && (!account.name || account.name.includes('پرداختنی'))) ||
-      code === '1110' ||
-      code === '1120'
-    ) {
+    const expectedName = LEGACY_CONTROL_ACCOUNTS[code];
+    if (expectedName && account.name?.trim() === expectedName) {
       return true;
     }
   }
