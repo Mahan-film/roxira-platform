@@ -968,7 +968,7 @@ export class AccountingService {
       return;
     }
     const inAdjustmentPeriod =
-      (await this.accountingRepository.isDateInAdjustmentPeriod?.(
+      (await this.accountingRepository.isDateInAdjustmentPeriod(
         tenantId,
         date,
         manager,
