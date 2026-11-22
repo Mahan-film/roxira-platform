@@ -15,7 +15,12 @@ function getMasterKey(): Buffer {
     process.env.WEBHOOK_ENC_KEY ||
     process.env.TOTP_ENC_KEY ||
     process.env.JWT_SECRET ||
-    'roxira-default-webhook-key-32b!';
+    process.env.JWT_SECRET_KEY;
+  if (!envKey) {
+    throw new Error(
+      'Webhook encryption key is missing. Set WEBHOOK_ENC_KEY, TOTP_ENC_KEY, or JWT_SECRET in environment.',
+    );
+  }
   return createHash('sha256').update(envKey).digest();
 }
 
@@ -115,8 +120,7 @@ export class WebhooksRepository {
       const generated = randomBytes(32).toString('hex');
       secretEncrypted = sealWebhookSecret(generated, tenantId);
     } else if (!secretEncrypted.startsWith(`${WEBHOOK_SEAL_VERSION}.`)) {
-      // Plaintext passed as secretEncrypted: encrypt it
-      secretEncrypted = sealWebhookSecret(secretEncrypted, tenantId);
+      throw new Error(`Invalid sealed webhook secret format: expected '${WEBHOOK_SEAL_VERSION}.' prefix`);
     }
 
     return this.scope.within(tenantId, manager, async (m) => {
