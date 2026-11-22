@@ -663,7 +663,7 @@ set -eu
 d="$ROXIRA_BUILDER_TASKS/$2"
 [ -z "${KEYPOOL_MASTER_KEY:-}" ] && [ -z "${OPENCODE_CONFIG_CONTENT:-}" ]      # secrets never in the child env
 [ "$(stat -c %a "$d/gateway.env")" = 600 ] && grep -q "^KEYPOOL_MASTER_KEY=${EXPECT_KEY}$" "$d/gateway.env"
-[ "$(cat "$d/prompt.txt")" = "do the task" ] && [ ! -e "$d/work/.git" ]
+[ "$(cat "$d/prompt.txt")" = "do the task" ] && [ -f "$d/work/.git/HEAD" ] && ! grep -q remote "$d/work/.git/config" && [ -z "$(ls "$d/work/.git/hooks" 2>/dev/null)" ]
 echo edited > "$d/work/docs/a.md"; echo made > "$d/work/docs/b.md"
 echo "builder says hi" > "$d/out/builder.log"; echo '{"exit": 0}' > "$d/out/result.json"
 """)
@@ -864,3 +864,37 @@ def test_sandbox_property_set_is_the_tested_one():
     props = br.unit_properties(br.Cfg(), "9", "/w", "/r/task", "/r/env")
     assert not any(p.startswith("ProcSubset") for p in props)
     assert sum(p.startswith("EnvironmentFile=") for p in props) == 2
+
+
+def test_init_work_repo_is_fresh_without_remote_or_hooks(tmp_path):
+    work = tmp_path / "work"
+    work.mkdir()
+    bio.init_work_repo(work)
+    assert (work / ".git" / "HEAD").is_file()
+    assert "remote" not in (work / ".git" / "config").read_text()
+    assert not (work / ".git" / "hooks").exists() or not os.listdir(work / ".git" / "hooks")
+    out = subprocess.run(["git", "-C", str(work), "log"], capture_output=True, text=True)
+    assert out.returncode != 0  # no history: nothing of the real repository is reachable
+
+
+def test_import_ignores_the_builders_root_git_even_if_hostile(tmp_path):
+    wt, work = tmp_path / "wt", tmp_path / "work"
+    wt.mkdir()
+    work.mkdir()
+    _tree(wt, {".git": "gitdir: x", "a.txt": "1"})
+    bio.stage_tree(wt, work)
+    bio.init_work_repo(work)
+    (work / ".git" / "config").write_text("[core]\nfsmonitor = touch /tmp/pwned\n")
+    (work / "a.txt").write_text("2")
+    assert bio.import_tree(work, wt) == []
+    assert (wt / ".git").read_text() == "gitdir: x" and (wt / "a.txt").read_text() == "2"
+    (work / "sub").mkdir()
+    (work / "sub" / ".git").mkdir()
+    assert any(
+        "sub/.git" in b for b in bio.import_tree(work, wt)
+    )  # nested repositories stay refused
+
+
+def test_apply_root_installs_ripgrep_idempotently():
+    text = APPLY.read_text()
+    assert "dpkg -s ripgrep" in text and "apt-get install -y ripgrep" in text

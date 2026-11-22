@@ -154,6 +154,15 @@ else
   info "   skipped (no binary found); the verb will refuse to run until $OPT/bin/opencode exists"
 fi
 undo "rm -rf $OPT"
+# OpenCode searches with ripgrep. Without it on PATH it tries to download one into the builder's cache from a release host
+# that is not on the allowlist, and every search fails ("ripgrep execution failed"). A root-owned package avoids that.
+if dpkg -s ripgrep >/dev/null 2>&1; then
+  info "   package ripgrep present"
+else
+  info "   ripgrep: needs network for apt (box proxy on: 'sudo box-proxy on')"
+  run apt-get install -y ripgrep
+fi
+undo "apt-get remove ripgrep   (only if nothing else uses it)"
 
 # ---- 5. tinyproxy ------------------------------------------------------------------------------------------
 step "5. tinyproxy: package, our filter/conf, a second instance on 127.0.0.1:$PROXY_PORT"

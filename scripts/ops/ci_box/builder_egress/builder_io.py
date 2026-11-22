@@ -66,6 +66,28 @@ def stage_tree(src: Path, dst: Path) -> int:
     return n
 
 
+def init_work_repo(work: Path) -> None:
+    """A fresh, empty git repository in work/ (no remote, no history, no hooks, no config from the host).
+    Why: OpenCode takes its project root from git; without a repository the root is "/" and the relative edit/read
+    patterns of run_task.sh (docs/agents/**) never match the absolute path, so every write is denied. The real .git
+    of the worktree is never copied, so the builder still cannot reach the real history or the remote. The lane user
+    never runs git inside work/ (a builder-written .git/config could run code); the importer ignores this .git."""
+    env = {
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        "GIT_CONFIG_GLOBAL": "/dev/null",
+        "GIT_CONFIG_SYSTEM": "/dev/null",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "HOME": str(work),
+    }
+    subprocess.run(
+        ["git", "init", "-q", "--template=", "-b", "main", str(work)],
+        env=env,
+        stdin=subprocess.DEVNULL,
+        check=True,
+        stdout=subprocess.DEVNULL,
+    )
+
+
 def new_task_dir(base: Path, rand) -> tuple[str, Path]:
     """Create <base>/<id>/{work,out}, mode 0700. id = 12 digits from time and a random part; retried on collision."""
     import time
@@ -112,6 +134,8 @@ def _scan(root: Path) -> tuple[dict[str, os.stat_result], list[str]]:
                 r = f"{rel}/{e.name}" if rel else e.name
                 st = e.stat(follow_symlinks=False)
                 if e.name == ".git":
+                    if not rel:
+                        continue  # the builder's own throwaway repository (init_work_repo): never imported
                     bad.append(f"{r} (.git is not allowed)")
                     continue
                 if len(found) >= MAX_FILES:
@@ -252,6 +276,7 @@ def shim_main(argv: list[str], env: dict[str, str], cwd: Path) -> int:
     rc = 1
     try:
         stage_tree(cwd, tdir / "work")
+        init_work_repo(tdir / "work")
         write_private(tdir / "prompt.txt", prompt, 0o600)
         write_private(tdir / "model.txt", model + "\n", 0o600)
         write_private(tdir / "config.json", config, 0o600)

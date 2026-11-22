@@ -60,7 +60,14 @@ sudo -n /usr/local/sbin/roxira-lane-root run-builder <task-id>      # task-id: 1
   calls it like opencode. The shim copies the worktree WITHOUT `.git` into `work/`, runs the verb, then imports the result
   into the real worktree as plain files (no symlink changes, no `.git`, size limits; anything refused makes the run fail).
   `run_task.sh` then does its usual scope check, commit and diff as the lane user, so the builder never touches git
-  metadata. Inside the builder there is no `.git`, so `git status`/`git diff` in its bash allowlist fail; it works on files.
+  metadata. The copy gets a FRESH `git init` (no remote, no history, no hooks, no host config) and nothing of the real
+  `.git`: OpenCode takes its project root from git, and without a repository the root is `/`, so the relative scope
+  patterns of `run_task.sh` (`docs/agents/**`) never match and every write is denied. The builder therefore cannot reach
+  the real history or the remote (it also has no token). The lane user never runs git inside `work/` (a builder-written
+  `.git/config` could run code) and the importer ignores that `.git`; nested `.git` entries are still refused.
+- ripgrep: OpenCode searches with `rg`. If none is on `PATH` it downloads one into the builder's cache from a release
+  host that is not on the allowlist, and every search fails. `apply_root.sh` installs the `ripgrep` package (root-owned,
+  `/usr/bin/rg`, on the default `PATH` of the unit). No allowlist change.
 - The gateway key is a capped virtual key for the loopback gateway, not a provider key. The builder holds it in its own
   process environment (it must, to call the gateway). Any local user can reach the loopback tunnel, so the key is only as
   secret as the box's local users; the protection is the server-side restriction (agent groups only, daily cap) and
