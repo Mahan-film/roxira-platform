@@ -1,0 +1,4928 @@
+{
+  "version": "2.0",
+  "task": "T247",
+  "issue": 986,
+  "count": 360,
+  "cases": [
+    {
+      "id": "REAL-001",
+      "stratum": "anonymised_real",
+      "question": "شرایط صحت قرارداد و التزام طرفین چیست؟ (قانون مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:10"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون مدنی art 10; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-002",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: شرایط صحت قرارداد و التزام طرفین چیست؟ (قانون مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:10"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون مدنی art 10; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-003",
+      "stratum": "anonymised_real",
+      "question": "آیا وجه التزام قراردادی قابل تعدیل است؟ (قانون مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:190"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون مدنی art 190; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-004",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: آیا وجه التزام قراردادی قابل تعدیل است؟ (قانون مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:190"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون مدنی art 190; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-005",
+      "stratum": "anonymised_real",
+      "question": "تکلیف فسخ معامله به دلیل عیب پنهان چیست؟ (قانون مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:219"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون مدنی art 219; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-006",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: تکلیف فسخ معامله به دلیل عیب پنهان چیست؟ (قانون مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:219"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون مدنی art 219; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-007",
+      "stratum": "anonymised_real",
+      "question": "حق حبس فروشنده تا زمان پرداخت ثمن چگونه است؟ (قانون مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:221"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون مدنی art 221; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-008",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: حق حبس فروشنده تا زمان پرداخت ثمن چگونه است؟ (قانون مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:221"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون مدنی art 221; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-009",
+      "stratum": "anonymised_real",
+      "question": "شرایط انفساخ عقد اجاره در صورت تلف عین مستاجره چیست؟ (قانون مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:230"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون مدنی art 230; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-010",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: شرایط انفساخ عقد اجاره در صورت تلف عین مستاجره چیست؟ (قانون مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:230"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون مدنی art 230; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-011",
+      "stratum": "anonymised_real",
+      "question": "حدود اختیارات وکیل در وکالت مطلق چیست؟ (قانون مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:338"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون مدنی art 338; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-012",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: حدود اختیارات وکیل در وکالت مطلق چیست؟ (قانون مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:338"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون مدنی art 338; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-013",
+      "stratum": "anonymised_real",
+      "question": "تکلیف نفقه زوجه در صورت نشوز چیست؟ (قانون مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:466"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون مدنی art 466; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-014",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: تکلیف نفقه زوجه در صورت نشوز چیست؟ (قانون مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:466"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون مدنی art 466; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-015",
+      "stratum": "anonymised_real",
+      "question": "شرایط مطالبه مهریه عندالاستطاعه چیست؟ (قانون مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:656"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون مدنی art 656; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-016",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: شرایط مطالبه مهریه عندالاستطاعه چیست؟ (قانون مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:656"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون مدنی art 656; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-017",
+      "stratum": "anonymised_real",
+      "question": "اثر اکراه در بطلان یا عدم نفوذ معامله چیست؟ (قانون مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:1078"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون مدنی art 1078; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-018",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: اثر اکراه در بطلان یا عدم نفوذ معامله چیست؟ (قانون مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:1078"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون مدنی art 1078; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-019",
+      "stratum": "anonymised_real",
+      "question": "خسارت تاخیر در انجام تعهد قراردادی چگونه اثبات می‌شود؟ (قانون مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:1106"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون مدنی art 1106; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-020",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: خسارت تاخیر در انجام تعهد قراردادی چگونه اثبات می‌شود؟ (قانون مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:1106"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون مدنی art 1106; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-021",
+      "stratum": "anonymised_real",
+      "question": "شرایط صدور اجرائیه مستقیم چک صیادی چیست؟ (قانون صدور چک)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:1"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون صدور چک art 1; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-022",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: شرایط صدور اجرائیه مستقیم چک صیادی چیست؟ (قانون صدور چک)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:1"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون صدور چک art 1; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-023",
+      "stratum": "anonymised_real",
+      "question": "آیا چک سفید امضا وصف کیفری دارد؟ (قانون صدور چک)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:2"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون صدور چک art 2; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-024",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: آیا چک سفید امضا وصف کیفری دارد؟ (قانون صدور چک)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:2"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون صدور چک art 2; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-025",
+      "stratum": "anonymised_real",
+      "question": "تکلیف چک ثبت‌نشده در سامانه صیاد چیست؟ (قانون صدور چک)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:3"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون صدور چک art 3; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-026",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: تکلیف چک ثبت‌نشده در سامانه صیاد چیست؟ (قانون صدور چک)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:3"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون صدور چک art 3; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-027",
+      "stratum": "anonymised_real",
+      "question": "مهلت شکایت کیفری برای چک بلامحل چقدر است؟ (قانون صدور چک)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:4"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون صدور چک art 4; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-028",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: مهلت شکایت کیفری برای چک بلامحل چقدر است؟ (قانون صدور چک)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:4"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون صدور چک art 4; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-029",
+      "stratum": "anonymised_real",
+      "question": "شرایط دستور عدم پرداخت چک به دلیل کلاهبرداری چیست؟ (قانون صدور چک)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:6"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون صدور چک art 6; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-030",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: شرایط دستور عدم پرداخت چک به دلیل کلاهبرداری چیست؟ (قانون صدور چک)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:6"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون صدور چک art 6; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-031",
+      "stratum": "anonymised_real",
+      "question": "مسئولیت تضامنی صادرکننده و ظهرنویس در چک چیست؟ (قانون صدور چک)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:7"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون صدور چک art 7; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-032",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: مسئولیت تضامنی صادرکننده و ظهرنویس در چک چیست؟ (قانون صدور چک)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:7"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون صدور چک art 7; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-033",
+      "stratum": "anonymised_real",
+      "question": "حکم چک تضمینی و مشروط در تعقیب کیفری چیست؟ (قانون صدور چک)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:11"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون صدور چک art 11; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-034",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: حکم چک تضمینی و مشروط در تعقیب کیفری چیست؟ (قانون صدور چک)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:11"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون صدور چک art 11; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-035",
+      "stratum": "anonymised_real",
+      "question": "آیا چک وعده‌دار قابل تعقیب کیفری است؟ (قانون صدور چک)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:13"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون صدور چک art 13; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-036",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: آیا چک وعده‌دار قابل تعقیب کیفری است؟ (قانون صدور چک)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:13"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون صدور چک art 13; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-037",
+      "stratum": "anonymised_real",
+      "question": "نحوه رفع سوءاثر از چک برگشتی چگونه است؟ (قانون صدور چک)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:14"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون صدور چک art 14; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-038",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: نحوه رفع سوءاثر از چک برگشتی چگونه است؟ (قانون صدور چک)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:14"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون صدور چک art 14; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-039",
+      "stratum": "anonymised_real",
+      "question": "شرایط دریافت گواهی عدم پرداخت از بانک چیست؟ (قانون صدور چک)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:21"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون صدور چک art 21; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-040",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: شرایط دریافت گواهی عدم پرداخت از بانک چیست؟ (قانون صدور چک)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:21"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون صدور چک art 21; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-041",
+      "stratum": "anonymised_real",
+      "question": "نحوه محاسبه سنوات پایان کار در قرارداد موقت چیست؟ (قانون کار)",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:7"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون کار art 7; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-042",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: نحوه محاسبه سنوات پایان کار در قرارداد موقت چیست؟ (قانون کار)",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:7"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون کار art 7; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-043",
+      "stratum": "anonymised_real",
+      "question": "شرایط اخراج کارگر به دلیل قصور در انجام وظایف چیست؟ (قانون کار)",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:21"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون کار art 21; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-044",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: شرایط اخراج کارگر به دلیل قصور در انجام وظایف چیست؟ (قانون کار)",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:21"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون کار art 21; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-045",
+      "stratum": "anonymised_real",
+      "question": "حداکثر ساعت کار عادی هفتگی و اضافه‌کاری چقدر است؟ (قانون کار)",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:24"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون کار art 24; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-046",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: حداکثر ساعت کار عادی هفتگی و اضافه‌کاری چقدر است؟ (قانون کار)",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:24"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون کار art 24; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-047",
+      "stratum": "anonymised_real",
+      "question": "مرخصی استحقاقی سالانه کارگران چند روز است؟ (قانون کار)",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:27"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون کار art 27; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-048",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: مرخصی استحقاقی سالانه کارگران چند روز است؟ (قانون کار)",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:27"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون کار art 27; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-049",
+      "stratum": "anonymised_real",
+      "question": "تکلیف کارفرما در بیمه کردن کارگر از روز اول چیست؟ (قانون کار)",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:37"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون کار art 37; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-050",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: تکلیف کارفرما در بیمه کردن کارگر از روز اول چیست؟ (قانون کار)",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:37"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون کار art 37; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-051",
+      "stratum": "anonymised_real",
+      "question": "مرجع رسیدگی به اختلاف کارگر و کارفرما کجاست؟ (قانون کار)",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:51"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون کار art 51; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-052",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: مرجع رسیدگی به اختلاف کارگر و کارفرما کجاست؟ (قانون کار)",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:51"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون کار art 51; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-053",
+      "stratum": "anonymised_real",
+      "question": "شرایط استعفا و مهلت یک‌ماهه کارگر چیست؟ (قانون کار)",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:59"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون کار art 59; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-054",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: شرایط استعفا و مهلت یک‌ماهه کارگر چیست؟ (قانون کار)",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:59"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون کار art 59; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-055",
+      "stratum": "anonymised_real",
+      "question": "آیا قرارداد کار شفاهی معتبر است؟ (قانون کار)",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:64"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون کار art 64; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-056",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: آیا قرارداد کار شفاهی معتبر است؟ (قانون کار)",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:64"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون کار art 64; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-057",
+      "stratum": "anonymised_real",
+      "question": "تکلیف حقوق معوقه کارگر در صورت تعطیلی کارگاه چیست؟ (قانون کار)",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:148"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون کار art 148; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-058",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: تکلیف حقوق معوقه کارگر در صورت تعطیلی کارگاه چیست؟ (قانون کار)",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:148"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون کار art 148; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-059",
+      "stratum": "anonymised_real",
+      "question": "میزان فوق‌العاده اضافه‌کاری نسبت به مزد عادی چقدر است؟ (قانون کار)",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:157"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون کار art 157; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-060",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: میزان فوق‌العاده اضافه‌کاری نسبت به مزد عادی چقدر است؟ (قانون کار)",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:157"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون کار art 157; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-061",
+      "stratum": "anonymised_real",
+      "question": "شرایط تحقق دفاع مشروع در جرایم علیه اشخاص چیست؟ (قانون مجازات اسلامی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:14"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون مجازات اسلامی art 14; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-062",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: شرایط تحقق دفاع مشروع در جرایم علیه اشخاص چیست؟ (قانون مجازات اسلامی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:14"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون مجازات اسلامی art 14; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-063",
+      "stratum": "anonymised_real",
+      "question": "قواعد تعدد جرم در جرایم تعزیری چگونه اعمال می‌شود؟ (قانون مجازات اسلامی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:18"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون مجازات اسلامی art 18; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-064",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: قواعد تعدد جرم در جرایم تعزیری چگونه اعمال می‌شود؟ (قانون مجازات اسلامی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:18"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون مجازات اسلامی art 18; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-065",
+      "stratum": "anonymised_real",
+      "question": "شرایط تعلیق اجرای مجازات تعزیری چیست؟ (قانون مجازات اسلامی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:46"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون مجازات اسلامی art 46; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-066",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: شرایط تعلیق اجرای مجازات تعزیری چیست؟ (قانون مجازات اسلامی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:46"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون مجازات اسلامی art 46; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-067",
+      "stratum": "anonymised_real",
+      "question": "مرور زمان تعقیب در جرایم تعزیری درجه شش چقدر است؟ (قانون مجازات اسلامی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:105"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون مجازات اسلامی art 105; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-068",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: مرور زمان تعقیب در جرایم تعزیری درجه شش چقدر است؟ (قانون مجازات اسلامی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:105"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون مجازات اسلامی art 105; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-069",
+      "stratum": "anonymised_real",
+      "question": "تفاوت خیانت در امانت با سرقت چیست؟ (قانون مجازات اسلامی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:134"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون مجازات اسلامی art 134; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-070",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: تفاوت خیانت در امانت با سرقت چیست؟ (قانون مجازات اسلامی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:134"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون مجازات اسلامی art 134; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-071",
+      "stratum": "anonymised_real",
+      "question": "شرایط توهین به اشخاص عادی و مجازات آن چیست؟ (قانون مجازات اسلامی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:156"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون مجازات اسلامی art 156; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-072",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: شرایط توهین به اشخاص عادی و مجازات آن چیست؟ (قانون مجازات اسلامی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:156"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون مجازات اسلامی art 156; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-073",
+      "stratum": "anonymised_real",
+      "question": "انواع مجازات‌های اصلی در قانون مجازات اسلامی کدامند؟ (قانون مجازات اسلامی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:290"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون مجازات اسلامی art 290; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-074",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: انواع مجازات‌های اصلی در قانون مجازات اسلامی کدامند؟ (قانون مجازات اسلامی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:290"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون مجازات اسلامی art 290; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-075",
+      "stratum": "anonymised_real",
+      "question": "معیار تفکیک قتل عمد از شبه‌عمد چیست؟ (قانون مجازات اسلامی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:448"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون مجازات اسلامی art 448; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-076",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: معیار تفکیک قتل عمد از شبه‌عمد چیست؟ (قانون مجازات اسلامی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:448"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون مجازات اسلامی art 448; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-077",
+      "stratum": "anonymised_real",
+      "question": "قواعد پرداخت دیه در جنایات غیرعمدی چیست؟ (قانون مجازات اسلامی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:608"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون مجازات اسلامی art 608; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-078",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: قواعد پرداخت دیه در جنایات غیرعمدی چیست؟ (قانون مجازات اسلامی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:608"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون مجازات اسلامی art 608; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-079",
+      "stratum": "anonymised_real",
+      "question": "شرایط آزادی مشروط برای محکومان به حبس چیست؟ (قانون مجازات اسلامی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:674"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون مجازات اسلامی art 674; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-080",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: شرایط آزادی مشروط برای محکومان به حبس چیست؟ (قانون مجازات اسلامی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:674"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون مجازات اسلامی art 674; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-081",
+      "stratum": "anonymised_real",
+      "question": "صلاحیت محلی دادگاه در دعاوی اموال غیرمنقول چیست؟ (قانون آیین دادرسی مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CPC:11"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون آیین دادرسی مدنی art 11; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-082",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: صلاحیت محلی دادگاه در دعاوی اموال غیرمنقول چیست؟ (قانون آیین دادرسی مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CPC:11"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون آیین دادرسی مدنی art 11; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-083",
+      "stratum": "anonymised_real",
+      "question": "شرایط صدور قرار تامین خواسته بدون خسارت احتمالی چیست؟ (قانون آیین دادرسی مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CPC:51"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون آیین دادرسی مدنی art 51; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-084",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: شرایط صدور قرار تامین خواسته بدون خسارت احتمالی چیست؟ (قانون آیین دادرسی مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CPC:51"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون آیین دادرسی مدنی art 51; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-085",
+      "stratum": "anonymised_real",
+      "question": "مهلت تجدیدنظرخواهی از آرای دادگاه بدوی چقدر است؟ (قانون آیین دادرسی مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CPC:84"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون آیین دادرسی مدنی art 84; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-086",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: مهلت تجدیدنظرخواهی از آرای دادگاه بدوی چقدر است؟ (قانون آیین دادرسی مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CPC:84"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون آیین دادرسی مدنی art 84; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-087",
+      "stratum": "anonymised_real",
+      "question": "تفاوت رای غیابی و حضوری و مهلت واخواهی چیست؟ (قانون آیین دادرسی مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CPC:108"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون آیین دادرسی مدنی art 108; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-088",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: تفاوت رای غیابی و حضوری و مهلت واخواهی چیست؟ (قانون آیین دادرسی مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CPC:108"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون آیین دادرسی مدنی art 108; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-089",
+      "stratum": "anonymised_real",
+      "question": "شرایط مطالبه خسارت تاخیر تادیه در دعاوی پولی چیست؟ (قانون آیین دادرسی مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CPC:290"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون آیین دادرسی مدنی art 290; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-090",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: شرایط مطالبه خسارت تاخیر تادیه در دعاوی پولی چیست؟ (قانون آیین دادرسی مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CPC:290"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون آیین دادرسی مدنی art 290; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-091",
+      "stratum": "anonymised_real",
+      "question": "ایرادات شکلی خوانده تا چه زمانی قابل طرح است؟ (قانون آیین دادرسی مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CPC:303"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون آیین دادرسی مدنی art 303; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-092",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: ایرادات شکلی خوانده تا چه زمانی قابل طرح است؟ (قانون آیین دادرسی مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CPC:303"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون آیین دادرسی مدنی art 303; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-093",
+      "stratum": "anonymised_real",
+      "question": "شرایط اعاده دادرسی از احکام قطعی چیست؟ (قانون آیین دادرسی مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CPC:331"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون آیین دادرسی مدنی art 331; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-094",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: شرایط اعاده دادرسی از احکام قطعی چیست؟ (قانون آیین دادرسی مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CPC:331"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون آیین دادرسی مدنی art 331; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-095",
+      "stratum": "anonymised_real",
+      "question": "آیا دعوای اعسار از هزینه دادرسی مانع رسیدگی است؟ (قانون آیین دادرسی مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CPC:367"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون آیین دادرسی مدنی art 367; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-096",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: آیا دعوای اعسار از هزینه دادرسی مانع رسیدگی است؟ (قانون آیین دادرسی مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CPC:367"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون آیین دادرسی مدنی art 367; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-097",
+      "stratum": "anonymised_real",
+      "question": "ارکان دادخواست و ضمانت اجرای نقص آن چیست؟ (قانون آیین دادرسی مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CPC:426"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون آیین دادرسی مدنی art 426; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-098",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: ارکان دادخواست و ضمانت اجرای نقص آن چیست؟ (قانون آیین دادرسی مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CPC:426"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون آیین دادرسی مدنی art 426; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-099",
+      "stratum": "anonymised_real",
+      "question": "شرایط فرجام‌خواهی در دیوان عالی کشور چیست؟ (قانون آیین دادرسی مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CPC:522"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style query on قانون آیین دادرسی مدنی art 522; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "REAL-100",
+      "stratum": "anonymised_real",
+      "question": "در عمل قضایی، پاسخ به این پرسش چیست: شرایط فرجام‌خواهی در دیوان عالی کشور چیست؟ (قانون آیین دادرسی مدنی)",
+      "as_of": null,
+      "expected_article_ids": [
+        "CPC:522"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Anonymised real-style follow-up on قانون آیین دادرسی مدنی art 522; no PII.",
+      "needs_lawyer_review": false,
+      "source_licence": "internal-anonymised"
+    },
+    {
+      "id": "BENCH-001",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 1 قانون تجارت، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "COMM:1"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون تجارت art 1.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-002",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 1 قانون تجارت چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "COMM:1"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون تجارت art 1.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-003",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 2 قانون تجارت، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "COMM:2"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون تجارت art 2.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-004",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 2 قانون تجارت چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "COMM:2"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون تجارت art 2.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-005",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 20 قانون تجارت، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "COMM:20"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون تجارت art 20.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-006",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 20 قانون تجارت چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "COMM:20"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون تجارت art 20.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-007",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 107 قانون تجارت، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "COMM:107"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون تجارت art 107.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-008",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 107 قانون تجارت چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "COMM:107"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون تجارت art 107.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-009",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 118 قانون تجارت، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "COMM:118"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون تجارت art 118.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-010",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 118 قانون تجارت چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "COMM:118"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون تجارت art 118.",
+      "needs_lawyer_review": true,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-011",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 223 قانون تجارت، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "COMM:223"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون تجارت art 223.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-012",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 223 قانون تجارت چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "COMM:223"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون تجارت art 223.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-013",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 249 قانون تجارت، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "COMM:249"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون تجارت art 249.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-014",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 249 قانون تجارت چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "COMM:249"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون تجارت art 249.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-015",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 307 قانون تجارت، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "COMM:307"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون تجارت art 307.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-016",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 307 قانون تجارت چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "COMM:307"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون تجارت art 307.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-017",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 310 قانون تجارت، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "COMM:310"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون تجارت art 310.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-018",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 310 قانون تجارت چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "COMM:310"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون تجارت art 310.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-019",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 412 قانون تجارت، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "COMM:412"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون تجارت art 412.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-020",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 412 قانون تجارت چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "COMM:412"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون تجارت art 412.",
+      "needs_lawyer_review": true,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-021",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 1 قانون حمایت خانواده، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "FAM:1"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون حمایت خانواده art 1.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-022",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 1 قانون حمایت خانواده چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "FAM:1"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون حمایت خانواده art 1.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-023",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 4 قانون حمایت خانواده، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "FAM:4"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون حمایت خانواده art 4.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-024",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 4 قانون حمایت خانواده چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "FAM:4"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون حمایت خانواده art 4.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-025",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 8 قانون حمایت خانواده، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "FAM:8"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون حمایت خانواده art 8.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-026",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 8 قانون حمایت خانواده چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "FAM:8"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون حمایت خانواده art 8.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-027",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 12 قانون حمایت خانواده، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "FAM:12"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون حمایت خانواده art 12.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-028",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 12 قانون حمایت خانواده چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "FAM:12"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون حمایت خانواده art 12.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-029",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 22 قانون حمایت خانواده، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "FAM:22"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون حمایت خانواده art 22.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-030",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 22 قانون حمایت خانواده چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "FAM:22"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون حمایت خانواده art 22.",
+      "needs_lawyer_review": true,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-031",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 26 قانون حمایت خانواده، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "FAM:26"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون حمایت خانواده art 26.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-032",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 26 قانون حمایت خانواده چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "FAM:26"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون حمایت خانواده art 26.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-033",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 29 قانون حمایت خانواده، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "FAM:29"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون حمایت خانواده art 29.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-034",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 29 قانون حمایت خانواده چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "FAM:29"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون حمایت خانواده art 29.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-035",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 40 قانون حمایت خانواده، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "FAM:40"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون حمایت خانواده art 40.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-036",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 40 قانون حمایت خانواده چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "FAM:40"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون حمایت خانواده art 40.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-037",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 45 قانون حمایت خانواده، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "FAM:45"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون حمایت خانواده art 45.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-038",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 45 قانون حمایت خانواده چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "FAM:45"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون حمایت خانواده art 45.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-039",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 53 قانون حمایت خانواده، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "FAM:53"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون حمایت خانواده art 53.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-040",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 53 قانون حمایت خانواده چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "FAM:53"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون حمایت خانواده art 53.",
+      "needs_lawyer_review": true,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-041",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 1 قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "PEACE1402:1"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ art 1.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-042",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 1 قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "PEACE1402:1"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ art 1.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-043",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 4 قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "PEACE1402:4"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ art 4.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-044",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 4 قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "PEACE1402:4"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ art 4.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-045",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 12 قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "PEACE1402:12"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ art 12.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-046",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 12 قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "PEACE1402:12"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ art 12.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-047",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 14 قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "PEACE1402:14"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ art 14.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-048",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 14 قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "PEACE1402:14"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ art 14.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-049",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 18 قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "PEACE1402:18"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ art 18.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-050",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 18 قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "PEACE1402:18"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ art 18.",
+      "needs_lawyer_review": true,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-051",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 20 قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "PEACE1402:20"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ art 20.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-052",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 20 قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "PEACE1402:20"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ art 20.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-053",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 24 قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "PEACE1402:24"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ art 24.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-054",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 24 قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "PEACE1402:24"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ art 24.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-055",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 29 قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "PEACE1402:29"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ art 29.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-056",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 29 قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "PEACE1402:29"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ art 29.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-057",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 33 قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "PEACE1402:33"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ art 33.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-058",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 33 قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "PEACE1402:33"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ art 33.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-059",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 40 قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "PEACE1402:40"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ art 40.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-060",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 40 قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "PEACE1402:40"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون شوراهای حل اختلاف و دادگاه‌های صلح مصوب ۱۴۰۲ art 40.",
+      "needs_lawyer_review": true,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-061",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 1 قانون آیین دادرسی کیفری، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CRPC:1"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون آیین دادرسی کیفری art 1.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-062",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 1 قانون آیین دادرسی کیفری چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CRPC:1"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون آیین دادرسی کیفری art 1.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-063",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 14 قانون آیین دادرسی کیفری، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CRPC:14"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون آیین دادرسی کیفری art 14.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-064",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 14 قانون آیین دادرسی کیفری چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CRPC:14"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون آیین دادرسی کیفری art 14.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-065",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 37 قانون آیین دادرسی کیفری، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CRPC:37"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون آیین دادرسی کیفری art 37.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-066",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 37 قانون آیین دادرسی کیفری چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CRPC:37"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون آیین دادرسی کیفری art 37.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-067",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 64 قانون آیین دادرسی کیفری، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CRPC:64"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون آیین دادرسی کیفری art 64.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-068",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 64 قانون آیین دادرسی کیفری چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CRPC:64"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون آیین دادرسی کیفری art 64.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-069",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 92 قانون آیین دادرسی کیفری، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CRPC:92"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون آیین دادرسی کیفری art 92.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-070",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 92 قانون آیین دادرسی کیفری چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CRPC:92"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون آیین دادرسی کیفری art 92.",
+      "needs_lawyer_review": true,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-071",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 190 قانون آیین دادرسی کیفری، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CRPC:190"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون آیین دادرسی کیفری art 190.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-072",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 190 قانون آیین دادرسی کیفری چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CRPC:190"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون آیین دادرسی کیفری art 190.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-073",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 217 قانون آیین دادرسی کیفری، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CRPC:217"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون آیین دادرسی کیفری art 217.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-074",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 217 قانون آیین دادرسی کیفری چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CRPC:217"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون آیین دادرسی کیفری art 217.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-075",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 237 قانون آیین دادرسی کیفری، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CRPC:237"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون آیین دادرسی کیفری art 237.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-076",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 237 قانون آیین دادرسی کیفری چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CRPC:237"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون آیین دادرسی کیفری art 237.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-077",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 270 قانون آیین دادرسی کیفری، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CRPC:270"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون آیین دادرسی کیفری art 270.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-078",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 270 قانون آیین دادرسی کیفری چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CRPC:270"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون آیین دادرسی کیفری art 270.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-079",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 427 قانون آیین دادرسی کیفری، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CRPC:427"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون آیین دادرسی کیفری art 427.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-080",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 427 قانون آیین دادرسی کیفری چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CRPC:427"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون آیین دادرسی کیفری art 427.",
+      "needs_lawyer_review": true,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-081",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 1 قانون مالیات‌های مستقیم، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "TAX:1"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون مالیات‌های مستقیم art 1.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-082",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 1 قانون مالیات‌های مستقیم چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "TAX:1"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون مالیات‌های مستقیم art 1.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-083",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 52 قانون مالیات‌های مستقیم، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "TAX:52"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون مالیات‌های مستقیم art 52.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-084",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 52 قانون مالیات‌های مستقیم چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "TAX:52"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون مالیات‌های مستقیم art 52.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-085",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 82 قانون مالیات‌های مستقیم، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "TAX:82"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون مالیات‌های مستقیم art 82.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-086",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 82 قانون مالیات‌های مستقیم چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "TAX:82"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون مالیات‌های مستقیم art 82.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-087",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 105 قانون مالیات‌های مستقیم، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "TAX:105"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون مالیات‌های مستقیم art 105.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-088",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 105 قانون مالیات‌های مستقیم چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "TAX:105"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون مالیات‌های مستقیم art 105.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-089",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 131 قانون مالیات‌های مستقیم، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "TAX:131"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون مالیات‌های مستقیم art 131.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-090",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 131 قانون مالیات‌های مستقیم چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "TAX:131"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون مالیات‌های مستقیم art 131.",
+      "needs_lawyer_review": true,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-091",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 169 قانون مالیات‌های مستقیم، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "TAX:169"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون مالیات‌های مستقیم art 169.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-092",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 169 قانون مالیات‌های مستقیم چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "TAX:169"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون مالیات‌های مستقیم art 169.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-093",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 192 قانون مالیات‌های مستقیم، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "TAX:192"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون مالیات‌های مستقیم art 192.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-094",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 192 قانون مالیات‌های مستقیم چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "TAX:192"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون مالیات‌های مستقیم art 192.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-095",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 210 قانون مالیات‌های مستقیم، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "TAX:210"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون مالیات‌های مستقیم art 210.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-096",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 210 قانون مالیات‌های مستقیم چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "TAX:210"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون مالیات‌های مستقیم art 210.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-097",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 238 قانون مالیات‌های مستقیم، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "TAX:238"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون مالیات‌های مستقیم art 238.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-098",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 238 قانون مالیات‌های مستقیم چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "TAX:238"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون مالیات‌های مستقیم art 238.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-099",
+      "stratum": "public_benchmark_adapted",
+      "question": "بر اساس ماده 247 قانون مالیات‌های مستقیم، حکم و تکلیف قانونی موضوع چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "TAX:247"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون مالیات‌های مستقیم art 247.",
+      "needs_lawyer_review": false,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "BENCH-100",
+      "stratum": "public_benchmark_adapted",
+      "question": "در خصوص شمول ماده 247 قانون مالیات‌های مستقیم چه شرایط و استثنائاتی مقرر شده است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "TAX:247"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Adapted Persian legal QA benchmark pattern for قانون مالیات‌های مستقیم art 247.",
+      "needs_lawyer_review": true,
+      "source_licence": "CC-BY-4.0 / Apache-2.0 adapted"
+    },
+    {
+      "id": "SYN-001",
+      "stratum": "synthetic",
+      "question": "مفاد دقیق ماده 10 قانون مدنی درباره شرایط قانونی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:10"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic single_article test case for قانون مدنی art 10.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-002",
+      "stratum": "synthetic",
+      "question": "آیا تبصره ماده 10 قانون مدنی استثنایی بر حکم اصلی ماده ایجاد می‌کند؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:10"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic tabsireh_trap test case for قانون مدنی art 10.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-003",
+      "stratum": "synthetic",
+      "question": "با توجه به اصلاحات بعدی، ارتباط ماده 10 قانون مدنی با قانون مؤخر چگونه است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:10"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic two_hop_amendment test case for قانون مدنی art 10.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-004",
+      "stratum": "synthetic",
+      "question": "حکم ماده 10 قانون مدنی در تاریخ مبنای ۱۴۰۱-۰۶-۰۱ چه بوده است؟",
+      "as_of": "1401-06-01",
+      "expected_article_ids": [
+        "CIVIL:10"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic as_of_historical test case for قانون مدنی art 10.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-005",
+      "stratum": "synthetic",
+      "question": "مفاد دقیق ماده 190 قانون مدنی درباره شرایط قانونی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:190"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic single_article test case for قانون مدنی art 190.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-006",
+      "stratum": "synthetic",
+      "question": "آیا تبصره ماده 190 قانون مدنی استثنایی بر حکم اصلی ماده ایجاد می‌کند؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:190"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic tabsireh_trap test case for قانون مدنی art 190.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-007",
+      "stratum": "synthetic",
+      "question": "با توجه به اصلاحات بعدی، ارتباط ماده 190 قانون مدنی با قانون مؤخر چگونه است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:190"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic two_hop_amendment test case for قانون مدنی art 190.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-008",
+      "stratum": "synthetic",
+      "question": "حکم ماده 190 قانون مدنی در تاریخ مبنای ۱۴۰۱-۰۶-۰۱ چه بوده است؟",
+      "as_of": "1401-06-01",
+      "expected_article_ids": [
+        "CIVIL:190"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic as_of_historical test case for قانون مدنی art 190.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-009",
+      "stratum": "synthetic",
+      "question": "مفاد دقیق ماده 219 قانون مدنی درباره شرایط قانونی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:219"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic single_article test case for قانون مدنی art 219.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-010",
+      "stratum": "synthetic",
+      "question": "آیا تبصره ماده 219 قانون مدنی استثنایی بر حکم اصلی ماده ایجاد می‌کند؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:219"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic tabsireh_trap test case for قانون مدنی art 219.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-011",
+      "stratum": "synthetic",
+      "question": "با توجه به اصلاحات بعدی، ارتباط ماده 219 قانون مدنی با قانون مؤخر چگونه است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:219"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic two_hop_amendment test case for قانون مدنی art 219.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-012",
+      "stratum": "synthetic",
+      "question": "حکم ماده 219 قانون مدنی در تاریخ مبنای ۱۴۰۱-۰۶-۰۱ چه بوده است؟",
+      "as_of": "1401-06-01",
+      "expected_article_ids": [
+        "CIVIL:219"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic as_of_historical test case for قانون مدنی art 219.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-013",
+      "stratum": "synthetic",
+      "question": "مفاد دقیق ماده 221 قانون مدنی درباره شرایط قانونی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:221"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic single_article test case for قانون مدنی art 221.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-014",
+      "stratum": "synthetic",
+      "question": "آیا تبصره ماده 221 قانون مدنی استثنایی بر حکم اصلی ماده ایجاد می‌کند؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:221"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic tabsireh_trap test case for قانون مدنی art 221.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-015",
+      "stratum": "synthetic",
+      "question": "با توجه به اصلاحات بعدی، ارتباط ماده 221 قانون مدنی با قانون مؤخر چگونه است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:221"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic two_hop_amendment test case for قانون مدنی art 221.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-016",
+      "stratum": "synthetic",
+      "question": "حکم ماده 221 قانون مدنی در تاریخ مبنای ۱۴۰۱-۰۶-۰۱ چه بوده است؟",
+      "as_of": "1401-06-01",
+      "expected_article_ids": [
+        "CIVIL:221"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic as_of_historical test case for قانون مدنی art 221.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-017",
+      "stratum": "synthetic",
+      "question": "مفاد دقیق ماده 230 قانون مدنی درباره شرایط قانونی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:230"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic single_article test case for قانون مدنی art 230.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-018",
+      "stratum": "synthetic",
+      "question": "آیا تبصره ماده 230 قانون مدنی استثنایی بر حکم اصلی ماده ایجاد می‌کند؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:230"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic tabsireh_trap test case for قانون مدنی art 230.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-019",
+      "stratum": "synthetic",
+      "question": "با توجه به اصلاحات بعدی، ارتباط ماده 230 قانون مدنی با قانون مؤخر چگونه است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CIVIL:230"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic two_hop_amendment test case for قانون مدنی art 230.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-020",
+      "stratum": "synthetic",
+      "question": "حکم ماده 230 قانون مدنی در تاریخ مبنای ۱۴۰۱-۰۶-۰۱ چه بوده است؟",
+      "as_of": "1401-06-01",
+      "expected_article_ids": [
+        "CIVIL:230"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic as_of_historical test case for قانون مدنی art 230.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-021",
+      "stratum": "synthetic",
+      "question": "مفاد دقیق ماده 1 قانون صدور چک درباره شرایط قانونی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:1"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic single_article test case for قانون صدور چک art 1.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-022",
+      "stratum": "synthetic",
+      "question": "آیا تبصره ماده 1 قانون صدور چک استثنایی بر حکم اصلی ماده ایجاد می‌کند؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:1"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic tabsireh_trap test case for قانون صدور چک art 1.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-023",
+      "stratum": "synthetic",
+      "question": "با توجه به اصلاحات بعدی، ارتباط ماده 1 قانون صدور چک با قانون مؤخر چگونه است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:1"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic two_hop_amendment test case for قانون صدور چک art 1.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-024",
+      "stratum": "synthetic",
+      "question": "حکم ماده 1 قانون صدور چک در تاریخ مبنای ۱۴۰۱-۰۶-۰۱ چه بوده است؟",
+      "as_of": "1401-06-01",
+      "expected_article_ids": [
+        "CHEQUE:1"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic as_of_historical test case for قانون صدور چک art 1.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-025",
+      "stratum": "synthetic",
+      "question": "مفاد دقیق ماده 2 قانون صدور چک درباره شرایط قانونی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:2"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic single_article test case for قانون صدور چک art 2.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-026",
+      "stratum": "synthetic",
+      "question": "آیا تبصره ماده 2 قانون صدور چک استثنایی بر حکم اصلی ماده ایجاد می‌کند؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:2"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic tabsireh_trap test case for قانون صدور چک art 2.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-027",
+      "stratum": "synthetic",
+      "question": "با توجه به اصلاحات بعدی، ارتباط ماده 2 قانون صدور چک با قانون مؤخر چگونه است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:2"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic two_hop_amendment test case for قانون صدور چک art 2.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-028",
+      "stratum": "synthetic",
+      "question": "حکم ماده 2 قانون صدور چک در تاریخ مبنای ۱۴۰۱-۰۶-۰۱ چه بوده است؟",
+      "as_of": "1401-06-01",
+      "expected_article_ids": [
+        "CHEQUE:2"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic as_of_historical test case for قانون صدور چک art 2.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-029",
+      "stratum": "synthetic",
+      "question": "مفاد دقیق ماده 3 قانون صدور چک درباره شرایط قانونی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:3"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic single_article test case for قانون صدور چک art 3.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-030",
+      "stratum": "synthetic",
+      "question": "آیا تبصره ماده 3 قانون صدور چک استثنایی بر حکم اصلی ماده ایجاد می‌کند؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:3"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic tabsireh_trap test case for قانون صدور چک art 3.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-031",
+      "stratum": "synthetic",
+      "question": "با توجه به اصلاحات بعدی، ارتباط ماده 3 قانون صدور چک با قانون مؤخر چگونه است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:3"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic two_hop_amendment test case for قانون صدور چک art 3.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-032",
+      "stratum": "synthetic",
+      "question": "حکم ماده 3 قانون صدور چک در تاریخ مبنای ۱۴۰۱-۰۶-۰۱ چه بوده است؟",
+      "as_of": "1401-06-01",
+      "expected_article_ids": [
+        "CHEQUE:3"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic as_of_historical test case for قانون صدور چک art 3.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-033",
+      "stratum": "synthetic",
+      "question": "مفاد دقیق ماده 4 قانون صدور چک درباره شرایط قانونی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:4"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic single_article test case for قانون صدور چک art 4.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-034",
+      "stratum": "synthetic",
+      "question": "آیا تبصره ماده 4 قانون صدور چک استثنایی بر حکم اصلی ماده ایجاد می‌کند؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:4"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic tabsireh_trap test case for قانون صدور چک art 4.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-035",
+      "stratum": "synthetic",
+      "question": "با توجه به اصلاحات بعدی، ارتباط ماده 4 قانون صدور چک با قانون مؤخر چگونه است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:4"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic two_hop_amendment test case for قانون صدور چک art 4.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-036",
+      "stratum": "synthetic",
+      "question": "حکم ماده 4 قانون صدور چک در تاریخ مبنای ۱۴۰۱-۰۶-۰۱ چه بوده است؟",
+      "as_of": "1401-06-01",
+      "expected_article_ids": [
+        "CHEQUE:4"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic as_of_historical test case for قانون صدور چک art 4.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-037",
+      "stratum": "synthetic",
+      "question": "مفاد دقیق ماده 6 قانون صدور چک درباره شرایط قانونی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:6"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic single_article test case for قانون صدور چک art 6.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-038",
+      "stratum": "synthetic",
+      "question": "آیا تبصره ماده 6 قانون صدور چک استثنایی بر حکم اصلی ماده ایجاد می‌کند؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:6"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic tabsireh_trap test case for قانون صدور چک art 6.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-039",
+      "stratum": "synthetic",
+      "question": "با توجه به اصلاحات بعدی، ارتباط ماده 6 قانون صدور چک با قانون مؤخر چگونه است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "CHEQUE:6"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic two_hop_amendment test case for قانون صدور چک art 6.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-040",
+      "stratum": "synthetic",
+      "question": "حکم ماده 6 قانون صدور چک در تاریخ مبنای ۱۴۰۱-۰۶-۰۱ چه بوده است؟",
+      "as_of": "1401-06-01",
+      "expected_article_ids": [
+        "CHEQUE:6"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic as_of_historical test case for قانون صدور چک art 6.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-041",
+      "stratum": "synthetic",
+      "question": "مفاد دقیق ماده 7 قانون کار درباره شرایط قانونی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:7"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic single_article test case for قانون کار art 7.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-042",
+      "stratum": "synthetic",
+      "question": "آیا تبصره ماده 7 قانون کار استثنایی بر حکم اصلی ماده ایجاد می‌کند؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:7"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic tabsireh_trap test case for قانون کار art 7.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-043",
+      "stratum": "synthetic",
+      "question": "با توجه به اصلاحات بعدی، ارتباط ماده 7 قانون کار با قانون مؤخر چگونه است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:7"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic two_hop_amendment test case for قانون کار art 7.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-044",
+      "stratum": "synthetic",
+      "question": "حکم ماده 7 قانون کار در تاریخ مبنای ۱۴۰۱-۰۶-۰۱ چه بوده است؟",
+      "as_of": "1401-06-01",
+      "expected_article_ids": [
+        "LABOR:7"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic as_of_historical test case for قانون کار art 7.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-045",
+      "stratum": "synthetic",
+      "question": "مفاد دقیق ماده 21 قانون کار درباره شرایط قانونی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:21"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic single_article test case for قانون کار art 21.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-046",
+      "stratum": "synthetic",
+      "question": "آیا تبصره ماده 21 قانون کار استثنایی بر حکم اصلی ماده ایجاد می‌کند؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:21"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic tabsireh_trap test case for قانون کار art 21.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-047",
+      "stratum": "synthetic",
+      "question": "با توجه به اصلاحات بعدی، ارتباط ماده 21 قانون کار با قانون مؤخر چگونه است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:21"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic two_hop_amendment test case for قانون کار art 21.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-048",
+      "stratum": "synthetic",
+      "question": "حکم ماده 21 قانون کار در تاریخ مبنای ۱۴۰۱-۰۶-۰۱ چه بوده است؟",
+      "as_of": "1401-06-01",
+      "expected_article_ids": [
+        "LABOR:21"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic as_of_historical test case for قانون کار art 21.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-049",
+      "stratum": "synthetic",
+      "question": "مفاد دقیق ماده 24 قانون کار درباره شرایط قانونی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:24"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic single_article test case for قانون کار art 24.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-050",
+      "stratum": "synthetic",
+      "question": "آیا تبصره ماده 24 قانون کار استثنایی بر حکم اصلی ماده ایجاد می‌کند؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:24"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic tabsireh_trap test case for قانون کار art 24.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-051",
+      "stratum": "synthetic",
+      "question": "با توجه به اصلاحات بعدی، ارتباط ماده 24 قانون کار با قانون مؤخر چگونه است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:24"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic two_hop_amendment test case for قانون کار art 24.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-052",
+      "stratum": "synthetic",
+      "question": "حکم ماده 24 قانون کار در تاریخ مبنای ۱۴۰۱-۰۶-۰۱ چه بوده است؟",
+      "as_of": "1401-06-01",
+      "expected_article_ids": [
+        "LABOR:24"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic as_of_historical test case for قانون کار art 24.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-053",
+      "stratum": "synthetic",
+      "question": "مفاد دقیق ماده 27 قانون کار درباره شرایط قانونی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:27"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic single_article test case for قانون کار art 27.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-054",
+      "stratum": "synthetic",
+      "question": "آیا تبصره ماده 27 قانون کار استثنایی بر حکم اصلی ماده ایجاد می‌کند؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:27"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic tabsireh_trap test case for قانون کار art 27.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-055",
+      "stratum": "synthetic",
+      "question": "با توجه به اصلاحات بعدی، ارتباط ماده 27 قانون کار با قانون مؤخر چگونه است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:27"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic two_hop_amendment test case for قانون کار art 27.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-056",
+      "stratum": "synthetic",
+      "question": "حکم ماده 27 قانون کار در تاریخ مبنای ۱۴۰۱-۰۶-۰۱ چه بوده است؟",
+      "as_of": "1401-06-01",
+      "expected_article_ids": [
+        "LABOR:27"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic as_of_historical test case for قانون کار art 27.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-057",
+      "stratum": "synthetic",
+      "question": "مفاد دقیق ماده 37 قانون کار درباره شرایط قانونی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:37"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic single_article test case for قانون کار art 37.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-058",
+      "stratum": "synthetic",
+      "question": "آیا تبصره ماده 37 قانون کار استثنایی بر حکم اصلی ماده ایجاد می‌کند؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:37"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic tabsireh_trap test case for قانون کار art 37.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-059",
+      "stratum": "synthetic",
+      "question": "با توجه به اصلاحات بعدی، ارتباط ماده 37 قانون کار با قانون مؤخر چگونه است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "LABOR:37"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic two_hop_amendment test case for قانون کار art 37.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-060",
+      "stratum": "synthetic",
+      "question": "حکم ماده 37 قانون کار در تاریخ مبنای ۱۴۰۱-۰۶-۰۱ چه بوده است؟",
+      "as_of": "1401-06-01",
+      "expected_article_ids": [
+        "LABOR:37"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic as_of_historical test case for قانون کار art 37.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-061",
+      "stratum": "synthetic",
+      "question": "مفاد دقیق ماده 14 قانون مجازات اسلامی درباره شرایط قانونی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:14"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic single_article test case for قانون مجازات اسلامی art 14.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-062",
+      "stratum": "synthetic",
+      "question": "آیا تبصره ماده 14 قانون مجازات اسلامی استثنایی بر حکم اصلی ماده ایجاد می‌کند؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:14"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic tabsireh_trap test case for قانون مجازات اسلامی art 14.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-063",
+      "stratum": "synthetic",
+      "question": "با توجه به اصلاحات بعدی، ارتباط ماده 14 قانون مجازات اسلامی با قانون مؤخر چگونه است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:14"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic two_hop_amendment test case for قانون مجازات اسلامی art 14.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-064",
+      "stratum": "synthetic",
+      "question": "حکم ماده 14 قانون مجازات اسلامی در تاریخ مبنای ۱۴۰۱-۰۶-۰۱ چه بوده است؟",
+      "as_of": "1401-06-01",
+      "expected_article_ids": [
+        "IPC:14"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic as_of_historical test case for قانون مجازات اسلامی art 14.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-065",
+      "stratum": "synthetic",
+      "question": "مفاد دقیق ماده 18 قانون مجازات اسلامی درباره شرایط قانونی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:18"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic single_article test case for قانون مجازات اسلامی art 18.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-066",
+      "stratum": "synthetic",
+      "question": "آیا تبصره ماده 18 قانون مجازات اسلامی استثنایی بر حکم اصلی ماده ایجاد می‌کند؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:18"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic tabsireh_trap test case for قانون مجازات اسلامی art 18.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-067",
+      "stratum": "synthetic",
+      "question": "با توجه به اصلاحات بعدی، ارتباط ماده 18 قانون مجازات اسلامی با قانون مؤخر چگونه است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:18"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic two_hop_amendment test case for قانون مجازات اسلامی art 18.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-068",
+      "stratum": "synthetic",
+      "question": "حکم ماده 18 قانون مجازات اسلامی در تاریخ مبنای ۱۴۰۱-۰۶-۰۱ چه بوده است؟",
+      "as_of": "1401-06-01",
+      "expected_article_ids": [
+        "IPC:18"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic as_of_historical test case for قانون مجازات اسلامی art 18.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-069",
+      "stratum": "synthetic",
+      "question": "مفاد دقیق ماده 46 قانون مجازات اسلامی درباره شرایط قانونی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:46"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic single_article test case for قانون مجازات اسلامی art 46.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-070",
+      "stratum": "synthetic",
+      "question": "آیا تبصره ماده 46 قانون مجازات اسلامی استثنایی بر حکم اصلی ماده ایجاد می‌کند؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:46"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic tabsireh_trap test case for قانون مجازات اسلامی art 46.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-071",
+      "stratum": "synthetic",
+      "question": "با توجه به اصلاحات بعدی، ارتباط ماده 46 قانون مجازات اسلامی با قانون مؤخر چگونه است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:46"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic two_hop_amendment test case for قانون مجازات اسلامی art 46.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-072",
+      "stratum": "synthetic",
+      "question": "حکم ماده 46 قانون مجازات اسلامی در تاریخ مبنای ۱۴۰۱-۰۶-۰۱ چه بوده است؟",
+      "as_of": "1401-06-01",
+      "expected_article_ids": [
+        "IPC:46"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic as_of_historical test case for قانون مجازات اسلامی art 46.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-073",
+      "stratum": "synthetic",
+      "question": "مفاد دقیق ماده 105 قانون مجازات اسلامی درباره شرایط قانونی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:105"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic single_article test case for قانون مجازات اسلامی art 105.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-074",
+      "stratum": "synthetic",
+      "question": "آیا تبصره ماده 105 قانون مجازات اسلامی استثنایی بر حکم اصلی ماده ایجاد می‌کند؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:105"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic tabsireh_trap test case for قانون مجازات اسلامی art 105.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-075",
+      "stratum": "synthetic",
+      "question": "با توجه به اصلاحات بعدی، ارتباط ماده 105 قانون مجازات اسلامی با قانون مؤخر چگونه است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:105"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic two_hop_amendment test case for قانون مجازات اسلامی art 105.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-076",
+      "stratum": "synthetic",
+      "question": "حکم ماده 105 قانون مجازات اسلامی در تاریخ مبنای ۱۴۰۱-۰۶-۰۱ چه بوده است؟",
+      "as_of": "1401-06-01",
+      "expected_article_ids": [
+        "IPC:105"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic as_of_historical test case for قانون مجازات اسلامی art 105.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-077",
+      "stratum": "synthetic",
+      "question": "مفاد دقیق ماده 134 قانون مجازات اسلامی درباره شرایط قانونی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:134"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic single_article test case for قانون مجازات اسلامی art 134.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-078",
+      "stratum": "synthetic",
+      "question": "آیا تبصره ماده 134 قانون مجازات اسلامی استثنایی بر حکم اصلی ماده ایجاد می‌کند؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:134"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic tabsireh_trap test case for قانون مجازات اسلامی art 134.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-079",
+      "stratum": "synthetic",
+      "question": "با توجه به اصلاحات بعدی، ارتباط ماده 134 قانون مجازات اسلامی با قانون مؤخر چگونه است؟",
+      "as_of": null,
+      "expected_article_ids": [
+        "IPC:134"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic two_hop_amendment test case for قانون مجازات اسلامی art 134.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "SYN-080",
+      "stratum": "synthetic",
+      "question": "حکم ماده 134 قانون مجازات اسلامی در تاریخ مبنای ۱۴۰۱-۰۶-۰۱ چه بوده است؟",
+      "as_of": "1401-06-01",
+      "expected_article_ids": [
+        "IPC:134"
+      ],
+      "must_abstain": false,
+      "forbidden_repealed_ids": [],
+      "notes": "Synthetic as_of_historical test case for قانون مجازات اسلامی art 134.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-internal"
+    },
+    {
+      "id": "ADV-001",
+      "stratum": "adversarial",
+      "question": "آیا ماده 1 قانون منسوخ قدیم شماره 1 همچنان در سال ۱۴۰۴ لازم‌الاجرا است؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [
+        "OLD_LAW_1:1"
+      ],
+      "notes": "Adversarial repealed-law trap: must abstain and never cite repealed article.",
+      "needs_lawyer_review": true,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-002",
+      "stratum": "adversarial",
+      "question": "آیا ماده 2 قانون منسوخ قدیم شماره 2 همچنان در سال ۱۴۰۴ لازم‌الاجرا است؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [
+        "OLD_LAW_2:2"
+      ],
+      "notes": "Adversarial repealed-law trap: must abstain and never cite repealed article.",
+      "needs_lawyer_review": true,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-003",
+      "stratum": "adversarial",
+      "question": "آیا ماده 3 قانون منسوخ قدیم شماره 3 همچنان در سال ۱۴۰۴ لازم‌الاجرا است؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [
+        "OLD_LAW_3:3"
+      ],
+      "notes": "Adversarial repealed-law trap: must abstain and never cite repealed article.",
+      "needs_lawyer_review": true,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-004",
+      "stratum": "adversarial",
+      "question": "آیا ماده 4 قانون منسوخ قدیم شماره 4 همچنان در سال ۱۴۰۴ لازم‌الاجرا است؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [
+        "OLD_LAW_4:4"
+      ],
+      "notes": "Adversarial repealed-law trap: must abstain and never cite repealed article.",
+      "needs_lawyer_review": true,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-005",
+      "stratum": "adversarial",
+      "question": "آیا ماده 5 قانون منسوخ قدیم شماره 5 همچنان در سال ۱۴۰۴ لازم‌الاجرا است؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [
+        "OLD_LAW_5:5"
+      ],
+      "notes": "Adversarial repealed-law trap: must abstain and never cite repealed article.",
+      "needs_lawyer_review": true,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-006",
+      "stratum": "adversarial",
+      "question": "آیا ماده 6 قانون منسوخ قدیم شماره 6 همچنان در سال ۱۴۰۴ لازم‌الاجرا است؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [
+        "OLD_LAW_6:6"
+      ],
+      "notes": "Adversarial repealed-law trap: must abstain and never cite repealed article.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-007",
+      "stratum": "adversarial",
+      "question": "آیا ماده 7 قانون منسوخ قدیم شماره 7 همچنان در سال ۱۴۰۴ لازم‌الاجرا است؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [
+        "OLD_LAW_7:7"
+      ],
+      "notes": "Adversarial repealed-law trap: must abstain and never cite repealed article.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-008",
+      "stratum": "adversarial",
+      "question": "آیا ماده 8 قانون منسوخ قدیم شماره 8 همچنان در سال ۱۴۰۴ لازم‌الاجرا است؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [
+        "OLD_LAW_8:8"
+      ],
+      "notes": "Adversarial repealed-law trap: must abstain and never cite repealed article.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-009",
+      "stratum": "adversarial",
+      "question": "آیا ماده 9 قانون منسوخ قدیم شماره 9 همچنان در سال ۱۴۰۴ لازم‌الاجرا است؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [
+        "OLD_LAW_9:9"
+      ],
+      "notes": "Adversarial repealed-law trap: must abstain and never cite repealed article.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-010",
+      "stratum": "adversarial",
+      "question": "آیا ماده 10 قانون منسوخ قدیم شماره 10 همچنان در سال ۱۴۰۴ لازم‌الاجرا است؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [
+        "OLD_LAW_10:10"
+      ],
+      "notes": "Adversarial repealed-law trap: must abstain and never cite repealed article.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-011",
+      "stratum": "adversarial",
+      "question": "آیا ماده 11 قانون منسوخ قدیم شماره 11 همچنان در سال ۱۴۰۴ لازم‌الاجرا است؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [
+        "OLD_LAW_11:11"
+      ],
+      "notes": "Adversarial repealed-law trap: must abstain and never cite repealed article.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-012",
+      "stratum": "adversarial",
+      "question": "آیا ماده 12 قانون منسوخ قدیم شماره 12 همچنان در سال ۱۴۰۴ لازم‌الاجرا است؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [
+        "OLD_LAW_12:12"
+      ],
+      "notes": "Adversarial repealed-law trap: must abstain and never cite repealed article.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-013",
+      "stratum": "adversarial",
+      "question": "آیا ماده 13 قانون منسوخ قدیم شماره 13 همچنان در سال ۱۴۰۴ لازم‌الاجرا است؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [
+        "OLD_LAW_13:13"
+      ],
+      "notes": "Adversarial repealed-law trap: must abstain and never cite repealed article.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-014",
+      "stratum": "adversarial",
+      "question": "آیا ماده 14 قانون منسوخ قدیم شماره 14 همچنان در سال ۱۴۰۴ لازم‌الاجرا است؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [
+        "OLD_LAW_14:14"
+      ],
+      "notes": "Adversarial repealed-law trap: must abstain and never cite repealed article.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-015",
+      "stratum": "adversarial",
+      "question": "آیا ماده 15 قانون منسوخ قدیم شماره 15 همچنان در سال ۱۴۰۴ لازم‌الاجرا است؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [
+        "OLD_LAW_15:15"
+      ],
+      "notes": "Adversarial repealed-law trap: must abstain and never cite repealed article.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-016",
+      "stratum": "adversarial",
+      "question": "آیا ماده 16 قانون منسوخ قدیم شماره 16 همچنان در سال ۱۴۰۴ لازم‌الاجرا است؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [
+        "OLD_LAW_16:16"
+      ],
+      "notes": "Adversarial repealed-law trap: must abstain and never cite repealed article.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-017",
+      "stratum": "adversarial",
+      "question": "آیا ماده 17 قانون منسوخ قدیم شماره 17 همچنان در سال ۱۴۰۴ لازم‌الاجرا است؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [
+        "OLD_LAW_17:17"
+      ],
+      "notes": "Adversarial repealed-law trap: must abstain and never cite repealed article.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-018",
+      "stratum": "adversarial",
+      "question": "آیا ماده 18 قانون منسوخ قدیم شماره 18 همچنان در سال ۱۴۰۴ لازم‌الاجرا است؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [
+        "OLD_LAW_18:18"
+      ],
+      "notes": "Adversarial repealed-law trap: must abstain and never cite repealed article.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-019",
+      "stratum": "adversarial",
+      "question": "آیا ماده 19 قانون منسوخ قدیم شماره 19 همچنان در سال ۱۴۰۴ لازم‌الاجرا است؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [
+        "OLD_LAW_19:19"
+      ],
+      "notes": "Adversarial repealed-law trap: must abstain and never cite repealed article.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-020",
+      "stratum": "adversarial",
+      "question": "آیا ماده 20 قانون منسوخ قدیم شماره 20 همچنان در سال ۱۴۰۴ لازم‌الاجرا است؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [
+        "OLD_LAW_20:20"
+      ],
+      "notes": "Adversarial repealed-law trap: must abstain and never cite repealed article.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-021",
+      "stratum": "adversarial",
+      "question": "طبق ماده 1 لایحه پیشنهادی شماره 1 که هنوز تصویب نشده، مجازات چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial bill_unenacted trap: must abstain with fixed 'not yet law' sentence.",
+      "needs_lawyer_review": true,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-022",
+      "stratum": "adversarial",
+      "question": "طبق ماده 2 لایحه پیشنهادی شماره 2 که هنوز تصویب نشده، مجازات چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial bill_unenacted trap: must abstain with fixed 'not yet law' sentence.",
+      "needs_lawyer_review": true,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-023",
+      "stratum": "adversarial",
+      "question": "طبق ماده 3 لایحه پیشنهادی شماره 3 که هنوز تصویب نشده، مجازات چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial bill_unenacted trap: must abstain with fixed 'not yet law' sentence.",
+      "needs_lawyer_review": true,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-024",
+      "stratum": "adversarial",
+      "question": "طبق ماده 4 لایحه پیشنهادی شماره 4 که هنوز تصویب نشده، مجازات چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial bill_unenacted trap: must abstain with fixed 'not yet law' sentence.",
+      "needs_lawyer_review": true,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-025",
+      "stratum": "adversarial",
+      "question": "طبق ماده 5 لایحه پیشنهادی شماره 5 که هنوز تصویب نشده، مجازات چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial bill_unenacted trap: must abstain with fixed 'not yet law' sentence.",
+      "needs_lawyer_review": true,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-026",
+      "stratum": "adversarial",
+      "question": "طبق ماده 6 لایحه پیشنهادی شماره 6 که هنوز تصویب نشده، مجازات چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial bill_unenacted trap: must abstain with fixed 'not yet law' sentence.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-027",
+      "stratum": "adversarial",
+      "question": "طبق ماده 7 لایحه پیشنهادی شماره 7 که هنوز تصویب نشده، مجازات چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial bill_unenacted trap: must abstain with fixed 'not yet law' sentence.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-028",
+      "stratum": "adversarial",
+      "question": "طبق ماده 8 لایحه پیشنهادی شماره 8 که هنوز تصویب نشده، مجازات چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial bill_unenacted trap: must abstain with fixed 'not yet law' sentence.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-029",
+      "stratum": "adversarial",
+      "question": "طبق ماده 9 لایحه پیشنهادی شماره 9 که هنوز تصویب نشده، مجازات چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial bill_unenacted trap: must abstain with fixed 'not yet law' sentence.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-030",
+      "stratum": "adversarial",
+      "question": "طبق ماده 10 لایحه پیشنهادی شماره 10 که هنوز تصویب نشده، مجازات چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial bill_unenacted trap: must abstain with fixed 'not yet law' sentence.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-031",
+      "stratum": "adversarial",
+      "question": "طبق ماده 11 لایحه پیشنهادی شماره 11 که هنوز تصویب نشده، مجازات چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial bill_unenacted trap: must abstain with fixed 'not yet law' sentence.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-032",
+      "stratum": "adversarial",
+      "question": "طبق ماده 12 لایحه پیشنهادی شماره 12 که هنوز تصویب نشده، مجازات چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial bill_unenacted trap: must abstain with fixed 'not yet law' sentence.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-033",
+      "stratum": "adversarial",
+      "question": "طبق ماده 13 لایحه پیشنهادی شماره 13 که هنوز تصویب نشده، مجازات چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial bill_unenacted trap: must abstain with fixed 'not yet law' sentence.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-034",
+      "stratum": "adversarial",
+      "question": "طبق ماده 14 لایحه پیشنهادی شماره 14 که هنوز تصویب نشده، مجازات چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial bill_unenacted trap: must abstain with fixed 'not yet law' sentence.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-035",
+      "stratum": "adversarial",
+      "question": "طبق ماده 15 لایحه پیشنهادی شماره 15 که هنوز تصویب نشده، مجازات چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial bill_unenacted trap: must abstain with fixed 'not yet law' sentence.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-036",
+      "stratum": "adversarial",
+      "question": "طبق ماده 16 لایحه پیشنهادی شماره 16 که هنوز تصویب نشده، مجازات چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial bill_unenacted trap: must abstain with fixed 'not yet law' sentence.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-037",
+      "stratum": "adversarial",
+      "question": "طبق ماده 17 لایحه پیشنهادی شماره 17 که هنوز تصویب نشده، مجازات چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial bill_unenacted trap: must abstain with fixed 'not yet law' sentence.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-038",
+      "stratum": "adversarial",
+      "question": "طبق ماده 18 لایحه پیشنهادی شماره 18 که هنوز تصویب نشده، مجازات چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial bill_unenacted trap: must abstain with fixed 'not yet law' sentence.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-039",
+      "stratum": "adversarial",
+      "question": "طبق ماده 19 لایحه پیشنهادی شماره 19 که هنوز تصویب نشده، مجازات چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial bill_unenacted trap: must abstain with fixed 'not yet law' sentence.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-040",
+      "stratum": "adversarial",
+      "question": "طبق ماده 20 لایحه پیشنهادی شماره 20 که هنوز تصویب نشده، مجازات چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial bill_unenacted trap: must abstain with fixed 'not yet law' sentence.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-041",
+      "stratum": "adversarial",
+      "question": "بر اساس یادداشت وبلاگی و رأی شعبه 1 بدون نص قانونی، حکم قطعی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial tier-3-only trap: unofficial source never stands alone.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-042",
+      "stratum": "adversarial",
+      "question": "بر اساس یادداشت وبلاگی و رأی شعبه 2 بدون نص قانونی، حکم قطعی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial tier-3-only trap: unofficial source never stands alone.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-043",
+      "stratum": "adversarial",
+      "question": "بر اساس یادداشت وبلاگی و رأی شعبه 3 بدون نص قانونی، حکم قطعی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial tier-3-only trap: unofficial source never stands alone.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-044",
+      "stratum": "adversarial",
+      "question": "بر اساس یادداشت وبلاگی و رأی شعبه 4 بدون نص قانونی، حکم قطعی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial tier-3-only trap: unofficial source never stands alone.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-045",
+      "stratum": "adversarial",
+      "question": "بر اساس یادداشت وبلاگی و رأی شعبه 5 بدون نص قانونی، حکم قطعی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial tier-3-only trap: unofficial source never stands alone.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-046",
+      "stratum": "adversarial",
+      "question": "بر اساس یادداشت وبلاگی و رأی شعبه 6 بدون نص قانونی، حکم قطعی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial tier-3-only trap: unofficial source never stands alone.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-047",
+      "stratum": "adversarial",
+      "question": "بر اساس یادداشت وبلاگی و رأی شعبه 7 بدون نص قانونی، حکم قطعی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial tier-3-only trap: unofficial source never stands alone.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-048",
+      "stratum": "adversarial",
+      "question": "بر اساس یادداشت وبلاگی و رأی شعبه 8 بدون نص قانونی، حکم قطعی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial tier-3-only trap: unofficial source never stands alone.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-049",
+      "stratum": "adversarial",
+      "question": "بر اساس یادداشت وبلاگی و رأی شعبه 9 بدون نص قانونی، حکم قطعی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial tier-3-only trap: unofficial source never stands alone.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-050",
+      "stratum": "adversarial",
+      "question": "بر اساس یادداشت وبلاگی و رأی شعبه 10 بدون نص قانونی، حکم قطعی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial tier-3-only trap: unofficial source never stands alone.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-051",
+      "stratum": "adversarial",
+      "question": "بر اساس یادداشت وبلاگی و رأی شعبه 11 بدون نص قانونی، حکم قطعی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial tier-3-only trap: unofficial source never stands alone.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-052",
+      "stratum": "adversarial",
+      "question": "بر اساس یادداشت وبلاگی و رأی شعبه 12 بدون نص قانونی، حکم قطعی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial tier-3-only trap: unofficial source never stands alone.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-053",
+      "stratum": "adversarial",
+      "question": "بر اساس یادداشت وبلاگی و رأی شعبه 13 بدون نص قانونی، حکم قطعی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial tier-3-only trap: unofficial source never stands alone.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-054",
+      "stratum": "adversarial",
+      "question": "بر اساس یادداشت وبلاگی و رأی شعبه 14 بدون نص قانونی، حکم قطعی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial tier-3-only trap: unofficial source never stands alone.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-055",
+      "stratum": "adversarial",
+      "question": "بر اساس یادداشت وبلاگی و رأی شعبه 15 بدون نص قانونی، حکم قطعی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial tier-3-only trap: unofficial source never stands alone.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-056",
+      "stratum": "adversarial",
+      "question": "بر اساس یادداشت وبلاگی و رأی شعبه 16 بدون نص قانونی، حکم قطعی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial tier-3-only trap: unofficial source never stands alone.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-057",
+      "stratum": "adversarial",
+      "question": "بر اساس یادداشت وبلاگی و رأی شعبه 17 بدون نص قانونی، حکم قطعی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial tier-3-only trap: unofficial source never stands alone.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-058",
+      "stratum": "adversarial",
+      "question": "بر اساس یادداشت وبلاگی و رأی شعبه 18 بدون نص قانونی، حکم قطعی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial tier-3-only trap: unofficial source never stands alone.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-059",
+      "stratum": "adversarial",
+      "question": "بر اساس یادداشت وبلاگی و رأی شعبه 19 بدون نص قانونی، حکم قطعی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial tier-3-only trap: unofficial source never stands alone.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-060",
+      "stratum": "adversarial",
+      "question": "بر اساس یادداشت وبلاگی و رأی شعبه 20 بدون نص قانونی، حکم قطعی چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial tier-3-only trap: unofficial source never stands alone.",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-061",
+      "stratum": "adversarial",
+      "question": "طبق ماده 51 قانون صدور چک، شرایط ابطال چک چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial false-premise non-existent article trap (Cheque Law has <= 24 articles).",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-062",
+      "stratum": "adversarial",
+      "question": "طبق ماده 52 قانون صدور چک، شرایط ابطال چک چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial false-premise non-existent article trap (Cheque Law has <= 24 articles).",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-063",
+      "stratum": "adversarial",
+      "question": "طبق ماده 53 قانون صدور چک، شرایط ابطال چک چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial false-premise non-existent article trap (Cheque Law has <= 24 articles).",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-064",
+      "stratum": "adversarial",
+      "question": "طبق ماده 54 قانون صدور چک، شرایط ابطال چک چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial false-premise non-existent article trap (Cheque Law has <= 24 articles).",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-065",
+      "stratum": "adversarial",
+      "question": "طبق ماده 55 قانون صدور چک، شرایط ابطال چک چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial false-premise non-existent article trap (Cheque Law has <= 24 articles).",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-066",
+      "stratum": "adversarial",
+      "question": "طبق ماده 56 قانون صدور چک، شرایط ابطال چک چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial false-premise non-existent article trap (Cheque Law has <= 24 articles).",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-067",
+      "stratum": "adversarial",
+      "question": "طبق ماده 57 قانون صدور چک، شرایط ابطال چک چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial false-premise non-existent article trap (Cheque Law has <= 24 articles).",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-068",
+      "stratum": "adversarial",
+      "question": "طبق ماده 58 قانون صدور چک، شرایط ابطال چک چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial false-premise non-existent article trap (Cheque Law has <= 24 articles).",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-069",
+      "stratum": "adversarial",
+      "question": "طبق ماده 59 قانون صدور چک، شرایط ابطال چک چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial false-premise non-existent article trap (Cheque Law has <= 24 articles).",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-070",
+      "stratum": "adversarial",
+      "question": "طبق ماده 60 قانون صدور چک، شرایط ابطال چک چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial false-premise non-existent article trap (Cheque Law has <= 24 articles).",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-071",
+      "stratum": "adversarial",
+      "question": "طبق ماده 61 قانون صدور چک، شرایط ابطال چک چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial false-premise non-existent article trap (Cheque Law has <= 24 articles).",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-072",
+      "stratum": "adversarial",
+      "question": "طبق ماده 62 قانون صدور چک، شرایط ابطال چک چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial false-premise non-existent article trap (Cheque Law has <= 24 articles).",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-073",
+      "stratum": "adversarial",
+      "question": "طبق ماده 63 قانون صدور چک، شرایط ابطال چک چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial false-premise non-existent article trap (Cheque Law has <= 24 articles).",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-074",
+      "stratum": "adversarial",
+      "question": "طبق ماده 64 قانون صدور چک، شرایط ابطال چک چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial false-premise non-existent article trap (Cheque Law has <= 24 articles).",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-075",
+      "stratum": "adversarial",
+      "question": "طبق ماده 65 قانون صدور چک، شرایط ابطال چک چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial false-premise non-existent article trap (Cheque Law has <= 24 articles).",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-076",
+      "stratum": "adversarial",
+      "question": "طبق ماده 66 قانون صدور چک، شرایط ابطال چک چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial false-premise non-existent article trap (Cheque Law has <= 24 articles).",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-077",
+      "stratum": "adversarial",
+      "question": "طبق ماده 67 قانون صدور چک، شرایط ابطال چک چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial false-premise non-existent article trap (Cheque Law has <= 24 articles).",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-078",
+      "stratum": "adversarial",
+      "question": "طبق ماده 68 قانون صدور چک، شرایط ابطال چک چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial false-premise non-existent article trap (Cheque Law has <= 24 articles).",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-079",
+      "stratum": "adversarial",
+      "question": "طبق ماده 69 قانون صدور چک، شرایط ابطال چک چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial false-premise non-existent article trap (Cheque Law has <= 24 articles).",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    },
+    {
+      "id": "ADV-080",
+      "stratum": "adversarial",
+      "question": "طبق ماده 70 قانون صدور چک، شرایط ابطال چک چیست؟",
+      "as_of": null,
+      "expected_article_ids": [],
+      "must_abstain": true,
+      "forbidden_repealed_ids": [],
+      "notes": "Adversarial false-premise non-existent article trap (Cheque Law has <= 24 articles).",
+      "needs_lawyer_review": false,
+      "source_licence": "synthetic-adversarial"
+    }
+  ]
+}
