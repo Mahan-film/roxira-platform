@@ -58,6 +58,7 @@ bash "$HERE/install_user.sh" >"$T/out" 2>&1; rc=$?
 [ "$rc" = 0 ] && grep -q 'Nothing changed' "$T/out" && [ "$(find "$HOME" | wc -l)" = "$before" ] && ok "install_user dry-run changes nothing" || bad "install_user dry-run"
 bash "$HERE/install_root.sh" --lane-user "$(id -un)" >"$T/out" 2>&1; rc=$?
 [ "$rc" = 0 ] && grep -q 'NOPASSWD: /usr/local/sbin/roxira-lane-root' "$T/out" && ok "install_root dry-run prints the single sudoers line" || bad "install_root dry-run"
+# shellcheck disable=SC2016  # literal pattern on purpose: we grep the generated wrapper text
 grep -q 'run-builder)' "$T/out" && grep -q 'case "\$2" in' "$T/out" && ok "wrapper has the run-builder verb with a digits-only argument check" || bad "run-builder verb missing"
 bash "$HERE/install_root.sh" --lane-user root >/dev/null 2>&1; [ $? = 2 ] && ok "install_root refuses root as lane user" || bad "root lane user"
 
