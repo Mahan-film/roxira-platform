@@ -601,8 +601,8 @@ export class ImportTieOutEngine {
 
     if (!hasControl && !(tb.found && hasSubledger)) {
       warningsFa.push(missingWarning);
-      // AP check without controlTotal or counterpart subledger must fail (never silently pass).
-      if (!requireSubledgerOrControl && category !== 'ACCOUNTS_PAYABLE') return null;
+      // AP check without controlTotal or counterpart subledger must fail when AP opening balance exists (never silently pass).
+      if (!requireSubledgerOrControl && !(category === 'ACCOUNTS_PAYABLE' && tb.found)) return null;
       const presentUnits = hasSubledger ? subledgerUnits : tb.balance;
       const actualMoney = formatTieOutMoney(presentUnits, currency);
       return {

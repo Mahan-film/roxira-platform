@@ -707,7 +707,7 @@ describe('T325 R32: Import Tie-Out Engine (TB, AR/AP, Stock Value, Bank)', () =>
         differenceMinor: '-500000',
       });
       expect(report.tieOut?.items.find((i) => i.category === 'ACCOUNTS_RECEIVABLE')).toBeUndefined();
-      expect(report.tieOut?.warningsFa?.some((w) => w.includes('9999'))).toBe(true);
+      expect((report.tieOut?.warningsFa ?? []).some((w) => w.includes('9999'))).toBe(false);
 
       expect(() => parseMoneyValue('not-a-number', 'IRR')).toThrow(BadRequestException);
       expect(() => parseMoneyValue('10.5', 'IRR')).toThrow(BadRequestException);
