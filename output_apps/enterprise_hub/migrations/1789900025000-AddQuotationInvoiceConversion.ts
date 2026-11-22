@@ -41,10 +41,14 @@ export class AddQuotationInvoiceConversion1789900025000 implements MigrationInte
 
   public async down(q: QueryRunner): Promise<void> {
     await q.query(`SET LOCAL lock_timeout = '3s'`);
-    await q.query(`DROP INDEX IF EXISTS "IDX_erp_sales_quotations_tenant_invoice"`);
-    await q.query(
-      `ALTER TABLE "erp_sales_quotations" DROP COLUMN IF EXISTS "converted_invoice_id"`,
+    const converted = await q.query(
+      `SELECT count(*)::int AS count FROM "erp_sales_quotations" WHERE "converted_invoice_id" IS NOT NULL`,
     );
+    if (converted && converted[0]?.count > 0) {
+      throw new Error(
+        `Cannot revert migration: ${converted[0].count} quotation(s) have converted invoices. Business records cannot be altered or deleted.`,
+      );
+    }
     const expired = await q.query(
       `SELECT count(*)::int AS count FROM "erp_sales_quotations" WHERE "status" = 'EXPIRED'`,
     );
@@ -53,6 +57,10 @@ export class AddQuotationInvoiceConversion1789900025000 implements MigrationInte
         `Cannot revert migration: ${expired[0].count} quotation(s) have status 'EXPIRED'. Business records cannot be altered or deleted.`,
       );
     }
+    await q.query(`DROP INDEX IF EXISTS "IDX_erp_sales_quotations_tenant_invoice"`);
+    await q.query(
+      `ALTER TABLE "erp_sales_quotations" DROP COLUMN IF EXISTS "converted_invoice_id"`,
+    );
     await q.query(
       `ALTER TABLE "erp_sales_quotations" DROP CONSTRAINT IF EXISTS "CHK_erp_sales_quotations_status"`,
     );

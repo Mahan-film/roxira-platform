@@ -5249,6 +5249,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/sales/quotations/:id/status (SalesController.changeQuotationStatus)": {
