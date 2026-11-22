@@ -1316,6 +1316,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/data-import/export/json (TenantExportController.exportJson)": {
@@ -2947,6 +2948,7 @@
     "cheque_reviewer": true,
     "hr": true,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": true
   },
   "GET /tenants/me/onboarding/ (OnboardingController.get)": {
@@ -4410,6 +4412,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/data-import/packages (DataImportController.createPackage)": {
@@ -5651,6 +5654,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PUT /admin/entitlements/:tenantId (EntitlementsAdminController.set)": {

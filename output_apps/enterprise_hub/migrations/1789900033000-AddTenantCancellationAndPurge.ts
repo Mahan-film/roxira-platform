@@ -11,8 +11,8 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  *
  * Adds index on (status, delete_after) for efficient purge job scheduling.
  */
-export class AddTenantCancellationAndPurge1789900012700 implements MigrationInterface {
-  name = 'AddTenantCancellationAndPurge1789900012700';
+export class AddTenantCancellationAndPurge1789900033000 implements MigrationInterface {
+  name = 'AddTenantCancellationAndPurge1789900033000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
@@ -55,7 +55,7 @@ export class AddTenantCancellationAndPurge1789900012700 implements MigrationInte
     // Preserve any non-default cancellation/purge metadata before dropping columns
     // so rollback never silently deletes data.
     await queryRunner.query(`
-      CREATE TABLE IF NOT EXISTS "_rollback_backup_1789900012700_tenants_cancellation" (
+      CREATE TABLE IF NOT EXISTS "_rollback_backup_1789900033000_tenants_cancellation" (
         "tenant_id" uuid PRIMARY KEY,
         "status" character varying(32),
         "delete_after" TIMESTAMP WITH TIME ZONE,
@@ -66,7 +66,7 @@ export class AddTenantCancellationAndPurge1789900012700 implements MigrationInte
       );
     `);
     await queryRunner.query(`
-      INSERT INTO "_rollback_backup_1789900012700_tenants_cancellation" (
+      INSERT INTO "_rollback_backup_1789900033000_tenants_cancellation" (
         "tenant_id", "status", "delete_after", "cancelled_at", "cancellation_reason", "purged_at"
       )
       SELECT "id", "status", "delete_after", "cancelled_at", "cancellation_reason", "purged_at"

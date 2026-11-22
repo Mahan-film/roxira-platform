@@ -296,4 +296,31 @@ describe('TenantCancellationService', () => {
       expect(purgeSpy).toHaveBeenCalledTimes(2);
     });
   });
+
+  describe('automated purge scheduler (T148)', () => {
+    it('registers repeatable purge sweep job in BullMQ', async () => {
+      await service.registerPurgeSchedule();
+
+      expect(purgeQueue.add).toHaveBeenCalledWith(
+        'purge-expired',
+        { action: 'purge-expired' },
+        {
+          repeat: { every: 6 * 60 * 60 * 1000 },
+          jobId: 'tenant-purge-sweep',
+          removeOnComplete: 10,
+          removeOnFail: 10,
+        },
+      );
+    });
+
+    it('gracefully handles missing queue in registerPurgeSchedule', async () => {
+      const unqueuedService = new TenantCancellationService(
+        tenantsRepo,
+        dataSource,
+        mockTenantScope,
+      );
+
+      await expect(unqueuedService.registerPurgeSchedule()).resolves.toBeUndefined();
+    });
+  });
 });

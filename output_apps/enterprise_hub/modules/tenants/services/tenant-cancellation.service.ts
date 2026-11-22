@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  OnModuleInit,
   Optional,
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -16,9 +17,12 @@ import { TenantCancellationStatusResponseDto } from '../dto/tenant-cancellation.
 
 export const TENANT_EXPORT_QUEUE = 'tenant-export';
 export const TENANT_PURGE_QUEUE = 'tenant-purge';
+export const TENANT_PURGE_SWEEP_JOB = 'purge-expired';
+export const TENANT_PURGE_SWEEP_JOB_ID = 'tenant-purge-sweep';
+export const TENANT_PURGE_SWEEP_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 @Injectable()
-export class TenantCancellationService {
+export class TenantCancellationService implements OnModuleInit {
   private readonly logger = new Logger(TenantCancellationService.name);
 
   constructor(
@@ -32,6 +36,31 @@ export class TenantCancellationService {
     @InjectQueue(TENANT_PURGE_QUEUE)
     private readonly purgeQueue?: Queue,
   ) {}
+
+  /** Registers repeatable sweep job for automated purging of expired tenants (T148). */
+  async onModuleInit(): Promise<void> {
+    if (process.env.NODE_ENV === 'test' || !this.purgeQueue) return;
+    await this.registerPurgeSchedule();
+  }
+
+  /** Schedules periodic purge sweep in BullMQ. Public for testing. */
+  async registerPurgeSchedule(): Promise<void> {
+    if (!this.purgeQueue) return;
+    try {
+      await this.purgeQueue.add(
+        TENANT_PURGE_SWEEP_JOB,
+        { action: 'purge-expired' },
+        {
+          repeat: { every: TENANT_PURGE_SWEEP_INTERVAL_MS },
+          jobId: TENANT_PURGE_SWEEP_JOB_ID,
+          removeOnComplete: 10,
+          removeOnFail: 10,
+        },
+      );
+    } catch (error) {
+      this.logger.warn(`Failed to schedule tenant purge sweep: ${(error as Error).message}`);
+    }
+  }
 
   /**
    * Puts an organisation into `cancelled_readonly` status with retention period (Task T148).
