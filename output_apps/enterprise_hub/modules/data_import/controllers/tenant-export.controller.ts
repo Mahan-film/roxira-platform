@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Post, Req, UseGuards, BadRequestException } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AccessAction, AccessModule } from '../../access/catalogue';
 import { ModuleAccess, RequireAction } from '../../access/decorators';
 import { AuthenticatedRequest, JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -11,11 +11,12 @@ import {
   TenantTabularExport,
 } from '../services/tenant-export.service';
 import { TenantRestoreResult, TenantRestoreService } from '../services/tenant-restore.service';
+import { RestoreTenantDto } from '../dto/restore-tenant.dto';
 
 /**
  * Controller for tenant data export and restore (#230 / T77 / #1057 / T262 R26).
  * Guaranteed GoBD Z3 compliance and EU Data Act exit right.
- * Protected by DATA_IMPORT module access and EXPORT/IMPORT action.
+ * Protected by DATA_IMPORT module access and EXPORT/CREATE action.
  */
 @ApiTags('Data Import - Tenant Export (استخراج داده‌های مستأجر)')
 @ApiBearerAuth()
@@ -25,7 +26,7 @@ import { TenantRestoreResult, TenantRestoreService } from '../services/tenant-re
 export class TenantExportController {
   constructor(
     private readonly exportService: TenantExportService,
-    private readonly restoreService?: TenantRestoreService,
+    private readonly restoreService: TenantRestoreService,
   ) {}
 
   @Get('json')
@@ -58,15 +59,24 @@ export class TenantExportController {
   @Post('restore')
   @RequireAction(AccessAction.CREATE)
   @ApiOperation({ summary: 'بازیابی داده‌های مستأجر از بسته خروجی اعتبارسنجی‌شده' })
+  @ApiQuery({ name: 'dryRun', required: false, type: Boolean, description: 'اعتبارسنجی بدون ذخیره در پایگاه داده' })
   @ApiResponse({ status: 200, description: 'نتیجه بازیابی داده‌های مستأجر' })
   async restoreTenant(
     @Req() req: AuthenticatedRequest,
-    @Body() archive: TenantGoBDZ3Archive,
+    @Body() body: RestoreTenantDto | TenantGoBDZ3Archive,
+    @Query('dryRun') dryRunQuery?: string,
   ): Promise<TenantRestoreResult> {
     const tenantId = requireTenantId(req);
-    if (!this.restoreService) {
-      throw new BadRequestException('Tenant restore service not initialized');
-    }
-    return this.restoreService.restoreTenantFromExport(tenantId, archive);
+    const isDto = 'archive' in body && body.archive != null;
+    const archive = isDto ? (body as RestoreTenantDto).archive : (body as TenantGoBDZ3Archive);
+    const dryRun = isDto
+      ? (body as RestoreTenantDto).dryRun ?? (dryRunQuery === 'true')
+      : dryRunQuery === 'true';
+    const allowNonEmptyTenant = isDto ? (body as RestoreTenantDto).allowNonEmptyTenant : false;
+
+    return this.restoreService.restoreTenantFromExport(tenantId, archive, {
+      dryRun,
+      allowNonEmptyTenant,
+    });
   }
 }

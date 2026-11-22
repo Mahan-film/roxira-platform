@@ -58,6 +58,7 @@ import { TenantExportService } from './services/tenant-export.service';
 import { TenantRestoreService } from './services/tenant-restore.service';
 import { TenantExportController } from './controllers/tenant-export.controller';
 import { TenantExportRepository } from './repositories/tenant-export.repository';
+import { TenantRestoreRepository } from './repositories/tenant-restore.repository';
 import { SepidarMappingAdapter } from './migration/bak/sepidar-mapping.adapter';
 import { HolooMappingAdapter } from './migration/bak/holoo-mapping.adapter';
 import { ImportDryRunController } from './controllers/import-dry-run.controller';
@@ -202,6 +203,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     BulkPostService,
     BulkImportProcessor,
     TenantExportRepository,
+    TenantRestoreRepository,
     TenantExportService,
     TenantRestoreService,
     ImportDryRunService,
@@ -216,6 +218,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     EntityImportService,
     SepidarChequesFifoAdapter,
     TenantExportRepository,
+    TenantRestoreRepository,
     TenantExportService,
     TenantRestoreService,
     ImportDryRunService, // Re-exported for external module injection (single provider instance registered above)

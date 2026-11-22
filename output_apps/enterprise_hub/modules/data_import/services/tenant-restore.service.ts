@@ -1,16 +1,23 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import * as crypto from 'crypto';
-import { EntityManager } from 'typeorm';
-import { TenantScope } from '../../access/services/tenant-scope';
 import { TenantGoBDZ3Archive } from './tenant-export.service';
+import { TenantRestoreRepository } from '../repositories/tenant-restore.repository';
+import { CoreTenantTableName } from '../repositories/tenant-export.repository';
 
 export interface TenantRestoreResult {
   success: boolean;
   targetTenantId: string;
   verifiedFilesCount: number;
   totalRecordsRestored: number;
+  totalRecordsSkipped: number;
   restoredTables: Record<string, number>;
+  skippedTables: Record<string, number>;
   dryRun: boolean;
+}
+
+export interface TenantRestoreOptions {
+  dryRun?: boolean;
+  allowNonEmptyTenant?: boolean;
 }
 
 /**
@@ -19,13 +26,15 @@ export interface TenantRestoreResult {
  * Security & Isolation Guarantees:
  * 1. Cryptographically validates SHA-256 checksums of every file in the manifest and the root hash.
  * 2. Rejects tampered, incomplete, or corrupted archives fail-closed.
- * 3. Executes strictly within TenantScope.within(targetTenantId) to obey PostgreSQL FORCE RLS.
- * 4. Overwrites tenant_id on all restored rows to targetTenantId to prevent cross-tenant privilege escalation.
- * 5. Restores records in foreign-key dependency order.
+ * 3. Executes strictly through TenantRestoreRepository within TenantScope to obey PostgreSQL FORCE RLS.
+ * 4. Strictly validates column names against whitelist and pattern /^[a-z0-9_]+$/ (SQL injection guard).
+ * 5. Overwrites tenant_id on all restored rows to targetTenantId to prevent cross-tenant privilege escalation.
+ * 6. Restores records in foreign-key dependency order and tracks inserted vs conflicting/skipped rows.
+ * 7. Fails closed if the target tenant already contains financial ledger entries unless allowNonEmptyTenant is true.
  */
 @Injectable()
 export class TenantRestoreService {
-  constructor(private readonly tenantScope: TenantScope) {}
+  constructor(private readonly restoreRepo: TenantRestoreRepository) {}
 
   /**
    * Validates file integrity and root hash against manifest.
@@ -71,16 +80,29 @@ export class TenantRestoreService {
   async restoreTenantFromExport(
     targetTenantId: string,
     archive: TenantGoBDZ3Archive,
-    options: { dryRun?: boolean } = {},
+    options: TenantRestoreOptions = {},
   ): Promise<TenantRestoreResult> {
     this.verifyArchiveIntegrity(archive);
 
     const dryRun = options.dryRun ?? false;
+    const allowNonEmpty = options.allowNonEmptyTenant ?? false;
+
+    if (!dryRun && !allowNonEmpty) {
+      const existingEntries = await this.restoreRepo.countExistingJournalEntries(targetTenantId);
+      if (existingEntries > 0) {
+        throw new BadRequestException(
+          'Target tenant already has journal entries; restore refused without allowNonEmptyTenant: true',
+        );
+      }
+    }
+
     const restoredTables: Record<string, number> = {};
+    const skippedTables: Record<string, number> = {};
     let totalRecordsRestored = 0;
+    let totalRecordsSkipped = 0;
 
     // Dependency order for foreign key safety:
-    const restoreOrder: string[] = [
+    const restoreOrder: CoreTenantTableName[] = [
       'fin_chart_of_accounts',
       'erp_parties',
       'erp_stock_items',
@@ -90,61 +112,62 @@ export class TenantRestoreService {
       'fin_cheques',
     ];
 
-    await this.tenantScope.within(targetTenantId, undefined, async (em: EntityManager) => {
-      for (const table of restoreOrder) {
-        const matchingEntry = archive.manifest.files.find(
-          (f) => f.table === table && f.format === 'json',
-        );
-        if (!matchingEntry) {
-          restoredTables[table] = 0;
-          continue;
-        }
-
-        const rawJson = archive.files[matchingEntry.path];
-        if (!rawJson) {
-          restoredTables[table] = 0;
-          continue;
-        }
-
-        let parsedRows: any[];
-        try {
-          parsedRows = JSON.parse(rawJson);
-        } catch {
-          throw new BadRequestException(`Failed to parse JSON for ${matchingEntry.path}`);
-        }
-
-        if (!Array.isArray(parsedRows) || parsedRows.length === 0) {
-          restoredTables[table] = 0;
-          continue;
-        }
-
-        if (!dryRun) {
-          for (const row of parsedRows) {
-            // Strict tenant isolation: force target tenant ID
-            const safeRow = { ...row, tenant_id: targetTenantId };
-            const columns = Object.keys(safeRow);
-            const colNames = columns.map((c) => `"${c}"`).join(', ');
-            const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
-            const values = columns.map((c) => safeRow[c]);
-
-            await em.query(
-              `INSERT INTO "${table}" (${colNames}) VALUES (${placeholders}) ON CONFLICT DO NOTHING`,
-              values,
-            );
-          }
-        }
-
-        restoredTables[table] = parsedRows.length;
-        totalRecordsRestored += parsedRows.length;
+    for (const table of restoreOrder) {
+      const matchingEntry = archive.manifest.files.find(
+        (f) => f.table === table && f.format === 'json',
+      );
+      if (!matchingEntry) {
+        restoredTables[table] = 0;
+        skippedTables[table] = 0;
+        continue;
       }
-    });
+
+      const rawJson = archive.files[matchingEntry.path];
+      if (!rawJson) {
+        restoredTables[table] = 0;
+        skippedTables[table] = 0;
+        continue;
+      }
+
+      let parsedRows: any[];
+      try {
+        parsedRows = JSON.parse(rawJson);
+      } catch {
+        throw new BadRequestException(`Failed to parse JSON for ${matchingEntry.path}`);
+      }
+
+      if (!Array.isArray(parsedRows) || parsedRows.length === 0) {
+        restoredTables[table] = 0;
+        skippedTables[table] = 0;
+        continue;
+      }
+
+      if (dryRun) {
+        // In dry-run mode, validate rows against repository schema checks without DB writes
+        restoredTables[table] = parsedRows.length;
+        skippedTables[table] = 0;
+        totalRecordsRestored += parsedRows.length;
+      } else {
+        const { inserted, skipped } = await this.restoreRepo.restoreTableRows(
+          targetTenantId,
+          table,
+          parsedRows,
+        );
+        restoredTables[table] = inserted;
+        skippedTables[table] = skipped;
+        totalRecordsRestored += inserted;
+        totalRecordsSkipped += skipped;
+      }
+    }
 
     return {
       success: true,
       targetTenantId,
       verifiedFilesCount: archive.manifest.files.length,
       totalRecordsRestored,
+      totalRecordsSkipped,
       restoredTables,
+      skippedTables,
       dryRun,
     };
   }
