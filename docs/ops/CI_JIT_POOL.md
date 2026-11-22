@@ -78,6 +78,10 @@ The runner template follows the old runner's version (`runner_setup.sh`); re-run
 after a runner upgrade. GitHub only accepts runners within a few releases of the latest, so refresh
 it at least monthly (Sunday maintenance).
 
+Updating the launcher: re-run `08_root_ci_pool.sh`. Launchers re-exec themselves between jobs when
+the installed file changed; `runner_setup.sh` also restarts any launcher still running older code,
+but only while no job runs on the box (otherwise it says so; re-run the script when idle).
+
 ## Revert
 
 1. `gh variable set CI_RUNNER_MODE -b hosted -R Mahan-film/roxira-platform` (CI is hosted again at once).
