@@ -118,7 +118,7 @@ class Base(unittest.TestCase):
         """Blob sha of the file `write(mid, name)` creates."""
         text = f"export class {name}{mid} {{\n  name = '{name}{mid}';\n}}\n"
         return subprocess.run(["git", "hash-object", "--stdin"], input=text, capture_output=True,
-                              text=True, check=True).stdout.strip()
+                              text=True, check=True, cwd=self.repo, env=self.env).stdout.strip()
 
     def git(self, *a):
         subprocess.run(["git", *a], cwd=self.repo, check=True, capture_output=True, env=self.env)
