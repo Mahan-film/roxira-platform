@@ -263,6 +263,7 @@ class Pool:
         state = self.load_state()
         runners = self.cleanup(self.runners())
         status = self.slot_status(runners)
+        observed = json.loads(json.dumps(status))  # what --status shows: before this tick mints
         for slot, s in status.items():
             if s["held"]:
                 log.info("slot %s: HOLD (load shedding), not minting", slot)
@@ -277,7 +278,7 @@ class Pool:
             self.save_state(state)
         for a in self.actions:
             log.info("%s%s", "[dry-run] " if self.dry else "", a)
-        return {"status": status, "actions": self.actions}
+        return {"status": observed, "actions": self.actions}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -308,6 +309,8 @@ def main(argv: list[str] | None = None) -> int:
         for slot, s in (result.get("status") or {}).items():
             print(f"{slot}: registered={s['present']} online={s['online']} busy={s['busy']} pending={s['pending']} "
                   f"launcher={'alive' if s['alive'] else 'down'} hold={'yes' if s['held'] else 'no'}")
+        for act in result.get("actions") or []:
+            print(f"would {act}" if cfg["dry_run"] else act)
     return 0
 
 

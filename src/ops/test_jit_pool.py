@@ -340,3 +340,10 @@ def test_launcher_retires_old_runner_only_when_idle(launcher_env, tmp_path):
     (launcher_env["tmp"] / "busy").unlink()
     assert launch(launcher_env, "light").returncode == 0
     assert "systemctl --user disable --now actions-runner" in (launcher_env["tmp"] / "log").read_text()
+
+
+def test_reported_status_is_before_minting(jp, env):
+    alive(env, "light", "docker")
+    res = run_tick(jp, env, FakeApi())
+    assert res["status"]["light"]["present"] == 0 and res["status"]["light"]["pending"] == 0
+    assert any(a.startswith("mint jit-light-") for a in res["actions"])
