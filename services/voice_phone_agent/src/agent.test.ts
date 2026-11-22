@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { FormData, Response } from 'undici';
+import { noSourceAnswer } from './brain.js';
 import { cfg, validateConfig } from './config.js';
 import { LEGAL_VOCAB, repairLegalTerms } from './legal-terms.js';
 import { clean, isPromptEcho, transcribe, transcribeDetailed, weightedLogprob } from './stt.js';
@@ -224,4 +225,26 @@ test('transcribe builds a fresh FormData on each key-rotation retry', async () =
     cfg.sttProvider = prevProvider;
     cfg.groqKeys = prevKeys;
   }
+});
+
+// `done` bodies shaped like the live voice-mode answers of 2026-11-22 (texts shortened)
+const SRC_EMPTY = { statutory_basis: [], unified_precedents: [], judicial_practice: [], regulations: [] };
+
+test('noSourceAnswer: only a sourced-nothing main answer gets the notice', () => {
+  // main answer path, nothing cited (the server empties the lists when retrieval found nothing real)
+  assert.equal(noSourceAnswer({ ...SRC_EMPTY, reply: 'ضرب و جرح در هر دو مکان جرم است.', spoken_reply: 'x' }), true);
+  // answer with a cited law or a ruling (catalog path)
+  assert.equal(noSourceAnswer({ ...SRC_EMPTY, statutory_basis: [{ law: 'x' }], reply: 'پاسخ.', spoken_reply: 'x' }), false);
+  assert.equal(noSourceAnswer({ ...SRC_EMPTY, judicial_practice: [{ id: 1 }], reply: 'رأی شماره ...', spoken_reply: 'x' }), false);
+  // fast paths carry no spoken_reply: small talk, out of scope, free tier busy
+  assert.equal(noSourceAnswer({ statutory_basis: [], unified_precedents: [], reply: 'سلام! بفرمایید.' }), false);
+  assert.equal(noSourceAnswer({ ...SRC_EMPTY, reply: 'شلوغ است.', upsell: true }), false);
+  assert.equal(noSourceAnswer({ ...SRC_EMPTY, reply: 'یافت نشد.', spoken_reply: 'x', abstained: true }), false);
+  // a clarifying question is not a legal claim
+  assert.equal(noSourceAnswer({ ...SRC_EMPTY, reply: 'منظورتان کدام قانون است؟', spoken_reply: 'x' }), false);
+  for (const bad of [null, undefined, 'text', 3]) assert.equal(noSourceAnswer(bad), false);
+});
+
+test('the no-source notice is configurable and short enough to say after an answer', () => {
+  assert.ok(cfg.noSourceText.length > 0 && cfg.noSourceText.length < 160 || process.env.NO_SOURCE_TEXT !== undefined);
 });
