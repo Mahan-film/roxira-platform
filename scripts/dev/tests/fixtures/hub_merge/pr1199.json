@@ -1,0 +1,197 @@
+{
+ "_note": "Recorded from the public repo 2026-11-22 (comments, reviews, files, check-runs, head commit date are real; bodies trimmed to header + verdict lines; non-bot logins anonymised). pr.state, pr.mergeable_state and pr.auto_merge are SYNTHETIC: the PRs were already merged when recorded, so state is set to open to replay the decision as it stood before the merge.",
+ "pr": {
+  "number": 1199,
+  "title": "feat(data_import): T326 R32: import batch tagging, idempotent re-import and undo (#1149)",
+  "draft": false,
+  "state": "open",
+  "labels": [],
+  "head": {
+   "sha": "16187efb091aa03d5a3efab246e6a5a9d09ebad6"
+  },
+  "base": {
+   "ref": "main"
+  },
+  "mergeable_state": "clean",
+  "auto_merge": null
+ },
+ "head_commit_date": "2026-11-21T18:36:19Z",
+ "comments": [
+  {
+   "id": 7067513752,
+   "user": {
+    "login": "github-actions[bot]"
+   },
+   "created_at": "2026-11-21T18:47:20Z",
+   "updated_at": "2026-11-21T18:47:20Z",
+   "body": "Cross-family review (nvidia/nemotron-3-ultra-550b-a55b:free via OpenRouter, family nvidia) @ 16187efb091aa03d5a3efab246e6a5a9d09ebad6\n[... body trimmed in fixture ...]\nVerdict: blocker"
+  }
+ ],
+ "reviews": [],
+ "files": [
+  {
+   "filename": "output_apps/enterprise_hub/migrations/1789900017000-AddFileHashToDataImportBatches.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/data_import/data-import-damages-rls.pg.spec.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/data_import/dto/batch-response.dto.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/data_import/entities/data-import-batch.entity.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/data_import/repositories/data-import-batch.repository.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/data_import/services/entity-import.service.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/data_import/services/import-idempotent-undo.spec.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/data_import/services/package-commit.service.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/data_import/services/package-store.service.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/data_import/services/upload-store.service.ts"
+  }
+ ],
+ "check_runs": [
+  {
+   "id": 136944297144,
+   "name": "Ruff (non-blocking)",
+   "status": "completed",
+   "conclusion": "skipped"
+  },
+  {
+   "id": 136944296899,
+   "name": "Static RTL template build (report-only)",
+   "status": "completed",
+   "conclusion": "skipped"
+  },
+  {
+   "id": 136944296850,
+   "name": "Pytest (unit)",
+   "status": "completed",
+   "conclusion": "skipped"
+  },
+  {
+   "id": 136944296755,
+   "name": "Compose config",
+   "status": "completed",
+   "conclusion": "skipped"
+  },
+  {
+   "id": 136944296590,
+   "name": "Generated template check (report-only)",
+   "status": "completed",
+   "conclusion": "skipped"
+  },
+  {
+   "id": 136944296460,
+   "name": "Frontend lint + build",
+   "status": "completed",
+   "conclusion": "skipped"
+  },
+  {
+   "id": 136944295808,
+   "name": "Frontend gate",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136944295308,
+   "name": "TypeScript 7 type-check (report-only) (backend)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136944295282,
+   "name": "Backend (tsc + jest + Postgres specs)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136944295257,
+   "name": "Migration ids + Squawk (new migrations only)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136944295250,
+   "name": "TypeScript 7 type-check (report-only) (frontend)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136944295234,
+   "name": "M1 gate (Playwright)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136944295194,
+   "name": "Smoke + axe gate (Playwright)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136944252130,
+   "name": "System inventory up to date",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136944252095,
+   "name": "Detect changes",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136944252005,
+   "name": "Agent guards (money, tenant scope, model ids, secrets)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136944251993,
+   "name": "OSV-Scanner (report-only)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136944251974,
+   "name": "Secret scan (new commits only)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136944251950,
+   "name": "Semgrep CE (new findings)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136944251935,
+   "name": "Trivy filesystem scan (report-only)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136944251909,
+   "name": "Undefined names",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136944218247,
+   "name": "Pick runner",
+   "status": "completed",
+   "conclusion": "success"
+  }
+ ]
+}

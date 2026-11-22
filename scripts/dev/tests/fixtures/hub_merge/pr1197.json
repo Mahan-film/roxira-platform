@@ -1,0 +1,284 @@
+{
+ "_note": "Recorded from the public repo 2026-11-22 (comments, reviews, files, check-runs, head commit date are real; bodies trimmed to header + verdict lines; non-bot logins anonymised). pr.state, pr.mergeable_state and pr.auto_merge are SYNTHETIC: the PRs were already merged when recorded, so state is set to open to replay the decision as it stood before the merge.",
+ "pr": {
+  "number": 1197,
+  "title": "feat(access): T196 Accountant-firm access (#923)",
+  "draft": false,
+  "state": "open",
+  "labels": [],
+  "head": {
+   "sha": "dbe96679a93e66b786f753d82587787cb6a9cd30"
+  },
+  "base": {
+   "ref": "main"
+  },
+  "mergeable_state": "clean",
+  "auto_merge": null
+ },
+ "head_commit_date": "2026-11-21T22:52:43Z",
+ "comments": [
+  {
+   "id": 7066984835,
+   "user": {
+    "login": "hub-account"
+   },
+   "created_at": "2026-11-21T18:04:45Z",
+   "updated_at": "2026-11-21T18:04:45Z",
+   "body": "### Implementation Plan: T196 Accountant-firm access (#923)\n[... body trimmed in fixture ...]"
+  },
+  {
+   "id": 7067455233,
+   "user": {
+    "login": "github-actions[bot]"
+   },
+   "created_at": "2026-11-21T18:42:42Z",
+   "updated_at": "2026-11-21T18:42:42Z",
+   "body": "Cross-family review (nvidia/nemotron-3-ultra-550b-a55b:free via OpenRouter, family nvidia) @ 9ae79873100b5108daf5d2d4b49040126b349ef2\n[... body trimmed in fixture ...]\nVerdict: blocker"
+  },
+  {
+   "id": 7067722772,
+   "user": {
+    "login": "github-actions[bot]"
+   },
+   "created_at": "2026-11-21T19:03:06Z",
+   "updated_at": "2026-11-21T19:03:06Z",
+   "body": "Cross-family review (nvidia/nemotron-3-ultra-550b-a55b:free via OpenRouter, family nvidia) @ fd98ba34e437899741b1b12bdaa127aa10d94ea2\n[... body trimmed in fixture ...]\nVerdict: blocker"
+  },
+  {
+   "id": 7067938041,
+   "user": {
+    "login": "hub-account"
+   },
+   "created_at": "2026-11-21T19:19:35Z",
+   "updated_at": "2026-11-21T19:19:35Z",
+   "body": "Hub review (Claude Sonnet reviewer, different family from the author), 2026-11-21. Findings must be fixed first.\n[... body trimmed in fixture ...]\nVerdict: blocker"
+  },
+  {
+   "id": 7070242509,
+   "user": {
+    "login": "hub-account"
+   },
+   "created_at": "2026-11-21T22:31:34Z",
+   "updated_at": "2026-11-21T22:31:34Z",
+   "body": "Addressed all Hub review and cross-family review findings at `6d0eca7f8`:\n[... body trimmed in fixture ...]"
+  },
+  {
+   "id": 7070597731,
+   "user": {
+    "login": "github-actions[bot]"
+   },
+   "created_at": "2026-11-21T23:02:12Z",
+   "updated_at": "2026-11-21T23:02:12Z",
+   "body": "Cross-family review (nvidia/nemotron-3-ultra-550b-a55b:free via OpenRouter, family nvidia) @ dbe96679a93e66b786f753d82587787cb6a9cd30\n[... body trimmed in fixture ...]\nVerdict: no blocker"
+  },
+  {
+   "id": 7070667182,
+   "user": {
+    "login": "hub-account"
+   },
+   "created_at": "2026-11-21T23:08:05Z",
+   "updated_at": "2026-11-21T23:08:05Z",
+   "body": "Hub re-review (Claude Sonnet, other family than the author), 2026-11-22, head dbe9667. Fixed: tag/firmUserId server-derived; partner_advisor restricted to the adjustment period on create/update/post; assignAdvisor needs members:admin + canGrant and a different role gives 409; service wired into org.controller.\n[... body trimmed in fixture ...]\nVerdict: blocker"
+  }
+ ],
+ "reviews": [],
+ "files": [
+  {
+   "filename": "output_apps/enterprise_hub/migrations/1789900019200-AddTagAndFirmUserIdToJournalEntries.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/access/access.module.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/access/accountant-firm-access.pg.spec.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/access/accountant-firm-access.spec.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/access/catalogue.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/access/controllers/org.controller.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/access/dto/org.dto.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/access/permission-matrix.snapshot.json"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/access/permission-matrix.spec.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/access/services/accountant-firm.service.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/access/time-window-access.spec.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/accounting/acceptance/r16-core.spec.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/accounting/add-tag-and-firm-user-id-to-journal-entries.migration.spec.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/accounting/controllers/accounting.controller.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/accounting/dto/journal-entry-response.dto.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/accounting/entities/fiscal-year.entity.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/accounting/entities/journal-entry.entity.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/accounting/repositories/accounting.repository.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/accounting/services/accounting.service.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/accounting/services/fiscal-year.service.spec.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/parties/parties-access.spec.ts"
+  }
+ ],
+ "check_runs": [
+  {
+   "id": 137013607987,
+   "name": "Frontend lint + build",
+   "status": "completed",
+   "conclusion": "skipped"
+  },
+  {
+   "id": 137013607686,
+   "name": "Compose config",
+   "status": "completed",
+   "conclusion": "skipped"
+  },
+  {
+   "id": 137013607558,
+   "name": "Generated template check (report-only)",
+   "status": "completed",
+   "conclusion": "skipped"
+  },
+  {
+   "id": 137013607299,
+   "name": "Ruff (non-blocking)",
+   "status": "completed",
+   "conclusion": "skipped"
+  },
+  {
+   "id": 137013607284,
+   "name": "Static RTL template build (report-only)",
+   "status": "completed",
+   "conclusion": "skipped"
+  },
+  {
+   "id": 137013607132,
+   "name": "Pytest (unit)",
+   "status": "completed",
+   "conclusion": "skipped"
+  },
+  {
+   "id": 137013606430,
+   "name": "Frontend gate",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 137013606167,
+   "name": "TypeScript 7 type-check (report-only) (backend)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 137013606158,
+   "name": "Smoke + axe gate (Playwright)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 137013606142,
+   "name": "TypeScript 7 type-check (report-only) (frontend)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 137013606120,
+   "name": "Backend (tsc + jest + Postgres specs)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 137013606110,
+   "name": "Migration ids + Squawk (new migrations only)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 137013606086,
+   "name": "M1 gate (Playwright)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 137013559205,
+   "name": "Semgrep CE (new findings)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 137013559103,
+   "name": "Secret scan (new commits only)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 137013559086,
+   "name": "Undefined names",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 137013559079,
+   "name": "Detect changes",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 137013559069,
+   "name": "System inventory up to date",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 137013559060,
+   "name": "Agent guards (money, tenant scope, model ids, secrets)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 137013559038,
+   "name": "OSV-Scanner (report-only)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 137013559037,
+   "name": "Trivy filesystem scan (report-only)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 137013512340,
+   "name": "Pick runner",
+   "status": "completed",
+   "conclusion": "success"
+  }
+ ]
+}

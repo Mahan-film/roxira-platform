@@ -1,0 +1,251 @@
+{
+ "_note": "Recorded from the public repo 2026-11-22 (comments, reviews, files, check-runs, head commit date are real; bodies trimmed to header + verdict lines; non-bot logins anonymised). pr.state, pr.mergeable_state and pr.auto_merge are SYNTHETIC: the PRs were already merged when recorded, so state is set to open to replay the decision as it stood before the merge.",
+ "pr": {
+  "number": 1074,
+  "title": "feat(accounting,country_packs): T169 currency precision core (#901)",
+  "draft": false,
+  "state": "open",
+  "labels": [],
+  "head": {
+   "sha": "eef7ac18fb2ed7f0c0ef0d0d06aa7ddf1694827e"
+  },
+  "base": {
+   "ref": "main"
+  },
+  "mergeable_state": "clean",
+  "auto_merge": null
+ },
+ "head_commit_date": "2026-11-21T13:55:15Z",
+ "comments": [
+  {
+   "id": 7063149968,
+   "user": {
+    "login": "github-actions[bot]"
+   },
+   "created_at": "2026-11-21T13:16:18Z",
+   "updated_at": "2026-11-21T13:16:18Z",
+   "body": "Cross-family review (nvidia/nemotron-3-ultra-550b-a55b:free via OpenRouter, family nvidia) @ 3376221e2095208f6389e37ac94ae57ff6b10dfd\n[... body trimmed in fixture ...]\nVerdict: no blocker"
+  },
+  {
+   "id": 7063850383,
+   "user": {
+    "login": "github-actions[bot]"
+   },
+   "created_at": "2026-11-21T14:08:23Z",
+   "updated_at": "2026-11-21T14:08:23Z",
+   "body": "Cross-family review (nvidia/nemotron-3-ultra-550b-a55b:free via OpenRouter, family nvidia) @ eef7ac18fb2ed7f0c0ef0d0d06aa7ddf1694827e\n[... body trimmed in fixture ...]\nVerdict: blocker"
+  }
+ ],
+ "reviews": [],
+ "files": [
+  {
+   "filename": "output_apps/enterprise_hub/migrations/1789900013100-WidenLedgerMoneyColumns.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/migrations/1789900013200-WidenInvoiceMoneyColumns.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/migrations/1789900013300-WidenTreasuryMoneyColumns.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/migrations/1789900013400-WidenInventoryMoneyColumns.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/accounting/accounting.ledger.pg.spec.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/accounting/currency-precision.spec.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/accounting/entities/chart-of-account.entity.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/accounting/entities/journal-entry-line.entity.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/accounting/fiscal-close.pg.spec.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/accounting/fixed-asset-disposal.pg.spec.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/accounting/fixed-assets.pg.spec.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/accounting/money.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/accounting/recurring-vouchers.pg.spec.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/accounting/voucher-states.pg.spec.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/accounting/voucher-tools.pg.spec.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/country_packs/currency-exponents.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/country_packs/index.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/data_import/sepidar-persistence.pg.spec.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/inventory/entities/stock-document.entity.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/invoicing/entities/invoice.entity.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/report_builder/report-builder.pg.spec.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/treasury/bank-statement.pg.spec.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/treasury/entities/treasury-allocation.entity.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/treasury/entities/treasury-document-line.entity.ts"
+  },
+  {
+   "filename": "output_apps/enterprise_hub/modules/treasury/entities/treasury-document.entity.ts"
+  }
+ ],
+ "check_runs": [
+  {
+   "id": 136867943837,
+   "name": "Pytest (unit)",
+   "status": "completed",
+   "conclusion": "skipped"
+  },
+  {
+   "id": 136867943721,
+   "name": "Static RTL template build (report-only)",
+   "status": "completed",
+   "conclusion": "skipped"
+  },
+  {
+   "id": 136867943529,
+   "name": "Generated template check (report-only)",
+   "status": "completed",
+   "conclusion": "skipped"
+  },
+  {
+   "id": 136867943355,
+   "name": "Ruff (non-blocking)",
+   "status": "completed",
+   "conclusion": "skipped"
+  },
+  {
+   "id": 136867943326,
+   "name": "Frontend lint + build",
+   "status": "completed",
+   "conclusion": "skipped"
+  },
+  {
+   "id": 136867943313,
+   "name": "Compose config",
+   "status": "completed",
+   "conclusion": "skipped"
+  },
+  {
+   "id": 136867942639,
+   "name": "Frontend gate",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136867942404,
+   "name": "Migration ids + Squawk (new migrations only)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136867942372,
+   "name": "Smoke + axe gate (Playwright)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136867942350,
+   "name": "M1 gate (Playwright)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136867942301,
+   "name": "TypeScript 7 type-check (report-only) (backend)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136867942279,
+   "name": "Backend (tsc + jest + Postgres specs)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136867942277,
+   "name": "TypeScript 7 type-check (report-only) (frontend)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136867505663,
+   "name": "System inventory up to date",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136867505611,
+   "name": "OSV-Scanner (report-only)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136867505569,
+   "name": "Undefined names",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136867505563,
+   "name": "Semgrep CE (new findings)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136867505561,
+   "name": "Agent guards (money, tenant scope, model ids, secrets)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136867505550,
+   "name": "Detect changes",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136867505547,
+   "name": "Secret scan (new commits only)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136867505543,
+   "name": "Trivy filesystem scan (report-only)",
+   "status": "completed",
+   "conclusion": "success"
+  },
+  {
+   "id": 136867453734,
+   "name": "Pick runner",
+   "status": "completed",
+   "conclusion": "success"
+  }
+ ]
+}
