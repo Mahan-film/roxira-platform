@@ -1,0 +1,11 @@
+[Unit]
+Description=Roxira box status page refresh (every 5 minutes, off the hour)
+
+[Timer]
+OnCalendar=*:1/5
+RandomizedDelaySec=20
+AccuracySec=30s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,13 @@
+[Unit]
+Description=Roxira box failure alerts to Telegram (no-op until the env file exists)
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=HTTPS_PROXY=http://127.0.0.1:10809 HTTP_PROXY=http://127.0.0.1:10809 NO_PROXY=127.0.0.1,localhost NODE_USE_ENV_PROXY=1
+EnvironmentFile=-%h/.config/roxira-status/status.env
+# Token and chat id live only in %h/.config/roxira-status/telegram.env (mode 600), read by the script itself.
+ExecStart=/usr/bin/python3 %h/.local/share/roxira-status/bin/box_alert.py
+TimeoutStartSec=120
+Nice=10
+NoNewPrivileges=true
