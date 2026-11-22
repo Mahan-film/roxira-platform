@@ -469,7 +469,7 @@ def is_critical(path: str, ladder: dict | None = None) -> bool:
 
 
 def safe_text(text: str) -> str:
-    """A path or finding as one plain line: control characters and line separators (a git path may hold a
+    """A path as one plain line: control characters and line separators (a git path may hold a
     newline) become `?`, so file names cannot forge a `Verdict:` line in the comment or the prompt."""
     return re.sub(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]", "?", text)
 
