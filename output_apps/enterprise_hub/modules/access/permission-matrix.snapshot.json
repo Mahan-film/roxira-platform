@@ -1676,6 +1676,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/integrations/woocommerce/logs (WooCommerceConfigController.getLogs)": {
@@ -1687,6 +1688,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/documents/ (StockDocumentsController.list)": {
@@ -4674,6 +4676,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/integrations/woocommerce/webhook/:tenantId (WooCommerceWebhookController.handleWebhook)": {
@@ -5813,6 +5816,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PUT /enterprise-hub/inventory/openings/:id/lines (OpeningBalanceController.replaceLines)": {
