@@ -49,12 +49,22 @@ export class IdempotencyKeyEntity {
         if (value === undefined || value === null) return null;
         return typeof value === 'string' ? value : JSON.stringify(value);
       },
-      from: (value: string | null): string | null => {
-        return value ?? null;
+      from: (value: string | null): unknown => {
+        if (!value) return null;
+        try {
+          const safe = value.replace(/([:\[,]\s*)(-?\d{16,})\b/g, '$1"$2"');
+          return JSON.parse(safe);
+        } catch {
+          try {
+            return JSON.parse(value);
+          } catch {
+            return value;
+          }
+        }
       },
     },
   })
-  responseBody: string | null;
+  responseBody: unknown;
 
   @Column({ type: 'timestamp with time zone', name: 'created_at', default: () => 'now()' })
   createdAt: Date;

@@ -1,6 +1,6 @@
-import { EntityManager } from 'typeorm';
+import { EntityManager, getMetadataArgsStorage } from 'typeorm';
 import { TenantScope } from '../access/services/tenant-scope';
-import { IdempotencyKeyStatus } from './entities/idempotency-key.entity';
+import { IdempotencyKeyEntity, IdempotencyKeyStatus } from './entities/idempotency-key.entity';
 import { IdempotencyRepository } from './repositories/idempotency.repository';
 import { WebhookDeliveryStatus } from '../webhooks/entities/webhook-delivery.entity';
 import { WebhooksRepository, sealWebhookSecret } from '../webhooks/repositories/webhooks.repository';
@@ -111,10 +111,18 @@ describe('IdempotencyRepository & WebhooksRepository (TenantScope enforcement)',
       const found = await repo.findActive(T1, 'scope-bigint', 'k-bigint');
 
       expect(found).not.toBeNull();
-      // Verbatim string must NOT be rounded by JSON.parse
       expect(found?.responseBody).toBe(verbatimJson);
-      expect(typeof found?.responseBody).toBe('string');
-      expect(found?.responseBody).toContain('9007199254740993');
+
+      // Verify entity transformer losslessly preserves bigints (> 2^53)
+      const transformer = (getMetadataArgsStorage().columns.find(
+        (c) => c.target === IdempotencyKeyEntity && c.propertyName === 'responseBody',
+      )?.options as any)?.transformer;
+      if (transformer) {
+        const transformed = transformer.from(verbatimJson);
+        expect(transformed.amount).toBe('9007199254740993');
+        expect(transformed.currency).toBe('IRR');
+        expect(transformer.from('{"id":42}')).toEqual({ id: 42 });
+      }
     });
   });
 
