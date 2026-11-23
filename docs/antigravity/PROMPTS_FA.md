@@ -215,22 +215,24 @@ Allowed slash commands: /compact. No /swarm, /boost, /teamwork, /schedule, autom
 ```
 
 
-# دور کمک‌بازبینی (RV1 تا RV10)
+# دور کمک‌بازبینی (RV1 تا RV8)
 
-وقتی laneهای سازنده کارشان تمام شد، همان چت‌ها را با این ده بلوک کمک‌بازبین کن. هر بلوک یک دهمِ PRهای باز را برمی‌دارد (شمارهٔ PR به پیمانهٔ ۱۰)، پس با هم تداخل ندارند. حداکثر ۸ چت هم‌زمان روی مک: RV1 تا RV5 را اول، RV6 تا RV10 را موج بعد بچسبان. ایرادهای بازبین را بررسی می‌کنند، ایراد واقعی را درست و push می‌کنند و برای هر PR یک وضعیت می‌نویسند. حکم نهایی را همچنان بازبین خودکارِ خانوادهٔ مدل دیگر می‌دهد و هاب مرج می‌کند.
-قاعدهٔ بار CI: هر PR در هر دور فقط یک push؛ push فقط‌مستندات روی سرِ سبز ممنوع.
+وقتی laneهای سازنده کارشان تمام شد (یا اول از همه، پیش از سازنده‌ها)، هر هشت بلوک را هم‌زمان در هشت چت جدا بچسبان. هر بلوک یک هشتمِ PRهای باز را برمی‌دارد (شمارهٔ PR به پیمانهٔ ۸؛ RV8 باقی‌ماندهٔ ۰ را می‌گیرد)، پس با هم تداخل ندارند و هیچ PRی جا نمی‌ماند. هشت چت = سقف مک. فقط وقتی این فایل در main مرج شده باشد کار می‌کنند (preflight روی main).
+قاعدهٔ بار CI: هر PR در هر دور فقط یک push؛ اگر حکم بازبین روی سر فعلی «no blocker» و CI سبز است، هیچ pushی نکن و فقط READY بنویس.
+حکم نهایی را بازبین خودکارِ خانوادهٔ مدل دیگر می‌دهد و هاب مرج می‌کند.
 
 
-## RV1: کمک‌بازبین 1 از ۱۰ (PRهایی که شماره‌شان به پیمانهٔ ۱۰ برابر 1 است)
+## RV1: کمک‌بازبین 1 از ۸ (PRهایی که شماره‌شان به پیمانهٔ ۸ برابر 1 است)
 
 ```text
 LANE = RV1
 Review-helper round (several hours). You make open PRs ready for the hub; you never merge. Reply to the owner in Persian; code, commits and docs in English.
 Start: git checkout main && git pull; source scripts/dev/lane_env.sh; bash scripts/dev/lane_preflight.sh RV1. On FAIL post BLOCKED on issue 592 and stop. Read docs/antigravity/LANE_RULES.md and docs/agents/LESSONS.md once.
-Your PRs: open, non-draft PRs of Mahan-film/roxira-platform with PR number modulo 10 == 1, lowest number first. Skip a PR that someone claimed on issue 592 in the last 2 hours, and skip PRs that touch output_apps/enterprise_hub/modules/country_packs/ or Smart Judge core prompts (hub only).
-For each PR: post "taking PR #N (RV1)" on issue 592; read EVERY PR comment (desk review at the current head, hub notes, Owner packet); check it out in your own worktree from scripts/dev/claim.sh conventions (git worktree add under $ROXIRA_WT_ROOT, never two PRs in one folder).
+Your PRs: open, non-draft PRs of Mahan-film/roxira-platform with PR number modulo 8 == 1, lowest number first. Skip a PR that someone claimed on issue 592 in the last 2 hours, and skip PRs that touch output_apps/enterprise_hub/modules/country_packs/ or Smart Judge core prompts (hub only).
+First read once the newest comments on issue 592 whose first line starts with "HUB -> LANES" (hold notes, CI load rule). For each PR: post "taking PR #N (RV1)" on issue 592; read EVERY PR comment (desk review at the current head, hub notes, Owner packet); check it out in your own worktree from scripts/dev/claim.sh conventions (git worktree add under $ROXIRA_WT_ROOT, never two PRs in one folder).
 Then: (1) for each desk or hub finding, check the code: if real, make the smallest fix on the PR's own branch; if false, note file:line evidence. (2) If CONFLICTING, git merge origin/main (no rebase, no force push) and keep migration ids above main's newest. (3) Run only the tests for the files you touched (never pytest over src/ or the repo root). (4) Push with LOCAL_CI_SKIP_PYTEST=1 FRESH_DB_PORT=<unique> git push; never --no-verify. At most 2 CI fix rounds, then post a Handoff block on the PR.
 Then post ONE PR comment starting "Lane check (RV1) @ <head 8 chars>:" with one line per finding (fixed how / false alarm with evidence), CI state, mergeable state, and one status: READY FOR HUB, NEEDS OWNER (protected path; say which), or BLOCKED (why). Never write the word "Verdict" and never approve a PR: the cross-family review desk gives the verdict and the hub merges.
+CI load rule: ONE push per PR per round. If the desk verdict at the PR's current head is no blocker and CI is green at job level, do NOT push anything (a push resets the desk verdict): post only the Lane check comment with READY FOR HUB (or NEEDS OWNER for a protected path). Push only to fix a real finding, a red check or a conflict.
 Never merge, never print secrets or env values, never touch production, never name a country (say current pack or default pack).
 REPORT on issue 592 after every 5 PRs and at the end (PR, new head, status).
 Stop when your PRs are done or credit/context is low; then say so and wait for the same prompt again.
@@ -238,16 +240,17 @@ Allowed slash commands: /compact. No /swarm, /boost, /teamwork, /schedule, autom
 ```
 
 
-## RV2: کمک‌بازبین 2 از ۱۰ (PRهایی که شماره‌شان به پیمانهٔ ۱۰ برابر 2 است)
+## RV2: کمک‌بازبین 2 از ۸ (PRهایی که شماره‌شان به پیمانهٔ ۸ برابر 2 است)
 
 ```text
 LANE = RV2
 Review-helper round (several hours). You make open PRs ready for the hub; you never merge. Reply to the owner in Persian; code, commits and docs in English.
 Start: git checkout main && git pull; source scripts/dev/lane_env.sh; bash scripts/dev/lane_preflight.sh RV2. On FAIL post BLOCKED on issue 592 and stop. Read docs/antigravity/LANE_RULES.md and docs/agents/LESSONS.md once.
-Your PRs: open, non-draft PRs of Mahan-film/roxira-platform with PR number modulo 10 == 2, lowest number first. Skip a PR that someone claimed on issue 592 in the last 2 hours, and skip PRs that touch output_apps/enterprise_hub/modules/country_packs/ or Smart Judge core prompts (hub only).
-For each PR: post "taking PR #N (RV2)" on issue 592; read EVERY PR comment (desk review at the current head, hub notes, Owner packet); check it out in your own worktree from scripts/dev/claim.sh conventions (git worktree add under $ROXIRA_WT_ROOT, never two PRs in one folder).
+Your PRs: open, non-draft PRs of Mahan-film/roxira-platform with PR number modulo 8 == 2, lowest number first. Skip a PR that someone claimed on issue 592 in the last 2 hours, and skip PRs that touch output_apps/enterprise_hub/modules/country_packs/ or Smart Judge core prompts (hub only).
+First read once the newest comments on issue 592 whose first line starts with "HUB -> LANES" (hold notes, CI load rule). For each PR: post "taking PR #N (RV2)" on issue 592; read EVERY PR comment (desk review at the current head, hub notes, Owner packet); check it out in your own worktree from scripts/dev/claim.sh conventions (git worktree add under $ROXIRA_WT_ROOT, never two PRs in one folder).
 Then: (1) for each desk or hub finding, check the code: if real, make the smallest fix on the PR's own branch; if false, note file:line evidence. (2) If CONFLICTING, git merge origin/main (no rebase, no force push) and keep migration ids above main's newest. (3) Run only the tests for the files you touched (never pytest over src/ or the repo root). (4) Push with LOCAL_CI_SKIP_PYTEST=1 FRESH_DB_PORT=<unique> git push; never --no-verify. At most 2 CI fix rounds, then post a Handoff block on the PR.
 Then post ONE PR comment starting "Lane check (RV2) @ <head 8 chars>:" with one line per finding (fixed how / false alarm with evidence), CI state, mergeable state, and one status: READY FOR HUB, NEEDS OWNER (protected path; say which), or BLOCKED (why). Never write the word "Verdict" and never approve a PR: the cross-family review desk gives the verdict and the hub merges.
+CI load rule: ONE push per PR per round. If the desk verdict at the PR's current head is no blocker and CI is green at job level, do NOT push anything (a push resets the desk verdict): post only the Lane check comment with READY FOR HUB (or NEEDS OWNER for a protected path). Push only to fix a real finding, a red check or a conflict.
 Never merge, never print secrets or env values, never touch production, never name a country (say current pack or default pack).
 REPORT on issue 592 after every 5 PRs and at the end (PR, new head, status).
 Stop when your PRs are done or credit/context is low; then say so and wait for the same prompt again.
@@ -255,16 +258,17 @@ Allowed slash commands: /compact. No /swarm, /boost, /teamwork, /schedule, autom
 ```
 
 
-## RV3: کمک‌بازبین 3 از ۱۰ (PRهایی که شماره‌شان به پیمانهٔ ۱۰ برابر 3 است)
+## RV3: کمک‌بازبین 3 از ۸ (PRهایی که شماره‌شان به پیمانهٔ ۸ برابر 3 است)
 
 ```text
 LANE = RV3
 Review-helper round (several hours). You make open PRs ready for the hub; you never merge. Reply to the owner in Persian; code, commits and docs in English.
 Start: git checkout main && git pull; source scripts/dev/lane_env.sh; bash scripts/dev/lane_preflight.sh RV3. On FAIL post BLOCKED on issue 592 and stop. Read docs/antigravity/LANE_RULES.md and docs/agents/LESSONS.md once.
-Your PRs: open, non-draft PRs of Mahan-film/roxira-platform with PR number modulo 10 == 3, lowest number first. Skip a PR that someone claimed on issue 592 in the last 2 hours, and skip PRs that touch output_apps/enterprise_hub/modules/country_packs/ or Smart Judge core prompts (hub only).
-For each PR: post "taking PR #N (RV3)" on issue 592; read EVERY PR comment (desk review at the current head, hub notes, Owner packet); check it out in your own worktree from scripts/dev/claim.sh conventions (git worktree add under $ROXIRA_WT_ROOT, never two PRs in one folder).
+Your PRs: open, non-draft PRs of Mahan-film/roxira-platform with PR number modulo 8 == 3, lowest number first. Skip a PR that someone claimed on issue 592 in the last 2 hours, and skip PRs that touch output_apps/enterprise_hub/modules/country_packs/ or Smart Judge core prompts (hub only).
+First read once the newest comments on issue 592 whose first line starts with "HUB -> LANES" (hold notes, CI load rule). For each PR: post "taking PR #N (RV3)" on issue 592; read EVERY PR comment (desk review at the current head, hub notes, Owner packet); check it out in your own worktree from scripts/dev/claim.sh conventions (git worktree add under $ROXIRA_WT_ROOT, never two PRs in one folder).
 Then: (1) for each desk or hub finding, check the code: if real, make the smallest fix on the PR's own branch; if false, note file:line evidence. (2) If CONFLICTING, git merge origin/main (no rebase, no force push) and keep migration ids above main's newest. (3) Run only the tests for the files you touched (never pytest over src/ or the repo root). (4) Push with LOCAL_CI_SKIP_PYTEST=1 FRESH_DB_PORT=<unique> git push; never --no-verify. At most 2 CI fix rounds, then post a Handoff block on the PR.
 Then post ONE PR comment starting "Lane check (RV3) @ <head 8 chars>:" with one line per finding (fixed how / false alarm with evidence), CI state, mergeable state, and one status: READY FOR HUB, NEEDS OWNER (protected path; say which), or BLOCKED (why). Never write the word "Verdict" and never approve a PR: the cross-family review desk gives the verdict and the hub merges.
+CI load rule: ONE push per PR per round. If the desk verdict at the PR's current head is no blocker and CI is green at job level, do NOT push anything (a push resets the desk verdict): post only the Lane check comment with READY FOR HUB (or NEEDS OWNER for a protected path). Push only to fix a real finding, a red check or a conflict.
 Never merge, never print secrets or env values, never touch production, never name a country (say current pack or default pack).
 REPORT on issue 592 after every 5 PRs and at the end (PR, new head, status).
 Stop when your PRs are done or credit/context is low; then say so and wait for the same prompt again.
@@ -272,16 +276,17 @@ Allowed slash commands: /compact. No /swarm, /boost, /teamwork, /schedule, autom
 ```
 
 
-## RV4: کمک‌بازبین 4 از ۱۰ (PRهایی که شماره‌شان به پیمانهٔ ۱۰ برابر 4 است)
+## RV4: کمک‌بازبین 4 از ۸ (PRهایی که شماره‌شان به پیمانهٔ ۸ برابر 4 است)
 
 ```text
 LANE = RV4
 Review-helper round (several hours). You make open PRs ready for the hub; you never merge. Reply to the owner in Persian; code, commits and docs in English.
 Start: git checkout main && git pull; source scripts/dev/lane_env.sh; bash scripts/dev/lane_preflight.sh RV4. On FAIL post BLOCKED on issue 592 and stop. Read docs/antigravity/LANE_RULES.md and docs/agents/LESSONS.md once.
-Your PRs: open, non-draft PRs of Mahan-film/roxira-platform with PR number modulo 10 == 4, lowest number first. Skip a PR that someone claimed on issue 592 in the last 2 hours, and skip PRs that touch output_apps/enterprise_hub/modules/country_packs/ or Smart Judge core prompts (hub only).
-For each PR: post "taking PR #N (RV4)" on issue 592; read EVERY PR comment (desk review at the current head, hub notes, Owner packet); check it out in your own worktree from scripts/dev/claim.sh conventions (git worktree add under $ROXIRA_WT_ROOT, never two PRs in one folder).
+Your PRs: open, non-draft PRs of Mahan-film/roxira-platform with PR number modulo 8 == 4, lowest number first. Skip a PR that someone claimed on issue 592 in the last 2 hours, and skip PRs that touch output_apps/enterprise_hub/modules/country_packs/ or Smart Judge core prompts (hub only).
+First read once the newest comments on issue 592 whose first line starts with "HUB -> LANES" (hold notes, CI load rule). For each PR: post "taking PR #N (RV4)" on issue 592; read EVERY PR comment (desk review at the current head, hub notes, Owner packet); check it out in your own worktree from scripts/dev/claim.sh conventions (git worktree add under $ROXIRA_WT_ROOT, never two PRs in one folder).
 Then: (1) for each desk or hub finding, check the code: if real, make the smallest fix on the PR's own branch; if false, note file:line evidence. (2) If CONFLICTING, git merge origin/main (no rebase, no force push) and keep migration ids above main's newest. (3) Run only the tests for the files you touched (never pytest over src/ or the repo root). (4) Push with LOCAL_CI_SKIP_PYTEST=1 FRESH_DB_PORT=<unique> git push; never --no-verify. At most 2 CI fix rounds, then post a Handoff block on the PR.
 Then post ONE PR comment starting "Lane check (RV4) @ <head 8 chars>:" with one line per finding (fixed how / false alarm with evidence), CI state, mergeable state, and one status: READY FOR HUB, NEEDS OWNER (protected path; say which), or BLOCKED (why). Never write the word "Verdict" and never approve a PR: the cross-family review desk gives the verdict and the hub merges.
+CI load rule: ONE push per PR per round. If the desk verdict at the PR's current head is no blocker and CI is green at job level, do NOT push anything (a push resets the desk verdict): post only the Lane check comment with READY FOR HUB (or NEEDS OWNER for a protected path). Push only to fix a real finding, a red check or a conflict.
 Never merge, never print secrets or env values, never touch production, never name a country (say current pack or default pack).
 REPORT on issue 592 after every 5 PRs and at the end (PR, new head, status).
 Stop when your PRs are done or credit/context is low; then say so and wait for the same prompt again.
@@ -289,16 +294,17 @@ Allowed slash commands: /compact. No /swarm, /boost, /teamwork, /schedule, autom
 ```
 
 
-## RV5: کمک‌بازبین 5 از ۱۰ (PRهایی که شماره‌شان به پیمانهٔ ۱۰ برابر 5 است)
+## RV5: کمک‌بازبین 5 از ۸ (PRهایی که شماره‌شان به پیمانهٔ ۸ برابر 5 است)
 
 ```text
 LANE = RV5
 Review-helper round (several hours). You make open PRs ready for the hub; you never merge. Reply to the owner in Persian; code, commits and docs in English.
 Start: git checkout main && git pull; source scripts/dev/lane_env.sh; bash scripts/dev/lane_preflight.sh RV5. On FAIL post BLOCKED on issue 592 and stop. Read docs/antigravity/LANE_RULES.md and docs/agents/LESSONS.md once.
-Your PRs: open, non-draft PRs of Mahan-film/roxira-platform with PR number modulo 10 == 5, lowest number first. Skip a PR that someone claimed on issue 592 in the last 2 hours, and skip PRs that touch output_apps/enterprise_hub/modules/country_packs/ or Smart Judge core prompts (hub only).
-For each PR: post "taking PR #N (RV5)" on issue 592; read EVERY PR comment (desk review at the current head, hub notes, Owner packet); check it out in your own worktree from scripts/dev/claim.sh conventions (git worktree add under $ROXIRA_WT_ROOT, never two PRs in one folder).
+Your PRs: open, non-draft PRs of Mahan-film/roxira-platform with PR number modulo 8 == 5, lowest number first. Skip a PR that someone claimed on issue 592 in the last 2 hours, and skip PRs that touch output_apps/enterprise_hub/modules/country_packs/ or Smart Judge core prompts (hub only).
+First read once the newest comments on issue 592 whose first line starts with "HUB -> LANES" (hold notes, CI load rule). For each PR: post "taking PR #N (RV5)" on issue 592; read EVERY PR comment (desk review at the current head, hub notes, Owner packet); check it out in your own worktree from scripts/dev/claim.sh conventions (git worktree add under $ROXIRA_WT_ROOT, never two PRs in one folder).
 Then: (1) for each desk or hub finding, check the code: if real, make the smallest fix on the PR's own branch; if false, note file:line evidence. (2) If CONFLICTING, git merge origin/main (no rebase, no force push) and keep migration ids above main's newest. (3) Run only the tests for the files you touched (never pytest over src/ or the repo root). (4) Push with LOCAL_CI_SKIP_PYTEST=1 FRESH_DB_PORT=<unique> git push; never --no-verify. At most 2 CI fix rounds, then post a Handoff block on the PR.
 Then post ONE PR comment starting "Lane check (RV5) @ <head 8 chars>:" with one line per finding (fixed how / false alarm with evidence), CI state, mergeable state, and one status: READY FOR HUB, NEEDS OWNER (protected path; say which), or BLOCKED (why). Never write the word "Verdict" and never approve a PR: the cross-family review desk gives the verdict and the hub merges.
+CI load rule: ONE push per PR per round. If the desk verdict at the PR's current head is no blocker and CI is green at job level, do NOT push anything (a push resets the desk verdict): post only the Lane check comment with READY FOR HUB (or NEEDS OWNER for a protected path). Push only to fix a real finding, a red check or a conflict.
 Never merge, never print secrets or env values, never touch production, never name a country (say current pack or default pack).
 REPORT on issue 592 after every 5 PRs and at the end (PR, new head, status).
 Stop when your PRs are done or credit/context is low; then say so and wait for the same prompt again.
@@ -306,16 +312,17 @@ Allowed slash commands: /compact. No /swarm, /boost, /teamwork, /schedule, autom
 ```
 
 
-## RV6: کمک‌بازبین 6 از ۱۰ (PRهایی که شماره‌شان به پیمانهٔ ۱۰ برابر 6 است)
+## RV6: کمک‌بازبین 6 از ۸ (PRهایی که شماره‌شان به پیمانهٔ ۸ برابر 6 است)
 
 ```text
 LANE = RV6
 Review-helper round (several hours). You make open PRs ready for the hub; you never merge. Reply to the owner in Persian; code, commits and docs in English.
 Start: git checkout main && git pull; source scripts/dev/lane_env.sh; bash scripts/dev/lane_preflight.sh RV6. On FAIL post BLOCKED on issue 592 and stop. Read docs/antigravity/LANE_RULES.md and docs/agents/LESSONS.md once.
-Your PRs: open, non-draft PRs of Mahan-film/roxira-platform with PR number modulo 10 == 6, lowest number first. Skip a PR that someone claimed on issue 592 in the last 2 hours, and skip PRs that touch output_apps/enterprise_hub/modules/country_packs/ or Smart Judge core prompts (hub only).
-For each PR: post "taking PR #N (RV6)" on issue 592; read EVERY PR comment (desk review at the current head, hub notes, Owner packet); check it out in your own worktree from scripts/dev/claim.sh conventions (git worktree add under $ROXIRA_WT_ROOT, never two PRs in one folder).
+Your PRs: open, non-draft PRs of Mahan-film/roxira-platform with PR number modulo 8 == 6, lowest number first. Skip a PR that someone claimed on issue 592 in the last 2 hours, and skip PRs that touch output_apps/enterprise_hub/modules/country_packs/ or Smart Judge core prompts (hub only).
+First read once the newest comments on issue 592 whose first line starts with "HUB -> LANES" (hold notes, CI load rule). For each PR: post "taking PR #N (RV6)" on issue 592; read EVERY PR comment (desk review at the current head, hub notes, Owner packet); check it out in your own worktree from scripts/dev/claim.sh conventions (git worktree add under $ROXIRA_WT_ROOT, never two PRs in one folder).
 Then: (1) for each desk or hub finding, check the code: if real, make the smallest fix on the PR's own branch; if false, note file:line evidence. (2) If CONFLICTING, git merge origin/main (no rebase, no force push) and keep migration ids above main's newest. (3) Run only the tests for the files you touched (never pytest over src/ or the repo root). (4) Push with LOCAL_CI_SKIP_PYTEST=1 FRESH_DB_PORT=<unique> git push; never --no-verify. At most 2 CI fix rounds, then post a Handoff block on the PR.
 Then post ONE PR comment starting "Lane check (RV6) @ <head 8 chars>:" with one line per finding (fixed how / false alarm with evidence), CI state, mergeable state, and one status: READY FOR HUB, NEEDS OWNER (protected path; say which), or BLOCKED (why). Never write the word "Verdict" and never approve a PR: the cross-family review desk gives the verdict and the hub merges.
+CI load rule: ONE push per PR per round. If the desk verdict at the PR's current head is no blocker and CI is green at job level, do NOT push anything (a push resets the desk verdict): post only the Lane check comment with READY FOR HUB (or NEEDS OWNER for a protected path). Push only to fix a real finding, a red check or a conflict.
 Never merge, never print secrets or env values, never touch production, never name a country (say current pack or default pack).
 REPORT on issue 592 after every 5 PRs and at the end (PR, new head, status).
 Stop when your PRs are done or credit/context is low; then say so and wait for the same prompt again.
@@ -323,16 +330,17 @@ Allowed slash commands: /compact. No /swarm, /boost, /teamwork, /schedule, autom
 ```
 
 
-## RV7: کمک‌بازبین 7 از ۱۰ (PRهایی که شماره‌شان به پیمانهٔ ۱۰ برابر 7 است)
+## RV7: کمک‌بازبین 7 از ۸ (PRهایی که شماره‌شان به پیمانهٔ ۸ برابر 7 است)
 
 ```text
 LANE = RV7
 Review-helper round (several hours). You make open PRs ready for the hub; you never merge. Reply to the owner in Persian; code, commits and docs in English.
 Start: git checkout main && git pull; source scripts/dev/lane_env.sh; bash scripts/dev/lane_preflight.sh RV7. On FAIL post BLOCKED on issue 592 and stop. Read docs/antigravity/LANE_RULES.md and docs/agents/LESSONS.md once.
-Your PRs: open, non-draft PRs of Mahan-film/roxira-platform with PR number modulo 10 == 7, lowest number first. Skip a PR that someone claimed on issue 592 in the last 2 hours, and skip PRs that touch output_apps/enterprise_hub/modules/country_packs/ or Smart Judge core prompts (hub only).
-For each PR: post "taking PR #N (RV7)" on issue 592; read EVERY PR comment (desk review at the current head, hub notes, Owner packet); check it out in your own worktree from scripts/dev/claim.sh conventions (git worktree add under $ROXIRA_WT_ROOT, never two PRs in one folder).
+Your PRs: open, non-draft PRs of Mahan-film/roxira-platform with PR number modulo 8 == 7, lowest number first. Skip a PR that someone claimed on issue 592 in the last 2 hours, and skip PRs that touch output_apps/enterprise_hub/modules/country_packs/ or Smart Judge core prompts (hub only).
+First read once the newest comments on issue 592 whose first line starts with "HUB -> LANES" (hold notes, CI load rule). For each PR: post "taking PR #N (RV7)" on issue 592; read EVERY PR comment (desk review at the current head, hub notes, Owner packet); check it out in your own worktree from scripts/dev/claim.sh conventions (git worktree add under $ROXIRA_WT_ROOT, never two PRs in one folder).
 Then: (1) for each desk or hub finding, check the code: if real, make the smallest fix on the PR's own branch; if false, note file:line evidence. (2) If CONFLICTING, git merge origin/main (no rebase, no force push) and keep migration ids above main's newest. (3) Run only the tests for the files you touched (never pytest over src/ or the repo root). (4) Push with LOCAL_CI_SKIP_PYTEST=1 FRESH_DB_PORT=<unique> git push; never --no-verify. At most 2 CI fix rounds, then post a Handoff block on the PR.
 Then post ONE PR comment starting "Lane check (RV7) @ <head 8 chars>:" with one line per finding (fixed how / false alarm with evidence), CI state, mergeable state, and one status: READY FOR HUB, NEEDS OWNER (protected path; say which), or BLOCKED (why). Never write the word "Verdict" and never approve a PR: the cross-family review desk gives the verdict and the hub merges.
+CI load rule: ONE push per PR per round. If the desk verdict at the PR's current head is no blocker and CI is green at job level, do NOT push anything (a push resets the desk verdict): post only the Lane check comment with READY FOR HUB (or NEEDS OWNER for a protected path). Push only to fix a real finding, a red check or a conflict.
 Never merge, never print secrets or env values, never touch production, never name a country (say current pack or default pack).
 REPORT on issue 592 after every 5 PRs and at the end (PR, new head, status).
 Stop when your PRs are done or credit/context is low; then say so and wait for the same prompt again.
@@ -340,50 +348,17 @@ Allowed slash commands: /compact. No /swarm, /boost, /teamwork, /schedule, autom
 ```
 
 
-## RV8: کمک‌بازبین 8 از ۱۰ (PRهایی که شماره‌شان به پیمانهٔ ۱۰ برابر 8 است)
+## RV8: کمک‌بازبین 8 از ۸ (PRهایی که شماره‌شان به پیمانهٔ ۸ برابر 0 است)
 
 ```text
 LANE = RV8
 Review-helper round (several hours). You make open PRs ready for the hub; you never merge. Reply to the owner in Persian; code, commits and docs in English.
 Start: git checkout main && git pull; source scripts/dev/lane_env.sh; bash scripts/dev/lane_preflight.sh RV8. On FAIL post BLOCKED on issue 592 and stop. Read docs/antigravity/LANE_RULES.md and docs/agents/LESSONS.md once.
-Your PRs: open, non-draft PRs of Mahan-film/roxira-platform with PR number modulo 10 == 8, lowest number first. Skip a PR that someone claimed on issue 592 in the last 2 hours, and skip PRs that touch output_apps/enterprise_hub/modules/country_packs/ or Smart Judge core prompts (hub only).
-For each PR: post "taking PR #N (RV8)" on issue 592; read EVERY PR comment (desk review at the current head, hub notes, Owner packet); check it out in your own worktree from scripts/dev/claim.sh conventions (git worktree add under $ROXIRA_WT_ROOT, never two PRs in one folder).
+Your PRs: open, non-draft PRs of Mahan-film/roxira-platform with PR number modulo 8 == 0, lowest number first. Skip a PR that someone claimed on issue 592 in the last 2 hours, and skip PRs that touch output_apps/enterprise_hub/modules/country_packs/ or Smart Judge core prompts (hub only).
+First read once the newest comments on issue 592 whose first line starts with "HUB -> LANES" (hold notes, CI load rule). For each PR: post "taking PR #N (RV8)" on issue 592; read EVERY PR comment (desk review at the current head, hub notes, Owner packet); check it out in your own worktree from scripts/dev/claim.sh conventions (git worktree add under $ROXIRA_WT_ROOT, never two PRs in one folder).
 Then: (1) for each desk or hub finding, check the code: if real, make the smallest fix on the PR's own branch; if false, note file:line evidence. (2) If CONFLICTING, git merge origin/main (no rebase, no force push) and keep migration ids above main's newest. (3) Run only the tests for the files you touched (never pytest over src/ or the repo root). (4) Push with LOCAL_CI_SKIP_PYTEST=1 FRESH_DB_PORT=<unique> git push; never --no-verify. At most 2 CI fix rounds, then post a Handoff block on the PR.
 Then post ONE PR comment starting "Lane check (RV8) @ <head 8 chars>:" with one line per finding (fixed how / false alarm with evidence), CI state, mergeable state, and one status: READY FOR HUB, NEEDS OWNER (protected path; say which), or BLOCKED (why). Never write the word "Verdict" and never approve a PR: the cross-family review desk gives the verdict and the hub merges.
-Never merge, never print secrets or env values, never touch production, never name a country (say current pack or default pack).
-REPORT on issue 592 after every 5 PRs and at the end (PR, new head, status).
-Stop when your PRs are done or credit/context is low; then say so and wait for the same prompt again.
-Allowed slash commands: /compact. No /swarm, /boost, /teamwork, /schedule, automation.
-```
-
-
-## RV9: کمک‌بازبین 9 از ۱۰ (PRهایی که شماره‌شان به پیمانهٔ ۱۰ برابر 9 است)
-
-```text
-LANE = RV9
-Review-helper round (several hours). You make open PRs ready for the hub; you never merge. Reply to the owner in Persian; code, commits and docs in English.
-Start: git checkout main && git pull; source scripts/dev/lane_env.sh; bash scripts/dev/lane_preflight.sh RV9. On FAIL post BLOCKED on issue 592 and stop. Read docs/antigravity/LANE_RULES.md and docs/agents/LESSONS.md once.
-Your PRs: open, non-draft PRs of Mahan-film/roxira-platform with PR number modulo 10 == 9, lowest number first. Skip a PR that someone claimed on issue 592 in the last 2 hours, and skip PRs that touch output_apps/enterprise_hub/modules/country_packs/ or Smart Judge core prompts (hub only).
-For each PR: post "taking PR #N (RV9)" on issue 592; read EVERY PR comment (desk review at the current head, hub notes, Owner packet); check it out in your own worktree from scripts/dev/claim.sh conventions (git worktree add under $ROXIRA_WT_ROOT, never two PRs in one folder).
-Then: (1) for each desk or hub finding, check the code: if real, make the smallest fix on the PR's own branch; if false, note file:line evidence. (2) If CONFLICTING, git merge origin/main (no rebase, no force push) and keep migration ids above main's newest. (3) Run only the tests for the files you touched (never pytest over src/ or the repo root). (4) Push with LOCAL_CI_SKIP_PYTEST=1 FRESH_DB_PORT=<unique> git push; never --no-verify. At most 2 CI fix rounds, then post a Handoff block on the PR.
-Then post ONE PR comment starting "Lane check (RV9) @ <head 8 chars>:" with one line per finding (fixed how / false alarm with evidence), CI state, mergeable state, and one status: READY FOR HUB, NEEDS OWNER (protected path; say which), or BLOCKED (why). Never write the word "Verdict" and never approve a PR: the cross-family review desk gives the verdict and the hub merges.
-Never merge, never print secrets or env values, never touch production, never name a country (say current pack or default pack).
-REPORT on issue 592 after every 5 PRs and at the end (PR, new head, status).
-Stop when your PRs are done or credit/context is low; then say so and wait for the same prompt again.
-Allowed slash commands: /compact. No /swarm, /boost, /teamwork, /schedule, automation.
-```
-
-
-## RV10: کمک‌بازبین 10 از ۱۰ (PRهایی که شماره‌شان به پیمانهٔ ۱۰ برابر 0 است)
-
-```text
-LANE = RV10
-Review-helper round (several hours). You make open PRs ready for the hub; you never merge. Reply to the owner in Persian; code, commits and docs in English.
-Start: git checkout main && git pull; source scripts/dev/lane_env.sh; bash scripts/dev/lane_preflight.sh RV10. On FAIL post BLOCKED on issue 592 and stop. Read docs/antigravity/LANE_RULES.md and docs/agents/LESSONS.md once.
-Your PRs: open, non-draft PRs of Mahan-film/roxira-platform with PR number modulo 10 == 0, lowest number first. Skip a PR that someone claimed on issue 592 in the last 2 hours, and skip PRs that touch output_apps/enterprise_hub/modules/country_packs/ or Smart Judge core prompts (hub only).
-For each PR: post "taking PR #N (RV10)" on issue 592; read EVERY PR comment (desk review at the current head, hub notes, Owner packet); check it out in your own worktree from scripts/dev/claim.sh conventions (git worktree add under $ROXIRA_WT_ROOT, never two PRs in one folder).
-Then: (1) for each desk or hub finding, check the code: if real, make the smallest fix on the PR's own branch; if false, note file:line evidence. (2) If CONFLICTING, git merge origin/main (no rebase, no force push) and keep migration ids above main's newest. (3) Run only the tests for the files you touched (never pytest over src/ or the repo root). (4) Push with LOCAL_CI_SKIP_PYTEST=1 FRESH_DB_PORT=<unique> git push; never --no-verify. At most 2 CI fix rounds, then post a Handoff block on the PR.
-Then post ONE PR comment starting "Lane check (RV10) @ <head 8 chars>:" with one line per finding (fixed how / false alarm with evidence), CI state, mergeable state, and one status: READY FOR HUB, NEEDS OWNER (protected path; say which), or BLOCKED (why). Never write the word "Verdict" and never approve a PR: the cross-family review desk gives the verdict and the hub merges.
+CI load rule: ONE push per PR per round. If the desk verdict at the PR's current head is no blocker and CI is green at job level, do NOT push anything (a push resets the desk verdict): post only the Lane check comment with READY FOR HUB (or NEEDS OWNER for a protected path). Push only to fix a real finding, a red check or a conflict.
 Never merge, never print secrets or env values, never touch production, never name a country (say current pack or default pack).
 REPORT on issue 592 after every 5 PRs and at the end (PR, new head, status).
 Stop when your PRs are done or credit/context is low; then say so and wait for the same prompt again.
