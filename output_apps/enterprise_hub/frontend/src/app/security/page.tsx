@@ -120,7 +120,7 @@ export default function SecurityTrustPage() {
               <h2 className="text-base font-bold text-white">ردیابی تغییرناپذیر رخدادها (Immutable Audit Logs)</h2>
             </div>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              کلیه تراکنش‌های مالی، ورودهای سیستمی و تغییرات دسترسی با چک‌سام‌های رمزنگاری‌شده ثبت می‌شوند. <strong>۱۲ ماه نگهداری گزارش‌های حسابرسی خط مشی رسمی ما است</strong> (12 months of audit log is our retention).
+              کلیه تراکنش‌های مالی، ورودهای سیستمی و تغییرات دسترسی با چک‌سام‌های رمزنگاری‌شده ثبت می‌شوند. <strong>هدف خط مشی ما نگهداری ۱۲ ماهه گزارش‌های حسابرسی است</strong> (12 months is our target retention policy; automated enforcement is not yet in place).
             </p>
           </article>
         </div>
@@ -174,8 +174,8 @@ export default function SecurityTrustPage() {
         <section className="border-t border-slate-800 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
           <div>
             گزارش‌های آسیب‌پذیری و ارزیابی امنیتی:{" "}
-            <a href="mailto:security@roxira.ir" className="text-emerald-400 underline font-mono">
-              security@roxira.ir
+            <a href="mailto:security@roxira.com" className="text-emerald-400 underline font-mono">
+              security@roxira.com
             </a>
           </div>
           <div className="flex items-center gap-4">

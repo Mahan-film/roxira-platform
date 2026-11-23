@@ -13,9 +13,9 @@
 
 ### 1. Audit & Assurance (A&A)
 - **A&A-01 (Audit Logging)**: Does the organization collect and preserve immutable audit logs of administrative, user, and data access activities?
-  - **Response**: **Yes**. Comprehensive structured audit logs are generated for all authentication, data mutation, administrative role assignment, and financial postings (`capture_audit`, `fin_bank_recon_audit`, `ops_errors`). **12 months of audit log is our retention**.
+  - **Response**: **Yes**. Comprehensive structured audit logs are generated for all authentication, data mutation, administrative role assignment, and financial postings (`capture_audit`, `fin_bank_recon_audit`, `ops_errors`). **12 months of audit log is our retention policy target** (automated retention enforcement is not yet implemented).
 - **A&A-02 (Independent Review)**: Are independent reviews or automated security assessments conducted?
-  - **Response**: **Yes**. Automated SAST, SCA, and dependency vulnerability scans execute on every code change in CI/CD. Third-party external penetration testing is scheduled annually.
+  - **Response**: **Yes**. Automated SAST, SCA, and dependency vulnerability scans execute on every code change in CI/CD. An annual third-party penetration test is planned but has not yet been performed.
 
 ### 2. Application & Interface Security (AIS)
 - **AIS-01 (Application Security Architecture)**: Does the application enforce tenant isolation at the data tier?
@@ -25,7 +25,7 @@
 
 ### 3. Business Continuity & Disaster Recovery (BCR)
 - **BCR-01 (Backup Policy & Restoration)**: Are regular backups executed and tested?
-  - **Response**: **Yes**. Continuous WAL archiving and daily base backups provide an RPO $< 15$ minutes and RTO $< 2$ hours. Backups are encrypted with AES-256 and stored off-site with Object Lock immutability. Restore procedures are automatically validated.
+  - **Response**: **Yes**. Continuous WAL archiving and daily base backups provide an RPO $< 15$ minutes and RTO $< 2$ hours. Backups are encrypted with AES-256 and stored off-site with Object Lock immutability. Restore procedures are documented; routine restore testing is a policy goal and is not yet continuously automated.
 
 ### 4. Cryptography, Encryption & Key Management (CEK)
 - **CEK-01 (Encryption in Transit)**: Is all network traffic encrypted in transit?

@@ -44,7 +44,7 @@
 ## 4. Audit Logging & Monitoring
 
 ### Q4.1: What is the audit log retention period?
-**Answer**: **12 months of audit log is our retention**. Audit logs cover user logins, MFA verifications, token rotations, financial journal entries, tax authority transmissions, and permission modifications. Logs are stored immutably with tamper-evident checksums.
+**Answer**: **12 months of audit log is our retention policy target** (automated retention enforcement is not yet implemented). Audit logs cover user logins, MFA verifications, token rotations, financial journal entries, tax authority transmissions, and permission modifications. Logs are stored immutably with tamper-evident checksums.
 
 ### Q4.2: How are system errors and security events monitored?
 **Answer**: Centralized logging and error tracking (`ops_errors`, Prometheus, Grafana) capture real-time anomalies. Critical anomalies trigger on-call engineering alerts.
@@ -58,7 +58,7 @@
 - **Secret Scanning**: Gitleaks executes on pre-commit and CI hooks, preventing accidental secret commits.
 - **SAST**: Semgrep and oxlint scan source files for security vulnerabilities and dangerous patterns.
 - **SCA**: Trivy scans npm and pip dependencies on every pull request.
-- **Anti-Circumvention**: Automated repository guards block modifications that bypass permission matrices or tenant scoping.
+- **Anti-Circumvention**: A pre-merge CI check (`check_agent_guards.py`) fails pull requests that bypass permission matrices or tenant scoping; it is not a runtime control.
 
 ### Q5.2: What are the remediation SLAs for discovered vulnerabilities?
 **Answer**:

@@ -20,7 +20,7 @@ This policy establishes standard operating procedures for detecting, triaging, c
 1. **Detection & Triage**: Automated alerting via Prometheus, Sentry error capture (`ops_errors`), and telemetry triggers on-call incident response immediately upon SEV-1/SEV-2 classification.
 2. **Containment & Isolation**: Application gateways, database connections, or compromised API tokens are revocable within minutes via automated circuit breakers and token family revocation.
 3. **Breach Notification Commitment**:
-   - In the event of a confirmed personal data breach or unauthorized access to customer data, Roxira notifies impacted customer organizations within **48 hours** of confirmation, exceeding GDPR Article 33/34 timelines.
+   - In the event of a confirmed personal data breach or unauthorized access to customer data, Roxira notifies impacted customer organizations within **48 hours** of confirmation, which is shorter than the 72-hour limit for notifying the supervisory authority under GDPR Art. 33(1); notice to affected data subjects under GDPR Art. 34 follows without undue delay.
    - Initial notice provides nature of incident, affected data categories, containment actions taken, and recommended mitigations.
 4. **Post-Mortem & Remediation**:
    - A blameless root-cause analysis (RCA) is conducted within 5 business days of incident closure.

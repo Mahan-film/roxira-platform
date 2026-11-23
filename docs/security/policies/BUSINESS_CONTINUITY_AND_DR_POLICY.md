@@ -25,6 +25,6 @@ Roxira systems are engineered to achieve strict Recovery Point and Recovery Time
 2. **Object Lock & Write-Once-Read-Many (WORM)**:
    - Remote backup archives enforce S3/Object Lock compliance mode, rendering historical snapshots strictly immutable and tamper-proof against ransomware or compromised administrative keys.
 3. **Restoration Verification & Drills**:
-   - Automated synthetic database restore drills run on a continuous scheduled basis (`fresh_db_migrate.sh` / restore verification scripts).
+   - Restore drills are a policy goal. `scripts/dev/fresh_db_migrate.sh` only verifies that migrations build a database from zero in CI; it is not a backup-restore drill, and scheduled backup-restore drills are not yet automated.
    - Full quarterly disaster recovery rehearsals are conducted and recorded in platform operational logs.
    - 12 months of audit log is our retention for all backup verification, restore drill logs, and disaster recovery exercise reports.
