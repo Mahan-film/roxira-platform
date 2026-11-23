@@ -2282,9 +2282,19 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         detected_domains = _prompt_library.detect_domains(user_text)
         competence_queries = list(_prompt_library.expand_competence_queries(user_text))
 
+    as_of = payload.get("as_of_date") or payload.get("as_of")
     main_task = aquery_knowledge_graph(retrieval_query, limit=5)
+    extra_cat_kw = {}
+    if cat_intent and cat_intent.get("issuer"):
+        extra_cat_kw["issuer"] = cat_intent["issuer"]
+    if as_of:
+        extra_cat_kw["as_of"] = as_of
     cat_task = (
-        _rulings.latest_rulings(limit=5, sub_collection=(cat_intent.get("sub_collection") or "unity_rulings"))
+        _rulings.latest_rulings(
+            limit=5,
+            sub_collection=(cat_intent.get("sub_collection") or "unity_rulings"),
+            **extra_cat_kw,
+        )
         if cat_intent
         else None
     )
@@ -2334,6 +2344,12 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
                 spoken_reply=clean_spoken_text(direct_ans) if is_voice else None,
             )
         cat_context_str = _catalog_intent.build_catalog_context(cat_rows, target=target)
+        if cat_rows:
+            if target == "regulation":
+                from output_apps.generated_modules.smartjudge import regulations_retrieval as _regs
+                precedents = _regs.merge_regulations(precedents, cat_rows)
+            else:
+                precedents = _rulings.merge_rulings(precedents, cat_rows)
 
     # Default ON (SMARTJUDGE_PROMPT_LIBRARY=0 disables): competence questions get up to 3 extra
     # targeted retrieval queries, merged and de-duplicated by title.
