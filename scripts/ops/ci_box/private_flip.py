@@ -57,17 +57,28 @@ def _is_jit(name: str) -> bool:
     return name.startswith("jit-")
 
 
+def counted_runs(runs: list[dict], want: int = MAIN_RUNS_WANTED) -> list[dict]:
+    """The newest `want` completed main runs that count.
+
+    Cancelled runs are skipped: on main a newer push replaces the pending run of the
+    shared concurrency group, so `cancelled` there means "superseded", not "red" (a busy
+    merge hour would otherwise never show three in a row).
+    """
+    counted = [r for r in runs if r.get("status") == "completed" and r.get("conclusion") != "cancelled"]
+    return counted[:want]
+
+
 def check_main_runs(runs: list[dict], jobs_by_run: dict[int, list[dict]], want: int = MAIN_RUNS_WANTED) -> Result:
     """The last `want` completed CI runs on main are green, and their box jobs ran on JIT runners.
 
     runs: workflow runs of CI on main, newest first (fields: id, status, conclusion). Runs that are not completed are
-    ignored (a run in flight says nothing yet). jobs_by_run: id -> jobs (fields: name, conclusion, runner_name).
+    ignored (a run in flight says nothing yet), and so are cancelled ones (see counted_runs). jobs_by_run: id -> jobs (fields: name, conclusion, runner_name).
     A job with no runner_name never started (skipped) and is ignored; a hosted job ("GitHub Actions ...") is fine;
     any other runner (the retired old runner, a stray name) fails the check; at least one jit- job is required.
     """
-    done = [r for r in runs if r.get("status") == "completed"][:want]
+    done = counted_runs(runs, want)
     if len(done) < want:
-        return False, f"only {len(done)} completed main CI runs, need {want}"
+        return False, f"only {len(done)} completed (not cancelled) main CI runs, need {want}"
     problems: list[str] = []
     for r in done:
         rid = r["id"]
@@ -137,7 +148,7 @@ class Gh:
 
     def main_runs(self) -> list[dict]:
         out = self.api(
-            f"repos/{self.repo}/actions/workflows/ci.yml/runs?branch=main&event=push&per_page=15",
+            f"repos/{self.repo}/actions/workflows/ci.yml/runs?branch=main&event=push&per_page=50",
             "-q", "[.workflow_runs[]|{id,status,conclusion}]",
         )
         return json.loads(out)
@@ -172,8 +183,7 @@ def gather_prereqs(gh: Gh, gate_toml: Path) -> list[tuple[str, Result]]:
         res.append(("CI_RUNNER_MODE set", (False, str(e))))
     try:
         runs = gh.main_runs()
-        done = [r for r in runs if r.get("status") == "completed"][:MAIN_RUNS_WANTED]
-        jobs = {r["id"]: gh.run_jobs(r["id"]) for r in done}
+        jobs = {r["id"]: gh.run_jobs(r["id"]) for r in counted_runs(runs)}
         res.append(("last 3 main CI runs green on JIT", check_main_runs(runs, jobs)))
     except (RuntimeError, ValueError, KeyError) as e:
         res.append(("last 3 main CI runs green on JIT", (False, f"cannot read runs: {e}")))
