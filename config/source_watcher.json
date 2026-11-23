@@ -1,0 +1,160 @@
+{
+ "_note": "Public pages only. Owner decision 2026-11-23: every public legal source is allowed; politeness, robots.txt and the no-bypass rule stay. enabled=false + manual_import = challenge/WAF host, people save pages by hand. A host with ca_file pins an extra intermediate CA (path relative to this file); tls_max=1.2 is for a server that resets TLS 1.3 clients. TLS verification is never disabled. Left out on purpose: qavanin.ir (challenge), majlis.ir (expired certificate), judiciary.ir and supremecourt.ir (connection reset), ssaa.ir (server error), edaalat.org (proxy-only, owner rule).",
+ "delay_s": 3.0,
+ "max_requests_per_run": 500,
+ "sources": [
+  {
+   "id": "rrk",
+   "list_urls": [
+    "https://rrk.ir/"
+   ],
+   "tier": "official",
+   "doc_type": "gazette_item",
+   "issuer": "Official Gazette",
+   "ca_file": "ca/certum_dv_tls_g2_r39.crt"
+  },
+  {
+   "id": "dotic",
+   "list_urls": [
+    "https://dotic.ir/"
+   ],
+   "tier": "official",
+   "doc_type": "legislation_news",
+   "issuer": "Presidency legal deputy (DOTIC)"
+  },
+  {
+   "id": "majlis_rc",
+   "list_urls": [
+    "https://rc.majlis.ir/"
+   ],
+   "tier": "official",
+   "doc_type": "law",
+   "issuer": "Parliament Research Center"
+  },
+  {
+   "id": "divan_edalat",
+   "list_urls": [
+    "https://divanedalat.eadl.ir/"
+   ],
+   "tier": "official",
+   "doc_type": "admin_court_ruling",
+   "issuer": "Administrative Justice Court"
+  },
+  {
+   "id": "cbi",
+   "list_urls": [
+    "https://cbi.ir/"
+   ],
+   "tier": "official",
+   "doc_type": "circular",
+   "issuer": "Central Bank",
+   "enabled": false,
+   "manual_import": "WAF block page: manual import only (no bypass, no retry with another UA)"
+  },
+  {
+   "id": "shora_gc",
+   "list_urls": [
+    "https://www.shora-gc.ir/"
+   ],
+   "tier": "official",
+   "doc_type": "guardian_council",
+   "issuer": "Guardian Council",
+   "link_regex": "/fa/(news|allnews)"
+  },
+  {
+   "id": "dolat",
+   "list_urls": [
+    "https://dolat.ir/"
+   ],
+   "tier": "official",
+   "doc_type": "cabinet_decision",
+   "issuer": "Cabinet",
+   "enabled": false,
+   "manual_import": "challenge page: manual import only (no bypass)"
+  },
+  {
+   "id": "mimt",
+   "list_urls": [
+    "https://www.mimt.gov.ir/"
+   ],
+   "tier": "official",
+   "doc_type": "trade_circular",
+   "issuer": "Ministry of Industry, Mine and Trade"
+  },
+  {
+   "id": "icbar",
+   "list_urls": [
+    "https://icbar.org/"
+   ],
+   "tier": "official",
+   "doc_type": "bar_circular",
+   "issuer": "Central Bar Association"
+  },
+  {
+   "id": "iranbar",
+   "list_urls": [
+    "https://iranbar.org/"
+   ],
+   "tier": "official",
+   "doc_type": "bar_circular",
+   "issuer": "Iran Bar Association",
+   "tls_max": "1.2"
+  },
+  {
+   "id": "eadl",
+   "list_urls": [
+    "https://eadl.ir/"
+   ],
+   "tier": "official",
+   "doc_type": "judiciary",
+   "issuer": "Judiciary (eadl)"
+  },
+  {
+   "id": "adliran",
+   "list_urls": [
+    "https://adliran.ir/"
+   ],
+   "tier": "official",
+   "doc_type": "judiciary",
+   "issuer": "Judiciary (adliran)"
+  },
+  {
+   "id": "setad",
+   "list_urls": [
+    "https://setadiran.ir/"
+   ],
+   "tier": "official",
+   "doc_type": "auction_listing",
+   "issuer": "Setad (public listing pages only, no login)"
+  },
+  {
+   "id": "ara",
+   "list_urls": [
+    "https://ara.jri.ac.ir/"
+   ],
+   "tier": "official",
+   "doc_type": "court_ruling",
+   "issuer": "Judiciary research institute (rulings)"
+  },
+  {
+   "id": "irica",
+   "list_urls": [
+    "https://www.irica.gov.ir/"
+   ],
+   "tier": "official",
+   "doc_type": "customs_circular",
+   "issuer": "Customs Administration"
+  },
+  {
+   "id": "tax",
+   "list_urls": [
+    "https://www.intamedia.ir/"
+   ],
+   "tier": "official",
+   "doc_type": "tax_news",
+   "issuer": "Tax Administration (public site)"
+  }
+ ],
+ "details_per_source": 30,
+ "_details_note": "details_per_source = page texts fetched per source per run (new/changed first, then the backlog). With a 3 s per-host delay this is about 1 request per 3-5 s per host."
+}

@@ -8,16 +8,16 @@
 #      rwx for mahanfilms (the controller writes single-use JIT configs; runner consumes them).
 #      ACLs instead of a shared group, so no running session needs a re-login. Also
 #      /srv/data/ci-jit/ms-playwright (browsers seeded by mahanfilms via seed_playwright.sh).
-#   2. code: scripts/ops/ci_box/jit_pool/* -> /usr/local/lib/roxira-jit (root-owned; job code
+#   2. code (launcher, jit_watchdog.py wall-time cap, light Dockerfile): scripts/ops/ci_box/jit_pool/* -> /usr/local/lib/roxira-jit (root-owned; job code
 #      running as `runner` cannot change the launcher).
 #   3. CI resource cap for everything user `runner` runs, including rootless Docker containers
-#      (brief section 7: docker slot 4 threads / 6 GB + light slot 1 thread / 2 GB):
-#      systemctl set-property user@<runner-uid>.service CPUQuota=500% MemoryHigh=7G MemoryMax=8G TasksMax=8192
+#      (docker slot 4 threads / 6 GB + JIT_LIGHT_SLOTS light slots of 1 thread / 2 GB, default 3):
+#      systemctl set-property user@<runner-uid>.service CPUQuota=600% MemoryHigh=12G MemoryMax=13G TasksMax=10240
 #   4. apt: postgresql-client (psql for the RLS gate and app-role steps) and fonts-noto-color-emoji
 #      (the one Playwright chromium dependency this box lacks); /opt/hostedtoolcache owned by runner
 #      (setup-python's builds only work from that path).
 #   5. as user runner: runner_setup.sh (runner template v<same as old runner>, SHA-256 checked;
-#      light image; user units roxira-jit@light + roxira-jit@docker, enabled).
+#      light image; user units roxira-jit@docker + roxira-jit@light, @light-2, @light-3, enabled).
 # Does NOT touch: nftables, ufw, xray, sudoers, the proxy, the phone stack, production, or the old
 # runner (actions-runner keeps running until two JIT runs pass; then mahanfilms drops the flag
 # /srv/data/ci-jit/control/retire-old-runner and the runner's own launcher disables it).
@@ -42,7 +42,16 @@ LIB=/usr/local/lib/roxira-jit
 BASE=/srv/data/ci-jit
 RUNNER=runner
 CTRL=mahanfilms
-CPU=500%; MEM_HIGH=7G; MEM_MAX=8G; TASKS=8192
+# Light slots: how many light launchers (1 CPU, 2 GB container each) run side by side. One slot ran
+# about 55 jobs an hour; agent PR CI queued 200+ light jobs (box hub decision 2026-11-23: 3).
+LIGHT_SLOTS="${JIT_LIGHT_SLOTS:-3}"
+case "$LIGHT_SLOTS" in [1-9]) ;; *) echo "JIT_LIGHT_SLOTS must be 1..9" >&2; exit 2 ;; esac
+# user@runner cap = docker slot (4 threads pinned to CPUs 2-5, 6 GB incl. Postgres) + light slots
+# (1 thread, 2 GB each). CPU stops at 6 threads: the phone stack keeps 2 of the 8. MemoryHigh is the
+# budget itself (it was 7G, below it: reclaim throttling slowed Postgres, #230 perf spec at 6 s).
+CPU_N=$((4 + LIGHT_SLOTS)); [ "$CPU_N" -le 6 ] || CPU_N=6
+MEM_HIGH_G=$((6 + 2 * LIGHT_SLOTS)); MEM_MAX_G=$((MEM_HIGH_G + 1))
+CPU="${CPU_N}00%"; MEM_HIGH="${MEM_HIGH_G}G"; MEM_MAX="${MEM_MAX_G}G"; TASKS=$((4096 + 2048 * LIGHT_SLOTS))
 
 ok()   { echo "OK    $*"; }
 todo() { echo "TODO  $*"; }
@@ -52,7 +61,7 @@ id "$RUNNER" >/dev/null 2>&1 || { echo "FAIL  user $RUNNER missing"; exit 1; }
 id "$CTRL" >/dev/null 2>&1 || { echo "FAIL  user $CTRL missing"; exit 1; }
 RUID="$(id -u "$RUNNER")"
 RHOME="$(getent passwd "$RUNNER" | cut -d: -f6)"
-for f in jit_launcher.sh runner_setup.sh Dockerfile.light 'roxira-jit@.service'; do
+for f in jit_launcher.sh jit_watchdog.py runner_setup.sh Dockerfile.light 'roxira-jit@.service'; do
   [ -f "$SRC/$f" ] || { echo "FAIL  $SRC/$f missing (run from a checkout of the repo)"; exit 1; }
 done
 mountpoint -q /srv/data || { echo "FAIL  /srv/data is not mounted"; exit 1; }
@@ -82,11 +91,13 @@ fi
 
 echo "== 2. launcher code in $LIB"
 changed=0
-for f in jit_launcher.sh runner_setup.sh Dockerfile.light 'roxira-jit@.service'; do
+for f in jit_launcher.sh jit_watchdog.py runner_setup.sh Dockerfile.light 'roxira-jit@.service'; do
   if [ -f "$LIB/$f" ] && cmp -s "$SRC/$f" "$LIB/$f"; then ok "$LIB/$f"; else todo "$LIB/$f"; changed=1; fi
 done
 if [ "$changed" = 1 ]; then
   run install -d -o root -g root -m 0755 "$LIB"
+  # watchdog first: the launcher (which re-execs itself between jobs) calls it
+  run install -o root -g root -m 0755 "$SRC/jit_watchdog.py" "$LIB/"
   run install -o root -g root -m 0755 "$SRC/jit_launcher.sh" "$SRC/runner_setup.sh" "$LIB/"
   run install -o root -g root -m 0644 "$SRC/Dockerfile.light" "$SRC/roxira-jit@.service" "$LIB/"
 fi
@@ -94,7 +105,8 @@ fi
 echo "== 3. resource cap for user $RUNNER (user@$RUID.service)"
 cur_cpu="$(systemctl show "user@$RUID.service" -p CPUQuotaPerSecUSec --value 2>/dev/null || true)"
 cur_mem="$(systemctl show "user@$RUID.service" -p MemoryMax --value 2>/dev/null || true)"
-if [ "$cur_cpu" = "5s" ] && [ "$cur_mem" = "$((8 * 1024 * 1024 * 1024))" ]; then ok "CPUQuota=$CPU MemoryMax=$MEM_MAX"; else
+cur_high="$(systemctl show "user@$RUID.service" -p MemoryHigh --value 2>/dev/null || true)"
+if [ "$cur_cpu" = "${CPU_N}s" ] && [ "$cur_mem" = "$((MEM_MAX_G * 1024 * 1024 * 1024))" ] && [ "$cur_high" = "$((MEM_HIGH_G * 1024 * 1024 * 1024))" ]; then ok "CPUQuota=$CPU MemoryHigh=$MEM_HIGH MemoryMax=$MEM_MAX ($LIGHT_SLOTS light slots)"; else
   todo "CPUQuota=$CPU MemoryHigh=$MEM_HIGH MemoryMax=$MEM_MAX TasksMax=$TASKS (now: cpu ${cur_cpu:-unknown}, mem ${cur_mem:-unknown})"
   run systemctl set-property "user@$RUID.service" "CPUQuota=$CPU" "MemoryHigh=$MEM_HIGH" "MemoryMax=$MEM_MAX" "TasksMax=$TASKS"
 fi
@@ -119,7 +131,7 @@ fi
 
 echo "== 5. runner side (as $RUNNER): template, light image, launchers"
 if [ "$DRY" = 1 ]; then
-  echo "[dry-run] runuser -u $RUNNER -- env HOME=$RHOME XDG_RUNTIME_DIR=/run/user/$RUID bash $LIB/runner_setup.sh"
+  echo "[dry-run] runuser -u $RUNNER -- env HOME=$RHOME XDG_RUNTIME_DIR=/run/user/$RUID JIT_LIGHT_SLOTS=$LIGHT_SLOTS bash $LIB/runner_setup.sh"
   if [ "$(id -u)" -eq 0 ]; then
     for s in light docker; do
       st="$(runuser -u "$RUNNER" -- env XDG_RUNTIME_DIR="/run/user/$RUID" systemctl --user is-active "roxira-jit@$s.service" 2>/dev/null || true)"
@@ -131,7 +143,8 @@ if [ "$DRY" = 1 ]; then
     echo "now   $RUNNER reaches api.github.com: HTTP ${code:-none}"
   fi
 else
-  runuser -u "$RUNNER" -- env HOME="$RHOME" USER="$RUNNER" XDG_RUNTIME_DIR="/run/user/$RUID" bash "$LIB/runner_setup.sh"
+  runuser -u "$RUNNER" -- env HOME="$RHOME" USER="$RUNNER" XDG_RUNTIME_DIR="/run/user/$RUID" \
+    JIT_LIGHT_SLOTS="$LIGHT_SLOTS" bash "$LIB/runner_setup.sh"
 fi
 
 echo

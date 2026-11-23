@@ -43,7 +43,7 @@ export class CountryPackRegistry {
 
   get(country: string): CountryPack {
     const pack = this.packs.get(country.toUpperCase());
-    if (!pack) throw new CountryPackNotFoundError(`no country pack for ${country}`);
+    if (!pack) throw new CountryPackNotFoundError(`no country pack registered for country code "${country}" (registered: ${[...this.packs.keys()].sort().join(', ') || 'none'})`);
     return pack;
   }
 

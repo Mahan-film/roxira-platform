@@ -1,0 +1,349 @@
+"""Offline tests for scripts/legal/source_watcher.py (no network, no sleeping)."""
+# ruff: noqa: E501
+
+import gzip
+import importlib.util
+import json
+import sqlite3
+from pathlib import Path
+
+_spec = importlib.util.spec_from_file_location(
+    "source_watcher", Path(__file__).resolve().parents[1] / "source_watcher.py"
+)
+sw = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(sw)
+
+CHALLENGE = b'<html><body><link href="/cdn-cgi/assets/css/x.css"><h2>Transferring to the website...</h2></body></html>'
+WAF = "<html><body><div>درخواست رد شد</div><div class='support-id'>123</div></body></html>".encode()
+PARKED = b"<p>&nbsp;</p><h1>This domain name may be for sale</h1>"
+PAGE = (
+    "<html><head><title>صفحه اصلی</title></head><body>"
+    + "".join(f'<a href="/n/{i}">بخشنامه {i}</a>' for i in range(5))
+    + "<a href='#x'>x</a><a href='http://other.test/a'>o</a></body></html>"
+).encode()
+
+
+def test_classify_200_is_not_content():
+    assert sw.classify_page(200, {}, CHALLENGE) == sw.CHALLENGE
+    assert sw.classify_page(200, {}, WAF) == sw.BLOCKED
+    assert sw.classify_page(200, {}, PARKED) == sw.PARKED
+    assert sw.classify_page(200, {}, PAGE) == sw.OK
+    assert sw.classify_page(200, {}, b"") == sw.EMPTY
+    assert sw.classify_page(403, {}, b"nope") == sw.BLOCKED
+    assert sw.classify_page(403, {}, CHALLENGE) == sw.CHALLENGE
+    assert sw.classify_page(302, {"Location": "/Account/Login?x=1"}, b"") == sw.LOGIN
+    assert sw.classify_page(302, {"Location": "/fa/"}, b"") == sw.REDIRECT
+    assert sw.classify_page(404, {}, b"missing") == sw.HTTP_ERROR
+
+
+def test_big_page_with_captcha_word_is_still_ok():
+    big = b"<html><body>" + b"x " * 20000 + b"<form>g-recaptcha</form></body></html>"
+    assert sw.classify_page(200, {}, big) == sw.OK
+
+
+def test_normalize_text():
+    assert sw.normalize_text("كتاب ي ۱۲۳ ٤٥  \n x") == "کتاب ی 123 45 x"
+    assert sw.sha256_text("ي") == sw.sha256_text("ی")
+
+
+def test_extract_links_same_host_filter_and_fragments():
+    p = sw.extract_page(PAGE, "https://a.test/")
+    urls = [lk["url"] for lk in p["links"]]
+    assert "https://a.test/n/0" in urls and all("#" not in u for u in urls)
+    assert p["title"] == "صفحه اصلی"
+
+
+def _opener(pages):
+    calls = []
+
+    def op(url, headers, ca):
+        calls.append(url)
+        assert headers["User-Agent"].startswith("RoxiraBot/1.0")
+        return pages.get(url, (404, {}, b"nf"))
+
+    op.calls = calls
+    return op
+
+
+def _everything(body):
+    class P(dict):
+        def get(self, url, default=None):
+            return (404, {}, b"nf") if url.endswith("/robots.txt") else (200, {}, body)
+
+    return _opener(P())
+
+
+def _src(**k):
+    return {
+        "id": "t",
+        "list_urls": ["https://a.test/"],
+        "tier": "official",
+        "doc_type": "circular",
+        **k,
+    }
+
+
+def _client(opener, **k):
+    return sw.Client(opener=opener, sleep=lambda s: None, **k)
+
+
+def test_run_source_missing_robots_is_ok_and_items_new(tmp_path):
+    con = sw.open_state(tmp_path / "s.db")
+    op = _opener({"https://a.test/": (200, {}, PAGE)})
+    rep = sw.run_source(_src(), _client(op), con)
+    assert (
+        rep["host_state"] == sw.OK
+        and len(rep["items"]) == 5
+        and {i["state"] for i in rep["items"]} == {"new"}
+    )
+    assert op.calls[0] == "https://a.test/robots.txt"
+
+
+def test_robots_disallow_respected():
+    con = sqlite3.connect(":memory:")
+    con.executescript(sw.SCHEMA)
+    op = _opener(
+        {
+            "https://a.test/robots.txt": (200, {}, b"User-agent: *\nDisallow: /\n"),
+            "https://a.test/": (200, {}, PAGE),
+        }
+    )
+    rep = sw.run_source(_src(), _client(op), con)
+    assert (
+        rep["pages"] == []
+        and any("robots" in n for n in rep["notes"])
+        and "https://a.test/" not in op.calls
+    )
+
+
+def test_challenge_robots_stops_host_nothing_parsed():
+    con = sqlite3.connect(":memory:")
+    con.executescript(sw.SCHEMA)
+    op = _opener(
+        {"https://a.test/robots.txt": (200, {}, CHALLENGE), "https://a.test/": (200, {}, PAGE)}
+    )
+    rep = sw.run_source(_src(), _client(op), con)
+    assert rep["host_state"] != sw.OK and rep["items"] == [] and "https://a.test/" not in op.calls
+
+
+def test_waf_page_on_list_stops_and_parses_nothing():
+    con = sqlite3.connect(":memory:")
+    con.executescript(sw.SCHEMA)
+    op = _opener({"https://a.test/": (200, {}, WAF)})
+    rep = sw.run_source(_src(), _client(op), con)
+    assert rep["host_state"] == sw.BLOCKED and rep["items"] == []
+
+
+def test_change_detection_new_changed_same(tmp_path):
+    con = sw.open_state(tmp_path / "s.db")
+    items = [{"url": "https://a.test/x", "title": "t", "content_sha256": "1", "list_sha": "1"}]
+    sw.save_items(con, "t", sw.diff_items(con, "t", items), "now")
+    assert sw.diff_items(con, "t", items)[0]["state"] == "same"
+    items[0]["list_sha"] = "2"
+    assert sw.diff_items(con, "t", items)[0]["state"] == "changed"
+
+
+def test_budget_and_delay():
+    sleeps = []
+    c = sw.Client(opener=_opener({}), max_requests=2, sleep=sleeps.append)
+    c.fetch("https://a.test/1")
+    c.fetch("https://a.test/2")
+    assert sleeps and sleeps[0] > 2
+    try:
+        c.fetch("https://a.test/3")
+        raise AssertionError("budget not enforced")
+    except sw.Skip:
+        pass
+
+
+def test_gzip_body_and_tls_error():
+    op = _opener({"https://a.test/": (200, {"Content-Encoding": "gzip"}, gzip.compress(PAGE))})
+    state, *_ = _client(op).fetch("https://a.test/")
+    assert state == sw.OK
+
+    def tls(url, headers, ca):
+        import ssl
+
+        raise ssl.SSLCertVerificationError("bad")
+
+    state, status, *_ = _client(tls).fetch("https://a.test/")
+    assert state == sw.TLS_ERROR and status == 0
+
+
+def test_dry_run_writes_no_state(tmp_path, monkeypatch):
+    monkeypatch.setenv("SOURCE_WATCHER_STATE", str(tmp_path))
+    cfg = tmp_path / "c.json"
+    cfg.write_text(json.dumps({"sources": [_src()]}))
+    real = sw.Client
+    monkeypatch.setattr(
+        sw,
+        "Client",
+        lambda **k: real(
+            opener=_opener({"https://a.test/": (200, {}, PAGE)}), sleep=lambda s: None, **k
+        ),
+    )
+    assert sw.main(["run", "--config", str(cfg)]) == 0
+    con = sqlite3.connect(tmp_path / "state.db")
+    assert (
+        con.execute("SELECT COUNT(*) FROM items").fetchone()[0] == 0
+        and not (tmp_path / "staged").exists()
+    )
+    assert sw.main(["run", "--config", str(cfg), "--commit"]) == 0
+    assert con.execute("SELECT COUNT(*) FROM items").fetchone()[0] == 5
+    rows = [
+        json.loads(line)
+        for f in (tmp_path / "staged").glob("*.jsonl")
+        for line in f.read_text().splitlines()
+    ]
+    assert len(rows) == 5 and all(
+        r["needs_review"] and r["staging_status"] == "proposed" for r in rows
+    )
+
+
+def test_config_requires_https(tmp_path):
+    cfg = tmp_path / "c.json"
+    cfg.write_text(json.dumps({"sources": [_src(list_urls=["http://a.test/"])]}))
+    try:
+        sw.load_config(cfg)
+        raise AssertionError("http accepted")
+    except SystemExit:
+        pass
+
+
+def test_same_site_redirect_followed_other_site_and_login_not():
+    pages = {
+        "https://a.test/": (301, {"Location": "https://www.a.test/fa/"}, b""),
+        "https://www.a.test/fa/": (200, {}, PAGE),
+        "https://b.test/": (302, {"Location": "https://evil.test/"}, b""),
+        "https://c.test/": (302, {"Location": "/Account/Login"}, b""),
+    }
+    state, _s, _h, _b, final = _client(_opener(pages)).fetch("https://a.test/")
+    assert state == sw.OK and final == "https://www.a.test/fa/"
+    assert _client(_opener(pages)).fetch("https://b.test/")[0] == sw.REDIRECT
+    assert _client(_opener(pages)).fetch("https://c.test/")[0] == sw.LOGIN
+
+
+def test_empty_robots_file_is_ok():
+    con = sqlite3.connect(":memory:")
+    con.executescript(sw.SCHEMA)
+    op = _opener({"https://a.test/robots.txt": (200, {}, b""), "https://a.test/": (200, {}, PAGE)})
+    assert sw.run_source(_src(), _client(op), con)["host_state"] == sw.OK
+
+
+def test_crash_after_jsonl_loses_nothing(tmp_path, monkeypatch):
+    """Staged rows are on disk before the DB commit; a crash in between re-emits them next run."""
+    monkeypatch.setenv("SOURCE_WATCHER_STATE", str(tmp_path))
+    cfg = tmp_path / "c.json"
+    cfg.write_text(json.dumps({"sources": [_src()]}))
+    real = sw.Client
+    monkeypatch.setattr(
+        sw,
+        "Client",
+        lambda **k: real(
+            opener=_opener({"https://a.test/": (200, {}, PAGE)}), sleep=lambda s: None, **k
+        ),
+    )
+
+    def boom(*a, **k):
+        raise RuntimeError("crash")
+
+    with monkeypatch.context() as m:
+        m.setattr(sw, "save_items", boom)
+        try:
+            sw.main(["run", "--config", str(cfg), "--commit"])
+            raise AssertionError("no crash")
+        except RuntimeError:
+            pass
+    con = sqlite3.connect(tmp_path / "state.db")
+    assert con.execute("SELECT COUNT(*) FROM items").fetchone()[0] == 0
+    rows = [ln for f in (tmp_path / "staged").glob("*.jsonl") for ln in f.read_text().splitlines()]
+    assert len(rows) == 5  # on disk despite the crash
+    assert sw.main(["run", "--config", str(cfg), "--commit"]) == 0
+    assert con.execute("SELECT COUNT(*) FROM items").fetchone()[0] == 5
+    rows = [ln for f in (tmp_path / "staged").glob("*.jsonl") for ln in f.read_text().splitlines()]
+    assert len(rows) == 10  # replayed, at-least-once
+
+
+def test_cookie_redirect_and_robots_filters_links(tmp_path):
+    calls = []
+
+    def op(url, headers, ca):
+        calls.append(headers.get("Cookie"))
+        if url.endswith("/robots.txt"):
+            return 200, {}, b"User-agent: *\nDisallow: /fa/archive\n"
+        if headers.get("Cookie") is None:
+            return 302, {"Location": url, "Set-Cookie": "a=1; Path=/\nb=2; Path=/"}, b""
+        body = (
+            b"<html><title>t</title><body>"
+            + b"".join(
+                b'<a href="/fa/news/%d/x">long title number %d</a>' % (i, i) for i in range(4)
+            )
+            + b'<a href="/fa/archive/1">archive entry title</a>'
+            + b"</body></html>"
+            + b"x" * 400
+        )
+        return 200, {}, body
+
+    con = sw.open_state(tmp_path / "s.db")
+    src = _src(list_urls=["https://a.test/"], link_regex="/fa/")
+    rep = sw.run_source(src, _client(op), con)
+    assert rep["host_state"] == sw.OK and "a=1; b=2" in calls
+    urls = [i["url"] for i in rep["items"]]
+    assert len(urls) == 4 and not any("archive" in u for u in urls)
+
+
+def test_ca_file_resolved_relative_to_config(tmp_path):
+    (tmp_path / "ca").mkdir()
+    (tmp_path / "ca" / "x.pem").write_text("x")
+    cfg = tmp_path / "c.json"
+    cfg.write_text(json.dumps({"sources": [_src(ca_file="ca/x.pem")]}))
+    assert sw.load_config(cfg)["sources"][0]["ca_file"] == str(tmp_path / "ca" / "x.pem")
+    cfg.write_text(json.dumps({"sources": [_src(ca_file="ca/missing.pem")]}))
+    try:
+        sw.load_config(cfg)
+        raise AssertionError("missing ca accepted")
+    except SystemExit:
+        pass
+
+
+def test_non_ascii_url_is_percent_encoded():
+    out = sw.iri_to_uri("https://a.test/fa/news/1/تایید-طرح?q=قانون")
+    assert out.isascii() and out.startswith("https://a.test/fa/news/1/%")
+    assert sw.iri_to_uri("https://a.test/x/y?z=1") == "https://a.test/x/y?z=1"
+
+
+def test_backfill_text_over_runs_without_re_emitting_changes(tmp_path, monkeypatch):
+    monkeypatch.setenv("SOURCE_WATCHER_STATE", str(tmp_path))
+    cfg = tmp_path / "c.json"
+    cfg.write_text(json.dumps({"details_per_source": 2, "sources": [_src()]}))
+    real = sw.Client
+    monkeypatch.setattr(
+        sw,
+        "Client",
+        lambda **k: real(opener=_everything(PAGE), sleep=lambda s: None, **k),
+    )
+    con = sqlite3.connect(tmp_path / "state.db")
+
+    def done():
+        return con.execute("SELECT COALESCE(SUM(text_done),0) FROM items").fetchone()[0]
+
+    def rows():
+        return [
+            json.loads(ln)
+            for f in (tmp_path / "staged").glob("*.jsonl")
+            for ln in f.read_text().splitlines()
+        ]
+
+    for want in (2, 4, 5, 5):  # 5 items, 2 pages of text per run, then nothing left to do
+        assert sw.main(["run", "--config", str(cfg), "--commit"]) == 0
+        assert done() == want
+    r = rows()
+    assert len(r) == 5 + 2 + 1  # 5 listing rows, then 2 and 1 text-only rows from the backlog
+    assert sum(1 for x in r if x["text"]) == 5
+    assert all(x["state"] in ("new", "text") for x in r)  # nothing reported as changed
+
+
+def test_status_line(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("SOURCE_WATCHER_STATE", str(tmp_path))
+    assert sw.main(["status", "--line"]) == 0
+    assert "0 items" in capsys.readouterr().out

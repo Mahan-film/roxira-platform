@@ -4,10 +4,10 @@
 #                --task-file /tmp/t.md --scope docs/ops/ --push'
 #
 #   run_task.sh (--task TEXT | --task-file FILE) [--model ALIAS] [--scope PATH]... [--public] [--push]
-#               [--timeout SECS] [--slug WORD] [--cleanup] [--dry-run] [--gateway] [--tier light|strong|best]
+#               [--timeout SECS] [--slug WORD] [--cleanup] [--dry-run] [--gateway] [--tier light|strong|paid|best]
 #               [--no-checks]   skip the post-run workbench checks (workbench.sh: docker-isolated tsc/eslint/jest/ruff/pytest)
 #   --gateway   route through the key-pool gateway: --tier strong (default) -> group agent-strong-free,
-#               --tier light -> agent-light-free. URL from $AGENT_GATEWAY_URL (default
+#               --tier light -> agent-light-free, --tier paid -> agent-free-paid (the capped paid step). URL from $AGENT_GATEWAY_URL (default
 #               http://127.0.0.1:4000/v1, key KEYPOOL_MASTER_KEY). Free providers may log: needs --public.
 #   run_task.sh --smoke [--model ALIAS]      verification run (throwaway worktree, nothing pushed)
 #   run_task.sh --list                       agent/* branches known to the agents' clone
@@ -60,7 +60,7 @@ while [ $# -gt 0 ]; do
     --no-checks) NO_CHECKS=1 ;;
     --no-fallback) NO_FALLBACK=1 ;;
     --gateway) GATEWAY=1 ;;
-    --tier) TIER="${2?--tier needs light, strong or best}"; shift ;;
+    --tier) TIER="${2?--tier needs light, strong, paid or best}"; shift ;;
     -h | --help) sed -n '2,22p' "$0"; exit 0 ;;
     *) die "unknown option: $1 (see --help)" ;;
   esac
@@ -114,11 +114,12 @@ resolve_alias() { # alias -> MODEL_REF PUBLIC_ONLY KEYVAR (empty MODEL_REF when 
   case "$MODEL_REF" in *:free | openrouter/free) PUBLIC_ONLY=1 ;; esac
 }
 resolve_alias "$MODEL_ALIAS"
-case "$TIER" in '' | light | strong | best) ;; *) die "--tier must be light, strong or best" ;; esac
+case "$TIER" in '' | light | strong | paid | best) ;; *) die "--tier must be light, strong, paid or best" ;; esac
 if [ "$GATEWAY" = 1 ] || [ -n "$TIER" ]; then   # key-pool gateway; --tier picks the model tier group
   GATEWAY=1
   case "$TIER" in
     light) MODEL_REF="keypool/agent-light-free" ;;
+    paid) MODEL_REF="keypool/agent-free-paid" ;;
     best) MODEL_REF="keypool/best-all" ;;   # quality ladder over ALL keys (Gemini x4, Groq x3, Mistral x4, SambaNova)
     *) MODEL_REF="keypool/agent-strong-free" ;;   # default, and --tier strong
   esac

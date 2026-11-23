@@ -50,7 +50,7 @@ LIVE_PORT = 4000
 # Canary ports: loopback only, none of them in the AGENTS.md section 7 reservation list.
 CANARY_PORTS = (14010, 14011, 14012, 14013, 14014)
 CANARY_MEM = "1536m"
-IMAGE_RE = re.compile(r"^ghcr\.io/berriai/litellm:v\d+\.\d+\.\d+(-stable)?$")
+IMAGE_RE = re.compile(r"^ghcr\.io/berriai/litellm:v\d+\.\d+\.\d+(-stable)?(@sha256:[0-9a-f]{64})?$")
 # Disk guard (bytes). Image pull of the new tag needs room; keep a floor free afterwards.
 GB = 1024 ** 3
 DEFAULT_MIN_FREE_GB = 5.5      # free space required BEFORE the pull
@@ -75,7 +75,7 @@ class UpgradeError(RuntimeError):
 def validate_image(ref: str) -> str:
     """Only a pinned stable release tag; never main-*/nightly/dev/rc/latest."""
     if not IMAGE_RE.match(ref):
-        raise UpgradeError(f"image {ref!r} is not a pinned stable tag (ghcr.io/berriai/litellm:vX.Y.Z[-stable])")
+        raise UpgradeError(f"image {ref!r} is not a pinned stable tag (ghcr.io/berriai/litellm:vX.Y.Z[-stable][@sha256:<digest>])")
     return ref
 
 

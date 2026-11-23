@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { FormData, Response } from 'undici';
+import { SentenceSplitter, noSourceAnswer } from './brain.js';
 import { cfg, validateConfig } from './config.js';
 import { LEGAL_VOCAB, repairLegalTerms } from './legal-terms.js';
-import { clean, isPromptEcho, transcribe, transcribeDetailed, weightedLogprob } from './stt.js';
+import { speakDates, speakable } from './speak.js';
+import { clean, geminiNote, isPromptEcho, transcribe, transcribeDetailed, weightedLogprob } from './stt.js';
 import { looksIncomplete, sameWord, stripEcho } from './turn.js';
 
 // tests never reach a real provider: keys from the local key pool are dropped; tests set their own
@@ -223,5 +225,142 @@ test('transcribe builds a fresh FormData on each key-rotation retry', async () =
   } finally {
     cfg.sttProvider = prevProvider;
     cfg.groqKeys = prevKeys;
+  }
+});
+
+// `done` bodies shaped like the live voice-mode answers of 2026-11-22 (texts shortened)
+const SRC_EMPTY = { statutory_basis: [], unified_precedents: [], judicial_practice: [], regulations: [] };
+
+test('noSourceAnswer: only a sourced-nothing main answer gets the notice', () => {
+  // main answer path, nothing cited (the server empties the lists when retrieval found nothing real)
+  assert.equal(noSourceAnswer({ ...SRC_EMPTY, reply: 'ضرب و جرح در هر دو مکان جرم است.', spoken_reply: 'x' }), true);
+  // answer with a cited law or a ruling (catalog path)
+  assert.equal(noSourceAnswer({ ...SRC_EMPTY, statutory_basis: [{ law: 'x' }], reply: 'پاسخ.', spoken_reply: 'x' }), false);
+  assert.equal(noSourceAnswer({ ...SRC_EMPTY, judicial_practice: [{ id: 1 }], reply: 'رأی شماره ...', spoken_reply: 'x' }), false);
+  // fast paths carry no spoken_reply: small talk, out of scope, free tier busy
+  assert.equal(noSourceAnswer({ statutory_basis: [], unified_precedents: [], reply: 'سلام! بفرمایید.' }), false);
+  assert.equal(noSourceAnswer({ ...SRC_EMPTY, reply: 'شلوغ است.', upsell: true }), false);
+  assert.equal(noSourceAnswer({ ...SRC_EMPTY, reply: 'یافت نشد.', spoken_reply: 'x', abstained: true }), false);
+  // a clarifying question is not a legal claim
+  assert.equal(noSourceAnswer({ ...SRC_EMPTY, reply: 'منظورتان کدام قانون است؟', spoken_reply: 'x' }), false);
+  for (const bad of [null, undefined, 'text', 3]) assert.equal(noSourceAnswer(bad), false);
+});
+
+test('the no-source notice is configurable and short enough to say after an answer', () => {
+  assert.ok(cfg.noSourceText.length > 0 && cfg.noSourceText.length < 160 || process.env.NO_SOURCE_TEXT !== undefined);
+});
+
+
+test('speakDates reads Jalali dates with the month name and leaves other numbers alone', () => {
+  assert.equal(speakDates('به تاریخ 1405/07/21 است.'), 'به تاریخ 21 مهر 1405 است.');
+  assert.equal(speakDates('مورخ ۱۴۰۳/۰۵/۰۴'), 'مورخ 4 مرداد 1403');
+  assert.equal(speakDates('1398-12-29'), '29 اسفند 1398');
+  for (const keep of ['شماره 03/101819', 'رأی 883', 'ماده 9', '1405/13/01', '12/1405/07/21', '2024/05/04']) {
+    assert.equal(speakDates(keep), keep);
+  }
+});
+
+test('speakable drops written-answer labels and the "in this message" wording, nothing else', () => {
+  assert.equal(speakable('پاسخ کوتاه: تخلفات انتظامی قضات در دادگاه عالی انتظامی رسیدگی می‌شود.'),
+    'تخلفات انتظامی قضات در دادگاه عالی انتظامی رسیدگی می‌شود.');
+  // real voice reply, 2026-11-23
+  assert.equal(speakable('در مواد و آراءِ ارسال‌شده در این پیام، بخشنامه‌ی خاصی از قوه قضاییه ذکر نشده.'),
+    'در مواد و آراءِ موجود در منابع من، بخشنامه‌ی خاصی از قوه قضاییه ذکر نشده.');
+  const legal = 'طبق ماده 10 قانون مدنی، قراردادهای خصوصی نافذ است؛ پاسخ این پرسش به رأی شماره 883 برمی‌گردد.';
+  assert.equal(speakable(legal), legal);
+  // the message can be the case itself: never rewritten
+  const sms = 'اگر در این پیام تهدید شده باشید، می‌توانید شکایت کنید.';
+  assert.equal(speakable(sms), sms);
+});
+
+test('SentenceSplitter: shaped sentences, runaway text cut at a comma before MAX_SENTENCE_CHARS', () => {
+  const sp = new SentenceSplitter();
+  const first = sp.push('آخرین رأی وحدت رویه، رأی شماره 883 به تاریخ 1405/07/21 است. ');
+  assert.deepEqual(first, ['آخرین رأی وحدت رویه، رأی شماره 883 به تاریخ 21 مهر 1405 است.']);
+  const long = 'این رأی درباره چکی است که غیرتاجر صادر کرده و '.repeat(3) + '، ' + 'باید معادل مبلغ آن در بانک باشد و '.repeat(4);
+  const out = sp.push(long);
+  assert.equal(out.length, 1);
+  assert.ok(out[0].length <= cfg.maxSentenceChars, `cut at ${out[0].length}`);
+  assert.ok(out[0].endsWith('،'));
+  assert.ok(sp.flush()[0].startsWith('باید'));
+});
+
+test('fillers rotate; the greeting is shorter but keeps the notice sentence word for word', () => {
+  assert.ok(cfg.fillerTexts.length >= 2);
+  assert.equal(new Set(cfg.fillerTexts).size, cfg.fillerTexts.length);
+  assert.ok(cfg.greetingText.length < GREETING.length, `${cfg.greetingText.length} vs ${GREETING.length}`);
+  // policy text waits for the owners and the lawyer (HUB-ANSWER #965, 2026-11-23)
+  assert.ok(cfg.greetingText.includes('لطفاً توجه داشته باشید که این پاسخ‌ها مشاوره اولیه است و جایگزین وکیل نیست.'));
+  assert.match(cfg.ttsPitch, /^[+-]\d{1,2}Hz$/);
+});
+
+test('geminiNote says why the preferred Gemini STT model lost (no keys, status only)', () => {
+  const prev = cfg.geminiSttModels;
+  cfg.geminiSttModels = ['pref', 'pref', 'lite'];
+  try {
+    assert.equal(geminiNote([{ ok: false, err: 'gemini stt 429', model: 'pref' }, undefined,
+      { ok: true, text: 'x', model: 'lite' }], 'pref'), 'pref lost: 429,timeout');
+    assert.equal(geminiNote([{ ok: true, text: 'x', model: 'pref' }, { ok: true, text: '', model: 'pref' }], 'pref'),
+      'pref lost: empty');
+    assert.equal(geminiNote([{ ok: true, text: 'x', model: 'pref' }, { ok: true, text: 'y', model: 'pref' }], 'pref'), '');
+  } finally {
+    cfg.geminiSttModels = prev;
+  }
+});
+
+test('hybrid STT: when the preferred model fails, the backup text is used and the turn log gets the reason', async () => {
+  const prev = { p: cfg.sttProvider, g: cfg.groqKeys, m: cfg.geminiKeys, mode: cfg.sttMode, models: cfg.geminiSttModels };
+  cfg.sttProvider = 'groq'; cfg.groqKeys = ['g1']; cfg.geminiKeys = ['m1']; cfg.sttMode = 'hybrid';
+  cfg.geminiSttModels = ['pref-model', 'lite-model'];
+  const good = { text: 'آخر رای وحدت رویه چه بوده؟', segments: [{ start: 0, end: 3, avg_logprob: -0.25 }] };
+  const f = (async (url: string) => {
+    if (String(url).includes('groq')) {
+      return new Response(JSON.stringify(good), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (String(url).includes('pref-model')) return new Response('{}', { status: 429 });
+    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'آخرین رای وحدت رویه چه بوده؟' }] } }] }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }) as unknown as typeof import('./http.js').fetchProxied;
+  try {
+    const r = await transcribeDetailed(new Int16Array(1600), new AbortController().signal, f);
+    assert.equal(r.text, 'آخرین رای وحدت رویه چه بوده؟');
+    assert.ok(r.provider.startsWith('gemini:lite-model'));
+    assert.equal(r.note, 'pref-model lost: 429');
+  } finally {
+    cfg.sttProvider = prev.p; cfg.groqKeys = prev.g; cfg.geminiKeys = prev.m; cfg.sttMode = prev.mode;
+    cfg.geminiSttModels = prev.models;
+  }
+});
+
+
+test('hybrid STT always returns text and provider: Gemini all failing, and Whisper down', async () => {
+  const prev = { p: cfg.sttProvider, g: cfg.groqKeys, m: cfg.geminiKeys, mode: cfg.sttMode, models: cfg.geminiSttModels };
+  cfg.sttProvider = 'groq'; cfg.groqKeys = ['g1']; cfg.geminiKeys = ['m1']; cfg.sttMode = 'hybrid';
+  cfg.geminiSttModels = ['pref-model', 'lite-model'];
+  const good = { text: 'آخرین رای وحدت رویه چه بوده؟', segments: [{ start: 0, end: 3, avg_logprob: -0.25 }] };
+  const fetchWith = (groqOk: boolean, gemOk: boolean) => (async (url: string) => {
+    if (String(url).includes('groq')) {
+      return groqOk ? new Response(JSON.stringify(good), { status: 200, headers: { 'Content-Type': 'application/json' } })
+        : new Response('{}', { status: 503 });
+    }
+    return gemOk ? new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'از جمینای' }] } }] }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }) : new Response('{}', { status: 429 });
+  }) as unknown as typeof import('./http.js').fetchProxied;
+  const sig = new AbortController().signal;
+  try {
+    // every Gemini copy fails: Whisper's text, a provider, and the reason in the note
+    const a = await transcribeDetailed(new Int16Array(1600), sig, fetchWith(true, false));
+    assert.equal(a.text, 'آخرین رای وحدت رویه چه بوده؟');
+    assert.ok(a.provider.startsWith('groq:'));
+    assert.equal(a.logprob, -0.25);
+    assert.equal(a.note, 'pref-model lost: 429');
+    // Whisper down: Gemini alone, still with text and provider (no Whisper fields read)
+    const b = await transcribeDetailed(new Int16Array(1600), sig, fetchWith(false, true));
+    assert.equal(b.text, 'از جمینای');
+    assert.ok(b.provider.startsWith('gemini-fallback:'));
+    assert.equal(b.logprob, null);
+  } finally {
+    cfg.sttProvider = prev.p; cfg.groqKeys = prev.g; cfg.geminiKeys = prev.m; cfg.sttMode = prev.mode;
+    cfg.geminiSttModels = prev.models;
   }
 });

@@ -1,4 +1,8 @@
 [Unit]
+# Restart=always with a short delay never trips the default start limit, so the unit never reaches
+# `failed` and OnFailure never fires. 10 starts in 10 minutes -> failed -> Telegram alert.
+StartLimitIntervalSec=600
+StartLimitBurst=10
 Description=Smart Judge voice agent - edge-tts sidecar
 After=network-online.target
 Wants=network-online.target
@@ -12,7 +16,7 @@ EnvironmentFile=-/srv/data/phone/agent/.env
 Environment=PROXY_URL=http://127.0.0.1:10809
 ExecStart=/srv/data/phone/venv/bin/python tts_server.py
 Restart=always
-RestartSec=3
+RestartSec=5
 MemoryMax=200M
 NoNewPrivileges=true
 

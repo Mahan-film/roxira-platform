@@ -30,6 +30,10 @@ DEFAULT_QUERIES: List[str] = [
     "چک برگشتی و صدور اجراییه مستقیم بر اساس قانون جدید چک",
 ]
 
+# Rust Hot-Path Gate policy constants (T308 / R33)
+RUST_GATE_STAGE_SHARE_THRESHOLD_PCT: float = 30.0
+RUST_GATE_PROTOTYPE_SPEEDUP_THRESHOLD: float = 2.0
+
 
 def percentile(values: Sequence[float], pct: float) -> float:
     """Nearest-rank percentile (0..100) in milliseconds, rounded to 2 decimals."""
@@ -41,7 +45,7 @@ def percentile(values: Sequence[float], pct: float) -> float:
 
 
 def summarize_stages(records: Iterable[RetrievalTimings]) -> Dict[str, Dict[str, float]]:
-    """Compute p50 and p95 per retrieval stage from a list of ``RetrievalTimings``."""
+    """Compute p50, p95, and p95_share_pct per retrieval stage from a list of ``RetrievalTimings``."""
     buckets: Dict[str, List[float]] = {
         "embed_ms": [],
         "qdrant_ms": [],
@@ -53,9 +57,89 @@ def summarize_stages(records: Iterable[RetrievalTimings]) -> Dict[str, Dict[str,
     for rec in records:
         for stage in buckets:
             buckets[stage].append(float(getattr(rec, stage, 0.0)))
-    return {
+
+    summary: Dict[str, Dict[str, float]] = {
         stage: {"p50": percentile(vals, 50), "p95": percentile(vals, 95)}
         for stage, vals in buckets.items()
+    }
+
+    total_p95 = summary.get("total_ms", {}).get("p95", 0.0)
+    for stage, stats in summary.items():
+        if stage == "total_ms":
+            stats["p95_share_pct"] = 100.0 if total_p95 > 0 else 0.0
+        else:
+            stats["p95_share_pct"] = (
+                round((stats["p95"] / total_p95) * 100.0, 1) if total_p95 > 0 else 0.0
+            )
+
+    return summary
+
+
+def evaluate_rust_gate(
+    summary: Dict[str, Dict[str, float]],
+    prototype_speedups: Optional[Dict[str, float]] = None,
+) -> Dict[str, Any]:
+    """Evaluate retrieval stages against the Rust Hot-Path Gate policy (T308 / R33).
+
+    A stage is eligible for a Rust sidecar rewrite ONLY if BOTH:
+      1. Its p95 latency constitutes > 30% of total_ms p95 latency.
+      2. A measured prototype in Rust proves > 2.0x speedup over baseline.
+
+    Returns a structured dictionary with per-stage evaluations and overall verdict.
+    """
+    total_p95 = summary.get("total_ms", {}).get("p95", 0.0)
+    prototype_speedups = prototype_speedups or {}
+
+    stage_evals: Dict[str, Dict[str, Any]] = {}
+    any_stage_exceeds_threshold = False
+    eligible_for_rewrite: List[str] = []
+
+    for stage, stats in summary.items():
+        if stage == "total_ms":
+            continue
+        p95 = stats.get("p95", 0.0)
+        share_pct = stats.get("p95_share_pct", 0.0)
+        exceeds_share = share_pct > RUST_GATE_STAGE_SHARE_THRESHOLD_PCT
+        speedup = float(prototype_speedups.get(stage, 1.0))
+        exceeds_speedup = speedup > RUST_GATE_PROTOTYPE_SPEEDUP_THRESHOLD
+
+        eligible = exceeds_share and exceeds_speedup
+        if exceeds_share:
+            any_stage_exceeds_threshold = True
+        if eligible:
+            eligible_for_rewrite.append(stage)
+
+        stage_evals[stage] = {
+            "p95_ms": p95,
+            "p95_share_pct": share_pct,
+            "exceeds_30pct_threshold": exceeds_share,
+            "prototype_speedup": speedup,
+            "exceeds_2x_speedup": exceeds_speedup,
+            "eligible_for_rewrite": eligible,
+        }
+
+    verdict = "REWRITE_PROHIBITED" if not eligible_for_rewrite else "REWRITE_PERMITTED"
+    if not any_stage_exceeds_threshold:
+        reason = (
+            f"No stage exceeds {RUST_GATE_STAGE_SHARE_THRESHOLD_PCT}% of p95 latency. "
+            "Consuming pre-built Rust binaries (Qdrant, TEI, ruff, oxlint, orjson) remains optimal."
+        )
+    elif not eligible_for_rewrite:
+        reason = (
+            f"Stage(s) exceed {RUST_GATE_STAGE_SHARE_THRESHOLD_PCT}% latency share, "
+            f"but proven prototype speedup > {RUST_GATE_PROTOTYPE_SPEEDUP_THRESHOLD}x was not demonstrated."
+        )
+    else:
+        reason = f"Stage(s) {eligible_for_rewrite} meet all gate criteria (>30% p95 and >2x prototype speedup)."
+
+    return {
+        "gate_threshold_share_pct": RUST_GATE_STAGE_SHARE_THRESHOLD_PCT,
+        "gate_threshold_speedup": RUST_GATE_PROTOTYPE_SPEEDUP_THRESHOLD,
+        "total_p95_ms": total_p95,
+        "stages": stage_evals,
+        "eligible_stages": eligible_for_rewrite,
+        "verdict": verdict,
+        "reason": reason,
     }
 
 
@@ -101,10 +185,21 @@ async def run_benchmark(
     return summarize_stages(timings)
 
 
-def format_report(summary: Dict[str, Dict[str, float]]) -> str:
-    lines = ["stage        p50_ms    p95_ms"]
+def format_report(
+    summary: Dict[str, Dict[str, float]],
+    gate: Optional[Dict[str, Any]] = None,
+) -> str:
+    lines = ["stage        p50_ms    p95_ms    p95_share_%"]
     for stage, stats in summary.items():
-        lines.append(f"{stage:<12} {stats['p50']:>6.2f}    {stats['p95']:>6.2f}")
+        share = stats.get("p95_share_pct", 0.0)
+        lines.append(f"{stage:<12} {stats['p50']:>6.2f}    {stats['p95']:>6.2f}        {share:>5.1f}%")
+
+    gate_eval = gate or evaluate_rust_gate(summary)
+    lines.append("")
+    lines.append("--- Rust Hot-Path Gate (T308 / R33) ---")
+    lines.append(f"Threshold: stage > {gate_eval['gate_threshold_share_pct']}% of p95 AND prototype > {gate_eval['gate_threshold_speedup']}x speedup")
+    lines.append(f"Verdict:   {gate_eval['verdict']}")
+    lines.append(f"Reason:    {gate_eval['reason']}")
     return "\n".join(lines)
 
 
@@ -113,7 +208,23 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--offline", action="store_true", help="Use deterministic offline mock backend")
     parser.add_argument("--runs", type=int, default=3, help="Number of passes over query set")
     parser.add_argument("--json", action="store_true", help="Print JSON summary")
+    parser.add_argument("--check-gate", action="store_true", help="Verify against Rust Hot-Path Gate (T308)")
+    parser.add_argument(
+        "--prototype-speedup",
+        action="append",
+        default=[],
+        help="Proven prototype speedup as STAGE=SPEEDUP (e.g. qdrant_ms=2.5)",
+    )
     args = parser.parse_args(argv)
+
+    prototype_speedups: Dict[str, float] = {}
+    for item in args.prototype_speedup:
+        if "=" in item:
+            stage_name, val_str = item.split("=", 1)
+            try:
+                prototype_speedups[stage_name.strip()] = float(val_str.strip())
+            except ValueError:
+                pass
 
     if args.offline:
         backend: RetrievalBackend = _OfflineMockBackend()
@@ -124,10 +235,19 @@ def main(argv: Optional[List[str]] = None) -> int:
         backend = LocalRetrievalBackend(sm.aquery_knowledge_graph)
 
     summary = asyncio.run(run_benchmark(backend, runs=args.runs))
+    gate_eval = evaluate_rust_gate(summary, prototype_speedups=prototype_speedups)
+
     if args.json:
-        print(json.dumps(summary, ensure_ascii=False, indent=2))
+        payload = {
+            "summary": summary,
+            "rust_gate": gate_eval,
+        }
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
-        print(format_report(summary))
+        print(format_report(summary, gate=gate_eval))
+
+    if args.check_gate and gate_eval["verdict"] == "REWRITE_PROHIBITED":
+        return 1
     return 0
 
 
