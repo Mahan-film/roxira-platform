@@ -118,6 +118,9 @@ def run_retrieval(set_path: Path, top_k: int = 5) -> int:
     return 0 if hits == scored else 1
 
 
+EVAL_USER_AGENT = "roxira-eval/1.0"
+
+
 def chat_payload(question: str, voice: bool = False) -> dict:
     """Request body; voice=True asks like the phone line does (short spoken answer, voice prompt)."""
     body = {"message": question, "tier": "FREE"}
@@ -130,7 +133,8 @@ def ask(base_url: str, question: str, voice: bool = False) -> str:
     req = urllib.request.Request(
         base_url.rstrip("/") + "/api/v1/apps/judge/chat",
         data=json.dumps(chat_payload(question, voice)).encode(),
-        headers={"Content-Type": "application/json"},
+        # the public URL sits behind Cloudflare, which refuses the default Python-urllib agent (error 1010)
+        headers={"Content-Type": "application/json", "User-Agent": EVAL_USER_AGENT},
     )
     with urllib.request.urlopen(req, timeout=90) as resp:  # noqa: S310 - operator-supplied URL
         return str(json.loads(resp.read()).get("reply") or "")

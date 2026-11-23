@@ -209,16 +209,20 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Cache Trivy binary
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/roxira/trivy-*
+          key: trivy-${{ runner.os }}-${{ hashFiles('scripts/dev/install_trivy.sh') }}
       - name: Install Trivy
         run: |
-          curl -sSfL --retry 5 --retry-all-errors --retry-delay 10 "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
-            | tar -xz -C "$RUNNER_TEMP" trivy
-          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
-          "$RUNNER_TEMP/trivy" --version
+          TRIVY="$(bash scripts/dev/install_trivy.sh)"
+          "$TRIVY" --version
+          echo "TRIVY_BIN=$TRIVY" >> "$GITHUB_ENV"
       - name: Scan filesystem
         # mirror.gcr.io (Trivy's default DB source) is blocked from the CI box network; ghcr.io works everywhere.
         run: |
-          trivy fs --db-repository ghcr.io/aquasecurity/trivy-db:2 --java-db-repository ghcr.io/aquasecurity/trivy-java-db:1 \
+          "$TRIVY_BIN" fs --db-repository ghcr.io/aquasecurity/trivy-db:2 --java-db-repository ghcr.io/aquasecurity/trivy-java-db:1 \
             --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --exit-code 0 --format table . > "$RUNNER_TEMP/trivy-fs.txt"
       - name: Upload Trivy report
         if: always()
@@ -318,6 +322,22 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
         run: python3 scripts/ci/check_agent_guards.py --base "$BASE_SHA"
+      - name: Check container image licences (no RSAL/SSPL/AGPL)
+        run: python3 scripts/ci/check_image_licences.py
+
+  runtime-licence-gate:
+    name: Runtime licence gate (T252)
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Check runtime licences (no GPL/AGPL/SSPL/RSAL/CC-BY-NC/ELv2)
+        run: python3 scripts/ci/check_runtime_licences.py
 
   ruff:
     name: Ruff (non-blocking)
@@ -719,7 +739,7 @@ jobs:
           --health-timeout 5s
           --health-retries 20
       redis:
-        image: ${{ needs.pick-runner.outputs.image_registry || vars.CI_IMAGE_REGISTRY || 'mirror.gcr.io/library' }}/redis:7
+        image: ${{ needs.pick-runner.outputs.image_registry || vars.CI_IMAGE_REGISTRY || 'mirror.gcr.io/library' }}/redis:7.2
         ports:
           # Host port 16379: 6379 is taken on the CI box (phone stack); same on hosted runners.
           - 16379:6379

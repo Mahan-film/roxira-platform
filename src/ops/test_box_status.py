@@ -114,6 +114,15 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(out["items"][0]["present"], False)
         self.assertIsNone(out["items"][0]["ts"])
 
+    def test_bwrap_version_check(self):
+        self.assertEqual(bs.parse_bwrap_version("bubblewrap 0.11.1\n"), (0, 11, 1))
+        self.assertIsNone(bs.parse_bwrap_version("garbage"))
+        cases = {"bubblewrap 0.11.1": "warn", "bubblewrap 0.11.2": "ok", "bubblewrap 0.12.0": "ok", "bubblewrap 0.9.0": "warn"}
+        for out, state in cases.items():
+            self.assertEqual(bs.collect_sandbox(lambda cmd, t=10, o=out: (0, o))["state"], state, out)
+        self.assertEqual(bs.collect_sandbox(lambda cmd, t=10: (127, ""))["state"], "unknown")
+        self.assertEqual(bs.collect_sandbox(lambda cmd, t=10: (0, "nope"))["state"], "unknown")
+
     def test_tick_log(self):
         text = ("old line\nroxira-orch tick DRY-RUN (nothing written; pass --apply)\n"
                 "WOULD CLAIM #12 lane L5 wave-rank 0 key k: 'Title'\n    done when: 'x'\nskip #13 lane L5: WIP\n")
