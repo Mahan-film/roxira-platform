@@ -217,6 +217,20 @@ def extract_page(body: bytes, base_url: str) -> dict:
 # ---- polite client ------------------------------------------------------------------------------------------------
 
 
+def iri_to_uri(url: str) -> str:
+    """Percent-encode non-ASCII path/query (Persian slugs) so the request line is plain ASCII."""
+    u = urllib.parse.urlsplit(url)
+    return urllib.parse.urlunsplit(
+        (
+            u.scheme,
+            u.netloc.encode("idna").decode("ascii") if not u.netloc.isascii() else u.netloc,
+            urllib.parse.quote(u.path, safe="/%:@!$&'()*+,;=~-._"),
+            urllib.parse.quote(u.query, safe="/%:@!$&'()*+,;=?~-._"),
+            "",
+        )
+    )
+
+
 def same_site(a: str, b: str) -> bool:
     ha = urllib.parse.urlparse(a).netloc.split(":")[0].lower().removeprefix("www.")
     hb = urllib.parse.urlparse(b).netloc.split(":")[0].lower().removeprefix("www.")
@@ -298,7 +312,7 @@ class Client:
         except ssl.SSLError as exc:
             self.last_reason[host] = f" ({type(exc).__name__})"
             return TLS_ERROR, 0, {"reason": type(exc).__name__}, b"", url
-        except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as exc:
+        except (urllib.error.URLError, TimeoutError, ConnectionError, OSError, ValueError) as exc:
             reason = getattr(exc, "reason", exc)
             self.last_reason[host] = f" ({type(reason).__name__})"
             if isinstance(reason, ssl.SSLError) or "CERTIFICATE" in str(reason).upper():
@@ -328,7 +342,9 @@ class Client:
             ),
             _NoRedirect(),
         )
-        req = urllib.request.Request(url, headers=headers)  # http(s) only, checked by caller
+        req = urllib.request.Request(  # http(s) only, checked by caller
+            iri_to_uri(url), headers=headers
+        )
         try:
             with opener.open(req, timeout=30) as r:
                 return r.geturl(), r.status, self._hdrs(r.headers), r.read(MAX_BODY)
