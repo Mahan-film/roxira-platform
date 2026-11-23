@@ -10,10 +10,10 @@ import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
  * - Enables and forces tenant RLS (`enableTenantRls`, idempotent).
  * - Uses `SET LOCAL lock_timeout` inside TypeORM's standard transaction mode `"all"`.
  */
-export class CreateSafeDataImportCutovers1789900020000
+export class CreateSafeDataImportCutovers1789900035000
   implements MigrationInterface
 {
-  name = 'CreateSafeDataImportCutovers1789900020000';
+  name = 'CreateSafeDataImportCutovers1789900035000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`SET LOCAL lock_timeout = '5s'`);
