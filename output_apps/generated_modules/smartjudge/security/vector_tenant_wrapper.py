@@ -200,6 +200,25 @@ def validate_points_for_upsert(
 ) -> List[Dict[str, Any]]:
     """Validate and enforce tenant tags on points before upserting into Qdrant."""
     if not is_tenant_collection(collection_name):
+        # Public reference collection: refuse tenant tags or tenant document payloads to avoid contamination
+        if tenant_id or user_id:
+            raise InvalidTenantFilterError(
+                f"Cannot specify tenant_id/user_id for public collection '{collection_name}'"
+            )
+        for idx, p in enumerate(points or []):
+            if isinstance(p, dict):
+                payload = p.get("payload") or {}
+                if isinstance(payload, dict):
+                    for key in ("tenant_id", "user_id", "customer_id", "client_id"):
+                        if payload.get(key) not in (None, ""):
+                            raise InvalidTenantFilterError(
+                                f"Point at index {idx} contains tenant-owned field '{key}' targeting public collection '{collection_name}'"
+                            )
+                    doc_type = str(payload.get("doc_type") or "").lower()
+                    if doc_type in ("tenant_doc", "case_file", "customer_contract", "private_note"):
+                        raise InvalidTenantFilterError(
+                            f"Point at index {idx} contains tenant document type '{doc_type}' targeting public collection '{collection_name}'"
+                        )
         return list(points)
 
     condition = build_tenant_condition(tenant_id=tenant_id, user_id=user_id)

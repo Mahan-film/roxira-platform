@@ -106,6 +106,9 @@ def payload_to_row(payload: Dict[str, Any], vector_score: Optional[float] = None
         "match_level": MATCH_LEVEL,
         "vector_score": vector_score,
         "source": f"qdrant:{collection() or 'rulings'}",
+        "valid_from": payload.get("valid_from"),
+        "valid_to": payload.get("valid_to"),
+        "status": payload.get("status"),
     }
 
 
@@ -201,6 +204,8 @@ async def retrieve_rulings(
     embed: Optional[EmbedFn] = None,
     search: Optional[SearchFn] = None,
     embedder_name: Optional[str] = None,
+    as_of: Optional[str] = None,
+    tz: Optional[Any] = None,
 ) -> List[Dict[str, Any]]:
     """Ruling rows for ``query`` (best effort: any failure -> []). OFF unless the flag names a collection."""
     name = collection()
@@ -226,7 +231,9 @@ async def retrieve_rulings(
         if vector is None:
             return []
         payloads = await search(vector, name, max(k * 4, 8))
-        return hits_to_rows(payloads or [], limit=k)
+        rows = hits_to_rows(payloads or [], limit=k)
+        from output_apps.generated_modules.smartjudge import abstention_gate as _ag
+        return _ag.filter_by_as_of(rows, as_of_date=as_of, tz=tz)
     except Exception as exc:  # noqa: BLE001 - rulings are an optional extra, never break the answer
         logger.warning("rulings retrieval failed: %s", exc)
         return []
@@ -283,13 +290,15 @@ _CACHE_TTL_S = 600.0
 async def latest_rulings(
     limit: int = 5,
     sub_collection: Optional[str] = "unity_rulings",
-    coll_name: Optional[str] = None
+    coll_name: Optional[str] = None,
+    as_of: Optional[str] = None,
+    tz: Optional[Any] = None,
 ) -> List[dict]:
     """Return latest rulings sorted descending by date/number (cached 10m).
     
     Tries Qdrant scroll first, with fallback to staged JSONL files when Qdrant is offline.
     """
-    cache_key = f"{coll_name or collection()}:{sub_collection}:{limit}"
+    cache_key = f"{coll_name or collection()}:{sub_collection}:{limit}:{as_of or ''}:{tz or ''}"
     now = asyncio.get_event_loop().time()
     if cache_key in _LATEST_CACHE:
         ts, cached = _LATEST_CACHE[cache_key]
@@ -388,7 +397,9 @@ async def latest_rulings(
 
     # 4. Sort descending by date and number
     sorted_items = parse_and_sort(filtered)
-    rows = [payload_to_row(p) for p in sorted_items[:limit]]
+    rows = [payload_to_row(p) for p in sorted_items]
+    from output_apps.generated_modules.smartjudge import abstention_gate as _ag
+    rows = _ag.filter_by_as_of(rows, as_of_date=as_of, tz=tz)[:limit]
     if rows:  # never cache an empty answer: a transient outage would hide rulings for the whole TTL
         _LATEST_CACHE[cache_key] = (now, rows)
     return rows

@@ -18,8 +18,8 @@ class _Boom:
 def client(monkeypatch):
     async def fake_kg(query, limit=5, meta_out=None):
         return [
-            {"law_name": "قانون صدور چک", "article_no": "1", "title": "ماده ۱", "valid_from": "1397-01-01", "valid_to": "1405-01-01", "vector_score": 0.9, "rerank_score": 0.9},
-            {"law_name": "قانون صدور چک", "article_no": "2", "title": "ماده ۲", "valid_from": "1397-01-01", "valid_to": "1405-01-01", "vector_score": 0.9, "rerank_score": 0.9},
+            {"law_name": "قانون صدور چک", "article_no": "1", "title": "ماده ۱", "valid_from": "1397-01-01", "valid_to": "1405-12-29", "vector_score": 0.9, "rerank_score": 0.9},
+            {"law_name": "قانون صدور چک", "article_no": "2", "title": "ماده ۲", "valid_from": "1397-01-01", "valid_to": "1405-12-29", "vector_score": 0.9, "rerank_score": 0.9},
         ], []
 
     async def fake_guard(text, *, use_qdrant=True):

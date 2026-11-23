@@ -15,3 +15,8 @@ Read-only audit of the current Qdrant collection layout in `output_apps/generate
   1. Define separate `public-law` and `tenant-docs` collection names/configs.
   2. Create payload indexes (including `tenant_id` keyword index) before ingest.
   3. Enforce strict mode (refuse unindexed filtering) and add a tenant isolation test.
+
+## Public Legal Corpora (No Tenant Filter Policy)
+- **Law Collections** (`iran_laws_v2`, `iran_laws_hakim_v1`, `iran_laws_bge_m3`): Shared public reference corpus containing national statutes and codifications; queries do not apply a tenant filter and writes reject any tenant-owned identifiers or documents.
+- **Ruling Collections** (`iran_rulings_v1`, `judicial_precedents`): Shared public reference corpus containing court decisions and supreme court unity rulings; queries do not apply a tenant filter and writes reject any tenant-owned identifiers or documents.
+- **Regulation Collections** (`iran_regulations_v1`): Shared public reference corpus containing executive bylaws, administrative circulars, and board decisions; queries do not apply a tenant filter and writes reject any tenant-owned identifiers or documents.
