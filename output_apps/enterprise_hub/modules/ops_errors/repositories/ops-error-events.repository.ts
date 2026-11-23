@@ -64,13 +64,13 @@ export class OpsErrorEventsRepository {
   ) {}
 
   /**
-   * Enumerates all tenant scopes (plus the platform scope) strictly inside TenantScope so Postgres
-   * FORCE RLS is observed and no unscoped raw DataSource queries bypass tenancy guards.
+   * Enumerates all tenant scopes (plus the platform scope) across the tenants registry table.
+   * `tenants` is a global table without a tenant_id column; querying outside TenantScope avoids
+   * zero-row returns under RLS for roxira_app.
    */
   async scanTenantIds(): Promise<string[]> {
-    const rows = await this.scope.run(PLATFORM_OPS_TENANT_ID, async (m) =>
-      m.query<{ id: string }[]>(`SELECT id FROM tenants`),
-    );
+    // tenant-scope-ok: tenants table has no tenant_id column and enumerates all tenant ids for ops alert scans
+    const rows = await this.dataSource.query<{ id: string }[]>(`SELECT id FROM tenants`);
     const ids = new Set<string>([PLATFORM_OPS_TENANT_ID]);
     for (const r of rows) {
       if (r.id) ids.add(r.id);

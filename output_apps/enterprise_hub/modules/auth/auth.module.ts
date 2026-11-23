@@ -85,6 +85,6 @@ import { WebAuthnService } from './services/webauthn.service';
     JwtAuthGuard,
     redisClientProvider,
   ],
-  exports: [AuthService, WebAuthnService, JwtModule, MailService],
+  exports: [AuthService, WebAuthnService, JwtModule],
 })
 export class AuthModule {}

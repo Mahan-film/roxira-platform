@@ -48,6 +48,7 @@ export class CreateOpsErrorEvents1789900019400 implements MigrationInterface {
   }
 
   public async down(q: QueryRunner): Promise<void> {
+    // New table introduced in #1093; dropping the table on rollback loses only temporary ops telemetry events (no prior data existed).
     await disableTenantRls(q, 'ops_error_events');
     await q.query(`DROP TABLE IF EXISTS "ops_error_events"`);
   }

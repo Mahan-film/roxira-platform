@@ -29,7 +29,8 @@ try:
     from output_apps.generated_modules.smartjudge.error_capture import install_error_capture
     install_error_capture(app)
 except Exception as _capture_exc:  # pragma: no cover - defensive
-    print("[ROXIRA][ERROR-CAPTURE-WARN] disabled: %s" % _capture_exc, file=sys.stderr)
+    import logging
+    logging.getLogger("roxira.server").warning("Error capture disabled: %s", _capture_exc)
 
 # ============ Static assets (/static/*) ============
 STATIC_DIR = BASE_DIR / "output_apps" / "ecosystem_core" / "src" / "api" / "static"

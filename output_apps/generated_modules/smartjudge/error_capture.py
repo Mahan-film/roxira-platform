@@ -146,14 +146,21 @@ def _dsn() -> str:
     return (os.environ.get("OPS_ERRORS_DSN") or "").strip()
 
 
+_warned_unconfigured_dsn = False
+
+
 def write_event(event: dict[str, Any]) -> None:
     """Best effort: write event with tenant isolation.
     
     The Postgres connection MUST use a non-superuser role without BYPASSRLS (e.g. roxira_app)
     so app.tenant_id is strictly enforced by PostgreSQL FORCE ROW LEVEL SECURITY.
     """
+    global _warned_unconfigured_dsn
     dsn = _dsn()
     if not dsn:
+        if not _warned_unconfigured_dsn:
+            log.warning("OPS_ERRORS_DSN unset; ops error events will not be recorded to database.")
+            _warned_unconfigured_dsn = True
         return
     import psycopg  # imported lazily so a missing driver never breaks app start
 

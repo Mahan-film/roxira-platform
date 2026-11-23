@@ -104,3 +104,40 @@ def test_write_event_sets_transaction_local_tenant_rls(monkeypatch):
     assert executed[0][1] == (ec.PLATFORM_OPS_TENANT_ID,)
     assert "ON CONFLICT (tenant_id, fingerprint, day)" in executed[1][0]
     assert executed[1][1]["tenant_id"] == ec.PLATFORM_OPS_TENANT_ID
+
+
+def test_write_event_uses_provided_tenant_id(monkeypatch):
+    executed = []
+
+    class _Tx:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+    class _Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def transaction(self):
+            return _Tx()
+
+        def execute(self, sql, params):
+            executed.append((sql, params))
+
+    import sys
+    import types
+
+    fake_psycopg = types.SimpleNamespace(connect=lambda *a, **kw: _Conn())
+    monkeypatch.setitem(sys.modules, "psycopg", fake_psycopg)
+    monkeypatch.setenv("OPS_ERRORS_DSN", "postgresql://u:p@localhost:5432/db")
+
+    custom_tenant = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+    ec.write_event(ec.build_event(_exc(1), tenant_id=custom_tenant))
+    assert len(executed) == 2
+    assert executed[0][1] == (custom_tenant,)
+    assert executed[1][1]["tenant_id"] == custom_tenant
