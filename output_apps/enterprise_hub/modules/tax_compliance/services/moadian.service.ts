@@ -6,6 +6,7 @@ import {
   Logger,
   NotFoundException,
   OnModuleInit,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -63,7 +64,11 @@ import {
   MoadianPreFlightError,
 } from '../utils/moadian-preflight.validator';
 import { SubmitMoadianInvoiceDto } from '../dto/submit-moadian-invoice.dto';
-import { MoadianMappingError, mapInvoiceToMoadianPacket } from '../utils/moadian-packet.mapper';
+import {
+  MoadianInvoicePacket,
+  MoadianMappingError,
+  mapInvoiceToMoadianPacket,
+} from '../utils/moadian-packet.mapper';
 import {
   openSecret,
   openStoredPrivateKey,
@@ -71,6 +76,8 @@ import {
   sealSecret,
 } from '../utils/secret-box.util';
 import { MoadianApiClient, MoadianApiError, MoadianAuthContext } from './moadian-api.client';
+import { CountryPackRegistry } from '../../country_packs/country-pack.registry';
+import { tryResolvePack } from '../../country_packs/try-resolve-pack';
 
 /** payload کارهای صف `moadian` — فقط شناسه‌ها؛ هیچ کلید یا بسته‌ای در Redis نمی‌رود. */
 export interface MoadianJobData {
@@ -99,6 +106,7 @@ export class MoadianService implements OnModuleInit {
     @InjectQueue(MOADIAN_QUEUE) private readonly queue: Queue<MoadianJobData>,
     private readonly taxComplianceRepository: TaxComplianceRepository,
     private readonly vatRateResolver: VatRateResolver,
+    @Optional() private readonly countryPackRegistry?: CountryPackRegistry,
   ) {}
 
   /** ثبت جاب دوره‌ای همگام‌سازی وضعیت صورتحساب‌های معوق با سامانه مودیان. */
@@ -463,7 +471,7 @@ export class MoadianService implements OnModuleInit {
 
       const mapWith = (serial: number) => {
         try {
-          return mapInvoiceToMoadianPacket(invoice, {
+          const mappingContext = {
             memoryId: credential.memoryId,
             sellerEconomicCode: credential.economicCode,
             serial,
@@ -476,7 +484,39 @@ export class MoadianService implements OnModuleInit {
             cashPortion: options.cashPortion,
             lateRegistrationAt: options.lateRegistrationAt,
             extras: options.extras,
-          });
+          };
+          const eInvoiceAdapter = tryResolvePack(this.countryPackRegistry)?.eInvoice;
+          if (eInvoiceAdapter) {
+            const mapped = eInvoiceAdapter.map(invoice, mappingContext) as Partial<MoadianInvoicePacket> | null | undefined;
+            const h = mapped?.header;
+            const bodyValid =
+              Array.isArray(mapped?.body) &&
+              mapped.body.every(
+                (item) =>
+                  item &&
+                  typeof item === 'object' &&
+                  typeof item.sstid === 'string' &&
+                  typeof item.tsstam === 'number',
+              );
+            const headerValid =
+              h &&
+              typeof h === 'object' &&
+              typeof h.taxid === 'string' &&
+              h.taxid.length > 0 &&
+              typeof h.indatim === 'number' &&
+              typeof h.inty === 'number' &&
+              typeof h.inno === 'string' &&
+              typeof h.inp === 'number' &&
+              typeof h.ins === 'number' &&
+              typeof h.tins === 'string' &&
+              typeof h.setm === 'number' &&
+              typeof h.tbill === 'number';
+            if (!mapped || typeof mapped !== 'object' || !headerValid || !bodyValid || !Array.isArray(mapped.payments)) {
+              throw new BadRequestException('Country pack eInvoice adapter returned an invalid Moadian packet');
+            }
+            return mapped as MoadianInvoicePacket;
+          }
+          return mapInvoiceToMoadianPacket(invoice, mappingContext);
         } catch (error) {
           if (error instanceof MoadianMappingError) {
             throw new BadRequestException(error.message);
