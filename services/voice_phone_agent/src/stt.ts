@@ -122,7 +122,8 @@ export async function transcribeDetailed(
       const best = (await firstWithText(gem.filter(isPref), t0 + cfg.geminiWaitMs - Date.now()))
         ?? (await firstWithText(gem.filter((p, i) => !isPref(p, i)), 50));
       const note = best?.model === preferred ? '' : geminiNote(gemDone, preferred);
-      if (!best || !best.ok) return note ? { ...w, note } : w;
+      // Whisper's own result, rebuilt field by field so a turn always has text and provider
+      if (!best || !best.ok) return { text: w.text ?? '', logprob: w.logprob ?? null, provider: w.provider || 'whisper', ...(note ? { note } : {}) };
       return { text: best.text, logprob: w.logprob, provider: `gemini:${best.model}+whisper-gate`, ...(note ? { note } : {}) };
     }
     // Whisper down: Gemini alone (parallel calls already running, or started now), then Smart Judge

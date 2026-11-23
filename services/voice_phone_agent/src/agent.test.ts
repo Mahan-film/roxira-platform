@@ -331,3 +331,36 @@ test('hybrid STT: when the preferred model fails, the backup text is used and th
     cfg.geminiSttModels = prev.models;
   }
 });
+
+
+test('hybrid STT always returns text and provider: Gemini all failing, and Whisper down', async () => {
+  const prev = { p: cfg.sttProvider, g: cfg.groqKeys, m: cfg.geminiKeys, mode: cfg.sttMode, models: cfg.geminiSttModels };
+  cfg.sttProvider = 'groq'; cfg.groqKeys = ['g1']; cfg.geminiKeys = ['m1']; cfg.sttMode = 'hybrid';
+  cfg.geminiSttModels = ['pref-model', 'lite-model'];
+  const good = { text: 'آخرین رای وحدت رویه چه بوده؟', segments: [{ start: 0, end: 3, avg_logprob: -0.25 }] };
+  const fetchWith = (groqOk: boolean, gemOk: boolean) => (async (url: string) => {
+    if (String(url).includes('groq')) {
+      return groqOk ? new Response(JSON.stringify(good), { status: 200, headers: { 'Content-Type': 'application/json' } })
+        : new Response('{}', { status: 503 });
+    }
+    return gemOk ? new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'از جمینای' }] } }] }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }) : new Response('{}', { status: 429 });
+  }) as unknown as typeof import('./http.js').fetchProxied;
+  const sig = new AbortController().signal;
+  try {
+    // every Gemini copy fails: Whisper's text, a provider, and the reason in the note
+    const a = await transcribeDetailed(new Int16Array(1600), sig, fetchWith(true, false));
+    assert.equal(a.text, 'آخرین رای وحدت رویه چه بوده؟');
+    assert.ok(a.provider.startsWith('groq:'));
+    assert.equal(a.logprob, -0.25);
+    assert.equal(a.note, 'pref-model lost: 429');
+    // Whisper down: Gemini alone, still with text and provider (no Whisper fields read)
+    const b = await transcribeDetailed(new Int16Array(1600), sig, fetchWith(false, true));
+    assert.equal(b.text, 'از جمینای');
+    assert.ok(b.provider.startsWith('gemini-fallback:'));
+    assert.equal(b.logprob, null);
+  } finally {
+    cfg.sttProvider = prev.p; cfg.groqKeys = prev.g; cfg.geminiKeys = prev.m; cfg.sttMode = prev.mode;
+    cfg.geminiSttModels = prev.models;
+  }
+});
