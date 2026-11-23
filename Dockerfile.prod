@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # ---- builder: compilers + pip install into an isolated venv ----------------
-FROM python:3.11-slim AS builder
+FROM python:3.13-slim AS builder
 
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -24,7 +24,7 @@ RUN pip install docling
 # Case-file upload (case_files.py): HEIC phone photos + explicit Pillow.
 RUN pip install pillow pillow-heif
 # موتور گراف دانش حقوقی (LightRAG): موجودیت/رابطه + بازیابی برداری ترکیبی
-RUN pip install lightrag-hku==1.5.7 openai==3.22.1
+RUN pip install lightrag-hku==1.5.7 openai==3.51.0
 # TTS مسیر آبشاری صدای زنده (smartjudge_live_voice.py): edge-tts هرگز اینجا
 # نصب نشده بود (W20 diagnosis). google-genai برای مسیر اختیاری
 # VOICE_REALTIME_PROVIDER=gemini (پیش‌فرض خاموش، docs/W20_realtime_voice.md).
@@ -35,7 +35,7 @@ RUN python -c "import torch; assert torch.version.cuda is None, torch.version.cu
     && ! pip list 2>/dev/null | grep -i '^nvidia-'
 
 # ---- runtime: no compilers, only the venv + app code -----------------------
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 WORKDIR /app
 

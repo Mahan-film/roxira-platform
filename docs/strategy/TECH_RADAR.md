@@ -21,9 +21,9 @@ the repo root in this worktree.
 
 | Component | Version found | Language | Licence | Where used | Notes |
 |---|---|---|---|---|---|
-| Node.js | `node:26-alpine` in both Dockerfiles; backend `engines` `>=20.9.0` | JS/TS runtime | not stated | `output_apps/enterprise_hub/Dockerfile`, `frontend/Dockerfile` | R12 (2026-11) says stages were `node:22-alpine` and T162 plans Node 24; the Dockerfiles now say 26. Reconcile before acting on R12's EOL dates. |
+| Node.js | `node:26-alpine` in Dockerfiles; `engines` `>=26.0.0` | JS/TS runtime | not stated | `output_apps/enterprise_hub/Dockerfile`, `frontend/Dockerfile` | Aligned to Node 26 LTS in T302 (R33). |
 | TypeScript | `^5.9.3` backend, `^5` frontend; `typescript7` alias = 7.0.2 | TS | Apache-2.0 for 7.0.2 (R19) | type-check jobs `typecheck:ts7` beside TS 5.9 | T202 |
-| Python | `python:3.11-slim` in `Dockerfile.prod`; `pyproject.toml` `requires-python >=3.13`, ruff target py313 | Python | not stated | AI core, Smart Judge, `src/` | Mismatch between image (3.11) and pyproject (3.13). R12: 3.11 EOL Oct 2027 (verified there). |
+| Python | `python:3.13-slim` in `Dockerfile.prod`; `pyproject.toml` `requires-python >=3.13`, ruff target py313 | Python | not stated | AI core, Smart Judge, `src/` | Aligned to Python 3.13 in T302 (R33). |
 
 ### Web framework and API
 
@@ -89,7 +89,7 @@ the repo root in this worktree.
 | LiteLLM proxy | `ghcr.io/berriai/litellm:v1.105.6` | Python | MIT core, enterprise-gated parts disputed (R12) | `config/key_pool.yaml`, 127.0.0.1:4000 | pinned, enterprise features off |
 | Provider pool | groq, sambanova, mistral, gemini, openrouter (free/paid/private), nvidia-nim, cloudflare-ai, deepseek, chutes, together, fireworks, more | n/a | n/a | `config/key_pool.yaml` | free first, paid fallback (AGENTS.md) |
 | Model registry | roles architect/executor/reviewer/mechanical, free/cheap/strong/stt/tts | YAML | n/a | `config/models.yaml`, `model_registry.py` | ids live only here |
-| LangGraph, OpenAI SDK, google-genai, edge-tts | langgraph 1.2.15; openai 3.22.1 (Dockerfile) vs 3.51.0 (pyproject legal-graph extra); unpinned | Python | not stated | AI core | two different `openai` pins |
+| LangGraph, OpenAI SDK, google-genai, edge-tts | langgraph 1.2.15; openai 3.51.0 in Dockerfile & pyproject; unpinned | Python | not stated | AI core | Aligned to openai 3.51.0 in T302 (R33) |
 | Flagd + OpenFeature | flagd `v0.18.2`; SDK 1.23.0, provider 0.18.0 | Go / TS | Apache-2.0 (R19) | `flagd` container, per-tenant flags (T203) | |
 
 ### Reverse proxy and edge
