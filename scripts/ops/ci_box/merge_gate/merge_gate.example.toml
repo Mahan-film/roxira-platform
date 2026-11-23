@@ -74,9 +74,18 @@ review_comment_author_ids = []
 block_labels = ["needs-human", "do-not-merge"]
 block_title_markers = ["[needs owner]"]
 
-# true = the PR must contain the tip of main (merge-queue behaviour, one merge per CI cycle);
-# false = merge a green head even when behind (what the old ruleset did).
-require_up_to_date = true
+# Decision B7-2: false = merge a green head even when behind, as long as it merges cleanly into the current main
+# (what the old ruleset did). The gate then merges one PR per tick and waits for that merge's push CI run on main;
+# a red run pauses the gate (file PAUSE in state_dir) and alerts on Telegram.
+# true = the PR must contain the tip of main (update-branch + new CI + new review per PR; starved the dry-run).
+require_up_to_date = false
+main_ci_workflow = "ci.yml"          # push-to-main run that must pass after each gate merge
+main_ci_grace_seconds = 300          # no run after this = paths-ignored push, counted as passed
+
+# Dispatch review-desk.yml for a PR that passed every other rule but has no verdict for its head (once per head,
+# one per tick, only when no desk run is queued or running). Acts even while dry_run = true.
+dispatch_review_desk = true
+review_desk_workflow = "review-desk.yml"
 
 # Numeric GitHub user ids (gh api users/<login> --jq .id). Empty = feature off.
 approver_ids = []        # human APPROVE on the exact head counts as a review

@@ -59,7 +59,7 @@ class ReadOnlyAsOf:
         return res
 
 
-def merged_prs(api: Callable, repo: str, limit: int) -> list[dict]:
+def merged_prs(api: Callable, repo: str, limit: int, since: str = "") -> list[dict]:
     out: list[dict] = []
     page = 1
     while len(out) < limit and page <= 20:
@@ -69,6 +69,8 @@ def merged_prs(api: Callable, repo: str, limit: int) -> list[dict]:
         out += [p for p in batch if p.get("merged_at")]
         page += 1
     out.sort(key=lambda p: p["merged_at"], reverse=True)
+    if since:  # ISO-8601 UTC, e.g. 2026-11-23T09:00:00Z: only PRs merged at or after it
+        out = [p for p in out if p["merged_at"] >= since]
     return out[:limit]
 
 
@@ -111,9 +113,9 @@ def replay(cfg: dict, api: Callable, brief: dict) -> dict:
     }
 
 
-def build_report(cfg: dict, api: Callable, limit: int) -> dict:
+def build_report(cfg: dict, api: Callable, limit: int, since: str = "") -> dict:
     rows = []
-    for brief in merged_prs(api, cfg["repo"], limit):
+    for brief in merged_prs(api, cfg["repo"], limit, since):
         try:
             rows.append(replay(cfg, api, brief))
         except mg.GhError as e:
@@ -166,11 +168,12 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Compare gate decisions with merged history (read-only)")
     ap.add_argument("--config", default=os.environ.get("MERGE_GATE_CONFIG"))
     ap.add_argument("--limit", type=int, default=30)
+    ap.add_argument("--since", default="", help="only PRs merged at or after this UTC time (2026-11-23T09:00:00Z)")
     ap.add_argument("--format", choices=("md", "json"), default="md")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s", stream=sys.stderr)
     cfg = mg.load_config(args.config)
-    rep = build_report(cfg, ReadOnlyAsOf(mg.GhApi(cfg["proxy"])), args.limit)
+    rep = build_report(cfg, ReadOnlyAsOf(mg.GhApi(cfg["proxy"])), args.limit, args.since)
     if args.format == "json":
         print(json.dumps(rep, indent=1, default=list))
     else:

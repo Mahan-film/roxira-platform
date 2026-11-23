@@ -20,7 +20,7 @@ evaluation makes GitHub refuse the merge. One merge per tick (every 5 min, oldes
 | 4 | Review: the latest `Cross-family review ... @ <sha>` comment names this head and says `Verdict: no blocker`, written by a review-desk account; or an allowlisted human APPROVED this head. Only the latest desk comment counts: a later "no blocker" on the same head overrides an earlier "blocker", and a later comment for another head voids it | yes | authors matched by **numeric id** when `review_comment_author_ids` is set (this PR); until it is set on the box the check falls back to the login, which can be renamed. Human approval ids (`approver_ids`) are empty on the box. The desk runs about every 2 h, so a new head waits for its review |
 | 5 | No hold: label `needs-human` or `do-not-merge`; `[needs owner]` in the title; an unresolved `BLOCKER:` comment from an allowlisted human id (cleared by a later `UNBLOCK:` from one) | yes, added in this PR (`block_labels`, `block_title_markers`, `hold_reason`) | the BLOCKER/UNBLOCK convention needs `approver_ids` or `owner_approver_ids` filled; label holds work without ids. A blocker verdict from the review desk already fails rule 4 |
 | 6 | Protected paths (decision B7, `protected_globs`: migrations, payment and billing, auth, `Dockerfile.prod`, prod compose, deploy scripts and units, workflow files, the gate's own code, tests and spec) are class **owner sentence required**: the gate never merges such a PR without an owner marker comment `OWNER-OK #<PR> <head sha7>` from an id in `owner_approver_ids`; it reports once per head and waits. Details in section 1a | yes (`OWNER` status, `owner_ok`) | the marker is tied to the head SHA (a push voids it). `owner_approver_ids` is empty on the box, so today every protected PR waits (fails closed). The label `owner-approved` is retired and ignored |
-| 7 | Rebase before merge: the head contains the tip of `main`; if behind, the gate calls `update-branch` and waits for the checks on the new head | yes (`require_up_to_date`, default true) | it merges `main` into the branch (a rebase would need a force-push); the PR is squash-merged so history stays linear. The new head voids the review (rule 4) and any `OWNER-OK` (rule 6), so every update costs a new review cycle. Set `require_up_to_date = false` to mirror the old ruleset (strict off); trade-off and DECISION in section 6 |
+| 7 | Merges cleanly into the current `main` (B7-2): GitHub `mergeable` is true and the state is not `dirty` (unknown = wait one tick); the head need not be up to date. After a gate merge, no further merge until the push CI run of that merge on `main` has finished; if it failed the gate pauses itself (`PAUSE` file) and alerts | yes (`require_up_to_date`, default **false** since B7-2; `main_guard`) | `require_up_to_date = true` restores update-branch + wait (new head, new review). Section 6 has the decision and the trade-off |
 | 8 | Kill switch, lock, dry-run | yes (`KILL` file, flock, `dry_run`) | |
 
 ### 1a. Rule 6 in detail: owner sentence required (decision B7)
@@ -153,7 +153,25 @@ repository flip, which stays with the main hub or the owner.
 
 ## 6. Decision for the hub: `require_up_to_date` (rule 7)
 
-**DECISION B7-2 (for the hub; this page only recommends).**
+**DECISION B7-2 (taken by the box hub under the owner's delegated authority, 2026-11-23): `require_up_to_date = false`.**
+The dry-run of 2026-11-21/22 (31 h, issue #592) measured the up-to-date rule blocking 80 of 90 merged PRs. What replaces
+it, all implemented in `merge_gate.py`:
+
+1. **Merges cleanly into current main.** `mergeable` must be true (not conflicting). `null` (GitHub has not computed it
+   after `main` moved) waits one tick without a comment. Required checks must be green on the head (rule 3).
+2. **One merge per tick, and one main CI cycle per merge.** After a gate merge the gate records the merge commit. It
+   does not merge another PR until the `ci.yml` push run of that commit on `main` has completed. No run after
+   `main_ci_grace_seconds` (300) means a paths-ignored push (docs only), treated as passed. `cancelled` is not a failure.
+3. **Pause on a red main.** If that run ended `failure`, `timed_out` or `startup_failure`, the gate writes
+   `<state_dir>/PAUSE`, sends one Telegram alert (`notify.env`, same path as the direct-push alert) and merges nothing
+   until a human removes the file. It does not use `KILL`, which also silences the direct-push alert.
+4. **Re-evaluation.** Every tick re-reads every labelled PR against the new `main`; nothing is cached between ticks.
+
+Known residual risk: two PRs that are each green but break together can land one CI cycle apart; step 3 limits the
+damage to one merge and stops the gate. Main failures that are not gate merges (a manual push) do not pause the gate:
+the direct-push alert covers them.
+
+The original comparison, kept for the record (section 2 numbers, 30 merged PRs):
 
 Numbers (section 2, 30 merged PRs, 2026-11-21): 26 of 30 were behind `main` at their head. With the switch on the gate
 would merge 1 of 30; with it off, 10 of 30 (the other 20 fail review, checks or protected paths, which is the gate working).
@@ -166,18 +184,16 @@ So nearly every PR is behind when it is ready: the switch is not an edge case, i
 | Risk | slow, and agents re-review the same diff repeatedly | two PRs that are each green but break together can land back to back; `main` autodeploys, so a semantic conflict reaches production unless caught after the merge |
 | Protected-path PRs | each update voids the owner's `OWNER-OK`, the owner must re-approve the final head | the marker stays valid unless the author pushes |
 
-Recommendation: default **`false`**, plus a cheap guard that does not need a new head: the gate merges only while the most
-recent completed CI run on `main` is not red (a "main is green" precondition, one extra GET per tick), and the post-merge CI
+Recommendation (adopted, with the guard implemented as steps 2 and 3 above rather than a "most recent run on `main` is green" precondition): default **`false`**, and the post-merge CI
 run plus the direct-push alert (section 3) stay on. Optional hardening, if the hub wants it: treat a behind PR as up to date
 only when the files changed on `main` since its merge base do not overlap the PR's files (a compare call), else wait.
-`true` stays available as a one-line config change if semantic conflicts are seen. The precondition and the overlap check are
-not implemented in this change.
+`true` stays available as a one-line config change if semantic conflicts are seen. The overlap check is not implemented.
 
 Keeping branches current without the gate rewriting history (applies whichever default is chosen):
 
 1. **Agent-side (recommended).** The agent that owns a branch rebases or merges `main` into it before asking for review
    (label `merge-queue`) and when the gate comment says "behind". History of a branch is only ever rewritten by its owner.
-2. **`update-branch` by the gate (exists today, active when the switch is `true`).** GitHub merges `main` into the branch; no
+2. **`update-branch` by the gate (exists, active only when the switch is `true`).** GitHub merges `main` into the branch; no
    history is rewritten, no force-push, and `expected_head_sha` makes the call fail rather than overwrite a push that raced it.
    It still pushes to an agent's branch unasked and voids review and `OWNER-OK` for that head. Safe, but noisy.
 3. **Rebase plus force-push by the gate: not enabled, and not to be added without an owner rule.** If the owners want it, the

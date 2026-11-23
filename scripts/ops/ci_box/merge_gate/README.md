@@ -18,8 +18,15 @@ A PR is squash-merged, with `sha=<head>` as guard, only when all of these hold o
    workflows, the gate itself), unless an owner comment line `OWNER-OK #<PR> <head sha7>` exists, written by an id in
    `owner_approver_ids` for this exact head. Without it the PR is class "owner sentence required": never merged, one
    comment per head, then it waits. Empty `owner_approver_ids` = such PRs are never merged by the gate;
-7. branch not behind main (`require_up_to_date`, default true); if behind, the gate calls update-branch and waits for
-   checks on the next tick.
+7. the PR merges cleanly into the current main (`mergeable` true; unknown = wait a tick). `require_up_to_date` is
+   `false` by default (decision B7-2): a green head that is only behind main merges. `true` makes the gate call
+   update-branch and wait for checks on the next tick.
+
+Main CI guard: after a gate merge the gate waits for that commit's push CI run on main (`main_ci_workflow`) before the
+next merge. If it fails the gate pauses itself: it writes `<state_dir>/PAUSE`, sends one Telegram alert and merges
+nothing until `rm <state_dir>/PAUSE`. Review desk dispatch: a PR that passed every other rule but has no verdict for its
+head gets one `review-desk.yml` dispatch (once per head, one per tick, only when no desk run is queued or running;
+`dispatch_review_desk = false` turns it off). It is the only write done in dry-run.
 
 One merge per tick (oldest PR number first). A comment is posted on the PR when it is merged, and when it is
 refused (once per head SHA and reason). Waiting states (checks running) are silent.
@@ -29,7 +36,10 @@ refused (once per head SHA and reason). Waiting states (checks running) are sile
   Try it by hand: `python3 merge_gate.py --config ~/.config/roxira-merge-gate/merge_gate.toml --dry-run`
 - Logs: `journalctl --user -u roxira-merge-gate -f`
 - Kill switch: `touch ~/.local/state/roxira-merge-gate/KILL` (remove to resume). Lock: `flock` on `lock` in the
-  same dir, so overlapping ticks exit quietly. State: `state.json` (comment dedupe, merged PRs).
+  same dir, so overlapping ticks exit quietly. State: `state.json` (comment dedupe, dispatches, last merge), `state.dryrun.json` in dry-run (so go-live still
+  posts the real comments).
+- Pause: `PAUSE` file in the state dir (written by the gate after a red main CI; remove it to resume). `KILL` stops
+  the gate and the direct-push alert; `PAUSE` stops only merges.
 - Go live at the flip: set `dry_run = false`, fill `approver_ids` / `owner_approver_ids`, and check that
   `required_checks` match the real names:
   `gh api repos/Mahan-film/roxira-platform/commits/<sha>/check-runs --jq '.check_runs[].name'`.

@@ -16,8 +16,17 @@ A PR is merged (squash, guarded by its head SHA) only when ALL hold:
      the gate itself; `protected_globs`) are untouched, unless an owner wrote `OWNER-OK #<PR> <head sha7>` in a
      PR comment (author numeric id in `owner_approver_ids`, bound to the exact head). Such a PR is class
      OWNER: the gate never merges it without that sentence, it only reports it once per head;
-  6. the branch is up to date with the base (else the branch is updated and the PR waits a tick).
-One merge per tick. State + lock + kill switch live in the state dir. Dry-run logs only.
+  6. the PR merges cleanly into the CURRENT base (GitHub `mergeable` true, not conflicting; unknown = wait one
+     tick). Decision B7-2: `require_up_to_date = false` by default, so a green head that is merely behind merges.
+     (`require_up_to_date = true` keeps the old behaviour: update-branch, wait for CI.)
+One merge per tick, and none while the main CI run of the previous gate merge is still pending (decision B7-2:
+main CI must be able to catch a bad combination before the next PR lands). If that main CI run FAILS the gate
+pauses itself (file `PAUSE` in the state dir, sticky, `rm` it to resume) and sends one Telegram alert. The
+remaining PRs are re-evaluated against the new main on every tick.
+Review desk dispatch: a PR that passed every other rule but has no verdict for its head gets one
+`review-desk.yml` run dispatched (once per head, at most one per tick, never while a desk run is queued or
+running: the workflow's concurrency group keeps only one pending run). This is the only write done in dry-run.
+State + lock + kill switch live in the state dir. Dry-run logs only (its dedupe lives in `state.dryrun.json`).
 """
 from __future__ import annotations
 
@@ -27,11 +36,14 @@ import json
 import logging
 import os
 import re
+import importlib.util
 import subprocess
 import sys
 import tempfile
+import time
 import tomllib
 from pathlib import Path
+from typing import Callable
 
 log = logging.getLogger("merge_gate")
 
@@ -91,9 +103,17 @@ DEFAULTS = {
     "review_comment_author_ids": [],
     "block_labels": ["needs-human", "do-not-merge"],
     "block_title_markers": ["[needs owner]"],
-    # Rule 6. true = the PR must contain the tip of the base (what the merge queue guaranteed; one merge per
-    # CI cycle). false = like the old ruleset (strict up-to-date off): a green head merges even when behind.
-    "require_up_to_date": True,
+    # Rule 6 (decision B7-2). false = like the old ruleset (strict up-to-date off): a green head merges even when
+    # behind, as long as it merges cleanly into the current base. true = the PR must contain the tip of the base
+    # (update-branch + CI cycle per PR; starved the gate in the dry-run: 80 of 90 merged PRs were behind).
+    "require_up_to_date": False,
+    # Main CI guard: workflow whose push-to-base run must pass after each gate merge, and how long to wait for
+    # that run to appear (a docs-only merge is paths-ignored by ci.yml and never gets one).
+    "main_ci_workflow": "ci.yml",
+    "main_ci_grace_seconds": 300,
+    # Review desk dispatch (see module docstring). Acts even when dry_run = true.
+    "dispatch_review_desk": True,
+    "review_desk_workflow": "review-desk.yml",
     "approver_ids": [],
     "owner_approver_ids": [],
 }
@@ -206,9 +226,12 @@ class GhApi:
 
 
 class State:
-    def __init__(self, directory: str):
-        self.path = Path(directory) / "state.json"
-        self.data: dict = {"commented": [], "merged": {}}
+    """state.json (live) or state.dryrun.json (dry-run). Separate files: a "would comment" mark made in dry-run must
+    not suppress the real comment for the same head at go-live. Both are saved every tick."""
+
+    def __init__(self, directory: str, dry: bool = False):
+        self.path = Path(directory) / ("state.dryrun.json" if dry else "state.json")
+        self.data: dict = {"commented": [], "merged": {}, "dispatched": [], "last_merge": None}
         if self.path.exists():
             try:
                 self.data.update(json.loads(self.path.read_text()))
@@ -221,6 +244,12 @@ class State:
     def mark(self, key: str) -> None:
         self.data["commented"] = (self.data["commented"] + [key])[-500:]
 
+    def dispatched(self, key: str) -> bool:
+        return key in self.data["dispatched"]
+
+    def mark_dispatched(self, key: str) -> None:
+        self.data["dispatched"] = (self.data["dispatched"] + [key])[-500:]
+
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp = tempfile.mkstemp(dir=self.path.parent)
@@ -229,10 +258,31 @@ class State:
         os.replace(tmp, self.path)
 
 
+def load_notify() -> Callable[[str], bool]:
+    """Return notify.send. Looks next to this file (installed copy), then in the repo tree."""
+    here = Path(__file__).resolve()
+    candidates = [Path(os.environ.get("NOTIFY_PY", "")), here.parent / "notify.py",
+                  here.parents[2] / "notify" / "notify.py"]
+    for path in candidates:
+        if path.is_file():
+            spec = importlib.util.spec_from_file_location("roxira_notify", path)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod.send
+    log.warning("notify.py not found: alerts go to the log only")
+    return lambda text: False
+
+
+FAILED_RUN = {"failure", "timed_out", "startup_failure"}
+
+
 class Gate:
-    def __init__(self, cfg: dict, api, state: State, dry_run: bool):
+    def __init__(self, cfg: dict, api, state: State, dry_run: bool, notify: Callable[[str], bool] | None = None,
+                 now: Callable[[], float] = time.time):
         self.cfg, self.api, self.state, self.dry = cfg, api, state, dry_run
         self.repo = cfg["repo"]
+        self.notify, self.now = notify, now
+        self.pause_file = Path(cfg.get("state_dir", ".")) / "PAUSE"
 
     def p(self, suffix: str) -> str:
         return f"repos/{self.repo}/{suffix}"
@@ -352,8 +402,10 @@ class Gate:
             return SKIP, "", "draft"
         if pr["base"]["ref"] != self.cfg["base"]:
             return REFUSE, "base", f"base branch is {pr['base']['ref']}, not {self.cfg['base']}"
-        if pr.get("mergeable_state") == "dirty":
+        if pr.get("mergeable_state") == "dirty" or pr.get("mergeable") is False:
             return REFUSE, "conflict", "merge conflicts with the base branch"
+        if ("mergeable" in pr and pr["mergeable"] is None) or pr.get("mergeable_state") == "unknown":
+            return WAIT, "mergeable-unknown", "GitHub has not computed mergeability against the current base yet"
         hold = self.hold_reason(pr, labels)
         if hold:
             return REFUSE, "hold", f"on hold: {hold}"
@@ -374,7 +426,7 @@ class Gate:
         if status != MERGE:
             return status, "checks", why
         if not self.cfg.get("require_up_to_date", True):
-            return MERGE, "", "all gates passed (up-to-date not required)"
+            return MERGE, "", "all gates passed (merges cleanly into current base; up-to-date not required)"
         cmp = self.api("GET", self.p(f"compare/{self.cfg['base']}...{head}"))
         if cmp.get("behind_by", 0) > 0:
             return BEHIND, "behind", f"behind {self.cfg['base']} by {cmp['behind_by']} commits"
@@ -386,6 +438,7 @@ class Gate:
             return
         if self.dry:
             log.info("[dry-run] would comment on #%s: %s", n, text)
+            self.state.mark(key)  # state.dryrun.json: one line per head and reason, not one per tick
             return
         try:
             self.api("POST", self.p(f"issues/{n}/comments"), {"body": f"merge-gate: {text} (head {head[:7]})"})
@@ -401,7 +454,10 @@ class Gate:
     def tick(self) -> str | None:
         prs = self.api("GET", self.p("pulls?state=open&per_page=100"), paginate=True)
         prs.sort(key=lambda p: p["number"])
-        to_merge, to_update = None, None
+        to_merge, to_update, to_review = None, None, None
+        guard_ok, guard_why = self.main_guard()
+        if not guard_ok:
+            log.warning("merges held: %s", guard_why)
         for brief in prs:
             if not self.wants(brief):
                 continue
@@ -419,11 +475,87 @@ class Gate:
                 to_merge = pr
             elif status == BEHIND and to_update is None:
                 to_update = pr
+            if code == "review" and to_review is None:
+                to_review = pr
+        if to_review:
+            self.dispatch_review(to_review)
+        if to_merge and not guard_ok:
+            log.info("[hold] would merge #%s but %s", to_merge["number"], guard_why)
+            return None
         if to_merge:
             return self.merge(to_merge)
         if to_update:
             self.update_branch(to_update)
         return None
+
+    # ---- main CI guard (decision B7-2) -------------------------------------
+    def alert(self, text: str) -> None:
+        log.error(text)
+        if self.dry or self.notify is None:
+            return
+        try:
+            self.notify(text)
+        except Exception as e:  # an alert path failure must not stop the tick
+            log.error("alert send failed: %s", e)
+
+    def main_guard(self) -> tuple[bool, str]:
+        """(ok to merge, why not). Pauses the gate (sticky PAUSE file + one alert) when main CI failed on a gate merge."""
+        if self.pause_file.exists():
+            return False, f"gate paused ({self.pause_file.name} present): main CI failed after a gate merge"
+        lm = self.state.data.get("last_merge")
+        if not lm or lm.get("done"):
+            return True, ""
+        sha, n = lm["sha"], lm["pr"]
+        wf = self.cfg["main_ci_workflow"]
+        try:
+            res = self.api("GET", self.p(f"actions/workflows/{wf}/runs?branch={self.cfg['base']}&event=push&head_sha={sha}"))
+        except GhError as e:
+            return False, f"cannot read main CI for the last gate merge: {e}"
+        runs = (res or {}).get("workflow_runs", []) if isinstance(res, dict) else []
+        if not runs:
+            if self.now() - lm["at"] < self.cfg["main_ci_grace_seconds"]:
+                return False, f"main CI for #{n} ({sha[:7]}) has not started yet"
+            log.info("no main CI run for #%s (%s): paths-ignored push, treated as passed", n, sha[:7])
+            lm["done"] = True
+            return True, ""
+        if any(r.get("status") != "completed" for r in runs):
+            return False, f"main CI for #{n} ({sha[:7]}) is still running"
+        bad = sorted({str(r.get("conclusion")) for r in runs} & FAILED_RUN)
+        if bad:
+            lm["done"] = True
+            if not self.dry:
+                self.pause_file.parent.mkdir(parents=True, exist_ok=True)
+                self.pause_file.write_text(f"main CI {', '.join(bad)} after gate merge of #{n} ({sha[:7]})\n")
+            self.alert(
+                f"[ALERT] merge gate PAUSED: main CI {', '.join(bad)} after the gate merged #{n} ({sha[:7]}). "
+                f"No more gate merges until someone removes {self.pause_file}. Fix or revert main first."
+            )
+            return False, "main CI failed after a gate merge, gate paused"
+        lm["done"] = True
+        return True, ""
+
+    # ---- review desk dispatch ------------------------------------------------
+    def dispatch_review(self, pr: dict) -> None:
+        if not self.cfg.get("dispatch_review_desk"):
+            return
+        n, head = pr["number"], pr["head"]["sha"]
+        key = f"{n}:{head}"
+        if self.state.dispatched(key):
+            return
+        wf = self.cfg["review_desk_workflow"]
+        try:
+            res = self.api("GET", self.p(f"actions/workflows/{wf}/runs?per_page=20"))
+            active = [r for r in (res or {}).get("workflow_runs", []) if r.get("status") != "completed"]
+            if active:
+                log.info("review desk busy (%s run active): #%s waits for the next tick", len(active), n)
+                return
+            self.api("POST", self.p(f"actions/workflows/{wf}/dispatches"),
+                     {"ref": self.cfg["base"], "inputs[pr]": str(n)})
+        except GhError as e:
+            log.error("review desk dispatch for #%s failed: %s", n, e)
+            return
+        self.state.mark_dispatched(key)
+        log.info("dispatched review desk for #%s at %s%s", n, head[:7], " (dry-run: the only write)" if self.dry else "")
 
     def merge(self, pr: dict) -> str | None:
         n, head = pr["number"], pr["head"]["sha"]
@@ -437,6 +569,7 @@ class Gate:
             self.comment(n, head, "merge-error", f"merge was refused by GitHub: {e}")
             return None
         self.state.data["merged"][str(n)] = head
+        self.state.data["last_merge"] = {"pr": n, "sha": str((res or {}).get("sha", "")), "at": self.now(), "done": False}
         sha = str((res or {}).get("sha", ""))[:7]
         self.comment(n, head, "merged", f"merged (squash) at {head[:7]}, commit {sha}")
         log.info("merged #%s", n)
@@ -475,15 +608,17 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     dry = args.dry_run or bool(cfg["dry_run"])
     log.info("tick start (dry_run=%s)", dry)
-    state = State(str(sd))
+    if cfg["proxy"]:  # urllib (Telegram) honours the same proxy as gh
+        for k in ("HTTPS_PROXY", "HTTP_PROXY", "https_proxy", "http_proxy"):
+            os.environ[k] = cfg["proxy"]
+    state = State(str(sd), dry)
     try:
-        Gate(cfg, GhApi(cfg["proxy"]), state, dry).tick()
+        Gate(cfg, GhApi(cfg["proxy"]), state, dry, load_notify()).tick()
     except GhError as e:
         log.error("tick failed: %s", e)
         return 1
     finally:
-        if not dry:
-            state.save()
+        state.save()
     return 0
 
 
