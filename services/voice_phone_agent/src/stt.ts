@@ -2,6 +2,7 @@ import { FormData } from 'undici';
 import { IN_RATE, wav } from './audio.js';
 import { cfg } from './config.js';
 import { fetchDirect, fetchProxied } from './http.js';
+import { KeyCooldowns } from './key-cooldown.js';
 import { repairLegalTerms } from './legal-terms.js';
 
 function buildForm(wavBuf: Buffer, model?: string): FormData {
@@ -153,8 +154,10 @@ export function geminiNote(done: (Settled | undefined)[], preferred: string): st
 }
 
 let geminiCursor = 0;
+/** Gemini keys resting after 401/403/429 (GEMINI_KEY_COOLDOWN_MIN) */
+export const geminiCooldowns = new KeyCooldowns();
 
-async function geminiStt(
+export async function geminiStt(
   wavBuf: Buffer, signal: AbortSignal, doFetch: typeof fetchProxied, model: string, keyOffset: number,
 ): Promise<string> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
@@ -168,8 +171,7 @@ async function geminiStt(
   let lastErr = '';
   const base = geminiCursor + keyOffset;
   geminiCursor = (geminiCursor + 1) % Math.max(1, cfg.geminiKeys.length);
-  for (let i = 0; i < cfg.geminiKeys.length; i++) {
-    const key = cfg.geminiKeys[(base + i) % cfg.geminiKeys.length];
+  for (const key of geminiCooldowns.order(cfg.geminiKeys, base)) {
     const r = await doFetch(url, {
       method: 'POST', body, signal,
       headers: { 'x-goog-api-key': key, 'Content-Type': 'application/json' },
@@ -179,7 +181,9 @@ async function geminiStt(
       return clean((j.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '').join(''));
     }
     lastErr = `${r.status}`;
-    if (r.status !== 429 && r.status !== 403 && r.status < 500) break;
+    // dead (401/403) or exhausted (429) key: rest it and rotate to the next one
+    if (r.status === 401 || r.status === 403 || r.status === 429) { geminiCooldowns.mark(key, cfg.geminiKeyCooldownMs); continue; }
+    if (r.status < 500) break;
   }
   throw new Error(`gemini stt ${lastErr}`);
 }

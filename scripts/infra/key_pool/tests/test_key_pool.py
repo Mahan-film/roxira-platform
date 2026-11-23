@@ -649,3 +649,20 @@ def test_agent_strong_free_falls_back_to_agent_free_paid():
     cfg = _full_cfg()
     fb = _fb(cfg)
     assert "agent-free-paid" in fb["agent-strong-free"]
+
+
+def test_router_retry_policy_and_max_fallbacks_cover_every_chain():
+    """Per-error retries are rendered, and max_fallbacks is at least the longest fallback chain
+    (LiteLLM's default of 5 would cut the 10-12 rank ladders short)."""
+    cfg = render_litellm.render(pool(), set(FAKE_ENV))
+    router = cfg["router_settings"]
+    rp = router["retry_policy"]
+    assert rp["RateLimitErrorRetries"] >= 1 and rp["AuthenticationErrorRetries"] >= 1
+    assert rp["InternalServerErrorRetries"] >= 1 and rp["ContentPolicyViolationErrorRetries"] == 0
+    longest = max(len(v) for f in router["fallbacks"] for v in f.values())
+    assert router["max_fallbacks"] >= longest
+    assert router["max_fallbacks"] > 5 or longest <= 5
+    # an explicit gateway value wins
+    p = pool()
+    p["gateway"]["router"]["max_fallbacks"] = 99
+    assert render_litellm.render(p, set(FAKE_ENV))["router_settings"]["max_fallbacks"] == 99
