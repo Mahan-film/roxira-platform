@@ -76,6 +76,8 @@ export const cfg = {
   // Gemini hears real phone Persian much better than Whisper, but on heavy noise it invents a plausible
   // question instead of returning nothing - so Whisper's confidence always decides "speech or noise".
   geminiKeys: ['GEMINI_API_KEY', 'GEMINI_API_KEY_2', 'GEMINI_API_KEY_3', 'GEMINI_API_KEY_4'].map((k) => str(k)).filter(Boolean),
+  // a Gemini key that answered 401/403/429 is skipped for this many minutes (0 = no cooldown)
+  geminiKeyCooldownMs: num('GEMINI_KEY_COOLDOWN_MIN', 10) * 60_000,
   // All run in parallel, each on its own key; the first id is preferred. 3-flash-preview was exact on the
   // real 2026-11-15 call ("آخرین آرای ...", 1.8-4.6 s), so it runs twice to cut its slow tail;
   // 3.5-flash-lite (~1.2 s) is the fast backup but heard "آخر رای", which the brain read as a definition question.
