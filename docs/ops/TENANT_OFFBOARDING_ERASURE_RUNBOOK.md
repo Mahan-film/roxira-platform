@@ -43,17 +43,24 @@ Operational standard for tenant data destruction across PostgreSQL, Qdrant vecto
 ### Phase 1: Pre-Flight Audit & Ingress Disablement
 
 1. **Verify Authorization**: Confirm signed offboarding request or DPO erasure ticket.
-2. **Retrieve Exact Tenant UUID**:
+2. **Retrieve and Validate Tenant UUID**:
    ```bash
    export TENANT_ID="018f4a12-xxxx-7000-xxxx-xxxxxxxxxxxx"
-   # Verify tenant exists
-   psql -d roxira_prod -c "SELECT id, name, created_at FROM tenants WHERE id = '$TENANT_ID';"
+
+   # Strictly validate UUID format before executing any command
+   if ! [[ "$TENANT_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
+     echo "ERROR: TENANT_ID must be a valid RFC 4122 UUID" >&2
+     exit 1
+   fi
+
+   # Verify tenant exists as roxira_app role (NOSUPERUSER NOBYPASSRLS) with psql variable substitution
+   psql -U roxira_app -d roxira_prod -v v_tenant_id="'$TENANT_ID'" -c "SELECT id, name, created_at FROM tenants WHERE id = :v_tenant_id::uuid;"
    ```
 3. **Immediate Ingress Disablement**:
-   - Invalidate all active JWT tokens, refresh tokens, and API credentials:
+   - Invalidate all active JWT tokens, refresh tokens, and API credentials as `roxira_app`:
      ```bash
-     psql -d roxira_prod -c "UPDATE auth_refresh_tokens SET revoked = true WHERE user_id IN (SELECT id FROM users WHERE tenant_id = '$TENANT_ID');"
-     psql -d roxira_prod -c "UPDATE users SET is_active = false WHERE tenant_id = '$TENANT_ID';"
+     psql -U roxira_app -d roxira_prod -v v_tenant_id="'$TENANT_ID'" -c "UPDATE auth_refresh_tokens SET revoked = true WHERE user_id IN (SELECT id FROM users WHERE tenant_id = :v_tenant_id::uuid);"
+     psql -U roxira_app -d roxira_prod -v v_tenant_id="'$TENANT_ID'" -c "UPDATE users SET is_active = false WHERE tenant_id = :v_tenant_id::uuid;"
      ```
    - Register the cancellation in the application registry to immediately block hot-path RAG queries (durable across restarts):
      ```python
@@ -95,7 +102,20 @@ Operational standard for tenant data destruction across PostgreSQL, Qdrant vecto
    for COLL in tenant_documents tenant_case_documents smartjudge_learned_experience tenant_knowledge_base tenant_crm_vectors; do
      curl -s -X POST "http://127.0.0.1:6333/collections/$COLL/points/delete?wait=true" \
        -H "Content-Type: application/json" \
-       -d "{\"filter\": {\"must\": [{\"key\": \"tenant_id\", \"match\": {\"value\": \"$TENANT_ID\"}}]}}"
+       --data-binary @- <<EOF
+{
+  "filter": {
+    "must": [
+      {
+        "key": "tenant_id",
+        "match": {
+          "value": "$TENANT_ID"
+        }
+      }
+    ]
+  }
+}
+EOF
    done
    ```
 
@@ -114,8 +134,22 @@ Operational standard for tenant data destruction across PostgreSQL, Qdrant vecto
    for COLL in tenant_documents tenant_case_documents smartjudge_learned_experience; do
      SURVIVING=$(curl -s -X POST "http://127.0.0.1:6333/collections/$COLL/points/scroll" \
        -H "Content-Type: application/json" \
-       -d "{\"filter\": {\"must\": [{\"key\": \"tenant_id\", \"match\": {\"value\": \"$TENANT_ID\"}}]}, \"limit\": 1}" \
-       | jq '.result.points | length')
+       --data-binary @- <<EOF | jq '.result.points | length'
+{
+  "filter": {
+    "must": [
+      {
+        "key": "tenant_id",
+        "match": {
+          "value": "$TENANT_ID"
+        }
+      }
+    ]
+  },
+  "limit": 1
+}
+EOF
+)
      if [ "$SURVIVING" -ne 0 ]; then
        echo "ERROR: Ghost vectors still exist in $COLL for tenant $TENANT_ID" >&2
        exit 1
