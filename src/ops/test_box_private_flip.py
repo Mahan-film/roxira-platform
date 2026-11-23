@@ -88,6 +88,29 @@ class MainRuns(unittest.TestCase):
     def test_missing_jobs_fail(self):
         self.assertFalse(pf.check_main_runs([run(3), run(2), run(1)], {})[0])
 
+    def test_cancelled_runs_are_skipped(self):
+        # A newer push replaces the pending main run (shared concurrency group): superseded, not red.
+        runs = [run(6), run(5, "cancelled"), run(4, "cancelled"), run(3), run(2), run(1, "failure")]
+        ok, ev = pf.check_main_runs(runs, good_jobs([6, 3, 2]))
+        self.assertTrue(ok, ev)
+        self.assertIn("6, 3, 2", ev)
+
+    def test_cancelled_runs_do_not_fill_the_window(self):
+        runs = [run(4, "cancelled"), run(3), run(2, "cancelled"), run(1)]
+        ok, ev = pf.check_main_runs(runs, good_jobs([3, 1]))
+        self.assertFalse(ok)
+        self.assertIn("only 2", ev)
+
+    def test_a_failure_behind_cancelled_runs_still_fails(self):
+        runs = [run(5), run(4, "cancelled"), run(3, "failure"), run(2), run(1)]
+        ok, ev = pf.check_main_runs(runs, good_jobs([5, 2, 1]))
+        self.assertFalse(ok)
+        self.assertIn("run 3", ev)
+
+    def test_counted_runs_feeds_the_job_lookup(self):
+        runs = [run(5, "cancelled"), run(4, "", "in_progress"), run(3), run(2), run(1)]
+        self.assertEqual([r["id"] for r in pf.counted_runs(runs)], [3, 2, 1])
+
 
 class Evaluate(unittest.TestCase):
     def test_all_must_pass(self):
