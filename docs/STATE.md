@@ -30,6 +30,11 @@ The owner wants maximum pressure on Antigravity lanes and cheap agents (Haiku/So
   The other SSD partition is exFAT: not for git. Mac system disk had about 14 GiB free on 2026-11-23.
 - Owner guide: `docs/owner/ANTIGRAVITY_GUIDE_FA.md`.
 
+## WAVE 33 (2026-11-23, review-first) and WAVE 32 fix queue
+- WAVE 33 on #592: every lane clears its own PRs' desk findings first, then the WAVE 32 fix queue, then new rows. RV1-RV4 and L9-L12 all reported once; RV reports: READY FOR HUB #1312 #1356 #1360 #943; NEEDS OWNER #1072 #1200 #663 #831 #963.
+- CI load rule (HUB -> LANES on #592): one push per PR per round, no docs-only pushes on green heads, no needless rebases.
+- Merged/queued this session: #1367 merged, #1201 re-queued (it left the queue on `checks_timed_out`), #850 reviewed by the hub (B1 core, no blocker) and queued.
+
 ## WAVE 32 (2026-11-23): finish every open PR
 - 50 PRs were triaged read-only. Fix queue (25) belongs to L8, with each lane taking its own. Claims are on #592 (`taking PR #N (Lx)`).
 - Hub agents fixed #850 (new `country_packs/try-resolve-pack.ts`, so it is now B1 core: the hub reviews it), #1313, #1314, and posted evidence on #1312 (false alarms); #1310 was already fixed.
@@ -51,10 +56,15 @@ The owner wants maximum pressure on Antigravity lanes and cheap agents (Haiku/So
 - `data_import_batches` had 1 row and 0 duplicates (so #1227's migration changes no data). `data_import_cutovers` is still an empty leftover table (a drop needs the owner).
 
 ## Waiting on the owner
-- Accept the approver account invitation from that account. Say "go private" or not for 2026-11-25.
-- German e-invoice deadline: was 2026 turnover above 800k EUR? Who keeps the backup encryption key offline?
-- Sentences for #831 #663 (then #1072 #1198 #1200 in a window), CodeRabbit yes/no, delete the exFAT copies of an env file and a key (owner only).
+- Owner answers 2026-11-23: no 2026 turnover (German e-invoice threshold moot); offline backup key stays on the owner's Mac with an SSD copy; fewer CI runs; "go private" wished but NOT yet the exact flip sentence.
+- Private flip: preconditions on #965 (CI under load, #1020 or replacement for `environment: production`, checklist, no hosted fallback); then the owners give the `--owner-go` sentence (hub asks once, after the box posts the #1353 dry-run).
+- Owner sentences per PR: #831 (auth), #663 (nginx), #963, and the restart window for #1072 #1198 #1200; the earlier broad authority is not a per-PR OWNER-OK. CodeRabbit yes/no.
+- Delete the exFAT copies of an env file and a key (owner only). Accept the approver account invitation.
 - Research still to send in Gemini: R34, R35, R27, R33, R22 Stage 2 (prompts in `docs/research/prompts/`).
+
+## Site review 2026-11-23 (public pages only, browser pane, no login)
+- roxira.ir home, /contact, /login, /signup render well on desktop and phone; /accounting /invoicing /inventory /hr /crm and /app/* all redirect to the login gate (not reviewed behind login: the hub never types the owner's password; the owner signs in in the pane, then the hub continues).
+- roxira.net: 3 of 6 demos opened (e-invoicing, accounting, AI placeholder), FX and pricing sections fine. **Bug:** at 375 px the header overflows, the "Request API access" button is cut off and there is no mobile menu. Needs a frontend row (L9/L10).
 
 ## Known issues
 - Review desk: 8 PRs per run, free models give false blockers; dispatch once (`gh workflow run review-desk.yml`) and never while one runs.
