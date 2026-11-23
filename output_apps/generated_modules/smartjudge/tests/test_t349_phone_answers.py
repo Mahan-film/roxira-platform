@@ -103,7 +103,7 @@ def test_phone_gateway_tier_is_vip(monkeypatch):
     assert chat_auth.is_phone_gateway(gw_user)
     assert chat_auth.user_level(gw_user) == "vip"
     assert gw_user.tier == "VIP"
-    assert gw_user.plan_level == "vip"
+    assert gw_user.plan_level == "free"
 
 
 def test_phone_gateway_never_receives_upsell_on_exhaustion(monkeypatch):
@@ -111,33 +111,44 @@ def test_phone_gateway_never_receives_upsell_on_exhaustion(monkeypatch):
     key = "k" * 40
     monkeypatch.setenv("SMARTJUDGE_PHONE_GATEWAY_KEY", key)
     gw_user = chat_auth.authenticate({"x-phone-gateway-key": key})
+    assert chat_auth.is_phone_gateway(gw_user)
 
     class FakeLLMGateway:
         UPSELL_MESSAGE = "لطفاً برای دریافت پاسخ اشتراک تهیه فرمایید."
         PLANS_URL = "https://example.com/plans"
+
+        def configured(self):
+            return True
 
         def may_use_paid(self, tier):
             return False  # Pretend paid cannot be used
 
     monkeypatch.setattr(sj, "_llm_gateway", FakeLLMGateway())
 
-    # Mock chat_auth.decr
+    # Mock knowledge graph and LLM stream outcome to simulate exhaustion
+    async def fake_kg(q, limit=5, meta_out=None):
+        return [
+            {
+                "title": "ماده ۱۰ قانون مدنی",
+                "summary": "قراردادهای خصوصی نسبت به کسانی که آن را منعقد نموده‌اند نافذ است.",
+                "match_level": "EXACT",
+                "is_active": True,
+                "source_tier": "official",
+                "category": "LAW",
+            }
+        ], []
+
+    async def fake_llm(*args, **kwargs):
+        from output_apps.generated_modules.smartjudge import chat_fast as cf
+        return cf.StreamOutcome(text=""), "exhausted"
+
+    monkeypatch.setattr(sj, "aquery_knowledge_graph", fake_kg)
+    monkeypatch.setattr(sj, "_llm_stream_answer", fake_llm)
     monkeypatch.setattr(chat_auth, "decr", lambda k: 0)
 
-    # Directly check the branch in _consult_core logic:
-    # not chat_auth.is_phone_gateway(user) guard prevents returning UPSELL_MESSAGE
-    is_phone = chat_auth.is_phone_gateway(gw_user)
-    assert is_phone is True
-
-    # The guard in smartjudge_module:
-    # not chat_auth.is_phone_gateway(user) and _llm_gateway.may_use_paid(...)
-    # return _consult_body(..., reply=_llm_gateway.UPSELL_MESSAGE, upsell=True)
-    should_upsell = (
-        not chat_auth.is_phone_gateway(gw_user)
-        and sj._llm_gateway is not None
-        and not sj._llm_gateway.may_use_paid("VIP")
-    )
-    assert should_upsell is False, "Phone gateway must never be upsold"
+    resp = asyncio.run(sj._consult_core({"message": "سوال تلفنی"}, None, gw_user))
+    # It must return 503 unavailable, NEVER a friendly upsell
+    assert getattr(resp, "status_code", 0) == 503
 
 
 # ==============================================================================

@@ -5,13 +5,16 @@ and provides deterministic, hallucination-free catalog retrieval.
 """
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger("smartjudge.catalog_intent")
 
 _DIGIT_TRANS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
 
 # Match patterns for "latest / newest / last number" of rulings
-_LATEST_KW = r"(?:آخرین|جدیدترین|تازه‌ترین|تازه ترین|اخرین|واپسین|آخر|اخر)"
+_LATEST_KW = r"(?:آخرین|جدیدترین|تازه‌ترین|تازه ترین|اخرین|واپسین|\bآخر\b|\bاخر\b)"
 _UNITY_KW = r"(?:وحدت\s*رویه|رای\s*وسط\s*روی|آرای\s*وحدت\s*رویه|ارای\s*وحدت\s*رویه)"
 _SUPREME_KW = r"(?:دیوان\s*عالی(?:\s*کشور)?|دیوان\s*آلی(?:\s*کشور)?)"
 _ADMIN_KW = r"(?:دیوان\s*عدالت(?:\s*اداری)?|هیئت\s*عمومی\s*دیوان\s*عدالت)"
@@ -44,7 +47,10 @@ def _norm(text: str) -> str:
 
 def detect(user_text: str) -> Optional[Dict[str, Any]]:
     """Detect if user query is asking for catalog metadata (latest rulings/regulations)."""
-    if not user_text or len(user_text.strip()) > 300:
+    if not user_text:
+        return None
+    if len(user_text.strip()) > 300:
+        logger.debug("catalog_intent: query length %d exceeds threshold, skipping meta detection", len(user_text))
         return None
 
     norm_text = _norm(user_text)

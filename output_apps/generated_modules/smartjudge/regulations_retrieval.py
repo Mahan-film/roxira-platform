@@ -17,9 +17,15 @@ import asyncio
 import logging
 import os
 import re
+import time
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Sequence
 
 logger = logging.getLogger(__name__)
+
+try:
+    from output_apps.generated_modules.smartjudge.legal_graph import lightrag_engine as _eng
+except Exception:  # noqa: BLE001
+    _eng = None
 
 ENV_COLLECTION = "SMARTJUDGE_REGULATIONS_COLLECTION"
 ENV_MIN_SCORE = "SMARTJUDGE_REGULATIONS_MIN_SCORE"
@@ -262,7 +268,7 @@ async def latest_regulations(
     Scrolls Qdrant collection when reachable, falls back to staged jsonl files.
     """
     cache_key = f"{coll_name or collection()}:{issuer}:{limit}"
-    now = asyncio.get_event_loop().time()
+    now = time.monotonic()
     if cache_key in _LATEST_CACHE:
         ts, cached = _LATEST_CACHE[cache_key]
         if now - ts < _CACHE_TTL_S:
@@ -271,47 +277,51 @@ async def latest_regulations(
     coll = coll_name or collection() or "iran_regulations_v1"
     raw_payloads: List[dict] = []
 
-    # 1. Try Qdrant scroll
-    try:
-        from output_apps.generated_modules.smartjudge.legal_graph import lightrag_engine as eng
-        import httpx
-        body: Dict[str, Any] = {"limit": _SCROLL_PAGE, "with_payload": True, "with_vector": False}
-        sf = _regulation_scroll_filter(issuer)
-        if sf:
-            body["filter"] = sf
-        async with httpx.AsyncClient(timeout=4.0) as client:
-            for host, base, hdrs in eng._qdrant_targets():
-                try:
-                    pages = 0
-                    page_body = dict(body)
-                    while pages < _SCROLL_MAX_PAGES:
-                        resp = await client.post(
-                            f"{base}/collections/{coll}/points/scroll", json=page_body, headers=hdrs
-                        )
-                        if pages == 0 and eng._qcloud.skip_cloud_response(host, getattr(resp, "status_code", 0)):
-                            break
-                        if resp.status_code != 200:
-                            break
-                        result = resp.json().get("result", {})
-                        for pt in result.get("points", []):
-                            payload = pt.get("payload")
-                            if isinstance(payload, dict):
-                                raw_payloads.append(payload)
-                        pages += 1
-                        nxt = result.get("next_page_offset")
-                        if not nxt:
-                            break
-                        page_body["offset"] = nxt
-                    if pages:
-                        eng._qcloud.record(host, True)
-                except Exception as exc:  # noqa: BLE001
-                    logger.debug("regulations scroll host %s unreachable: %s", host, exc)
-                    eng._qcloud.record(host, False, type(exc).__name__)
-                    continue
-                if raw_payloads:
-                    break
-    except Exception as exc:
-        logger.debug("Qdrant regulations scroll offline: %s", exc)
+    # 1. Try Qdrant scroll (when legal_graph engine is available)
+    if _eng is not None:
+        try:
+            import httpx
+            body: Dict[str, Any] = {"limit": _SCROLL_PAGE, "with_payload": True, "with_vector": False}
+            sf = _regulation_scroll_filter(issuer)
+            if sf:
+                body["filter"] = sf
+            async with httpx.AsyncClient(timeout=4.0) as client:
+                req_timeout = httpx.Timeout(2.0, connect=1.0)
+                for host, base, hdrs in _eng._qdrant_targets():
+                    try:
+                        pages = 0
+                        page_body = dict(body)
+                        while pages < _SCROLL_MAX_PAGES:
+                            resp = await client.post(
+                                f"{base}/collections/{coll}/points/scroll",
+                                json=page_body,
+                                headers=hdrs,
+                                timeout=req_timeout,
+                            )
+                            if pages == 0 and _eng._qcloud.skip_cloud_response(host, resp.status_code):
+                                break
+                            if resp.status_code != 200:
+                                break
+                            result = resp.json().get("result", {})
+                            for pt in result.get("points", []):
+                                payload = pt.get("payload")
+                                if isinstance(payload, dict):
+                                    raw_payloads.append(payload)
+                            pages += 1
+                            nxt = result.get("next_page_offset")
+                            if not nxt:
+                                break
+                            page_body["offset"] = nxt
+                        if pages:
+                            _eng._qcloud.record(host, True)
+                    except Exception as exc:  # noqa: BLE001
+                        logger.debug("regulations scroll host %s unreachable: %s", host, exc)
+                        _eng._qcloud.record(host, False, type(exc).__name__)
+                        continue
+                    if raw_payloads:
+                        break
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Qdrant regulations scroll offline: %s", exc)
 
     # 2. Fallback to staged files
     if not raw_payloads:
@@ -337,8 +347,10 @@ async def latest_regulations(
                             line = line.strip()
                             if line:
                                 raw_payloads.append(json.loads(line))
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     logger.debug("Failed reading staged regulation file %s: %s", p, exc)
+            else:
+                logger.info("Staged regulation file %s not found on host", p)
 
     # 3. Filter by issuer if specified
     filtered = []

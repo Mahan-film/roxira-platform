@@ -2290,7 +2290,7 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
 
     main_task = aquery_knowledge_graph(retrieval_query, limit=5)
     if cat_intent:
-        if cat_intent.get("intent") == "latest_regulation" or cat_intent.get("target") == "regulation":
+        if cat_intent.get("target") == "regulation":
             cat_task = _regs.latest_regulations(limit=5)
         else:
             cat_task = _rulings.latest_rulings(
@@ -2601,7 +2601,10 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         await asyncio.to_thread(chat_auth.decr, daily_key)  # unanswered: does not use up the daily quota
         if top_key:
             await asyncio.to_thread(chat_auth.decr, top_key)
-        if not chat_auth.is_phone_gateway(user) and _llm_gateway is not None and not _llm_gateway.may_use_paid(selected_tier):
+        if chat_auth.is_phone_gateway(user):
+            # Telephone agent callers never receive consumer subscription/upsell prompts.
+            return _llm_unavailable_response()
+        if _llm_gateway is not None and not _llm_gateway.may_use_paid(selected_tier):
             # Free tier, free models exhausted: friendly upsell instead of a paid model or a 503.
             return _consult_body(
                 conv_id=conv_id or str(uuid.uuid4()), reply=_llm_gateway.UPSELL_MESSAGE, prob=None, draft=None,
