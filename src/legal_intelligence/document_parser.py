@@ -323,7 +323,7 @@ def _persian_digits_to_ascii(text: str) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# استخراج PDF متنی با pymupdf
+# استخراج PDF متنی با pypdfium2 (یا fallback به pymupdf)
 # ─────────────────────────────────────────────────────────────────────────────
 def _import_fitz() -> Any:
     try:
@@ -338,66 +338,90 @@ def _import_fitz() -> Any:
 
 
 def _pdf_text_to_markdown(data: bytes, filename: str) -> Tuple[Optional[ParsedDocument], List[str]]:
-    """استخراج متن PDF با pymupdf. خروجی: (سند یا None, هشدارها)."""
-    fitz = _import_fitz()
-    if fitz is None:
-        return None, ["کتابخانه pymupdf نصب نیست؛ استخراج متن PDF ممکن نشد."]
-    warnings: List[str] = []
+    """استخراج متن PDF با pypdfium2. خروجی: (سند یا None, هشدارها)."""
     try:
-        doc = fitz.open(stream=data, filetype="pdf")
-    except Exception as exc:
-        return None, [f"بازکردن PDF ناموفق بود: {str(exc)[:160]}"]
-    try:
+        from output_apps.generated_modules.smartjudge.documents import pdf_backend
+        warnings: List[str] = []
         pages_md: List[str] = []
-        for page in doc:
-            text = page.get_text("text") or ""
-            text = normalize_persian_text(text)
-            if text:
-                pages_md.append(f"## صفحه {page.number + 1}\n\n{text}")
-        full = normalize_persian_text("\n\n".join(pages_md))
-        if len(full) < _MIN_TEXT_PDF_CHARS:
-            return None, warnings
-        return (
-            ParsedDocument(
-                filename=filename,
-                format="pdf",
-                method="pymupdf",
-                markdown=full,
-            ),
-            warnings,
-        )
-    finally:
+        with pdf_backend.open_pdf(data) as doc:
+            for idx in range(pdf_backend.page_count(doc)):
+                try:
+                    text = pdf_backend.extract_page_text(doc, idx) or ""
+                except Exception:
+                    text = ""
+                text = normalize_persian_text(text)
+                if text:
+                    pages_md.append(f"## صفحه {idx + 1}\n\n{text}")
+            full = normalize_persian_text("\n\n".join(pages_md))
+            if len(full) < _MIN_TEXT_PDF_CHARS:
+                return None, warnings
+            return (
+                ParsedDocument(
+                    filename=filename,
+                    format="pdf",
+                    method="pypdfium2",
+                    markdown=full,
+                ),
+                warnings,
+            )
+    except Exception as exc:
+        fitz = _import_fitz()
+        if fitz is None:
+            return None, [f"بازکردن PDF ناموفق بود: {str(exc)[:160]}"]
+        warnings = []
         try:
-            doc.close()
-        except Exception:
-            pass
+            doc = fitz.open(stream=data, filetype="pdf")
+            try:
+                pages_md = []
+                for page in doc:
+                    text = page.get_text("text") or ""
+                    text = normalize_persian_text(text)
+                    if text:
+                        pages_md.append(f"## صفحه {page.number + 1}\n\n{text}")
+                full = normalize_persian_text("\n\n".join(pages_md))
+                if len(full) < _MIN_TEXT_PDF_CHARS:
+                    return None, warnings
+                return (
+                    ParsedDocument(
+                        filename=filename,
+                        format="pdf",
+                        method="pymupdf",
+                        markdown=full,
+                    ),
+                    warnings,
+                )
+            finally:
+                doc.close()
+        except Exception as e2:
+            return None, [f"بازکردن PDF ناموفق بود: {str(e2)[:160]}"]
 
 
 def _pdf_render_pages_png(data: bytes, max_pages: int = _MAX_VISION_PAGES) -> List[bytes]:
     """رندر هر صفحه PDF اسکن‌شده به PNG برای ارسال به Vision LLM."""
-    fitz = _import_fitz()
-    if fitz is None:
-        return []
-    images: List[bytes] = []
     try:
-        doc = fitz.open(stream=data, filetype="pdf")
+        from output_apps.generated_modules.smartjudge.documents import pdf_backend
+        return pdf_backend.render_pages_png(data, max_pages=max_pages, dpi=144)
     except Exception:
-        return []
-    try:
-        for page in doc:
-            if len(images) >= max_pages:
-                break
-            try:
-                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
-                images.append(pix.tobytes("png"))
-            except Exception:
-                continue
-    finally:
+        fitz = _import_fitz()
+        if fitz is None:
+            return []
+        images: List[bytes] = []
         try:
-            doc.close()
+            doc = fitz.open(stream=data, filetype="pdf")
+            try:
+                for page in doc:
+                    if len(images) >= max_pages:
+                        break
+                    try:
+                        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+                        images.append(pix.tobytes("png"))
+                    except Exception:
+                        continue
+            finally:
+                doc.close()
         except Exception:
-            pass
-    return images
+            return []
+        return images
 
 
 # ─────────────────────────────────────────────────────────────────────────────

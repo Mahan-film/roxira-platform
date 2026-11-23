@@ -319,7 +319,7 @@ def _recover_reverse_bidi(text: str) -> str:
 
 
 def inspect_and_extract_fast_path(page: Any) -> tuple[bool, str, str]:
-    """Inspect page in < 2ms using fitz text layer. Returns (is_clean, normalized_text, reason).
+    """Inspect page in < 2ms using text layer. Returns (is_clean, normalized_text, reason).
     
     Checks:
     - Minimum length threshold (OCR_PAGE_MIN_CHARS)
@@ -329,7 +329,22 @@ def inspect_and_extract_fast_path(page: Any) -> tuple[bool, str, str]:
     - Character and digit normalization
     """
     raw_text = ""
-    if hasattr(page, "get_text"):
+    if hasattr(page, "get_textpage"):
+        try:
+            tp = page.get_textpage()
+            try:
+                if hasattr(tp, "get_text_range"):
+                    raw_text = tp.get_text_range() or ""
+                elif hasattr(tp, "extractText"):
+                    raw_text = tp.extractText() or ""
+                else:
+                    raw_text = page.get_text("text") if hasattr(page, "get_text") else ""
+            finally:
+                if hasattr(tp, "close"):
+                    tp.close()
+        except Exception as exc:
+            return False, "", f"EXTRACT_ERROR: {type(exc).__name__}"
+    elif hasattr(page, "get_text"):
         try:
             raw_text = page.get_text("text") or ""
         except Exception as exc:
@@ -383,7 +398,14 @@ def render_and_enhance_page_to_webp(page: Any, dpi: int = 160) -> bytes:
     except ImportError as exc:
         raise CaseFileError(MSG_OCR_FAILED, 503, "OCR_UNAVAILABLE") from exc
 
-    if hasattr(page, "get_pixmap"):
+    if hasattr(page, "render"):
+        # pypdfium2 PdfPage
+        bitmap = page.render(scale=dpi / 72.0)
+        try:
+            img = bitmap.to_pil().convert("L")
+        finally:
+            bitmap.close()
+    elif hasattr(page, "get_pixmap"):
         try:
             import fitz
         except ImportError:
@@ -898,21 +920,18 @@ class _PdfSource:
 
     def __init__(self, data: bytes) -> None:
         try:
-            import pymupdf as fitz  # type: ignore
-        except ImportError:
-            try:
-                import fitz  # type: ignore
-            except ImportError as exc:  # pragma: no cover
-                raise CaseFileError(MSG_CORRUPT, 503, "PDF_UNAVAILABLE") from exc
-        self._fitz = fitz
+            import pypdfium2 as pdfium
+            from output_apps.generated_modules.smartjudge.documents import pdf_backend
+        except ImportError as exc:  # pragma: no cover
+            raise CaseFileError(MSG_CORRUPT, 503, "PDF_UNAVAILABLE") from exc
+        self._pdfium = pdfium
+        self._pdf_backend = pdf_backend
         try:
-            self.doc = fitz.open(stream=data, filetype="pdf")
+            self.doc = pdfium.PdfDocument(data)
         except Exception as exc:  # noqa: BLE001
             raise CaseFileError(MSG_CORRUPT, 400, "CORRUPT_FILE") from exc
         try:
-            if self.doc.needs_pass or self.doc.is_encrypted:
-                raise CaseFileError(MSG_ENCRYPTED, 400, "PDF_ENCRYPTED")
-            self.count = self.doc.page_count
+            self.count = len(self.doc)
             if self.count > MAX_PAGES:
                 raise CaseFileError(msg_too_many_pages(self.count), 413, "TOO_MANY_PAGES")
         except BaseException:
@@ -921,9 +940,9 @@ class _PdfSource:
 
     def text_layers(self) -> List[str]:
         out: List[str] = []
-        for page in self.doc:
+        for i in range(len(self.doc)):
             try:
-                out.append((page.get_text("text") or "").strip())
+                out.append(self._pdf_backend.extract_page_text(self.doc, i).strip())
             except Exception:  # noqa: BLE001
                 out.append("")
         return out
@@ -931,11 +950,17 @@ class _PdfSource:
     def render(self, index: int) -> Optional[bytes]:
         try:
             page = self.doc[index]
-            longest = max(page.rect.width, page.rect.height) or 1.0
-            zoom = min(200 / 72, OCR_MAX_SIDE_PX / longest)
-            pix = page.get_pixmap(matrix=self._fitz.Matrix(zoom, zoom), alpha=False)
-            from PIL import Image
-            return _encode_jpeg(Image.frombytes("RGB", (pix.width, pix.height), pix.samples))
+            try:
+                width, height = page.get_size()
+                longest = max(width, height) or 1.0
+                scale = min(200 / 72, OCR_MAX_SIDE_PX / longest)
+                bitmap = page.render(scale=scale)
+                try:
+                    return _encode_jpeg(bitmap.to_pil())
+                finally:
+                    bitmap.close()
+            finally:
+                page.close()
         except Exception as exc:  # noqa: BLE001
             print(f"[CASEFILE][PDF-RENDER] {type(exc).__name__}", file=sys.stderr)
             return None
@@ -943,20 +968,28 @@ class _PdfSource:
     def render_webp(self, index: int) -> Optional[bytes]:
         try:
             page = self.doc[index]
-            return render_and_enhance_page_to_webp(page)
+            try:
+                return render_and_enhance_page_to_webp(page)
+            finally:
+                page.close()
         except Exception as exc:  # noqa: BLE001
             print(f"[CASEFILE][PDF-RENDER-WEBP] {type(exc).__name__}", file=sys.stderr)
             return self.render(index)
 
     def fast_path(self, index: int) -> tuple[bool, str, str]:
         try:
-            return inspect_and_extract_fast_path(self.doc[index])
+            page = self.doc[index]
+            try:
+                return inspect_and_extract_fast_path(page)
+            finally:
+                page.close()
         except Exception as exc:  # noqa: BLE001
             return False, "", f"ERROR: {type(exc).__name__}"
 
     def close(self) -> None:
         try:
-            self.doc.close()
+            if hasattr(self, "doc") and self.doc:
+                self.doc.close()
         except Exception:  # noqa: BLE001
             pass
 

@@ -50,14 +50,14 @@ class Doc2XEngine:
                 text_content = raw_bytes.decode("utf-8", errors="replace")
             elif filename.lower().endswith(".pdf"):
                 try:
-                    import fitz  # PyMuPDF
-                    doc = fitz.open(stream=raw_bytes, filetype="pdf")
-                    extracted = []
-                    for page_idx, page in enumerate(doc):
-                        page_text = page.get_text("text")
-                        if page_text.strip():
-                            extracted.append(f"### صفحه {page_idx + 1}\n{page_text}")
-                    text_content = "\n\n".join(extracted)
+                    from output_apps.generated_modules.smartjudge.documents import pdf_backend
+                    with pdf_backend.open_pdf(raw_bytes) as doc:
+                        extracted = []
+                        for page_idx in range(pdf_backend.page_count(doc)):
+                            page_text = pdf_backend.extract_page_text(doc, page_idx)
+                            if page_text.strip():
+                                extracted.append(f"### صفحه {page_idx + 1}\n{page_text}")
+                        text_content = "\n\n".join(extracted)
                 except Exception:
                     text_content = "متن سند از طریق موتور بینایی چندوجهی استخراج شد."
         except Exception as exc:

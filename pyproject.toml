@@ -50,10 +50,10 @@ dev = [
 
 # ── پردازش اسناد (هستهٔ SmartJudge) ──────────────────────────────────────────
 # موتور اصلی تبدیل PDF/Word/تصویر به Markdown با چیدمان، جدول و OCR چندزبانه.
-# در نبود آن، پکیج به‌صورت خودکار به PyMuPDF + python-docx + OCR بینایی تنزل می‌کند.
+# در نبود آن، پکیج به‌صورت خودکار به pypdfium2 + python-docx + OCR بینایی تنزل می‌کند.
 documents = [
     "docling>=2.5.0",
-    "pymupdf>=1.24.0",
+    "pypdfium2>=4.30.0",
     "python-docx>=1.1.0",
     "pillow>=10.0",
     "pillow-heif>=0.18",
