@@ -54,6 +54,8 @@ class TenantCancellationRegistry:
         env_p = os.environ.get("TENANT_CANCELLATION_FILE") or os.environ.get("TENANT_CANCELLATION_REGISTRY_PATH")
         if env_p:
             return Path(env_p)
+        if os.environ.get("ENV") == "production" or os.environ.get("NODE_ENV") == "production":
+            raise RuntimeError("TENANT_CANCELLATION_FILE environment variable must be set in production")
         base_dir = Path(__file__).resolve().parents[4]
         data_dir = base_dir / "data"
         if not data_dir.is_dir():
@@ -74,7 +76,8 @@ class TenantCancellationRegistry:
                     if isinstance(data, list):
                         cls._cancelled_tenants.update(data)
             except Exception as e:
-                logger.warning("Failed loading cancelled tenants file %s: %s", p, e)
+                logger.error("Failed loading cancelled tenants file %s: %s", p, e)
+                raise
 
     @classmethod
     def _save_persisted(cls) -> None:
@@ -86,7 +89,8 @@ class TenantCancellationRegistry:
                 json.dump(sorted(list(cls._cancelled_tenants)), f)
             tmp.replace(p)
         except Exception as e:
-            logger.warning("Failed persisting cancelled tenants to %s: %s", p, e)
+            logger.error("Failed persisting cancelled tenants to %s: %s", p, e)
+            raise
 
     @classmethod
     def cancel_tenant(cls, tenant_id: str, reason: str = "", authorized_by: str = "") -> Dict[str, Any]:
@@ -107,7 +111,11 @@ class TenantCancellationRegistry:
         clean_id = str(tenant_id).strip()
         if clean_id in cls._cancelled_tenants:
             return True
-        cls._load_persisted()
+        try:
+            cls._load_persisted()
+        except Exception:
+            logger.error("Failing closed: cannot verify cancellation status for tenant '%s'", clean_id)
+            return True
         return clean_id in cls._cancelled_tenants
 
     @classmethod
@@ -588,31 +596,44 @@ class TenantVectorStoreWrapper:
     ) -> int:
         """Count surviving vector points for tenant_id. Must return 0 after complete erasure."""
         valid_id = validate_identifier(tenant_id, "tenant_id", check_cancelled=False)
-        payload = {
-            "filter": {
-                "must": [
-                    {"key": "tenant_id", "match": {"value": valid_id}}
-                ]
-            },
-            "limit": 100,
-            "with_payload": False,
-        }
-        url = f"{self.base_url}/collections/{collection_name}/points/scroll"
-        data = json.dumps(payload).encode("utf-8")
-        req = urllib_request.Request(
-            url,
-            data=data,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        try:
-            with urllib_request.urlopen(req, timeout=self.timeout) as resp:
-                res_json = json.loads(resp.read().decode("utf-8"))
-                points = res_json.get("result", {}).get("points", [])
-                return len(points)
-        except Exception as exc:
-            logger.error("Ghost check scroll error on %s: %s", collection_name, exc)
-            raise RuntimeError(f"Ghost check failed for collection '{collection_name}': {exc}") from exc
+        total_points = 0
+        offset = None
+
+        while True:
+            payload: Dict[str, Any] = {
+                "filter": {
+                    "must": [
+                        {"key": "tenant_id", "match": {"value": valid_id}}
+                    ]
+                },
+                "limit": 100,
+                "with_payload": False,
+            }
+            if offset is not None:
+                payload["offset"] = offset
+
+            url = f"{self.base_url}/collections/{collection_name}/points/scroll"
+            data = json.dumps(payload).encode("utf-8")
+            req = urllib_request.Request(
+                url,
+                data=data,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            try:
+                with urllib_request.urlopen(req, timeout=self.timeout) as resp:
+                    res_json = json.loads(resp.read().decode("utf-8"))
+                    result = res_json.get("result", {})
+                    points = result.get("points", [])
+                    total_points += len(points)
+                    offset = result.get("next_page_offset")
+                    if not offset or not points:
+                        break
+            except Exception as exc:
+                logger.error("Ghost check scroll error on %s: %s", collection_name, exc)
+                raise RuntimeError(f"Ghost check failed for collection '{collection_name}': {exc}") from exc
+
+        return total_points
 
 
 def tenant_cache_key(tenant_id: str, key: str, namespace: str = "rag") -> str:

@@ -138,6 +138,7 @@ def replay_tenant_erasure(
 
     wrapper = TenantVectorStoreWrapper(base_url=qdrant_url)
     surviving_ghosts = 0
+    compaction_failures = 0
     for coll in target_collections:
         del_res = wrapper.delete_tenant_vectors(coll, valid_id, force_compaction=True)
         if del_res.get("deleted"):
@@ -145,7 +146,7 @@ def replay_tenant_erasure(
         if not del_res.get("compacted", False):
             logger.error("Compaction was not completed for tenant %s on collection %s", valid_id, coll)
             result["compaction_failed"] = True
-            surviving_ghosts += 1
+            compaction_failures += 1
         try:
             surviving_ghosts += wrapper.ghost_check_tenant(coll, valid_id)
         except Exception as e:
@@ -153,10 +154,14 @@ def replay_tenant_erasure(
             surviving_ghosts += 1  # Fail closed: treat connection/check failure as unclean
 
     result["ghost_count"] = surviving_ghosts
-    if surviving_ghosts > 0:
-        logger.error("WARNING: Ghost check failed! %d vectors survive for %s", surviving_ghosts, valid_id)
+    result["compaction_failures"] = compaction_failures
+    if surviving_ghosts > 0 or compaction_failures > 0:
+        logger.error(
+            "WARNING: Replay failed for %s! %d vectors survive, %d compaction failures",
+            valid_id, surviving_ghosts, compaction_failures
+        )
     else:
-        logger.info("Tenant %s successfully erased (ghost count = 0)", valid_id)
+        logger.info("Tenant %s successfully erased (ghost count = 0, compacted)", valid_id)
 
     return result
 
