@@ -225,13 +225,15 @@ export class QuotationToInvoiceService {
         }
         const unitPriceMinor = toMinor(line.unitPrice);
         const discountMinor = line.discount ? toMinor(line.discount) : 0n;
+        const MAX_SAFE_PRICE_MINOR = 2n ** 51n;
+        if (unitPriceMinor > MAX_SAFE_PRICE_MINOR || discountMinor > MAX_SAFE_PRICE_MINOR) {
+          throw new BadRequestException(
+            'مبلغ واحد یا تخفیف سطر بیش از حد مجاز برای صدور صورتحساب است.',
+          );
+        }
         const unitPriceVal = fromMinor(unitPriceMinor);
         const discountVal = discountMinor > 0n ? fromMinor(discountMinor) : 0;
-        // In modules/accounting/money.ts:90, fromMinor returns `number` for values within MAX_NUMBER_MINOR
-        // (2^51 minor units, ~2.25 quadrillion Rials) and `string` (minorToDecimal) only if it overflows.
-        // InvoiceItemDto requires `number` for unitPrice; if an amount overflows safe float representation,
-        // we fail closed with BadRequestException rather than passing an unsafe string to the invoice service.
-        if (typeof unitPriceVal === 'string' || typeof discountVal === 'string') {
+        if (typeof unitPriceVal !== 'number' || typeof discountVal !== 'number') {
           throw new BadRequestException(
             'مبلغ واحد یا تخفیف سطر بیش از حد مجاز برای صدور صورتحساب است.',
           );
