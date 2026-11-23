@@ -11,7 +11,7 @@ import {
   createPriceTier,
   deletePriceTier,
 } from "@/lib/api/sales-client";
-import { formatSalesMoney } from "./sales-format";
+import { formatSalesMoney, parseNonNegativeMinor } from "./sales-format";
 import type { CustomerGroup, PriceTier } from "@/types/sales";
 
 const CUSTOMER_GROUP_LABELS: Record<CustomerGroup, string> = {
@@ -69,9 +69,15 @@ export function PriceTiersTab() {
       return;
     }
 
-    const price = parseInt(unitPriceMinor, 10);
-    if (isNaN(price) || price < 0) {
+    const price = parseNonNegativeMinor(unitPriceMinor, false);
+    if (price === null) {
       setError("مبلغ واحد نامعتبر است.");
+      return;
+    }
+
+    const discountTrimmed = discountPercent.trim() || "0";
+    if (!/^\d+(?:\.\d+)?$/.test(discountTrimmed)) {
+      setError("درصد تخفیف نامعتبر است.");
       return;
     }
 
@@ -80,8 +86,8 @@ export function PriceTiersTab() {
       const created = await createPriceTier({
         sku: trimmedSku,
         customerGroup,
-        unitPriceMinor: String(price),
-        discountPercent: parseFloat(discountPercent) || 0,
+        unitPriceMinor: price,
+        discountPercent: Number(discountTrimmed),
         effectiveFrom: effectiveFrom.trim() || undefined,
         effectiveTo: effectiveTo.trim() || undefined,
       });
@@ -99,7 +105,6 @@ export function PriceTiersTab() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("آیا از حذف این سطح قیمت اطمینان دارید؟")) return;
     try {
       await deletePriceTier(id);
       setTiers(tiers.filter((t) => t.id !== id));

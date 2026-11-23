@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { changeQuotationStatus, convertQuotation } from "@/lib/api/sales-client";
-import { formatSalesMoney, formatSalesQuantity } from "./sales-format";
+import { formatSalesMoney, formatSalesQuantity, parsePositiveInt } from "./sales-format";
 import type { SalesOrder, SalesQuotation, SalesQuotationStatus } from "@/types/sales";
 
 interface QuotationDetailDrawerProps {
@@ -32,7 +32,7 @@ export function QuotationDetailDrawer({
 
   // Convert form state
   const [showConvertForm, setShowConvertForm] = useState(false);
-  const [warehouseId, setWarehouseId] = useState("1");
+  const [warehouseId, setWarehouseId] = useState("");
   const [orderDate, setOrderDate] = useState(
     new Date().toISOString().split("T")[0],
   );
@@ -60,8 +60,8 @@ export function QuotationDetailDrawer({
     setError(null);
     setSuccessMsg(null);
 
-    const whId = parseInt(warehouseId, 10);
-    if (isNaN(whId) || whId <= 0) {
+    const whId = parsePositiveInt(warehouseId);
+    if (whId === null) {
       setError("شناسه انبار نامعتبر است.");
       return;
     }

@@ -8,7 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { createSalesOrder } from "@/lib/api/sales-client";
-import { formatSalesMoney } from "./sales-format";
+import {
+  computeLineTotalMinor,
+  formatSalesMoney,
+  parseNonNegativeMinor,
+  parsePositiveDecimalString,
+  parsePositiveInt,
+} from "./sales-format";
 import type { SalesOrder } from "@/types/sales";
 
 interface OrderLineInputRow {
@@ -32,12 +38,12 @@ export function SalesOrderCreateDrawer({
 }: SalesOrderCreateDrawerProps) {
   const today = new Date().toISOString().split("T")[0];
   const [partyCode, setPartyCode] = useState("");
-  const [warehouseId, setWarehouseId] = useState("1");
+  const [warehouseId, setWarehouseId] = useState("");
   const [orderDate, setOrderDate] = useState(today);
   const [promisedDate, setPromisedDate] = useState("");
   const [note, setNote] = useState("");
   const [lines, setLines] = useState<OrderLineInputRow[]>([
-    { itemId: "1", description: "", quantity: "1", unitPrice: "0", discount: "0" },
+    { itemId: "", description: "", quantity: "1", unitPrice: "0", discount: "0" },
   ]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +51,7 @@ export function SalesOrderCreateDrawer({
   const addLine = () => {
     setLines([
       ...lines,
-      { itemId: "1", description: "", quantity: "1", unitPrice: "0", discount: "0" },
+      { itemId: "", description: "", quantity: "1", unitPrice: "0", discount: "0" },
     ]);
   };
 
@@ -70,8 +76,8 @@ export function SalesOrderCreateDrawer({
       return;
     }
 
-    const whId = parseInt(warehouseId, 10);
-    if (isNaN(whId) || whId <= 0) {
+    const whId = parsePositiveInt(warehouseId);
+    if (whId === null) {
       setError("شناسه انبار نامعتبر است.");
       return;
     }
@@ -81,34 +87,47 @@ export function SalesOrderCreateDrawer({
       return;
     }
 
+    const payloadLines: Array<{
+      itemId: number;
+      description?: string;
+      quantity: string;
+      unitPrice: string;
+      discount: string;
+    }> = [];
+
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i];
-      const itId = parseInt(l.itemId, 10);
-      if (isNaN(itId) || itId <= 0) {
+      const itId = parsePositiveInt(l.itemId);
+      if (itId === null) {
         setError(`شناسه کالای سطر ${i + 1} نامعتبر است.`);
         return;
       }
-      const q = parseFloat(l.quantity);
-      if (isNaN(q) || q <= 0) {
+      const q = parsePositiveDecimalString(l.quantity);
+      if (q === null) {
         setError(`مقدار سطر ${i + 1} باید بزرگتر از صفر باشد.`);
         return;
       }
-      const p = parseFloat(l.unitPrice);
-      if (isNaN(p) || p < 0) {
+      const p = parseNonNegativeMinor(l.unitPrice, false);
+      if (p === null) {
         setError(`بهای واحد سطر ${i + 1} نامعتبر است.`);
         return;
       }
+      const d = parseNonNegativeMinor(l.discount, true);
+      if (d === null) {
+        setError(`تخفیف سطر ${i + 1} نامعتبر است.`);
+        return;
+      }
+      payloadLines.push({
+        itemId: itId,
+        description: l.description.trim() || undefined,
+        quantity: q,
+        unitPrice: p,
+        discount: d,
+      });
     }
 
     setSubmitting(true);
     try {
-      const payloadLines = lines.map((l) => ({
-        itemId: parseInt(l.itemId, 10),
-        description: l.description.trim() || undefined,
-        quantity: parseFloat(l.quantity),
-        unitPrice: parseFloat(l.unitPrice),
-        discount: parseFloat(l.discount) || 0,
-      }));
 
       const res = await createSalesOrder({
         partyCode: trimmedParty,
@@ -217,10 +236,7 @@ export function SalesOrderCreateDrawer({
 
           <div className="flex flex-col gap-2.5">
             {lines.map((l, idx) => {
-              const q = parseFloat(l.quantity) || 0;
-              const p = parseFloat(l.unitPrice) || 0;
-              const d = parseFloat(l.discount) || 0;
-              const estTotal = Math.max(0, q * p - d);
+              const estTotal = computeLineTotalMinor(l.quantity, l.unitPrice, l.discount);
 
               return (
                 <div
