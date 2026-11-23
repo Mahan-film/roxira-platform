@@ -31,5 +31,5 @@ This policy defines standards for data classification, cryptographic protections
    - Cryptographic master keys are managed via environment injection or hardware/cloud KMS. Secrets are never checked into version control.
 
 ## 4. Retention & Disposal
-- 12 months of audit log is our retention.
+- 12 months of audit log is our retention policy target (automated retention enforcement is not yet implemented).
 - Expired backups and temporary import chunks undergo cryptographic shredding upon expiration.

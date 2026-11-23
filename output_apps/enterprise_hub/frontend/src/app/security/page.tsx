@@ -120,7 +120,7 @@ export default function SecurityTrustPage() {
               <h2 className="text-base font-bold text-white">ردیابی تغییرناپذیر رخدادها (Immutable Audit Logs)</h2>
             </div>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              کلیه تراکنش‌های مالی، ورودهای سیستمی و تغییرات دسترسی با چک‌سام‌های رمزنگاری‌شده ثبت می‌شوند. <strong>هدف خط مشی ما نگهداری ۱۲ ماهه گزارش‌های حسابرسی است</strong> (12 months is our target retention policy; automated enforcement is not yet in place).
+              کلیه تراکنش‌های مالی، ورودهای سیستمی و تغییرات دسترسی با چک‌سام‌های رمزنگاری‌شده ثبت می‌شوند. <strong>هدف خط‌مشی ما نگهداری ۱۲ ماهه گزارش‌های حسابرسی است</strong> (سازوکار حذف خودکار پس از پایان دوره هنوز در سیستم فعال نشده است).
             </p>
           </article>
         </div>
