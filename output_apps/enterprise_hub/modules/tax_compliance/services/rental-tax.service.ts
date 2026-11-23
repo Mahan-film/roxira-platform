@@ -1,6 +1,9 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { minorToDecimal, parseMinor } from '../../accounting/money';
 import { StatutoryRepository } from '../../hr/statutory/statutory.repository';
+import { StatutoryKey } from '../../hr/statutory/statutory-catalogue';
+import { CountryPackRegistry } from '../../country_packs/country-pack.registry';
+import { tryResolvePack } from '../../country_packs/try-resolve-pack';
 import { RentalTaxPreviewDto } from '../dto/rental-tax-preview.dto';
 import { applyRate, Bracket, bracketTax, readStatutory, StatutoryUse } from '../utils/progressive-tax';
 
@@ -34,16 +37,23 @@ const min = (a: bigint, b: bigint): bigint => (a < b ? a : b);
 /** Rental income tax (Act Art. 53) with the Art. 57 exemption. Preview only, rates from the statutory store. */
 @Injectable()
 export class RentalTaxService {
-  constructor(private readonly statutory: StatutoryRepository) {}
+  constructor(
+    private readonly statutory: StatutoryRepository,
+    @Optional() private readonly countryPackRegistry?: CountryPackRegistry,
+  ) {}
 
   async preview(tenantId: string, dto: RentalTaxPreviewDto): Promise<RentalTaxPreview> {
     if (!dto.lessorIsOwner && dto.rentPaid === undefined) {
       throw new BadRequestException('وقتی موجر مالک نیست، اجاره‌بهای پرداختی (rentPaid) لازم است.');
     }
-    const used = await readStatutory(this.statutory, tenantId, dto.fiscalYear, KEYS);
+    const pack = tryResolvePack(this.countryPackRegistry);
+    const rule = pack?.taxRules.find((r) => r.kind === 'rental_tax');
+    const keys = rule ? (rule.statutoryKeys as readonly StatutoryKey[]) : KEYS;
+    const country = pack?.country || 'IR';
+    const used = await readStatutory(this.statutory, tenantId, dto.fiscalYear, keys, country);
     const deductionRate = String(used.get('rental_expense_deduction_rate')!.value);
     // The store holds whole rials (money kind); the computation works in minor units (rial x 100).
-    const ceiling = BigInt(used.get('income_exemption_ceiling_art57_art101')!.value as number) * 100n;
+    const ceiling = BigInt(String(used.get('income_exemption_ceiling_art57_art101')!.value)) * 100n;
     const brackets = used.get('income_tax_art131_brackets')!.value as Bracket[];
 
     const gross = parseMinor(dto.rentReceived) + big(dto.inKindIncome);

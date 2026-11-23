@@ -21,7 +21,9 @@ tree check, records previous commit and tags current images `:prev` (state in
 `/root/deploy-state/` on the server, outside the git tree), `git merge --ff-only`,
 `compose config -q`, build and `up -d --no-deps` only the services whose files
 changed, nginx reload (recreate if `nginx.conf` changed), then a smoke test.
-Any failed smoke check triggers an automatic rollback.
+Smoke tests verify Smart Judge health, backend system health (`/api/backend/health/system`),
+and an authenticated tenant-scoped read for a seeded smoke tenant (`/api/backend/tenants/me`
+using `SMOKE_AUTH_TOKEN`). Any failed smoke check triggers an automatic rollback.
 
 ## چک‌لیست پیش از استقرار (pre-flight)
 

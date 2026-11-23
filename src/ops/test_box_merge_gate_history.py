@@ -136,9 +136,11 @@ class UpToDateRule(unittest.TestCase):
         api = FakeApi(comments=[review()], behind=2)
         return mg.Gate(cfg(**kw), api, mg.State(os.devnull), True).evaluate(pr)[0]
 
-    def test_behind_pr_waits_by_default_and_merges_when_not_required(self):
-        self.assertEqual(self.evaluate(), mg.BEHIND)
+    def test_behind_pr_merges_by_default_and_waits_when_required(self):
+        # decision B7-2: the default is false, a green head that is only behind main merges
+        self.assertEqual(self.evaluate(), mg.MERGE)
         self.assertEqual(self.evaluate(require_up_to_date=False), mg.MERGE)
+        self.assertEqual(self.evaluate(require_up_to_date=True), mg.BEHIND)
 
     def test_hold_label_wins_over_green_checks(self):
         pr = {"number": 7, "title": "t", "labels": [{"name": "merge-queue"}, {"name": "needs-human"}],
@@ -163,7 +165,7 @@ class HistoryComparison(unittest.TestCase):
             files=[{"filename": ".github/workflows/ci.yml"}],
             behind=3,
         )
-        rep = self.report(api)
+        rep = self.report(api, require_up_to_date=True)
         s = rep["summary"]
         self.assertEqual(s["merged_but_gate_blocks"], 1)
         self.assertEqual(set(s["blocked_by_rule"]), {"protected", "review", "checks", "behind"})
@@ -183,7 +185,8 @@ class HistoryComparison(unittest.TestCase):
 
     def test_behind_is_informational_when_up_to_date_is_not_required(self):
         api = FakeApi(comments=[review()], behind=4)
-        self.assertEqual(self.report(api)["summary"]["blocked_by_rule"], {"behind": 1})
+        self.assertEqual(self.report(api, require_up_to_date=True)["summary"]["blocked_by_rule"], {"behind": 1})
+        self.assertEqual(self.report(api)["summary"]["merged_but_gate_blocks"], 0)  # default since B7-2
         self.assertEqual(self.report(api, require_up_to_date=False)["summary"]["merged_but_gate_blocks"], 0)
 
     def test_only_get_requests_are_ever_sent(self):

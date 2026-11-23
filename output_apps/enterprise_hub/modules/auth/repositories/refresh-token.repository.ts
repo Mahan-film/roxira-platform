@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, LessThan, MoreThan, Not, Repository } from 'typeorm';
+import { In, IsNull, LessThan, MoreThan, Not, Repository } from 'typeorm';
 import { randomUUID } from 'node:crypto';
 import { RefreshTokenEntity } from '../entities/refresh-token.entity';
 
@@ -111,12 +111,19 @@ export class RefreshTokenRepository {
     }
   }
 
-  async revokeAllForUser(userId: string): Promise<void> {
+  async revokeAllForUser(userId: string, tenantIds?: string[]): Promise<void> {
+    if (tenantIds !== undefined && tenantIds.length === 0) {
+      return;
+    }
     await this.repository.manager.transaction(async (m) => {
       await m.query(`SELECT set_config('app.user_id', $1, true)`, [userId]);
+      const where: any = { userId, revokedAt: IsNull() };
+      if (tenantIds && tenantIds.length > 0) {
+        where.tenantId = In(tenantIds);
+      }
       await m.update(
         RefreshTokenEntity,
-        { userId, revokedAt: IsNull() },
+        where,
         { revokedAt: new Date() },
       );
     });

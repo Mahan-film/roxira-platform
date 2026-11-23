@@ -89,6 +89,12 @@ def read_credentials(path: Path) -> tuple[dict | None, str]:
 
 
 # ------------------------------------------------------------------ snapshot -> checks (pure)
+def _phone_probes():
+    """phone_probes.py next to this file; None when it is not installed (the phone checks are then simply absent)."""
+    path = HERE / "phone_probes.py"
+    return _load("phone_probes", path) if path.exists() else None
+
+
 def derive_results(snap: dict, state: dict, now: float) -> dict:
     """{check_key: (ok, detail)}. Unknown sources are omitted. Mutates state['runner_since'] (first-seen-offline)."""
     res: dict = {}
@@ -133,6 +139,9 @@ def derive_results(snap: dict, state: dict, now: float) -> dict:
                 res[f"cost:{lane}"] = (v["usd_ratio"] < COST_RATIO, f"lane {lane} spent {v['usd']:.3f} of {v['cap_usd']:g} USD today")
         if cost.get("total_ratio") is not None:
             res["cost:total"] = (cost["total_ratio"] < COST_RATIO, f"gateway spend {cost['total_usd']:.3f} of {cost['daily_cap_usd']:g} USD today")
+    pm = _phone_probes()  # phone line checks (work package G); absent source = no check
+    if pm is not None and snap.get("phone"):
+        res.update(pm.derive_phone_results(snap["phone"], state, now))
     return res
 
 
