@@ -113,6 +113,15 @@ describe('invoice vouchers: engine vs the frozen old line building', () => {
     expect(dto(0).lines[0]).toMatchObject({ accountCode: '1201', debit: '1012000000.00' });
   });
 
+  it('handles string fxRate without calling .toFixed or losing precision (LESSONS 8)', async () => {
+    const i = invoice({ currency: Currency.USD, fxRate: '920000.000000' } as never);
+    const { posting, dto } = harness([i]);
+    await posting.handle(ev(InvoiceStatus.ISSUED));
+    const old = legacyDocumentLines(plain(i), { receivable: toMinor(1012000000), vat: toMinor(92000000), net: toMinor(920000000), stock: -60000n }, LEGACY, false);
+    expect(shape(dto(0).lines)).toEqual(legacyShape(old));
+    expect(dto(0).lines[0]).toMatchObject({ accountCode: '1201', debit: '1012000000.00' });
+  });
+
   it('purchase with a stock line (hand: stock 600 of net 1000, purchases 400, VAT 100, AP 1100)', async () => {
     const i = invoice({ direction: InvoiceDirection.PURCHASE, status: InvoiceStatus.ISSUED });
     const { posting, dto } = harness([i]);

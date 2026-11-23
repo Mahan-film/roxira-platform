@@ -988,10 +988,24 @@ export class InvoicePostingService {
       typeof amount === 'string'
         ? fromDb(amount)
         : toMinor(this.round(amount ?? 0));
-    const rate = parseScaled(this.resolveFxRate(invoice).toFixed(6), 6);
+    const rate = parseScaled(this.resolveFxRateString(invoice), 6);
     const product = amountMinor * rate;
     const divisor = 1_000_000n;
     return (product + (product < 0n ? -divisor / 2n : divisor / 2n)) / divisor;
+  }
+
+  private resolveFxRateString(invoice: InvoiceEntity): string {
+    if (typeof invoice.fxRate === 'string') {
+      const trimmed = invoice.fxRate.trim();
+      const match = /^(\d+)(?:\.(\d+))?$/.exec(trimmed);
+      if (match) {
+        const intPart = match[1];
+        const fracPart = (match[2] ?? '').slice(0, 6);
+        return fracPart.length > 0 ? `${intPart}.${fracPart}` : intPart;
+      }
+    }
+    const rate = Number(invoice.fxRate);
+    return Number.isFinite(rate) && rate > 0 ? rate.toFixed(6) : '1';
   }
 
   private resolveFxRate(invoice: InvoiceEntity): number {
