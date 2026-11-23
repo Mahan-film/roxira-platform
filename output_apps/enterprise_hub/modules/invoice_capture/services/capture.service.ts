@@ -169,8 +169,19 @@ export class CaptureService {
     await this.assertWithinCaps(tenantId);
 
     const input = await this.prepareInput(file, userText);
-    await this.entitlements.consume(tenantId, 'ocr_pages', Math.max(1, input.images.length));
-    const outcome = await this.runExtraction(input);
+    const pages = Math.max(1, input.images.length);
+    await this.entitlements.consume(tenantId, 'ocr_pages', pages);
+    let outcome: { llm: LlmOutcome; result: ExtractionResult };
+    try {
+      outcome = await this.runExtraction(input);
+    } catch (err) {
+      try {
+        await this.entitlements.release(tenantId, 'ocr_pages', pages);
+      } catch {
+        // ignore rollback errors so original extraction failure is propagated
+      }
+      throw err;
+    }
 
     const sha = createHash('sha256')
       .update(file ? file.buffer : Buffer.from(userText))
