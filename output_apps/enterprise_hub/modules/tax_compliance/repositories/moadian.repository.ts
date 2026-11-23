@@ -35,6 +35,25 @@ export class MoadianRepository {
     return (this.resolvedScope = null);
   }
 
+  /**
+   * Acquires a transaction advisory lock keyed by tenantId:invoiceId to prevent
+   * concurrent submission race conditions and duplicate serial reservations.
+   */
+  async withInvoiceLock<T>(
+    tenantId: string,
+    invoiceId: string,
+    work: (repo: MoadianRepository) => Promise<T>,
+  ): Promise<T> {
+    const scope = this.getScope();
+    if (!scope) return work(this);
+    return scope.run(tenantId, async (m) => {
+      await m.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [
+        `moadian:${tenantId}:${invoiceId}`,
+      ]);
+      return work(this);
+    });
+  }
+
   private withCredentials<T>(
     tenantId: string,
     work: (repo: Repository<MoadianCredentialEntity>) => Promise<T>,

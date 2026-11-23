@@ -272,9 +272,19 @@ export class InvalidAmountError extends Error {}
  * Null, undefined and '' are 0. Persian/Arabic digits are normalized first.
  * Anything that is not a plain decimal throws InvalidAmountError.
  */
-export function toMinorUnits(value: number | string | null | undefined, scale: number): bigint {
+export function toMinorUnits(value: number | string | bigint | null | undefined, scale: number): bigint {
   if (value === null || value === undefined || value === '') return 0n;
-  const normalized = typeof value === 'string' ? toLatinDigits(value).trim() : value;
+  if (typeof value === 'bigint') return value;
+  let strVal: string;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      throw new InvalidAmountError(`Invalid amount: "${String(value)}"`);
+    }
+    strVal = value.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits: 20 });
+  } else {
+    strVal = value;
+  }
+  const normalized = toLatinDigits(strVal).trim();
   try {
     return numberToScaled(normalized, scale);
   } catch {
@@ -293,7 +303,7 @@ export function runMoadianPreFlightValidation(
   const errors: MoadianPreFlightError[] = [];
   const invalidAmountFields = new Set<string>();
   /** Exact minor units, or null (with one AMOUNT_INVALID error per field) when the input is not a decimal. */
-  const amount = (value: number | string | null | undefined, sc: number, field: string): bigint | null => {
+  const amount = (value: number | string | bigint | null | undefined, sc: number, field: string): bigint | null => {
     try {
       return toMinorUnits(value, sc);
     } catch {
@@ -320,6 +330,11 @@ export function runMoadianPreFlightValidation(
       field: 'sellerInfo.nationalId',
       message: 'شناسه ملی یا کد اقتصادی فروشنده الزامی است.',
       code: 'SELLER_ID_MISSING',
+    });
+    errors.push({
+      field: 'sellerInfo.economicCode',
+      message: 'کد اقتصادی یا شناسه ملی فروشنده الزامی است.',
+      code: 'SELLER_ECONOMIC_CODE_MISSING',
     });
   } else {
     if (sellerId) {
@@ -499,9 +514,14 @@ export function runMoadianPreFlightValidation(
   // Moadian 0012: type-1 invoices need the buyer's identification.
   if (options?.invoiceType === 1 && !buyerId && !buyerEco) {
     errors.push({
-      field: 'buyerInfo.economicCode',
-      message: `برای صورتحساب نوع اول اطلاعات خریدار ثبت نشده است. ${MOADIAN_ERROR_HINTS['0012']} (کد 0012)`,
+      field: 'buyerInfo.nationalId',
+      message: `برای صورتحساب نوع اول شناسه ملی یا کد اقتصادی خریدار الزامی است. ${MOADIAN_ERROR_HINTS['0012']} (کد 0012)`,
       code: 'BUYER_ID_REQUIRED_TYPE1',
+    });
+    errors.push({
+      field: 'buyerInfo.economicCode',
+      message: `برای صورتحساب نوع اول کد اقتصادی یا شناسه ملی خریدار الزامی است. ${MOADIAN_ERROR_HINTS['0012']} (کد 0012)`,
+      code: 'BUYER_ECONOMIC_CODE_REQUIRED_TYPE1',
     });
   }
 
@@ -542,7 +562,7 @@ export function runMoadianPreFlightValidation(
     }
 
     // Tax rate for fiscal year & exact minor-unit line math
-    // A missing vatRate is an error: never default to 0 (exempt).
+    // VAT rate must be explicitly supplied (can be 0 for exempt items, but must not be undefined or null).
     const vatRateMissing = item.vatRate === undefined || item.vatRate === null;
     if (vatRateMissing) {
       errors.push({
@@ -553,7 +573,11 @@ export function runMoadianPreFlightValidation(
     }
     const vatRateUnits = vatRateMissing
       ? null
-      : amount(item.vatRate as number | string, LINE_RATE_DECIMALS, `${fieldPrefix}.vatRate`);
+      : amount(
+          item.vatRate != null ? String(item.vatRate) : null,
+          LINE_RATE_DECIMALS,
+          `${fieldPrefix}.vatRate`,
+        );
     if (vatRateUnits !== null) {
       const vatRateBp = divRoundHalfUp(vatRateUnits, 100n);
       const vatCheck = validateVatRateForYear(vatRateBp, expectedVatRateBp);
@@ -571,18 +595,36 @@ export function runMoadianPreFlightValidation(
 
     // Line math consistency using exact integer minor units
     // Same math as InvoicingService (shared helper): gross is never rounded per line.
-    const discountUnits = amount(item.discount ?? 0, scale, `${fieldPrefix}.discount`);
-    const quantityUnits = amount(item.quantity ?? 0, LINE_QUANTITY_DECIMALS, `${fieldPrefix}.quantity`);
-    const unitPriceUnits = amount(item.unitPrice ?? 0, scale + LINE_PRICE_EXTRA_DECIMALS, `${fieldPrefix}.unitPrice`);
-    const actualTaxUnits = item.tax !== undefined ? amount(item.tax, scale, `${fieldPrefix}.tax`) : null;
-    const actualTotalUnits = item.total !== undefined ? amount(item.total, scale, `${fieldPrefix}.total`) : null;
+    const discountUnits = amount(
+      item.discount != null ? String(item.discount) : '0',
+      scale,
+      `${fieldPrefix}.discount`,
+    );
+    const quantityUnits = amount(
+      item.quantity != null ? String(item.quantity) : '0',
+      LINE_QUANTITY_DECIMALS,
+      `${fieldPrefix}.quantity`,
+    );
+    const unitPriceUnits = amount(
+      item.unitPrice != null ? String(item.unitPrice) : '0',
+      scale + LINE_PRICE_EXTRA_DECIMALS,
+      `${fieldPrefix}.unitPrice`,
+    );
+    const actualTaxUnits =
+      item.tax !== undefined && item.tax !== null
+        ? amount(String(item.tax), scale, `${fieldPrefix}.tax`)
+        : null;
+    const actualTotalUnits =
+      item.total !== undefined && item.total !== null
+        ? amount(String(item.total), scale, `${fieldPrefix}.total`)
+        : null;
     if (
       vatRateUnits === null ||
       discountUnits === null ||
       quantityUnits === null ||
       unitPriceUnits === null ||
-      (item.tax !== undefined && actualTaxUnits === null) ||
-      (item.total !== undefined && actualTotalUnits === null)
+      (item.tax !== undefined && item.tax !== null && actualTaxUnits === null) ||
+      (item.total !== undefined && item.total !== null && actualTotalUnits === null)
     ) {
       // The amounts are not decimals: AMOUNT_INVALID is reported; math cannot be compared.
       return;
@@ -622,7 +664,10 @@ export function runMoadianPreFlightValidation(
   const calculatedTotalAmountUnits = sumGrossMinor(lineMaths);
   // With an unparseable line amount the sums are incomplete; AMOUNT_INVALID is already reported.
   const headerComparable = lineMaths.length === items.length;
-  const totalAmountUnits = invoice.totalAmount !== undefined ? amount(invoice.totalAmount, scale, 'totalAmount') : null;
+  const totalAmountUnits =
+    invoice.totalAmount !== undefined && invoice.totalAmount !== null
+      ? amount(String(invoice.totalAmount), scale, 'totalAmount')
+      : null;
   if (totalAmountUnits !== null && headerComparable && totalAmountUnits !== calculatedTotalAmountUnits) {
     errors.push({
       field: 'totalAmount',
@@ -631,7 +676,10 @@ export function runMoadianPreFlightValidation(
     });
   }
 
-  const totalDiscountUnits = invoice.totalDiscount !== undefined ? amount(invoice.totalDiscount, scale, 'totalDiscount') : null;
+  const totalDiscountUnits =
+    invoice.totalDiscount !== undefined && invoice.totalDiscount !== null
+      ? amount(String(invoice.totalDiscount), scale, 'totalDiscount')
+      : null;
   if (totalDiscountUnits !== null && headerComparable && totalDiscountUnits !== calculatedTotalDiscountUnits) {
     errors.push({
       field: 'totalDiscount',
@@ -640,7 +688,10 @@ export function runMoadianPreFlightValidation(
     });
   }
 
-  const totalTaxUnits = invoice.totalTax !== undefined ? amount(invoice.totalTax, scale, 'totalTax') : null;
+  const totalTaxUnits =
+    invoice.totalTax !== undefined && invoice.totalTax !== null
+      ? amount(String(invoice.totalTax), scale, 'totalTax')
+      : null;
   if (totalTaxUnits !== null && headerComparable && totalTaxUnits !== calculatedTotalTaxUnits) {
     errors.push({
       field: 'totalTax',
@@ -649,7 +700,10 @@ export function runMoadianPreFlightValidation(
     });
   }
 
-  const finalPayableUnits = invoice.finalPayable !== undefined ? amount(invoice.finalPayable, scale, 'finalPayable') : null;
+  const finalPayableUnits =
+    invoice.finalPayable !== undefined && invoice.finalPayable !== null
+      ? amount(String(invoice.finalPayable), scale, 'finalPayable')
+      : null;
   if (finalPayableUnits !== null && headerComparable && finalPayableUnits !== calculatedFinalPayableUnits) {
     errors.push({
       field: 'finalPayable',

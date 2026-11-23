@@ -169,10 +169,12 @@ function rialFactor(invoice: InvoiceResponseDto): number {
 }
 
 function digitsOnly(value: string | undefined | null): string | null {
-  const normalized = (value ?? '')
+  if (value === undefined || value === null) return null;
+  const trimmed = value.trim();
+  if (/\s/.test(trimmed)) return null;
+  const normalized = trimmed
     .replace(/[۰-۹]/g, (c) => String(c.charCodeAt(0) - 0x06f0))
-    .replace(/[٠-٩]/g, (c) => String(c.charCodeAt(0) - 0x0660))
-    .replace(/\s+/g, '');
+    .replace(/[٠-٩]/g, (c) => String(c.charCodeAt(0) - 0x0660));
   return /^\d+$/.test(normalized) ? normalized : null;
 }
 

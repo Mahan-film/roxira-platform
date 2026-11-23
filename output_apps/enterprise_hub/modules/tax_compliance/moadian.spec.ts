@@ -463,6 +463,9 @@ class InMemoryMoadianRepository {
     this.credentials.push(row);
     return row;
   }
+  async withInvoiceLock<T>(_tenantId: string, _invoiceId: string, work: (repo: any) => Promise<T>): Promise<T> {
+    return work(this);
+  }
   async reserveSerial(tenantId: string) {
     const row = this.credentials.find((c) => c.tenantId === tenantId)!;
     const serial = Number(row.nextSerial);

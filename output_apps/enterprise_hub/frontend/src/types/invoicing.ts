@@ -107,8 +107,9 @@ export interface InvoicePartyInfo {
 export interface InvoiceItem {
   itemId?: number | null;
   sku?: string | null;
+  /** شناسه ۱۳ رقمی کالا/خدمت در سامانه مودیان (SSTID). */
   taxCode?: string | null;
-  /** Legacy alias for taxCode (SSTID). */
+  /** @deprecated Use `taxCode` instead. Legacy alias for SSTID. */
   sstid?: string | null;
   description: string;
   quantity: number;
