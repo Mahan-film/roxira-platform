@@ -8,7 +8,7 @@
 #      rwx for mahanfilms (the controller writes single-use JIT configs; runner consumes them).
 #      ACLs instead of a shared group, so no running session needs a re-login. Also
 #      /srv/data/ci-jit/ms-playwright (browsers seeded by mahanfilms via seed_playwright.sh).
-#   2. code: scripts/ops/ci_box/jit_pool/* -> /usr/local/lib/roxira-jit (root-owned; job code
+#   2. code (launcher, jit_watchdog.py wall-time cap, light Dockerfile): scripts/ops/ci_box/jit_pool/* -> /usr/local/lib/roxira-jit (root-owned; job code
 #      running as `runner` cannot change the launcher).
 #   3. CI resource cap for everything user `runner` runs, including rootless Docker containers
 #      (brief section 7: docker slot 4 threads / 6 GB + light slot 1 thread / 2 GB):
@@ -52,7 +52,7 @@ id "$RUNNER" >/dev/null 2>&1 || { echo "FAIL  user $RUNNER missing"; exit 1; }
 id "$CTRL" >/dev/null 2>&1 || { echo "FAIL  user $CTRL missing"; exit 1; }
 RUID="$(id -u "$RUNNER")"
 RHOME="$(getent passwd "$RUNNER" | cut -d: -f6)"
-for f in jit_launcher.sh runner_setup.sh Dockerfile.light 'roxira-jit@.service'; do
+for f in jit_launcher.sh jit_watchdog.py runner_setup.sh Dockerfile.light 'roxira-jit@.service'; do
   [ -f "$SRC/$f" ] || { echo "FAIL  $SRC/$f missing (run from a checkout of the repo)"; exit 1; }
 done
 mountpoint -q /srv/data || { echo "FAIL  /srv/data is not mounted"; exit 1; }
@@ -82,11 +82,13 @@ fi
 
 echo "== 2. launcher code in $LIB"
 changed=0
-for f in jit_launcher.sh runner_setup.sh Dockerfile.light 'roxira-jit@.service'; do
+for f in jit_launcher.sh jit_watchdog.py runner_setup.sh Dockerfile.light 'roxira-jit@.service'; do
   if [ -f "$LIB/$f" ] && cmp -s "$SRC/$f" "$LIB/$f"; then ok "$LIB/$f"; else todo "$LIB/$f"; changed=1; fi
 done
 if [ "$changed" = 1 ]; then
   run install -d -o root -g root -m 0755 "$LIB"
+  # watchdog first: the launcher (which re-execs itself between jobs) calls it
+  run install -o root -g root -m 0755 "$SRC/jit_watchdog.py" "$LIB/"
   run install -o root -g root -m 0755 "$SRC/jit_launcher.sh" "$SRC/runner_setup.sh" "$LIB/"
   run install -o root -g root -m 0644 "$SRC/Dockerfile.light" "$SRC/roxira-jit@.service" "$LIB/"
 fi

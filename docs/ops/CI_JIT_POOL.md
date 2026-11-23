@@ -82,6 +82,13 @@ Updating the launcher: re-run `08_root_ci_pool.sh`. Launchers re-exec themselves
 the installed file changed; `runner_setup.sh` also restarts any launcher still running older code,
 but only while no job runs on the box (otherwise it says so; re-run the script when idle).
 
+## Job wall-time watchdog and image pin
+
+- `jit_watchdog.py` (called by `jit_launcher.sh` for both slots) kills a JIT job that runs longer than the max wall time: light slot runs `docker kill <name>`, docker slot kills the runner's process group (TERM, then KILL after 10 s). Exit code 124 appears in the launcher log as `done <name> (exit 124)`.
+- Default 1110 s: the longest real job among the last 20 completed runs (739 s, M1 gate Playwright) + 50%, rounded up. Change it without root: write seconds to `/srv/data/ci-jit/control/max-wall-s` (floor 60 s; read at each job start). `JIT_MAX_WALL_S` in the unit environment also works. If the watchdog file is missing the launcher falls back to `timeout`.
+- Install: the next run of `sudo bash scripts/ops/ci_box/08_root_ci_pool.sh` copies `jit_watchdog.py` (before the launcher) to `/usr/local/lib/roxira-jit`; running launchers re-exec between jobs. Until then the old launcher has no cap.
+- `Dockerfile.light` pins its base by sha256 digest (ubuntu 24.04 index digest). Bump by replacing the digest; `src/ops/test_jit_watchdog.py` checks the format. `10_runner_rootless_docker.sh` pre-pulls `postgres:17` by tag and CI service images use tags via `CI_IMAGE_REGISTRY`; those are not part of the runner image and are not pinned here.
+
 ## Revert
 
 1. `gh variable set CI_RUNNER_MODE -b hosted -R Mahan-film/roxira-platform` (CI is hosted again at once).
