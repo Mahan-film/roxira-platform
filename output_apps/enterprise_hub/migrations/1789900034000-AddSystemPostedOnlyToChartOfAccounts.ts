@@ -16,10 +16,10 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  *   unclassified legacy default-chart accounts only when BOTH code AND exact default Persian name
  *   match (`1020`, `1030`, `2010`).
  */
-export class AddSystemPostedOnlyToChartOfAccounts1789900022000
+export class AddSystemPostedOnlyToChartOfAccounts1789900034000
   implements MigrationInterface
 {
-  name = 'AddSystemPostedOnlyToChartOfAccounts1789900022000';
+  name = 'AddSystemPostedOnlyToChartOfAccounts1789900034000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`SET LOCAL lock_timeout = '3s'`);

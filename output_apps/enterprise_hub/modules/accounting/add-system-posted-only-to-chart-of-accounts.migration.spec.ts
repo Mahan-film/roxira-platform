@@ -1,13 +1,13 @@
 import { QueryRunner } from 'typeorm';
-import { AddSystemPostedOnlyToChartOfAccounts1789900022000 } from '../../migrations/1789900022000-AddSystemPostedOnlyToChartOfAccounts';
+import { AddSystemPostedOnlyToChartOfAccounts1789900034000 } from '../../migrations/1789900034000-AddSystemPostedOnlyToChartOfAccounts';
 
-describe('AddSystemPostedOnlyToChartOfAccounts1789900022000', () => {
-  let migration: AddSystemPostedOnlyToChartOfAccounts1789900022000;
+describe('AddSystemPostedOnlyToChartOfAccounts1789900034000', () => {
+  let migration: AddSystemPostedOnlyToChartOfAccounts1789900034000;
   let queries: string[];
   let runner: QueryRunner;
 
   beforeEach(() => {
-    migration = new AddSystemPostedOnlyToChartOfAccounts1789900022000();
+    migration = new AddSystemPostedOnlyToChartOfAccounts1789900034000();
     queries = [];
     runner = {
       query: jest.fn(async (sql: string) => {
