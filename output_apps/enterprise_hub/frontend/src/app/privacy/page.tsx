@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { GhaziHeader } from "@/components/layout/ghazi-header";
 import { EnamadFooter } from "@/components/layout/enamad-footer";
+import { PRIVACY_VERSION, SUBPROCESSORS_DOC_URL } from "@/lib/legal/legal-versions";
 
 export const metadata: Metadata = {
   title: "حریم خصوصی | سامانه هوشمند قاضی هوشمند",
@@ -13,6 +14,7 @@ export const metadata: Metadata = {
 // Keep this page in sync with what the code does (AGENTS.md section 4: free models first, and
 // free tiers may log). Last audit: 2026-10-22 (key pool config/key_pool.yaml, Cloudflare proxy +
 // Workers AI embeddings, Kavenegar, Zibal, TRON, edge-tts, Telegram backups, R2, Umami).
+// Version: PRIVACY_VERSION; subprocessors list: SUBPROCESSORS_DOC_URL.
 
 type Processor = { name: string; fa: string; en: string };
 
@@ -91,9 +93,26 @@ export default function PrivacyPage() {
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-white">سیاست حفظ حریم خصوصی</h1>
           <p className="text-xs sm:text-sm text-slate-400">
-            قاضی هوشمند (ghazihoushmand.ir) و روکسیرا (roxira.ir). آخرین بازبینی: ۳۰ مهر ۱۴۰۵.
+            نسخهٔ سند: <code className="text-emerald-300">{PRIVACY_VERSION}</code> |{" "}
+            <a
+              href={SUBPROCESSORS_DOC_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline text-emerald-300 hover:text-emerald-200"
+            >
+              فهرست پردازشگرهای فرعی (SUBPROCESSORS.md)
+            </a>
           </p>
         </section>
+
+        <article className="bg-amber-950/30 border border-amber-500/40 p-5 sm:p-6 rounded-2xl space-y-2 text-xs sm:text-sm text-amber-100">
+          <h2 className="text-sm sm:text-base font-bold text-amber-300">
+            [PLACEHOLDER — PENDING LAWYER WORDING] سیاست داده برای محصول کسب‌وکار (Roxira Business)
+          </h2>
+          <p>
+            متن حقوقی مربوط به حریم خصوصی و سیاست نگهداری داده‌های محصول کسب‌وکار پس از تأیید وکیل در این بخش جایگزین می‌شود.
+          </p>
+        </article>
 
         <div className="space-y-6 text-xs sm:text-sm text-slate-300 leading-relaxed">
           <article className="bg-amber-500/10 border border-amber-500/40 p-5 sm:p-6 rounded-2xl space-y-2">
