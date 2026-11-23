@@ -220,7 +220,7 @@ Allowed slash commands: /compact. No /swarm, /boost, /teamwork, /schedule, autom
 وقتی laneهای سازنده کارشان تمام شد، همان چت‌ها را با این چهار بلوک کمک‌بازبین کن. هر بلوک یک چهارم PRهای باز را برمی‌دارد، پس با هم تداخل ندارند. ایرادهای بازبین را بررسی می‌کنند، ایراد واقعی را درست و push می‌کنند و برای هر PR یک وضعیت می‌نویسند. حکم نهایی را همچنان بازبین خودکارِ خانوادهٔ مدل دیگر می‌دهد و هاب مرج می‌کند.
 
 
-## RV1: کمک‌بازبین 1 از ۴ (PRهایی که شماره‌شان ends in 1, 5 or 9 پایان می‌یابد؛ دقیق‌تر: PR number modulo 4 == 1)
+## RV1: کمک‌بازبین 1 از ۴ (PRهایی که PR number modulo 4 == 1)
 
 ```text
 LANE = RV1
@@ -237,7 +237,7 @@ Allowed slash commands: /compact. No /swarm, /boost, /teamwork, /schedule, autom
 ```
 
 
-## RV2: کمک‌بازبین 2 از ۴ (PRهایی که شماره‌شان ends in 2 or 6 پایان می‌یابد؛ دقیق‌تر: PR number modulo 4 == 2)
+## RV2: کمک‌بازبین 2 از ۴ (PRهایی که PR number modulo 4 == 2)
 
 ```text
 LANE = RV2
@@ -254,7 +254,7 @@ Allowed slash commands: /compact. No /swarm, /boost, /teamwork, /schedule, autom
 ```
 
 
-## RV3: کمک‌بازبین 3 از ۴ (PRهایی که شماره‌شان ends in 3, 7 or 0 پایان می‌یابد؛ دقیق‌تر: PR number modulo 4 == 3)
+## RV3: کمک‌بازبین 3 از ۴ (PRهایی که PR number modulo 4 == 3)
 
 ```text
 LANE = RV3
@@ -271,7 +271,7 @@ Allowed slash commands: /compact. No /swarm, /boost, /teamwork, /schedule, autom
 ```
 
 
-## RV4: کمک‌بازبین 4 از ۴ (PRهایی که شماره‌شان ends in 4 or 8 پایان می‌یابد؛ دقیق‌تر: PR number modulo 4 == 0)
+## RV4: کمک‌بازبین 4 از ۴ (PRهایی که PR number modulo 4 == 0)
 
 ```text
 LANE = RV4
