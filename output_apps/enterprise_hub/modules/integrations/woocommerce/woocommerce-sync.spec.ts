@@ -27,9 +27,18 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
   const tenantId = '11111111-1111-4111-8111-111111111111';
   const tenantB = '22222222-2222-4222-8222-222222222222';
 
+  const originalKey = process.env.WOOCOMMERCE_KEY_ENCRYPTION_KEY;
   beforeAll(() => {
     process.env.WOOCOMMERCE_KEY_ENCRYPTION_KEY =
       process.env.WOOCOMMERCE_KEY_ENCRYPTION_KEY || randomBytes(32).toString('hex');
+  });
+
+  afterAll(() => {
+    if (originalKey === undefined) {
+      delete process.env.WOOCOMMERCE_KEY_ENCRYPTION_KEY;
+    } else {
+      process.env.WOOCOMMERCE_KEY_ENCRYPTION_KEY = originalKey;
+    }
   });
 
   describe('Credential Encryption, Masking & SSRF Guard', () => {
@@ -313,6 +322,26 @@ describe('WooCommerce Crypto, Controller & Sync Logic (Unit Specs)', () => {
           total: '100',
           line_items: [],
         } as any),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects negative amounts in orders with BadRequestException', async () => {
+      await expect(
+        service.importOrder(tenantId, {
+          id: 205,
+          currency: 'USD',
+          total: '-50.00',
+          line_items: [],
+        } as any),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects negative or invalid priceMinor in pushStockUpdate with BadRequestException', async () => {
+      await expect(
+        service.pushStockUpdate(tenantId, 'SKU-NEG', 5, -100n),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.pushStockUpdate(tenantId, 'SKU-NAN', 5, 'not-a-bigint' as any),
       ).rejects.toThrow(BadRequestException);
     });
 

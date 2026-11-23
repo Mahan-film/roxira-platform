@@ -95,11 +95,15 @@ function parseWooAmount(val?: string | number | null): bigint {
   if (val === undefined || val === null || val === '') return 0n;
   const str = String(val).trim();
   if (!str) return 0n;
-  if (!/^-?\d+(\.\d+)?$/.test(str)) {
+  if (!/^\d+(\.\d+)?$/.test(str)) {
     throw new BadRequestException(`مبلغ ارزی نامعتبر است: ${str}`);
   }
   try {
-    return fromDb(str);
+    const amount = fromDb(str);
+    if (amount < 0n) {
+      throw new BadRequestException(`مبلغ ارزی نامعتبر است: ${str}`);
+    }
+    return amount;
   } catch {
     throw new BadRequestException(`مبلغ ارزی نامعتبر است: ${str}`);
   }
@@ -494,8 +498,10 @@ export class WooCommerceSyncService {
     if (!Number.isFinite(quantity) || quantity < 0) {
       throw new BadRequestException('Quantity must be a non-negative finite number');
     }
-    if (priceMinor !== undefined && priceMinor < 0n) {
-      throw new BadRequestException('Price must be non-negative');
+    if (priceMinor !== undefined) {
+      if (typeof priceMinor !== 'bigint' || priceMinor < 0n) {
+        throw new BadRequestException('Price must be non-negative');
+      }
     }
     const config = await this.wooRepo.findConfig(tenantId);
     if (!config) {
