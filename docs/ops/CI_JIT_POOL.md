@@ -9,7 +9,7 @@ Two ephemeral **just-in-time (JIT)** runner slots on the box, plus the offline f
 | `docker` | service containers (Postgres, Redis), compose, builds, Playwright | fresh copy of the runner template in its own work dir per job, deleted afterwards; rootless Docker of user `runner`; tool cache `/opt/hostedtoolcache` (the only path where setup-python's builds work) | unit `CPUQuota=400% MemoryMax=6G`; runner and steps pinned to CPUs 2–5 (`taskset`, so Jest/npm/Next see 4 CPUs; 0–1 stay with the phone stack), 1 job | `self-hosted, linux-box, jit, slot-docker` |
 
 Everything user `runner` runs, including rootless Docker containers, is also capped as a whole:
-`user@<runner-uid>.service` `CPUQuota=500% MemoryHigh=7G MemoryMax=8G TasksMax=8192`. Service
+`user@<runner-uid>.service` `CPUQuota=500% MemoryHigh=8G MemoryMax=9G TasksMax=8192` (MemoryHigh = the brief section 7 CI budget, 6 GB docker + 2 GB light). Service
 containers of the `docker` slot run under rootless `dockerd`, outside the slot unit, so the
 user-wide cap is what bounds them. The phone stack is not limited (priority 1; its containers run
 under the system Docker daemon). Builder lanes are limited later by `roxira-orch` (#1021).

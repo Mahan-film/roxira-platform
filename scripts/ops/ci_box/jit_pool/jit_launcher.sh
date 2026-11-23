@@ -131,6 +131,8 @@ run_docker() {
 mkdir -p "$spool" "$home"
 # Re-exec between jobs when 08_root_ci_pool.sh installed a newer launcher (never mid-job).
 self_sig="$(stat -c %Y:%i "$0" 2>/dev/null || true)"
+# runner_setup.sh compares this with the installed file to tell whether a restart is needed.
+printf '%s\n' "$self_sig" > "$spool/.launcher-sig" 2>/dev/null || true
 while :; do
   if [ "$(stat -c %Y:%i "$0" 2>/dev/null || true)" != "$self_sig" ]; then
     say "launcher updated on disk: re-exec"

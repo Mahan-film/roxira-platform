@@ -18,6 +18,9 @@
 #   BOX_DOCKER   repo variable CI_BOX_LABELS_DOCKER (JSON array, default ["self-hosted","hp"])
 #   HOSTED       repo variable CI_HOSTED_RUNNER (JSON, default "ubuntu-latest")
 #   MAX_AGE      heartbeat freshness in seconds (default 300)
+#   MAX_WAIT     longest wait between the event and this job for which the event time is used
+#                as the reference (default 5400); after that the clock is used (see below)
+#   GITHUB_EVENT_PATH  the event payload (set by the runner); read for the event time
 #   NOW          override the clock (tests)
 #
 # Rules:
@@ -29,6 +32,13 @@
 #   - MODE auto: per slot, the box when the heartbeat is fresh and that slot has an online runner,
 #     otherwise hosted. A busy runner still counts as online: the job queues on the box. Falling
 #     back on "busy" would spend the private-repo allowance on every overlap (R20 snippet #5).
+#   - Heartbeat age is measured at the event time, not now: `vars` are read when the run is
+#     created, and a main run can wait 30+ min in the concurrency queue before this job starts
+#     (run 45118378279 saw a 2213 s old heartbeat while the box was writing one every 2 min).
+#     Event time: push repository.pushed_at or head_commit.timestamp, merge_group
+#     head_commit.timestamp, pull_request updated_at. schedule and workflow_dispatch carry none
+#     and use the clock. If the job starts more than MAX_WAIT after the event, the clock is used
+#     again, so a box that died while the run waited still falls back to hosted.
 #   - Anything unparsable falls back to hosted. The job is continue-on-error in ci.yml and every
 #     consumer has `|| '"ubuntu-latest"'`, so a broken picker can never skip required checks.
 set -u
@@ -40,6 +50,7 @@ box_light="${BOX_LIGHT:-}"
 box_docker="${BOX_DOCKER:-}"
 [ -n "$box_docker" ] || box_docker='["self-hosted","hp"]'
 max_age="${MAX_AGE:-300}"
+max_wait="${MAX_WAIT:-5400}"
 now="${NOW:-$(date +%s)}"
 
 valid_box() {
@@ -105,17 +116,65 @@ read -r hb_ts hb_light hb_docker _ <<EOF
 ${HEARTBEAT:-}
 EOF
 is_int() { case "${1:-}" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac; }
+
+event_time() {
+  # prints "<epoch> <field>" for the event, or nothing
+  local f="${GITHUB_EVENT_PATH:-}"
+  [ -n "$f" ] && [ -r "$f" ] || return 0
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$f" "${EVENT:-}" <<'PYEOF' 2>/dev/null && return 0
+import json, sys
+from datetime import datetime
+ev = json.load(open(sys.argv[1]))
+fields = {
+    "push": [("repository", "pushed_at"), ("head_commit", "timestamp")],
+    "merge_group": [("merge_group", "head_commit", "timestamp")],
+    "pull_request": [("pull_request", "updated_at")],
+}.get(sys.argv[2], [])
+for path in fields:
+    v = ev
+    for k in path:
+        v = v.get(k) if isinstance(v, dict) else None
+    t = None
+    if isinstance(v, int) and not isinstance(v, bool) and v > 0:
+        t = v
+    elif isinstance(v, str) and v:
+        try:
+            t = int(datetime.fromisoformat(v.replace("Z", "+00:00")).timestamp())
+        except ValueError:
+            t = None
+    if t:
+        print(t, ".".join(path))
+        break
+PYEOF
+  fi
+  # No python3: push payloads carry repository.pushed_at as a plain integer.
+  if [ "${EVENT:-}" = push ]; then
+    local t
+    t="$(grep -o '"pushed_at": *[0-9][0-9]*' "$f" 2>/dev/null | head -1 | grep -o '[0-9][0-9]*$')"
+    is_int "$t" && echo "$t repository.pushed_at"
+  fi
+  return 0
+}
+ref="$now"; ref_src="clock"
+read -r ev_ts ev_src _ <<EOF
+$(event_time)
+EOF
+if is_int "${ev_ts:-}" && [ "$ev_ts" -le $(( now + 60 )) ] && [ $(( now - ev_ts )) -le "$max_wait" ]; then
+  ref="$ev_ts"; ref_src="event $ev_src, $(( now - ev_ts ))s ago"
+fi
+
 if ! is_int "${hb_ts:-}" || ! is_int "${hb_light:-}" || ! is_int "${hb_docker:-}"; then
   emit "$hosted" "$hosted" "hosted (auto: no box heartbeat)"
   exit 0
 fi
-age=$(( now - hb_ts ))
+age=$(( ref - hb_ts ))
 # A heartbeat from the future (clock skew) of more than a minute is not trusted either.
 if [ "$age" -gt "$max_age" ] || [ "$age" -lt -60 ]; then
-  emit "$hosted" "$hosted" "hosted (auto: box heartbeat ${age}s old)"
+  emit "$hosted" "$hosted" "hosted (auto: box heartbeat ${age}s old at ${ref_src})"
   exit 0
 fi
 light="$hosted"; docker="$hosted"
 [ "$hb_light" -gt 0 ] && [ -n "$box_light" ] && light="$box_light"
 [ "$hb_docker" -gt 0 ] && [ -n "$box_docker" ] && docker="$box_docker"
-emit "$light" "$docker" "auto (heartbeat ${age}s, light online ${hb_light}, docker online ${hb_docker})"
+emit "$light" "$docker" "auto (heartbeat ${age}s at ${ref_src}, light online ${hb_light}, docker online ${hb_docker})"

@@ -1,4 +1,5 @@
 """Tests for scripts/ci/pick_runner.sh (#949 T228 / #1024 R20-8 runner selector)."""
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -141,3 +142,102 @@ def test_image_registry_override_and_validation():
 
     bad = pick(EVENT="push", MODE="hosted", IMAGE_REGISTRY="ghcr.io/bad space")
     assert bad["image_registry"] == "mirror.gcr.io/library"
+
+
+# --- event time as the heartbeat reference ---
+# vars are read at run creation; the picker job may start much later.
+
+
+
+def _event(tmp_path, payload) -> str:
+    f = tmp_path / "event.json"
+    f.write_text(payload if isinstance(payload, str) else json.dumps(payload))
+    return str(f)
+
+
+def _iso(epoch: int) -> str:
+    from datetime import UTC, datetime
+
+    return datetime.fromtimestamp(epoch, tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def test_queued_push_run_measures_heartbeat_at_push_time(tmp_path):
+    # Run 45118378279: heartbeat written 43 s before the push, picker started 37 min later.
+    pushed = NOW - 2213 + 43
+    ev = _event(tmp_path, {"repository": {"pushed_at": pushed},
+                           "head_commit": {"timestamp": _iso(pushed)}})
+    r = pick(EVENT="push", MODE="auto", HEARTBEAT=f"{NOW - 2213} 1 1", GITHUB_EVENT_PATH=ev)
+    assert r["light"] == BOX and r["docker"] == BOX
+    assert "repository.pushed_at" in r["where"]
+
+
+def test_push_falls_back_to_head_commit_timestamp(tmp_path):
+    ev = _event(tmp_path, {"repository": {}, "head_commit": {"timestamp": _iso(NOW - 1800)}})
+    r = pick(EVENT="push", MODE="auto", HEARTBEAT=f"{NOW - 1830} 1 1", GITHUB_EVENT_PATH=ev)
+    assert r["light"] == BOX
+    assert "head_commit.timestamp" in r["where"]
+
+
+def test_merge_group_and_pull_request_use_their_event_time(tmp_path):
+    ev = _event(tmp_path, {"merge_group": {"head_commit": {"timestamp": _iso(NOW - 1200)}}})
+    assert pick(EVENT="merge_group", MODE="auto", HEARTBEAT=f"{NOW - 1250} 1 1",
+                GITHUB_EVENT_PATH=ev)["light"] == BOX
+    ev = _event(tmp_path, {"pull_request": {"updated_at": _iso(NOW - 900)}})
+    assert pick(EVENT="pull_request", HEAD_REPO="o/r", MODE="auto", HEARTBEAT=f"{NOW - 950} 1 1",
+                GITHUB_EVENT_PATH=ev)["light"] == BOX
+
+
+def test_stale_at_event_time_is_still_hosted(tmp_path):
+    ev = _event(tmp_path, {"repository": {"pushed_at": NOW - 600}})
+    r = pick(EVENT="push", MODE="auto", HEARTBEAT=f"{NOW - 1000} 1 1", GITHUB_EVENT_PATH=ev)
+    assert r["light"] == HOSTED and r["docker"] == HOSTED
+    assert "400s old" in r["where"]
+
+
+def test_wait_longer_than_max_wait_uses_the_clock(tmp_path):
+    # The box may have died while the run waited: after MAX_WAIT the event time is not trusted.
+    ev = _event(tmp_path, {"repository": {"pushed_at": NOW - 6000}})
+    r = pick(EVENT="push", MODE="auto", HEARTBEAT=f"{NOW - 6010} 1 1", GITHUB_EVENT_PATH=ev)
+    assert r["light"] == HOSTED
+    assert "at clock" in r["where"]
+    r = pick(EVENT="push", MODE="auto", HEARTBEAT=f"{NOW - 6010} 1 1", GITHUB_EVENT_PATH=ev,
+             MAX_WAIT="7200")
+    assert r["light"] == BOX
+
+
+def test_event_time_in_the_future_uses_the_clock(tmp_path):
+    ev = _event(tmp_path, {"repository": {"pushed_at": NOW + 3600}})
+    r = pick(EVENT="push", MODE="auto", HEARTBEAT=f"{NOW - 30} 1 1", GITHUB_EVENT_PATH=ev)
+    assert r["light"] == BOX and "at clock" in r["where"]
+
+
+@pytest.mark.parametrize("payload", ["not json", "{}", '{"repository": {"pushed_at": "soon"}}',
+                                     '{"repository": {"pushed_at": true}}'])
+def test_unusable_payload_uses_the_clock(tmp_path, payload):
+    ev = _event(tmp_path, payload)
+    r = pick(EVENT="push", MODE="auto", HEARTBEAT=f"{NOW - 30} 1 1", GITHUB_EVENT_PATH=ev)
+    assert r["light"] == BOX and "at clock" in r["where"]
+    r = pick(EVENT="push", MODE="auto", HEARTBEAT=f"{NOW - 2000} 1 1", GITHUB_EVENT_PATH=ev)
+    assert r["light"] == HOSTED
+
+
+@pytest.mark.parametrize("event", ["schedule", "workflow_dispatch"])
+def test_schedule_and_dispatch_keep_the_clock(tmp_path, event):
+    ev = _event(tmp_path, {"repository": {"pushed_at": NOW - 1800}})
+    r = pick(EVENT=event, MODE="auto", HEARTBEAT=f"{NOW - 1810} 1 1", GITHUB_EVENT_PATH=ev)
+    assert r["light"] == HOSTED and "at clock" in r["where"]
+
+
+def test_push_without_python_reads_pushed_at(tmp_path):
+    # ubuntu-slim may lack python3: the grep fallback covers push (the main runs).
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    for tool in ("bash", "grep", "head", "date", "cat", "printf"):
+        src = subprocess.run(["bash", "-c", f"command -v {tool}"],
+                             capture_output=True, text=True).stdout.strip()
+        if src.startswith("/"):
+            (bindir / tool).symlink_to(src)
+    ev = _event(tmp_path, json.dumps({"repository": {"pushed_at": NOW - 1800}}, indent=2))
+    r = pick(EVENT="push", MODE="auto", HEARTBEAT=f"{NOW - 1810} 1 1", GITHUB_EVENT_PATH=ev,
+             PATH=str(bindir))
+    assert r["light"] == BOX and "repository.pushed_at" in r["where"]

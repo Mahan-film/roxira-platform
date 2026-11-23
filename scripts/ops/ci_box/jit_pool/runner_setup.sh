@@ -46,7 +46,8 @@ install -m 0644 "$lib/roxira-jit@.service" "$units/roxira-jit@.service"
 # docker slot: the runner process and job steps (brief section 7: 4 threads, 6 GB). Service
 # containers run under rootless dockerd, outside this unit; the user-wide cap from the root script
 # bounds them.
-printf '[Service]\nCPUQuota=400%%\nMemoryHigh=5G\nMemoryMax=6G\nTasksMax=4096\n' > "$units/roxira-jit@docker.service.d/limits.conf"
+# No MemoryHigh below the budget: reclaim throttling at 5G slowed Jest and the timed pg specs.
+printf '[Service]\nCPUQuota=400%%\nMemoryHigh=infinity\nMemoryMax=6G\nTasksMax=4096\n' > "$units/roxira-jit@docker.service.d/limits.conf"
 # light slot: the launcher only; the container itself is limited by docker run (--cpus 1 --memory 2g).
 printf '[Service]\nCPUQuota=50%%\nMemoryMax=256M\n' > "$units/roxira-jit@light.service.d/limits.conf"
 # The old persistent runner gets the same tool cache path (setup-python needs /opt/hostedtoolcache).
@@ -61,18 +62,16 @@ else
   systemctl --user try-restart actions-runner.service && echo "old runner: restarted with /opt/hostedtoolcache"
 fi
 systemctl --user enable --now roxira-jit@light.service roxira-jit@docker.service
-# A launcher started before the installed jit_launcher.sh keeps running the old code (bash holds the
-# old file). Launchers from #1276 on re-exec themselves between jobs; older ones must be restarted.
-# Restart only when no job runs anywhere on the box: the idle JIT runner it holds is dropped, the
-# controller deletes it as offline (stale_after_s) and mints a fresh one.
-lmt="$(stat -c %Y "$lib/jit_launcher.sh")"
+# A running launcher re-execs itself between jobs when jit_launcher.sh changed (#1276 on) and then
+# writes the file's signature to <spool>/<slot>/.launcher-sig. A slot whose signature does not match
+# the installed file runs older code: restart it, but only when no job runs anywhere on the box (the
+# idle JIT runner it holds is dropped; the controller deletes it as offline and mints a fresh one).
+want_sig="$(stat -c %Y:%i "$lib/jit_launcher.sh")"
 for s in light docker; do
-  started="$(systemctl --user show -p ExecMainStartTimestamp --value "roxira-jit@$s.service" || true)"
-  [ -n "$started" ] || continue
-  st="$(date -d "$started" +%s 2>/dev/null || echo 0)"
-  [ "$st" -lt "$lmt" ] || continue
+  have_sig="$(cat "${JIT_SPOOL:-/srv/data/ci-jit/spool}/$s/.launcher-sig" 2>/dev/null || true)"
+  [ "$have_sig" != "$want_sig" ] || { echo "roxira-jit@$s: runs the installed launcher"; continue; }
   if pgrep -f 'bin/Runner.Worker' >/dev/null 2>&1; then
-    echo "roxira-jit@$s: older launcher, a job is running; rerun this script when idle"
+    echo "roxira-jit@$s: older launcher, a job is running; it re-execs after that job (rerun to check)"
   else
     systemctl --user restart "roxira-jit@$s.service" && echo "roxira-jit@$s: restarted with the new launcher"
   fi
