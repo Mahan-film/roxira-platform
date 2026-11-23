@@ -60,13 +60,14 @@ jobs:
           fi
 
       - name: Run PR Agent
-        if: steps.check_head.outputs.skip != 'true'
+        if: steps.check_head.outputs.skip != 'true' && (secrets.OPENROUTER_API_KEY_AGENTS != '' || secrets.OPENROUTER_AGENT_KEY != '')
+        continue-on-error: true
         uses: qodo-ai/pr-agent@e673a02076ce09a4726c3d0c3cc85780e59ca52b # v0.50.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OPENROUTER_KEY: ${{ secrets.OPENROUTER_AGENT_KEY }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_AGENT_KEY }}
-          OPENAI_KEY: ${{ secrets.OPENROUTER_AGENT_KEY }}
+          OPENROUTER_KEY: ${{ secrets.OPENROUTER_API_KEY_AGENTS || secrets.OPENROUTER_AGENT_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY_AGENTS || secrets.OPENROUTER_AGENT_KEY }}
+          OPENAI_KEY: ${{ secrets.OPENROUTER_API_KEY_AGENTS || secrets.OPENROUTER_AGENT_KEY }}
           CONFIG.MODEL: "openrouter/qwen/qwen3.8-27b:free"
           CONFIG.FALLBACK_MODELS: '["openrouter/google/gemma-4-31b-it:free", "openrouter/nvidia/nemotron-3-super-120b-a12b:free", "openrouter/deepseek/deepseek-v4.1-flash"]'
           CONFIG.CUSTOM_MODEL_MAX_TOKENS: "32000"
