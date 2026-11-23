@@ -31,6 +31,23 @@ def run(args, cwd=None):
     return r.stdout.strip()
 
 
+def run_checked(args, cwd=None):
+    """Like run(), but returns (ok, stdout): ok is False on OSError or a non-zero exit."""
+    try:
+        r = subprocess.run(args, capture_output=True, text=True, cwd=cwd, check=False)
+    except OSError:
+        return False, ""
+    return r.returncode == 0, r.stdout.strip()
+
+
+def inside(path, root):
+    """True when path is root or under it, compared per path component (/wt/a is not /wt/ab)."""
+    try:
+        return os.path.commonpath([path, root]) == root
+    except ValueError:
+        return False
+
+
 def log(msg):
     line = time.strftime("%F %T ") + msg
     print(line)
@@ -87,13 +104,15 @@ def is_safe(wt, idle_h, cwds, keep):
         return False, "main/missing"
     if "locked" in wt:
         return False, "locked"
-    if any(rp in k for k in keep):
+    if any(inside(rp, k) or inside(k, rp) for k in keep):
         return False, "keep-list"
-    if any(c == p or c.startswith(p + "/") or os.path.realpath(c).startswith(rp) for c in cwds):
+    if any(inside(os.path.realpath(c), rp) for c in cwds):
         return False, "in-use"
-    if run(["git", "status", "--porcelain"], p):
-        return False, "dirty"
-    if not run(["git", "branch", "-r", "--contains", "HEAD"], p):
+    ok, status = run_checked(["git", "status", "--porcelain"], p)
+    if not ok or status:
+        return False, "dirty-or-unknown"  # fail closed: a failed status check is never "clean"
+    ok, remote = run_checked(["git", "branch", "-r", "--contains", "HEAD"], p)
+    if not ok or not remote:
         return False, "not-on-remote"
     if activity_age_h(p) < idle_h:
         return False, "recent"
