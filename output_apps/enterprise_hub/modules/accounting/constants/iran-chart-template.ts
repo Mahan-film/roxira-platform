@@ -42,8 +42,9 @@ const GROUPS: ReadonlyArray<[string, string, AccountType]> = [
   ['4', 'درآمدها', REVENUE],
   ['5', 'بهای تمام‌شده و هزینه‌ها', EXPENSE],
   // Memorandum (off-balance) accounts: each 91 debit has a 92 credit, so they net to zero and stay
-  // off the statements (report line MEMORANDUM). Typed ASSET / LIABILITY only for the debit/credit nature.
-  ['9', 'حساب‌های انتظامی', ASSET],
+  // off the statements (report line MEMORANDUM). Group 9 is typed EQUITY matching canonical Iranian
+  // COA group 9 (off-balance/closing accounts).
+  ['9', 'حساب‌های انتظامی', EQUITY],
 ];
 
 const KOLS: ReadonlyArray<[string, string, AccountType]> = [
