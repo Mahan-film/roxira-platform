@@ -10,6 +10,8 @@ import {
   VendorInvoiceRequest,
   getCurrencyExponent,
   multiplyMinorByQuantity,
+  minorToExactMajorString,
+  EU_MEMBER_COUNTRIES,
 } from './vendor-invoice.generator';
 import {
   MY_B2B_INVOICE_REQUEST,
@@ -52,9 +54,9 @@ describe('VendorInvoiceGenerator (T321 / R31)', () => {
       const ledgerDto = generator.toLedgerCreateInvoiceDto(doc);
       expect(ledgerDto.taxInvoiceNumber).toBe('INV-2026-000001');
       expect(ledgerDto.direction).toBe(InvoiceDirection.SALE);
-      expect(ledgerDto.items[0].unitPrice).toBe(4500); // Major units: RM 4,500.00
+      expect(ledgerDto.items[0].unitPrice).toBe(4500); // Exact major units: RM 4,500.00
       expect(ledgerDto.items[0].vatRate).toBe(0.08);
-      expect(ledgerDto.items[1].unitPrice).toBe(500); // Major units: RM 500.00
+      expect(ledgerDto.items[1].unitPrice).toBe(500); // Exact major units: RM 500.00
       expect(ledgerDto.items[1].vatRate).toBe(0.08);
     });
   });
@@ -368,6 +370,51 @@ describe('VendorInvoiceGenerator (T321 / R31)', () => {
           tenantId: '11111111-1111-4111-8111-111111111111',
         }),
       ).toThrow(/Injected sequencer uses an asynchronous persistent store/);
+    });
+
+    it('handles multiplyMinorByQuantity with scientific notation without throwing', () => {
+      // 1e-7 quantity: 0.0000001
+      const resultSmall = multiplyMinorByQuantity(10000000n, 1e-7);
+      expect(resultSmall).toBe(1n);
+
+      // 1e-5 quantity: 0.00001
+      const resultMedium = multiplyMinorByQuantity(500000n, 1e-5);
+      expect(resultMedium).toBe(5n);
+    });
+
+    it('minorToExactMajorString formats minor units exactly without float division', () => {
+      // Normal numbers
+      expect(minorToExactMajorString(450000n, 2)).toBe('4500');
+      expect(minorToExactMajorString(450050n, 2)).toBe('4500.5');
+      expect(minorToExactMajorString(450055n, 2)).toBe('4500.55');
+      expect(minorToExactMajorString(150000n, 0)).toBe('150000');
+      expect(minorToExactMajorString(2500n, 3)).toBe('2.5');
+
+      // Extreme values > 2^53 (e.g. 10^16 minor units)
+      const hugeMinor = 10_000_000_000_000_000n;
+      expect(minorToExactMajorString(hugeMinor, 2)).toBe('100000000000000');
+      expect(minorToExactMajorString(hugeMinor + 55n, 2)).toBe('100000000000000.55');
+    });
+
+    it('toLedgerCreateInvoiceDto guards against amounts exceeding IEEE 754 safe integer limit', () => {
+      const hugeDoc = generator.generate({
+        ...MY_B2B_INVOICE_REQUEST,
+        items: [{ description: 'Exceeding', quantity: 1, unitPriceMinor: 10_000_000_000_000_000n }],
+      }, 1);
+      expect(() => generator.toLedgerCreateInvoiceDto(hugeDoc)).toThrow(BadRequestException);
+      expect(() => generator.toLedgerCreateInvoiceDto(hugeDoc)).toThrow(/exceed IEEE 754 safe integer limit/);
+    });
+
+    it('correctly resolves currency exponents for standard ISO, 0-decimal, 3-decimal, and IRT', () => {
+      expect(getCurrencyExponent('IRT')).toBe(0);
+      expect(getCurrencyExponent('IRR')).toBe(0);
+      expect(getCurrencyExponent('CLP')).toBe(0);
+      expect(getCurrencyExponent('JOD')).toBe(3);
+      expect(getCurrencyExponent('KWD')).toBe(3);
+      expect(getCurrencyExponent('EUR')).toBe(2);
+      expect(getCurrencyExponent('USD')).toBe(2);
+      expect(EU_MEMBER_COUNTRIES.has('DE')).toBe(true);
+      expect(EU_MEMBER_COUNTRIES.has('US')).toBe(false);
     });
   });
 });

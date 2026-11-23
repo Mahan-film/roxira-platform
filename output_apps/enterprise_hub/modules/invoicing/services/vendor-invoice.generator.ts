@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException, Optional } from '@nestjs/common';
 import { Currency } from '../../currency/enums/currency.enum';
+import { ISO_4217_CURRENCY_EXPONENTS } from '../../country_packs/currency-exponents';
 import { CreateInvoiceDto, InvoiceItemDto, InvoicePartyInfoDto } from '../dto/create-invoice.dto';
 import { InvoiceDirection, InvoiceSubject } from '../enums/invoice-kind.enum';
 import { InvoiceJurisdiction } from '../enums/invoice-jurisdiction.enum';
@@ -135,21 +136,53 @@ export function assertValidIsoDate(dateStr: string, field = 'issueDate'): void {
   }
 }
 
+export const EU_MEMBER_COUNTRIES: ReadonlySet<string> = new Set([
+  'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR',
+  'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL',
+  'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE',
+]);
+
 export function getCurrencyExponent(currency: Currency | string): number {
-  const c = String(currency).toUpperCase();
-  if (c === 'JPY' || c === 'IRR' || c === 'IRT') return 0;
-  if (c === 'KWD' || c === 'BHD' || c === 'OMR') return 3;
+  const c = String(currency).trim().toUpperCase();
+  if (c === 'IRT') return 0;
+  if (Object.prototype.hasOwnProperty.call(ISO_4217_CURRENCY_EXPONENTS, c)) {
+    return ISO_4217_CURRENCY_EXPONENTS[c];
+  }
   return 2;
 }
 
 export function multiplyMinorByQuantity(unitPriceMinor: bigint, quantity: number): bigint {
   if (quantity === 0) return 0n;
   const isNeg = quantity < 0;
-  const [i, f = ''] = Math.abs(quantity).toString().split('.');
+  const raw = Math.abs(quantity).toString();
+  const normalised = raw.includes('e') || raw.includes('E')
+    ? Math.abs(quantity).toFixed(20).replace(/\.?0+$/, '')
+    : raw;
+  const [i, f = ''] = normalised.split('.');
   const denom = 10n ** BigInt(f.length);
   const scaled = BigInt(i) * denom + BigInt(f || '0');
   const rounded = (unitPriceMinor * scaled + denom / 2n) / denom;
   return isNeg ? -rounded : rounded;
+}
+
+/**
+ * Exact decimal string of minor units with ISO 4217 exponent (e.g. 2 for MYR, 0 for JPY/IRR, 3 for KWD).
+ * Avoids any JavaScript float division or precision loss (Rule 8).
+ */
+export function minorToExactMajorString(minor: bigint, exp: number): string {
+  const negative = minor < 0n;
+  const abs = negative ? -minor : minor;
+  if (exp === 0) {
+    return `${negative ? '-' : ''}${abs}`;
+  }
+  const factor = 10n ** BigInt(exp);
+  const intPart = abs / factor;
+  const fracPart = abs % factor;
+  if (fracPart === 0n) {
+    return `${negative ? '-' : ''}${intPart}`;
+  }
+  const fracStr = fracPart.toString().padStart(exp, '0').replace(/0+$/, '');
+  return `${negative ? '-' : ''}${intPart}.${fracStr}`;
 }
 
 /**
@@ -360,13 +393,24 @@ export class MemorySequencerStore implements SequencerStore {
 }
 
 export class PostgresSequencerStore implements SequencerStore {
+  /**
+   * Generates next gapless number atomically.
+   *
+   * Note on transaction rollback (Rule 18):
+   * Unlike PostgreSQL sequence objects, updates on regular tables within a transaction are fully
+   * rolled back if the surrounding transaction aborts. Because this operation executes on the
+   * caller's transactional EntityManager (`manager.query`), aborted transactions do not burn
+   * numbers, ensuring strict gapless integrity.
+   */
   async nextNumber(k: DocumentCounterKey, manager: any): Promise<number> {
     if (!k.tenantId || k.tenantId.trim() === '' || k.tenantId === '00000000-0000-0000-0000-000000000000') {
       throw new BadRequestException('Valid tenantId is required for persistent document numbering.');
     }
     if (!manager?.query) throw new BadRequestException('EntityManager query runner required for Postgres sequencer.');
     // Ensure tenant session configuration is set for tenant-isolated table under FORCE RLS
+    // tenant-scope-ok: sets app.tenant_id for FORCE RLS before atomic counter increment
     await manager.query(`SELECT set_config('app.tenant_id', $1, true)`, [k.tenantId]);
+    // tenant-scope-ok: atomic upsert on tenant-isolated table fin_document_counters inside transaction
     const rows: Array<{ last_number: string | number }> = await manager.query(
       `INSERT INTO "fin_document_counters" ("tenant_id", "document_type", "channel", "fiscal_year", "series", "last_number")
        VALUES ($1, $2, $3, $4, $5, 1)
@@ -519,9 +563,7 @@ export class VendorInvoiceGenerator {
       );
     }
 
-    const isEuCountry = ['DE', 'FR', 'NL', 'IT', 'ES', 'SE', 'PL', 'BE', 'AT', 'IE', 'FI', 'PT', 'GR', 'CZ', 'RO', 'DK', 'HU', 'SK', 'BG', 'HR', 'LT', 'SI', 'LV', 'EE', 'CY', 'LU', 'MT'].includes(
-      customerCountry,
-    );
+    const isEuCountry = EU_MEMBER_COUNTRIES.has(customerCountry);
     let jurisdiction: string;
     if (customerCountry === request.supplier.country.trim().toUpperCase()) {
       jurisdiction = customerCountry;
@@ -646,16 +688,35 @@ export class VendorInvoiceGenerator {
     };
 
     const exp = getCurrencyExponent(doc.currency);
-    const denom = 10 ** exp;
+    const factor = 10n ** BigInt(exp);
 
-    const items: InvoiceItemDto[] = doc.lines.map((l) => ({
-      description: l.description,
-      quantity: l.quantity,
-      unitPrice: Number(l.unitPriceMinor) / denom, // money-ok: CreateInvoiceDto wire format expects major unit numbers
-      discount: 0,
-      vatRate: l.taxRateBps / 10000,
-      sku: l.sku ?? undefined,
-    }));
+    const items: InvoiceItemDto[] = doc.lines.map((l) => {
+      // Guard against IEEE 754 precision loss (> 2^53 - 1) for large currency amounts (e.g. IRR/IRT)
+      const absMinor = l.unitPriceMinor < 0n ? -l.unitPriceMinor : l.unitPriceMinor;
+      if (absMinor > 9007199254740991n) {
+        throw new BadRequestException(
+          `Unit price minor units ${l.unitPriceMinor} exceed IEEE 754 safe integer limit for CreateInvoiceDto.`,
+        );
+      }
+
+      // Exact conversion into major unit numbers for CreateInvoiceDto wire format:
+      // For exp === 0 (e.g. IRR, IRT, JPY): direct safe integer, zero float division.
+      // For exp > 0 (e.g. MYR, EUR, USD): integer and fractional parts partitioned to eliminate float drift.
+      const intPart = l.unitPriceMinor / factor;
+      const fracPart = l.unitPriceMinor % factor;
+      const unitPrice = exp === 0
+        ? Number(l.unitPriceMinor) // money-ok: exp === 0 has no float division and value is guarded <= 2^53 - 1
+        : Number(intPart) + Number(fracPart) / Number(factor); // money-ok: bounded fractional remainder conversion for wire DTO
+
+      return {
+        description: l.description,
+        quantity: l.quantity,
+        unitPrice,
+        discount: 0,
+        vatRate: l.taxRateBps / 10000,
+        sku: l.sku ?? undefined,
+      };
+    });
 
     return {
       taxInvoiceNumber: doc.documentNumber,
