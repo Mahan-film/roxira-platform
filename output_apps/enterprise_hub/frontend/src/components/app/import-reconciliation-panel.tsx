@@ -92,6 +92,34 @@ export function ReconciliationPanel({
                 </li>
               ))}
             </ul>
+            {report.tieOut && report.tieOut.items.length > 0 && (
+              <div className="flex flex-col gap-2 rounded-xl border border-border/70 p-3 bg-muted/20">
+                <p className="font-bold text-xs text-muted-foreground">
+                  کنترل‌های معین افتتاحیه (Tie-Out): {formatNumber(report.tieOut.passedChecks)} از {formatNumber(report.tieOut.totalChecks)} تراز
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {report.tieOut.items.map((item) => (
+                    <div
+                      key={item.category}
+                      className={`rounded-lg border p-2 text-xs ${
+                        item.matched
+                          ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-400"
+                          : "border-rose-500/30 bg-rose-500/5 text-rose-400"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between font-semibold">
+                        <span>{item.name}</span>
+                        <span>{item.matched ? "✓ تراز" : "✗ مغایرت"}</span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        مبنا: {item.expectedMoney} | واقع: {item.actualMoney}
+                        {!item.matched && ` | اختلاف: ${item.differenceMoney}`}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {report.blockersFa.map((b) => (
               <p key={b} className="text-xs text-rose-400">
                 ⛔ {b}

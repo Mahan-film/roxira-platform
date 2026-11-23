@@ -33,6 +33,7 @@ import { SalesReportService } from './services/sales-report.service';
 import { PurchasesReportService } from './services/purchases-report.service';
 import { GrossProfitReportService } from './services/gross-profit-report.service';
 import { VatRateResolver } from './services/vat-rate.resolver';
+import { EffectiveTaxTreatmentRegistry, VendorInvoiceGenerator } from './services/vendor-invoice.generator';
 import { InvoicePaymentLinkController } from './controllers/invoice-payment-link.controller';
 
 /**
@@ -88,7 +89,16 @@ import { InvoicePaymentLinkController } from './controllers/invoice-payment-link
     SalesReportService,
     PurchasesReportService,
     GrossProfitReportService,
+    EffectiveTaxTreatmentRegistry,
+    VendorInvoiceGenerator,
   ],
-  exports: [InvoicingService, InvoicingRepository, InvoicePaymentLinkService, InvoicePaymentLinkRepository],
+  exports: [
+    InvoicingService,
+    InvoicingRepository,
+    InvoicePaymentLinkService,
+    InvoicePaymentLinkRepository,
+    EffectiveTaxTreatmentRegistry,
+    VendorInvoiceGenerator,
+  ],
 })
 export class InvoicingModule {}

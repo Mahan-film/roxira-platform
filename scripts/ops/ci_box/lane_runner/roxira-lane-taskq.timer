@@ -1,0 +1,12 @@
+# systemd USER timer: starts the queue pass twice an hour, never on :00. NOT enabled by the installer: the owner
+# enables it after the smoke test passes (docs/ops/BOX_LANE_RUNNER.md).
+[Unit]
+Description=Roxira box lane queue pass (staggered, never on :00)
+
+[Timer]
+OnCalendar=*:07,37
+RandomizedDelaySec=120
+Persistent=false
+
+[Install]
+WantedBy=timers.target

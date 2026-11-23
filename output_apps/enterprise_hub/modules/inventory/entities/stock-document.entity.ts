@@ -87,10 +87,10 @@ export class StockDocumentLineEntity {
   @Column({ type: 'numeric', precision: 12, scale: 2, transformer: numeric })
   quantity: number;
 
-  @Column({ type: 'numeric', precision: 18, scale: 2, name: 'unit_cost', default: 0, transformer: numeric })
+  @Column({ type: 'numeric', precision: 20, scale: 4, name: 'unit_cost', default: 0, transformer: numeric })
   unitCost: number;
 
-  @Column({ type: 'numeric', precision: 18, scale: 2, default: 0, transformer: numeric })
+  @Column({ type: 'numeric', precision: 20, scale: 4, default: 0, transformer: numeric })
   value: number;
 
   @Column({ type: 'varchar', length: 100, name: 'batch_number', nullable: true })

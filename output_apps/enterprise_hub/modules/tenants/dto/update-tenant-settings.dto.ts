@@ -1,5 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import {
+  IsBoolean,
   IsInt,
   IsNumber,
   IsOptional,
@@ -15,18 +17,6 @@ import {
  * فیلدهای بومی‌سازی شرکت (WAVE 15 - T137 / R4 Decision 1).
  */
 export class UpdateTenantSettingsDto {
-  @ApiPropertyOptional({
-    description: 'نرخ پیش‌فرض مالیات بر ارزش افزوده (نسبت؛ ۰٫۱ = ۱۰٪)',
-    example: 0.1,
-    minimum: 0,
-    maximum: 1,
-  })
-  @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 4 })
-  @Min(0)
-  @Max(1)
-  defaultVatRate?: number;
-
   @ApiPropertyOptional({
     description: 'کد کشور سازمان (ISO 3166-1 alpha-2). پس از ثبت نخستین سند قطعی قفل می‌شود.',
     example: 'IR',
@@ -80,4 +70,14 @@ export class UpdateTenantSettingsDto {
   @Min(1)
   @Max(12)
   fiscalYearStartMonth?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'حالت بدون رصد کارکنان (BetrVG §87(1)6): داشبوردهای فعالیت فردی و آمار مصرف هوش مصنوعی کاربران را مخفی می‌کند.',
+    example: true,
+  })
+  @IsOptional()
+  @Transform(({ obj, key }) => (obj as Record<string, unknown>)[key])
+  @IsBoolean()
+  noEmployeeTelemetry?: boolean;
 }

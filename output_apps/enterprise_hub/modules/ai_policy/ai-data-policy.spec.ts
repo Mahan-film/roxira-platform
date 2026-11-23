@@ -96,5 +96,55 @@ describe('repository config/ai_data_policy.json', () => {
     const policy = loadAiDataPolicy([modelsPath], { ROXIRA_AI_DATA_MODE: 'production' });
     expect(policy.allowsRole('tenant-business', 'free')).toBe(false);
     expect(policy.allowsRole('tenant-business', 'cheap')).toBe(true);
+    expect(policy.allowsRole('tenant-business', 'eu_tenant')).toBe(true);
+  });
+
+  it('T285: EU tenant profile flag enforces EU-resident no-training route table and blocks non-EU / may-log vendors', () => {
+    const policy = loadAiDataPolicy([modelsPath], { ROXIRA_EU_TENANT_AI_PROFILE: 'true' });
+    expect(policy.mode).toBe('eu_tenant');
+    expect(policy.euProfile.enabled).toBe(true);
+    expect(policy.euProfile.defaultForTaxAdvisorTenants).toBe(true);
+    expect(policy.euProfile.allowServiceImprovementDefault).toBe(false);
+
+    // Route table: public allows all, customer data classes allow ONLY eu_no_log
+    expect(policy.allowsRole('public', 'free')).toBe(true);
+    expect(policy.allowsRole('public', 'cheap')).toBe(true);
+    expect(policy.allowsRole('public', 'eu_tenant')).toBe(true);
+    expect(policy.allowsRole('tenant-business', 'free')).toBe(false);
+    expect(policy.allowsRole('tenant-business', 'cheap')).toBe(false);
+    expect(policy.allowsRole('tenant-business', 'strong')).toBe(false);
+    expect(policy.allowsRole('tenant-business', 'eu_tenant')).toBe(true);
+    expect(policy.allowsRole('personal', 'cheap')).toBe(false);
+    expect(policy.allowsRole('personal', 'eu_tenant')).toBe(true);
+
+    // Proves blocked path: non-EU and may-log models throw AiDataPolicyError
+    expect(() => policy.assertModel('tenant-business', 'cheap', 'deepseek/deepseek-v4.1-flash')).toThrow(AiDataPolicyError);
+    expect(() => policy.assertModel('personal', 'cheap', 'qwen/qwen3.8-flash')).toThrow(AiDataPolicyError);
+    expect(() => policy.assertModel('tenant-business', 'eu_tenant', 'deepseek/deepseek-v4.1-flash')).toThrow(AiDataPolicyError);
+    expect(() => policy.assertModel('tenant-business', 'eu_tenant', 'mistralai/mistral-small:free')).toThrow(AiDataPolicyError);
+    expect(() => policy.assertModel('tenant-business', 'eu_tenant', 'mistral-medium-latest')).not.toThrow();
+
+    // filterModels keeps only EU-resident no-training models
+    const filtered = policy.filterModels('tenant-business', [
+      { id: 'deepseek/deepseek-v4.1-flash', role: 'cheap' },
+      { id: 'qwen/qwen3.8-flash', role: 'cheap' },
+      { id: 'mistralai/mistral-small-24b-instruct-2501:free', role: 'eu_tenant' },
+      { id: 'mistral-medium-latest', role: 'eu_tenant' },
+    ]);
+    expect(filtered).toEqual([{ id: 'mistral-medium-latest', role: 'eu_tenant' }]);
+  });
+
+  it('T285: forTenant() forces EU-resident no-training profile for EU and tax-advisor tenants even when global mode is test_accounts', () => {
+    const base = loadAiDataPolicy([modelsPath], {});
+    expect(base.mode).toBe('test_accounts');
+
+    const taxAdvisorPolicy = base.forTenant({ isTaxAdvisor: true });
+    expect(taxAdvisorPolicy.mode).toBe('eu_tenant');
+    expect(taxAdvisorPolicy.allowsModel('tenant-business', 'cheap', 'deepseek/deepseek-v4.1-flash')).toBe(false);
+    expect(taxAdvisorPolicy.allowsModel('tenant-business', 'eu_tenant', 'mistral-medium-latest')).toBe(true);
+
+    const euPolicy = base.forTenant({ isEuTenant: true });
+    expect(euPolicy.mode).toBe('eu_tenant');
+    expect(() => euPolicy.assertModel('personal', 'cheap', 'google/gemini-3.1-flash-lite')).toThrow(AiDataPolicyError);
   });
 });

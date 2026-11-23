@@ -14,6 +14,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "DELETE /enterprise-hub/accounting/journal-entries/:id/attachments/:attachmentId (VoucherAttachmentController.remove)": {
@@ -25,6 +26,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "DELETE /enterprise-hub/accounting/recurring-vouchers/:id (RecurringVoucherController.remove)": {
@@ -36,6 +38,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "DELETE /enterprise-hub/api-tokens/:id (ApiTokensController.revoke)": {
@@ -47,6 +50,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "DELETE /enterprise-hub/assistant/memory/:id (AssistantMemoryController.forget)": {
@@ -58,6 +62,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": true
   },
   "DELETE /enterprise-hub/banking/recon/rules/:id (ReconController.deleteRule)": {
@@ -69,6 +74,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "DELETE /enterprise-hub/banking/statement-lines/:id/match (BankingController.unmatch)": {
@@ -80,6 +86,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "DELETE /enterprise-hub/contracting/statements/:id (StatementsController.remove)": {
@@ -91,6 +98,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "DELETE /enterprise-hub/data-import/bulk/jobs/:id (BulkImportController.remove)": {
@@ -102,6 +110,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "DELETE /enterprise-hub/integrations/receipt-bot/link (ReceiptBotController.unlink)": {
@@ -113,6 +122,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "DELETE /enterprise-hub/inventory/openings/:id (OpeningBalanceController.remove)": {
@@ -124,6 +134,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "DELETE /enterprise-hub/inventory/production/boms/:id (ProductionController.deleteBom)": {
@@ -135,6 +146,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "DELETE /enterprise-hub/mcp/ (McpController.handleDelete)": {
@@ -146,6 +158,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "DELETE /enterprise-hub/posting-rules/:docType/roles/:role (PostingRulesController.clear)": {
@@ -157,6 +170,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "DELETE /enterprise-hub/sales/price-tiers/:id (PriceTiersController.deletePriceTier)": {
@@ -168,6 +182,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "DELETE /org/branches/:id (OrgController.deleteBranch)": {
@@ -179,6 +194,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "DELETE /org/departments/:id (OrgController.deleteDepartment)": {
@@ -190,6 +206,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "DELETE /org/invitations/:id (OrgController.revokeInvitation)": {
@@ -201,6 +218,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "DELETE /org/members/:id (OrgController.removeMember)": {
@@ -212,6 +230,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "DELETE /org/roles/:id (OrgController.deleteRole)": {
@@ -223,6 +242,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "DELETE /report-builder/templates/:id (ReportBuilderController.deleteTemplate)": {
@@ -234,6 +254,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /admin/entitlements/ (EntitlementsAdminController.listTenants)": {
@@ -254,6 +275,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /approvals/requests/:id (ApprovalsController.getRequest)": {
@@ -265,6 +287,7 @@
     "cheque_reviewer": true,
     "hr": true,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": true
   },
   "GET /approvals/rules (ApprovalsController.listRules)": {
@@ -276,6 +299,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /auth/me (AuthController.me)": {
@@ -302,6 +326,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/accounts/:code/ledger (AccountingController.getAccountLedger)": {
@@ -313,6 +338,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/chart-templates (FiscalYearController.listTemplates)": {
@@ -324,6 +350,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/dimensions/ (DimensionController.list)": {
@@ -335,6 +362,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/dimensions/:kind/balances (DimensionController.balances)": {
@@ -346,6 +374,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/fiscal-years (FiscalYearController.list)": {
@@ -357,6 +386,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/fixed-assets/ (FixedAssetController.list)": {
@@ -368,6 +398,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/fixed-assets/:code/schedule (FixedAssetController.schedule)": {
@@ -379,6 +410,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/fixed-assets/register (FixedAssetController.register)": {
@@ -390,6 +422,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/journal-entries (AccountingController.listJournalEntries)": {
@@ -401,6 +434,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/journal-entries/:id (AccountingController.getJournalEntry)": {
@@ -412,6 +446,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/journal-entries/:id/attachments (VoucherAttachmentController.list)": {
@@ -423,6 +458,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/journal-entries/:id/attachments/:attachmentId/download (VoucherAttachmentController.download)": {
@@ -434,6 +470,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/period-locks (AccountingController.listPeriodLocks)": {
@@ -445,6 +482,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/petty-cash/funds (PettyCashController.list)": {
@@ -456,6 +494,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/petty-cash/funds/:id (PettyCashController.statement)": {
@@ -467,6 +506,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/recurring-vouchers/ (RecurringVoucherController.list)": {
@@ -478,6 +518,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/recurring-vouchers/:id (RecurringVoucherController.findOne)": {
@@ -489,6 +530,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/reports/balance-sheet (ReportsController.balanceSheet)": {
@@ -500,6 +542,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/reports/budget-vs-actual (ReportsController.budgetVsActual)": {
@@ -511,6 +554,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/reports/cash-flow (ReportsController.cashFlow)": {
@@ -522,6 +566,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/reports/consolidated (ReportsController.consolidated)": {
@@ -533,6 +578,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/reports/dashboard (ReportsController.dashboard)": {
@@ -544,6 +590,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/reports/equity-changes (ReportsController.equityChanges)": {
@@ -555,6 +602,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/reports/export/:report (ReportsController.export)": {
@@ -566,6 +614,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/reports/income-statement (ReportsController.incomeStatement)": {
@@ -577,6 +626,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/reports/ledger (ReportsController.ledger)": {
@@ -588,6 +638,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/reports/subsidiary (ReportsController.subsidiary)": {
@@ -599,6 +650,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/reports/trial-balance (ReportsController.trialBalance)": {
@@ -610,6 +662,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/reports/trial-balance-by-cost-centre (ReportsController.trialBalanceByCostCentre)": {
@@ -621,6 +674,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/accounting/trial-balance (AccountingController.getTrialBalance)": {
@@ -632,6 +686,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/api-tokens/ (ApiTokensController.list)": {
@@ -643,6 +698,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/assistant/capture/documents (CaptureController.recent)": {
@@ -654,6 +710,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/assistant/capture/documents/:id (CaptureController.one)": {
@@ -665,6 +722,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/assistant/capture/documents/:id/source (CaptureController.source)": {
@@ -676,6 +734,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/assistant/capture/queue (CaptureController.queue)": {
@@ -687,6 +746,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/assistant/capture/settings (CaptureController.getSettings)": {
@@ -698,6 +758,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/assistant/capture/vendor-rules (CaptureController.vendorRules)": {
@@ -709,6 +770,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/assistant/memory/ (AssistantMemoryController.recall)": {
@@ -720,6 +782,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": true
   },
   "GET /enterprise-hub/assistant/status (AssistantController.status)": {
@@ -731,6 +794,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": true
   },
   "GET /enterprise-hub/banking/accounts (BankingController.listAccounts)": {
@@ -742,6 +806,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/banking/accounts/:id/book-lines (BankingController.listBookLines)": {
@@ -753,6 +818,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/banking/accounts/:id/statement-lines (BankingController.listStatementLines)": {
@@ -764,6 +830,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/banking/accounts/:id/summary (BankingController.summary)": {
@@ -775,6 +842,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/banking/cash-boxes (CashBoxController.list)": {
@@ -786,6 +854,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/banking/cash-boxes/:id (CashBoxController.get)": {
@@ -797,6 +866,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/banking/recon/audit (ReconController.audit)": {
@@ -808,6 +878,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/banking/recon/reports (ReconController.reports)": {
@@ -819,6 +890,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/banking/recon/reports/:id (ReconController.exportReport)": {
@@ -830,6 +902,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/banking/recon/rules (ReconController.rules)": {
@@ -841,6 +914,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/banking/recon/sessions (ReconController.list)": {
@@ -852,6 +926,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/banking/recon/sessions/:id (ReconController.session)": {
@@ -863,6 +938,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/banking/recon/sessions/:id/review (ReconController.review)": {
@@ -874,6 +950,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/banking/recon/settings (ReconController.settings)": {
@@ -885,6 +962,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/cheques/ (ChequesController.list)": {
@@ -896,6 +974,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/cheques/:id (ChequesController.get)": {
@@ -907,6 +986,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/cheques/bounced (ChequesController.bounced)": {
@@ -918,6 +998,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/cheques/due (ChequesController.due)": {
@@ -929,6 +1010,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/cheques/maturity-report (ChequesController.maturityReport)": {
@@ -940,6 +1022,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/cheques/reconciliation (ChequesController.reconciliation)": {
@@ -951,6 +1034,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/contracting/contracts/ (ContractsController.list)": {
@@ -962,6 +1046,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/contracting/contracts/:contractId/movements (MovementsController.list)": {
@@ -973,6 +1058,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/contracting/contracts/:contractId/statements (StatementsController.list)": {
@@ -984,6 +1070,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/contracting/contracts/:id (ContractsController.getById)": {
@@ -995,6 +1082,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/contracting/projects/ (ProjectsController.list)": {
@@ -1006,6 +1094,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/contracting/projects/:id (ProjectsController.getById)": {
@@ -1017,6 +1106,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/contracting/reports/profitability (ProfitabilityController.report)": {
@@ -1028,6 +1118,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/contracting/statements/:id (StatementsController.getById)": {
@@ -1039,6 +1130,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/crm/leads (CrmController.listLeads)": {
@@ -1050,6 +1142,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": true
   },
   "GET /enterprise-hub/crm/leads/:id (CrmController.getLead)": {
@@ -1061,6 +1154,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": true
   },
   "GET /enterprise-hub/crm/leads/:id/contacts (CrmController.listContactRecords)": {
@@ -1072,6 +1166,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": true
   },
   "GET /enterprise-hub/crm/pipeline (CrmController.getPipeline)": {
@@ -1083,6 +1178,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": true
   },
   "GET /enterprise-hub/crm/stats (CrmController.getStats)": {
@@ -1094,6 +1190,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": true
   },
   "GET /enterprise-hub/currency/ (CurrencyController.listSupported)": {
@@ -1111,6 +1208,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/damages/:id (DamagesController.findOne)": {
@@ -1122,6 +1220,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/data-import/batches (DataImportController.listBatches)": {
@@ -1133,6 +1232,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/data-import/bulk/config (BulkImportController.config)": {
@@ -1144,6 +1244,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/data-import/bulk/jobs (BulkImportController.list)": {
@@ -1155,6 +1256,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/data-import/bulk/jobs/:id (BulkImportController.get)": {
@@ -1166,6 +1268,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/data-import/bulk/jobs/:id/tables/:idx/rows (BulkImportController.rows)": {
@@ -1177,6 +1280,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/data-import/bulk/uploads/:id/parts (BulkImportController.parts)": {
@@ -1188,6 +1292,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/data-import/entities (DataImportController.listEntities)": {
@@ -1199,6 +1304,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/data-import/export/json (TenantExportController.exportJson)": {
@@ -1210,6 +1316,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/data-import/export/tabular (TenantExportController.exportTabular)": {
@@ -1221,6 +1328,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/data-import/formats (DataImportController.listFormats)": {
@@ -1232,6 +1340,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/data-import/packages/:id (DataImportController.getPackage)": {
@@ -1243,6 +1352,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/data-import/packages/:id/progress (DataImportController.getPackageProgress)": {
@@ -1254,6 +1364,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/data-import/uploads/:uploadId (DataImportController.uploadStatus)": {
@@ -1265,6 +1376,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/attendance (HrController.listAttendance)": {
@@ -1276,6 +1388,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/attendance/daily (DailyAttendanceController.getDailySummary)": {
@@ -1287,6 +1400,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/contracts (HrController.listContracts)": {
@@ -1298,6 +1412,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/contracts/:id (HrController.getContract)": {
@@ -1309,6 +1424,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/contracts/:id/allowances (HrController.listAllowances)": {
@@ -1320,6 +1436,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/employees (HrController.listEmployees)": {
@@ -1331,6 +1448,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/employees/:id (HrController.getEmployee)": {
@@ -1342,6 +1460,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/leaves (HrController.listLeaves)": {
@@ -1353,6 +1472,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/loans (HrController.listStaffLoans)": {
@@ -1364,6 +1484,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/payroll-rates/:year (HrController.getPayrollRates)": {
@@ -1375,6 +1496,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/payroll-runs (HrController.listPayrollRuns)": {
@@ -1386,6 +1508,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/payroll-runs/:id (HrController.getPayrollRun)": {
@@ -1397,6 +1520,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/payroll-runs/:id/insurance-list (HrController.getInsuranceList)": {
@@ -1408,6 +1532,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/payroll-runs/:id/payslips-pdf (HrController.getPayslipsPdf)": {
@@ -1419,6 +1544,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/payroll-runs/:id/payslips/:payslipId/pdf (HrController.getPayslipPdf)": {
@@ -1430,6 +1556,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/payroll-runs/:id/reconciliation (HrController.getPayrollReconciliation)": {
@@ -1441,6 +1568,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/payroll-runs/:id/wage-tax-files (HrController.getWageTaxFiles)": {
@@ -1452,6 +1580,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/payslips (HrController.listPayslips)": {
@@ -1463,6 +1592,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/payslips/:id (HrController.getPayslip)": {
@@ -1474,6 +1604,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/stats (HrController.getStats)": {
@@ -1485,6 +1616,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/statutory-parameters/:year (StatutoryController.list)": {
@@ -1496,6 +1628,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/statutory-parameters/:year/:key/history (StatutoryController.history)": {
@@ -1507,6 +1640,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/hr/statutory-parameters/contract-terms (StatutoryController.contractTerms)": {
@@ -1518,6 +1652,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/integrations/receipt-bot/status (ReceiptBotController.getStatus)": {
@@ -1529,6 +1664,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/documents/ (StockDocumentsController.list)": {
@@ -1540,6 +1676,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/documents/:id (StockDocumentsController.get)": {
@@ -1551,6 +1688,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/items (InventoryController.listStockItems)": {
@@ -1562,6 +1700,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/items/:id (InventoryController.getStockItem)": {
@@ -1573,6 +1712,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/items/:sku/batches (InventoryController.getStockItemBatches)": {
@@ -1584,6 +1724,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/openings/:id (OpeningBalanceController.review)": {
@@ -1595,6 +1736,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/openings/template (OpeningBalanceController.template)": {
@@ -1606,6 +1748,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/production/boms (ProductionController.listBoms)": {
@@ -1617,6 +1760,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/production/boms/:id (ProductionController.getBom)": {
@@ -1628,6 +1772,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/production/orders (ProductionController.listOrders)": {
@@ -1639,6 +1784,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/production/orders/:id (ProductionController.getOrder)": {
@@ -1650,6 +1796,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/purchasing/invoices (SupplierInvoiceController.listInvoices)": {
@@ -1661,6 +1808,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/purchasing/invoices/:id (SupplierInvoiceController.getInvoice)": {
@@ -1672,6 +1820,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/purchasing/orders (PurchaseController.listOrders)": {
@@ -1683,6 +1832,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/purchasing/orders/:id (PurchaseController.getOrder)": {
@@ -1694,6 +1844,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/purchasing/receipts (PurchaseController.listReceipts)": {
@@ -1705,6 +1856,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/purchasing/receipts/:id (PurchaseController.getReceipt)": {
@@ -1716,6 +1868,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/purchasing/requests (PurchaseController.listRequests)": {
@@ -1727,6 +1880,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/purchasing/settings (PurchaseController.getSettings)": {
@@ -1738,6 +1892,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/reports/cardex (StockReportsController.cardex)": {
@@ -1749,6 +1904,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/reports/stock-balance (StockReportsController.stockBalance)": {
@@ -1760,6 +1916,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/stores/ (StoresController.list)": {
@@ -1771,6 +1928,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/valuation (InventoryController.getFifoValuation)": {
@@ -1782,6 +1940,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/warehouses (InventoryController.listWarehouses)": {
@@ -1793,6 +1952,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/inventory/warehouses/:id/stock (InventoryController.getWarehouseStock)": {
@@ -1804,6 +1964,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/invoicing/ (InvoicingController.findAll)": {
@@ -1815,6 +1976,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/invoicing/:id (InvoicingController.findOne)": {
@@ -1826,6 +1988,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/invoicing/payment-gateway/config (InvoicePaymentLinkController.getGatewayConfig)": {
@@ -1837,6 +2000,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/invoicing/payment-links/callback (InvoicePaymentLinkController.callbackGet)": {
@@ -1851,6 +2015,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/invoicing/reports/purchases/ (PurchasesReportController.report)": {
@@ -1862,6 +2027,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/invoicing/reports/sales/ (SalesReportController.report)": {
@@ -1873,6 +2039,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/mcp/ (McpController.handleGet)": {
@@ -1884,6 +2051,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": true
   },
   "GET /enterprise-hub/parties/ (PartiesController.list)": {
@@ -1895,6 +2063,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": true
   },
   "GET /enterprise-hub/parties/by-code/:code (PartiesController.getByCode)": {
@@ -1906,6 +2075,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": true
   },
   "GET /enterprise-hub/posting-rules/ (PostingRulesController.list)": {
@@ -1917,6 +2087,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/radar/report (RadarController.getReport)": {
@@ -1937,6 +2108,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/sales/backorders (SalesDeliveryController.listBackorders)": {
@@ -1948,6 +2120,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/sales/commission-policies (PriceTiersController.listCommissionPolicies)": {
@@ -1959,6 +2132,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/sales/deliveries (SalesDeliveryController.listDeliveries)": {
@@ -1970,6 +2144,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/sales/deliveries/:id (SalesDeliveryController.getDelivery)": {
@@ -1981,6 +2156,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/sales/orders (SalesController.listOrders)": {
@@ -1992,6 +2168,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/sales/orders/:id (SalesController.getOrder)": {
@@ -2003,6 +2180,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/sales/orders/:id/fulfilment (SalesDeliveryController.getFulfilment)": {
@@ -2014,6 +2192,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/sales/orders/:id/invoicing (SalesDeliveryController.getOrderInvoicing)": {
@@ -2025,6 +2204,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/sales/price-tiers (PriceTiersController.listPriceTiers)": {
@@ -2036,6 +2216,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/sales/quotations (SalesController.listQuotations)": {
@@ -2047,6 +2228,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/sales/quotations/:id (SalesController.getQuotation)": {
@@ -2058,6 +2240,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/keys/active (TaxComplianceController.getActiveKey)": {
@@ -2069,6 +2252,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/moadian/compliance/article-6-sales-cap (MoadianController.getArticle6Cap)": {
@@ -2080,6 +2264,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/moadian/compliance/inbox-age (MoadianController.getInboxAge)": {
@@ -2091,6 +2276,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/moadian/credentials (MoadianController.getCredential)": {
@@ -2102,6 +2288,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/moadian/invoices/:invoiceId/status (MoadianController.status)": {
@@ -2113,6 +2300,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/moadian/status (MoadianController.getStatus)": {
@@ -2124,6 +2312,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/moadian/submissions (MoadianController.listSubmissions)": {
@@ -2135,6 +2324,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/reports/commercial-books.csv (LedgerExportController.commercialBooksCsv)": {
@@ -2146,6 +2336,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/reports/commercial-books.xlsx (LedgerExportController.commercialBooksXlsx)": {
@@ -2157,6 +2348,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/reports/electronic-books (LedgerExportController.electronicBooksAuto)": {
@@ -2168,6 +2360,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/reports/electronic-books.csv (LedgerExportController.electronicBooksCsv)": {
@@ -2179,6 +2372,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/reports/electronic-books.xlsx (LedgerExportController.electronicBooksXlsx)": {
@@ -2190,6 +2384,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/reports/electronic-books/presets (LedgerExportController.electronicBooksPresets)": {
@@ -2201,6 +2396,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/reports/electronic-books/preview (LedgerExportController.electronicBooksPreview)": {
@@ -2212,6 +2408,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/reports/journal.csv (LedgerExportController.journal)": {
@@ -2223,6 +2420,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/reports/ledger.csv (LedgerExportController.ledger)": {
@@ -2234,6 +2432,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/reports/quarterly-tax-comparison (SeasonalReportController.quarterlyComparison)": {
@@ -2245,6 +2444,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/reports/seasonal-purchases.csv (SeasonalReportController.purchasesCsv)": {
@@ -2256,6 +2456,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/reports/seasonal-transactions (SeasonalReportController.transactions)": {
@@ -2267,6 +2468,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/reports/seasonal-transactions.csv (SeasonalReportController.transactionsCsv)": {
@@ -2278,6 +2480,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/reports/tax-inspector-package (SeasonalReportController.taxInspectorPackage)": {
@@ -2289,6 +2492,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/reports/vat-return (SeasonalReportController.vatReturn)": {
@@ -2300,6 +2504,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/reports/vat-return/export (SeasonalReportController.vatReturnExport)": {
@@ -2311,6 +2516,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/reports/vat-seasonal (SeasonalReportController.vat)": {
@@ -2322,6 +2528,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/reports/vat-seasonal.csv (SeasonalReportController.vatCsv)": {
@@ -2333,6 +2540,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/reports/year-end-tax-rollover (SeasonalReportController.yearEndRollover)": {
@@ -2344,6 +2552,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/signatures (TaxComplianceController.findAll)": {
@@ -2355,6 +2564,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/signatures/:id (TaxComplianceController.findOne)": {
@@ -2366,6 +2576,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/signatures/:id/packet (TaxComplianceController.getPacket)": {
@@ -2377,6 +2588,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /enterprise-hub/tax-compliance/signatures/:id/verify (TaxComplianceController.verify)": {
@@ -2388,6 +2600,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/treasury/allocations (TreasuryController.allocations)": {
@@ -2399,6 +2612,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/treasury/documents (TreasuryController.list)": {
@@ -2410,6 +2624,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/treasury/documents/:id (TreasuryController.get)": {
@@ -2421,6 +2636,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/treasury/open-invoices (TreasuryController.openInvoices)": {
@@ -2432,6 +2648,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/treasury/settings (TreasuryController.settings)": {
@@ -2443,6 +2660,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/treasury/sms/drafts (TreasurySmsController.listDrafts)": {
@@ -2454,6 +2672,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/treasury/sms/drafts/:id (TreasurySmsController.getDraft)": {
@@ -2465,6 +2684,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/treasury/statements/lines (BankStatementController.lines)": {
@@ -2476,6 +2696,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/treasury/statements/settings (BankStatementController.settings)": {
@@ -2487,6 +2708,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise/inquiries/ (InquiriesController.list)": {
@@ -2507,6 +2729,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /org/audit/verify (OrgController.verifyAudit)": {
@@ -2518,6 +2741,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /org/branches (OrgController.listBranches)": {
@@ -2529,6 +2753,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /org/departments (OrgController.listDepartments)": {
@@ -2540,6 +2765,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /org/entitlements (OrgController.listEntitlements)": {
@@ -2551,6 +2777,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /org/invitations (OrgController.listInvitations)": {
@@ -2562,6 +2789,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /org/me (OrgController.me)": {
@@ -2576,6 +2804,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /org/members/:userId/login-schedule (OrgController.getLoginSchedule)": {
@@ -2587,6 +2816,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /org/module-catalogue (OrgController.moduleCatalogue)": {
@@ -2598,6 +2828,7 @@
     "cheque_reviewer": true,
     "hr": true,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": true
   },
   "GET /org/roles (OrgController.listRoles)": {
@@ -2609,6 +2840,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /org/security (OrgController.getSecurity)": {
@@ -2620,6 +2852,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /policies/ (PolicyController.list)": {
@@ -2631,6 +2864,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "GET /report-builder/datasets (ReportBuilderController.getDatasets)": {
@@ -2642,6 +2876,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /report-builder/templates (ReportBuilderController.listTemplates)": {
@@ -2653,6 +2888,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /report-builder/templates/:id (ReportBuilderController.getTemplate)": {
@@ -2664,6 +2900,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /search/ (SearchController.search)": {
@@ -2675,6 +2912,7 @@
     "cheque_reviewer": true,
     "hr": true,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": true
   },
   "GET /tenants/me (TenantsController.me)": {
@@ -2686,6 +2924,7 @@
     "cheque_reviewer": true,
     "hr": true,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": true
   },
   "GET /tenants/me/onboarding/ (OnboardingController.get)": {
@@ -2697,6 +2936,7 @@
     "cheque_reviewer": true,
     "hr": true,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": true
   },
   "PATCH /enterprise-hub/assistant/capture/documents/:id (CaptureController.update)": {
@@ -2708,6 +2948,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "PATCH /enterprise-hub/crm/leads/:id (CrmController.updateLead)": {
@@ -2719,6 +2960,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": true
   },
   "PATCH /enterprise-hub/crm/leads/:id/stage (CrmController.updateLeadStage)": {
@@ -2730,6 +2972,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": true
   },
   "PATCH /enterprise-hub/hr/employees/:id (HrController.updateEmployee)": {
@@ -2741,6 +2984,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PATCH /enterprise-hub/hr/leaves/:id/review (HrController.reviewLeave)": {
@@ -2752,6 +2996,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PATCH /enterprise-hub/inventory/items/:id (InventoryController.updateStockItem)": {
@@ -2763,6 +3008,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PATCH /enterprise-hub/inventory/stores/:id (StoresController.update)": {
@@ -2774,6 +3020,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PATCH /enterprise-hub/inventory/warehouses/:id (InventoryController.updateWarehouse)": {
@@ -2785,6 +3032,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PATCH /enterprise-hub/invoicing/:id (InvoicingController.update)": {
@@ -2796,6 +3044,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PATCH /enterprise-hub/invoicing/:id/cancel (InvoicingController.cancel)": {
@@ -2807,6 +3056,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PATCH /enterprise-hub/invoicing/:id/pay (InvoicingController.pay)": {
@@ -2818,6 +3068,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PATCH /org/branches/:id (OrgController.updateBranch)": {
@@ -2829,6 +3080,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PATCH /org/members/:id (OrgController.updateMember)": {
@@ -2840,6 +3092,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PATCH /org/roles/:id (OrgController.updateRole)": {
@@ -2851,6 +3104,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PATCH /org/security (OrgController.setSecurity)": {
@@ -2862,6 +3116,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PATCH /tenants/me/onboarding/ (OnboardingController.update)": {
@@ -2873,6 +3128,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PATCH /tenants/me/settings (TenantsController.updateSettings)": {
@@ -2884,6 +3140,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /api/integrations/receipt-bot/webhook (ReceiptBotWebhookController.handleWebhook)": {
@@ -2898,6 +3155,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /approvals/delegations/:id/revoke (ApprovalsController.revokeDelegation)": {
@@ -2909,6 +3167,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /approvals/policy-changes/group-b (ApprovalsController.requestGroupBPolicyChange)": {
@@ -2920,6 +3179,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /approvals/requests (ApprovalsController.createRequest)": {
@@ -2931,6 +3191,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /approvals/requests/:id/decide (ApprovalsController.decide)": {
@@ -2942,6 +3203,7 @@
     "cheque_reviewer": true,
     "hr": true,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": true
   },
   "POST /approvals/rules (ApprovalsController.upsertRule)": {
@@ -2953,6 +3215,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /auth/login (AuthController.login)": {
@@ -3018,6 +3281,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/chart-templates/:key/apply (FiscalYearController.applyTemplate)": {
@@ -3029,6 +3293,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/dimensions/ (DimensionController.create)": {
@@ -3040,6 +3305,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/fiscal-years (FiscalYearController.create)": {
@@ -3051,6 +3317,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/fiscal-years/:id/close (FiscalYearController.close)": {
@@ -3062,6 +3329,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/fiscal-years/:id/reopen (FiscalYearController.reopen)": {
@@ -3073,6 +3341,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/fixed-assets/ (FixedAssetController.create)": {
@@ -3084,6 +3353,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/fixed-assets/:id/dispose (FixedAssetController.dispose)": {
@@ -3095,6 +3365,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/fixed-assets/depreciation-runs (FixedAssetController.run)": {
@@ -3106,6 +3377,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/journal-entries (AccountingController.createJournalEntry)": {
@@ -3117,6 +3389,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/journal-entries/:id/attachments (VoucherAttachmentController.upload)": {
@@ -3128,6 +3401,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/journal-entries/:id/copy (AccountingController.copyJournalEntry)": {
@@ -3139,6 +3413,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/journal-entries/:id/reverse (AccountingController.reverseJournalEntry)": {
@@ -3150,6 +3425,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/journal-entries/:id/status (AccountingController.changeJournalEntryStatus)": {
@@ -3161,6 +3437,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/period-locks (AccountingController.lockPeriod)": {
@@ -3172,6 +3449,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/period-locks/:id/unlock (AccountingController.unlockPeriod)": {
@@ -3183,6 +3461,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/petty-cash/funds (PettyCashController.create)": {
@@ -3194,6 +3473,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/petty-cash/funds/:id/charge (PettyCashController.charge)": {
@@ -3205,6 +3485,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/petty-cash/funds/:id/close (PettyCashController.close)": {
@@ -3216,6 +3497,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/petty-cash/funds/:id/expenses (PettyCashController.addExpense)": {
@@ -3227,6 +3509,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/petty-cash/funds/:id/expenses/:expenseId/void (PettyCashController.voidExpense)": {
@@ -3238,6 +3521,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/petty-cash/funds/:id/return (PettyCashController.returnCash)": {
@@ -3249,6 +3533,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/petty-cash/funds/:id/settle (PettyCashController.settle)": {
@@ -3260,6 +3545,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/recurring-vouchers/ (RecurringVoucherController.create)": {
@@ -3271,6 +3557,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/accounting/recurring-vouchers/run-due (RecurringVoucherController.runDue)": {
@@ -3282,6 +3569,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/api-tokens/ (ApiTokensController.create)": {
@@ -3293,6 +3581,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/assistant/capture/documents (CaptureController.create)": {
@@ -3304,6 +3593,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/assistant/capture/documents/:id/post (CaptureController.post)": {
@@ -3315,6 +3605,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/assistant/capture/documents/:id/reject (CaptureController.reject)": {
@@ -3326,6 +3617,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/assistant/capture/documents/:id/reverse (CaptureController.reverse)": {
@@ -3337,6 +3629,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/assistant/capture/documents/:id/review (CaptureController.review)": {
@@ -3348,6 +3641,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/assistant/chat (AssistantController.chat)": {
@@ -3359,6 +3653,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": true
   },
   "POST /enterprise-hub/assistant/memory/ (AssistantMemoryController.confirm)": {
@@ -3370,6 +3665,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": true
   },
   "POST /enterprise-hub/banking/accounts (BankingController.createAccount)": {
@@ -3381,6 +3677,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/banking/accounts/:id/auto-match (BankingController.autoMatch)": {
@@ -3392,6 +3689,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/banking/cash-boxes (CashBoxController.create)": {
@@ -3403,6 +3701,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/banking/pos-settlements (CashBoxController.settlePos)": {
@@ -3414,6 +3713,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/banking/recon/drafts/:id/reject (ReconController.reject)": {
@@ -3425,6 +3725,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/banking/recon/drafts/:id/reverse (ReconController.reverse)": {
@@ -3436,6 +3737,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/banking/recon/drafts/approve (ReconController.approve)": {
@@ -3447,6 +3749,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/banking/recon/items/:id/answer (ReconController.answer)": {
@@ -3458,6 +3761,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/banking/recon/items/:id/attachments (ReconController.attach)": {
@@ -3469,6 +3773,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/banking/recon/sessions (ReconController.upload)": {
@@ -3480,6 +3785,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/banking/recon/sessions/:id/answers (ReconController.answerCheck)": {
@@ -3491,6 +3797,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/banking/recon/sessions/:id/commit (ReconController.commit)": {
@@ -3502,6 +3809,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/banking/recon/sessions/:id/create-account (ReconController.createAccount)": {
@@ -3513,6 +3821,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/banking/recon/sessions/:id/mapping (ReconController.mapping)": {
@@ -3524,6 +3833,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/banking/recon/sessions/:id/matches/:groupId (ReconController.decide)": {
@@ -3535,6 +3845,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/banking/recon/sessions/:id/rematch (ReconController.rematch)": {
@@ -3546,6 +3857,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/banking/recon/sessions/:id/report (ReconController.report)": {
@@ -3557,6 +3869,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/banking/statement-lines/:id/journal-entry (BankingController.createEntry)": {
@@ -3568,6 +3881,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/banking/statement-lines/:id/match (BankingController.match)": {
@@ -3579,6 +3893,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/banking/transfers/cash-bank (CashBoxController.transfer)": {
@@ -3590,6 +3905,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/cheques/ (ChequesController.create)": {
@@ -3601,6 +3917,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/cheques/:id/partial-payment (ChequesController.partialPayment)": {
@@ -3612,6 +3929,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/cheques/:id/sayad-verification (ChequesController.verifySayad)": {
@@ -3623,6 +3941,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/cheques/:id/transition (ChequesController.transition)": {
@@ -3634,6 +3953,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/cheques/calculator/discount (ChequesController.calculateDiscount)": {
@@ -3645,6 +3965,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/cheques/calculator/rasgiri (ChequesController.calculateRasgiri)": {
@@ -3656,6 +3977,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/cheques/calculator/selection-discount (ChequesController.calculateSelectionDiscount)": {
@@ -3667,6 +3989,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/cheques/calculator/selection-rasgiri (ChequesController.calculateSelectionRasgiri)": {
@@ -3678,6 +4001,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/cheques/calculator/single-discount (ChequesController.calculateSingleDiscount)": {
@@ -3689,6 +4013,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/cheques/reconciliation/apply (ChequesController.reconApply)": {
@@ -3700,6 +4025,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/cheques/reconciliation/match (ChequesController.reconMatch)": {
@@ -3711,6 +4037,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/client-errors/ (ClientErrorsController.report)": {
@@ -3725,6 +4052,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/contracting/contracts/:contractId/advances (MovementsController.advance)": {
@@ -3736,6 +4064,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/contracting/contracts/:contractId/retention-releases (MovementsController.release)": {
@@ -3747,6 +4076,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/contracting/contracts/:contractId/statements (StatementsController.create)": {
@@ -3758,6 +4088,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/contracting/projects/ (ProjectsController.create)": {
@@ -3769,6 +4100,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/contracting/statements/:id/approve (StatementsController.approve)": {
@@ -3780,6 +4112,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/contracting/statements/:id/post (StatementsController.post)": {
@@ -3791,6 +4124,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/crm/leads (CrmController.createLead)": {
@@ -3802,6 +4136,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": true
   },
   "POST /enterprise-hub/crm/leads/:id/contacts (CrmController.addContactRecord)": {
@@ -3813,6 +4148,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": true
   },
   "POST /enterprise-hub/crm/leads/:id/notes (CrmController.addLeadNote)": {
@@ -3824,6 +4160,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": true
   },
   "POST /enterprise-hub/currency/revaluation (CurrencyController.revalueMonthEnd)": {
@@ -3835,6 +4172,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/damages/ (DamagesController.create)": {
@@ -3846,6 +4184,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/damages/bulk (DamagesController.createBulk)": {
@@ -3857,6 +4196,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/data-import/:entity/preview (DataImportController.previewForEntity)": {
@@ -3868,6 +4208,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/data-import/batches/:batchId/undo (DataImportController.undoBatch)": {
@@ -3879,6 +4220,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/data-import/bulk/jobs/:id/approve (BulkImportController.approve)": {
@@ -3890,6 +4232,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/data-import/bulk/jobs/:id/cancel (BulkImportController.cancel)": {
@@ -3901,6 +4244,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/data-import/bulk/jobs/:id/pause (BulkImportController.pause)": {
@@ -3912,6 +4256,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/data-import/bulk/jobs/:id/resume (BulkImportController.resume)": {
@@ -3923,6 +4268,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/data-import/bulk/jobs/:id/retry (BulkImportController.retry)": {
@@ -3934,6 +4280,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/data-import/bulk/uploads (BulkImportController.start)": {
@@ -3945,6 +4292,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/data-import/bulk/uploads/:id/complete (BulkImportController.complete)": {
@@ -3956,6 +4304,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/data-import/bulk/uploads/:id/sign (BulkImportController.sign)": {
@@ -3967,6 +4316,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/data-import/commit (DataImportController.commit)": {
@@ -3978,6 +4328,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/data-import/crm-leads/commit (DataImportController.commitCrmLeads)": {
@@ -3989,6 +4340,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/data-import/crm-leads/preview (DataImportController.previewCrmLeads)": {
@@ -4000,6 +4352,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/data-import/dry-run/holoo (ImportDryRunController.dryRunHoloo)": {
@@ -4011,6 +4364,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/data-import/dry-run/sepidar (ImportDryRunController.dryRunSepidar)": {
@@ -4022,6 +4376,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/data-import/packages (DataImportController.createPackage)": {
@@ -4033,6 +4388,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/data-import/packages/:id/commit (DataImportController.commitPackage)": {
@@ -4044,6 +4400,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/data-import/packages/:id/reconcile (DataImportController.reconcilePackage)": {
@@ -4055,6 +4412,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/data-import/packages/:id/review (DataImportController.reviewPackage)": {
@@ -4066,6 +4424,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/data-import/packages/from-uploads (DataImportController.createPackageFromUploads)": {
@@ -4077,6 +4436,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/data-import/preview (DataImportController.preview)": {
@@ -4088,6 +4448,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/data-import/sepidar/persist (DataImportController.persistSepidar)": {
@@ -4099,6 +4460,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/data-import/uploads (DataImportController.initUpload)": {
@@ -4110,6 +4472,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/hr/attendance (HrController.recordAttendance)": {
@@ -4121,6 +4484,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/hr/attendance/events (DailyAttendanceController.recordEvent)": {
@@ -4132,6 +4496,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/hr/attendance/import-csv (DailyAttendanceController.importCsv)": {
@@ -4143,6 +4508,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/hr/attendance/rollup (DailyAttendanceController.rollupMonthly)": {
@@ -4154,6 +4520,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/hr/contracts (HrController.createContract)": {
@@ -4165,6 +4532,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/hr/employees (HrController.createEmployee)": {
@@ -4176,6 +4544,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/hr/employees/:id/settlement (HrController.previewSettlement)": {
@@ -4187,6 +4556,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/hr/leaves (HrController.requestLeave)": {
@@ -4198,6 +4568,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/hr/loans (HrController.createStaffLoan)": {
@@ -4209,6 +4580,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/hr/payroll-runs (HrController.createPayrollRun)": {
@@ -4220,6 +4592,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/hr/payroll-runs/:id/post (HrController.postPayrollRun)": {
@@ -4231,6 +4604,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/hr/payroll/calculate (HrController.calculatePayroll)": {
@@ -4242,6 +4616,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/hr/payslips (HrController.issuePayslip)": {
@@ -4253,6 +4628,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/integrations/receipt-bot/link-code (ReceiptBotController.generateCode)": {
@@ -4264,6 +4640,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/documents/adjustments (StockDocumentsController.createAdjustment)": {
@@ -4275,6 +4652,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/documents/deliveries (StockDocumentsController.createDelivery)": {
@@ -4286,6 +4664,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/documents/receipts (StockDocumentsController.createReceipt)": {
@@ -4297,6 +4676,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/documents/transfers (StockDocumentsController.createTransfer)": {
@@ -4308,6 +4688,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/items (InventoryController.createStockItem)": {
@@ -4319,6 +4700,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/movements/inbound (InventoryController.receiveStock)": {
@@ -4330,6 +4712,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/movements/outbound (InventoryController.issueStock)": {
@@ -4341,6 +4724,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/openings/ (OpeningBalanceController.create)": {
@@ -4352,6 +4736,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/openings/:id/post (OpeningBalanceController.post)": {
@@ -4363,6 +4748,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/openings/:id/review (OpeningBalanceController.markReviewed)": {
@@ -4374,6 +4760,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/production/boms (ProductionController.createBom)": {
@@ -4385,6 +4772,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/production/boms/:id/explode (ProductionController.explodeBom)": {
@@ -4396,6 +4784,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/production/orders (ProductionController.createOrder)": {
@@ -4407,6 +4796,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/production/orders/:id/cancel (ProductionController.cancelOrder)": {
@@ -4418,6 +4808,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/production/orders/:id/complete (ProductionController.completeOrder)": {
@@ -4429,6 +4820,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/production/orders/:id/start (ProductionController.startOrder)": {
@@ -4440,6 +4832,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/purchasing/invoices/:id/accept (SupplierInvoiceController.acceptInvoice)": {
@@ -4451,6 +4844,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/purchasing/invoices/:id/post (SupplierInvoiceController.postInvoice)": {
@@ -4462,6 +4856,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/purchasing/orders (PurchaseController.createOrder)": {
@@ -4473,6 +4868,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/purchasing/orders/:id/approve (PurchaseController.approveOrder)": {
@@ -4484,6 +4880,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/purchasing/orders/:id/cancel (PurchaseController.cancelOrder)": {
@@ -4495,6 +4892,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/purchasing/orders/:id/close (PurchaseController.closeOrder)": {
@@ -4506,6 +4904,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/purchasing/orders/:id/receipts (PurchaseController.createReceipt)": {
@@ -4517,6 +4916,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/purchasing/orders/:orderId/invoices (SupplierInvoiceController.createInvoice)": {
@@ -4528,6 +4928,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/purchasing/receipts/:id/landed-costs (LandedCostController.createLandedCost)": {
@@ -4539,6 +4940,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/purchasing/requests (PurchaseController.createRequest)": {
@@ -4550,6 +4952,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/purchasing/requests/:id/cancel (PurchaseController.cancelRequest)": {
@@ -4561,6 +4964,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/purchasing/requests/:id/convert (PurchaseController.convertRequest)": {
@@ -4572,6 +4976,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/stores/ (StoresController.create)": {
@@ -4583,6 +4988,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/inventory/warehouses (InventoryController.createWarehouse)": {
@@ -4594,6 +5000,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/invoicing/ (InvoicingController.create)": {
@@ -4605,6 +5012,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/invoicing/invoices/:id/payment-link (InvoicePaymentLinkController.createPaymentLink)": {
@@ -4616,6 +5024,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/invoicing/payment-gateway/config (InvoicePaymentLinkController.configureGateway)": {
@@ -4627,6 +5036,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/invoicing/payment-links/callback (InvoicePaymentLinkController.callbackPost)": {
@@ -4641,6 +5051,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/invoicing/pos-sales/sync (PosSalesController.sync)": {
@@ -4652,6 +5063,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/mcp/ (McpController.handlePost)": {
@@ -4663,6 +5075,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": true
   },
   "POST /enterprise-hub/parties/ (PartiesController.create)": {
@@ -4674,6 +5087,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": true
   },
   "POST /enterprise-hub/radar/run-swarm (RadarController.runSwarm)": {
@@ -4691,6 +5105,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/sales/commission/calculate (PriceTiersController.calculateCommission)": {
@@ -4702,6 +5117,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/sales/invoices/:invoiceId/returns (SalesReturnController.createReturn)": {
@@ -4713,6 +5129,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/sales/invoices/from-deliveries (SalesDeliveryController.createInvoiceFromDelivery)": {
@@ -4724,6 +5141,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/sales/orders (SalesController.createOrder)": {
@@ -4735,6 +5153,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/sales/orders/:id/cancel (SalesController.cancelOrder)": {
@@ -4746,6 +5165,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/sales/orders/:id/confirm (SalesController.confirmOrder)": {
@@ -4757,6 +5177,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/sales/orders/:id/deliveries (SalesDeliveryController.createDelivery)": {
@@ -4768,6 +5189,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/sales/price-tiers (PriceTiersController.createPriceTier)": {
@@ -4779,6 +5201,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/sales/price-tiers/resolve (PriceTiersController.resolvePrice)": {
@@ -4790,6 +5213,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/sales/quotations (SalesController.createQuotation)": {
@@ -4801,6 +5225,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/sales/quotations/:id/convert (SalesController.convertQuotation)": {
@@ -4812,6 +5237,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/sales/quotations/:id/status (SalesController.changeQuotationStatus)": {
@@ -4823,6 +5249,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/tax-compliance/business-tax/preview (BusinessTaxController.preview)": {
@@ -4834,6 +5261,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/tax-compliance/corporate-tax/preview (CorporateTaxController.preview)": {
@@ -4845,6 +5273,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/tax-compliance/csr (TaxComplianceController.generateCsr)": {
@@ -4856,6 +5285,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/tax-compliance/doctor-withholding/preview (DoctorWithholdingController.preview)": {
@@ -4867,6 +5297,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/tax-compliance/kartable/reconcile (KartableReconciliationController.reconcile)": {
@@ -4878,6 +5309,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/tax-compliance/keys (TaxComplianceController.generateKeyPair)": {
@@ -4889,6 +5321,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/tax-compliance/moadian/compliance/check-article-6-cap (MoadianController.checkArticle6Cap)": {
@@ -4900,6 +5333,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/tax-compliance/moadian/invoices/:invoiceId/submit (MoadianController.submit)": {
@@ -4911,6 +5345,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/tax-compliance/rental-tax/preview (RentalTaxController.preview)": {
@@ -4922,6 +5357,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/tax-compliance/sign-invoice (TaxComplianceController.signInvoice)": {
@@ -4933,6 +5369,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/tax-compliance/signatures/:id/submit (TaxComplianceController.submit)": {
@@ -4944,6 +5381,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/treasury/documents (TreasuryController.create)": {
@@ -4955,6 +5393,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/treasury/documents/:id/allocations (TreasuryController.allocate)": {
@@ -4966,6 +5405,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/treasury/sms/capture (TreasurySmsController.capture)": {
@@ -4977,6 +5417,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/treasury/sms/drafts/:id/confirm (TreasurySmsController.confirmDraft)": {
@@ -4988,6 +5429,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/treasury/sms/drafts/:id/reject (TreasurySmsController.rejectDraft)": {
@@ -4999,6 +5441,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/treasury/sms/parse (TreasurySmsController.parse)": {
@@ -5010,6 +5453,7 @@
     "cheque_reviewer": true,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/treasury/statements/import (BankStatementController.import)": {
@@ -5021,6 +5465,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/treasury/statements/lines/:id/confirm (BankStatementController.confirm)": {
@@ -5032,6 +5477,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise/inquiries/ (InquiriesController.create)": {
@@ -5052,6 +5498,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /org/departments (OrgController.createDepartment)": {
@@ -5063,6 +5510,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /org/invitations (OrgController.invite)": {
@@ -5074,6 +5522,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /org/members (OrgController.createManagedMember)": {
@@ -5085,6 +5534,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /org/members/:id/password (OrgController.resetManagedPassword)": {
@@ -5096,6 +5546,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /org/module-requests (OrgController.requestModule)": {
@@ -5107,6 +5558,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /org/roles (OrgController.createRole)": {
@@ -5118,6 +5570,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /report-builder/export (ReportBuilderController.exportReport)": {
@@ -5129,6 +5582,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /report-builder/query (ReportBuilderController.executeQuery)": {
@@ -5140,6 +5594,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /report-builder/templates (ReportBuilderController.saveTemplate)": {
@@ -5151,6 +5606,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "PUT /admin/entitlements/:tenantId (EntitlementsAdminController.set)": {
@@ -5165,6 +5621,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "PUT /enterprise-hub/accounting/recurring-vouchers/:id (RecurringVoucherController.update)": {
@@ -5176,6 +5633,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "PUT /enterprise-hub/accounting/reports/budgets (ReportsController.setBudget)": {
@@ -5187,6 +5645,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PUT /enterprise-hub/assistant/capture/settings (CaptureController.putSettings)": {
@@ -5198,6 +5657,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PUT /enterprise-hub/assistant/capture/vendor-rules/:vendorId (CaptureController.putRule)": {
@@ -5209,6 +5669,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PUT /enterprise-hub/banking/recon/settings (ReconController.updateSettings)": {
@@ -5220,6 +5681,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PUT /enterprise-hub/contracting/contracts/:id (ContractsController.update)": {
@@ -5231,6 +5693,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "PUT /enterprise-hub/contracting/projects/:id (ProjectsController.update)": {
@@ -5242,6 +5705,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "PUT /enterprise-hub/data-import/bulk/uploads/:id/parts/:n (BulkImportController.putPart)": {
@@ -5253,6 +5717,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PUT /enterprise-hub/data-import/uploads/:uploadId/chunks/:index (DataImportController.putChunk)": {
@@ -5264,6 +5729,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PUT /enterprise-hub/hr/contracts/:id/allowances (HrController.replaceAllowances)": {
@@ -5275,6 +5741,7 @@
     "cheque_reviewer": false,
     "hr": true,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PUT /enterprise-hub/hr/statutory-parameters/ (StatutoryController.set)": {
@@ -5286,6 +5753,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PUT /enterprise-hub/integrations/receipt-bot/preferences (ReceiptBotController.updatePreferences)": {
@@ -5297,6 +5765,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "PUT /enterprise-hub/inventory/openings/:id/lines (OpeningBalanceController.replaceLines)": {
@@ -5308,6 +5777,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PUT /enterprise-hub/inventory/purchasing/settings (PurchaseController.updateSettings)": {
@@ -5319,6 +5789,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PUT /enterprise-hub/parties/:id (PartiesController.update)": {
@@ -5330,6 +5801,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": true
   },
   "PUT /enterprise-hub/posting-rules/:docType/roles/:role (PostingRulesController.set)": {
@@ -5341,6 +5813,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PUT /enterprise-hub/sales/orders/:id (SalesController.updateOrder)": {
@@ -5352,6 +5825,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PUT /enterprise-hub/sales/quotations/:id (SalesController.updateQuotation)": {
@@ -5363,6 +5837,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PUT /enterprise-hub/tax-compliance/moadian/credentials (MoadianController.putCredential)": {
@@ -5374,6 +5849,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PUT /enterprise-hub/treasury/settings (TreasuryController.setSettings)": {
@@ -5385,6 +5861,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PUT /enterprise-hub/treasury/statements/settings (BankStatementController.updateSettings)": {
@@ -5396,6 +5873,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PUT /org/members/:userId/login-schedule (OrgController.setLoginSchedule)": {
@@ -5407,6 +5885,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PUT /policies/:key (PolicyController.set)": {
@@ -5418,6 +5897,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PUT /tenants/me/onboarding/profile (OnboardingController.saveProfile)": {
@@ -5429,6 +5909,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PUT /tenants/me/onboarding/steps/:step (OnboardingController.setStep)": {
@@ -5440,6 +5921,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   }
 }

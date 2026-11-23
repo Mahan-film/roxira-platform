@@ -45,13 +45,13 @@ export class TenantsService {
     dto: UpdateTenantSettingsDto,
   ): Promise<TenantEntity> {
     const fields: Partial<TenantEntity> = {};
-    if (dto.defaultVatRate !== undefined) fields.defaultVatRate = dto.defaultVatRate;
     if (dto.countryCode !== undefined) fields.countryCode = dto.countryCode.toUpperCase();
     if (dto.bookCurrencyCode !== undefined) fields.bookCurrencyCode = dto.bookCurrencyCode.toUpperCase();
     if (dto.defaultCalendar !== undefined) fields.defaultCalendar = dto.defaultCalendar;
     if (dto.timezone !== undefined) fields.timezone = dto.timezone;
     if (dto.locale !== undefined) fields.locale = dto.locale;
     if (dto.fiscalYearStartMonth !== undefined) fields.fiscalYearStartMonth = dto.fiscalYearStartMonth;
+    if (dto.noEmployeeTelemetry !== undefined) fields.noEmployeeTelemetry = dto.noEmployeeTelemetry;
 
     const tenant = await this.tenantsRepository.updateSettings(tenantId, fields);
     if (!tenant) {

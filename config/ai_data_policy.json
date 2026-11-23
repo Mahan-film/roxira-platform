@@ -5,18 +5,32 @@
   "_mode_comment": "THE SWITCH. test_accounts = owner decision 2026-10-14 (AGENTS.md section 4): all customers are test accounts, data is not confidential, so free / may-log providers are allowed for every class. Change to production BEFORE onboarding real paying customers with confidential data. Emergency flip without a deploy: env ROXIRA_AI_DATA_MODE=production.",
   "provider_classes": {
     "non_sensitive_only": "may_log",
-    "standard": "no_log"
+    "standard": "no_log",
+    "eu_no_log": "eu_no_log"
+  },
+  "eu_tenant_profile": {
+    "enabled": false,
+    "env_flag": "ROXIRA_EU_TENANT_AI_PROFILE",
+    "default_for_tax_advisor_tenants": true,
+    "allow_service_improvement_default": false,
+    "allowed_residency": ["eu"],
+    "allowed_vendor_prefixes": ["mistral", "mistralai"]
   },
   "modes": {
     "test_accounts": {
-      "public": ["may_log", "no_log"],
-      "tenant-business": ["may_log", "no_log"],
-      "personal": ["may_log", "no_log"]
+      "public": ["may_log", "no_log", "eu_no_log"],
+      "tenant-business": ["may_log", "no_log", "eu_no_log"],
+      "personal": ["may_log", "no_log", "eu_no_log"]
     },
     "production": {
-      "public": ["may_log", "no_log"],
-      "tenant-business": ["no_log"],
-      "personal": ["no_log"]
+      "public": ["may_log", "no_log", "eu_no_log"],
+      "tenant-business": ["no_log", "eu_no_log"],
+      "personal": ["no_log", "eu_no_log"]
+    },
+    "eu_tenant": {
+      "public": ["may_log", "no_log", "eu_no_log"],
+      "tenant-business": ["eu_no_log"],
+      "personal": ["eu_no_log"]
     }
   }
 }

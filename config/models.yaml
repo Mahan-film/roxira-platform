@@ -90,6 +90,23 @@ retired:
     reason: "Google shutdown (14 Jan 2026)"
 
 roles:
+  # ---- EU / tax-advisor sovereign runtime tier (T285 / R29) ----------------
+  eu_tenant:
+    description: >
+      EU-resident, no-training inference role for EU tenants and German tax-advisor
+      tenants (section 62a Abs. 4 StBerG). Only EU-resident providers with zero
+      training / no prompt logging are permitted. Non-EU and may-log providers are
+      blocked in code by AiDataPolicy when the EU tenant profile is active.
+    data_policy: eu_no_log
+    residency: eu
+    models:
+      - id: mistral-medium-latest
+        provider: mistral
+        residency: eu
+        no_training: true
+        price_per_1m: null
+        catalogue_listed: false
+
   # ---- Product runtime tiers (docs/STRATEGY.md §3b) -----------------------
   free:
     description: Non-sensitive background work — crawler summaries, SEO text, tagging, tech radar.

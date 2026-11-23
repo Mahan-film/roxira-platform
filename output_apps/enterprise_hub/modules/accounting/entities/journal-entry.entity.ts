@@ -23,6 +23,9 @@ import { JournalEntryLineEntity } from './journal-entry-line.entity';
   unique: true,
 })
 @Index('IDX_fin_journal_entries_tenant_date', ['tenantId', 'date'])
+@Index('IDX_fin_journal_entries_tenant_tag', ['tenantId', 'tag'], {
+  where: '"tag" IS NOT NULL',
+})
 export class JournalEntryEntity {
   @PrimaryGeneratedColumn()
   id: number;
@@ -87,6 +90,18 @@ export class JournalEntryEntity {
     default: JournalEntryType.NORMAL,
   })
   entryType: JournalEntryType;
+
+  /**
+   * برچسب اختیاری سند (مانند PARTNER_ADJUSTMENT برای اسناد تعدیلی حسابدار مؤسسه).
+   */
+  @Column({ type: 'varchar', length: 64, name: 'tag', nullable: true })
+  tag: string | null;
+
+  /**
+   * شناسه کاربر مؤسسه حسابداری ثبت‌کننده سند (R16 Test 12 / T196).
+   */
+  @Column({ type: 'uuid', name: 'firm_user_id', nullable: true })
+  firmUserId: string | null;
 
   @OneToMany(() => JournalEntryLineEntity, (line) => line.journalEntry, {
     cascade: true,

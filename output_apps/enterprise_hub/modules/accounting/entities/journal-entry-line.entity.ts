@@ -56,10 +56,10 @@ export class JournalEntryLineEntity {
   @JoinColumn({ name: 'account_id' })
   account: ChartOfAccountEntity;
 
-  @Column({ type: 'numeric', precision: 18, scale: 2, default: 0 })
+  @Column({ type: 'numeric', precision: 20, scale: 4, default: 0 })
   debit: string;
 
-  @Column({ type: 'numeric', precision: 18, scale: 2, default: 0 })
+  @Column({ type: 'numeric', precision: 20, scale: 4, default: 0 })
   credit: string;
 
   /**
@@ -111,8 +111,8 @@ export class JournalEntryLineEntity {
   /** مبلغ بدهکار به ارز معامله (Transaction Currency). */
   @Column({
     type: 'numeric',
-    precision: 18,
-    scale: 2,
+    precision: 20,
+    scale: 4,
     name: 'tx_debit',
     nullable: true,
   })
@@ -121,8 +121,8 @@ export class JournalEntryLineEntity {
   /** مبلغ بستانکار به ارز معامله (Transaction Currency). */
   @Column({
     type: 'numeric',
-    precision: 18,
-    scale: 2,
+    precision: 20,
+    scale: 4,
     name: 'tx_credit',
     nullable: true,
   })
@@ -131,8 +131,8 @@ export class JournalEntryLineEntity {
   /** مبلغ بدهکار به ارز دفاتر (Book / Reporting Currency). */
   @Column({
     type: 'numeric',
-    precision: 18,
-    scale: 2,
+    precision: 20,
+    scale: 4,
     name: 'book_debit',
     nullable: true,
   })
@@ -141,12 +141,51 @@ export class JournalEntryLineEntity {
   /** مبلغ بستانکار به ارز دفاتر (Book / Reporting Currency). */
   @Column({
     type: 'numeric',
-    precision: 18,
-    scale: 2,
+    precision: 20,
+    scale: 4,
     name: 'book_credit',
     nullable: true,
   })
   bookCredit: string | null;
+
+  /** کد ارز گزارش‌گیری (Reporting Currency, ISO 4217). */
+  @Column({
+    type: 'varchar',
+    length: 8,
+    name: 'reporting_currency_code',
+    nullable: true,
+  })
+  reportingCurrencyCode: string | null;
+
+  /** نرخ تبدیل ارز دفاتر به ارز گزارش‌گیری (دقت ۶ رقم اعشار). */
+  @Column({
+    type: 'numeric',
+    precision: 24,
+    scale: 6,
+    name: 'reporting_fx_rate',
+    nullable: true,
+  })
+  reportingFxRate: string | null;
+
+  /** مبلغ بدهکار به ارز گزارش‌گیری (Reporting Currency). */
+  @Column({
+    type: 'numeric',
+    precision: 20,
+    scale: 4,
+    name: 'reporting_debit',
+    nullable: true,
+  })
+  reportingDebit: string | null;
+
+  /** مبلغ بستانکار به ارز گزارش‌گیری (Reporting Currency). */
+  @Column({
+    type: 'numeric',
+    precision: 20,
+    scale: 4,
+    name: 'reporting_credit',
+    nullable: true,
+  })
+  reportingCredit: string | null;
 
   /** نشانگر سطر تعدیل گردکردن ناشی از تسعیر ارز. */
   @Column({

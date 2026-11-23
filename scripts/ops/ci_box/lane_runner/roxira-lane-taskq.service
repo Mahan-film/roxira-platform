@@ -1,0 +1,17 @@
+# systemd USER unit: one pass over the box-local taskq (public tasks only, gateway ladder only). Started by the timer.
+# @REPO@ and @STATE@ are filled in by install_user.sh. No secrets: lane-run reads the virtual key from gateway.env.
+[Unit]
+Description=Roxira box lane queue pass (taskq once, gateway only)
+After=roxira-gateway-tunnel.service
+Wants=roxira-gateway-tunnel.service
+
+[Service]
+Type=oneshot
+Environment=ROXIRA_AGENTS_HOME=@STATE@
+Environment=TASKQ_BUDGETS=@REPO@/scripts/ops/ci_box/lane_runner/lane_budgets.box.json
+Environment=TASKQ_RUNNER=@REPO@/scripts/ops/ci_box/lane_runner/taskq-runner.sh
+Environment=TASKQ_REVIEW=0
+Environment=TASKQ_NOTIFY=0
+ExecStart=/usr/bin/python3 @REPO@/scripts/infra/server_agents/taskq.py run --once --max-parallel 1 --stagger 20
+TimeoutStartSec=3600
+Nice=10

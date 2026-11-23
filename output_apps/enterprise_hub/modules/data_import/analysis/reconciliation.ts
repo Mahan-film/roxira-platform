@@ -6,7 +6,18 @@
 
 import { createHash } from 'crypto';
 import { PackageTableReader } from '../parsers/package-source.types';
-import { EntityImportAdapter } from '../registry/import-registry.types';
+import {
+  EntityImportAdapter,
+  NormalisedRecord,
+} from '../registry/import-registry.types';
+import {
+  EffectiveTieOutConfig,
+  TieOutCategory,
+} from './effective-tie-out-config.registry';
+import {
+  ImportTieOutEngine,
+  TieOutSummary,
+} from './import-tie-out.engine';
 import { PackageAnalysis } from './package-analysis';
 import { buildRecords, concreteMapping } from './record-builder';
 
@@ -43,6 +54,28 @@ export interface ReconciliationReport {
   balanced: boolean;
   blockersFa: string[];
   warningsFa: string[];
+  /** گزارش جامع موتور مغایرت‌گیری سرفصل‌های کنترل افتتاحیه (TB, AR/AP, Stock, Bank). */
+  tieOut?: TieOutSummary;
+}
+
+export interface ReconcilePackageOptions {
+  asOfDate?: string;
+  currency?: string;
+  customConfig?: Partial<EffectiveTieOutConfig>;
+  controlTotals?: Partial<Record<TieOutCategory, number | string | bigint>>;
+  tieOutEngine?: ImportTieOutEngine;
+}
+
+export const BANK_STATEMENT_ENTITY_KEY = 'bank-statement';
+
+const ENTITY_KEY_ALIASES: Readonly<Record<string, string>> = {
+  'bank-statements': BANK_STATEMENT_ENTITY_KEY,
+  bank_statement: BANK_STATEMENT_ENTITY_KEY,
+  bank_statements: BANK_STATEMENT_ENTITY_KEY,
+};
+
+function canonicalEntityKey(entity: string): string {
+  return ENTITY_KEY_ALIASES[entity] ?? entity;
 }
 
 const DEBIT_CREDIT: Record<string, { debit: string; credit: string }> = {
@@ -57,7 +90,7 @@ export function selectionKey(selections: ReconcileSelection[]): string {
     .filter((s) => !s.skip)
     .map((s) => ({
       n: s.name,
-      e: s.entity,
+      e: canonicalEntityKey(s.entity),
       m: Object.entries(s.mapping ?? {}).sort(([a], [b]) => a.localeCompare(b)),
       u: s.moneyToRial ?? 1,
     }))
@@ -65,21 +98,49 @@ export function selectionKey(selections: ReconcileSelection[]): string {
   return createHash('sha256').update(JSON.stringify(canonical)).digest('hex').slice(0, 32);
 }
 
+/** Deterministic cache key covering table selections plus tie-out options (date, currency, control totals). */
+export function reconciliationCacheKey(
+  selections: ReconcileSelection[],
+  options?: Pick<ReconcilePackageOptions, 'asOfDate' | 'currency' | 'controlTotals' | 'customConfig'>,
+): string {
+  const baseKey = selectionKey(selections);
+  if (!options || (!options.asOfDate && !options.currency && !options.controlTotals && !options.customConfig)) {
+    return baseKey;
+  }
+  const controlTotals = options.controlTotals
+    ? Object.entries(options.controlTotals)
+        .filter(([, v]) => v !== undefined)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => [k, String(v).trim()])
+    : null;
+  const payload = {
+    baseKey,
+    asOfDate: options.asOfDate ?? null,
+    currency: options.currency ? options.currency.trim().toUpperCase() : null,
+    controlTotals,
+    customConfig: options.customConfig ?? null,
+  };
+  return createHash('sha256').update(JSON.stringify(payload)).digest('hex').slice(0, 32);
+}
+
 export function reconcilePackage(
   tables: PackageTableReader[],
   analysis: PackageAnalysis | undefined,
   adapters: EntityImportAdapter[],
   selections: ReconcileSelection[],
+  options?: ReconcilePackageOptions,
 ): ReconciliationReport {
   const result: TableReconciliation[] = [];
   const blockersFa: string[] = [];
   const warningsFa: string[] = [];
+  const recordsByEntity = new Map<string, NormalisedRecord[]>();
   let debit = 0;
   let credit = 0;
 
   for (const selection of selections.filter((s) => !s.skip)) {
     const table = tables.find((t) => t.name === selection.name);
-    const adapter = adapters.find((a) => a.key === selection.entity);
+    const entityKey = canonicalEntityKey(selection.entity);
+    const adapter = adapters.find((a) => a.key === entityKey);
     if (!table || !adapter) {
       warningsFa.push(`جدول یا موجودیت «${selection.name}» برای مغایرت‌گیری یافت نشد.`);
       continue;
@@ -91,6 +152,10 @@ export function reconcilePackage(
     );
     const moneyToRial = selection.moneyToRial && selection.moneyToRial > 0 ? selection.moneyToRial : 1;
     const { records, invalidRows } = buildRecords(adapter, table, mapping, { moneyToRial });
+
+    // تجمیع ردیف‌ها به تفکیک موجودیت جهت موتور مغایرت‌گیری کنترل‌ها
+    const existing = recordsByEntity.get(adapter.key) ?? [];
+    recordsByEntity.set(adapter.key, [...existing, ...records]);
 
     const mappedColumns = new Set(Object.keys(mapping));
     const unmappedColumns = table.columns.map((c) => c.name).filter((name) => !mappedColumns.has(name));
@@ -163,6 +228,24 @@ export function reconcilePackage(
     result.push(row);
   }
 
+  // ارزیابی موتور مغایرت‌گیری کنترل‌های سرفصل افتتاحیه (TB, AR, AP, Stock, Bank)
+  const tieOutEngine = options?.tieOutEngine ?? new ImportTieOutEngine();
+  const tieOut = tieOutEngine.evaluateTieOuts({
+    recordsByEntity,
+    asOfDate: options?.asOfDate,
+    currency: options?.currency,
+    customConfig: options?.customConfig,
+    controlTotals: options?.controlTotals,
+  });
+
+  if (!tieOut.passed) {
+    blockersFa.push(...tieOut.blockersFa);
+  }
+  const tieOutWarnings = (tieOut as { warningsFa?: string[] }).warningsFa;
+  if (Array.isArray(tieOutWarnings) && tieOutWarnings.length > 0) {
+    warningsFa.push(...tieOutWarnings);
+  }
+
   const balanced = blockersFa.length === 0;
   return {
     key: selectionKey(selections),
@@ -170,6 +253,10 @@ export function reconcilePackage(
     totals: { debit, credit, difference: debit - credit },
     balanced,
     blockersFa,
-    warningsFa: [...warningsFa, ...result.flatMap((t) => t.warningsFa.map((w) => `«${t.name}»: ${w}`))],
+    warningsFa: [
+      ...warningsFa,
+      ...result.flatMap((t) => t.warningsFa.map((w) => `«${t.name}»: ${w}`)),
+    ],
+    tieOut,
   };
 }

@@ -19,8 +19,14 @@ if [ "${#args[@]}" -eq 0 ]; then
   exit 0
 fi
 printf 'lockfiles: %s\n' "$(( ${#args[@]} / 2 ))"
+
+cfg_args=()
+if [ -f "osv-scanner.toml" ]; then
+  cfg_args=("--config" "osv-scanner.toml")
+fi
+
 if [ -n "$OUT" ]; then
-  "$OSV" scan source "${args[@]}" --format json --output-file "$OUT"
+  "$OSV" scan source "${cfg_args[@]}" "${args[@]}" --format json --output-file "$OUT"
 else
-  "$OSV" scan source "${args[@]}" --format table
+  "$OSV" scan source "${cfg_args[@]}" "${args[@]}" --format table
 fi

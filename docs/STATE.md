@@ -1,109 +1,66 @@
 # Current state (read this first)
 
-> **Last update: 2026-11-21 (main hub, Claude on the Mac, before the Mac's Claude account switch).**
-> Older state: `git log -p docs/STATE.md`. New hub: `docs/hub/HUB_START.md` →
-> `docs/hub/MAIN_HUB_MASTER_BRIEF.md` → this file. Laptop: `docs/hub/BOX_HUB_MASTER_BRIEF.md`.
-> Live GitHub data beats this file. Rebuild it with `gh pr list` and the latest WAVE/BOX: comments on #592 and #965.
+> **Last update: 2026-11-23 evening (main hub, Claude Opus 5.5 on the Mac).**
+> New hub: `docs/hub/HUB_START.md` -> `docs/hub/MAIN_HUB_MASTER_BRIEF.md` -> this file. Laptop: `docs/hub/BOX_HUB_MASTER_BRIEF.md`.
+> Live GitHub data beats this file: `gh pr list`, the newest `## WAVE`, `HUB -> LANES`, `BOX:` and `HUB→BOX:` comments on #592, and `HUB-ANSWER`/`ASK-BOX` on #965.
 
-The owner speaks Persian: reply in Persian; code, commits and docs in English. The owner wants full automation: hand over a command only for a secret, a physical action, sudo on the laptop or a production write.
+The owner speaks Persian: reply in Persian; code, commits and docs in English. Never name the owners' country ("the default pack").
+The owner wants maximum pressure on Antigravity lanes and cheap agents (Haiku/Sonnet 5.5) for hub work; the hub plans, reviews and merges.
 
-## Direction
-- **Product first:** CRM/ERP/accounting/tax usable globally (default pack live; DE/EU next, then the Gulf), plus Smart Judge (web and phone). No company, market or pricing work until the product is complete.
-- **Hub = chief architect, planner and reviewer.** Lanes build; the hub writes rows, routes reviews, merges and runs production steps. Lowest cost, free models first.
-- Map of every decision: `docs/STRATEGY_NOW.md`. Research digests: `docs/strategy/research/` (R1–R21).
+## Hub discipline
+- ONE acting Mac hub chat. The Mac hub never administers or SSHes into the Linux box; GitHub is the control plane (#592 notes, #965 answers).
+- Secrets: clipboard relay only (never files on the Mac, never AirDrop). Do not rotate `box-lanes` again unless exposed.
+- **Merge = production write** (autodeploy about every 5 min). Merge check (lesson 37): desk `Verdict: no blocker` naming the CURRENT head, CI green at job level,
+  no comment newer than the head with `Verdict: blocker`, not on the Held list. Use the merge queue: `gh pr merge N --auto --match-head-commit <sha>`.
+- Protected paths (migrations, auth, payment, Dockerfile.prod, deploy scripts, workflows, nginx, production compose) need the owner's answer for that PR;
+  the hub then posts `OWNER-OK @ <sha>` and queues it. B1 core (Smart Judge core prompts/algorithms, billing, pricing, tax rules, ALL `country_packs/**`) is human-hub only.
+- Private flip: only the owners say "go private". The box plans it for 2026-11-25 after its merge gate goes live; the hub told the box on #965 it needs the owners' own sentence.
 
-## People and accounts (changed 2026-11-21)
-- The Mac's Claude login moves to the colleague, now the main owner. The current Claude account moves to the Linux laptop (box hub). The hub's context lives in git, so nothing is lost (`docs/hub/HUB_START.md` §2a).
-- GitHub does not change: Mac gh `mahan-films` (id 226124844), laptop gh `mahansudo` (id 211047265), both with full repo access.
-- **O-1 (open, the two partners decide):** who approves production writes and spending. Default until they say otherwise: the person running the Mac hub.
+## Box standing rules (accepted on #965, 2026-11-23)
+- The box hub may merge `agent/claude-mahansudo/*` PRs, and its merge gate may merge lane PRs, when: desk no blocker at head, required checks green, no B1 core.
+  Main-hub conditions: also refuse on any newer `Verdict: blocker`, the Held list, or a desk note that a critical file was truncated. The main hub may revert.
+- `CI_RUNNER_MODE=auto` is agreed; never set `CI_RUNS_ON`. Never edit box timers, gate config or runners: ask with `ASK-BOX:` on #965.
+- Owner approver account (numeric id 243877284) invited read-level; the box registers it in `owner_approver_ids`.
 
-## How work flows
-- **Queues:** GitHub issues labelled `lane:L1`…`lane:L7` (+ `prio:1..3`, `research-row`, `filler`). Each lane follows the latest `## WAVE` comment on #592. Open issues 2026-11-21: L1 22, L2 7, L3 12, L4 22, L5 13, L6 7, L7 10.
-- **Mac:** main hub + Antigravity L1–L4 (the owner pastes `docs/antigravity/prompts/L1..L4.txt` and relays the hub's messages).
-- **Laptop `roxira-ci`:** box hub (Claude, gh `mahansudo`) + L5–L7 (Gemini CLI/OpenCode headless), runner, phone stack. Reports go to #592 as `BOX:`.
-- **Mac → laptop without the owner:** `WAVE:` comments on #965 (`scripts/dev/hub_wave.sh`). A systemd timer on the laptop runs them with `claude -p` and answers `REPORT:` (`scripts/dev/hub_reports.sh`). Built in #1028. Being installed now (Phase 0, `BOX:` reports of 2026-11-21, fixes in #1035).
-- **Review:** `gh workflow run review-desk.yml` once, never with `-f pr`. Merge on "no blocker" for the current head with `gh pr merge N --auto` (the merge queue sets the strategy).
-- **Push:** `LOCAL_CI_SKIP_PYTEST=1 FRESH_DB_PORT=<unique> git push`. Pre-push now also runs gitleaks (#1032); re-run `bash scripts/dev/install_hooks.sh` in every clone.
+## Fleet (Antigravity, all on the Mac until the laptop's Antigravity works)
+- One stable prompt per lane in `docs/antigravity/PROMPTS_FA.md` (also `prompts/L<n>.txt`): no wave or issue numbers; the queue is the newest `## WAVE` on #592.
+  The owner re-pastes the same block every round. Mac cap 8 chats. Running: L1-L8 (L7 is box-only). L9-L12 start when L1-L8 ease off.
+- Slash policy: `/swarm` only L8/L11 (max 3 workers, own working copies), `/boost` L3/L5 for one hard bug, `/teamwork` and `/schedule` never.
+- Worktrees and caches go to the external SSD: `/Volumes/ssd/roxira-work` (APFS, case-sensitive, encrypted) via `source scripts/dev/lane_env.sh`; `claim.sh` uses it.
+  The other SSD partition is exFAT: not for git. Mac system disk had about 14 GiB free on 2026-11-23.
+- Owner guide: `docs/owner/ANTIGRAVITY_GUIDE_FA.md`.
 
-## Live (production `ssh roxira-prod`, repo `/opt/roxira_platform`)
-- **Services:** Docker Compose with nginx, NestJS backend, Next.js, FastAPI AI core + Smart Judge (`roxira_app_prod`), Postgres 17, PgBouncer, Redis, Qdrant, TEI embeddings, LiteLLM key pool, research + SearXNG, mail, Umami, Twenty CRM. RAM 52%, **disk 80%** (plan a cleanup before 85%).
-- **Timers:** autodeploy (pull every 5 min), hourly encrypted off-site backups + DR drill, monitors and Telegram, radar, rulings update, self-improve, digest.
-- **Phone gateway key** `SMARTJUDGE_PHONE_GATEWAY_KEY` is set (64 characters). A copy is in the Mac's `~/Secrets/roxira/roxira.env` since 2026-11-21. The Mac file also holds the same three Groq keys as production.
-- **WAL-G** code is merged (#886) but off until `/etc/roxira/walg.env` exists.
+## WAVE 32 (2026-11-23): finish every open PR
+- 50 PRs were triaged read-only. Fix queue (25) belongs to L8, with each lane taking its own. Claims are on #592 (`taking PR #N (Lx)`).
+- Hub agents fixed #850 (new `country_packs/try-resolve-pack.ts`, so it is now B1 core: the hub reviews it), #1313, #1314, and posted evidence on #1312 (false alarms); #1310 was already fixed.
+- Merged 2026-11-23 after the owner's yes: #1227 #1271 #1301 #1303 (OWNER-OK), #1275 (box lane policy), #1342 (SSD + stable prompts), #1355, #1363 (RV prompts, if the queue finished).
+  #1201 (OWNER-OK) is still open: check why it left the queue before re-queuing. The queue stall of 07:12 UTC ended after the box set `CI_RUNNER_MODE=main` (09:17 UTC).
+- **Review helpers:** finished builder chats run RV1-RV4 (`docs/antigravity/PROMPTS_FA.md`, end of file). Each takes open PRs with number mod 4, fixes real desk findings on the PR branch,
+  and posts `Lane check (RVn) @ <sha>: READY FOR HUB | NEEDS OWNER | BLOCKED`. They never write a verdict line. The hub merges READY ones after a clean desk verdict at the same head.
+- L9-L12 and RV1-RV4 were running at the end of the 2026-11-23 session.
+- Held: #1309 (Python 3.11 -> 3.13 on the AI-core image is untested at runtime; the PR lists four fixes for L1), #943 (L5 checks the WHT journal sign), #1311 (hub blocker: Number() on money, phone in logs).
+- Waiting for the owner, after the five above: #831 (auth function), #663 (nginx cache); planned restart window: #1072, #1198, #1200; #1302 (relaxes OSV).
+- Closed: #889 and #1237 (replaced by #1239).
 
-## Merged 2026-11-20/21
-- #1025: account-independent hub memory (`docs/hub/`).
-- #1026: R21 research.
-- #1027: R20 digest fix.
-- #1028: agent bridge.
-- #1029: merge gate, dry-run.
-- #1030: laptop mirror/export + reliability pack.
-- #1032: gitleaks/OSV/Semgrep.
-- #1033: box hub master brief.
+## New rows 2026-11-23
+- #1343 L1 reviewdog + semgrep rules (money as Number, PII in logs). #1344 L1 pr-agent (MIT) on our own keys as a second reviewer. CodeRabbit (free on public repos) is the owner's choice.
+- #1348 L4 (B1 core, hub review): apply law valid_from/valid_to on every Smart Judge retrieval path; document that law collections are public (no tenant filter).
 
-## Open PRs (2026-11-21)
-- **Lane PRs with blockers:**
-
-  | Lane | PRs |
-  |------|-----|
-  | L1 | #831, #850, #771 |
-  | L2 | #868, #763 |
-  | L3 | #728, #854, #955 |
-  | L4 | #805 |
-  | L5 | #943, #963, #964 |
-
-- **Hub and ops PRs:** #889, #892 (conflicts), #972 (T232), #999 (licence gate), #1005 (merge desk), #1012 and #1014 (docs).
-- **Laptop:** #1035 (gh 2.46 fixes).
-- **Old drafts:** #663 (needs owner), #350.
-
-## Production steps waiting (each needs the owner's explicit sentence)
-1. **WAL-G:** create `/etc/roxira/walg.env` and restart Postgres in a maintenance window.
-2. **After #831:** T200 restricted DB role (<1 min downtime) + cross-tenant smoke test.
-3. **After #926 (T212):** switch `LIGHTRAG_QDRANT_COLLECTION` to v7b. After #927, clean up old Qdrant collections, which also frees disk.
-4. **After #972:** confirm a dirty tree can no longer block autodeploy. The radar drop-in hot-fix stays until then.
-5. **#1020:** read-only deploy key + signed-tag guard for migrations.
-
-## Laptop work order
-`docs/hub/BOX_HUB_MASTER_BRIEF.md` §9:
-1. Phase 0: install the bridge, merge gate, mirror, reliability and phone keys.
-2. Phase 1: #947, #949, #1024.
-3. Phase 2: #1021 orch v0, #1022 egress, #951 merge desk go-live.
-4. Phase 3: #987–#990 phone and evals.
+## Production
+- `ssh roxira-prod`, `/opt/roxira_platform`. Healthy on 2026-11-23 (app, backend, frontend, nginx, postgres; both sites 200). Postgres 17, AI core on Python 3.11, Node 26, aarch64.
+- `data_import_batches` had 1 row and 0 duplicates (so #1227's migration changes no data). `data_import_cutovers` is still an empty leftover table (a drop needs the owner).
 
 ## Waiting on the owner
-- **O-1:** approval rule (above).
-- **Spending:** Gemini API key (~USD 5, needed for reliable unattended Google lanes), small server for the phone stack, bigger production server (trigger: RAM above 70% for 7 days).
-- **Laptop:** sudo lines during Phase 0, the restic password, the Telegram bot env, and the SIP trunk registration, which still shows "Unregistered".
-- **Research R22:** unattended `claude -p` on a subscription login, and the risk of `agy -p`.
-- **Optional:** rotation of the secrets printed on 2026-11-17.
-
-## Mac background jobs (launchd, per macOS user)
-Jobs `ir.roxira.*` in `~/Library/LaunchAgents`:
-- backup-pull, reposync, lawwatch, diskguard, mac-cleanup, iranrelay, team-status, llm-tunnel, fleet.
-
-They keep running after a Claude account switch. A new macOS user must re-install them (`docs/hub/HUB_START.md` §3).
-
-Known on 2026-11-21:
-- `llm-tunnel` exits 255.
-- `team-status` exits 1.
-- `fleet` is not loaded.
-
-All three are to be checked by L1 or the hub.
+- Accept the approver account invitation from that account. Say "go private" or not for 2026-11-25.
+- German e-invoice deadline: was 2026 turnover above 800k EUR? Who keeps the backup encryption key offline?
+- Sentences for #831 #663 (then #1072 #1198 #1200 in a window), CodeRabbit yes/no, delete the exFAT copies of an env file and a key (owner only).
+- Research still to send in Gemini: R34, R35, R27, R33, R22 Stage 2 (prompts in `docs/research/prompts/`).
 
 ## Known issues
-- CSP is report-only (T216 #930). PgBouncer pool is above `max_connections` (T214 #928). Redis has no AOF (T217 #931).
-- 21 production tables lack FORCE RLS (T215). The app still connects as a superuser until T200.
-- OSV reports 164 dependency findings (#1031). GitHub Dependabot shows 179.
-- Docker Hub is blocked from the laptop's network: use `public.ecr.aws` images there.
-- The R17 digest file is missing. The prod IP is still in `docs/OPERATIONS_RUNBOOK.md` §1: scrub it.
+- Review desk: 8 PRs per run, free models give false blockers; dispatch once (`gh workflow run review-desk.yml`) and never while one runs.
+- #1295 hub_merge.py still has fail-open gaps (draft); #1294 #1296 guard PRs are drafts.
+- 164 OSV findings (#1031), CSP report-only, 21 tables without FORCE RLS until T200, #1092 gateway timeouts (probe once only).
 
 ## Key documents
-- `docs/hub/MAIN_HUB_MASTER_BRIEF.md`
-- `docs/hub/BOX_HUB_MASTER_BRIEF.md`
-- `docs/STRATEGY_NOW.md`
-- `docs/ARCHITECTURE.md`
-- `docs/strategy/R20_DIGEST.md`
-- `docs/research/R21_AGENT_BRIDGE.md`
-- `docs/TEAM_SPLIT_2026-11-17.md`
-- `docs/owner/OWNER_ASKS_FA.md`
-- `docs/OPERATIONS_RUNBOOK.md` §7–8
+`docs/hub/SYSTEM_OVERVIEW.md`, `docs/hub/MAIN_HUB_MASTER_BRIEF.md`, `docs/antigravity/LANE_RULES.md`, `docs/antigravity/PROMPTS_FA.md`, `docs/owner/ANTIGRAVITY_GUIDE_FA.md`,
+`docs/ops/BOX_LANE_POLICY.md`, `docs/ops/PRIVATE_FLIP_CHECKLIST.md`, `docs/strategy/research/DEEP_RESEARCH_2026-11-23_PLAN.md`, `docs/agents/LESSONS.md`.

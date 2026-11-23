@@ -65,6 +65,7 @@ put "$LIB/box-mirror.sh" 755 <<'JOB'
 #!/bin/bash
 # Nightly: git clone --mirror on first run, git remote update --prune afterwards.
 set -euo pipefail
+REPO="${REPO:-Mahan-film/roxira-platform}"   # the units set no REPO; default to the canonical repo
 DEST="${MIRROR_DIR:-/srv/data/mirror/roxira-platform.git}"
 STATE="${XDG_STATE_HOME:-$HOME/.local/state}/roxira-box"
 mkdir -p "$STATE" "$(dirname "$DEST")"
@@ -93,6 +94,7 @@ put "$LIB/box-github-export.sh" 755 <<'JOB'
 # Weekly: issues (incl. PR stubs), pulls, comments, review comments, labels, milestones as JSON.
 # Pages are flattened into one JSON array per file. Keeps the newest 8 dated directories.
 set -euo pipefail
+REPO="${REPO:-Mahan-film/roxira-platform}"   # the units set no REPO; default to the canonical repo
 ROOT="${EXPORT_DIR:-/srv/data/github-export}"
 KEEP=8
 STATE="${XDG_STATE_HOME:-$HOME/.local/state}/roxira-box"
@@ -161,6 +163,10 @@ if [ -n "$latest" ]; then
   echo "latest:       $latest"; sed -n '3,$p' "$latest/MANIFEST.txt" | sed 's/^/  /'
   printf 'kept dirs:    %s\n' "$(find "$EXPORT" -maxdepth 1 -mindepth 1 -type d -name '20??-??-??' | wc -l)"
 fi
+echo "== user data backup (restic, scripts/ops/ci_box/box_backup)"
+printf 'last run:     %s\n' "$(cat "$STATE/backup.last" 2>/dev/null || echo never)"
+printf 'off-box:      %s\n' "$(cat "$STATE/backup.offbox.last" 2>/dev/null || echo 'not configured')"
+printf 'last drill:   %s\n' "$(cat "$STATE/backup-drill.last" 2>/dev/null || echo never)"
 echo "== disk"
 du -sh "$MIRROR" "$EXPORT" 2>/dev/null
 df -h /srv/data 2>/dev/null | tail -1

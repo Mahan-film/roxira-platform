@@ -93,7 +93,7 @@ const EMPTY_PARTY: PartyState = {
   email: "",
 };
 
-function createLine(uid: string, vatRate = VAT_RATE * 100): LineState {
+function createLine(uid: string, vatRate = ""): LineState {
   return {
     uid,
     itemId: "",
@@ -133,13 +133,15 @@ function vatRateRatio(value: string): number {
   return percent / 100;
 }
 
-function computeLine(line: LineState) {
+function computeLine(line: LineState, fallbackRateRatio: number = 0.1) {
   const quantity = Number(line.quantity) || 0;
   const unitPrice = Number(line.unitPrice) || 0;
   const discount = (Number(line.discount) || 0) + (line.invoiceDiscountShare ?? 0);
   const gross = quantity * unitPrice;
   const taxable = Math.max(0, gross - discount);
-  const tax = taxable * vatRateRatio(line.vatRate);
+  const effectiveRatio =
+    line.vatRate.trim() !== "" ? vatRateRatio(line.vatRate) : fallbackRateRatio;
+  const tax = taxable * effectiveRatio;
   return { gross, discount, taxable, tax, total: taxable + tax };
 }
 
@@ -222,12 +224,13 @@ export function InvoiceEditor({
         unitPrice: String(item.unitPrice),
         discount: String(item.discount ?? 0),
         invoiceDiscountShare: Number(item.invoiceDiscountShare ?? 0),
-        vatRate: String(
-          Number(item.vatRate ?? effectiveDefaultVatRate) * 100,
-        ),
+        vatRate:
+          item.vatRate !== undefined && item.vatRate !== null
+            ? String(Number(item.vatRate) * 100)
+            : "",
       }));
     }
-    return [createLine("line-0", fallbackPercent)];
+    return [createLine("line-0", "")];
   });
 
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -298,9 +301,9 @@ export function InvoiceEditor({
     setJurisdiction(
       iranian ? InvoiceJurisdiction.IR : InvoiceJurisdiction.INTL,
     );
-    const nextPercent = iranian ? (defaultVatRate ?? VAT_RATE) * 100 : 0;
+    const nextPercent = iranian ? "" : "0";
     setLines((prev) =>
-      prev.map((line) => ({ ...line, vatRate: String(nextPercent) })),
+      prev.map((line) => ({ ...line, vatRate: nextPercent })),
     );
     if (iranian) {
       setFxRate("");
@@ -309,7 +312,7 @@ export function InvoiceEditor({
 
   function addLine() {
     const id = nextLine.current++;
-    setLines((prev) => [...prev, createLine(`line-${id}`, fallbackPercent)]);
+    setLines((prev) => [...prev, createLine(`line-${id}`, "")]);
   }
 
   /** A scanned item: one more unit on its line, else the first blank line, else a new line. */
@@ -324,7 +327,7 @@ export function InvoiceEditor({
         isBlank: isUntypedInvoiceLine,
         addOne: (line) => ({ ...line, quantity: incrementQuantity(line.quantity) }),
         fromItem: () => ({
-          ...createLine(uid, fallbackPercent),
+          ...createLine(uid, ""),
           itemId: String(item.id),
           sku: item.sku,
           description: item.name,
@@ -341,7 +344,7 @@ export function InvoiceEditor({
 
   const totals = lines.reduce(
     (acc, line) => {
-      const computed = computeLine(line);
+      const computed = computeLine(line, isForeign ? 0 : 0.1);
       return {
         gross: acc.gross + computed.gross,
         discount: acc.discount + computed.discount,
@@ -428,7 +431,7 @@ export function InvoiceEditor({
           quantity: Number(line.quantity) || 0,
           unitPrice: Number(line.unitPrice) || 0,
           discount: Number(line.discount) || 0,
-          vatRate: vatRateRatio(line.vatRate),
+          vatRate: line.vatRate.trim() ? vatRateRatio(line.vatRate) : undefined,
         })),
       status: nextStatus,
       currency,
@@ -771,7 +774,7 @@ export function InvoiceEditor({
                 </TableHeader>
                 <TableBody>
                   {lines.map((line) => {
-                    const computed = computeLine(line);
+                    const computed = computeLine(line, isForeign ? 0 : 0.1);
                     return (
                       <TableRow key={line.uid}>
                         <TableCell>
@@ -836,6 +839,7 @@ export function InvoiceEditor({
                           <Input
                             inputMode="decimal"
                             value={line.vatRate}
+                            placeholder={isForeign ? "0" : "۱۰ (قانونی)"}
                             onChange={(event) =>
                               updateLine(line.uid, "vatRate", event.target.value)
                             }

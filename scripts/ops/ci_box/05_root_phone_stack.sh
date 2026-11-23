@@ -11,7 +11,10 @@
 #   4. installs voice-ai-agent / voice-ai-tts units (user phone), enabled, not started
 #   5. installs root-owned /usr/local/bin/phone-stack up|down|status|logs and its health check
 #   6. installs /etc/sudoers.d/phone-stack (validated with visudo -cf)
-# Then: sudo phone-stack up && sudo phone-stack status
+#   7. LiveKit key guard (#1036): `phone-stack up` refuses to start while the public LiveKit dev pair
+#      is in the agent env; `sudo phone-stack keys rotate` writes a fresh openssl-random pair to the
+#      agent env (mode 600) and the stack configs, printing lengths only. Section 2 also warns.
+# Then: sudo phone-stack keys check && sudo phone-stack up && sudo phone-stack status
 # Revert: phone-stack down; rm /usr/local/bin/phone-stack /etc/sudoers.d/phone-stack
 #         /etc/systemd/system/voice-ai-{agent,tts}.service /usr/local/lib/phone-stack -r
 set -euo pipefail
@@ -116,6 +119,9 @@ names=$(grep -oE '^[A-Z][A-Z0-9_]*=' $AGENT/.env | tr -d = | sort -u | tr '\n' '
 echo "variable names in .env: $names"
 has() { grep -qE "^$1=.+" $AGENT/.env; }
 for k in LIVEKIT_API_KEY LIVEKIT_API_SECRET; do has $k || echo "WARN: $k empty or missing"; done
+if STACK=$STACK AGENT_ENV=$AGENT/.env AGENT_USER=$U bash <(git -c safe.directory="$REPO" -C "$REPO" show origin/main:services/voice_phone_agent/deploy/livekit_keys.sh) check >/dev/null 2>&1; then :; else
+  echo "WARN: LiveKit pair is the public dev default or a stack config holds it; run: sudo phone-stack keys rotate"
+fi
 has GROQ_API_KEY || has OPENAI_API_KEY || echo "WARN: no STT key (GROQ_API_KEY / OPENAI_API_KEY) in .env"
 has SMARTJUDGE_PHONE_GATEWAY_KEY || has SMARTJUDGE_TOKEN || echo "WARN: no Smart Judge key in .env"
 if has SECRETS_ENV_FILE; then
@@ -145,7 +151,8 @@ echo "units installed and enabled (not started)"
 echo "== 5. phone-stack wrapper"
 install -d -m 755 -o root -g root /usr/local/lib/phone-stack
 T=$(mktemp); from_main healthcheck.sh > "$T"; install -m 755 -o root -g root "$T" /usr/local/lib/phone-stack/healthcheck.sh; rm -f "$T"
-printf 'COMPOSE=%q\n' "$COMPOSE" > /usr/local/lib/phone-stack/phone-stack.conf
+T=$(mktemp); from_main livekit_keys.sh > "$T"; install -m 755 -o root -g root "$T" /usr/local/lib/phone-stack/livekit_keys.sh; rm -f "$T"
+printf 'COMPOSE=%q\nSTACK=%q\nAGENT_ENV=%q\nAGENT_USER=%q\n' "$COMPOSE" "$STACK" "$AGENT/.env" "$U" > /usr/local/lib/phone-stack/phone-stack.conf
 chmod 644 /usr/local/lib/phone-stack/phone-stack.conf
 # Model registry for the agent (MODELS_YAML in voice-ai-agent.service); the agent copy has no repo tree.
 git -c safe.directory="$REPO" -C "$REPO" show origin/main:config/models.yaml > /usr/local/lib/phone-stack/models.yaml
@@ -157,6 +164,8 @@ cat > "$TMP_BIN" <<'WRAPPER'
 set -euo pipefail
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 . /usr/local/lib/phone-stack/phone-stack.conf
+export STACK AGENT_ENV AGENT_USER
+KEYS=/usr/local/lib/phone-stack/livekit_keys.sh
 DC=(docker compose -f "$COMPOSE" --project-directory "$(dirname "$COMPOSE")")
 # Logs never show secrets, env lines, phone numbers or IP addresses.
 scrub() {
@@ -166,6 +175,8 @@ scrub() {
 }
 case "${1:-status}" in
   up)
+    # Refuse to start on the public LiveKit dev pair (#1036). Prints lengths only.
+    bash "$KEYS" check || { echo "refusing to start: run 'sudo phone-stack keys rotate' first"; exit 1; }
     if ! "${DC[@]}" pull -q --ignore-buildable >/dev/null 2>&1; then
       if /usr/local/bin/box-proxy status | grep -q 'docker direct'; then
         echo "image pull failed with docker direct; routing system-docker pulls through the box proxy"
@@ -182,6 +193,12 @@ case "${1:-status}" in
     "${DC[@]}" down 2>&1 | scrub
     echo "down"
     ;;
+  keys)
+    case "${2:-check}" in
+      check|rotate) bash "$KEYS" "${2:-check}" ;;
+      *) echo "usage: phone-stack keys check|rotate" >&2; exit 2 ;;
+    esac
+    ;;
   status)
     /usr/local/lib/phone-stack/healthcheck.sh
     ;;
@@ -190,7 +207,7 @@ case "${1:-status}" in
     echo "== containers"; "${DC[@]}" logs --no-color --tail "$n" 2>&1 | scrub
     echo "== units"; journalctl -u voice-ai-tts -u voice-ai-agent -n "$n" -o cat --no-pager 2>&1 | scrub
     ;;
-  *) echo "usage: phone-stack up|down|status|logs [lines]" >&2; exit 2 ;;
+  *) echo "usage: phone-stack up|down|status|keys|logs [lines]" >&2; exit 2 ;;
 esac
 WRAPPER
 install -m 0755 -o root -g root "$TMP_BIN" /usr/local/bin/phone-stack

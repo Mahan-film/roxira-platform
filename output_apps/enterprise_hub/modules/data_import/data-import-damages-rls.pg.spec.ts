@@ -18,8 +18,17 @@ import { DamagesRepository } from '../damages/repositories/damages.repository';
 import { DataImportBatchItemEntity } from './entities/data-import-batch-item.entity';
 import { DataImportBatchEntity } from './entities/data-import-batch.entity';
 import { ImportMappingMemoryEntity } from './entities/import-mapping-memory.entity';
-import { DataImportBatchRepository } from './repositories/data-import-batch.repository';
+import {
+  DataImportBatchRepository,
+  hashImportMapping,
+} from './repositories/data-import-batch.repository';
 import { ImportMappingMemoryRepository } from './repositories/import-mapping-memory.repository';
+import { EntityRegistryService } from './registry/entity-registry.service';
+import { EntityImportAdapter } from './registry/import-registry.types';
+import { DailyImportQuotaService } from './services/daily-import-quota.service';
+import { EntityImportService } from './services/entity-import.service';
+import { OpenRouterMappingService } from './services/openrouter-mapping.service';
+import { UploadStoreService } from './services/upload-store.service';
 
 const HOST = process.env.ROXIRA_TEST_PG_HOST;
 const describePg = HOST ? describe : describe.skip;
@@ -145,11 +154,14 @@ describePg('Data Import & Damages FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSR
   it('isolates DataImportBatchRepository across tenants under NOSUPERUSER NOBYPASSRLS', async () => {
     const batchIdA = randomUUID();
     const batchIdB = randomUUID();
+    const hashA = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2';
+    const hashB = 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff';
 
     await batchRepo.createBatch(TENANT_A, {
       id: batchIdA,
       entity: 'crm_leads',
       fileName: 'leads-a.csv',
+      fileHash: hashA,
       inserted: 2,
     });
     await batchRepo.addItems(TENANT_A, batchIdA, 'crm_leads', [
@@ -161,6 +173,7 @@ describePg('Data Import & Damages FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSR
       id: batchIdB,
       entity: 'crm_leads',
       fileName: 'leads-b.csv',
+      fileHash: hashB,
       inserted: 1,
     });
     await batchRepo.addItems(TENANT_B, batchIdB, 'crm_leads', [
@@ -168,11 +181,22 @@ describePg('Data Import & Damages FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSR
     ]);
 
     expect((await batchRepo.findBatch(TENANT_A, batchIdA))?.fileName).toBe('leads-a.csv');
+    expect((await batchRepo.findBatch(TENANT_A, batchIdA))?.fileHash).toBe(hashA);
     expect(await batchRepo.findBatch(TENANT_B, batchIdA)).toBeNull();
     expect((await batchRepo.listBatches(TENANT_A)).map((b) => b.id)).toEqual([batchIdA]);
     expect((await batchRepo.listBatches(TENANT_B)).map((b) => b.id)).toEqual([batchIdB]);
     expect(await batchRepo.findItems(TENANT_A, batchIdA)).toHaveLength(2);
     expect(await batchRepo.findItems(TENANT_B, batchIdA)).toEqual([]);
+
+    // Idempotent re-import lookup via findByFileHash respects tenant RLS isolation + entity & mapping scoping
+    const foundA = await batchRepo.findByFileHash(TENANT_A, hashA, 'crm_leads', '');
+    expect(foundA?.id).toBe(batchIdA);
+    expect(foundA?.fileHash).toBe(hashA);
+    // Different entity or mappingHash returns null
+    expect(await batchRepo.findByFileHash(TENANT_A, hashA, 'inventory_items', '')).toBeNull();
+    expect(await batchRepo.findByFileHash(TENANT_A, hashA, 'crm_leads', 'other-map-hash')).toBeNull();
+    // Tenant B cannot see Tenant A's batch by hash
+    expect(await batchRepo.findByFileHash(TENANT_B, hashA, 'crm_leads', '')).toBeNull();
 
     // Tenant B cannot modify or delete Tenant A's batch or items
     await batchRepo.markUndone(TENANT_B, batchIdA);
@@ -180,6 +204,88 @@ describePg('Data Import & Damages FORCE RLS on PostgreSQL (NOSUPERUSER NOBYPASSR
     await batchRepo.removeBatch(TENANT_B, batchIdA);
     expect((await batchRepo.findBatch(TENANT_A, batchIdA))?.undone).toBe(false);
     expect(await batchRepo.findItems(TENANT_A, batchIdA)).toHaveLength(2);
+
+    // Tenant A undo marks batch undone and removes items under RLS
+    await batchRepo.markUndone(TENANT_A, batchIdA);
+    expect((await batchRepo.findBatch(TENANT_A, batchIdA))?.undone).toBe(true);
+    // Undone batch is ignored by findByFileHash so re-import is permitted after undo
+    expect(await batchRepo.findByFileHash(TENANT_A, hashA, 'crm_leads', '')).toBeNull();
+    await batchRepo.removeItems(TENANT_A, batchIdA);
+    expect(await batchRepo.findItems(TENANT_A, batchIdA)).toHaveLength(0);
+  });
+
+  it('enforces unique partial index on concurrent commits, entity/mapping scoping, and undo-after-reimport under RLS (#1216)', async () => {
+    const indexes = (await appDs.query(
+      `SELECT indexname FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'data_import_batches'`,
+    )) as Array<{ indexname: string }>;
+    const names = indexes.map((i) => i.indexname);
+    expect(names).toContain('UQ_data_import_batches_active_idempotency');
+    expect(names).not.toContain('IDX_data_import_batches_tenant_file_hash');
+
+    let adapterCommits = 0;
+    const adapter: EntityImportAdapter = {
+      key: 'crm-leads',
+      labelFa: 'سرنخ‌ها',
+      fields: [
+        { key: 'name', labelFa: 'نام', required: true, type: 'text', synonyms: ['name'] },
+        { key: 'mobile', labelFa: 'موبایل', required: true, type: 'phone', synonyms: ['mobile'] },
+      ],
+      duplicateKeys: () => [],
+      findExistingDuplicateKeys: async () => [],
+      commit: async (_t, recs) => {
+        adapterCommits += 1;
+        await new Promise((r) => setTimeout(r, 80));
+        return {
+          inserted: recs.map((r, i) => ({ rowNumber: r.rowNumber, ownerId: adapterCommits * 100 + i })),
+          failed: [],
+        };
+      },
+      undo: async (_t, ids) => ({ removed: ids.length, refused: [] }),
+    };
+    const uploadStore = new UploadStoreService();
+    const svc = new EntityImportService(
+      new EntityRegistryService([adapter]),
+      {} as OpenRouterMappingService,
+      uploadStore,
+      batchRepo,
+      { assertWithinQuota: async () => undefined, recordImport: async () => undefined } as unknown as DailyImportQuotaService,
+    );
+
+    const file = { originalname: 'race.csv', mimetype: 'text/csv', buffer: Buffer.from('name,mobile\nReza,09123456789\nSara,09129876543') };
+    const p1 = await svc.preview(TENANT_A, file, 'crm-leads');
+    const p2 = await svc.preview(TENANT_A, file, 'crm-leads');
+    const mapping = { name: 'name', mobile: 'mobile' };
+
+    // Parallel commits race on UQ_data_import_batches_active_idempotency: only ONE imports rows.
+    const [r1, r2] = await Promise.all([
+      svc.commit(TENANT_A, { uploadId: p1.uploadId, entity: 'crm-leads', mapping }),
+      svc.commit(TENANT_A, { uploadId: p2.uploadId, entity: 'crm-leads', mapping }),
+    ]);
+    expect(adapterCommits).toBe(1);
+    expect(r1.batchId).toBe(r2.batchId);
+    expect([r1.inserted, r2.inserted].sort()).toEqual([0, 2]);
+
+    // Different mapping on the exact same file imports cleanly as a distinct batch.
+    const altMapHash = hashImportMapping({ name: 'name' });
+    expect(
+      await batchRepo.tryReserveBatch(TENANT_A, {
+        id: randomUUID(),
+        entity: 'crm-leads',
+        fileName: 'race.csv',
+        fileHash: (await batchRepo.findBatch(TENANT_A, r1.batchId))?.fileHash ?? null,
+        mappingHash: altMapHash,
+        inserted: 1,
+      }),
+    ).toBe(true);
+
+    // Undo after hash re-import frees the partial unique index for a fresh re-import.
+    const undoRes = await svc.undoBatch(TENANT_A, r1.batchId);
+    expect(undoRes.removed).toBe(2);
+    const p3 = await svc.preview(TENANT_A, file, 'crm-leads');
+    const r3 = await svc.commit(TENANT_A, { uploadId: p3.uploadId, entity: 'crm-leads', mapping });
+    expect(r3.batchId).not.toBe(r1.batchId);
+    expect(r3.inserted).toBe(2);
+    expect(adapterCommits).toBe(2);
   });
 
   it('isolates ImportMappingMemoryRepository across tenants under NOSUPERUSER NOBYPASSRLS', async () => {

@@ -20,7 +20,10 @@ import {
 import { ReconciliationReport, selectionKey } from '../analysis/reconciliation';
 import { ChunkedUploadService } from './chunked-upload.service';
 import { PackageReconciliationService } from './package-reconciliation.service';
-import { PackageCommitDto } from '../dto/package-commit.dto';
+import {
+  mapControlTotalsDtoToRecord,
+  PackageCommitDto,
+} from '../dto/package-commit.dto';
 import {
   PackageCommitResponseDto,
   PackageCreatedDto,
@@ -119,7 +122,11 @@ export class PackageImportService {
     if (!this.reconciliation) {
       throw new BadRequestException('مغایرت‌گیری فعال نیست.');
     }
-    return this.reconciliation.reconcile(tenantId, packageId, dto.tables ?? []);
+    return this.reconciliation.reconcile(tenantId, packageId, dto.tables ?? [], {
+      asOfDate: dto.asOfDate,
+      currency: dto.currency,
+      controlTotals: mapControlTotalsDtoToRecord(dto.controlTotals),
+    });
   }
 
   /** گروه‌بندی بسته و همهٔ سندهای پیشنهادی پیش از ثبت. */
@@ -195,7 +202,16 @@ export class PackageImportService {
     // Server-side gate: the client's report is never trusted. An imbalance blocks the commit unless
     // the platform admin / tenant owner explicitly confirms it (and that is logged).
     if (this.reconciliation) {
-      const report = await this.reconciliation.reconcile(tenantId, packageId, dto.tables);
+      const report = await this.reconciliation.reconcile(
+        tenantId,
+        packageId,
+        dto.tables,
+        {
+          asOfDate: dto.asOfDate,
+          currency: dto.currency,
+          controlTotals: mapControlTotalsDtoToRecord(dto.controlTotals),
+        },
+      );
       if (!report.balanced) {
         if (!(dto.confirmImbalance === true && actor.canOverrideImbalance)) {
           throw new ConflictException({

@@ -5,7 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import * as path from 'path';
 import {
   ALLOWED_UPLOAD_EXTENSIONS,
@@ -24,7 +24,10 @@ import {
 import { EntityPreviewResponseDto } from '../dto/entity-preview-response.dto';
 import { parseCsv, ParsedCsv } from '../parsers/csv.parser';
 import { parseXlsx } from '../parsers/xlsx.parser';
-import { DataImportBatchRepository } from '../repositories/data-import-batch.repository';
+import {
+  DataImportBatchRepository,
+  hashImportMapping,
+} from '../repositories/data-import-batch.repository';
 import { normaliseAndValidate } from '../registry/field-validation';
 import {
   buildEntityFallbackMapping,
@@ -111,11 +114,16 @@ export class EntityImportService {
       mapping,
     });
 
+    const fileHash = file?.buffer
+      ? createHash('sha256').update(file.buffer).digest('hex')
+      : null;
+
     const uploadId = randomUUID();
     this.uploadStore.save(tenantId, uploadId, {
       headers: parsed.headers,
       rows: parsed.rows,
       fileName: file?.originalname,
+      fileHash,
     });
 
     return {
@@ -148,12 +156,15 @@ export class EntityImportService {
     }
     this.assertMappingFields(adapter, dto.mapping);
 
+    const concreteMapping = this.toConcreteMapping(adapter, dto.mapping);
+    const mappingHash = hashImportMapping(concreteMapping);
+
     await this.quota.assertWithinQuota(tenantId);
 
     const { records, errors } = this.buildRecords(adapter, {
       headers: upload.headers,
       rows: upload.rows,
-      mapping: this.toConcreteMapping(adapter, dto.mapping),
+      mapping: concreteMapping,
     });
 
     const failed = errors.map((error) => ({
@@ -161,47 +172,124 @@ export class EntityImportService {
       message: `${error.field}: ${error.message}`,
     }));
 
-    const { unique, skipped } = await this.filterDuplicates(
-      adapter,
-      tenantId,
-      records,
-    );
-
-    const result = await adapter.commit(tenantId, unique, {
-      bankAccountId: dto.bankAccountId,
-    });
-    for (const failure of result.failed) {
-      failed.push({ row: failure.rowNumber, message: failure.message });
-    }
-
+    // Reserve batch header before processing; adapters execute on domain service connections
+    // so recovery relies on explicit compensation (adapter.undo) and batch release on failure.
     const batchId = randomUUID();
-    await this.batchRepository.createBatch(tenantId, {
-      id: batchId,
-      entity: adapter.key,
-      fileName: upload.fileName ?? 'upload',
-      inserted: result.inserted.length,
-    });
-    if (result.inserted.length > 0) {
-      await this.batchRepository.addItems(
-        tenantId,
-        batchId,
-        adapter.key,
-        result.inserted.map((row) => ({
-          ownerId: row.ownerId,
-          rowNumber: row.rowNumber,
-        })),
-      );
+    if (upload.fileHash && typeof this.batchRepository.tryReserveBatch === 'function') {
+      const reserved = await this.batchRepository.tryReserveBatch(tenantId, {
+        id: batchId,
+        entity: adapter.key,
+        fileName: upload.fileName ?? 'upload',
+        fileHash: upload.fileHash,
+        mappingHash,
+        inserted: 0,
+      });
+      if (!reserved) {
+        const existing = await this.batchRepository.findByFileHash(
+          tenantId,
+          upload.fileHash,
+          adapter.key,
+          mappingHash,
+          undefined,
+          true,
+        );
+        this.uploadStore.remove(tenantId, dto.uploadId);
+        return {
+          batchId: existing?.id ?? batchId,
+          inserted: 0,
+          skippedDuplicates: upload.rows.length,
+          failed: [],
+        };
+      }
+    } else {
+      if (upload.fileHash && typeof this.batchRepository.findByFileHash === 'function') {
+        const existing = await this.batchRepository.findByFileHash(
+          tenantId,
+          upload.fileHash,
+          adapter.key,
+          mappingHash,
+        );
+        if (existing && existing.inserted > 0) {
+          this.uploadStore.remove(tenantId, dto.uploadId);
+          return {
+            batchId: existing.id,
+            inserted: 0,
+            skippedDuplicates: upload.rows.length,
+            failed: [],
+          };
+        }
+      }
+      await this.batchRepository.createBatch(tenantId, {
+        id: batchId,
+        entity: adapter.key,
+        fileName: upload.fileName ?? 'upload',
+        fileHash: upload.fileHash,
+        mappingHash,
+        inserted: 0,
+      });
     }
 
-    this.uploadStore.remove(tenantId, dto.uploadId);
-    await this.quota.recordImport(tenantId);
+    const { unique, skipped } = await this.filterDuplicates(adapter, tenantId, records);
+    let committedIds: ImportOwnerId[] = [];
+    try {
+      const result = await adapter.commit(tenantId, unique, {
+        bankAccountId: dto.bankAccountId,
+      });
+      committedIds = result.inserted.map((row) => row.ownerId);
+      for (const failure of result.failed) {
+        failed.push({ row: failure.rowNumber, message: failure.message });
+      }
+      if (result.inserted.length > 0) {
+        await this.batchRepository.addItems(
+          tenantId,
+          batchId,
+          adapter.key,
+          result.inserted.map((row) => ({
+            ownerId: row.ownerId,
+            rowNumber: row.rowNumber,
+          })),
+        );
+        if (typeof this.batchRepository.setInserted === 'function') {
+          await this.batchRepository.setInserted(
+            tenantId,
+            batchId,
+            result.inserted.length,
+          );
+        }
+      } else {
+        // Release reservation in the same unit of work if 0 rows were inserted:
+        if (typeof this.batchRepository.removeBatch === 'function') {
+          await this.batchRepository.removeBatch(tenantId, batchId);
+        }
+      }
 
-    return {
-      batchId,
-      inserted: result.inserted.length,
-      skippedDuplicates: skipped,
-      failed,
-    };
+      this.uploadStore.remove(tenantId, dto.uploadId);
+      if (result.inserted.length > 0) {
+        await this.quota.recordImport(tenantId);
+      }
+
+      return {
+        batchId,
+        inserted: result.inserted.length,
+        skippedDuplicates: skipped,
+        failed,
+      };
+    } catch (error) {
+      if (committedIds.length > 0 && typeof adapter.undo === 'function') {
+        await adapter.undo(tenantId, Array.from(new Set(committedIds))).catch((undoErr) => {
+          this.logger.warn(
+            `[DATA-IMPORT] compensating undo failed after batch error: ${
+              undoErr instanceof Error ? undoErr.message : String(undoErr)
+            }`,
+          );
+        });
+      }
+      // Release reservation in the same unit of work on failure:
+      if (typeof this.batchRepository.removeBatch === 'function') {
+        await this.batchRepository.removeBatch(tenantId, batchId).catch(() => undefined);
+      }
+      throw error;
+    }
   }
 
   /** بازگردانی کامل یک دسته ورود (حذف دقیق ردیف‌های همان دسته). */
@@ -267,6 +355,7 @@ export class EntityImportService {
       batchId: batch.id,
       entity: batch.entity,
       fileName: batch.fileName,
+      fileHash: batch.fileHash ?? null,
       inserted: batch.inserted,
       createdAt: batch.createdAt,
       undone: batch.undone,

@@ -1,0 +1,23 @@
+# Builder egress allowlist: the ONE place that says where builder agents on the box may connect.
+# Consumed by gen_egress.py (nftables ruleset + proxy filter + proxy env). Public file: no secrets, no hosts of ours.
+# Format, one entry per line:  <kind> <value>  # purpose
+#   domain  exact host name (HTTPS, port 443 only); "domain *.example.org" = example.org and every subdomain
+#   port    loopback TCP port a builder may connect to (127.0.0.1 only)
+# Anything not listed is refused: no direct internet, no LAN, no xray port, no DNS.
+
+# Key-pool gateway: loopback ssh tunnel (scripts/ops/ci_box/lane_runner, local port 4181).
+port 4181   # gateway tunnel (LLM calls; builders hold no provider key, the pool key lives in the lane-run env)
+# Allowlist proxy in front of xray (tinyproxy, generated config). Builders use HTTPS_PROXY=http://127.0.0.1:<this>.
+port 10810  # allowlist proxy
+
+# Git host
+domain github.com
+domain api.github.com
+domain codeload.github.com
+domain objects.githubusercontent.com
+domain raw.githubusercontent.com
+
+# Package registries
+domain registry.npmjs.org
+domain pypi.org
+domain files.pythonhosted.org

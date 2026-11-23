@@ -22,6 +22,12 @@ export class DataImportBatchEntity {
   @Column({ type: 'varchar', length: 255, name: 'file_name' })
   fileName: string;
 
+  @Column({ type: 'varchar', length: 128, name: 'file_hash', nullable: true })
+  fileHash?: string | null;
+
+  @Column({ type: 'text', name: 'mapping_hash', nullable: true })
+  mappingHash?: string | null;
+
   @Column({ type: 'integer', default: 0 })
   inserted: number;
 

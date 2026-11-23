@@ -1,0 +1,26 @@
+# JIT pool controller config (copy to ~/.config/roxira-jit/jit_pool.toml, mode 600). No secrets here:
+# GitHub access is the existing `gh` login of mahanfilms.
+repo = "Mahan-film/roxira-platform"
+
+# true = list and log only (no runner registration, no variable writes). Set false after
+# 08_root_ci_pool.sh has run and both launchers show "alive" in `jit_pool.py --status`.
+dry_run = true
+
+# Local HTTP proxy for this user's egress (the future allowlist proxy is 3128, #1022).
+proxy = "http://127.0.0.1:10809"
+
+spool_dir = "/srv/data/ci-jit/spool"
+runner_group_id = 1
+stale_after_s = 300
+heartbeat_variable = "CI_BOX_HEARTBEAT"
+heartbeat_every_s = 120
+
+# Labels never include `hp` (the old persistent runner keeps that one until it is retired).
+# ahead = configs pre-minted beyond one per live launcher (0..4), so the next job starts at once.
+[slots.light]
+labels = ["self-hosted", "linux-box", "jit", "slot-light"]
+ahead = 1
+
+[slots.docker]
+labels = ["self-hosted", "linux-box", "jit", "slot-docker"]
+ahead = 1

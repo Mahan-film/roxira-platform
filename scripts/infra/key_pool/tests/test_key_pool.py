@@ -619,3 +619,50 @@ def test_client_without_virtual_key_skips_gateway(monkeypatch):
     assert llm_pool.gateway_from_env({"LLM_GATEWAY_KEY": "k"}) == ("http://127.0.0.1:4181/v1", "k")
     monkeypatch.setenv("LLM_GATEWAY_OFF", "1")
     assert llm_pool.gateway_from_env({"LLM_GATEWAY_KEY": "k"}) is None
+
+
+def test_health_direct_skips_keyless_embedding_without_keyerror(capsys):
+    """#1092: direct health must never crash with KeyError('none') on keyless embedding deployments."""
+    called_urls = []
+
+    def post(url, headers, body, timeout):
+        called_urls.append(url)
+        return 200, {"choices": [{"message": {"content": "ok"}}]}
+
+    rc = llm_pool.health(pool(), {"GROQ_API_KEY": "gsk-test"}, gateway=None, post=post)
+    assert rc == 0
+    assert called_urls, "expected at least one chat provider probe"
+    assert not any("roxira_embeddings" in u for u in called_urls)
+    out = capsys.readouterr().out
+    assert "groq" in out and "ok" in out
+
+
+def test_health_sh_exports_key_pool_config_var():
+    """#1092: health.sh must export KEY_POOL_CONFIG (matching keypool_config.load_pool)."""
+    script = (kc.ROOT / "scripts" / "infra" / "key_pool" / "health.sh").read_text(encoding="utf-8")
+    assert 'export KEY_POOL_CONFIG="$CHAT_POOL"' in script
+    assert "KEYPOOL_CONFIG=" not in script
+
+
+def test_agent_strong_free_falls_back_to_agent_free_paid():
+    """#1092: agent-strong-free must fall back to agent-free-paid after gemini-best."""
+    cfg = _full_cfg()
+    fb = _fb(cfg)
+    assert "agent-free-paid" in fb["agent-strong-free"]
+
+
+def test_router_retry_policy_and_max_fallbacks_cover_every_chain():
+    """Per-error retries are rendered, and max_fallbacks is at least the longest fallback chain
+    (LiteLLM's default of 5 would cut the 10-12 rank ladders short)."""
+    cfg = render_litellm.render(pool(), set(FAKE_ENV))
+    router = cfg["router_settings"]
+    rp = router["retry_policy"]
+    assert rp["RateLimitErrorRetries"] >= 1 and rp["AuthenticationErrorRetries"] >= 1
+    assert rp["InternalServerErrorRetries"] >= 1 and rp["ContentPolicyViolationErrorRetries"] == 0
+    longest = max(len(v) for f in router["fallbacks"] for v in f.values())
+    assert router["max_fallbacks"] >= longest
+    assert router["max_fallbacks"] > 5 or longest <= 5
+    # an explicit gateway value wins
+    p = pool()
+    p["gateway"]["router"]["max_fallbacks"] = 99
+    assert render_litellm.render(p, set(FAKE_ENV))["router_settings"]["max_fallbacks"] == 99

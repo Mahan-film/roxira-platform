@@ -1,0 +1,23 @@
+# systemd USER unit (box lane user): ssh tunnel to the key-pool gateway on the production server.
+# Local 127.0.0.1:4181 -> gateway 127.0.0.1:4000. Loopback bind only. Reaches the server through the box proxy
+# (HTTP CONNECT on 127.0.0.1:10809), so it works under the nftables egress lock. Holds no secrets: the ssh key is a
+# file (mode 600) and host/user/port come from tunnel.env (outside the repo).
+# The server side must restrict that key to forwarding only (docs/ops/BOX_LANE_RUNNER.md step 2).
+[Unit]
+Description=ssh tunnel to the Roxira key-pool gateway (127.0.0.1:4181)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=%h/.config/roxira-lane/tunnel.env
+ExecStart=/usr/bin/ssh -N -T -i %h/.ssh/roxira_gateway_tunnel -o IdentitiesOnly=yes -o BatchMode=yes \
+  -o StrictHostKeyChecking=yes -o UserKnownHostsFile=%h/.ssh/known_hosts_roxira_gateway \
+  -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ConnectTimeout=20 \
+  -o "ProxyCommand=/usr/bin/nc -X connect -x 127.0.0.1:10809 %%h %%p" \
+  -L 127.0.0.1:4181:127.0.0.1:4000 -p ${TUNNEL_PORT} ${TUNNEL_USER}@${TUNNEL_HOST}
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

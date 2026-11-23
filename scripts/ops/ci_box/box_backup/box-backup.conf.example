@@ -1,0 +1,23 @@
+# Copy to ~/.config/roxira-box-backup/backup.conf (install_user.sh does this). Parsed as KEY=VALUE, never sourced.
+# No secrets here: the repository password lives in restic.pass, cloud credentials in offbox.env (both mode 600).
+
+# Primary repository on the data disk. One-time owner step (root) because /srv/data/backups is root-owned:
+#   sudo install -d -o mahanfilms -g mahanfilms -m 700 /srv/data/backups/box-user
+REPOSITORY=/srv/data/backups/box-user
+PASSWORD_FILE=~/.config/roxira-box-backup/restic.pass
+
+# Off-box copy (owner decides; empty = off). Examples:
+#   OFFBOX_REPOSITORY=/mnt/second-disk/box-user            second local disk (must be a different filesystem)
+#   OFFBOX_REPOSITORY=s3:https://s3.example.invalid/bucket/box-user      any S3-compatible endpoint
+#   OFFBOX_REPOSITORY=b2:bucket-name:box-user              Backblaze B2 (native backend)
+# Remote repositories need ~/.config/roxira-box-backup/offbox.env (mode 600) with AWS_ACCESS_KEY_ID /
+# AWS_SECRET_ACCESS_KEY (S3) or B2_ACCOUNT_ID / B2_ACCOUNT_KEY (B2).
+OFFBOX_REPOSITORY=
+# Empty = same password as the primary repository (simplest; `restic copy` works either way).
+OFFBOX_PASSWORD_FILE=
+# Proxy for off-box traffic only (the lane user is egress-locked). Empty = inherit the unit's HTTPS_PROXY.
+PROXY=
+
+# Extra files or directories to include, space separated. The secret filters still apply.
+EXTRA_PATHS=
+INCLUDE_EXPORT_MANIFEST=1

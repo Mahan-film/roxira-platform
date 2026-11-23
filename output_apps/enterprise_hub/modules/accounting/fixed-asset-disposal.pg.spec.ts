@@ -167,9 +167,9 @@ describePg('Fixed-asset disposal on PostgreSQL', () => {
     const sums = await sumsOf(result.journalEntryId);
     // Debits: accumulated 30 + proceeds 100 = 130 million. Credits: cost 120 + gain 10 = 130 million.
     // The total is cost plus the gain, not cost, because proceeds exceed the book value here.
-    expect(sums.d).toBe('130000000.00');
-    expect(sums.c).toBe('130000000.00');
-    expect(await balance('1120')).toBe('-150000000.00'); // 6 assets charged, one asset's accumulated removed
+    expect(sums.d).toBe('130000000.0000');
+    expect(sums.c).toBe('130000000.0000');
+    expect(await balance('1120')).toBe('-150000000.0000'); // 6 assets charged, one asset's accumulated removed
   });
 
   it('refuses the second disposal of the same asset with 409', async () => {
@@ -193,8 +193,8 @@ describePg('Fixed-asset disposal on PostgreSQL', () => {
       ['5070', fromDb('10000000.00'), 0n],
     ]);
     const sums = await sumsOf(result.journalEntryId);
-    expect(sums.d).toBe(COST);
-    expect(sums.c).toBe(COST);
+    expect(sums.d).toBe('120000000.0000');
+    expect(sums.c).toBe('120000000.0000');
   });
 
   it('books the whole book value as loss when the proceeds are zero, and the voucher balances', async () => {
@@ -212,8 +212,8 @@ describePg('Fixed-asset disposal on PostgreSQL', () => {
       ['5070', fromDb(BOOK_VALUE), 0n],
     ]);
     const sums = await sumsOf(result.journalEntryId);
-    expect(sums.d).toBe(COST);
-    expect(sums.c).toBe(COST);
+    expect(sums.d).toBe('120000000.0000');
+    expect(sums.c).toBe('120000000.0000');
   });
 
   it('refuses a disposal inside a locked period with 423 and writes nothing, then succeeds after the unlock', async () => {
@@ -260,10 +260,10 @@ describePg('Fixed-asset disposal on PostgreSQL', () => {
     expect(run.charged).toEqual([{ code: 'FA-KEEP', amount: '10000000.00' }]);
     const touched = [...run.charged.map((c) => c.code), ...run.skipped.map((s) => s.code), ...run.zeroCharge];
     expect(touched).toEqual(['FA-KEEP']);
-    expect(await balance('4050')).toBe('-10000000.00');
-    expect(await balance('5070')).toBe('190000000.00'); // 10 + 90 + 90 million of losses
-    expect(await balance('1011')).toBe('270000000.00'); // 100 + 80 + 0 + 0 + 90 million of proceeds
-    expect(await balance('1113')).toBe('-600000000.00'); // five assets sold at cost
-    expect(await balance('1120')).toBe('-40000000.00'); // 180 - 150 posted, then KEEP's fourth month
+    expect(await balance('4050')).toBe('-10000000.0000');
+    expect(await balance('5070')).toBe('190000000.0000'); // 10 + 90 + 90 million of losses
+    expect(await balance('1011')).toBe('270000000.0000'); // 100 + 80 + 0 + 0 + 90 million of proceeds
+    expect(await balance('1113')).toBe('-600000000.0000'); // five assets sold at cost
+    expect(await balance('1120')).toBe('-40000000.0000'); // 180 - 150 posted, then KEEP's fourth month
   });
 });

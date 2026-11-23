@@ -17,7 +17,7 @@ export class TreasuryDocumentLineEntity {
   @Column({ type: 'varchar', length: 16 })
   method: TreasuryMethod;
 
-  @Column({ type: 'numeric', precision: 18, scale: 2 })
+  @Column({ type: 'numeric', precision: 20, scale: 4 })
   amount: string;
 
   /** `fin_bank_accounts.id` for bank transfer and card lines. */

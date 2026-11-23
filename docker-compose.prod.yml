@@ -5,8 +5,12 @@ services:
       dockerfile: Dockerfile.prod
     container_name: roxira_app_prod
     restart: always
+    # T254 (#993): Smart Judge total cap <= 4.5 GB (4512m) & <= 2.5 vCPU across
+    # enterprise_app (1200m/1.0), qdrant_prod (512m/0.5), roxira_embeddings (2800m/1.0).
+    # Rollback: remove `cpus:` and restore `roxira_embeddings` mem_limit to 3500m.
     mem_limit: 1200m
     mem_reservation: 600m
+    cpus: 1.0
     security_opt:
       - no-new-privileges:true
     # FastAPI AI Core (پورت ۸۰۰۰) فقط روی loopback هاست منتشر می‌شود تا
@@ -225,6 +229,7 @@ services:
     restart: always
     mem_limit: 512m
     mem_reservation: 256m
+    cpus: 0.5  # T254 (#993)
     security_opt:
       - no-new-privileges:true
     ports:
@@ -260,8 +265,11 @@ services:
     command: --model-id BAAI/bge-m3 --max-batch-tokens 2048 --max-client-batch-size 16 --max-concurrent-requests 8
     volumes:
       - /var/lib/roxira/tei-cache:/data
-    mem_limit: 3500m
+    # T254 (#993): Capped to 2800m / 1.0 vCPU so Smart Judge total <= 4.5 GB & 2.5 vCPU.
+    # Rollback: restore mem_limit: 3500m and remove cpus: 1.0.
+    mem_limit: 2800m
     mem_reservation: 1024m
+    cpus: 1.0
     oom_score_adj: 500  # T205: disposable: stateless, restarts on its own, dies first
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:80/health || exit 1"]
@@ -324,6 +332,9 @@ services:
       - HOME=/tmp
       # Bulk import spills (XLSX shared strings, nested workbooks) go to disk, not to the RAM-backed /tmp.
       - IMPORT_BULK_SPOOL_DIR=/import-spool
+      # Feature flags (T203): flagd service on roxira_net; unset FLAGD_HOST = every flag uses its fallback.
+      - FLAGD_HOST=flagd
+      - FLAGD_PORT=8013
     # non-root (nestjs = uid 100 / gid 101 in the image), no capabilities,
     # read-only root filesystem. Host prerequisite for the radar write paths below:
     #   chown 100:101 TECH_RADAR_REPORT.md TECH_RADAR_REPORT.json; install -d -o 100 -g 101 data/tech_radar
@@ -415,6 +426,41 @@ services:
         max-file: "3"
     networks:
       - docker_proxy_net
+
+  # ------------------------------------------------------------------
+  # Feature flags (T203, docs/ops/FEATURE_FLAGS.md). flagd reads config/flags/flags.json
+  # read-only and serves evaluations on 8013 (gRPC + HTTP). Reachable from roxira_net and
+  # from the host loopback only. 8013 is not in the AGENTS.md section 7 reserved list.
+  # ------------------------------------------------------------------
+  flagd:
+    image: ghcr.io/open-feature/flagd:v0.18.2@sha256:a1b6de22ef4f8a4f10af2f9d0009ccef946d707d4211db342f0f2422778b764a
+    container_name: roxira_flagd
+    restart: always
+    mem_limit: 64m
+    mem_reservation: 24m
+    oom_score_adj: 300  # T205 convention: stateless, backend falls back safely when flagd is gone
+    command:
+      - start
+      - --uri
+      - file:/etc/flagd/flags.json
+      - --port
+      - "8013"
+    volumes:
+      - ./config/flags:/etc/flagd:ro
+    ports:
+      - "127.0.0.1:8013:8013"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - roxira_net
 
   roxira_enterprise_frontend:
     build:

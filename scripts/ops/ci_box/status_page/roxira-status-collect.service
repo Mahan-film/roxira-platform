@@ -1,0 +1,13 @@
+[Unit]
+Description=Roxira box status: collect facts and write the static page (read-only)
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+# gh reaches GitHub through the box proxy; the loopback tunnel probe bypasses it on purpose.
+Environment=HTTPS_PROXY=http://127.0.0.1:10809 HTTP_PROXY=http://127.0.0.1:10809 NO_PROXY=127.0.0.1,localhost NODE_USE_ENV_PROXY=1
+EnvironmentFile=-%h/.config/roxira-status/status.env
+ExecStart=/usr/bin/python3 %h/.local/share/roxira-status/bin/box_status.py collect
+TimeoutStartSec=120
+Nice=10
+NoNewPrivileges=true

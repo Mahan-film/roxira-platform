@@ -128,6 +128,8 @@ export class OrgController {
     return this.members.remove(requireAccess(req), id, req);
   }
 
+  // accountant-firm advisor routes are disabled (revert of #1197, row #1258): see docs/STATE.md
+
   @RequireAction(AccessAction.ADMIN)
   @Get('members/:userId/login-schedule')
   @ApiOperation({ summary: 'Get allowed login time window schedule for a member' })

@@ -15,6 +15,7 @@ Environment=RADAR_MAX_USD=0.05
 ExecStart=/usr/bin/python3 /opt/roxira_platform/scripts/ops/radar/radar.py --mode weekly
 StateDirectory=roxira-radar
 Environment=RADAR_STATE_DIR=/var/lib/roxira-radar
+Environment=RADAR_DECISIONS_FILE=/var/lib/roxira-radar/DECISIONS.md
 User=root
 Nice=15
 # The radar only reads public endpoints and writes docs/radar/REPORT_<date>.md + a state file.

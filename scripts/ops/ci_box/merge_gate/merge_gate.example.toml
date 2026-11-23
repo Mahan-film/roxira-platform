@@ -3,9 +3,9 @@
 repo = "Mahan-film/roxira-platform"
 base = "main"
 label = "merge-queue"
-owner_label = "owner-approved"
 
-# Stay true until the repo flip. While true, nothing is merged, commented or written.
+# Stay true until the repo flip. While true, nothing is merged or commented (the main-push alert keeps a separate
+# dry-run pointer file and sends nothing).
 dry_run = true
 
 # Also treat "auto-merge requested" as a request to merge (transition period).
@@ -23,6 +23,7 @@ state_dir = "~/.local/state/roxira-merge-gate"
 required_checks = [
   "Detect changes",
   "Secret scan (new commits only)",
+  "Semgrep CE (new findings)",
   "Agent guards (money, tenant scope, model ids, secrets)",
   "Pytest (unit)",
   "Compose config",
@@ -31,17 +32,63 @@ required_checks = [
   "Frontend gate",
 ]
 
+# Decision B7: a PR touching any of these is class "owner sentence required". The gate never merges it; it
+# comments once per head and waits for an owner comment line `OWNER-OK #<PR number> <head sha7>` written by an id
+# in owner_approver_ids. This list REPLACES the code default, so keep the live toml in sync with this example.
 protected_globs = [
+  # migrations
   "migrations/**",
   "**/migrations/**",
-  ".github/workflows/**",
-  "scripts/ops/deploy*.sh",
+  # payment, billing, auth
+  "**/payment/**",
+  "**/payments/**",
+  "**/*payment*",
+  "**/zibal*",
+  "**/billing/**",
+  "**/auth/**",
+  "**/*auth/**",
+  "**/auth_*/**",
+  "**/auth.*",
+  # production image, compose, deploy scripts and units (main autodeploys)
+  "Dockerfile.prod",
+  "**/Dockerfile.prod",
   "docker-compose.prod.yml",
+  "scripts/ops/deploy*.sh",
+  "scripts/ops/*deploy*.sh",
+  "scripts/ops/autodeploy/**",
+  "deploy/**",
+  # workflows and the gate itself
+  ".github/workflows/**",
+  "scripts/ops/ci_box/merge_gate/**",
+  "scripts/ci/merge_gate*.py",
+  "src/ops/test_*merge_gate*.py",
+  "docs/ops/MERGE_GATE_SPEC.md",
 ]
 
 # Only comments by these logins count as review-desk verdicts.
-review_comment_authors = ["github-actions[bot]"]
+review_comment_authors = ["github-actions[bot]"]   # used only while the id list below is empty
+# Numeric ids of the review-desk accounts (gh api users/<login> --jq .id). When set they replace the login check.
+review_comment_author_ids = []
+
+# Explicit holds: a PR with one of these labels, or a title containing one of these markers, is never merged.
+block_labels = ["needs-human", "do-not-merge"]
+block_title_markers = ["[needs owner]"]
+
+# Decision B7-2: false = merge a green head even when behind, as long as it merges cleanly into the current main
+# (what the old ruleset did). The gate then merges one PR per tick and waits for that merge's push CI run on main;
+# a red run pauses the gate (file PAUSE in state_dir) and alerts on Telegram.
+# true = the PR must contain the tip of main (update-branch + new CI + new review per PR; starved the dry-run).
+require_up_to_date = false
+main_ci_workflow = "ci.yml"          # push-to-main run that must pass after each gate merge
+main_ci_grace_seconds = 300          # no run after this = paths-ignored push, counted as passed
+
+# Dispatch review-desk.yml for a PR that passed every other rule but has no verdict for its head (once per head,
+# one per tick, only when no desk run is queued or running). Acts even while dry_run = true.
+dispatch_review_desk = true
+review_desk_workflow = "review-desk.yml"
 
 # Numeric GitHub user ids (gh api users/<login> --jq .id). Empty = feature off.
 approver_ids = []        # human APPROVE on the exact head counts as a review
-owner_approver_ids = []  # may add the `owner-approved` label for protected paths
+# Human owners whose `OWNER-OK #<PR> <sha7>` comment releases a protected-path PR. Must be accounts that no agent,
+# automation or box token can act as; empty = no protected PR is ever merged by the gate (fails closed).
+owner_approver_ids = []

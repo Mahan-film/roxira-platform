@@ -1,11 +1,19 @@
 import { buildReview, PackageReview } from '../analysis/review';
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
+import {
+  ReconcilePackageOptions,
   ReconcileSelection,
   ReconciliationReport,
   reconcilePackage,
+  reconciliationCacheKey,
   selectionKey,
 } from '../analysis/reconciliation';
+import { ImportTieOutEngine } from '../analysis/import-tie-out.engine';
 import { EntityRegistryService } from '../registry/entity-registry.service';
 import { PackageAnalysisService } from './package-analysis.service';
 import { PackageStoreService } from './package-store.service';
@@ -17,6 +25,7 @@ export class PackageReconciliationService {
     private readonly store: PackageStoreService,
     private readonly analysisService: PackageAnalysisService,
     private readonly registry: EntityRegistryService,
+    @Optional() private readonly tieOutEngine?: ImportTieOutEngine,
   ) {}
 
   /** صفحهٔ بازبینی: گروه‌بندی و همهٔ سندهای پیشنهادی. برای بستهٔ OCR پیش‌شرط ثبت است. */
@@ -52,6 +61,7 @@ export class PackageReconciliationService {
     tenantId: string,
     packageId: string,
     selections: ReconcileSelection[],
+    options?: ReconcilePackageOptions,
   ): Promise<ReconciliationReport> {
     const state = await this.store.getState(tenantId, packageId);
     if (!state) {
@@ -60,16 +70,25 @@ export class PackageReconciliationService {
     if (!state.analysis || (state.status !== 'ready' && state.status !== 'committing')) {
       throw new BadRequestException('این بسته آمادهٔ مغایرت‌گیری نیست؛ ابتدا تحلیل باید کامل شود.');
     }
-    const key = selectionKey(selections);
-    if (state.reconciliation?.key === key) {
+    const cacheKey = reconciliationCacheKey(selections, options);
+    if (state.reconciliation?.key === cacheKey) {
       return state.reconciliation.report as ReconciliationReport;
     }
     const parsed = await this.analysisService.openPackage(state);
     try {
-      const report = reconcilePackage(parsed.tables, state.analysis, this.registry.all(), selections);
+      const report = reconcilePackage(
+        parsed.tables,
+        state.analysis,
+        this.registry.all(),
+        selections,
+        {
+          tieOutEngine: this.tieOutEngine,
+          ...options,
+        },
+      );
       const fresh = await this.store.getState(tenantId, packageId);
       if (fresh) {
-        fresh.reconciliation = { key, report };
+        fresh.reconciliation = { key: cacheKey, report };
         await this.store.writeState(fresh);
       }
       return report;

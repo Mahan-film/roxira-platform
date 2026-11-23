@@ -143,7 +143,7 @@ describe('InvoicingService.importInvoices', () => {
     expect(invoice.totalTax).toBe(3725000 + 500);
     expect(invoice.finalPayable).toBe(40975000 + 5500);
     expect(invoice.currency).toBe(Currency.IRR);
-    expect(invoice.customerId).toBeNull();
+    expect(invoice.customerId).toBe(1);
     expect(invoice.buyerInfo).toMatchObject({ name: 'آرش آذرخش نمونه', nationalId: '1000000001' });
     expect(invoice.sellerInfo).toMatchObject({ name: 'شرکت ما' });
     expect(invoice.issuedAt).toEqual(new Date(Date.UTC(2024, 3, 1)));

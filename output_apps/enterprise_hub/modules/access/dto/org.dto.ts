@@ -136,3 +136,38 @@ export class SetEntitlementsDto {
 export class RequestModuleDto {
   @ApiProperty() @IsString() @MaxLength(40) module: string;
 }
+
+export class AssignPartnerAdvisorDto {
+  @ApiProperty({ description: 'شناسه کاربر مؤسسه حسابداری' })
+  @IsUUID()
+  userId: string;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsUUID()
+  branchId?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsUUID()
+  departmentId?: string | null;
+}
+
+export class RevokeFirmUserDto {
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'فهرست اختیاری سازمان‌های هدف (در صورت ارسال، اختیار مدیر در هر سازمان بررسی می‌شود)',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @IsUUID('4', { each: true })
+  tenantIds?: string[];
+
+  @ApiPropertyOptional({ maxLength: 256 })
+  @IsOptional()
+  @Transform(trimmed)
+  @IsString()
+  @MaxLength(256)
+  reason?: string;
+}

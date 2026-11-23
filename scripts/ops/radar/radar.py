@@ -45,7 +45,20 @@ import xml.etree.ElementTree as ET
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.environ.get("ROXIRA_REPO_DIR") or os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 MODELS_YAML = os.path.join(REPO, "config", "models.yaml")
-DECISIONS_MD = os.environ.get("RADAR_DECISIONS_FILE") or os.path.join(REPO, "docs", "radar", "DECISIONS.md")
+DEFAULT_STATE_DIR = os.environ.get("RADAR_STATE_DIR") or "/var/lib/roxira-radar"
+REPO_DECISIONS_MD = os.path.join(REPO, "docs", "radar", "DECISIONS.md")
+
+
+def default_decisions_file(state_dir=None):
+    """Return the writable decisions log path, always outside REPO by default (T232)."""
+    override = os.environ.get("RADAR_DECISIONS_FILE")
+    if override:
+        return override
+    base = state_dir or os.environ.get("RADAR_STATE_DIR") or "/var/lib/roxira-radar"
+    return os.path.join(base, "DECISIONS.md")
+
+
+DECISIONS_MD = default_decisions_file(DEFAULT_STATE_DIR)
 UA = "roxira-radar/1.0 (+https://github.com/Mahan-film/roxira-platform)"
 
 HARD_CAP_USD = 0.05  # absolute ceiling per run; RADAR_MAX_USD can only lower it
@@ -957,8 +970,12 @@ def render_email(run):
 SOURCE_MAP = {"github": "github", "hackernews": "hackernews", "arxiv": "arxiv"}
 
 
-def append_decisions(items, path=DECISIONS_MD, today=None):
-    """Append adopt/trial rows (release rows only for adopt) to docs/radar/DECISIONS.md. Never edits old rows."""
+def append_decisions(items, path=None, today=None):
+    """Append adopt/trial rows (release rows only for adopt) to the decisions log (default outside REPO). Never edits old rows."""
+    target = path or default_decisions_file()
+    parent = os.path.dirname(os.path.abspath(target))
+    if parent:
+        os.makedirs(parent, exist_ok=True)
     dl = decision_log()
     n = 0
     for c in items:
@@ -970,7 +987,7 @@ def append_decisions(items, path=DECISIONS_MD, today=None):
         if len(reason) < dl.MIN_REASON_LEN:
             reason = f"{reason} (radar score {c['total']})"
         try:
-            dl.add_decision(path, c["name"], c["url"], SOURCE_MAP.get(c["seen_in"][0], "manual"),
+            dl.add_decision(target, c["name"], c["url"], SOURCE_MAP.get(c["seen_in"][0], "manual"),
                             c["verdict"], reason, owner="radar", date=today)
             n += 1
         except dl.DecisionError:
@@ -1085,7 +1102,10 @@ def main(argv=None):
     budget = RunBudget(cap_from_env())
     llm = LLM(budget, os.environ.get("OPENROUTER_API_KEY", "")) if not a.no_llm else None
     dl = decision_log()
-    decided = {canon_url(r["url"]) for r in dl.list_decisions(DECISIONS_MD)}
+    decisions_path = default_decisions_file(state_dir)
+    decided = {canon_url(r["url"]) for r in dl.list_decisions(decisions_path)}
+    if os.path.abspath(decisions_path) != os.path.abspath(REPO_DECISIONS_MD) and os.path.exists(REPO_DECISIONS_MD):
+        decided |= {canon_url(r["url"]) for r in dl.list_decisions(REPO_DECISIONS_MD)}
 
     res = build_run(a.mode, ctx, registry, state, skip=[s for s in a.skip.split(",") if s], llm=llm,
                     no_llm=a.no_llm, enrich=not a.no_enrich, top_n=a.top, decided_urls=decided, budget=budget)
@@ -1105,7 +1125,7 @@ def main(argv=None):
         text = render_report(run)
         with open(os.path.join(report_dir, name), "w", encoding="utf-8") as fh:
             fh.write(text)
-        n_dec = append_decisions(run["items"])
+        n_dec = append_decisions(run["items"], path=decisions_path)
         if not a.no_issues:
             run["issues"] = open_issues(run["items"], state)
         if not a.no_email and not mc.silenced():

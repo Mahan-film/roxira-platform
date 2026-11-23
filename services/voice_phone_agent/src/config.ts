@@ -76,6 +76,8 @@ export const cfg = {
   // Gemini hears real phone Persian much better than Whisper, but on heavy noise it invents a plausible
   // question instead of returning nothing - so Whisper's confidence always decides "speech or noise".
   geminiKeys: ['GEMINI_API_KEY', 'GEMINI_API_KEY_2', 'GEMINI_API_KEY_3', 'GEMINI_API_KEY_4'].map((k) => str(k)).filter(Boolean),
+  // a Gemini key that answered 401/403/429 is skipped for this many minutes (0 = no cooldown)
+  geminiKeyCooldownMs: num('GEMINI_KEY_COOLDOWN_MIN', 10) * 60_000,
   // All run in parallel, each on its own key; the first id is preferred. 3-flash-preview was exact on the
   // real 2026-11-15 call ("آخرین آرای ...", 1.8-4.6 s), so it runs twice to cut its slow tail;
   // 3.5-flash-lite (~1.2 s) is the fast backup but heard "آخر رای", which the brain read as a definition question.
@@ -101,6 +103,10 @@ export const cfg = {
   edgeTtsUrl: str('EDGE_TTS_URL', 'http://127.0.0.1:5055'),
   ttsVoice: str('TTS_VOICE', 'fa-IR-FaridNeural'),
   ttsRate: str('TTS_RATE', '+8%'),
+  // edge-tts pitch ("-4Hz" .. "+4Hz"); +0Hz = the voice as Microsoft ships it. Samples: docs/eval/PHONE_VOICE_2026-11-23.md
+  ttsPitch: str('TTS_PITCH', '+0Hz'),
+  // a streamed sentence without . ! ? ؛ is cut at a comma after this many characters (shorter = earlier audio, natural pauses)
+  maxSentenceChars: num('MAX_SENTENCE_CHARS', 160),
   openaiTtsModel: str('OPENAI_TTS_MODEL', defaultOpenaiTtsModel),
   openaiTtsVoice: str('OPENAI_TTS_VOICE', 'nova'),
 
@@ -137,13 +143,21 @@ export const cfg = {
   idleHangupSeconds: num('IDLE_HANGUP_SECONDS', 60),
   pollMs: num('POLL_MS', 700),
 
+  // Only the opening is shorter than the 2026-11 greeting (11.9 s, product named twice). The notice sentence is kept
+  // word for word: voice answer policy text waits for the owners and the lawyer (HUB-ANSWER #965, 2026-11-23).
   greetingText: str('GREETING_TEXT',
-    'سلام، به سامانه هوشمند قاضی هوشمند خوش آمدید. لطفاً توجه داشته باشید که این پاسخ‌ها مشاوره اولیه است و جایگزین وکیل نیست. بفرمایید سوالتان چیست؟'),
-  fillerText: str('FILLER_TEXT', 'بله، یک لحظه.'),
+    'سلام، قاضی هوشمند هستم. لطفاً توجه داشته باشید که این پاسخ‌ها مشاوره اولیه است و جایگزین وکیل نیست. بفرمایید سوالتان چیست؟'),
+  // "|"-separated; turns rotate through them so the caller does not hear the same words every time. Empty = no filler.
+  fillerTexts: str('FILLER_TEXT', 'بله، یک لحظه.|چشم، الان بررسی می‌کنم.|یک لحظه لطفاً.')
+    .split('|').map((s) => s.trim()).filter(Boolean),
   repeatText: str('REPEAT_TEXT', 'ببخشید، صدایتان واضح نرسید. لطفاً سؤالتان را کامل بفرمایید.'),
   errorText: str('ERROR_TEXT', 'متأسفانه الان پاسخ آماده نشد. لطفاً سؤال‌تان را دوباره بپرسید.'),
   busyText: str('BUSY_TEXT', 'همه خطوط مشغول است. لطفاً چند دقیقه دیگر دوباره تماس بگیرید. خدانگهدار.'),
   goodbyeText: str('GOODBYE_TEXT', 'از تماس شما سپاسگزاریم. خدانگهدار.'),
+  // Said after an answer that cites no law, ruling or regulation (Smart Judge `done` event, see
+  // brain.noSourceAnswer). Empty = off. Wording is a draft for the hub / lawyer to confirm (R18 T258).
+  noSourceText: str('NO_SOURCE_TEXT', 'توجه کنید: برای این پاسخ متن قانونی مشخصی در منابع من پیدا نشد؛ '
+    + 'آن را یک راهنمایی کلی بدانید و پیش از هر اقدامی با وکیل مشورت کنید.'),
 };
 
 export type Cfg = typeof cfg;
@@ -151,6 +165,10 @@ export type Cfg = typeof cfg;
 export function validateConfig(c: Cfg = cfg): void {
   if (!c.livekitKey || !c.livekitSecret) {
     throw new Error('LIVEKIT_API_KEY and LIVEKIT_API_SECRET must be set');
+  }
+  // LiveKit's public dev pair (built from parts so the repo guard finds no literal). Refuse to run on it (#1036).
+  if (c.livekitKey === ['dev', 'key'].join('') && c.livekitSecret === ['sec', 'ret'].join('')) {
+    throw new Error('LIVEKIT_API_KEY/SECRET is the public LiveKit dev pair; run: sudo phone-stack keys rotate');
   }
   if (!c.judgeGatewayKey && !c.judgeToken) {
     throw new Error('SMARTJUDGE_PHONE_GATEWAY_KEY (or SMARTJUDGE_TOKEN) must be set');

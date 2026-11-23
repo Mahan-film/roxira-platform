@@ -27,6 +27,7 @@ export const DEFAULT_RATES_PER_USD: Record<Currency, number> = {
   [Currency.TRY]: 34.5,
   [Currency.CNY]: 7.2,
   [Currency.OMR]: 0.3845,
+  [Currency.GBP]: 0.79,
 };
 
 /** متغیر محیطی متناظر با هر ارز جهت بازنویسی نرخ مرجع. */
@@ -39,6 +40,7 @@ export const CURRENCY_RATE_ENV_KEYS: Record<Currency, string> = {
   [Currency.TRY]: 'CURRENCY_RATE_TRY',
   [Currency.CNY]: 'CURRENCY_RATE_CNY',
   [Currency.OMR]: 'CURRENCY_RATE_OMR',
+  [Currency.GBP]: 'CURRENCY_RATE_GBP',
 };
 
 /** فراداده نمایشی هر ارز (نماد، نام انگلیسی و تعداد اعشار چاپی). */
@@ -107,6 +109,13 @@ export const CURRENCY_METADATA: Record<Currency, CurrencyMetadata> = {
     decimals: 3,
     isBase: false,
   },
+  [Currency.GBP]: {
+    code: Currency.GBP,
+    name: 'British Pound',
+    symbol: '£',
+    decimals: 2,
+    isBase: false,
+  },
 };
 
 /** فهرست ارزهای مجاز (برای اعتبارسنجی DTO). */
@@ -119,4 +128,5 @@ export const SUPPORTED_CURRENCIES: Currency[] = [
   Currency.TRY,
   Currency.CNY,
   Currency.OMR,
+  Currency.GBP,
 ];

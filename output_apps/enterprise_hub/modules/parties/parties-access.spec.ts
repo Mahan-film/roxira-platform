@@ -58,8 +58,8 @@ describe('party master access', () => {
   });
 
   it.each(roleKeys)('role %s matches the catalogue on the four party handlers', async (role) => {
-    const expectedRead = [SystemRole.OWNER, SystemRole.ADMIN, SystemRole.ACCOUNTANT, SystemRole.SALES,
-      SystemRole.READ_ONLY, SystemRole.LEGACY_MEMBER].includes(role as SystemRole);
+    const expectedRead = [SystemRole.OWNER, SystemRole.ADMIN, SystemRole.ACCOUNTANT, SystemRole.PARTNER_ADVISOR,
+      SystemRole.SALES, SystemRole.READ_ONLY, SystemRole.LEGACY_MEMBER].includes(role as SystemRole);
     const expectedWrite = [SystemRole.OWNER, SystemRole.ADMIN, SystemRole.SALES, SystemRole.LEGACY_MEMBER]
       .includes(role as SystemRole);
     for (const handler of ['list', 'getByCode'] as const) {

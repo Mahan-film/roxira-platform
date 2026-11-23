@@ -582,6 +582,14 @@ def drafting_models() -> list[str]:
     return out
 
 
+try:
+    from .security.pii_scrubber import scrub_messages as _scrub_messages
+    from .security.pii_scrubber import unmask_pii_entities as _unmask_pii_entities
+except ImportError:  # pragma: no cover - top-level script import
+    from security.pii_scrubber import scrub_messages as _scrub_messages
+    from security.pii_scrubber import unmask_pii_entities as _unmask_pii_entities
+
+
 async def complete_ladder(
     messages: list[dict[str, Any]],
     *,
@@ -608,6 +616,10 @@ async def complete_ladder(
             raise ValueError("pass no model/models/provider; configure the ladder in config/models.yaml")
     if params.get("stream"):
         raise ValueError("streaming is not supported by llm_router.complete_ladder")
+    scrub_pii = params.pop("scrub_pii", True)
+    pii_mapping: dict[str, str] = {}
+    if scrub_pii:
+        messages, pii_mapping, _ = _scrub_messages(messages, context=feature or "llm_ladder")
     models = drafting_models()
     per_try = float(attempt_timeout) if attempt_timeout else drafting_attempt_timeout()
     budget = float(total_budget) if total_budget else drafting_total_budget()
@@ -648,6 +660,8 @@ async def complete_ladder(
             elif accept is not None and not accept(result.content):
                 last_status, last_reason = None, "answer rejected by validator"
             else:
+                if pii_mapping and result.content:
+                    result.content = _unmask_pii_entities(result.content, pii_mapping)
                 llm_gateway.log_served("ladder", result.model or mid)
                 _log_usage_background(_usage_record(base, result, models, t0, "ok", 200))
                 return result
@@ -702,8 +716,14 @@ async def complete(
             attempt_timeout=timeout, **params,
         )
 
+    scrub_pii = params.pop("scrub_pii", True)
     requested_tier = tier
     tier, models = _resolve_models(tier, sensitive)
+
+    pii_mapping: dict[str, str] = {}
+    if scrub_pii:
+        messages, pii_mapping, _ = _scrub_messages(messages, context=feature or f"llm_{tier}")
+
     t0 = time.monotonic()
     base = {
         "tenant": tenant,
@@ -713,11 +733,14 @@ async def complete(
         "requested_tier": requested_tier,
     }
 
-    key = cache_key(models, messages, params) if _is_cacheable(params) else None
+    # Skip cache when PII was scrubbed to prevent cross-request placeholder/PII poisoning.
+    key = cache_key(models, messages, params) if (_is_cacheable(params) and not pii_mapping) else None
     if key:
         hit = await _cache_get(key)
         if hit:
             result = LLMResult(**{**hit, "cached": True, "attempts": 0, "cost_usd": 0.0})
+            if pii_mapping and result.content:
+                result.content = _unmask_pii_entities(result.content, pii_mapping)
             _log_usage_background(_usage_record(base, result, models, t0, "ok", None))
             return result
 
@@ -758,6 +781,8 @@ async def complete(
                 cached = asdict(result)
                 cached.pop("raw", None)
                 await _cache_set(key, cached)
+            if pii_mapping and result.content:
+                result.content = _unmask_pii_entities(result.content, pii_mapping)
             return result
 
     if plan is not None and not llm_gateway.may_use_paid(plan):
@@ -799,6 +824,8 @@ async def complete(
         cached = asdict(result)
         cached.pop("raw", None)
         await _cache_set(key, cached)
+    if pii_mapping and result.content:
+        result.content = _unmask_pii_entities(result.content, pii_mapping)
     return result
 
 

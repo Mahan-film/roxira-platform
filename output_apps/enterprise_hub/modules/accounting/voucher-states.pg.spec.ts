@@ -54,7 +54,7 @@ describePg('Voucher states on PostgreSQL', () => {
     expect(draft.status).toBe('DRAFT');
     const tb = await accounting.getTrialBalance(T1);
     expect(tb.rows.every((r) => r.totalDebit === 0 && r.totalCredit === 0)).toBe(true);
-    expect(await balance(T1, '1010')).toBe('0.00');
+    expect(await balance(T1, '1010')).toBe('0.0000');
   });
 
   it('refuses an unbalanced temporary or final voucher', async () => {
@@ -80,7 +80,7 @@ describePg('Voucher states on PostgreSQL', () => {
     expect(edited.totalDebit).toBe(100);
     const temp = await accounting.changeVoucherStatus(T1, draft!.id, JournalEntryStatus.TEMPORARY);
     expect(temp.status).toBe('TEMPORARY');
-    expect(await balance(T1, '1010')).toBe('0.00');
+    expect(await balance(T1, '1010')).toBe('0.0000');
   });
 
   it('finalises once: balances move exactly one time and the voucher becomes immutable', async () => {
@@ -90,7 +90,7 @@ describePg('Voucher states on PostgreSQL', () => {
       accounting.changeVoucherStatus(T1, entry!.id, JournalEntryStatus.POSTED),
     ]);
     expect(settled.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
-    expect(await balance(T1, '1010')).toBe('100.00');
+    expect(await balance(T1, '1010')).toBe('100.0000');
     const tb = await accounting.getTrialBalance(T1);
     expect(tb.rows.find((r) => r.code === '1010')).toMatchObject({ totalDebit: 100, totalCredit: 0 });
 

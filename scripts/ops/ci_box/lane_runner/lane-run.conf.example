@@ -1,0 +1,15 @@
+# lane-run config: install_user.sh copies this to ~/.config/roxira-lane/lane-run.conf. KEY=VALUE, no shell syntax
+# (the file is parsed, never sourced, and "~" is not expanded: leave the defaults unless you need to change them).
+# Gateway: the local end of the ssh tunnel. Must be loopback; lane-run refuses anything else.
+GATEWAY_URL=http://127.0.0.1:4181/v1
+# Tier picks the gateway group: light=agent-light-free, strong=agent-strong-free, best=best-all.
+# Model ids live in config/key_pool.yaml and config/models.yaml; never write one here.
+TIER=strong
+MODEL_GROUP=agent-strong-free
+# Bot-loop guard: events by these logins (or any "[bot]" account) and events labelled OWN_LABEL are ignored.
+BOT_LOGINS=github-actions,dependabot,renovate,copilot
+OWN_LABEL=lane-runner
+# Optional overrides (defaults are under the lane user's home, outside the repo):
+# GATEWAY_ENV=/home/<lane-user>/.config/roxira-lane/gateway.env
+# STATE_DIR=/home/<lane-user>/.local/state/roxira-lane
+# OPENCODE_BIN=/home/<lane-user>/.local/bin/opencode

@@ -413,13 +413,13 @@ describe('permission matrix (every controller)', () => {
       }
     });
 
-    it('no role other than accountant, owner, admin, sales, read_only and legacy_member reads parties; hr and cheque_reviewer do not', async () => {
+    it('no role other than accountant, partner_advisor, owner, admin, sales, read_only and legacy_member reads parties; hr and cheque_reviewer do not', async () => {
       const party = routes.filter((r) => r.controller.name === 'PartiesController');
       const list = party.find((r) => r.id.endsWith('PartiesController.list)'));
       for (const role of roleKeys) {
         const ok = await allowed(list!, (s) => s.grant('u1', TENANT, role));
         const expected = [
-          SystemRole.OWNER, SystemRole.ADMIN, SystemRole.ACCOUNTANT,
+          SystemRole.OWNER, SystemRole.ADMIN, SystemRole.ACCOUNTANT, SystemRole.PARTNER_ADVISOR,
           SystemRole.SALES, SystemRole.READ_ONLY, SystemRole.LEGACY_MEMBER,
         ].includes(role as SystemRole);
         expect(ok).toBe(expected);

@@ -29,16 +29,17 @@ async function waitForTts() {
 async function loadPrompts(): Promise<Prompts> {
   const welcomeWav = path.resolve(cfg.root, '..', 'welcome.wav');
   const t0 = Date.now();
-  const [greeting, filler, repeat, error, busy, goodbye] = await Promise.all([
+  const [greeting, filler, repeat, error, busy, goodbye, noSource] = await Promise.all([
     cachedPrompt(cfg.greetingText, welcomeWav),
-    cachedPrompt(cfg.fillerText),
+    Promise.all(cfg.fillerTexts.map((t) => cachedPrompt(t))),
     cachedPrompt(cfg.repeatText),
     cachedPrompt(cfg.errorText),
     cachedPrompt(cfg.busyText),
     cachedPrompt(cfg.goodbyeText),
+    cfg.noSourceText ? cachedPrompt(cfg.noSourceText) : Promise.resolve(new Int16Array(0)),
   ]);
   log.info(`prompts ready in ${Date.now() - t0} ms (greeting ${(greeting.length / 48000).toFixed(1)} s)`);
-  return { greeting, filler, repeat, error, busy, goodbye };
+  return { greeting, filler, repeat, error, busy, goodbye, noSource };
 }
 
 async function poll(prompts: Prompts) {

@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "effective_from": "2026-11-21",
+  "review_cadence_days": 90,
+  "note": "Effective-dated retention and breach-notification policy (T291 / R29). Statutory retention durations marked requires-primary-check must be verified with local counsel before onboarding regulated paying tenants.",
+  "breach_notification_sla": {
+    "initial_triage_hours": 4,
+    "containment_target_hours": 12,
+    "customer_notice_hours": 48,
+    "supervisory_authority_window_hours": 72,
+    "post_incident_review_business_days": 5,
+    "primary_source": "https://eur-lex.europa.eu/eli/reg/2016/679/oj",
+    "verification_status": "requires-primary-check"
+  },
+  "data_classes": [
+    {
+      "id": "accounting_ledger_and_vouchers",
+      "description": "Posted journal entries, chart of accounts, trial balances, and fiscal close records",
+      "retention_days": 3650,
+      "legal_basis": "Statutory bookkeeping retention (e.g., DE AO §147 / HGB §257; IR Direct Taxes Act)",
+      "primary_source": "https://www.gesetze-im-internet.de/ao_1977/__147.html",
+      "verification_status": "requires-primary-check",
+      "disposal_method": "Export to tenant archive (GoBD Z3 / CSV) then cryptographic erasure on offboarding after statutory hold"
+    },
+    {
+      "id": "tax_and_einvoice_transmissions",
+      "description": "Moadian / MyInvois / ZATCA / PINT payloads, receipts, and signed XML artifacts",
+      "retention_days": 3650,
+      "legal_basis": "Statutory tax invoice archiving",
+      "primary_source": "https://www.gesetze-im-internet.de/ao_1977/__147.html",
+      "verification_status": "requires-primary-check",
+      "disposal_method": "Immutable archive export followed by tenant key destruction after statutory hold"
+    },
+    {
+      "id": "hr_and_payroll_records",
+      "description": "Employee master data, payslips, tax/social-security filings, and leave records",
+      "retention_days": 2190,
+      "legal_basis": "Statutory payroll and social-security retention",
+      "primary_source": "https://www.gesetze-im-internet.de/ao_1977/__147.html",
+      "verification_status": "requires-primary-check",
+      "disposal_method": "Tenant-scoped hard delete + backup expiry"
+    },
+    {
+      "id": "raw_customer_uploads",
+      "description": "Uploaded PDFs, images, spreadsheets, and OCR staging files prior to ledger posting",
+      "retention_days": 90,
+      "legal_basis": "Operational processing and import tie-out window",
+      "primary_source": "https://eur-lex.europa.eu/eli/reg/2016/679/oj",
+      "verification_status": "internal-policy",
+      "disposal_method": "Automated scheduled purge job after successful posting or tenant offboarding"
+    },
+    {
+      "id": "ai_prompts_and_usage_logs",
+      "description": "PII-scrubbed AI routing metadata, token counts, and latency telemetry",
+      "retention_days": 90,
+      "legal_basis": "Service reliability, abuse prevention, and cost accounting",
+      "primary_source": "https://eur-lex.europa.eu/eli/reg/2016/679/oj",
+      "verification_status": "internal-policy",
+      "disposal_method": "Automated TTL purge; raw PII is scrubbed before external LLM calls"
+    },
+    {
+      "id": "security_and_audit_logs",
+      "description": "Sign-in events, role access denials, period-lock changes, and admin actions",
+      "retention_days": 365,
+      "legal_basis": "Security incident forensics and compliance audit trail",
+      "primary_source": "https://eur-lex.europa.eu/eli/reg/2016/679/oj",
+      "verification_status": "internal-policy",
+      "disposal_method": "Rolling 365-day retention with append-only storage"
+    },
+    {
+      "id": "database_backups_and_wal",
+      "description": "Encrypted PostgreSQL pg_dump/age archives and WAL-G PITR segments",
+      "retention_days": 35,
+      "legal_basis": "Disaster recovery and point-in-time recovery",
+      "primary_source": "https://eur-lex.europa.eu/eli/reg/2016/679/oj",
+      "verification_status": "internal-policy",
+      "disposal_method": "Automatic lifecycle expiry on object storage"
+    },
+    {
+      "id": "qdrant_vector_snapshots",
+      "description": "Qdrant collection snapshots for legal corpus and tenant knowledge indices",
+      "retention_days": 30,
+      "legal_basis": "Disaster recovery for vector search indices",
+      "primary_source": "https://eur-lex.europa.eu/eli/reg/2016/679/oj",
+      "verification_status": "internal-policy",
+      "disposal_method": "Verified off-container snapshot rotation and collection deletion"
+    }
+  ]
+}

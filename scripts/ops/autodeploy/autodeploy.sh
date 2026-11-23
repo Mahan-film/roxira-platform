@@ -35,6 +35,8 @@ DEPLOYED_BEFORE=""
 TARGET_SHORT=""
 MIGRATED=false
 RESULT="skipped"
+FAIL_REASON=""
+FAIL_DETAIL=""
 LOG_FILE=""
 DEPLOY_TMP=""
 
@@ -58,7 +60,21 @@ write_status() {
     # Best effort: notify the owner for a real outcome, never for a no-op/skip.
     # A failed (rolled back) deploy is urgent -> Telegram only (1/h); a good deploy goes to the digest.
     if [ "$RESULT" = "failed" ]; then
-      python3 "$REPO/scripts/ops/notify/notify.py" --urgent "deploy-failed" "استقرار ${TARGET_SHORT:0:7} ناموفق بود و برگردانده شد" >/dev/null 2>&1 || true
+      if [ "$FAIL_REASON" = "dirty-tree" ]; then
+        python3 "$REPO/scripts/ops/notify/notify.py" --urgent "autodeploy-dirty-${TARGET_SHORT:0:7}" \
+          "autodeploy refused ${TARGET_SHORT:0:7}: dirty tree (${FAIL_DETAIL}). Clear marker: scripts/ops/autodeploy/clear_failed.sh ${TARGET_SHORT:0:7}" >/dev/null 2>&1 || true
+      elif [ "$FAIL_REASON" = "migrate-failed" ]; then
+        python3 "$REPO/scripts/ops/notify/notify.py" --urgent "autodeploy-migrate-${TARGET_SHORT:0:7}" \
+          "autodeploy refused ${TARGET_SHORT:0:7}: migration failed (deploy not started). Clear marker: scripts/ops/autodeploy/clear_failed.sh ${TARGET_SHORT:0:7}" >/dev/null 2>&1 || true
+      elif [ "$FAIL_REASON" = "ci-failed" ]; then
+        python3 "$REPO/scripts/ops/notify/notify.py" --urgent "autodeploy-ci-${TARGET_SHORT:0:7}" \
+          "autodeploy refused ${TARGET_SHORT:0:7}: CI checks not green. Clear marker: scripts/ops/autodeploy/clear_failed.sh ${TARGET_SHORT:0:7}" >/dev/null 2>&1 || true
+      elif [ "$FAIL_REASON" = "ci-api-error" ] || [ "$FAIL_REASON" = "ci-script-missing" ]; then
+        python3 "$REPO/scripts/ops/notify/notify.py" --urgent "autodeploy-ci-error-${TARGET_SHORT:0:7}" \
+          "autodeploy refused ${TARGET_SHORT:0:7}: CI check API error (fail closed)." >/dev/null 2>&1 || true
+      else
+        python3 "$REPO/scripts/ops/notify/notify.py" --urgent "deploy-failed" "استقرار ${TARGET_SHORT:0:7} ناموفق بود و برگردانده شد" >/dev/null 2>&1 || true
+      fi
     elif [ "$RESULT" = "ok" ]; then
       python3 "$REPO/scripts/ops/notify/notify.py" --queue info autodeploy "deploy ${TARGET_SHORT:0:7}" "deployed ok" >/dev/null 2>&1 || true
     fi
@@ -100,10 +116,42 @@ fi
 # deploy_local.sh's local_root is resolved from the cwd, so run from the repo.
 cd "$REPO"
 
-git -C "$REPO" fetch -q origin main || { log "git fetch origin main failed"; RESULT="failed"; exit 1; }
+# R20-4 (#1020): Optional read-only deploy key and SSH signed tag guard
+DEPLOY_SSH_KEY="${AUTODEPLOY_SSH_KEY:-${PULL_DEPLOY_SSH_KEY:-}}"
+if [ -n "$DEPLOY_SSH_KEY" ]; then
+  export GIT_SSH_COMMAND="ssh -i \"${DEPLOY_SSH_KEY}\" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+fi
+
+if [ "${AUTODEPLOY_SIGNED_TAG_GUARD:-${PULL_DEPLOY_SIGNED_TAG_GUARD:-0}}" = "1" ]; then
+  git -C "$REPO" fetch -q --tags --force origin main || { log "git fetch --tags --force origin main failed"; RESULT="failed"; exit 1; }
+else
+  git -C "$REPO" fetch -q origin main || { log "git fetch origin main failed"; RESULT="failed"; exit 1; }
+fi
 TARGET="$(git -C "$REPO" rev-parse origin/main)"
 TARGET_SHORT="$(git -C "$REPO" rev-parse --short=8 origin/main)"
 DEPLOYED_BEFORE="$(git -C "$REPO" rev-parse HEAD)"
+
+if [ "${AUTODEPLOY_SIGNED_TAG_GUARD:-${PULL_DEPLOY_SIGNED_TAG_GUARD:-0}}" = "1" ]; then
+  NEEDS_SIGNED_TAG=0
+  if [ "${AUTODEPLOY_REQUIRE_SIGNED_TAG:-${PULL_DEPLOY_REQUIRE_SIGNED_TAG:-0}}" = "1" ]; then
+    NEEDS_SIGNED_TAG=1
+  elif git -C "$REPO" diff --name-only "$DEPLOYED_BEFORE" "$TARGET" | grep -qE '^(output_apps/enterprise_hub/migrations/|docker-compose.*\.ya?ml$|scripts/ops/|\.github/workflows/)'; then
+    NEEDS_SIGNED_TAG=1
+  fi
+
+  if [ "$NEEDS_SIGNED_TAG" = "1" ]; then
+    GUARD_SCRIPT="${SIGNED_TAG_GUARD_SCRIPT:-$REPO/scripts/ops/signed_tag_guard.sh}"
+    if ! TAG_OUT="$(REPO_DIR="$REPO" "$GUARD_SCRIPT")"; then
+      log "autodeploy: signed-tag guard failed (no valid SSH-signed deploy/* tag); refusing deploy"
+      RESULT="failed"
+      exit 1
+    fi
+    SIGNED_TAG="${TAG_OUT%% *}"
+    TARGET="${TAG_OUT#* }"
+    TARGET_SHORT="$(git -C "$REPO" rev-parse --short=8 "$TARGET")"
+    log "autodeploy: signed-tag guard selected $SIGNED_TAG ($TARGET_SHORT)"
+  fi
+fi
 
 if [ "$TARGET" = "$DEPLOYED_BEFORE" ]; then
   log "already at $TARGET_SHORT; nothing to do"
@@ -113,6 +161,60 @@ fi
 if [ -f "$FAILED_SHAS" ] && grep -qxF "$TARGET" "$FAILED_SHAS"; then
   log "target $TARGET_SHORT is recorded as failed; not retrying until a newer commit"
   exit 0
+fi
+
+# Refuse a dirty server working tree before running deploy_local.sh so we record the target
+# once and send an urgent Telegram alert naming only the dirty paths (never file contents).
+DIRTY_RAW="$(git -C "$REPO" status --porcelain -uall 2>/dev/null || true)"
+if [ -n "$DIRTY_RAW" ]; then
+  DIRTY_PATHS="$(printf '%s\n' "$DIRTY_RAW" | sed 's/^...//' | head -n 10 | paste -sd ', ' -)"
+  DIRTY_COUNT="$(printf '%s\n' "$DIRTY_RAW" | wc -l | tr -d ' ')"
+  if [ "$DIRTY_COUNT" -gt 10 ]; then
+    DIRTY_PATHS="$DIRTY_PATHS (+$((DIRTY_COUNT - 10)) more)"
+  fi
+  log "dirty working tree in $REPO ($DIRTY_COUNT paths: $DIRTY_PATHS); refusing deploy of $TARGET_SHORT"
+  record_failure
+  FAIL_REASON="dirty-tree"
+  FAIL_DETAIL="$DIRTY_PATHS"
+  RESULT="failed"
+  exit 1
+fi
+
+# CI Gate (T336 / #1285): refuse a commit whose GitHub Actions CI jobs are not green at job level.
+# Fails closed on API errors, with a documented owner override.
+if [ "${AUTODEPLOY_SKIP_CI_GATE:-0}" = "1" ] || [ -f "$REPO/.autodeploy-skip-ci" ]; then
+  log "CI gate skipped by owner override"
+else
+  CI_CHECK_SCRIPT="${AUTODEPLOY_CI_CHECK_SCRIPT:-$REPO/scripts/ops/autodeploy/check_ci.py}"
+  [ -f "$CI_CHECK_SCRIPT" ] || CI_CHECK_SCRIPT="$(dirname "$0")/check_ci.py"
+  if [ -f "$CI_CHECK_SCRIPT" ]; then
+    set +e
+    python3 "$CI_CHECK_SCRIPT" "$TARGET"
+    CI_RC=$?
+    set -e
+    if [ "$CI_RC" -eq 0 ]; then
+      log "CI gate OK: required jobs green for $TARGET_SHORT"
+    elif [ "$CI_RC" -eq 2 ]; then
+      log "CI gate: checks pending for $TARGET_SHORT; will retry next tick"
+      exit 0
+    elif [ "$CI_RC" -eq 1 ]; then
+      log "CI gate: required jobs not green for $TARGET_SHORT; refusing deploy"
+      record_failure
+      FAIL_REASON="ci-failed"
+      RESULT="failed"
+      exit 1
+    else
+      log "CI gate: GitHub API check failed (rc=$CI_RC); refusing deploy (fail closed)"
+      FAIL_REASON="ci-api-error"
+      RESULT="failed"
+      exit 1
+    fi
+  else
+    log "CI gate: check script $CI_CHECK_SCRIPT missing; refusing deploy (fail closed)"
+    FAIL_REASON="ci-script-missing"
+    RESULT="failed"
+    exit 1
+  fi
 fi
 
 # Copy the deploy script FROM THE TARGET commit, exactly like the owner flow
@@ -127,6 +229,7 @@ if git -C "$REPO" diff --name-only "$DEPLOYED_BEFORE" "$TARGET" | grep -q "^$MIG
   if ! DEPLOY_SSH_HOST=local DEPLOY_AUTO_CONFIRM="$TARGET_SHORT" bash "$DEPLOY_TMP" migrate --yes; then
     log "migrate failed for $TARGET_SHORT; recording as failed and NOT deploying"
     record_failure
+    FAIL_REASON="migrate-failed"
     RESULT="failed"
     exit 1
   fi

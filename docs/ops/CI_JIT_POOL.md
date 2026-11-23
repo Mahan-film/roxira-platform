@@ -1,0 +1,115 @@
+# CI JIT runner pool on roxira-ci (R20-8, #1024)
+
+Two ephemeral **just-in-time (JIT)** runner slots on the box, plus the offline fallback in `ci.yml`
+(runner picker, #949). Each JIT runner takes exactly one job and is then removed by GitHub.
+
+| Slot | Runs | Isolation | Limits (brief section 7) | Labels |
+|---|---|---|---|---|
+| `light` | lint, unit tests, scanners | fresh container `roxira-ci-light` per job: no Docker socket, `--cap-drop ALL`, `no-new-privileges`, no host loopback (rootless slirp4netns), own tool-cache volume per launcher | `--cpus 1 --memory 2g --cpu-shares 512` (yields CPU to the docker slot's Postgres); 3 launchers (`roxira-jit@light`, `@light-2`, `@light-3`; `JIT_LIGHT_SLOTS` in `08_root_ci_pool.sh`) share one spool, 1 job each | `self-hosted, linux-box, jit, slot-light` |
+| `docker` | service containers (Postgres, Redis), compose, builds, Playwright | fresh copy of the runner template in its own work dir per job, deleted afterwards; rootless Docker of user `runner`; tool cache `/opt/hostedtoolcache` (the only path where setup-python's builds work) | unit `CPUQuota=400% MemoryMax=6G`; runner and steps pinned to CPUs 2–5 (`taskset`, so Jest/npm/Next see 4 CPUs; 0–1 stay with the phone stack), 1 job | `self-hosted, linux-box, jit, slot-docker` |
+
+Everything user `runner` runs, including rootless Docker containers, is also capped as a whole:
+`user@<runner-uid>.service` `CPUQuota=600% MemoryHigh=12G MemoryMax=13G TasksMax=10240` with 3 light slots (MemoryHigh = 6 GB docker + 2 GB per light slot; CPU stops at 6 of 8 threads, the phone stack keeps 2). Service
+containers of the `docker` slot run under rootless `dockerd`, outside the slot unit, so the
+user-wide cap is what bounds them. The phone stack is not limited (priority 1; its containers run
+under the system Docker daemon). Builder lanes are limited later by `roxira-orch` (#1021).
+
+## How it fits together
+
+```
+mahanfilms (gh login, repo admin)                 runner (executes job code, holds no token)
+  roxira-jit-pool.timer, every 30 s                 roxira-jit@light.service   roxira-jit@docker.service
+  jit_pool.py:                                      jit_launcher.sh <slot>:
+    list runners, delete stale jit-*                  touch spool/<slot>/.alive
+    per live slot with no registered runner:          claim oldest spool/<slot>/jit-*.jit (rename)
+      POST generate-jitconfig  ----- spool file --->  light: docker create/start (env file, 600)
+    write repo variable CI_BOX_HEARTBEAT              docker: fresh runner dir, run.sh, delete dir
+                                                      GitHub de-registers the runner after 1 job
+ci.yml "Pick runner" (hosted ubuntu-slim) reads CI_RUNNER_MODE + CI_BOX_HEARTBEAT -> box or hosted
+```
+
+- The admin credential never reaches user `runner`; it only gets single-use JIT configs through
+  `/srv/data/ci-jit/spool/<slot>/` (owner `runner`, ACL for `mahanfilms`). The configs travel in an
+  env file or the process environment (`ACTIONS_RUNNER_INPUT_JITCONFIG`), never on a command line,
+  and are never logged.
+- Launcher code lives root-owned in `/usr/local/lib/roxira-jit`, so a job cannot change it.
+- A busy slot stays "ok" in the heartbeat, so jobs queue on the box instead of spending hosted
+  minutes; a dead launcher or `HOLD` flips the slot to hosted within one tick (auto mode).
+- `hp` is never a JIT label: the old persistent runner keeps `hp` until it is retired.
+
+## Install (once)
+
+1. Owner, one line (dry run first, then the real run):
+   `sudo bash scripts/ops/ci_box/08_root_ci_pool.sh --dry-run` then
+   `sudo bash scripts/ops/ci_box/08_root_ci_pool.sh`
+   (dirs + ACLs, launcher code, the user-wide cap, one font package, and as `runner`: runner
+   template with SHA-256 check, light image, the docker and light launchers enabled). Prints names and statuses only.
+2. Box hub (mahanfilms, no root): `bash scripts/ops/ci_box/jit_pool/install_user.sh`
+   (timer + `~/.config/roxira-jit/jit_pool.toml`, `dry_run = true`).
+3. Box hub: `bash scripts/ops/ci_box/jit_pool/seed_playwright.sh` (Chromium for the Playwright jobs;
+   the browser CDN is blocked from this network for `runner`, so `mahanfilms` fetches it through its
+   proxy into `/srv/data/ci-jit/ms-playwright`; re-run after each Playwright upgrade).
+4. `python3 ~/roxira-jit/jit_pool.py --status` shows both launchers `alive`; set `dry_run = false`.
+5. Point the picker at the slots (box mode only; nothing changes for `hosted`):
+   `gh variable set CI_BOX_LABELS_LIGHT -b '["self-hosted","jit","slot-light"]' -R Mahan-film/roxira-platform`
+   `gh variable set CI_BOX_LABELS_DOCKER -b '["self-hosted","jit","slot-docker"]' -R Mahan-film/roxira-platform`
+6. Two real runs: `gh workflow run ci.yml -R Mahan-film/roxira-platform --ref <branch> -f runner=box`
+   on two PR branches; both green, with job runner names `jit-light-*` / `jit-docker-*` and
+   different container ids in the launcher log (`journalctl --user -u roxira-jit@light` as runner,
+   or `sudo box-status`).
+7. Fallback test: `touch ~/.config/roxira-jit/HOLD` (or stop a launcher); with
+   `CI_RUNNER_MODE=auto`, the next CI run shows "Runner: hosted (auto ...)" in its summary and
+   finishes on GitHub-hosted runners. `rm ~/.config/roxira-jit/HOLD` to resume.
+8. Retire the old runner after the two green runs: `touch /srv/data/ci-jit/control/retire-old-runner`
+   (the runner's own launcher disables `actions-runner.service`), then delete its registration:
+   `gh api -X DELETE repos/Mahan-film/roxira-platform/actions/runners/<id of roxira-ci>`.
+
+## Operate
+
+| Want | Do (as mahanfilms) |
+|---|---|
+| status | `python3 ~/roxira-jit/jit_pool.py --status` |
+| hold new CI jobs (load shedding) | `touch ~/.config/roxira-jit/HOLD` (remove to resume) |
+| stop the controller | `touch ~/.config/roxira-jit/STOP` |
+| all CI back to hosted at once | `gh variable set CI_RUNNER_MODE -b hosted -R Mahan-film/roxira-platform` |
+| logs | `journalctl --user -u roxira-jit-pool -n 50` |
+
+The runner template follows the old runner's version (`runner_setup.sh`); re-run it as `runner`
+after a runner upgrade. GitHub only accepts runners within a few releases of the latest, so refresh
+it at least monthly (Sunday maintenance).
+
+Updating the launcher: re-run `08_root_ci_pool.sh`. Launchers re-exec themselves between jobs when
+the installed file changed; `runner_setup.sh` also restarts any launcher still running older code,
+but only while no job runs on the box (otherwise it says so; re-run the script when idle).
+
+## Job wall-time watchdog and image pin
+
+- `jit_watchdog.py` (called by `jit_launcher.sh` for both slots) kills a JIT job that runs longer than the max wall time: light slot runs `docker kill <name>`, docker slot kills the runner's process group (TERM, then KILL after 10 s). Exit code 124 appears in the launcher log as `done <name> (exit 124)`.
+- Default 1110 s: the longest real job among the last 20 completed runs (739 s, M1 gate Playwright) + 50%, rounded up. Change it without root: write seconds to `/srv/data/ci-jit/control/max-wall-s` (floor 60 s; read at each job start). `JIT_MAX_WALL_S` in the unit environment also works. If the watchdog file is missing the launcher falls back to `timeout`.
+- Install: the next run of `sudo bash scripts/ops/ci_box/08_root_ci_pool.sh` copies `jit_watchdog.py` (before the launcher) to `/usr/local/lib/roxira-jit`; running launchers re-exec between jobs. Until then the old launcher has no cap.
+- `Dockerfile.light` pins its base by sha256 digest (ubuntu 24.04 index digest). Bump by replacing the digest; `src/ops/test_jit_watchdog.py` checks the format. `10_runner_rootless_docker.sh` pre-pulls `postgres:17` by tag and CI service images use tags via `CI_IMAGE_REGISTRY`; those are not part of the runner image and are not pinned here.
+
+## Capacity: light slots and pre-mint
+
+- **Light slots** (`JIT_LIGHT_SLOTS`, default 3, in `08_root_ci_pool.sh`): one launcher unit per slot (`light`, `light-2`, ...), all claiming from `spool/light` by atomic rename. Each touches `.alive.<instance>`; the controller counts live launchers. Lowering the number disables the extra units once idle.
+- **Pre-mint** (`ahead` per slot in `~/.config/roxira-jit/jit_pool.toml`, 0..4; the example sets 1): the controller keeps `live launchers + ahead` runners registered. A launcher that finishes a job claims the next config at once instead of waiting for the next tick plus container start (35-70 s per job with one slot and no spare). A spooled config is not stale until `spool_max_age_s` (3600 s).
+- Measured before this change (2026-11-23, auto mode, all agent PR CI on the box): 1 light slot ran about 55 jobs/h; 203 light jobs were queued.
+
+## Revert
+
+1. `gh variable set CI_RUNNER_MODE -b hosted -R Mahan-film/roxira-platform` (CI is hosted again at once).
+2. mahanfilms: `systemctl --user disable --now roxira-jit-pool.timer`.
+3. Owner: `sudo runuser -u runner -- env XDG_RUNTIME_DIR=/run/user/$(id -u runner) systemctl --user disable --now roxira-jit@light roxira-jit@light-2 roxira-jit@light-3 roxira-jit@docker`,
+   `sudo systemctl revert user@$(id -u runner).service` (removes the cap),
+   `sudo rm -rf /usr/local/lib/roxira-jit /srv/data/ci-jit`.
+4. If the old runner was retired: as `runner`, `systemctl --user enable --now actions-runner` and
+   re-register it with `11_runner_register.sh`.
+
+## Not covered yet
+
+- A job in the `docker` slot can reach the rootless Docker socket and everything user `runner`
+  owns; that is accepted because only collaborators' branches reach the box (fork PRs stay hosted,
+  external contributors need approval). A throwaway VM per job (R20 review) is the next step if
+  outside contributors ever push.
+- The controller holds jobs on `HOLD`; the automatic load-shedding trigger belongs to `roxira-orch`
+  (#1021).

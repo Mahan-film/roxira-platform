@@ -15,12 +15,18 @@ Every 5 minutes `roxira-autodeploy.timer` runs `autodeploy.sh`, which:
 3. `git fetch`es `origin/main`; if it equals the deployed `HEAD`, exits 0;
 4. skips a SHA listed in `/root/deploy-state/autodeploy-failed-shas` (a failed SHA
    is never retried; a newer commit starts a fresh attempt);
-5. copies `scripts/ops/deploy_local.sh` **from the target commit** into a temp file
+5. verifies GitHub Actions CI checks for the target commit (`scripts/ops/autodeploy/check_ci.py`).
+   Required jobs (`Detect changes`, `Secret scan`, `Pytest`, `Frontend gate`, `Undefined names`, `System inventory`)
+   must be green (`success` or `skipped`). If jobs are pending, exits 0 to wait for the next tick.
+   If checks failed, records failure and refuses. Fails closed on GitHub API errors.
+   Owner override: `AUTODEPLOY_SKIP_CI_GATE=1` or `touch /opt/roxira_platform/.autodeploy-skip-ci`;
+6. copies `scripts/ops/deploy_local.sh` **from the target commit** into a temp file
    (exactly like the owner flow), then runs it with `DEPLOY_SSH_HOST=local`;
-6. if the diff touches `output_apps/enterprise_hub/migrations/`, runs
+7. if the diff touches `output_apps/enterprise_hub/migrations/`, runs
    `migrate --yes` first (that takes a `pg_dump` backup before touching the DB); a
    failed migration is recorded and the deploy does NOT run;
-7. runs `deploy --yes`, which smoke-tests and rolls back automatically on failure.
+8. runs `deploy --yes`, which smoke-tests (including ERP backend health and authenticated
+   tenant read) and rolls back automatically on failure.
 
 Because it runs `deploy_local.sh` with `DEPLOY_SSH_HOST=local`, `rsh()` runs commands
 on the server with `bash -c` instead of `ssh`, and the confirmation is answered from
@@ -70,6 +76,12 @@ journalctl -u roxira-autodeploy.service -n 50 --no-pager
   verified; a failed or unverified migration records the SHA and aborts.
 - Smoke tests run from the server; any failure triggers automatic rollback.
 - A failed SHA is written to `autodeploy-failed-shas` so the timer does not retry it.
+- When autodeploy refuses a dirty server tree or a failed migration, it records the target SHA once and sends an urgent Telegram alert (naming the dirty paths, never file contents).
+- After fixing the dirty tree or migration, clear the failed-target marker with one command so the next timer tick retries:
+
+```bash
+scripts/ops/autodeploy/clear_failed.sh <sha-prefix>   # or --all
+```
 
 ## Manual fallback
 

@@ -64,7 +64,7 @@ describePg('Voucher copy and edit lock on PostgreSQL', () => {
 
   it('copies a posted voucher line by line as a DRAFT and leaves the source untouched', async () => {
     const source = await make(T1, 'SRC-1', JournalEntryStatus.POSTED);
-    expect(await balance(T1, '1010')).toBe('100.00');
+    expect(await balance(T1, '1010')).toBe('100.0000');
 
     const copy = await tools.copyVoucher(T1, source.id, {} as never);
     expect(copy.status).toBe(JournalEntryStatus.DRAFT);
@@ -73,7 +73,7 @@ describePg('Voucher copy and edit lock on PostgreSQL', () => {
     expect(lineView(copy)).toEqual(lineView(source));
 
     // The copy is a draft: it did not move any balance.
-    expect(await balance(T1, '1010')).toBe('100.00');
+    expect(await balance(T1, '1010')).toBe('100.0000');
 
     // The source row and its lines are exactly as before, version still 1.
     const reloaded = await accounting.findOneJournalEntry(T1, source.id);
