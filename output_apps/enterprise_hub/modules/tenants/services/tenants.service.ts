@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { CountryPackRegistry } from '../../country_packs/country-pack.registry';
 import { UpdateTenantSettingsDto } from '../dto/update-tenant-settings.dto';
@@ -22,7 +22,7 @@ const SLUG_SUFFIX_LENGTH = 6;
 export class TenantsService {
   constructor(
     private readonly tenantsRepository: TenantsRepository,
-    @Optional() private readonly packRegistry?: CountryPackRegistry,
+    private readonly packRegistry: CountryPackRegistry,
   ) {}
 
   /** ایجاد سازمان جدید با اسلاگ یکتا ساخته‌شده از نام + پسوند تصادفی کوتاه. */

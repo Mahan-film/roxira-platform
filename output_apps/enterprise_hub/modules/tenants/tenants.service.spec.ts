@@ -73,16 +73,6 @@ describe('TenantsService.updateSettings country & currency validation (T338 / #1
     expect(repo.updateSettings).not.toHaveBeenCalled();
   });
 
-  it('fails closed when CountryPackRegistry is unavailable', async () => {
-    const noRegistryService = new TenantsService(repo as any, undefined);
-    await expect(
-      noRegistryService.updateSettings('t1', { countryCode: 'IR' }),
-    ).rejects.toThrow(BadRequestException);
-    await expect(
-      noRegistryService.updateSettings('t1', { bookCurrencyCode: 'IRR' }),
-    ).rejects.toThrow(BadRequestException);
-  });
-
   it('throws NotFoundException when tenant does not exist', async () => {
     repo.findById.mockResolvedValueOnce(null);
     await expect(
