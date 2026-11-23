@@ -1,7 +1,10 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { minorToDecimal, parseMinor } from '../../accounting/money';
 import { gregorianToJalali, isoDate, jalaliMonthEnd } from '../../hr/services/jalali-period';
 import { StatutoryRepository } from '../../hr/statutory/statutory.repository';
+import { StatutoryKey } from '../../hr/statutory/statutory-catalogue';
+import { CountryPackRegistry } from '../../country_packs/country-pack.registry';
+import { tryResolvePack } from '../../country_packs/try-resolve-pack';
 import { DoctorWithholdingPreviewDto } from '../dto/doctor-withholding-preview.dto';
 import { applyRate, readStatutory, StatutoryUse } from '../utils/progressive-tax';
 
@@ -65,10 +68,17 @@ export function monthsLate(due: string, remitted: string): number {
 /** Advance withholding on doctors' fees paid by medical centres. Preview only, rates from the statutory store. */
 @Injectable()
 export class DoctorWithholdingService {
-  constructor(private readonly statutory: StatutoryRepository) {}
+  constructor(
+    private readonly statutory: StatutoryRepository,
+    @Optional() private readonly countryPackRegistry?: CountryPackRegistry,
+  ) {}
 
   async preview(tenantId: string, dto: DoctorWithholdingPreviewDto): Promise<DoctorWithholdingPreview> {
-    const used = await readStatutory(this.statutory, tenantId, dto.fiscalYear, KEYS);
+    const pack = tryResolvePack(this.countryPackRegistry);
+    const rule = pack?.taxRules.find((r) => r.kind === 'doctor_withholding');
+    const keys = rule ? (rule.statutoryKeys as readonly StatutoryKey[]) : KEYS;
+    const country = pack?.country || 'IR';
+    const used = await readStatutory(this.statutory, tenantId, dto.fiscalYear, keys, country);
     const rate = String(used.get('doctor_fee_withholding_rate')!.value);
 
     const lines: DoctorWithholdingLine[] = dto.payments.map((p) => {
