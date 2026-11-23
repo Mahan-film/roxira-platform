@@ -3,6 +3,7 @@
 #   source scripts/dev/lane_env.sh
 # Safe to source more than once. Changes nothing when the disk is not mounted (Linux laptop, CI).
 # No secrets here: only paths.
+# ROXIRA_WORK_DISK overrides the work folder (default /Volumes/ssd/roxira-work, see docs/owner/ANTIGRAVITY_GUIDE_FA.md).
 
 _rx_work="${ROXIRA_WORK_DISK:-/Volumes/ssd/roxira-work}"
 if [ -d "$_rx_work/wt" ] && [ -w "$_rx_work/wt" ]; then

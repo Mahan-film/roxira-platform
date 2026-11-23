@@ -74,6 +74,10 @@ wt_root="${ROXIRA_WT_ROOT:-}"
 if [ -z "$wt_root" ] && [ -d /Volumes/ssd/roxira-work/wt ] && [ -w /Volumes/ssd/roxira-work/wt ]; then
   wt_root=/Volumes/ssd/roxira-work/wt
 fi
+if [ -n "$wt_root" ] && ! { [ -d "$wt_root" ] && [ -w "$wt_root" ]; }; then
+  echo "ROXIRA_WT_ROOT=$wt_root is not a writable folder; unset it or mount the work disk" >&2
+  exit 1
+fi
 wt="${wt_root:-$root/../roxira-wt}/$issue-$slug"
 git -C "$root" worktree add -q -b "$branch" "$wt" origin/main
 git -C "$wt" commit -q --allow-empty -m "chore: start #$issue $title"
