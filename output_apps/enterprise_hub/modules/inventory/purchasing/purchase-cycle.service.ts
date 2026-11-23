@@ -153,7 +153,7 @@ export class PurchaseCycleService {
     private readonly inventory: InventoryService,
     private readonly stockDocuments: StockDocumentsService,
     private readonly postingRules: PostingRulesService,
-    @Optional() private readonly budgetControl?: BudgetControlService,
+    private readonly budgetControl?: BudgetControlService,
   ) {}
 
   /** Domain errors become 400 for a bad line/unknown line, 409 for every other rule refusal. */
@@ -338,7 +338,12 @@ export class PurchaseCycleService {
       if (!order) throw new NotFoundException(NOT_FOUND_ORDER);
       this.transitionOrThrow(order.status, PurchaseOrderStatus.APPROVED);
       let budgetWarning: string | undefined;
-      if (this.budgetControl && order.accountCode) {
+      if (order.accountCode) {
+        if (!this.budgetControl) {
+          throw new ConflictException(
+            'BUDGET_CONTROL_UNAVAILABLE: BudgetControlService is required for orders with accountCode',
+          );
+        }
         const decision = await this.budgetControl.checkAndEncumberPo(
           tenantId,
           {
@@ -382,6 +387,11 @@ export class PurchaseCycleService {
       if (!order) throw new NotFoundException(NOT_FOUND_ORDER);
       this.transitionOrThrow(order.status, PurchaseOrderStatus.CANCELLED);
       await this.repository.updateOrderStatus(tenantId, order.id, PurchaseOrderStatus.CANCELLED, manager);
+      if (order.accountCode && !this.budgetControl) {
+        throw new ConflictException(
+          'BUDGET_CONTROL_UNAVAILABLE: BudgetControlService is required to release encumbrance',
+        );
+      }
       await this.budgetControl?.releaseEncumbrance(tenantId, 'purchase_order', order.id, manager);
       return toOrderResponse({ ...order, status: PurchaseOrderStatus.CANCELLED });
     });
@@ -397,6 +407,11 @@ export class PurchaseCycleService {
       if (!order) throw new NotFoundException(NOT_FOUND_ORDER);
       this.transitionOrThrow(order.status, PurchaseOrderStatus.CLOSED);
       await this.repository.updateOrderStatus(tenantId, order.id, PurchaseOrderStatus.CLOSED, manager);
+      if (order.accountCode && !this.budgetControl) {
+        throw new ConflictException(
+          'BUDGET_CONTROL_UNAVAILABLE: BudgetControlService is required to release encumbrance',
+        );
+      }
       await this.budgetControl?.releaseEncumbrance(tenantId, 'purchase_order', order.id, manager);
       return toOrderResponse({ ...order, status: PurchaseOrderStatus.CLOSED });
     });

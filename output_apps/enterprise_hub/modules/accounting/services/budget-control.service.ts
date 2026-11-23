@@ -182,14 +182,21 @@ export class BudgetControlService {
     const sourceType = input.sourceType ?? 'purchase_order';
     const costCenterKey = input.costCenterCode?.trim() || '';
 
+    if (!/^\d{4}-\d{2}/.test(input.periodKey)) {
+      throw new BadRequestException({
+        code: 'INVALID_PERIOD_KEY',
+        message: `فرمت کلید دوره ${input.periodKey} نامعتبر است؛ باید با YYYY-MM شروع شود.`,
+      });
+    }
+
     return this.scope.within(tenantId, manager, async (m) => {
-      // Serialise check-and-write per (tenant, account, cost centre, period) so concurrent
-      // postings cannot both pass the check and overspend. Released at transaction end.
+      // Serialise check-and-write per (tenant, account, cost centre) so concurrent
+      // postings cannot both pass the check and overspend the annual budget. Released at transaction end.
       await m.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [
-        `budget-encumbrance|${tenantId}|${input.accountCode}|${costCenterKey}|${input.periodKey}`,
+        `budget-encumbrance|${tenantId}|${input.accountCode}|${costCenterKey}`,
       ]);
       const budgetRows = (await m.query(
-        `SELECT b."budget_amount"
+        `SELECT b."budget_amount", fy."id" AS fiscal_year_id, fy."start_date", fy."end_date"
          FROM "fin_account_budgets" b
          JOIN "fin_fiscal_years" fy ON fy."id" = b."fiscal_year_id" AND fy."tenant_id" = b."tenant_id"
          LEFT JOIN "fin_dimensions" cc ON cc."id" = b."cost_center_id" AND cc."tenant_id" = b."tenant_id"
@@ -200,7 +207,12 @@ export class BudgetControlService {
          ORDER BY b."updated_at" DESC
          LIMIT 1`,
         [tenantId, input.accountCode, costCenterKey, input.periodKey],
-      )) as Array<{ budget_amount: string | number }>;
+      )) as Array<{
+        budget_amount: string | number;
+        fiscal_year_id: number;
+        start_date: string | Date;
+        end_date: string | Date;
+      }>;
 
       const budgetMinor =
         budgetRows.length > 0 ? fromDb(budgetRows[0].budget_amount) : 0n;
@@ -213,6 +225,10 @@ export class BudgetControlService {
         });
       }
 
+      const fyStart = budgetRows[0].start_date;
+      const fyEnd = budgetRows[0].end_date;
+
+      // Sum year-to-date posted spend within the same fiscal year
       const spendRows = (await m.query(
         `SELECT COALESCE(SUM(l."debit" - l."credit"), 0) AS spend
          FROM "fin_journal_entry_lines" l
@@ -222,23 +238,25 @@ export class BudgetControlService {
          WHERE l."tenant_id" = $1
            AND a."code" = $2
            AND e."status" = 'POSTED'
-           AND to_char(e."date", 'YYYY-MM') = $3
-           AND (($4 = '' AND l."cost_center_id" IS NULL) OR cc."code" = $4)`,
-        [tenantId, input.accountCode, input.periodKey, costCenterKey],
+           AND e."date" >= $3
+           AND e."date" <= $4
+           AND (($5 = '' AND l."cost_center_id" IS NULL) OR cc."code" = $5)`,
+        [tenantId, input.accountCode, fyStart, fyEnd, costCenterKey],
       )) as Array<{ spend: string | number }>;
 
       const actualSpendMinor = fromDb(spendRows[0]?.spend ?? 0);
 
+      // Sum open commitments for the account and cost centre within the same fiscal year
       const committedRows = (await m.query(
         `SELECT COALESCE(SUM("amount_minor"), 0) AS committed
          FROM "fin_budget_encumbrances"
          WHERE "tenant_id" = $1
            AND "account_code" = $2
            AND "cost_center_code" = $3
-           AND "period_key" = $4
+           AND to_date(substring("period_key" from 1 for 7), 'YYYY-MM') BETWEEN $4 AND $5
            AND "status" = 'OPEN'
-           AND NOT ("source_type" = $5 AND "source_id" = $6)`,
-        [tenantId, input.accountCode, costCenterKey, input.periodKey, sourceType, input.sourceId],
+           AND NOT ("source_type" = $6 AND "source_id" = $7)`,
+        [tenantId, input.accountCode, costCenterKey, fyStart, fyEnd, sourceType, input.sourceId],
       )) as Array<{ committed: string | number }>;
 
       const committedMinor = BigInt(committedRows[0]?.committed ?? 0);

@@ -22,7 +22,14 @@ describe('BudgetControlService.checkAndEncumberPo (lock and fail-closed)', () =>
   }
 
   it('takes the advisory lock before reading the budget', async () => {
-    const { service, calls } = build([{ budget_amount: '1000.00' }]);
+    const { service, calls } = build([
+      {
+        budget_amount: '1000.00',
+        fiscal_year_id: 1,
+        start_date: '2026-01-01',
+        end_date: '2026-12-31',
+      },
+    ]);
     await service.checkAndEncumberPo(TENANT, input);
     expect(calls[0]).toContain('pg_advisory_xact_lock');
     expect(calls.findIndex((c) => c.includes('INSERT INTO "fin_budget_encumbrances"'))).toBeGreaterThan(0);

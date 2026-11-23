@@ -26,7 +26,7 @@ const options = (database: string, username = OWNER, password = OWNER_PW) => ({
   username,
   password,
   database,
-  entities: [path.join(__dirname, '../**/*.entity.ts')],
+  entities: [path.join(__dirname, '../../**/*.entity.ts')],
   migrations: [path.join(__dirname, '../../../migrations/*.ts')],
   migrationsTransactionMode: 'each' as const,
   synchronize: false,
@@ -171,5 +171,48 @@ describePg('BudgetEncumbrance on PostgreSQL (NOSUPERUSER NOBYPASSRLS, FORCE RLS)
 
     // Release PO-88 encumbrance
     await service.releaseEncumbrance(TENANT_A, 'purchase_order', 'PO-88');
+
+    // Multi-period cumulative encumbrance test within the same fiscal year:
+    // Create PO-M3 in 2026-03 for 2,000.00 (200,000 minor)
+    await service.checkAndEncumberPo(TENANT_A, {
+      accountCode: T6.account,
+      costCenterCode: T6.costCentre,
+      periodKey: '2026-03',
+      sourceId: 'PO-M3',
+      amountMinor: 200_000n,
+    });
+
+    // In 2026-07, PO-M7 for 2,500.00 (250,000 minor) brings total commitments to 4,500.00 (81.8% of 5,500.00 budget) -> WARN
+    const poM7 = await service.checkAndEncumberPo(TENANT_A, {
+      accountCode: T6.account,
+      costCenterCode: T6.costCentre,
+      periodKey: '2026-07',
+      sourceId: 'PO-M7',
+      amountMinor: 250_000n,
+    });
+    expect(poM7.allowed).toBe(true);
+    expect(poM7.status).toBe('WARN');
+
+    // In 2026-10, PO-M10 for 1,500.00 would exceed the 5,500.00 budget (total 6,000.00 = 109%) -> BLOCKED
+    await expect(
+      service.checkAndEncumberPo(TENANT_A, {
+        accountCode: T6.account,
+        costCenterCode: T6.costCentre,
+        periodKey: '2026-10',
+        sourceId: 'PO-M10',
+        amountMinor: 150_000n,
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+
+    // Releasing PO-M3 unblocks PO-M10
+    await service.releaseEncumbrance(TENANT_A, 'purchase_order', 'PO-M3');
+    const poM10AfterRelease = await service.checkAndEncumberPo(TENANT_A, {
+      accountCode: T6.account,
+      costCenterCode: T6.costCentre,
+      periodKey: '2026-10',
+      sourceId: 'PO-M10',
+      amountMinor: 150_000n,
+    });
+    expect(poM10AfterRelease.allowed).toBe(true);
   });
 });

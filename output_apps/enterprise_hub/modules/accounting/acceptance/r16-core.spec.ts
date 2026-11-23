@@ -182,27 +182,70 @@ describe('R16 T3 period close and locks (T178)', () => {
 describe('R16 T6 budgets and encumbrance', () => {
   const createInMemoryBudgetControl = (initialBudgetMinor: bigint) => {
     let budgetMinor = initialBudgetMinor;
-    const encumbrances = new Map<string, bigint>();
+    interface StoredEncumbrance {
+      tenantId: string;
+      accountCode: string;
+      costCenterCode: string;
+      periodKey: string;
+      sourceType: string;
+      sourceId: string;
+      amountMinor: bigint;
+      status: string;
+    }
+    const encumbrances = new Map<string, StoredEncumbrance>();
     const manager = {
       query: async (sql: string, params: unknown[]) => {
         if (sql.includes('FROM "fin_account_budgets"')) {
-          return [{ budget_amount: fromMinor(budgetMinor).toString() }];
+          return [
+            {
+              budget_amount: fromMinor(budgetMinor).toString(),
+              fiscal_year_id: 1,
+              start_date: '2026-01-01',
+              end_date: '2026-12-31',
+            },
+          ];
         }
         if (sql.includes('FROM "fin_journal_entry_lines"')) {
           return [{ spend: '0' }];
         }
         if (sql.includes('FROM "fin_budget_encumbrances"')) {
-          const sourceId = String(params[5] ?? '');
+          const tenantId = String(params[0] ?? '');
+          const accountCode = String(params[1] ?? '');
+          const costCenterCode = String(params[2] ?? '');
+          const sourceType = String(params[5] ?? '');
+          const sourceId = String(params[6] ?? '');
           let committed = 0n;
-          for (const [id, amt] of encumbrances.entries()) {
-            if (id !== sourceId) committed += amt;
+          for (const enc of encumbrances.values()) {
+            if (
+              enc.tenantId === tenantId &&
+              enc.accountCode === accountCode &&
+              enc.costCenterCode === costCenterCode &&
+              enc.status === 'OPEN' &&
+              !(enc.sourceType === sourceType && enc.sourceId === sourceId)
+            ) {
+              committed += enc.amountMinor;
+            }
           }
           return [{ committed: committed.toString() }];
         }
         if (sql.includes('INSERT INTO "fin_budget_encumbrances"')) {
+          const tenantId = String(params[0]);
+          const accountCode = String(params[1]);
+          const costCenterCode = String(params[2]);
+          const periodKey = String(params[3]);
+          const sourceType = String(params[4]);
           const sourceId = String(params[5]);
           const amountMinor = BigInt(String(params[6]));
-          encumbrances.set(sourceId, amountMinor);
+          encumbrances.set(sourceId, {
+            tenantId,
+            accountCode,
+            costCenterCode,
+            periodKey,
+            sourceType,
+            sourceId,
+            amountMinor,
+            status: 'OPEN',
+          });
           return [];
         }
         return [];
