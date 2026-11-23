@@ -1,6 +1,6 @@
 # Current state (read this first)
 
-> **Last update: 2026-11-23 (main hub, Claude Opus 5.5 on the Mac).**
+> **Last update: 2026-11-23 evening (main hub, Claude Opus 5.5 on the Mac).**
 > New hub: `docs/hub/HUB_START.md` -> `docs/hub/MAIN_HUB_MASTER_BRIEF.md` -> this file. Laptop: `docs/hub/BOX_HUB_MASTER_BRIEF.md`.
 > Live GitHub data beats this file: `gh pr list`, the newest `## WAVE`, `HUB -> LANES`, `BOX:` and `HUB→BOX:` comments on #592, and `HUB-ANSWER`/`ASK-BOX` on #965.
 
@@ -33,8 +33,11 @@ The owner wants maximum pressure on Antigravity lanes and cheap agents (Haiku/So
 ## WAVE 32 (2026-11-23): finish every open PR
 - 50 PRs were triaged read-only. Fix queue (25) belongs to L8, with each lane taking its own. Claims are on #592 (`taking PR #N (Lx)`).
 - Hub agents fixed #850 (new `country_packs/try-resolve-pack.ts`, so it is now B1 core: the hub reviews it), #1313, #1314, and posted evidence on #1312 (false alarms); #1310 was already fixed.
-- Owner said yes and the hub queued: #1201 #1227 #1271 #1301 #1303 (OWNER-OK), #1342 (SSD + stable prompts), #1275 (box lane policy, OWNER-OK).
-  **The merge queue stalled at 07:12 UTC**: merge_group jobs sit `queued` with no runner. ASK-BOX posted on #965. Re-check before anything else.
+- Merged 2026-11-23 after the owner's yes: #1227 #1271 #1301 #1303 (OWNER-OK), #1275 (box lane policy), #1342 (SSD + stable prompts), #1355, #1363 (RV prompts, if the queue finished).
+  #1201 (OWNER-OK) is still open: check why it left the queue before re-queuing. The queue stall of 07:12 UTC ended after the box set `CI_RUNNER_MODE=main` (09:17 UTC).
+- **Review helpers:** finished builder chats run RV1-RV4 (`docs/antigravity/PROMPTS_FA.md`, end of file). Each takes open PRs with number mod 4, fixes real desk findings on the PR branch,
+  and posts `Lane check (RVn) @ <sha>: READY FOR HUB | NEEDS OWNER | BLOCKED`. They never write a verdict line. The hub merges READY ones after a clean desk verdict at the same head.
+- L9-L12 and RV1-RV4 were running at the end of the 2026-11-23 session.
 - Held: #1309 (Python 3.11 -> 3.13 on the AI-core image is untested at runtime; the PR lists four fixes for L1), #943 (L5 checks the WHT journal sign), #1311 (hub blocker: Number() on money, phone in logs).
 - Waiting for the owner, after the five above: #831 (auth function), #663 (nginx cache); planned restart window: #1072, #1198, #1200; #1302 (relaxes OSV).
 - Closed: #889 and #1237 (replaced by #1239).
