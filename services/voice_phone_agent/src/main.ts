@@ -31,7 +31,7 @@ async function loadPrompts(): Promise<Prompts> {
   const t0 = Date.now();
   const [greeting, filler, repeat, error, busy, goodbye, noSource] = await Promise.all([
     cachedPrompt(cfg.greetingText, welcomeWav),
-    cachedPrompt(cfg.fillerText),
+    Promise.all(cfg.fillerTexts.map((t) => cachedPrompt(t))),
     cachedPrompt(cfg.repeatText),
     cachedPrompt(cfg.errorText),
     cachedPrompt(cfg.busyText),

@@ -14,7 +14,10 @@ import { MappingMemoryService } from './mapping-memory.service';
 import { PackageAnalysisService } from './package-analysis.service';
 import { PackageProgressService } from './package-progress.service';
 import { PackageStoreService } from './package-store.service';
-import { DataImportBatchRepository } from '../repositories/data-import-batch.repository';
+import {
+  DataImportBatchRepository,
+  hashPackageSelections,
+} from '../repositories/data-import-batch.repository';
 
 /** انتخاب یک جدول برای commit از بدنهٔ درخواست. */
 export interface PackageCommitTableInput {
@@ -68,14 +71,30 @@ export class PackageCommitService {
       return sum + (analysis?.rowCount ?? 0);
     }, 0);
 
-    // Idempotent re-import check: if this database package was already committed and not undone,
-    // return the existing batch with 0 new rows (Done when: the same file twice creates 0 new rows).
-    if (state.fileHash && typeof this.batchRepository.findByFileHash === 'function') {
-      const existingBatch = await this.batchRepository.findByFileHash(
-        tenantId,
-        state.fileHash,
-      );
-      if (existingBatch) {
+    const mappingHash = hashPackageSelections(selections);
+
+    // Atomic idempotency reservation scoped by (tenant_id, 'package', file_hash, mapping_hash):
+    // two parallel commits race on the unique partial index so only one writes rows.
+    let existingBatchId: string | null = null;
+    if (state.fileHash && typeof this.batchRepository.tryReserveBatch === 'function') {
+      const reserved = await this.batchRepository.tryReserveBatch(tenantId, {
+        id: batchId,
+        entity: 'package',
+        fileName: state.fileName,
+        fileHash: state.fileHash,
+        mappingHash,
+        inserted: 0,
+      });
+      if (!reserved) {
+        const existing = await this.batchRepository.findByFileHash(
+          tenantId,
+          state.fileHash,
+          'package',
+          mappingHash,
+          undefined,
+          true,
+        );
+        const resolvedId = existing?.id ?? batchId;
         await this.progress.set(tenantId, packageId, {
           phase: 'committed',
           done: total,
@@ -85,9 +104,49 @@ export class PackageCommitService {
           errors: [],
         });
         state.status = 'committed';
-        state.batchId = existingBatch.id;
+        state.batchId = resolvedId;
         await this.store.writeState(state);
-        return { batchId: existingBatch.id };
+        return { batchId: resolvedId };
+      }
+    } else {
+      if (state.fileHash && typeof this.batchRepository.findByFileHash === 'function') {
+        const existing = await this.batchRepository.findByFileHash(
+          tenantId,
+          state.fileHash,
+          'package',
+          mappingHash,
+        );
+        if (existing) {
+          existingBatchId = existing.id;
+        }
+      }
+      if (!existingBatchId) {
+        await this.batchRepository.createBatch(tenantId, {
+          id: batchId,
+          entity: 'package',
+          fileName: state.fileName,
+          fileHash: state.fileHash,
+          mappingHash,
+          inserted: 0,
+        });
+      }
+    }
+
+    if (existingBatchId) {
+      const existing = await this.batchRepository.findBatch(tenantId, existingBatchId);
+      if (existing && existing.inserted > 0) {
+        await this.progress.set(tenantId, packageId, {
+          phase: 'committed',
+          done: total,
+          total,
+          inserted: {},
+          skipped: { package: total },
+          errors: [],
+        });
+        state.status = 'committed';
+        state.batchId = existingBatchId;
+        await this.store.writeState(state);
+        return { batchId: existingBatchId };
       }
     }
 
@@ -98,16 +157,6 @@ export class PackageCommitService {
       inserted: {},
       skipped: {},
       errors: [],
-    });
-
-    // Create the batch header BEFORE any row is written: whatever happens afterwards (crash,
-    // adapter exception) every inserted row is already reachable through this batch for undo.
-    await this.batchRepository.createBatch(tenantId, {
-      id: batchId,
-      entity: 'package',
-      fileName: state.fileName,
-      fileHash: state.fileHash,
-      inserted: 0,
     });
 
     let parsed: ParsedPackage;
@@ -216,11 +265,17 @@ export class PackageCommitService {
         }
       }
     } catch (error) {
-      // The batch (with the items recorded so far) stays so the owner can undo the partial import.
-      await this.batchRepository.setInserted(tenantId, batchId, totalInserted);
+      if (totalInserted === 0) {
+        // Release reservation in the same unit of work so a failed package doesn't block re-import:
+        await this.batchRepository.removeBatch(tenantId, batchId).catch(() => undefined);
+        state.batchId = undefined;
+        state.error = 'ثبت بسته با خطا متوقف شد؛ هیچ ردیفی درج نشد و رزرو دسته آزاد شد.';
+      } else {
+        await this.batchRepository.setInserted(tenantId, batchId, totalInserted);
+        state.batchId = batchId;
+        state.error = 'ثبت بسته با خطا متوقف شد؛ ردیف‌های ثبت‌شده تا اینجا را می‌توانید بازگردانی کنید.';
+      }
       state.status = 'failed';
-      state.batchId = batchId;
-      state.error = 'ثبت بسته با خطا متوقف شد؛ ردیف‌های ثبت‌شده تا اینجا را می‌توانید بازگردانی کنید.';
       await this.store.writeState(state);
       await this.progress.set(tenantId, packageId, {
         phase: 'failed',

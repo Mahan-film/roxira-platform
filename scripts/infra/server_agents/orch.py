@@ -21,6 +21,9 @@ Env: ORCH_REPO, ORCH_HOME (state dir, default $ROXIRA_AGENTS_HOME/orch), ORCH_KI
 ORCH_GH / ORCH_GIT (binaries), ORCH_WAVE_ISSUE (592), ORCH_LANES (L5,L6,L7), ORCH_SELF_LOGINS (extra logins to ignore),
 ORCH_WAVE_DEPTH (3 newest WAVE comments, 1 = newest only), ORCH_COOLDOWN_S (900), ORCH_BREAKER_FAILS (3), ORCH_BREAKER_S (3600), ORCH_MAX_RUNS_PER_ISSUE (2),
 ORCH_SCOPE_<LANE> (comma list of path scopes, set by the operator, never by an issue), plus taskq.py's env.
+Box policy (off unless set): ROXIRA_LANE_POLICY=<path to config/box_lane_policy.json> gives the box ladder and a per-lane
+scope table, refuses any lane whose scopes touch a denied path (or are empty), and TASKQ_LADDER overrides the ladder.
+See docs/ops/BOX_LANE_POLICY.md.
 """
 
 from __future__ import annotations
@@ -40,6 +43,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import lane_budget  # noqa: E402
+import lane_policy  # noqa: E402
 import taskq  # noqa: E402
 
 MARKER = "<!-- roxira-orch:v0"
@@ -318,6 +322,7 @@ def plan(db: sqlite3.Connection, now: float, only_lane: str | None = None) -> tu
     cands: list[dict] = []
     skipped: list[str] = []
     taken: set[str] = set()
+    scope_bad = {ln: scope_problems(ln) for ln in allowed}
     head = None
     for issue in order_issues(issues, wave):
         n, lane = issue["number"], lane_map[issue["number"]]
@@ -340,6 +345,8 @@ def plan(db: sqlite3.Connection, now: float, only_lane: str | None = None) -> tu
             why = f"lane {lane}: daily budget reached"
         elif not done_when(issue.get("body") or ""):
             why = "no 'Done when' text"
+        elif scope_bad.get(lane):
+            why = f"lane {lane}: scope policy refuses: {scope_bad[lane][0]}"
         else:
             runs = db.execute("SELECT status FROM jobs WHERE issue=?", (n,)).fetchall()
             if any(r["status"] in ("claimed", "running", "reported") for r in runs):
@@ -361,13 +368,38 @@ def plan(db: sqlite3.Connection, now: float, only_lane: str | None = None) -> tu
 
 
 # ---------------------------------------------------------------- execution
+def lane_scopes(lane: str) -> list[str]:
+    """Scopes for a lane: operator env ORCH_SCOPE_<LANE>, else the box policy table (never issue text)."""
+    return lane_policy.lane_scopes(lane, lane_policy.load())
+
+
+def scope_problems(lane: str) -> list[str]:
+    """Why the lane may not run (checked before any claim). Always: an invalid ladder. With the box policy active also: a
+    denied or missing scope, a bad policy file, a direct-provider ladder step, and a TASKQ_RUNNER that is not set (the
+    queue would then call run_task.sh directly and bypass lane-run: caps, stop file, key and group allowlist)."""
+    try:
+        steps = [s.strip() for s in taskq.default_ladder().split(",") if s.strip()]
+        out = [f"ladder step {s!r} is unknown ({', '.join(taskq.LADDER_STEPS)})" for s in steps if s not in taskq.LADDER_STEPS]
+        if not steps:
+            out.append("the ladder is empty")
+        if not lane_policy.load():
+            return out
+        out += [f"ladder step {s!r} is a direct provider call; the box holds no provider keys" for s in steps
+                if s in taskq.LADDER_STEPS and lane_policy.STEP_GROUP.get(s) is None]
+        if not os.environ.get("TASKQ_RUNNER"):
+            out.append("TASKQ_RUNNER is not set: with the box policy the queue must go through taskq-runner.sh (lane-run)")
+        return out + lane_policy.problems_for_lane(lane, repo_root=HERE.parents[2])
+    except lane_policy.PolicyError as exc:
+        return [str(exc)]
+
+
 def cooled_aliases(db: sqlite3.Connection, now: float) -> set[str]:
     return {r["provider"] for r in db.execute("SELECT provider FROM cooldowns WHERE until>?", (now,))}
 
 
 def usable_ladder(db: sqlite3.Connection, now: float) -> list[str]:
     cooled = cooled_aliases(db, now)
-    return [s for s in taskq.DEFAULT_LADDER.split(",") if s not in cooled]
+    return [s for s in taskq.default_ladder().split(",") if s and s not in cooled]
 
 
 def note_rate_limits(db: sqlite3.Connection, tid: int, now: float) -> None:
@@ -434,7 +466,7 @@ def execute(db: sqlite3.Connection, cand: dict, now: float) -> dict:
         ladder = usable_ladder(db, now)
         if not ladder:
             raise GhError("every ladder step is on provider cooldown")
-        scopes = [s for s in os.environ.get(f"ORCH_SCOPE_{lane}", "").split(",") if s.strip()]
+        scopes = lane_scopes(lane)
         args = ["add", "--slug", f"i{n}-{lane.lower()}", "--task-file", str(tfile), "--public", "--priority", "100",
                 "--lane", lane.lower(), "--ladder", ",".join(ladder)]
         for s in scopes:
@@ -442,7 +474,10 @@ def execute(db: sqlite3.Connection, cand: dict, now: float) -> dict:
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             taskq.main(args)
-        tid = int(buf.getvalue().strip().splitlines()[-1])
+        added = buf.getvalue().strip().splitlines()
+        if not added:
+            raise GhError("taskq add refused the task (ladder or scope policy); nothing was queued")
+        tid = int(added[-1])
         rec["task_id"] = tid
         db.execute("UPDATE jobs SET status='running', task_id=?, updated=? WHERE key=?", (tid, time.time(), key))
         db.commit()

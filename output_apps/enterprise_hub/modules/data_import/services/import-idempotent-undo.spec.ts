@@ -4,7 +4,10 @@ import { EntityImportService } from './entity-import.service';
 import { EntityRegistryService } from '../registry/entity-registry.service';
 import { OpenRouterMappingService } from './openrouter-mapping.service';
 import { UploadStoreService } from './upload-store.service';
-import { DataImportBatchRepository } from '../repositories/data-import-batch.repository';
+import {
+  DataImportBatchRepository,
+  hashImportMapping,
+} from '../repositories/data-import-batch.repository';
 import { DailyImportQuotaService } from './daily-import-quota.service';
 import {
   AdapterCommitResult,
@@ -52,6 +55,7 @@ describe('Import Idempotency, Batch Tagging & Undo (T326 R32)', () => {
   };
 
   beforeEach(() => {
+    jest.clearAllMocks();
     registry = {
       all: jest.fn().mockReturnValue([mockAdapter, accountingAdapter]),
       get: jest.fn((key: string) => {
@@ -127,14 +131,17 @@ describe('Import Idempotency, Batch Tagging & Undo (T326 R32)', () => {
 
       expect(commit1.inserted).toBe(2);
       expect(mockAdapter.commit).toHaveBeenCalledTimes(1);
+      const expectedMappingHash = hashImportMapping({ name: 'name', mobile: 'mobile' });
       expect(batchRepo.createBatch).toHaveBeenCalledWith(
         tenantId,
         expect.objectContaining({
           entity: 'crm-leads',
           fileHash: expectedHash,
-          inserted: 2,
+          mappingHash: expectedMappingHash,
+          inserted: 0,
         }),
       );
+      expect(batchRepo.setInserted).toHaveBeenCalledWith(tenantId, commit1.batchId, 2);
       expect(batchRepo.addItems).toHaveBeenCalledWith(
         tenantId,
         commit1.batchId,
@@ -204,8 +211,48 @@ describe('Import Idempotency, Batch Tagging & Undo (T326 R32)', () => {
 
       expect(commitResult.inserted).toBe(0);
       expect(commitResult.skippedDuplicates).toBe(2);
+      expect(typeof commitResult.batchId).toBe('string');
       // Commit was called with empty array (0 unique rows)
       expect(mockAdapter.commit).toHaveBeenCalledWith(tenantId, [], expect.any(Object));
+      // Batch reservation is released when 0 rows are inserted so subsequent imports are not blocked
+      expect(batchRepo.removeBatch).toHaveBeenCalledWith(tenantId, expect.any(String));
+    });
+
+    it('stops and does NOT call adapter.commit when tryReserveBatch returns false even if existing.inserted is 0', async () => {
+      const tenantId = '11111111-1111-4111-8111-111111111111';
+      const fileBuffer = Buffer.from('name,mobile\nReza,09123456789', 'utf8');
+      const mockFile = {
+        originalname: 'leads-in-flight.csv',
+        mimetype: 'text/csv',
+        buffer: fileBuffer,
+      };
+
+      const preview = await service.preview(tenantId, mockFile, 'crm-leads');
+
+      // tryReserveBatch returns false because another commit currently holds the reservation
+      batchRepo.tryReserveBatch = jest.fn().mockResolvedValueOnce(false);
+      // findByFileHash finds the in-flight batch which still has inserted = 0
+      (batchRepo.findByFileHash as jest.Mock).mockResolvedValueOnce({
+        id: 'in-flight-batch-id',
+        tenantId,
+        entity: 'crm-leads',
+        fileName: 'leads-in-flight.csv',
+        inserted: 0,
+        undone: false,
+        createdAt: new Date(),
+      });
+
+      const commitResult = await service.commit(tenantId, {
+        uploadId: preview.uploadId,
+        entity: 'crm-leads',
+        mapping: { name: 'name', mobile: 'mobile' },
+      });
+
+      expect(commitResult.batchId).toBe('in-flight-batch-id');
+      expect(commitResult.inserted).toBe(0);
+      expect(commitResult.skippedDuplicates).toBe(1);
+      // Crucial: adapter.commit was NEVER called!
+      expect(mockAdapter.commit).not.toHaveBeenCalled();
     });
   });
 
@@ -357,10 +404,48 @@ describe('Import Idempotency, Batch Tagging & Undo (T326 R32)', () => {
       expect(commitResult.inserted).toBe(1);
       expect(batchRepo.createBatch).toHaveBeenCalledWith(
         tenantId,
-        expect.objectContaining({
-          inserted: 1,
-        }),
+        expect.objectContaining({ entity: 'crm-leads', inserted: 0 }),
       );
+      expect(batchRepo.setInserted).toHaveBeenCalledWith(tenantId, commitResult.batchId, 1);
+    });
+
+    it('scopes fileHash lookup by entity and mappingHash so another entity or mapping imports cleanly (#1216)', async () => {
+      const tenantId = '11111111-1111-4111-8111-111111111111';
+      const fileBuffer = Buffer.from('a,b\nReza,09123456789', 'utf8');
+      const fileHash = createHash('sha256').update(fileBuffer).digest('hex');
+      const file = { originalname: 'same.csv', mimetype: 'text/csv', buffer: fileBuffer };
+
+      const p1 = await service.preview(tenantId, file, 'crm-leads');
+      (batchRepo.findByFileHash as jest.Mock).mockResolvedValueOnce(null);
+      (mockAdapter.commit as jest.Mock).mockResolvedValueOnce({ inserted: [{ rowNumber: 2, ownerId: 1 }], failed: [] });
+      await service.commit(tenantId, { uploadId: p1.uploadId, entity: 'crm-leads', mapping: { a: 'name', b: 'mobile' } });
+
+      const p2 = await service.preview(tenantId, file, 'crm-leads');
+      (batchRepo.findByFileHash as jest.Mock).mockResolvedValueOnce(null);
+      (mockAdapter.commit as jest.Mock).mockResolvedValueOnce({ inserted: [{ rowNumber: 2, ownerId: 2 }], failed: [] });
+      await service.commit(tenantId, { uploadId: p2.uploadId, entity: 'crm-leads', mapping: { b: 'name', a: 'mobile' } });
+
+      const calls = (batchRepo.findByFileHash as jest.Mock).mock.calls;
+      expect(calls[0]).toEqual([tenantId, fileHash, 'crm-leads', hashImportMapping({ a: 'name', b: 'mobile' }), undefined]);
+      expect(calls[1]).toEqual([tenantId, fileHash, 'crm-leads', hashImportMapping({ b: 'name', a: 'mobile' }), undefined]);
+      expect(calls[0][3]).not.toBe(calls[1][3]);
+    });
+
+    it('compensates via adapter.undo and removes batch when addItems fails mid-commit (#1216)', async () => {
+      const tenantId = '11111111-1111-4111-8111-111111111111';
+      const file = { originalname: 'fail.csv', mimetype: 'text/csv', buffer: Buffer.from('name,mobile\nAli,09120000001') };
+      const preview = await service.preview(tenantId, file, 'crm-leads');
+
+      (batchRepo.findByFileHash as jest.Mock).mockResolvedValueOnce(null);
+      (mockAdapter.commit as jest.Mock).mockResolvedValueOnce({ inserted: [{ rowNumber: 2, ownerId: 777 }], failed: [] });
+      (batchRepo.addItems as jest.Mock).mockRejectedValueOnce(new Error('db write failed'));
+      (mockAdapter.undo as jest.Mock).mockResolvedValueOnce({ removed: 1, refused: [] });
+
+      await expect(
+        service.commit(tenantId, { uploadId: preview.uploadId, entity: 'crm-leads', mapping: { name: 'name', mobile: 'mobile' } }),
+      ).rejects.toThrow('db write failed');
+      expect(mockAdapter.undo).toHaveBeenCalledWith(tenantId, [777]);
+      expect(batchRepo.removeBatch).toHaveBeenCalled();
     });
   });
 });
