@@ -1,0 +1,172 @@
+#!/bin/bash -p
+# roxira-root: fixed-verb root runner for the roxira-ci box (issue #1315, docs/ops/ROOT_RUNNER.md).
+# FROZEN COPY: installed by scripts/ops/ci_box/root_runner/install_root.sh (owner password) as
+# /usr/local/lib/roxira-root/roxira-root and reached through /usr/local/sbin/roxira-root. It is never updated by a verb.
+#
+#   roxira-root phone-keys-sync | phone-restart | phone-status | jit-restart | jit-status | box-status
+#
+# Rules: exactly one argument (the verb name), no free-form arguments or paths, nothing is sourced or executed from
+# /home or a worktree (the only /home path is SRC_ENV below, read as DATA), no value is read from the environment
+# except SUDO_UID (set by sudo itself, used only for the log line). Every call is logged to journald.
+set -eu
+umask 077
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+HOME=/root # so curl/others never read a caller's rc file
+export PATH HOME
+unset BASH_ENV ENV CDPATH LD_PRELOAD LD_LIBRARY_PATH 2>/dev/null || true
+
+# ---- constants. The test suite rewrites these lines to point at fakes; production values are fixed here. ------------
+SRC_ENV=/home/mahan/Secrets/roxira/roxira.env
+DST_ENV=/srv/data/phone/agent/.env
+PHONE_USER=phone
+PHONE_UNIT=voice-ai-agent
+RUNNER_USER=runner
+PROXY=http://127.0.0.1:10809
+GEMINI_URL='https://generativelanguage.googleapis.com/v1beta/models?pageSize=1'
+LOCK=/run/roxira-root.lock
+SETTLE=8
+CURL=/usr/bin/curl
+SYSTEMCTL=/usr/bin/systemctl
+RUNUSER=/usr/sbin/runuser
+LOGGER=/usr/bin/logger
+FLOCK=/usr/bin/flock
+IDBIN=/usr/bin/id
+CHOWN=/usr/bin/chown
+REALPATH=/usr/bin/realpath
+ENVBIN=/usr/bin/env
+SLEEP=/usr/bin/sleep
+MKTEMP=/usr/bin/mktemp
+RMBIN=/usr/bin/rm
+DFBIN=/usr/bin/df
+SENSORS=/usr/bin/sensors
+REBOOT_FLAG=/var/run/reboot-required
+JIT_UNITS="roxira-jit@light.service roxira-jit@docker.service"
+OLD_RUNNER_UNIT=actions-runner.service
+# ------------------------------------------------------------------------------------------------------------------
+
+CALLER="${SUDO_UID:-}"
+case "$CALLER" in '' | *[!0-9]*) CALLER="$("$IDBIN" -u)" ;; esac
+
+log() { "$LOGGER" -t roxira-root -p auth.notice -- "uid=$CALLER verb=${VERB:-none} $1" || true; }
+usage() {
+  echo "usage: roxira-root phone-keys-sync|phone-restart|phone-status|jit-restart|jit-status|box-status (no arguments)" >&2
+  exit 2
+}
+
+VERB="${1:-}"
+if [ $# -ne 1 ]; then
+  VERB=invalid
+  log "refused: expected exactly one argument, got $#"
+  usage
+fi
+case "$VERB" in
+  phone-keys-sync | phone-restart | phone-status | jit-restart | jit-status | box-status) ;;
+  *) VERB=invalid; log "refused: unknown verb"; usage ;;
+esac
+
+[ "$("$IDBIN" -u)" = 0 ] || { echo "roxira-root must run as root (use sudo)" >&2; exit 1; }
+
+take_lock() { # state-changing verbs run one at a time
+  exec 9>"$LOCK"
+  "$FLOCK" -w 60 9 || { echo "another roxira-root verb is running (lock timeout)"; return 1; }
+}
+
+runner_systemctl() { # systemctl --user for the CI runner user; fixed uid lookup, fixed units
+  local ruid
+  ruid="$("$IDBIN" -u "$RUNNER_USER")" || return 1
+  case "$ruid" in '' | *[!0-9]*) return 1 ;; esac
+  "$RUNUSER" -u "$RUNNER_USER" -- "$ENVBIN" "XDG_RUNTIME_DIR=/run/user/$ruid" \
+    "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$ruid/bus" "$SYSTEMCTL" --user "$@"
+}
+
+phone_state() { printf '%s: %s\n' "$PHONE_UNIT" "$("$SYSTEMCTL" is-active "$PHONE_UNIT" 2>/dev/null || true)"; }
+
+verb_phone_status() {
+  phone_state
+  "$SYSTEMCTL" show "$PHONE_UNIT" -p ActiveState -p SubState -p NRestarts -p ActiveEnterTimestamp 2>/dev/null || true
+}
+
+verb_phone_restart() {
+  take_lock || return 1
+  "$SYSTEMCTL" restart "$PHONE_UNIT" || return 1
+  "$SLEEP" "$SETTLE"
+  phone_state
+}
+
+drop_tmp() { "$RMBIN" -f -- "$1" || true; } # $1 is always a mktemp name next to the phone env
+
+verb_phone_keys_sync() {
+  take_lock || return 1
+  local slots=(GEMINI_API_KEY GEMINI_API_KEY_2 GEMINI_API_KEY_3 GEMINI_API_KEY_4)
+  local good=() k v code i tmp real
+  # The source is the owner's key file, read as DATA. Refuse anything that is not that exact regular file.
+  [ -f "$SRC_ENV" ] && [ ! -L "$SRC_ENV" ] || { echo "key source is missing or not a regular file"; return 1; }
+  real="$("$REALPATH" -e "$SRC_ENV")" && [ "$real" = "$SRC_ENV" ] || { echo "key source path resolves elsewhere (symlink in path)"; return 1; }
+  [ -f "$DST_ENV" ] && [ ! -L "$DST_ENV" ] || { echo "phone env is missing or not a regular file"; return 1; }
+  real="$("$REALPATH" -e "$(dirname "$DST_ENV")")" && [ "$real" = "$(dirname "$DST_ENV")" ] || { echo "phone env dir resolves elsewhere"; return 1; }
+  for k in "${slots[@]}"; do
+    v="$(grep -E "^[[:space:]]*(export[[:space:]]+)?$k=" "$SRC_ENV" | tail -n1 | cut -d= -f2- | tr -d "\r\"' " || true)"
+    if [ -z "$v" ]; then echo "$k not in file"; continue; fi
+    if ! [[ "$v" =~ ^[0-9A-Za-z_.-]{20,100}$ ]]; then echo "$k has an unexpected format, skipped"; v=""; continue; fi
+    # the key goes to curl on stdin (-K -), never on a command line
+    code="$(printf 'header = "x-goog-api-key: %s"\n' "$v" | "$CURL" -q -s -o /dev/null -w '%{http_code}' -m 20 -x "$PROXY" -K - "$GEMINI_URL")" || code=000
+    echo "$k http=$code"
+    if [ "$code" = 200 ]; then good+=("$v"); fi
+    v=""
+  done
+  if [ "${#good[@]}" -eq 0 ]; then echo "no working key, env unchanged"; return 1; fi
+  tmp="$("$MKTEMP" "$DST_ENV.XXXXXX")" || return 1
+  # set -e is off inside verbs: every step must succeed, otherwise the temp file is dropped and nothing is replaced
+  { grep -vE '^GEMINI_API_KEY(_[0-9]+)?=' "$DST_ENV" || true; } >"$tmp" || { drop_tmp "$tmp"; return 1; }
+  for i in "${!good[@]}"; do printf '%s=%s\n' "${slots[$i]}" "${good[$i]}" >>"$tmp" || { drop_tmp "$tmp"; return 1; }; done
+  good=()
+  "$CHOWN" "$PHONE_USER:$PHONE_USER" "$tmp" || { drop_tmp "$tmp"; echo "chown failed, env unchanged"; return 1; }
+  chmod 600 "$tmp" || { drop_tmp "$tmp"; return 1; }
+  mv -f "$tmp" "$DST_ENV" || { drop_tmp "$tmp"; return 1; }
+  echo "wrote working key(s) into slots 1..$(grep -cE '^GEMINI_API_KEY(_[0-9]+)?=' "$DST_ENV")"
+  "$SYSTEMCTL" restart "$PHONE_UNIT" || return 1
+  "$SLEEP" "$SETTLE"
+  phone_state
+}
+
+verb_jit_status() {
+  local u
+  for u in $JIT_UNITS $OLD_RUNNER_UNIT; do
+    printf '%s: %s\n' "$u" "$(runner_systemctl is-active "$u" 2>/dev/null || true)"
+  done
+}
+
+verb_jit_restart() {
+  take_lock || return 1
+  # shellcheck disable=SC2086  # fixed unit list, word splitting intended
+  runner_systemctl restart $JIT_UNITS || return 1
+  # the old persistent runner is only restarted if it is currently active (never started by this verb)
+  runner_systemctl try-restart "$OLD_RUNNER_UNIT" || true
+  "$SLEEP" 3
+  verb_jit_status
+}
+
+verb_box_status() {
+  local u
+  echo "== services"
+  for u in xray docker "$PHONE_UNIT"; do printf '%s: %s\n' "$u" "$("$SYSTEMCTL" is-active "$u" 2>/dev/null || true)"; done
+  verb_jit_status
+  echo "== disk"
+  "$DFBIN" -h / /srv/data 2>/dev/null || true
+  echo "== temperature"
+  if [ -x "$SENSORS" ]; then "$SENSORS" 2>/dev/null | grep -E '^(Package id [0-9]+|Core [0-9]+):' || echo "no readings"; else echo "sensors unavailable"; fi
+  if [ -e "$REBOOT_FLAG" ]; then echo "reboot required"; else echo "no reboot required"; fi
+}
+
+log "start"
+rc=0
+case "$VERB" in
+  phone-keys-sync) verb_phone_keys_sync || rc=$? ;;
+  phone-restart) verb_phone_restart || rc=$? ;;
+  phone-status) verb_phone_status || rc=$? ;;
+  jit-restart) verb_jit_restart || rc=$? ;;
+  jit-status) verb_jit_status || rc=$? ;;
+  box-status) verb_box_status || rc=$? ;;
+esac
+log "done rc=$rc"
+exit "$rc"

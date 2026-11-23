@@ -133,9 +133,9 @@ export class AccountantFirmService {
 
     const revokedAt = new Date().toISOString();
     try {
-      // Terminate sessions first so a subsequent DB/audit error never leaves tokens alive.
-      await this.refreshTokens.revokeAllForUser(firmUserId);
-      await Promise.resolve(this.access.invalidateUser(firmUserId));
+      // Terminate sessions for this tenant first so a subsequent DB/audit error never leaves tokens alive.
+      await this.refreshTokens.revokeAllForUser(firmUserId, [actor.tenantId]);
+      await Promise.resolve(this.access.invalidateUser(firmUserId, actor.tenantId));
 
       existing.status = 'SUSPENDED';
       await this.memberships.save(existing);
@@ -155,7 +155,7 @@ export class AccountantFirmService {
         request,
       });
     } finally {
-      await Promise.resolve(this.access.invalidateUser(firmUserId));
+      await Promise.resolve(this.access.invalidateUser(firmUserId, actor.tenantId));
     }
   }
 
@@ -213,13 +213,20 @@ export class AccountantFirmService {
       }
     }
 
+    // Empty targets means no-op: user is not an advisor in any administered tenant.
+    if (targets.length === 0) {
+      return { revokedTenantIds: [] };
+    }
+
+    const affectedTenantIds = targets.map((t) => t.tenantId);
     const revokedAt = new Date().toISOString();
     const revokedTenantIds: string[] = [];
 
     try {
-      // Revoke all refresh tokens FIRST so any failure in the per-tenant loop cannot leave sessions active.
-      await this.refreshTokens.revokeAllForUser(firmUserId);
-      await Promise.resolve(this.access.invalidateUser(firmUserId));
+      // Revoke refresh tokens ONLY for the actor-controlled tenants where user is an advisor,
+      // BEFORE the per-tenant loop so any failure in the loop cannot leave sessions active.
+      await this.refreshTokens.revokeAllForUser(firmUserId, affectedTenantIds);
+      await Promise.resolve(this.access.invalidateUser(firmUserId, affectedTenantIds));
 
       for (const { tenantId, membership } of targets) {
         membership.status = 'SUSPENDED';
@@ -242,7 +249,7 @@ export class AccountantFirmService {
         });
       }
     } finally {
-      await Promise.resolve(this.access.invalidateUser(firmUserId));
+      await Promise.resolve(this.access.invalidateUser(firmUserId, affectedTenantIds));
     }
 
     this.logger.log(

@@ -74,6 +74,9 @@ def _make_repo(tmp_path: Path, *, reset_to_base: bool) -> dict:
     dep = work / "scripts/ops"
     dep.mkdir(parents=True)
     shutil.copy(DEPLOY_SCRIPT, dep / "deploy_local.sh")
+    auto_dep = dep / "autodeploy"
+    auto_dep.mkdir(parents=True, exist_ok=True)
+    shutil.copy(ROOT / "scripts/ops/autodeploy/check_ci.py", auto_dep / "check_ci.py")
     (work / "README.md").write_text("base\n", encoding="utf-8")
     _git(work, "add", "-A")
     _git(work, "commit", "-q", "-m", "base")
@@ -138,6 +141,7 @@ def auto_env(tmp_path: Path) -> dict:
         "AUTODEPLOY_STATE_DIR": str(tmp_path / "state"),
         "AUTODEPLOY_LOG_DIR": str(tmp_path / "logs"),
         "AUTODEPLOY_LOCK": str(tmp_path / "autodeploy.lock"),
+        "AUTODEPLOY_SKIP_CI_GATE": "1",
         "FAKE_BASH_LOG": str(bash_log),
     }
     return {**repo, "env": env, "marker": marker, "bash_log": bash_log, "tmp": tmp_path}
@@ -230,6 +234,101 @@ def test_autodeploy_records_failed_sha_on_migrate_failure(auto_env: dict) -> Non
     assert auto_env["target"] in failed
     status = json.loads((auto_env["tmp"] / "state/autodeploy-last.json").read_text())
     assert status["result"] == "failed"
+
+
+def test_autodeploy_refuses_when_ci_gate_fails(auto_env: dict) -> None:
+    fixture = auto_env["tmp"] / "checks_fail.json"
+    fixture.write_text(
+        json.dumps({
+            "check_runs": [
+                {"name": "Detect changes", "status": "completed", "conclusion": "success"},
+                {"name": "Secret scan (new commits only)", "status": "completed", "conclusion": "success"},
+                {"name": "Pytest (unit)", "status": "completed", "conclusion": "failure"},
+                {"name": "Frontend gate", "status": "completed", "conclusion": "success"},
+                {"name": "Undefined names", "status": "completed", "conclusion": "success"},
+                {"name": "System inventory up to date", "status": "completed", "conclusion": "success"},
+            ]
+        }),
+        encoding="utf-8",
+    )
+    result = _run_auto(
+        auto_env,
+        extra_env={
+            "AUTODEPLOY_SKIP_CI_GATE": "0",
+            "AUTODEPLOY_CI_CHECK_FILE": str(fixture),
+        },
+    )
+    assert result.returncode == 1
+    failed = (auto_env["tmp"] / "state/autodeploy-failed-shas").read_text(encoding="utf-8")
+    assert auto_env["target"] in failed
+    assert auto_env["bash_log"].read_text(encoding="utf-8") == ""
+
+
+def test_autodeploy_skips_cleanly_when_ci_jobs_pending(auto_env: dict) -> None:
+    fixture = auto_env["tmp"] / "checks_pending.json"
+    fixture.write_text(
+        json.dumps({
+            "check_runs": [
+                {"name": "Detect changes", "status": "completed", "conclusion": "success"},
+                {"name": "Pytest (unit)", "status": "in_progress", "conclusion": None},
+            ]
+        }),
+        encoding="utf-8",
+    )
+    result = _run_auto(
+        auto_env,
+        extra_env={
+            "AUTODEPLOY_SKIP_CI_GATE": "0",
+            "AUTODEPLOY_CI_CHECK_FILE": str(fixture),
+        },
+    )
+    assert result.returncode == 0
+    state_file = auto_env["tmp"] / "state/autodeploy-failed-shas"
+    assert not state_file.exists() or auto_env["target"] not in state_file.read_text(encoding="utf-8")
+    assert auto_env["bash_log"].read_text(encoding="utf-8") == ""
+
+
+def test_autodeploy_fails_closed_on_ci_api_error(auto_env: dict) -> None:
+    result = _run_auto(
+        auto_env,
+        extra_env={
+            "AUTODEPLOY_SKIP_CI_GATE": "0",
+            "AUTODEPLOY_CI_CHECK_FILE": "/nonexistent/checks.json",
+        },
+    )
+    assert result.returncode == 1
+    state_file = auto_env["tmp"] / "state/autodeploy-failed-shas"
+    # transient API error should not permanently blacklist the SHA
+    assert not state_file.exists() or auto_env["target"] not in state_file.read_text(encoding="utf-8")
+    status = json.loads((auto_env["tmp"] / "state/autodeploy-last.json").read_text())
+    assert status["result"] == "failed"
+
+
+def test_autodeploy_proceeds_when_ci_gate_green(auto_env: dict) -> None:
+    fixture = auto_env["tmp"] / "checks_green.json"
+    fixture.write_text(
+        json.dumps({
+            "check_runs": [
+                {"name": "Detect changes", "status": "completed", "conclusion": "success"},
+                {"name": "Secret scan (new commits only)", "status": "completed", "conclusion": "success"},
+                {"name": "Pytest (unit)", "status": "completed", "conclusion": "success"},
+                {"name": "Frontend gate", "status": "completed", "conclusion": "success"},
+                {"name": "Undefined names", "status": "completed", "conclusion": "success"},
+                {"name": "System inventory up to date", "status": "completed", "conclusion": "success"},
+            ]
+        }),
+        encoding="utf-8",
+    )
+    result = _run_auto(
+        auto_env,
+        extra_env={
+            "AUTODEPLOY_SKIP_CI_GATE": "0",
+            "AUTODEPLOY_CI_CHECK_FILE": str(fixture),
+        },
+    )
+    assert result.returncode == 0
+    lines = auto_env["bash_log"].read_text(encoding="utf-8").splitlines()
+    assert any("deploy --yes" in ln for ln in lines)
 
 
 # ------------------------------------------------- deploy_local.sh auto-confirm

@@ -72,6 +72,33 @@ const taxRules: readonly TaxRuleInfo[] = [
       'insurable_ceiling_multiplier',
     ],
   },
+  {
+    kind: 'business_income_tax',
+    label: 'مالیات بر درآمد مشاغل',
+    statutoryKeys: [
+      'income_tax_art131_brackets',
+      'income_exemption_ceiling_art57_art101',
+      'civil_partnership_max_exemptions',
+    ],
+  },
+  {
+    kind: 'doctor_withholding',
+    label: 'مالیات تکلیفی پزشکان',
+    statutoryKeys: [
+      'doctor_fee_withholding_rate',
+      'withholding_late_penalty_rate',
+      'withholding_late_penalty_monthly_rate',
+    ],
+  },
+  {
+    kind: 'rental_tax',
+    label: 'مالیات بر درآمد اجاره املاک',
+    statutoryKeys: [
+      'rental_expense_deduction_rate',
+      'income_exemption_ceiling_art57_art101',
+      'income_tax_art131_brackets',
+    ],
+  },
 ];
 
 const ACCOUNTING_REPORTS = 'enterprise-hub/accounting/reports';

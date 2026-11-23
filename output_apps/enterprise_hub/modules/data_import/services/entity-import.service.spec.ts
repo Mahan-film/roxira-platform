@@ -63,6 +63,7 @@ function makeService() {
     findBatch: jest.fn(),
     listBatches: jest.fn().mockResolvedValue([]),
     findItems: jest.fn().mockResolvedValue([]),
+    setInserted: jest.fn().mockResolvedValue(undefined),
     markUndone: jest.fn().mockResolvedValue(undefined),
     removeItems: jest.fn().mockResolvedValue(undefined),
     countCreatedSince: jest.fn().mockResolvedValue(0),
@@ -196,8 +197,13 @@ describe('EntityImportService.commit', () => {
       expect.objectContaining({
         entity: 'hr-employees',
         fileName: 'employees.csv',
-        inserted: 2,
+        inserted: 0,
       }),
+    );
+    expect(batchRepository.setInserted).toHaveBeenCalledWith(
+      'tenant-1',
+      result.batchId,
+      2,
     );
     expect(batchRepository.addItems).toHaveBeenCalledWith(
       'tenant-1',

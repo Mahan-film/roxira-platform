@@ -1,23 +1,33 @@
 """Tiny local edge-tts sidecar for the voice agent.
 
-POST /tts {"text", "voice", "rate"} -> audio/mpeg. GET /health.
+POST /tts {"text", "voice", "rate", "pitch"} -> audio/mpeg. GET /health.
 One long-lived process shared by all calls: no Python start-up per sentence.
 Outbound traffic to Microsoft goes through the proxy (PROXY_URL); it listens on 127.0.0.1 only.
 """
 import asyncio
 import os
+import re
 
 import edge_tts
 from aiohttp import web
 
 PROXY = os.environ.get("PROXY_URL", "http://127.0.0.1:10808") or None
 PORT = int(os.environ.get("EDGE_TTS_PORT", "5055"))
+PITCH_RE = re.compile(r"^[+-]\d{1,2}Hz$")
+
+
+def pitch_of(body: dict) -> str:
+    """edge-tts pitch such as "-2Hz"; anything else (or missing, from an older agent) is the default."""
+    p = str(body.get("pitch") or "")
+    return p if PITCH_RE.match(p) else "+0Hz"
+
+
 FALLBACK_VOICE = {"fa-IR-DilaraNeural": "fa-IR-FaridNeural", "fa-IR-FaridNeural": "fa-IR-DilaraNeural"}
 
 
-async def synth(text: str, voice: str, rate: str) -> bytes:
+async def synth(text: str, voice: str, rate: str, pitch: str = "+0Hz") -> bytes:
     buf = bytearray()
-    async for chunk in edge_tts.Communicate(text, voice, rate=rate, proxy=PROXY).stream():
+    async for chunk in edge_tts.Communicate(text, voice, rate=rate, pitch=pitch, proxy=PROXY).stream():
         if chunk["type"] == "audio":
             buf.extend(chunk["data"])
     return bytes(buf)
@@ -32,7 +42,7 @@ async def tts(request: web.Request) -> web.Response:
     rate = body.get("rate") or "+0%"
     for v in (voice, voice, FALLBACK_VOICE.get(voice, voice)):
         try:
-            audio = await asyncio.wait_for(synth(text, v, rate), timeout=15)
+            audio = await asyncio.wait_for(synth(text, v, rate, pitch_of(body)), timeout=15)
             if len(audio) > 200:
                 return web.Response(body=audio, content_type="audio/mpeg")
         except Exception as exc:  # noqa: BLE001
@@ -54,7 +64,7 @@ async def tts_stream(request: web.Request) -> web.StreamResponse:
         sent = 0
         try:
             async with asyncio.timeout(20):
-                async for chunk in edge_tts.Communicate(text, v, rate=rate, proxy=PROXY).stream():
+                async for chunk in edge_tts.Communicate(text, v, rate=rate, pitch=pitch_of(body), proxy=PROXY).stream():
                     if chunk["type"] == "audio" and chunk["data"]:
                         if not resp.prepared:
                             await resp.prepare(request)
