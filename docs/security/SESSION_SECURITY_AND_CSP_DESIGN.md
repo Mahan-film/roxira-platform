@@ -51,17 +51,17 @@ This design note specifies the target architecture to permanently eliminate both
 
 #### Cookie Attributes
 ```http
-Set-Cookie: __Host-rx_refresh=<opaque_token>; 
+Set-Cookie: rx_refresh=<opaque_token>; 
             Path=/v1/auth; 
             HttpOnly; 
             Secure; 
             SameSite=Lax; 
             Max-Age=2592000
 ```
-- **Name**: `__Host-rx_refresh` (or `rx_refresh` when deployed across subdomain boundaries such as `app.roxira.ir` and `api.roxira.ir`). The `__Host-` prefix enforces that the cookie is secure, sent only to the host, and has `Path=/`.
+- **Name**: `rx_refresh`. The `__Host-` prefix is deliberately NOT used: browsers reject a `__Host-` cookie unless it has `Path=/`, and this design needs `Path=/v1/auth`. The cookie is host-only (no `Domain` attribute), so it is sent only to the host that set it.
 - **`HttpOnly`**: Set to `true`. Browser JavaScript (`document.cookie`) cannot read or manipulate it.
-- **`Secure`**: Set to `true`. Emitted only over HTTPS connections (in development, relaxed to `false` only if `NODE_ENV !== 'production'`).
-- **`SameSite=Lax`**: Provides top-level navigation safety while preventing cross-site POST requests from transmitting the cookie.
+- **`Secure`**: Set to `true`. Emitted only over HTTPS connections (the code sets `secure: process.env.NODE_ENV === 'production'`, so only a non-production build may omit it; a test must assert `Secure` is present when `NODE_ENV=production`).
+- **`SameSite=Lax`**: Provides top-level navigation safety while preventing cross-site POST requests from transmitting the cookie. "Site" means registrable domain (eTLD+1), not origin: `app.roxira.ir` to `api.roxira.ir` is same-site, so `Lax` cookies are sent on those requests (the API must still answer CORS with the exact origin and `Access-Control-Allow-Credentials: true`). `roxira.ir`, `roxira.net` and `ghazihoushmand.ir` are different sites: the refresh and logout calls of each domain must go to an API host or path under that same domain (today Nginx proxies the API under the same host). Do not use `SameSite=None` to work around this; it would re-open the CSRF surface in T2.
 - **`Path=/v1/auth`**: Scopes transmission strictly to authentication endpoints (`/v1/auth/refresh`, `/v1/auth/logout`, `/v1/auth/sessions`). Ordinary API calls (`/v1/invoices`, `/v1/ledger`) do not receive the cookie, minimizing overhead and surface area.
 
 #### Endpoint Request/Response Flow
@@ -91,7 +91,7 @@ Set-Cookie: __Host-rx_refresh=<opaque_token>;
 
 ### 3.2 Nonce-Based Content-Security-Policy (CSP) Architecture
 
-#### Next.js Middleware Implementation (`frontend/src/middleware.ts`)
+#### Next.js Middleware Implementation (`output_apps/enterprise_hub/frontend/src/middleware.ts`)
 Next.js 14/15 natively supports per-request nonces in Middleware:
 
 ```typescript
@@ -99,13 +99,16 @@ import { NextResponse, type NextRequest } from "next/server";
 
 export function middleware(request: NextRequest) {
   // 1. Generate 128-bit cryptographic nonce
-  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+  const nonce = Buffer.from(crypto.getRandomValues(new Uint8Array(16))).toString("base64");
+  // Edge runtime has no crypto.randomBytes; getRandomValues gives 16 random bytes (128 bits).
+  // In a Node runtime, crypto.randomBytes(16).toString("base64") is equivalent.
+  // Never base64-encode crypto.randomUUID(): that is a 36-character string with fixed structure.
 
   // 2. Formulate strict CSP
   // 'strict-dynamic' allows scripts loaded by trusted (nonced) scripts to execute
   const cspHeader = `
     default-src 'self';
-    script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https:;
+    script-src 'self' 'nonce-${nonce}' 'strict-dynamic';
     style-src 'self' 'unsafe-inline';
     img-src 'self' blob: data: https:;
     font-src 'self';
@@ -134,6 +137,8 @@ export function middleware(request: NextRequest) {
 }
 ```
 
+> Known gap: `style-src 'unsafe-inline'` stays for now (CSS injection can exfiltrate data via `url()`); track hashes or nonces for inline styles as a later hardening step.
+
 #### React Server Component Nonce Consumption
 In `frontend/src/app/layout.tsx`:
 ```tsx
@@ -154,7 +159,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
 #### Nginx Coordination
 In `output_apps/nginx_config/snippets/security_headers.conf`:
-- Remove the hardcoded static `Content-Security-Policy` header from Nginx for dynamic HTML pages so Nginx does not conflict with the dynamic nonce header issued by Next.js.
+- Current state: the shared snippet has a single `add_header Content-Security-Policy "...script-src 'self' 'unsafe-inline'..."` line, included in each `server` block (`nginx.conf:174` for the judge host and the equivalents for the other hosts). `proxy_hide_header` is NOT the fix: it only strips headers coming from the upstream, so it would remove the Next.js nonce header and keep the static one. Nginx `add_header` is added next to, not instead of, the upstream header, and the browser then enforces both policies (the intersection), so a static policy with `'unsafe-inline'` can coexist but would make the nonce rollout confusing and duplicate the header.
+- Change: delete the `add_header Content-Security-Policy` line from `security_headers.conf` and move it into a new `snippets/csp_static.conf`, included only in locations that serve non-Next.js content (for example Nginx-served static files and error pages). Locations that `proxy_pass` to `$frontend_backend` do not include it, so the only CSP on those responses is the one Next.js middleware sets.
+- Rollout order: ship the Next.js middleware first with `Content-Security-Policy-Report-Only` while Nginx still enforces its policy; then flip the middleware to enforce and remove the Nginx line in the same deploy. `scripts/ops/nginx/toggle_csp.sh` edits the `add_header Content-Security-Policy ` text in `security_headers.conf`; update it to point at the new snippet in the same PR.
 - Nginx retains static fallback headers (HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy).
 
 ---
@@ -202,7 +209,7 @@ flowchart TD
    - All subsequent refreshes invoke `fetch(AUTH_ENDPOINT, { method: 'POST', credentials: 'include' })` with empty body.
 
 ### Phase 3: CSP Nonce Activation & Final Cutover
-1. Enable Next.js Nonce Middleware in `frontend/src/middleware.ts`.
+1. Enable Next.js Nonce Middleware in `output_apps/enterprise_hub/frontend/src/middleware.ts`.
 2. Remove static `'unsafe-inline'` script directive from Nginx configuration.
 3. Turn `dto.refreshToken` in backend to optional/deprecated, validating exclusively via cookie.
 
@@ -212,10 +219,10 @@ flowchart TD
 
 | Slice | Title / Scope | Key Files Touched | Tests / Gates |
 |---|---|---|---|
-| **PR 1 (Backend)** | Backend cookie issuance & dual-read fallback | `auth.controller.ts`, `auth.service.ts`, `refresh-token.service.ts` | Auth unit specs, e2e refresh with cookie and body |
-| **PR 2 (Frontend)** | `session-store.ts` cookie-backed refresh & transparent migration | `session-store.ts`, `session-logic.ts`, `auth-client.ts` | Frontend Jest tests, `session-store.test.ts` |
-| **PR 3 (Security/Infra)**| Next.js dynamic nonce middleware & CSP header cleanup | `frontend/src/middleware.ts`, `layout.tsx`, `security_headers.conf` | Playwright e2e, CSP report check |
-| **PR 4 (Hardening)**| Deprecate JSON refresh token and enforce strict cookie | `auth.dto.ts`, `auth.controller.ts` | Full login/refresh/logout regression |
+| **PR 1 (Backend)** | Backend cookie issuance & dual-read fallback | `modules/auth/controllers/auth.controller.ts`, `modules/auth/services/auth.service.ts`, `modules/auth/services/refresh-token.service.ts` (under `output_apps/enterprise_hub/`) | Auth unit specs, e2e refresh with cookie and body |
+| **PR 2 (Frontend)** | `session-store.ts` cookie-backed refresh & transparent migration | `frontend/src/lib/api/session-store.ts`, `session-logic.ts`, `auth-client.ts` (all under `output_apps/enterprise_hub/`) | Frontend Jest tests, `session-store.test.ts` |
+| **PR 3 (Security/Infra)**| Next.js dynamic nonce middleware & CSP header cleanup | `output_apps/enterprise_hub/frontend/src/middleware.ts` (exists today and does host routing: add the nonce logic to it, do not replace it), `frontend/src/app/layout.tsx`, `output_apps/nginx_config/snippets/security_headers.conf` | Playwright e2e, CSP report check |
+| **PR 4 (Hardening)**| Deprecate JSON refresh token and enforce strict cookie | `modules/auth/dto/password-auth.dto.ts` (or the DTO that carries `refreshToken`), `auth.controller.ts` | Full login/refresh/logout regression |
 
 ---
 
