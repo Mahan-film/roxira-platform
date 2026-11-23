@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
   BASE,
@@ -64,7 +65,12 @@ test.describe('T354 · First-customer journey through the UI', () => {
     await page.waitForURL(/\/app/, { timeout: 35_000 });
     const sessionToken = await page.evaluate((key) => {
       const raw = window.localStorage.getItem(key);
-      return raw ? (JSON.parse(raw) as { accessToken?: string }).accessToken : null;
+      if (!raw) return null;
+      try {
+        return (JSON.parse(raw) as { accessToken?: string }).accessToken ?? null;
+      } catch {
+        return null;
+      }
     }, SESSION_KEY);
     expect(sessionToken, 'access token stored in localStorage after signup').toBeTruthy();
 
@@ -130,12 +136,18 @@ test.describe('T354 · First-customer journey through the UI', () => {
     // -------------------------------------------------------------------------
     currentStep = '04-import-list';
     const csvFile = createSmallSyntheticCsv(creds);
-    await page.goto(`${BASE}/app/import`, { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('#import-file')).toBeAttached({ timeout: 25_000 });
-    await page.locator('#import-file').setInputFiles(csvFile);
+    try {
+      await page.goto(`${BASE}/app/import`, { waitUntil: 'domcontentloaded' });
+      await expect(page.locator('#import-file')).toBeAttached({ timeout: 25_000 });
+      await page.locator('#import-file').setInputFiles(csvFile);
 
-    // Expect column mapping or preview table to render
-    await expect(page.getByText(/مشتری|تأمین‌کننده|ستون|بررسی/).first()).toBeVisible({ timeout: 35_000 });
+      // Expect column mapping or preview table to render
+      await expect(page.getByText(/مشتری|تأمین‌کننده|ستون|بررسی/).first()).toBeVisible({ timeout: 35_000 });
+    } finally {
+      try {
+        if (fs.existsSync(csvFile)) fs.unlinkSync(csvFile);
+      } catch {}
+    }
 
     // -------------------------------------------------------------------------
     // Step 5: Create and issue an invoice
