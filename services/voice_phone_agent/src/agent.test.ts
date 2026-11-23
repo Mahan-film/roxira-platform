@@ -268,6 +268,9 @@ test('speakable drops written-answer labels and the "in this message" wording, n
     'در مواد و آراءِ موجود در منابع من، بخشنامه‌ی خاصی از قوه قضاییه ذکر نشده.');
   const legal = 'طبق ماده 10 قانون مدنی، قراردادهای خصوصی نافذ است؛ پاسخ این پرسش به رأی شماره 883 برمی‌گردد.';
   assert.equal(speakable(legal), legal);
+  // the message can be the case itself: never rewritten
+  const sms = 'اگر در این پیام تهدید شده باشید، می‌توانید شکایت کنید.';
+  assert.equal(speakable(sms), sms);
 });
 
 test('SentenceSplitter: shaped sentences, runaway text cut at a comma before MAX_SENTENCE_CHARS', () => {
