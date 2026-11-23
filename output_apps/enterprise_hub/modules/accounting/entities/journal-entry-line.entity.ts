@@ -214,6 +214,10 @@ export class JournalEntryLineEntity {
   @Column({ type: 'integer', name: 'project_id', nullable: true })
   projectId: number | null;
 
+  /** Dynamic dimension map (T181): e.g. { PRODUCT_LINE: 'PL-1', REGION: 'REG-1', GRANT: 'G-1' } */
+  @Column({ type: 'jsonb', name: 'dimensions', default: () => "'{}'::jsonb" })
+  dimensions: Record<string, string>;
+
   @Column({ type: 'text', nullable: true })
   description: string | null;
 }

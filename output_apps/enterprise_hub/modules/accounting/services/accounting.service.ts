@@ -7,6 +7,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { BudgetControlService } from './budget-control.service';
+import { DimensionService } from './dimension.service';
 import { assertNotAiIdentity } from '../../access/access-context';
 import { PARTNER_ADVISOR_ROLE } from '../../access/catalogue';
 import { LedgerAuditService } from '../../access/services/ledger-audit.service';
@@ -140,6 +141,10 @@ interface NormalisedJournalLine {
   detailCode: string | null;
   costCenterCode: string | null;
   projectCode: string | null;
+  productLineCode?: string | null;
+  regionCode?: string | null;
+  grantCode?: string | null;
+  dimensions?: Record<string, string>;
   branchId: string | null;
   txCurrencyCode: string;
   fxRateApplied: string;
@@ -168,6 +173,7 @@ export class AccountingService {
     /** Optional so unit tests and tools can build the service without the access module. */
     @Optional() private readonly ledgerAudit?: LedgerAuditService,
     private readonly budgetControl?: BudgetControlService,
+    @Optional() private readonly dimensionService?: DimensionService,
   ) {}
 
   private toAccountDto(entity: ChartOfAccountEntity): AccountResponseDto {
@@ -420,6 +426,10 @@ export class AccountingService {
       detailCode: line.detailCode?.trim() || null,
       costCenterCode: line.costCenterCode?.trim() || null,
       projectCode: line.projectCode?.trim() || null,
+      productLineCode: line.productLineCode?.trim() || null,
+      regionCode: line.regionCode?.trim() || null,
+      grantCode: line.grantCode?.trim() || null,
+      dimensions: line.dimensions,
       branchId: line.branchId ?? defaultBranchId ?? null,
       txCurrencyCode,
       fxRateApplied,
@@ -845,6 +855,10 @@ export class AccountingService {
       detailCode: line.detailCode,
       costCenterCode: line.costCenterCode,
       projectCode: line.projectCode,
+      productLineCode: line.productLineCode,
+      regionCode: line.regionCode,
+      grantCode: line.grantCode,
+      dimensions: line.dimensions,
       branchId: line.branchId,
       txCurrencyCode: line.txCurrencyCode,
       fxRateApplied: line.fxRateApplied,
@@ -966,6 +980,12 @@ export class AccountingService {
       // Resolved once, after the number is known to be free (same order as before).
       if (lineInputs == null) {
         lineInputs = await this.resolveLineInputs(tenantId, normalizedLines, manager);
+        if (this.dimensionService) {
+          const uniqueCodes = Array.from(new Set(normalizedLines.map((l) => l.accountCode)));
+          const accounts = await this.accountingRepository.findAccountsByCodes(tenantId, uniqueCodes, manager);
+          const accountTypes = new Map(accounts.map((a) => [a.code, a.accountType]));
+          await this.dimensionService.validateLineRules(tenantId, normalizedLines, accountTypes);
+        }
       }
       if (this.budgetControl && status === JournalEntryStatus.POSTED) {
         const warnings: string[] = [];
@@ -1193,6 +1213,12 @@ export class AccountingService {
         this.mapPeriodLock(error);
       }
       const lineInputs = await this.resolveLineInputs(tenantId, normalizedLines, manager);
+      if (this.dimensionService) {
+        const uniqueCodes = Array.from(new Set(normalizedLines.map((l) => l.accountCode)));
+        const accounts = await this.accountingRepository.findAccountsByCodes(tenantId, uniqueCodes, manager);
+        const accountTypes = new Map(accounts.map((a) => [a.code, a.accountType]));
+        await this.dimensionService.validateLineRules(tenantId, normalizedLines, accountTypes);
+      }
       try {
         await this.accountingRepository.replaceEntryContent(
           tenantId,

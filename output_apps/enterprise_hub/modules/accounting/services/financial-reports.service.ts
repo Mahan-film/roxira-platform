@@ -44,6 +44,9 @@ export interface ResolvedPeriod {
   from: string;
   to: string;
   branchId?: string;
+  costCenterCode?: string;
+  dimensionCode?: string;
+  dimensionKind?: string;
 }
 
 export interface InferredAccount {
@@ -169,6 +172,9 @@ export class FinancialReportsService {
       from,
       to,
       branchId: query.branchId,
+      costCenterCode: query.costCenterCode,
+      dimensionCode: query.dimensionCode,
+      dimensionKind: query.dimensionKind,
     };
   }
 
@@ -556,7 +562,12 @@ export class FinancialReportsService {
     const resolved = await this.resolvePeriod(tenantId, query);
     const period = { ...resolved, from: resolved.yearStart };
     const { balances } = await this.balances(tenantId, period);
-    return { ...balanceSheet(balances), period, inferredAccounts: this.inferred(balances) };
+    const isDimensionFiltered = !!(query.costCenterCode || query.dimensionCode);
+    return {
+      ...balanceSheet(balances, { isDimensionFiltered }),
+      period,
+      inferredAccounts: this.inferred(balances),
+    };
   }
 
   async incomeStatement(

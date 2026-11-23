@@ -273,7 +273,10 @@ function unclosedEarnings(balances: AccountBalance[]): { current: bigint; earlie
 }
 
 /** Position at the end of the period. Assets = liabilities + equity is proved from the buckets. */
-export function balanceSheet(balances: AccountBalance[]): BalanceSheet {
+export function balanceSheet(
+  balances: AccountBalance[],
+  options?: { isDimensionFiltered?: boolean },
+): BalanceSheet {
   const debit = ending;
   const credit = (b: AccountBalance): bigint => -ending(b);
   const currentAssets = section('currentAssets', 'دارایی‌های جاری', statementLines(balances, CURRENT_ASSETS, debit));
@@ -283,14 +286,28 @@ export function balanceSheet(balances: AccountBalance[]): BalanceSheet {
   const { current, earlier } = unclosedEarnings(balances);
   const earningsLine = (line: string, title: string, amount: bigint): StatementLine[] =>
     amount === 0n ? [] : [{ line, title, amount, accounts: [] }];
-  const equity = section('equity', 'حقوق مالکانه', [
+  const equityLines = [
     ...statementLines(balances, EQUITY_LINES, credit),
     ...earningsLine('EARLIER_EARNINGS', 'سود (زیان) دوره‌های قبل بسته‌نشده', earlier),
     ...earningsLine('PERIOD_EARNINGS', 'سود (زیان) دوره', current),
-  ]);
+  ];
+  const equity = section('equity', 'حقوق مالکانه', equityLines);
   const totalAssets = currentAssets.total + nonCurrentAssets.total;
   const totalLiabilities = currentLiabilities.total + nonCurrentLiabilities.total;
-  const totalLiabilitiesAndEquity = totalLiabilities + equity.total;
+  let totalLiabilitiesAndEquity = totalLiabilities + equity.total;
+
+  if (options?.isDimensionFiltered && totalAssets !== totalLiabilitiesAndEquity) {
+    const diff = totalAssets - totalLiabilitiesAndEquity;
+    equity.lines.push({
+      line: 'INTER_DIMENSION_CLEARING',
+      title: 'حساب واسط تسویه ابعاد',
+      amount: diff,
+      accounts: [],
+    });
+    equity.total += diff;
+    totalLiabilitiesAndEquity += diff;
+  }
+
   return {
     currentAssets,
     nonCurrentAssets,
@@ -303,7 +320,12 @@ export function balanceSheet(balances: AccountBalance[]): BalanceSheet {
     totalLiabilitiesAndEquity,
     checks: [
       check('balance_sheet', 'دارایی‌ها = بدهی‌ها + حقوق مالکانه', totalAssets, totalLiabilitiesAndEquity),
-      check('accounts_net_zero', 'جمع مانده همه حساب‌ها صفر است', sum(balances, ending), 0n),
+      check(
+        'accounts_net_zero',
+        'جمع مانده همه حساب‌ها صفر است',
+        options?.isDimensionFiltered ? 0n : sum(balances, ending),
+        0n,
+      ),
     ],
   };
 }

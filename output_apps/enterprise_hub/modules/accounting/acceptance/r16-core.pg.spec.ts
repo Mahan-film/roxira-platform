@@ -29,6 +29,7 @@ import { DimensionService } from '../services/dimension.service';
 import { FinancialReportsService } from '../services/financial-reports.service';
 import { createTestDatabase, describePg, TestDatabaseContext, TEST_T1 as T1, TEST_T2 as T2 } from '../../../test/support/test-pg';
 import {
+  m,
   R16_T3_PERIODS as T3,
   R16_T4_AUDIT as T4,
   R16_T5_DIMENSIONS as T5,
@@ -42,6 +43,7 @@ describePg('R16 core acceptance on PostgreSQL', () => {
   let testDb: TestDatabaseContext;
   let accounting: AccountingService;
   let dims: DimensionService;
+  let reports: FinancialReportsService;
   let costCentres: CostCentreReportService;
   let inventory: InventoryService;
   let documents: StockDocumentsService;
@@ -50,13 +52,14 @@ describePg('R16 core acceptance on PostgreSQL', () => {
     testDb = await createTestDatabase('r16');
     const currency = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
     const repo = new AccountingRepository(testDb.scope);
-    accounting = new AccountingService(repo, currency);
-    await new ChartTemplateService(repo).apply(T1, 'iran-trading');
     const dimensionRepo = new DimensionRepository(testDb.app);
     dims = new DimensionService(dimensionRepo);
+    accounting = new AccountingService(repo, currency, undefined, undefined, dims);
+    await new ChartTemplateService(repo).apply(T1, 'iran-trading');
     const ledger = new LedgerReportRepository(testDb.scope);
+    reports = new FinancialReportsService(repo, new FiscalYearRepository(testDb.app), ledger);
     costCentres = new CostCentreReportService(
-      new FinancialReportsService(repo, new FiscalYearRepository(testDb.app), ledger),
+      reports,
       ledger,
       dimensionRepo,
     );
@@ -211,9 +214,86 @@ describePg('R16 core acceptance on PostgreSQL', () => {
       expect(report.balanced).toBe(true);
     });
 
-    it.skip('required-dimension rules: a CC-RND line without Project returns 422 DIMENSION_RULE_VIOLATION — needs T181 (dimension rules)', () => undefined);
-    it.skip('e-invoicing enabled uses no dimension slot; five dimensions at once — needs T181 (dimensions v2 beyond cost centre and project)', () => undefined);
-    it.skip('rename CC-SALES to CC-EMEA-SALES effective 2026-11-01: the 2026-10-31 report keeps CC-SALES 400.00, 2026-11-30 shows CC-EMEA-SALES — needs T181 (effective-dated dimension names)', () => undefined);
+    it('required-dimension rules: a CC-RND line without Project returns 422 DIMENSION_RULE_VIOLATION', async () => {
+      await dims.create(T1, { kind: DimensionKind.PROJECT, code: 'PRJ-ALPHA', name: 'Alpha Project' });
+      await dims.createRule(T1, {
+        name: 'Project required when CostCenter = CC-RND',
+        whenDimensionKind: DimensionKind.COST_CENTER,
+        whenDimensionCode: 'CC-RND',
+        requiresDimensionKind: DimensionKind.PROJECT,
+      });
+
+      await expect(
+        accounting.createJournalEntry(T1, {
+          entryNumber: 'TEST-RULE-FAIL',
+          date: noon('2026-10-15'),
+          description: 'Missing project on CC-RND line',
+          lines: [
+            { accountCode: '5020', debit: decimal(m('100.00')), costCenterCode: 'CC-RND' },
+            { accountCode: '2010', credit: decimal(m('100.00')) },
+          ],
+        } as never),
+      ).rejects.toMatchObject({
+        status: 422,
+        response: expect.objectContaining({ code: T5.expected.errorCode }),
+      });
+    });
+
+    it('e-invoicing enabled uses no dimension slot; five dimensions at once', async () => {
+      await dims.create(T1, { kind: DimensionKind.PRODUCT_LINE, code: 'PL-ENTERPRISE', name: 'Enterprise Line' });
+      await dims.create(T1, { kind: DimensionKind.REGION, code: 'REG-EMEA', name: 'EMEA Region' });
+      await dims.create(T1, { kind: DimensionKind.GRANT, code: 'GRANT-EU-2026', name: 'EU Grant 2026' });
+
+      const entry = await accounting.createJournalEntry(T1, {
+        entryNumber: 'FIVE-DIMS-01',
+        date: noon('2026-10-20'),
+        description: 'Five dimensions simultaneous test',
+        lines: [
+          {
+            accountCode: '5020',
+            debit: decimal(m('500.00')),
+            costCenterCode: 'CC-RND',
+            projectCode: 'PRJ-ALPHA',
+            productLineCode: 'PL-ENTERPRISE',
+            regionCode: 'REG-EMEA',
+            grantCode: 'GRANT-EU-2026',
+          },
+          {
+            accountCode: '2010',
+            credit: decimal(m('500.00')),
+          },
+        ],
+      } as never);
+
+      expect(entry.id).toBeDefined();
+
+      const bs = await reports.balanceSheet(T1, {
+        from: '2026-10-01',
+        to: '2026-10-31',
+        costCenterCode: 'CC-RND',
+      });
+      const check = bs.checks.find((c) => c.key === 'balance_sheet');
+      expect(check).toBeDefined();
+      expect(check!.ok).toBe(true);
+    });
+
+    it('rename CC-SALES to CC-EMEA-SALES effective 2026-11-01: the 2026-10-31 report keeps CC-SALES 400.00, 2026-11-30 shows CC-EMEA-SALES', async () => {
+      await dims.rename(T1, {
+        from: T5.rename.from,
+        to: T5.rename.to,
+        effective: T5.rename.effective,
+      });
+
+      const octReport = await costCentres.trialBalance(T1, { from: '2026-10-01', to: '2026-10-31' });
+      const octSales = octReport.centres.find((c) => c.code === T5.rename.from);
+      expect(octSales).toBeDefined();
+      expect(octSales!.totals.periodDebit).toBe(fromDb(decimal(T5.expected.salesAt20261031)));
+
+      const novReport = await costCentres.trialBalance(T1, { from: '2026-10-01', to: '2026-11-30' });
+      const novSales = novReport.centres.find((c) => c.code === T5.rename.to);
+      expect(novSales).toBeDefined();
+      expect(novSales!.totals.periodDebit).toBe(fromDb(decimal(T5.expected.salesAt20261031)));
+    });
   });
 
   describe('T8 inventory valuation', () => {

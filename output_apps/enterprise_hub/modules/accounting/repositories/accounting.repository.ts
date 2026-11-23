@@ -48,6 +48,10 @@ export interface JournalLineInput {
   detailCode?: string | null;
   costCenterCode?: string | null;
   projectCode?: string | null;
+  productLineCode?: string | null;
+  regionCode?: string | null;
+  grantCode?: string | null;
+  dimensions?: Record<string, string>;
   branchId?: string | null;
   txCurrencyCode?: string | null;
   fxRateApplied?: string | null;
@@ -606,6 +610,14 @@ export class AccountingRepository {
       if (line.detailCode) wanted.add(`DETAIL:${line.detailCode}`);
       if (line.costCenterCode) wanted.add(`COST_CENTER:${line.costCenterCode}`);
       if (line.projectCode) wanted.add(`PROJECT:${line.projectCode}`);
+      if (line.productLineCode) wanted.add(`PRODUCT_LINE:${line.productLineCode}`);
+      if (line.regionCode) wanted.add(`REGION:${line.regionCode}`);
+      if (line.grantCode) wanted.add(`GRANT:${line.grantCode}`);
+      if (line.dimensions) {
+        for (const [k, v] of Object.entries(line.dimensions)) {
+          if (v) wanted.add(`${k.toUpperCase()}:${v}`);
+        }
+      }
     }
     const ids = new Map<string, number>();
     if (wanted.size === 0) {
@@ -636,35 +648,46 @@ export class AccountingRepository {
     manager: EntityManager,
   ): Promise<void> {
     const ids = await this.resolveDimensions(tenantId, lineInputs, manager);
-    const lineRows = lineInputs.map((line) => ({
-      detailId: line.detailCode ? ids.get(`DETAIL:${line.detailCode}`)! : null,
-      costCenterId: line.costCenterCode ? ids.get(`COST_CENTER:${line.costCenterCode}`)! : null,
-      projectId: line.projectCode ? ids.get(`PROJECT:${line.projectCode}`)! : null,
-      tenantId,
-      journalEntryId: entryId,
-      accountId: line.accountId,
-      debit: minorToDecimal(line.debitMinor),
-      credit: minorToDecimal(line.creditMinor),
-      currency: line.currency ?? 'IRR',
-      amountFx: line.amountFx ?? null,
-      fxRate: line.fxRate ?? null,
-      partyCode: line.partyCode ?? null,
-      description: line.description ?? null,
-      branchId: line.branchId ?? null,
-      txCurrencyCode: line.txCurrencyCode ?? line.currency ?? 'IRR',
-      fxRateApplied: line.fxRateApplied ?? line.fxRate ?? '1.0',
-      txDebit: minorToDecimal(line.txDebitMinor != null ? line.txDebitMinor : line.debitMinor),
-      txCredit: minorToDecimal(line.txCreditMinor != null ? line.txCreditMinor : line.creditMinor),
-      bookDebit: minorToDecimal(line.bookDebitMinor != null ? line.bookDebitMinor : line.debitMinor),
-      bookCredit: minorToDecimal(line.bookCreditMinor != null ? line.bookCreditMinor : line.creditMinor),
-      reportingCurrencyCode: line.reportingCurrencyCode ?? null,
-      reportingFxRate: line.reportingFxRate ?? null,
+    const lineRows = lineInputs.map((line) => {
+      const dimensionsJson: Record<string, string> = { ...(line.dimensions || {}) };
+      if (line.costCenterCode) dimensionsJson['COST_CENTER'] = line.costCenterCode;
+      if (line.projectCode) dimensionsJson['PROJECT'] = line.projectCode;
+      if (line.detailCode) dimensionsJson['DETAIL'] = line.detailCode;
+      if (line.productLineCode) dimensionsJson['PRODUCT_LINE'] = line.productLineCode;
+      if (line.regionCode) dimensionsJson['REGION'] = line.regionCode;
+      if (line.grantCode) dimensionsJson['GRANT'] = line.grantCode;
+
+      return {
+        detailId: line.detailCode ? ids.get(`DETAIL:${line.detailCode}`)! : null,
+        costCenterId: line.costCenterCode ? ids.get(`COST_CENTER:${line.costCenterCode}`)! : null,
+        projectId: line.projectCode ? ids.get(`PROJECT:${line.projectCode}`)! : null,
+        dimensions: Object.keys(dimensionsJson).length > 0 ? dimensionsJson : {},
+        tenantId,
+        journalEntryId: entryId,
+        accountId: line.accountId,
+        debit: minorToDecimal(line.debitMinor),
+        credit: minorToDecimal(line.creditMinor),
+        currency: line.currency ?? 'IRR',
+        amountFx: line.amountFx ?? null,
+        fxRate: line.fxRate ?? null,
+        partyCode: line.partyCode ?? null,
+        description: line.description ?? null,
+        branchId: line.branchId ?? null,
+        txCurrencyCode: line.txCurrencyCode ?? line.currency ?? 'IRR',
+        fxRateApplied: line.fxRateApplied ?? line.fxRate ?? '1.0',
+        txDebit: minorToDecimal(line.txDebitMinor != null ? line.txDebitMinor : line.debitMinor),
+        txCredit: minorToDecimal(line.txCreditMinor != null ? line.txCreditMinor : line.creditMinor),
+        bookDebit: minorToDecimal(line.bookDebitMinor != null ? line.bookDebitMinor : line.debitMinor),
+        bookCredit: minorToDecimal(line.bookCreditMinor != null ? line.bookCreditMinor : line.creditMinor),
+        reportingCurrencyCode: line.reportingCurrencyCode ?? null,
+        reportingFxRate: line.reportingFxRate ?? null,
       reportingDebit:
         line.reportingDebitMinor != null ? minorToDecimal(line.reportingDebitMinor) : null,
       reportingCredit:
         line.reportingCreditMinor != null ? minorToDecimal(line.reportingCreditMinor) : null,
       isRounding: line.isRounding ?? false,
-    }));
+    };
+  });
     for (let offset = 0; offset < lineRows.length; offset += 200) {
       await manager
         .createQueryBuilder()
