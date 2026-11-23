@@ -11,13 +11,13 @@
 #   2. code (launcher, jit_watchdog.py wall-time cap, light Dockerfile): scripts/ops/ci_box/jit_pool/* -> /usr/local/lib/roxira-jit (root-owned; job code
 #      running as `runner` cannot change the launcher).
 #   3. CI resource cap for everything user `runner` runs, including rootless Docker containers
-#      (brief section 7: docker slot 4 threads / 6 GB + light slot 1 thread / 2 GB):
-#      systemctl set-property user@<runner-uid>.service CPUQuota=500% MemoryHigh=7G MemoryMax=8G TasksMax=8192
+#      (docker slot 4 threads / 6 GB + JIT_LIGHT_SLOTS light slots of 1 thread / 2 GB, default 3):
+#      systemctl set-property user@<runner-uid>.service CPUQuota=600% MemoryHigh=12G MemoryMax=13G TasksMax=10240
 #   4. apt: postgresql-client (psql for the RLS gate and app-role steps) and fonts-noto-color-emoji
 #      (the one Playwright chromium dependency this box lacks); /opt/hostedtoolcache owned by runner
 #      (setup-python's builds only work from that path).
 #   5. as user runner: runner_setup.sh (runner template v<same as old runner>, SHA-256 checked;
-#      light image; user units roxira-jit@light + roxira-jit@docker, enabled).
+#      light image; user units roxira-jit@docker + roxira-jit@light, @light-2, @light-3, enabled).
 # Does NOT touch: nftables, ufw, xray, sudoers, the proxy, the phone stack, production, or the old
 # runner (actions-runner keeps running until two JIT runs pass; then mahanfilms drops the flag
 # /srv/data/ci-jit/control/retire-old-runner and the runner's own launcher disables it).
@@ -42,10 +42,16 @@ LIB=/usr/local/lib/roxira-jit
 BASE=/srv/data/ci-jit
 RUNNER=runner
 CTRL=mahanfilms
-# MemoryHigh = the brief section 7 CI budget (docker slot 6 GB incl. Postgres + light slot 2 GB). It was 7G:
-# a light job next to a Backend run pushed user@ over it and the reclaim throttling slowed every
-# process under it, the Postgres service included (#230 perf spec at 6 s, best of 3).
-CPU=500%; MEM_HIGH=8G; MEM_MAX=9G; TASKS=8192
+# Light slots: how many light launchers (1 CPU, 2 GB container each) run side by side. One slot ran
+# about 55 jobs an hour; agent PR CI queued 200+ light jobs (box hub decision 2026-11-23: 3).
+LIGHT_SLOTS="${JIT_LIGHT_SLOTS:-3}"
+case "$LIGHT_SLOTS" in [1-9]) ;; *) echo "JIT_LIGHT_SLOTS must be 1..9" >&2; exit 2 ;; esac
+# user@runner cap = docker slot (4 threads pinned to CPUs 2-5, 6 GB incl. Postgres) + light slots
+# (1 thread, 2 GB each). CPU stops at 6 threads: the phone stack keeps 2 of the 8. MemoryHigh is the
+# budget itself (it was 7G, below it: reclaim throttling slowed Postgres, #230 perf spec at 6 s).
+CPU_N=$((4 + LIGHT_SLOTS)); [ "$CPU_N" -le 6 ] || CPU_N=6
+MEM_HIGH_G=$((6 + 2 * LIGHT_SLOTS)); MEM_MAX_G=$((MEM_HIGH_G + 1))
+CPU="${CPU_N}00%"; MEM_HIGH="${MEM_HIGH_G}G"; MEM_MAX="${MEM_MAX_G}G"; TASKS=$((4096 + 2048 * LIGHT_SLOTS))
 
 ok()   { echo "OK    $*"; }
 todo() { echo "TODO  $*"; }
@@ -100,7 +106,7 @@ echo "== 3. resource cap for user $RUNNER (user@$RUID.service)"
 cur_cpu="$(systemctl show "user@$RUID.service" -p CPUQuotaPerSecUSec --value 2>/dev/null || true)"
 cur_mem="$(systemctl show "user@$RUID.service" -p MemoryMax --value 2>/dev/null || true)"
 cur_high="$(systemctl show "user@$RUID.service" -p MemoryHigh --value 2>/dev/null || true)"
-if [ "$cur_cpu" = "5s" ] && [ "$cur_mem" = "$((9 * 1024 * 1024 * 1024))" ] && [ "$cur_high" = "$((8 * 1024 * 1024 * 1024))" ]; then ok "CPUQuota=$CPU MemoryMax=$MEM_MAX"; else
+if [ "$cur_cpu" = "${CPU_N}s" ] && [ "$cur_mem" = "$((MEM_MAX_G * 1024 * 1024 * 1024))" ] && [ "$cur_high" = "$((MEM_HIGH_G * 1024 * 1024 * 1024))" ]; then ok "CPUQuota=$CPU MemoryHigh=$MEM_HIGH MemoryMax=$MEM_MAX ($LIGHT_SLOTS light slots)"; else
   todo "CPUQuota=$CPU MemoryHigh=$MEM_HIGH MemoryMax=$MEM_MAX TasksMax=$TASKS (now: cpu ${cur_cpu:-unknown}, mem ${cur_mem:-unknown})"
   run systemctl set-property "user@$RUID.service" "CPUQuota=$CPU" "MemoryHigh=$MEM_HIGH" "MemoryMax=$MEM_MAX" "TasksMax=$TASKS"
 fi
@@ -125,7 +131,7 @@ fi
 
 echo "== 5. runner side (as $RUNNER): template, light image, launchers"
 if [ "$DRY" = 1 ]; then
-  echo "[dry-run] runuser -u $RUNNER -- env HOME=$RHOME XDG_RUNTIME_DIR=/run/user/$RUID bash $LIB/runner_setup.sh"
+  echo "[dry-run] runuser -u $RUNNER -- env HOME=$RHOME XDG_RUNTIME_DIR=/run/user/$RUID JIT_LIGHT_SLOTS=$LIGHT_SLOTS bash $LIB/runner_setup.sh"
   if [ "$(id -u)" -eq 0 ]; then
     for s in light docker; do
       st="$(runuser -u "$RUNNER" -- env XDG_RUNTIME_DIR="/run/user/$RUID" systemctl --user is-active "roxira-jit@$s.service" 2>/dev/null || true)"
@@ -137,7 +143,8 @@ if [ "$DRY" = 1 ]; then
     echo "now   $RUNNER reaches api.github.com: HTTP ${code:-none}"
   fi
 else
-  runuser -u "$RUNNER" -- env HOME="$RHOME" USER="$RUNNER" XDG_RUNTIME_DIR="/run/user/$RUID" bash "$LIB/runner_setup.sh"
+  runuser -u "$RUNNER" -- env HOME="$RHOME" USER="$RUNNER" XDG_RUNTIME_DIR="/run/user/$RUID" \
+    JIT_LIGHT_SLOTS="$LIGHT_SLOTS" bash "$LIB/runner_setup.sh"
 fi
 
 echo
