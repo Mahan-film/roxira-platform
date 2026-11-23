@@ -56,6 +56,13 @@ export const MENU_GROUPS: MenuGroup[] = [
     icon: "ShoppingCart",
     items: [
       {
+        href: "/app/sales",
+        label: "چرخه فروش و سفارشات",
+        icon: "ClipboardList",
+        module: "invoicing",
+        keywords: ["sales", "order", "quotation", "سفارش", "پیش‌فاکتور", "حواله", "فروش", "سطح قیمت"],
+      },
+      {
         href: "/app/invoicing",
         label: "صورتحساب‌ها",
         icon: "ReceiptText",
