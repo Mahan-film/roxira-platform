@@ -116,7 +116,7 @@ export class AccessGuard implements CanActivate {
       ),
     );
     assertTenantCancellationAccess({
-      status: ctx.tenantStatus,
+      status: ctx.tenantStatus ?? 'active',
       deleteAfter: ctx.deleteAfter,
       method: request.method,
       allowDuringCancellation: allowCancellation,

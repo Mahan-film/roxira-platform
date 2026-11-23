@@ -106,7 +106,7 @@ export class AccessService {
       scope,
       amountLimits,
       fieldVisibility,
-      tenantStatus: tenant.status,
+      tenantStatus: tenant.status ?? (tenant.isActive ? 'active' : 'suspended'),
       deleteAfter: tenant.deleteAfter,
     };
   }
