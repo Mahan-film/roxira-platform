@@ -60,8 +60,10 @@ export class AccountingPeriodService {
     tenantId: string,
     input: CreateAccountingPeriodInput,
   ): Promise<AccountingPeriodEntity> {
-    if (new Date(input.periodStart) > new Date(input.periodEnd)) {
-      throw new BadRequestException('periodStart must not be after periodEnd.');
+    const start = new Date(input.periodStart);
+    const end = new Date(input.periodEnd);
+    if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) {
+      throw new BadRequestException('periodStart must be a valid date and not after periodEnd.');
     }
     return this.scope.within(tenantId, undefined, async (m) => {
       const repo = m.getRepository(AccountingPeriodEntity);
@@ -70,6 +72,15 @@ export class AccountingPeriodService {
         throw new ConflictException(`Accounting period ${input.code} already exists.`);
       }
       const isAdj = input.isAdjustment ?? false;
+      if (!isAdj) {
+        const existingPeriods = await repo.find({ where: { tenantId, isAdjustment: false } });
+        const overlap = existingPeriods.find(
+          (p) => p.periodStart <= input.periodEnd && p.periodEnd >= input.periodStart,
+        );
+        if (overlap) {
+          throw new ConflictException(`Accounting period dates overlap with existing period ${overlap.code}.`);
+        }
+      }
       const entity = repo.create({
         tenantId,
         fiscalYearId: input.fiscalYearId ?? null,
@@ -208,7 +219,17 @@ export class AccountingPeriodService {
       period.lockedBy = null;
       period.lockedAt = null;
       period.lockReason = null;
-      return repo.save(period);
+      try {
+        return await repo.save(period);
+      } catch (err: unknown) {
+        const e = err as { code?: string; message?: string };
+        if (e?.code === 'RX007' || e?.message?.includes('RX007') || e?.message?.includes('hard-closed')) {
+          throw new ConflictException(
+            `Period ${period.code} is hard-closed and cannot be unlocked; post corrections to the next open period or an adjustment period.`,
+          );
+        }
+        throw err;
+      }
     });
   }
 

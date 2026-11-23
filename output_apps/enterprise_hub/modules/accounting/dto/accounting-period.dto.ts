@@ -79,9 +79,8 @@ export class SoftLockPeriodDto {
 }
 
 export class HardClosePeriodDto {
-  @ApiPropertyOptional({ maxLength: 200 })
-  @IsOptional()
+  @ApiProperty({ maxLength: 200, description: 'دلیل بستن دائم دوره حسابداری' })
   @IsString()
   @MaxLength(200)
-  reason?: string;
+  reason!: string;
 }
