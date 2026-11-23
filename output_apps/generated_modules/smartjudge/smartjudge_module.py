@@ -1977,12 +1977,15 @@ def _court_suggestion_for_chat(user_text: str, payload: dict) -> tuple:
 
 
 def _consult_body(*, conv_id, reply, prob, draft, laws, precedents, court_suggestion,
-                  case_file_refs, model, tier, t0, **extra) -> dict:
+                  case_file_refs, model, tier, t0, grounded: Optional[bool] = None, **extra) -> dict:
     """The one builder for the /chat success body (normal and early-return paths share its keys)."""
+    if grounded is None:
+        grounded = _chat_safety.is_grounded(laws, precedents)
     body = {
         "status": "SUCCESS",
         "conversation_id": conv_id,
         "reply": reply,
+        "grounded": bool(grounded),
         "success_probability": prob,
         "defense_draft": draft,
         "statutory_basis": _chat_fast.trim_sources(laws),
@@ -2123,7 +2126,10 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         conv_id = parsed_conv
     tier = user.tier
 
-    selected_tier = "VIP" if tier == "VIP" else "FREE"
+    if chat_auth.is_phone_gateway(user):
+        selected_tier = "VIP"
+    else:
+        selected_tier = "VIP" if tier == "VIP" else "FREE"
     cfg = OPENROUTER_TIERS[selected_tier]
 
     # پرونده‌های بارگذاری‌شده: فقط متعلق به همین کاربر (در غیر این صورت 404 یکسان)
@@ -2283,11 +2289,15 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         competence_queries = list(_prompt_library.expand_competence_queries(user_text))
 
     main_task = aquery_knowledge_graph(retrieval_query, limit=5)
-    cat_task = (
-        _rulings.latest_rulings(limit=5, sub_collection=(cat_intent.get("sub_collection") or "unity_rulings"))
-        if cat_intent
-        else None
-    )
+    if cat_intent:
+        if cat_intent.get("intent") == "latest_regulation" or cat_intent.get("target") == "regulation":
+            cat_task = _regs.latest_regulations(limit=5)
+        else:
+            cat_task = _rulings.latest_rulings(
+                limit=5, sub_collection=(cat_intent.get("sub_collection") or "unity_rulings")
+            )
+    else:
+        cat_task = None
     comp_tasks = [aquery_knowledge_graph(q, limit=3) for q in competence_queries]
 
     _t_exp = time.perf_counter()
@@ -2591,7 +2601,7 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         await asyncio.to_thread(chat_auth.decr, daily_key)  # unanswered: does not use up the daily quota
         if top_key:
             await asyncio.to_thread(chat_auth.decr, top_key)
-        if _llm_gateway is not None and not _llm_gateway.may_use_paid(selected_tier):
+        if not chat_auth.is_phone_gateway(user) and _llm_gateway is not None and not _llm_gateway.may_use_paid(selected_tier):
             # Free tier, free models exhausted: friendly upsell instead of a paid model or a 503.
             return _consult_body(
                 conv_id=conv_id or str(uuid.uuid4()), reply=_llm_gateway.UPSELL_MESSAGE, prob=None, draft=None,
@@ -2656,6 +2666,7 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         conv_id=conv_id, reply=reply_msg, prob=prob, draft=draft, laws=laws, precedents=precedents,
         court_suggestion=court_suggestion, case_file_refs=case_file_refs,
         model=routed_model or cfg["primary_model"], tier=selected_tier, t0=t0,
+        grounded=is_grounded_flag,
         **({"spoken_reply": spoken_reply} if is_voice else {}),
         **({"model_notice": top_note} if top_note else {}),
         **({"review": {"kind": _contract_review.MODE, "risk_score": _contract_review.extract_risk_score(reply_msg),

@@ -274,6 +274,9 @@ def _scroll_filter(sub_collection: Optional[str]) -> Optional[dict]:
     elif sub_collection in ("admin_court_board", "admin_court"):
         pairs = [("sub_collection", "admin_court_board"), ("ruling_type", "admin_court"),
                  ("ruling_type", "admin_court_board")]
+    elif sub_collection in ("regulations", "regulation"):
+        pairs = [("sub_collection", "regulations"), ("category", "REGULATION"),
+                 ("doc_type", "circular"), ("doc_type", "board_resolution")]
     else:
         return None
     return {"should": [{"key": k, "match": {"value": v}} for k, v in pairs]}
@@ -382,6 +385,9 @@ async def latest_rulings(
                 filtered.append(r)
         elif sub_collection in ("admin_court_board", "admin_court"):
             if sub_c == "admin_court_board" or rtype.startswith("admin_court") or "دیوان عدالت" in str(r.get("issuing_body") or ""):
+                filtered.append(r)
+        elif sub_collection in ("regulations", "regulation"):
+            if sub_c == "regulations" or r.get("category") == "REGULATION" or r.get("doc_type") in ("circular", "board_resolution"):
                 filtered.append(r)
         else:
             filtered.append(r)
