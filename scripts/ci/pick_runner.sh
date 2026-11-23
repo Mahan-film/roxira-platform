@@ -11,7 +11,7 @@
 #   HEAD_REPO    github.event.pull_request.head.repo.full_name (pull_request only)
 #   REPO         github.repository
 #   INPUT        workflow_dispatch input `runner`: default|auto|hosted|box
-#   MODE         repo variable CI_RUNNER_MODE: hosted (default) | auto | box
+#   MODE         repo variable CI_RUNNER_MODE: hosted (default) | auto | box | main
 #   HEARTBEAT    repo variable CI_BOX_HEARTBEAT, written by the box every ~2 min:
 #                "<unix-epoch> <light-online> <docker-online>"
 #   BOX_LIGHT    repo variable CI_BOX_LABELS_LIGHT  (JSON array, default ["self-hosted","hp"])
@@ -29,6 +29,10 @@
 #     (the fork-PR guard from docs/ops/LINUX_CI_BOX.md).
 #   - MODE hosted (the default, so nothing changes until the hub sets the variable): hosted.
 #   - MODE box: the box labels; jobs queue while the box is busy or offline.
+#   - MODE main: like auto for push, schedule and workflow_dispatch (main and the nightly);
+#     pull_request and merge_group stay hosted. For the time before the private flip, while hosted
+#     minutes are free: all agent PR CI on one light slot queued 200+ jobs (about 4 h) and main runs
+#     waited behind them. Switch to auto at the flip (a private Free repo has no merge queue).
 #   - MODE auto: per slot, the box when the heartbeat is fresh and that slot has an online runner,
 #     otherwise hosted. A busy runner still counts as online: the job queues on the box. Falling
 #     back on "busy" would spend the private-repo allowance on every overlap (R20 snippet #5).
@@ -100,6 +104,13 @@ mode="${MODE:-hosted}"
 case "${INPUT:-}" in
   auto|hosted|box) mode="$INPUT" ;;
 esac
+
+if [ "$mode" = main ]; then
+  case "${EVENT:-}" in
+    push|schedule|workflow_dispatch) mode=auto ;;
+    *) emit "$hosted" "$hosted" "hosted (mode main: ${EVENT:-none} runs hosted until the flip)"; exit 0 ;;
+  esac
+fi
 
 case "$mode" in
   box)

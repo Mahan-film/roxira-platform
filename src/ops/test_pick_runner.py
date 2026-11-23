@@ -241,3 +241,31 @@ def test_push_without_python_reads_pushed_at(tmp_path):
     r = pick(EVENT="push", MODE="auto", HEARTBEAT=f"{NOW - 1810} 1 1", GITHUB_EVENT_PATH=ev,
              PATH=str(bindir))
     assert r["light"] == BOX and "repository.pushed_at" in r["where"]
+
+
+# --- mode main: box for main/nightly/dispatch ---
+# PR and merge-queue CI stay hosted until the flip.
+
+
+@pytest.mark.parametrize("event", ["push", "schedule", "workflow_dispatch"])
+def test_main_mode_sends_main_runs_to_the_box(event):
+    r = pick(EVENT=event, MODE="main", HEARTBEAT=f"{NOW - 30} 1 1")
+    assert r["light"] == BOX and r["docker"] == BOX
+    assert r["where"].startswith("auto (")
+
+
+def test_main_mode_keeps_pull_requests_and_merge_queue_hosted():
+    for env in ({"EVENT": "pull_request", "HEAD_REPO": "o/r"}, {"EVENT": "merge_group"}):
+        r = pick(MODE="main", HEARTBEAT=f"{NOW - 30} 1 1", **env)
+        assert r["light"] == HOSTED and r["docker"] == HOSTED
+        assert "mode main" in r["where"]
+
+
+def test_main_mode_falls_back_like_auto():
+    r = pick(EVENT="push", MODE="main", HEARTBEAT=f"{NOW - 3000} 1 1")
+    assert r["light"] == HOSTED
+
+
+def test_main_mode_fork_pr_still_hosted():
+    r = pick(EVENT="pull_request", HEAD_REPO="x/fork", MODE="main", HEARTBEAT=f"{NOW} 1 1")
+    assert r["light"] == HOSTED and "never reaches the box" in r["where"]
