@@ -97,6 +97,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         module: "inventory",
         keywords: ["bom", "production", "تولید", "فرمول ساخت", "ضایعات"],
       },
+      {
+        href: "/app/purchasing",
+        label: "چرخه خرید",
+        icon: "ShoppingBag",
+        module: "inventory",
+        keywords: ["purchasing", "سفارش خرید", "خرید", "رسید کالا", "فاکتور خرید", "سربار"],
+      },
     ],
   },
   {
