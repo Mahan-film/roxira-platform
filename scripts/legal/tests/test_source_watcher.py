@@ -254,3 +254,45 @@ def test_crash_after_jsonl_loses_nothing(tmp_path, monkeypatch):
     assert con.execute("SELECT COUNT(*) FROM items").fetchone()[0] == 5
     rows = [ln for f in (tmp_path / "staged").glob("*.jsonl") for ln in f.read_text().splitlines()]
     assert len(rows) == 10  # replayed, at-least-once
+
+
+def test_cookie_redirect_and_robots_filters_links(tmp_path):
+    calls = []
+
+    def op(url, headers, ca):
+        calls.append(headers.get("Cookie"))
+        if url.endswith("/robots.txt"):
+            return 200, {}, b"User-agent: *\nDisallow: /fa/archive\n"
+        if headers.get("Cookie") is None:
+            return 302, {"Location": url, "Set-Cookie": "a=1; Path=/\nb=2; Path=/"}, b""
+        body = (
+            b"<html><title>t</title><body>"
+            + b"".join(
+                b'<a href="/fa/news/%d/x">long title number %d</a>' % (i, i) for i in range(4)
+            )
+            + b'<a href="/fa/archive/1">archive entry title</a>'
+            + b"</body></html>"
+            + b"x" * 400
+        )
+        return 200, {}, body
+
+    con = sw.open_state(tmp_path / "s.db")
+    src = _src(list_urls=["https://a.test/"], link_regex="/fa/")
+    rep = sw.run_source(src, _client(op), con)
+    assert rep["host_state"] == sw.OK and "a=1; b=2" in calls
+    urls = [i["url"] for i in rep["items"]]
+    assert len(urls) == 4 and not any("archive" in u for u in urls)
+
+
+def test_ca_file_resolved_relative_to_config(tmp_path):
+    (tmp_path / "ca").mkdir()
+    (tmp_path / "ca" / "x.pem").write_text("x")
+    cfg = tmp_path / "c.json"
+    cfg.write_text(json.dumps({"sources": [_src(ca_file="ca/x.pem")]}))
+    assert sw.load_config(cfg)["sources"][0]["ca_file"] == str(tmp_path / "ca" / "x.pem")
+    cfg.write_text(json.dumps({"sources": [_src(ca_file="ca/missing.pem")]}))
+    try:
+        sw.load_config(cfg)
+        raise AssertionError("missing ca accepted")
+    except SystemExit:
+        pass

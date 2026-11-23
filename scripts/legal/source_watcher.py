@@ -238,9 +238,14 @@ class Client:
         self._opener = opener  # test hook: (url, headers, ca_file) -> (status, headers, bytes)
         self._sleep = sleep
         self._robots: dict[str, urllib.robotparser.RobotFileParser | None] = {}
+        self.last_reason: dict[str, str] = {}  # host -> " (reason)" of the last network failure
+        self.tls_max: dict[str, str] = {}  # host -> "1.2": a server that resets TLS 1.3 clients
+        self._cookies: dict[str, dict[str, str]] = {}  # host -> name -> value, this run only
 
-    def _ctx(self, ca_file: str | None) -> ssl.SSLContext:
+    def _ctx(self, ca_file: str | None, host: str = "") -> ssl.SSLContext:
         ctx = ssl.create_default_context()  # verification stays ON
+        if self.tls_max.get(host) == "1.2":
+            ctx.maximum_version = ssl.TLSVersion.TLSv1_2
         if ca_file:
             ctx.load_verify_locations(cafile=ca_file)
         return ctx
@@ -281,6 +286,9 @@ class Client:
             "Accept-Language": "fa,en;q=0.5",
             "Accept-Encoding": "gzip",
         }
+        jar = self._cookies.get(host)
+        if jar:
+            headers["Cookie"] = "; ".join(f"{k}={v}" for k, v in jar.items())
         try:
             if self._opener:
                 status, hdrs, data = self._opener(url, headers, ca_file)
@@ -288,12 +296,19 @@ class Client:
             else:
                 final, status, hdrs, data = self._urlopen(url, headers, ca_file)
         except ssl.SSLError as exc:
+            self.last_reason[host] = f" ({type(exc).__name__})"
             return TLS_ERROR, 0, {"reason": type(exc).__name__}, b"", url
         except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as exc:
             reason = getattr(exc, "reason", exc)
+            self.last_reason[host] = f" ({type(reason).__name__})"
             if isinstance(reason, ssl.SSLError) or "CERTIFICATE" in str(reason).upper():
                 return TLS_ERROR, 0, {"reason": "certificate verify failed"}, b"", url
             return NET_ERROR, 0, {"reason": type(reason).__name__}, b"", url
+        for line in str(hdrs.get("Set-Cookie", "")).split("\n"):
+            pair = line.split(";", 1)[0]
+            if "=" in pair:
+                k, v = pair.split("=", 1)
+                self._cookies.setdefault(host, {})[k.strip()] = v.strip()
         if hdrs.get("Content-Encoding", "").lower() == "gzip":
             try:
                 data = gzip.decompress(data)
@@ -308,15 +323,26 @@ class Client:
 
         opener = urllib.request.build_opener(  # honours HTTPS_PROXY from the environment
             urllib.request.ProxyHandler(),
-            urllib.request.HTTPSHandler(context=self._ctx(ca_file)),
+            urllib.request.HTTPSHandler(
+                context=self._ctx(ca_file, urllib.parse.urlparse(url).netloc)
+            ),
             _NoRedirect(),
         )
         req = urllib.request.Request(url, headers=headers)  # http(s) only, checked by caller
         try:
             with opener.open(req, timeout=30) as r:
-                return r.geturl(), r.status, dict(r.headers), r.read(MAX_BODY)
+                return r.geturl(), r.status, self._hdrs(r.headers), r.read(MAX_BODY)
         except urllib.error.HTTPError as exc:
-            return url, exc.code, dict(exc.headers or {}), exc.read(MAX_BODY) or b""
+            return url, exc.code, self._hdrs(exc.headers), exc.read(MAX_BODY) or b""
+
+    @staticmethod
+    def _hdrs(msg) -> dict:
+        out = dict(msg or {})
+        if msg is not None and hasattr(msg, "get_all"):
+            cookies = msg.get_all("Set-Cookie") or []
+            if cookies:
+                out["Set-Cookie"] = "\n".join(cookies)
+        return out
 
     def robots(
         self, origin: str, ca_file: str | None
@@ -406,6 +432,13 @@ def load_config(path: Path) -> dict:
     for s in cfg["sources"]:
         if urllib.parse.urlparse(s["list_urls"][0]).scheme != "https":
             raise SystemExit(f"{s['id']}: list_urls must be https")
+        if s.get(
+            "ca_file"
+        ):  # extra intermediate CA for a host that omits it; verification stays ON
+            ca = Path(s["ca_file"])
+            s["ca_file"] = str(ca if ca.is_absolute() else path.parent / ca)
+            if not Path(s["ca_file"]).is_file():
+                raise SystemExit(f"{s['id']}: ca_file not found")
     return cfg
 
 
@@ -422,11 +455,15 @@ def run_source(src: dict, client: Client, con: sqlite3.Connection, details: int 
     }
     ca = src.get("ca_file")
     origin = "https://" + rep["host"]
+    if src.get("tls_max"):
+        client.tls_max[rep["host"]] = src["tls_max"]
     try:
         rp, st = client.robots(origin, ca)
         if st != OK:
             rep["host_state"] = st
-            rep["notes"].append(f"robots.txt page state: {st}")
+            rep["notes"].append(
+                f"robots.txt page state: {st}" + client.last_reason.get(rep["host"], "")
+            )
             return rep
         include = re.compile(src["link_regex"]) if src.get("link_regex") else None
         items: dict[str, dict] = {}
@@ -462,6 +499,8 @@ def run_source(src: dict, client: Client, con: sqlite3.Connection, details: int 
                     continue
                 if include and not include.search(ln["url"]) and not include.search(ln["title"]):
                     continue
+                if rp is not None and not rp.can_fetch(USER_AGENT, ln["url"]):
+                    continue  # robots.txt disallowed path: never stored, never fetched
                 if ln["title"]:
                     items.setdefault(
                         ln["url"],
