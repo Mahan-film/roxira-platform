@@ -270,6 +270,14 @@ export class EntitlementService implements OnModuleInit {
         [tenantId],
       )) as Array<{ rollover_day: number }>;
       const periodKey = computePeriodKey(meter, now, planRows[0]?.rollover_day ?? 1);
+      if (meter === 'branches') {
+        await manager.query(
+          `INSERT INTO usage_counters (tenant_id, meter, period_key, used)
+           VALUES ($1, $2, $3, (SELECT COUNT(*)::bigint FROM tenant_branches WHERE tenant_id = $1))
+           ON CONFLICT (tenant_id, meter, period_key) DO NOTHING`,
+          [tenantId, meter, periodKey],
+        );
+      }
       const rawReleased = await manager.query(
         `UPDATE usage_counters
             SET used = GREATEST(0, used - $4), updated_at = now()
