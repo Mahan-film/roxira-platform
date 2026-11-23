@@ -29,6 +29,12 @@ Model ids are not written anywhere in the pack. `TIER` (`light`, `strong`, `best
 (`agent-light-free`, `agent-strong-free`, `best-all`); the ids behind a group live in `config/key_pool.yaml` and
 `config/models.yaml`. `MODEL_GROUP` in the config must match the tier and must be an `agent-*` / `best-*` group.
 
+## Related pages
+
+- Ladder, key groups and path scopes (decision B1): `docs/ops/BOX_LANE_POLICY.md`.
+- Every way to stop the box: `docs/ops/BOX_KILL_SWITCHES.md` (lane stop file `~/.local/state/roxira-lane/STOP`).
+- What must be true before `orch.py tick --apply`: `docs/ops/BOX_LANE_READINESS.md` (`lane_readiness.py`, read-only).
+
 ## What `lane-run` does
 
 ```
@@ -40,6 +46,10 @@ lane-run --budget --lane L5
 
 - Refuses (exit 3) without `--public`, with a private/customer label, with a non-loopback `GATEWAY_URL`, or with a
   non-agent model group. Over the daily cap: exit 4.
+- Per-call `--tier light|strong|paid|best` picks the gateway group (`agent-light-free`, `agent-strong-free`, `agent-free-paid`,
+  `best-all`); a group outside `ALLOWED_GROUPS` (default: the box key's four groups, so `best-all` is out) is refused locally.
+- Stop file: `<state dir>/STOP` (or `STOP_FILE` in the config) makes every run exit 4 before any model call. A missing or unreadable
+  budgets file is an error (it used to mean no caps at all).
 - Caps: `lane_budget.py` with `lane_budgets.box.json` (attempts per day and paid USD per day, UTC day). Counted from
   the box's own log. Tokens are not metered (see "Not verified"), so only attempts and USD bind.
 - Stagger: it never starts in the `:00` minute (it waits a lane-specific 90-330 s instead); the timer fires at `:07,:37`

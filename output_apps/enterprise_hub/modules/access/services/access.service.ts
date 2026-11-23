@@ -141,8 +141,15 @@ export class AccessService {
     return value;
   }
 
-  invalidateUser(userId: string): void {
-    for (const k of this.contexts.keys()) if (k.startsWith(`${userId}:`)) this.contexts.delete(k);
+  invalidateUser(userId: string, tenantIds?: string[] | string): void {
+    if (tenantIds) {
+      const list = Array.isArray(tenantIds) ? tenantIds : [tenantIds];
+      for (const tid of list) {
+        this.contexts.delete(`${userId}:${tid}`);
+      }
+    } else {
+      for (const k of this.contexts.keys()) if (k.startsWith(`${userId}:`)) this.contexts.delete(k);
+    }
     for (const k of this.sessions.keys()) if (k.startsWith(`${userId}:`)) this.sessions.delete(k);
   }
 
