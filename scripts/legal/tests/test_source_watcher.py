@@ -296,3 +296,9 @@ def test_ca_file_resolved_relative_to_config(tmp_path):
         raise AssertionError("missing ca accepted")
     except SystemExit:
         pass
+
+
+def test_non_ascii_url_is_percent_encoded():
+    out = sw.iri_to_uri("https://a.test/fa/news/1/تایید-طرح?q=قانون")
+    assert out.isascii() and out.startswith("https://a.test/fa/news/1/%")
+    assert sw.iri_to_uri("https://a.test/x/y?z=1") == "https://a.test/x/y?z=1"
