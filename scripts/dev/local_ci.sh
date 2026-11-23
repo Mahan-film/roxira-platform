@@ -175,6 +175,12 @@ run_step "pinned GitHub Actions" python3 scripts/ci/check_pinned_actions.py
 # T207: money/tenant/model/secret guards, blocking, only on lines added since the base.
 run_step "agent guards (added lines)" python3 scripts/ci/check_agent_guards.py --base "$BASE_REF"
 
+# T337: frontend route & orphan-page audit (report-only, issue #1286)
+step_route_audit() {
+  python3 scripts/ci/audit_frontend_routes.py --report-only
+}
+run_step "frontend route & orphan-page audit (report-only)" step_route_audit
+
 # reviewer family: REPORT-ONLY for now (prints the finding, never fails the run).
 step_reviewer_family() {
   python3 scripts/dev/check_reviewer_family.py || echo "report-only: fix config/models.yaml reviewer/executor families"
