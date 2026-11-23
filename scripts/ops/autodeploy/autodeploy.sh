@@ -66,6 +66,12 @@ write_status() {
       elif [ "$FAIL_REASON" = "migrate-failed" ]; then
         python3 "$REPO/scripts/ops/notify/notify.py" --urgent "autodeploy-migrate-${TARGET_SHORT:0:7}" \
           "autodeploy refused ${TARGET_SHORT:0:7}: migration failed (deploy not started). Clear marker: scripts/ops/autodeploy/clear_failed.sh ${TARGET_SHORT:0:7}" >/dev/null 2>&1 || true
+      elif [ "$FAIL_REASON" = "ci-failed" ]; then
+        python3 "$REPO/scripts/ops/notify/notify.py" --urgent "autodeploy-ci-${TARGET_SHORT:0:7}" \
+          "autodeploy refused ${TARGET_SHORT:0:7}: CI checks not green. Clear marker: scripts/ops/autodeploy/clear_failed.sh ${TARGET_SHORT:0:7}" >/dev/null 2>&1 || true
+      elif [ "$FAIL_REASON" = "ci-api-error" ] || [ "$FAIL_REASON" = "ci-script-missing" ]; then
+        python3 "$REPO/scripts/ops/notify/notify.py" --urgent "autodeploy-ci-error-${TARGET_SHORT:0:7}" \
+          "autodeploy refused ${TARGET_SHORT:0:7}: CI check API error (fail closed)." >/dev/null 2>&1 || true
       else
         python3 "$REPO/scripts/ops/notify/notify.py" --urgent "deploy-failed" "استقرار ${TARGET_SHORT:0:7} ناموفق بود و برگردانده شد" >/dev/null 2>&1 || true
       fi
@@ -172,6 +178,43 @@ if [ -n "$DIRTY_RAW" ]; then
   FAIL_DETAIL="$DIRTY_PATHS"
   RESULT="failed"
   exit 1
+fi
+
+# CI Gate (T336 / #1285): refuse a commit whose GitHub Actions CI jobs are not green at job level.
+# Fails closed on API errors, with a documented owner override.
+if [ "${AUTODEPLOY_SKIP_CI_GATE:-0}" = "1" ] || [ -f "$REPO/.autodeploy-skip-ci" ]; then
+  log "CI gate skipped by owner override"
+else
+  CI_CHECK_SCRIPT="${AUTODEPLOY_CI_CHECK_SCRIPT:-$REPO/scripts/ops/autodeploy/check_ci.py}"
+  [ -f "$CI_CHECK_SCRIPT" ] || CI_CHECK_SCRIPT="$(dirname "$0")/check_ci.py"
+  if [ -f "$CI_CHECK_SCRIPT" ]; then
+    set +e
+    python3 "$CI_CHECK_SCRIPT" "$TARGET"
+    CI_RC=$?
+    set -e
+    if [ "$CI_RC" -eq 0 ]; then
+      log "CI gate OK: required jobs green for $TARGET_SHORT"
+    elif [ "$CI_RC" -eq 2 ]; then
+      log "CI gate: checks pending for $TARGET_SHORT; will retry next tick"
+      exit 0
+    elif [ "$CI_RC" -eq 1 ]; then
+      log "CI gate: required jobs not green for $TARGET_SHORT; refusing deploy"
+      record_failure
+      FAIL_REASON="ci-failed"
+      RESULT="failed"
+      exit 1
+    else
+      log "CI gate: GitHub API check failed (rc=$CI_RC); refusing deploy (fail closed)"
+      FAIL_REASON="ci-api-error"
+      RESULT="failed"
+      exit 1
+    fi
+  else
+    log "CI gate: check script $CI_CHECK_SCRIPT missing; refusing deploy (fail closed)"
+    FAIL_REASON="ci-script-missing"
+    RESULT="failed"
+    exit 1
+  fi
 fi
 
 # Copy the deploy script FROM THE TARGET commit, exactly like the owner flow

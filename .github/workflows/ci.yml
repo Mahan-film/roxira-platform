@@ -209,16 +209,20 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Cache Trivy binary
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/roxira/trivy-*
+          key: trivy-${{ runner.os }}-${{ hashFiles('scripts/dev/install_trivy.sh') }}
       - name: Install Trivy
         run: |
-          curl -sSfL --retry 5 --retry-all-errors --retry-delay 10 "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
-            | tar -xz -C "$RUNNER_TEMP" trivy
-          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
-          "$RUNNER_TEMP/trivy" --version
+          TRIVY="$(bash scripts/dev/install_trivy.sh)"
+          "$TRIVY" --version
+          echo "TRIVY_BIN=$TRIVY" >> "$GITHUB_ENV"
       - name: Scan filesystem
         # mirror.gcr.io (Trivy's default DB source) is blocked from the CI box network; ghcr.io works everywhere.
         run: |
-          trivy fs --db-repository ghcr.io/aquasecurity/trivy-db:2 --java-db-repository ghcr.io/aquasecurity/trivy-java-db:1 \
+          "$TRIVY_BIN" fs --db-repository ghcr.io/aquasecurity/trivy-db:2 --java-db-repository ghcr.io/aquasecurity/trivy-java-db:1 \
             --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --exit-code 0 --format table . > "$RUNNER_TEMP/trivy-fs.txt"
       - name: Upload Trivy report
         if: always()

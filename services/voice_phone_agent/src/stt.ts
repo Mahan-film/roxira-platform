@@ -2,6 +2,7 @@ import { FormData } from 'undici';
 import { IN_RATE, wav } from './audio.js';
 import { cfg } from './config.js';
 import { fetchDirect, fetchProxied } from './http.js';
+import { KeyCooldowns } from './key-cooldown.js';
 import { repairLegalTerms } from './legal-terms.js';
 
 function buildForm(wavBuf: Buffer, model?: string): FormData {
@@ -23,6 +24,8 @@ export interface Transcript {
   /** Duration-weighted Whisper avg_logprob (0 = certain); null when the provider gives none. */
   logprob: number | null;
   provider: string;
+  /** why the preferred Gemini model did not give the text (status codes only), for the turn log */
+  note?: string;
 }
 
 interface WhisperJson {
@@ -99,6 +102,8 @@ export async function transcribeDetailed(
   const gem = hybrid
     ? cfg.geminiSttModels.map((m, i) => settle(geminiStt(wavBuf, gctl.signal, doFetch, m, i), m))
     : [];
+  const gemDone: (Settled | undefined)[] = [];
+  gem.forEach((p, i) => { void p.then((r) => { gemDone[i] = r; }); });
   try {
     let w: Transcript | null = null;
     let why = '';
@@ -117,8 +122,10 @@ export async function transcribeDetailed(
       const isPref = (_: unknown, i: number) => cfg.geminiSttModels[i] === preferred;
       const best = (await firstWithText(gem.filter(isPref), t0 + cfg.geminiWaitMs - Date.now()))
         ?? (await firstWithText(gem.filter((p, i) => !isPref(p, i)), 50));
-      if (!best || !best.ok) return w;
-      return { text: best.text, logprob: w.logprob, provider: `gemini:${best.model}+whisper-gate` };
+      const note = best?.model === preferred ? '' : geminiNote(gemDone, preferred);
+      // Whisper's own result, rebuilt field by field so a turn always has text and provider
+      if (!best || !best.ok) return { text: w.text ?? '', logprob: w.logprob ?? null, provider: w.provider || 'whisper', ...(note ? { note } : {}) };
+      return { text: best.text, logprob: w.logprob, provider: `gemini:${best.model}+whisper-gate`, ...(note ? { note } : {}) };
     }
     // Whisper down: Gemini alone (parallel calls already running, or started now), then Smart Judge
     const gs = gem.length ? gem : cfg.geminiKeys.length ? [settle(geminiStt(wavBuf, gctl.signal, doFetch, cfg.geminiSttModels[0], 0), cfg.geminiSttModels[0])] : [];
@@ -134,9 +141,23 @@ export async function transcribeDetailed(
   }
 }
 
-let geminiCursor = 0;
+/** e.g. "gemini-3-flash-preview lost: 429,timeout" when the preferred model's copies gave no text. */
+export function geminiNote(done: (Settled | undefined)[], preferred: string): string {
+  const why = cfg.geminiSttModels.flatMap((m, i) => {
+    if (m !== preferred) return [];
+    const r = done[i];
+    if (!r) return ['timeout'];
+    if (!r.ok) return [r.err.replace(/^gemini stt /, '').slice(0, 40)];
+    return r.text ? [] : ['empty'];
+  });
+  return why.length ? `${preferred} lost: ${why.join(',')}` : '';
+}
 
-async function geminiStt(
+let geminiCursor = 0;
+/** Gemini keys resting after 401/403/429 (GEMINI_KEY_COOLDOWN_MIN) */
+export const geminiCooldowns = new KeyCooldowns();
+
+export async function geminiStt(
   wavBuf: Buffer, signal: AbortSignal, doFetch: typeof fetchProxied, model: string, keyOffset: number,
 ): Promise<string> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
@@ -150,8 +171,7 @@ async function geminiStt(
   let lastErr = '';
   const base = geminiCursor + keyOffset;
   geminiCursor = (geminiCursor + 1) % Math.max(1, cfg.geminiKeys.length);
-  for (let i = 0; i < cfg.geminiKeys.length; i++) {
-    const key = cfg.geminiKeys[(base + i) % cfg.geminiKeys.length];
+  for (const key of geminiCooldowns.order(cfg.geminiKeys, base)) {
     const r = await doFetch(url, {
       method: 'POST', body, signal,
       headers: { 'x-goog-api-key': key, 'Content-Type': 'application/json' },
@@ -161,7 +181,9 @@ async function geminiStt(
       return clean((j.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '').join(''));
     }
     lastErr = `${r.status}`;
-    if (r.status !== 429 && r.status !== 403 && r.status < 500) break;
+    // dead (401/403) or exhausted (429) key: rest it and rotate to the next one
+    if (r.status === 401 || r.status === 403 || r.status === 429) { geminiCooldowns.mark(key, cfg.geminiKeyCooldownMs); continue; }
+    if (r.status < 500) break;
   }
   throw new Error(`gemini stt ${lastErr}`);
 }
