@@ -81,6 +81,11 @@ describePg('EntitlementService & Usage Metering on PostgreSQL (T145)', () => {
   });
 
   it('seeds branches capacity meter from pre-existing tenant_branches rows', async () => {
+    // Ensure T1 exists in tenants (FK_tenant_branches_tenant requires this)
+    await testDb.owner.query(
+      `INSERT INTO tenants (id, name, slug) VALUES ($1, 'Test T1', 'test-t1-branches') ON CONFLICT (id) DO NOTHING`,
+      [T1],
+    );
     await testDb.scope.within(T1, undefined, async (manager) => {
       await manager.query(
         `INSERT INTO tenant_branches (tenant_id, name) VALUES ($1, 'HQ'), ($1, 'West')`,
