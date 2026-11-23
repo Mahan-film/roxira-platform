@@ -16,12 +16,13 @@ install -m 0644 "$repo/config/source_watcher.json" "$conf/sources.json"
 mkdir -p "$conf/ca"
 install -m 0644 "$repo"/config/ca/*.crt "$conf/ca/"
 [ -f "$conf/env" ] || install -m 0600 "$here/env.example" "$conf/env"
-install -m 0644 "$here/roxira-source-watcher.service" "$here/roxira-source-watcher.timer" "$unit/"
+install -m 0644 "$here/daily_report.sh" "$share/daily_report.sh"
+install -m 0644 "$here"/roxira-source-watcher*.service "$here"/roxira-source-watcher*.timer "$unit/"
 
 systemctl --user daemon-reload
-systemctl --user enable --now roxira-source-watcher.timer
+systemctl --user enable --now roxira-source-watcher.timer roxira-source-watcher-report.timer
 echo "Installed. Mode follows SOURCE_WATCHER_ARGS in $conf/env (empty = dry-run)."
 echo "  Run once now:   systemctl --user start roxira-source-watcher.service"
 echo "  Logs/report:    journalctl --user -u roxira-source-watcher -n 40; ls $HOME/.local/state/roxira-source-watcher/reports"
-echo "  Go live:        SOURCE_WATCHER_ARGS=--commit --details 6 in $conf/env (owner decision of 2026-11-23)"
+echo "  Mode:           --commit by default (owner decision of 2026-11-23); empty SOURCE_WATCHER_ARGS = dry-run"
 echo "  Kill switch:    touch $conf/STOP   (remove to resume)"
