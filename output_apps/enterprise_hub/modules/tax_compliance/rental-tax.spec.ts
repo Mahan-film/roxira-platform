@@ -78,4 +78,33 @@ describe('rental income tax preview (DTX-03)', () => {
     await controller.preview(request, { ...dto(), tenantId: 'tenant-b' } as never);
     expect(preview.mock.calls[0][0]).toBe('tenant-a');
   });
+
+  it('reads rental tax rule keys and country from the pack registry when provided', async () => {
+    const findForYear = jest.fn().mockResolvedValue(PARAMS);
+    const fakePack = {
+      country: 'IR',
+      taxRules: [
+        {
+          kind: 'rental_tax',
+          label: 'مالیات اجاره',
+          statutoryKeys: [
+            'rental_expense_deduction_rate',
+            'income_exemption_ceiling_art57_art101',
+            'income_tax_art131_brackets',
+          ],
+        },
+      ],
+    };
+    const packRegistry = {
+      resolve: jest.fn(() => fakePack),
+    };
+    const service = new RentalTaxService(
+      { findForYear } as unknown as StatutoryRepository,
+      packRegistry as never,
+    );
+    const result = await service.preview('tenant-1', dto());
+    expect(packRegistry.resolve).toHaveBeenCalled();
+    expect(findForYear).toHaveBeenCalledWith('tenant-1', 'IR', 1405);
+    expect(result.status).toBe('preview');
+  });
 });
