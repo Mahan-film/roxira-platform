@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Banknote,
@@ -122,6 +123,14 @@ function ReconcileTabContent() {
 function DamagesTabContent() {
   return (
     <div className="space-y-8">
+      <div className="flex justify-end">
+        <Link
+          href="/app/damages"
+          className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+        >
+          مشاهده در صفحه تمام‌صفحه اختصاصی محاسبات خسارت تأخیر تأدیه
+        </Link>
+      </div>
       <DamageCalculatorSection />
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">سوابق محاسبات</h2>

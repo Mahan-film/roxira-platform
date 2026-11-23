@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { UsersRound } from "lucide-react";
 
 import { InvitationsPanel } from "@/components/access/invitations-panel";
@@ -39,6 +40,14 @@ export default function MembersSettingsPage() {
         title="اعضا و نقش‌ها"
         description="اعضا را دعوت کنید، نقش بدهید و ساختار شعبه‌ها و دپارتمان‌ها را بسازید."
         icon={<UsersRound className="size-6 text-indigo-500" />}
+        actions={
+          <Link
+            href="/app/settings/access"
+            className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent"
+          >
+            ماتریس دسترسی‌ها و آزمایش کاربر
+          </Link>
+        }
       />
       <div role="tablist" aria-label="بخش‌های مدیریت اعضا" className="flex flex-wrap gap-1 border-b border-border">
         {TABS.map((t) => (

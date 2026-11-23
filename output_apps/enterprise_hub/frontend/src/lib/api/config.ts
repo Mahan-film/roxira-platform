@@ -51,6 +51,9 @@ export const TREASURY_RESOURCE_PATH = "enterprise-hub/treasury";
 /** مسیر پایه‌ی کنترلر دستیار هوشمند روی داده‌های سازمان در NestJS */
 export const ASSISTANT_RESOURCE_PATH = "enterprise-hub/assistant";
 
+/** Public API tokens management in NestJS (PublicApiModule). */
+export const API_TOKENS_RESOURCE_PATH = "enterprise-hub/api-tokens";
+
 /** مسیر نسبی سمت مرورگر که توسط rewrite در next.config.ts پروکسی می‌شود */
 export const API_PROXY_BASE_PATH = "/api/backend";
 

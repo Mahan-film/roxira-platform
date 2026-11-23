@@ -125,6 +125,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         module: "banking",
         keywords: ["money", "بانک", "چک", "صندوق", "تنخواه", "خسارت", "پول", "خزانه‌داری"],
       },
+      {
+        href: "/app/damages",
+        label: "خسارت تاخیر تادیه",
+        icon: "Scale",
+        module: "banking",
+        keywords: ["خسارت", "تاخیر تادیه", "شاخص بانک مرکزی", "ماده ۵۲۲"],
+      },
     ],
   },
   {
@@ -210,6 +217,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         keywords: ["dimension", "مرکز هزینه", "پروژه", "تفصیلی شناور"],
       },
       {
+        href: "/app/accounting/review",
+        label: "مرور حساب‌ها",
+        icon: "ListTree",
+        module: "accounting",
+        keywords: ["مرور حساب", "تراز آزمایشی", "کل", "معین", "تفصیلی", "گردش"],
+      },
+      {
         href: "/app/contracting",
         label: "پروژه‌ها و قراردادها",
         icon: "Briefcase",
@@ -236,6 +250,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         icon: "FileSpreadsheet",
         module: "tax",
         keywords: ["دفاتر الکترونیک", "دفتر کل", "دفتر روزنامه", "سامانه ثبت دفاتر"],
+      },
+      {
+        href: "/app/tax/kartable",
+        label: "مغایرت کارپوشه مودیان",
+        icon: "FileCheck",
+        module: "tax",
+        keywords: ["کارپوشه", "مغایرت", "مودیان", "سامانه مودیان"],
       },
     ],
   },

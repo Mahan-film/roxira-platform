@@ -67,6 +67,13 @@ export default function ChartOfAccountsPage() {
         actions={
           <div className="flex flex-wrap gap-2">
             <Link
+              href="/app/accounting/review"
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <Network aria-hidden="true" />
+              مرور حساب‌ها
+            </Link>
+            <Link
               href="/app/accounting/vouchers"
               className={buttonVariants({ variant: "outline", size: "sm" })}
             >
