@@ -1,18 +1,44 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page } from '@playwright/test';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 
-export const AUDIT_OUTPUT_DIR =
-  process.env.A11Y_AUDIT_DIR ||
-  (fs.existsSync('/Volumes/ssd/roxira-work/tmp')
-    ? '/Volumes/ssd/roxira-work/tmp/roxira-a11y-audit'
-    : path.join(os.tmpdir(), 'roxira-a11y-audit'));
+export function getAuditOutputDir(): string {
+  if (process.env.A11Y_AUDIT_DIR) {
+    return process.env.A11Y_AUDIT_DIR;
+  }
+  return path.join(process.cwd(), 'tmp', 'roxira-a11y-audit');
+}
+
+export function getMockAuthSession(): string {
+  const payload = {
+    sub: '00000000-0000-0000-0000-000000000001',
+    role: 'ADMIN',
+    tenantRole: 'OWNER',
+    tenantId: '00000000-0000-0000-0000-000000000001',
+    exp: Math.floor(Date.now() / 1000) + 86400 * 30,
+  };
+  const token = `eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.mocksig`;
+  return JSON.stringify({
+    accessToken: token,
+    tokenType: 'Bearer',
+    expiresAt: Date.now() + 86400 * 30 * 1000,
+    user: {
+      id: '00000000-0000-0000-0000-000000000001',
+      displayName: 'Audit Admin',
+      email: 'audit@roxira.ir',
+      phone: '09120000000',
+      role: 'ADMIN',
+      serviceDomain: 'ROXIRA',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    },
+  });
+}
 
 export interface PageGroup {
   name: string;
   slug: string;
+  isProtected?: boolean;
   routes: string[];
 }
 
@@ -20,31 +46,37 @@ export const AUDITED_PAGE_GROUPS: PageGroup[] = [
   {
     name: 'Public & Marketing',
     slug: 'public',
+    isProtected: false,
     routes: ['/', '/about', '/services', '/contact', '/terms', '/privacy', '/plans', '/technology'],
   },
   {
     name: 'Authentication & Portal',
     slug: 'auth',
+    isProtected: false,
     routes: ['/login', '/signup', '/reset-password', '/app/onboarding'],
   },
   {
     name: 'Legal & Smart Judge',
     slug: 'legal',
+    isProtected: false,
     routes: ['/judge', '/chat', '/laws', '/precedents', '/regulations', '/coverage', '/radar'],
   },
   {
     name: 'Invoicing & Sales',
     slug: 'invoicing',
+    isProtected: true,
     routes: ['/app/invoicing', '/app/invoicing/pos', '/app/crm'],
   },
   {
     name: 'Treasury & Banking',
     slug: 'treasury',
+    isProtected: true,
     routes: ['/app/treasury', '/app/treasury/cash-boxes', '/app/treasury/petty-cash', '/app/cheques'],
   },
   {
     name: 'Accounting & Ledger',
     slug: 'accounting',
+    isProtected: true,
     routes: [
       '/app/accounting',
       '/app/accounting/chart',
@@ -57,11 +89,13 @@ export const AUDITED_PAGE_GROUPS: PageGroup[] = [
   {
     name: 'Tax Compliance',
     slug: 'tax',
+    isProtected: true,
     routes: ['/app/tax', '/app/tax/electronic-books', '/app/tax/kartable', '/app/tax/wizard'],
   },
   {
     name: 'Settings & Organization',
     slug: 'settings',
+    isProtected: true,
     routes: [
       '/app/settings',
       '/app/settings/members',
@@ -131,18 +165,17 @@ export async function detectClippedText(page: Page): Promise<{
   snippets: string[];
 }> {
   return page.evaluate(() => {
-    const selectors = 'p, span, h1, h2, h3, h4, h5, h6, button, a, label';
+    const selectors = 'p, span, h1, h2, h3, h4, h5, h6, button, a, label, div';
     const elements = document.querySelectorAll(selectors);
     const snippets: string[] = [];
 
     for (let i = 0; i < elements.length && snippets.length < 5; i++) {
       const el = elements[i];
-      if (el.children.length === 0 && (el.textContent || '').trim().length > 3) {
-        if (el.scrollWidth > el.clientWidth + 3) {
-          const style = window.getComputedStyle(el);
-          if (style.overflow !== 'hidden' && style.textOverflow !== 'ellipsis') {
-            snippets.push(`[${el.tagName.toLowerCase()}] "${(el.textContent || '').trim().slice(0, 40)}..."`);
-          }
+      const text = (el.textContent || '').trim();
+      if (text.length > 3 && el.scrollWidth > el.clientWidth + 3) {
+        const style = window.getComputedStyle(el);
+        if (style.overflow !== 'hidden' && style.textOverflow !== 'ellipsis' && style.display !== 'inline') {
+          snippets.push(`[${el.tagName.toLowerCase()}] "${text.slice(0, 40)}..."`);
         }
       }
     }
@@ -186,11 +219,12 @@ export async function runAxeAudit(page: Page): Promise<
 }
 
 export function saveAuditReport(findings: PageAuditFinding[]): { reportPath: string; issuesDir: string } {
-  fs.mkdirSync(AUDIT_OUTPUT_DIR, { recursive: true });
-  const reportPath = path.join(AUDIT_OUTPUT_DIR, 'audit-report.json');
+  const auditOutputDir = getAuditOutputDir();
+  fs.mkdirSync(auditOutputDir, { recursive: true });
+  const reportPath = path.join(auditOutputDir, 'audit-report.json');
   fs.writeFileSync(reportPath, JSON.stringify(findings, null, 2), 'utf8');
 
-  const issuesDir = path.join(AUDIT_OUTPUT_DIR, 'issues');
+  const issuesDir = path.join(auditOutputDir, 'issues');
   fs.mkdirSync(issuesDir, { recursive: true });
 
   const grouped = new Map<string, PageAuditFinding[]>();
@@ -200,7 +234,7 @@ export function saveAuditReport(findings: PageAuditFinding[]): { reportPath: str
     grouped.set(f.group, list);
   }
 
-  for (const [group, items] of grouped.entries()) {
+  for (const [group, items] of Array.from(grouped.entries())) {
     const severityOrder = ['critical', 'serious', 'moderate', 'minor'];
     const lines: string[] = [
       `# Accessibility, RTL & Responsive Width Audit: ${group}`,

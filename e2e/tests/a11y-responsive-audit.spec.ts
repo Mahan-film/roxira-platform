@@ -2,10 +2,11 @@ import { test, expect } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
-  AUDIT_OUTPUT_DIR,
   AUDITED_PAGE_GROUPS,
   detectClippedText,
   detectHorizontalOverflow,
+  getAuditOutputDir,
+  getMockAuthSession,
   runAxeAudit,
   saveAuditReport,
   type PageAuditFinding,
@@ -31,7 +32,7 @@ const VIEWPORTS = [
 
 const DIRECTIONS: Array<'rtl' | 'ltr'> = ['rtl', 'ltr'];
 
-test.describe('T356 · Accessibility, RTL and Phone-Width Audit', () => {
+test.describe.serial('T356 · Accessibility, RTL and Phone-Width Audit', () => {
   const allFindings: PageAuditFinding[] = [];
 
   test.afterAll(async () => {
@@ -52,6 +53,25 @@ test.describe('T356 · Accessibility, RTL and Phone-Width Audit', () => {
             test(`audit ${route} @ ${vp.width}px (${dir.toUpperCase()})`, async ({ page }) => {
               await page.setViewportSize({ width: vp.width, height: vp.height });
 
+              const isProtected = group.isProtected || route.startsWith('/app/');
+              if (isProtected) {
+                const sessionRaw =
+                  process.env.APP_E2E_SESSION_FILE && fs.existsSync(process.env.APP_E2E_SESSION_FILE)
+                    ? fs.readFileSync(process.env.APP_E2E_SESSION_FILE, 'utf8')
+                    : getMockAuthSession();
+
+                await page.addInitScript(
+                  ([key, val]) => {
+                    try {
+                      window.localStorage.setItem(key, val);
+                    } catch {
+                      /* storage unavailable on about:blank */
+                    }
+                  },
+                  ['roxira.auth.session', sessionRaw],
+                );
+              }
+
               const response = await page.goto(route, { waitUntil: 'domcontentloaded' }).catch(() => null);
               if (!response) {
                 test.skip(true, `Route ${route} not reachable on current base URL`);
@@ -63,7 +83,8 @@ test.describe('T356 · Accessibility, RTL and Phone-Width Audit', () => {
                 document.documentElement.setAttribute('dir', d);
               }, dir);
 
-              await page.waitForTimeout(300);
+              await page.waitForLoadState('domcontentloaded');
+              await page.locator('body').waitFor({ state: 'attached' }).catch(() => undefined);
 
               // 1. Horizontal overflow check
               const overflow = await detectHorizontalOverflow(page);
@@ -75,11 +96,15 @@ test.describe('T356 · Accessibility, RTL and Phone-Width Audit', () => {
               const axeViolations = await runAxeAudit(page);
 
               // 4. Capture screenshot outside repo
-              const screenshotsDir = path.join(AUDIT_OUTPUT_DIR, 'screenshots');
+              const auditDir = getAuditOutputDir();
+              const screenshotsDir = path.join(auditDir, 'screenshots');
               fs.mkdirSync(screenshotsDir, { recursive: true });
               const slug = route.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'root';
               const shotPath = path.join(screenshotsDir, `${slug}-${vp.width}px-${dir}.png`);
-              await page.screenshot({ path: shotPath, fullPage: true }).catch(() => undefined);
+              await page.screenshot({ path: shotPath, fullPage: true }).catch((err) => {
+                // eslint-disable-next-line no-console
+                console.warn(`[T356] Screenshot failed for ${route} (${vp.width}px, ${dir}):`, err?.message || err);
+              });
 
               allFindings.push({
                 route,
@@ -96,7 +121,8 @@ test.describe('T356 · Accessibility, RTL and Phone-Width Audit', () => {
                 screenshotPath: shotPath,
               });
 
-              // Critical accessibility violations fail the spec so CI / QA flags blocker issues immediately
+              // Critical accessibility violations fail the spec so CI / QA flags blocker issues immediately.
+              // Serious/moderate/minor violations are recorded into the markdown issue templates by group.
               const criticalAxe = axeViolations.filter((v) => v.impact === 'critical');
               expect(
                 criticalAxe,
