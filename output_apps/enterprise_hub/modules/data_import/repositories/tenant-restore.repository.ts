@@ -58,12 +58,41 @@ export const ALLOWED_RESTORE_COLUMNS: Record<CoreTenantTableName, ReadonlySet<st
 const IDENTIFIER_REGEX = /^[a-z0-9_]+$/;
 
 function toSnakeCase(str: string): string {
-  return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+  return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`).replace(/^_/, '');
 }
 
 @Injectable()
 export class TenantRestoreRepository {
   constructor(private readonly tenantScope: TenantScope) {}
+
+  /**
+   * Validates row column names against identifier regex and table whitelist without DB writes.
+   * Ensures dry-run mode performs identical schema and SQL injection verification as real restore.
+   */
+  validateTableRows(table: CoreTenantTableName, rawRows: Record<string, any>[]): void {
+    if (!CORE_TENANT_TABLES.includes(table)) {
+      throw new BadRequestException(`Table "${table}" is not allowed for restore`);
+    }
+
+    const allowedCols = ALLOWED_RESTORE_COLUMNS[table];
+    for (const rawRow of rawRows) {
+      if (!rawRow || typeof rawRow !== 'object') continue;
+
+      for (const [key] of Object.entries(rawRow)) {
+        const snakeKey = toSnakeCase(key);
+        if (!IDENTIFIER_REGEX.test(snakeKey)) {
+          throw new BadRequestException(
+            `Invalid column identifier "${key}" in table "${table}" (SQL injection guard)`,
+          );
+        }
+        if (!allowedCols.has(snakeKey)) {
+          throw new BadRequestException(
+            `Column "${key}" (${snakeKey}) is not permitted on table "${table}"`,
+          );
+        }
+      }
+    }
+  }
 
   /**
    * Counts existing journal entries for a tenant to prevent accidental overwrite
@@ -88,11 +117,8 @@ export class TenantRestoreRepository {
     table: CoreTenantTableName,
     rawRows: Record<string, any>[],
   ): Promise<{ inserted: number; skipped: number }> {
-    if (!CORE_TENANT_TABLES.includes(table)) {
-      throw new BadRequestException(`Table "${table}" is not allowed for restore`);
-    }
+    this.validateTableRows(table, rawRows);
 
-    const allowedCols = ALLOWED_RESTORE_COLUMNS[table];
     let inserted = 0;
     let skipped = 0;
 
@@ -100,20 +126,10 @@ export class TenantRestoreRepository {
       for (const rawRow of rawRows) {
         if (!rawRow || typeof rawRow !== 'object') continue;
 
-        // Normalize keys to snake_case and validate
+        // Normalize keys to snake_case
         const normalizedRow: Record<string, any> = {};
         for (const [key, val] of Object.entries(rawRow)) {
           const snakeKey = toSnakeCase(key);
-          if (!IDENTIFIER_REGEX.test(snakeKey)) {
-            throw new BadRequestException(
-              `Invalid column identifier "${key}" in table "${table}" (SQL injection guard)`,
-            );
-          }
-          if (!allowedCols.has(snakeKey)) {
-            throw new BadRequestException(
-              `Column "${key}" (${snakeKey}) is not permitted on table "${table}"`,
-            );
-          }
           normalizedRow[snakeKey] = val;
         }
 
@@ -128,7 +144,7 @@ export class TenantRestoreRepository {
         const values = cols.map((c) => normalizedRow[c]);
 
         const res = await em.query(
-          `INSERT INTO "${table}" (${colNames}) VALUES (${placeholders}) ON CONFLICT DO NOTHING RETURNING 1`,
+          `INSERT INTO "${table}" (${colNames}) VALUES (${placeholders}) ON CONFLICT (id) DO NOTHING RETURNING 1`,
           values,
         );
 

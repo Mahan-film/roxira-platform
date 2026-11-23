@@ -75,8 +75,8 @@ export class TenantExportService {
       return '';
     }
     const str = String(val);
-    const trimmed = str.replace(/^[ \n]+/, '');
-    if (/^[=+\-@\t\r]/.test(trimmed)) {
+    const trimmed = str.trimStart();
+    if (/^[=+\-@\t\r]/.test(str) || /^[=+\-@\t\r]/.test(trimmed)) {
       return `'${str}`;
     }
     return str;

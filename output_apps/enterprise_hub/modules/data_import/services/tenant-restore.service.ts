@@ -144,6 +144,7 @@ export class TenantRestoreService {
 
       if (dryRun) {
         // In dry-run mode, validate rows against repository schema checks without DB writes
+        this.restoreRepo.validateTableRows(table, parsedRows);
         restoredTables[table] = parsedRows.length;
         skippedTables[table] = 0;
         totalRecordsRestored += parsedRows.length;

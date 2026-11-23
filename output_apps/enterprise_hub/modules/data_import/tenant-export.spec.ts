@@ -124,6 +124,8 @@ describe('Tenant Data Export & Restore / GoBD Z3 & EU Data Act (#230 / T77 / #10
     it('neutralizes formula injection even with leading spaces or newlines', () => {
       expect(exportService.sanitizeCellForSpreadsheet('   =1+1')).toBe("'   =1+1");
       expect(exportService.sanitizeCellForSpreadsheet('\n  @cmd')).toBe("'\n  @cmd");
+      expect(exportService.sanitizeCellForSpreadsheet('\u00A0=SUM(A1)')).toBe("'\u00A0=SUM(A1)");
+      expect(exportService.sanitizeCellForSpreadsheet('\u00A0+100')).toBe("'\u00A0+100");
     });
 
     it('leaves standard strings, numbers, and Persian text unaltered', () => {
@@ -395,6 +397,25 @@ describe('Tenant Data Export & Restore / GoBD Z3 & EU Data Act (#230 / T77 / #10
       expect(result.dryRun).toBe(true);
       expect(result.totalRecordsRestored).toBe(9);
       expect(mockEm.query).not.toHaveBeenCalled();
+    });
+
+    it('dryRun validates column names and rejects malicious or unknown columns (SQL injection guard)', async () => {
+      const archive = await exportService.exportTenantGoBDZ3(mockTenantId);
+
+      const badJson = JSON.stringify([
+        { id: 1, 'code"); DROP TABLE users; --': '1010', name: 'Bad' },
+      ]);
+      archive.files['accounting/fin_chart_of_accounts.json'] = badJson;
+      const hash = crypto.createHash('sha256').update(badJson, 'utf8').digest('hex');
+      archive.manifest.files.find((f) => f.path === 'accounting/fin_chart_of_accounts.json')!.sha256 = hash;
+      delete (archive.manifest as any).rootHash;
+
+      await expect(
+        restoreService.restoreTenantFromExport(targetTenantId, archive, { dryRun: true }),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        restoreService.restoreTenantFromExport(targetTenantId, archive, { dryRun: true }),
+      ).rejects.toThrow(/Invalid column identifier.*SQL injection guard/);
     });
   });
 
