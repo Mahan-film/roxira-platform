@@ -216,7 +216,7 @@ checks the primary source and runs a benchmark on our workload.
 | Vitest in place of Jest | R19: trial only, Jest plus Nest decorators | suite time, decorator support | Compatibility |
 | A faster Python package manager (for example uv) | `Dockerfile.prod` has many sequential `pip install` lines and a large torch layer | image build time, layer cache hits, CI install time | Everything about the tool, including licence |
 | Faster JS package manager (pnpm or bun) | two `package-lock.json` apps, npm only | clean install time on CI box | Everything about the tools |
-| Rust retrieval sidecar | ADR T211 contract exists | per-stage p95 from `replay_benchmark.py` | Any speed-up |
+| Rust retrieval sidecar | ADR T211 contract exists; gated by [RUST_HOT_PATH_GATE.md](RUST_HOT_PATH_GATE.md) (T308) | per-stage p95 share from `replay_benchmark.py` and prototype speedup | Threshold: stage >30% p95 share AND prototype >2x speedup; otherwise prohibited |
 | GoRules ZEN for tax rules (T180) | R19: trial with a spike, MIT, Rust core | decision latency and RAM for Iran VAT and EU reverse-charge cases | Licence, binding maturity |
 | pgBackRest vs WAL-G | R19: WAL-G chosen; pgBackRest repo active (checked 2026-11-17) | restore time, RPO | Feature comparison |
 

@@ -2,7 +2,9 @@
 # JIT runner launcher for one slot (R20-8, #1024). Runs as user `runner` from the user unit
 # roxira-jit@<slot>.service (installed by 08_root_ci_pool.sh into /usr/local/lib/roxira-jit, root-owned,
 # so job code cannot change it). One job at a time per slot:
-#   1. touch <spool>/<slot>/.alive (the controller mints only for live launchers);
+#   1. touch <spool>/<slot>/.alive.<instance> (and .alive); the controller mints one config per
+#      live launcher plus `ahead` spares. Instances: `light`, `light-2`, `light-3` (units
+#      roxira-jit@light-2 ...) share the light spool; claims are atomic renames;
 #   2. claim the oldest <spool>/<slot>/jit-*.jit (atomic rename), read it, delete it;
 #   3. light:  a fresh container from image roxira-ci-light (no Docker socket, --cap-drop ALL,
 #              no-new-privileges, 1 CPU, 2 GB, own tool-cache volume) runs `run.sh` with the JIT config;
@@ -16,8 +18,12 @@
 # Env (tests): JIT_SPOOL, JIT_CONTROL, JIT_HOME, JIT_ONCE=1 (one iteration), JIT_POLL (seconds).
 set -euo pipefail
 
-slot="${1:?usage: jit_launcher.sh light|docker}"
-case "$slot" in light|docker) ;; *) echo "unknown slot $slot" >&2; exit 2 ;; esac
+inst="${1:?usage: jit_launcher.sh light|light-<n>|docker}"
+case "$inst" in
+  light|docker) slot="$inst" ;;
+  light-[2-9]) slot=light ;;
+  *) echo "unknown slot $inst" >&2; exit 2 ;;
+esac
 
 spool="${JIT_SPOOL:-/srv/data/ci-jit/spool}/$slot"
 control="${JIT_CONTROL:-/srv/data/ci-jit/control}"
@@ -32,7 +38,7 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 export DOCKER_HOST="${DOCKER_HOST:-unix://$XDG_RUNTIME_DIR/docker.sock}"
 umask 077
 
-say() { echo "jit-$slot: $*"; }
+say() { echo "jit-$inst: $*"; }
 
 retire_old_runner() {
   [ -e "$control/retire-old-runner" ] || return 0
@@ -78,10 +84,11 @@ run_light() {
     --cpus 1 --memory 2g --memory-swap 2g --pids-limit 4096 \
     --cap-drop ALL --security-opt no-new-privileges \
     --tmpfs /tmp:rw,exec,size=2g \
-    -v roxira-jit-toolcache-light:/opt/hostedtoolcache \
+    --cpu-shares 512 \
+    -v "roxira-jit-toolcache-$inst:/opt/hostedtoolcache" \
     -e RUNNER_TOOL_CACHE=/opt/hostedtoolcache \
     --env-file "$envf" \
-    --label roxira.jit.slot=light \
+    --label roxira.jit.slot=light --label "roxira.jit.instance=$inst" \
     "$image" /home/runner/actions-runner/run.sh)" || { rm -f "$envf"; return 1; }
   rm -f "$envf"
   say "container ${cid:0:12} for $name"
@@ -131,12 +138,14 @@ run_docker() {
 mkdir -p "$spool" "$home"
 # Re-exec between jobs when 08_root_ci_pool.sh installed a newer launcher (never mid-job).
 self_sig="$(stat -c %Y:%i "$0" 2>/dev/null || true)"
+# runner_setup.sh compares this with the installed file to tell whether a restart is needed.
+printf '%s\n' "$self_sig" > "$spool/.launcher-sig.$inst" 2>/dev/null || true
 while :; do
   if [ "$(stat -c %Y:%i "$0" 2>/dev/null || true)" != "$self_sig" ]; then
     say "launcher updated on disk: re-exec"
-    exec bash "$0" "$slot"
+    exec bash "$0" "$inst"
   fi
-  touch "$spool/.alive"
+  touch "$spool/.alive" "$spool/.alive.$inst"
   retire_old_runner
   claimed="$(claim)"
   if [ -n "$claimed" ]; then
@@ -145,7 +154,7 @@ while :; do
     rm -f "$claimed"
     say "start $name"
     # keep .alive fresh while a long job runs
-    ( while sleep 30; do touch "$spool/.alive"; done ) </dev/null >/dev/null 2>&1 & keep=$!
+    ( while sleep 30; do touch "$spool/.alive" "$spool/.alive.$inst"; done ) </dev/null >/dev/null 2>&1 & keep=$!
     rc=0
     if [ "$slot" = light ]; then run_light "$name" "$cfg" || rc=$?; else run_docker "$name" "$cfg" || rc=$?; fi
     kill "$keep" 2>/dev/null || true
