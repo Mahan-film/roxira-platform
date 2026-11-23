@@ -1,0 +1,8 @@
+[Unit]
+Description=Roxira source watcher: daily storage-growth line on the tracking issue
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/roxira-source-watcher/env
+ExecStart=/bin/bash %h/.local/share/roxira-source-watcher/daily_report.sh
+Nice=15

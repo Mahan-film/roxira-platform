@@ -379,13 +379,10 @@ else
   # R25 / T269: Replay erased tenants ledger to prevent ghost resurrection after restore
   ERASED_LEDGER="${ERASED_TENANTS_LEDGER:-/var/lib/roxira/erased_tenants.jsonl}"
   REPLAY_SCRIPT="$SCRIPT_DIR/../replay_erased_tenants.py"
-  if [ "${SKIP_ERASED_REPLAY:-0}" = "1" ]; then
-    warn "SKIP_ERASED_REPLAY=1: skipping erased-tenants ledger replay"
-  elif [ -f "$ERASED_LEDGER" ] && [ -f "$REPLAY_SCRIPT" ]; then
+  if [ -f "$ERASED_LEDGER" ] && [ -f "$REPLAY_SCRIPT" ]; then
     log "Replaying erased-tenants ledger ($ERASED_LEDGER) to prevent ghost resurrection..."
     if ! python3 "$REPLAY_SCRIPT" --ledger "$ERASED_LEDGER"; then
       echo "FATAL: Replaying erased tenants failed! Ghost data would be resurrected." >&2
-      echo "Set SKIP_ERASED_REPLAY=1 to override if intentional." >&2
       exit 5
     fi
   fi

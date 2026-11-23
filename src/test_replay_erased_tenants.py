@@ -20,6 +20,7 @@ from scripts.ops.replay_erased_tenants import (
     main,
     record_erased_tenant,
     replay_tenant_erasure,
+    validate_ledger_path,
     validate_tenant_id,
 )
 
@@ -33,6 +34,14 @@ def test_validate_tenant_id():
 
     with pytest.raises(ValueError):
         validate_tenant_id("bad; DROP TABLE")
+
+
+def test_validate_ledger_path():
+    assert validate_ledger_path("/var/lib/roxira/erased_tenants.jsonl").name == "erased_tenants.jsonl"
+    with pytest.raises(ValueError):
+        validate_ledger_path("")
+    with pytest.raises(ValueError):
+        validate_ledger_path("../secret/file.jsonl")
 
 
 def test_record_and_load_erased_tenants():

@@ -34,8 +34,15 @@ def validate_tenant_id(val: str) -> str:
     return s
 
 
+def validate_ledger_path(path_str: str) -> Path:
+    s = str(path_str or "").strip()
+    if not s or ".." in Path(s).parts:
+        raise ValueError(f"Invalid or unsafe ledger path (path traversal prohibited): '{path_str}'")
+    return Path(s).resolve()
+
+
 def load_erased_tenants(ledger_path: str) -> List[Dict[str, Any]]:
-    path = Path(ledger_path)
+    path = validate_ledger_path(ledger_path)
     if not path.is_file():
         logger.info("Ledger file %s does not exist or is empty; 0 erased tenants to replay.", ledger_path)
         return []
@@ -79,7 +86,7 @@ def record_erased_tenant(
         "extra": extra or {},
     }
 
-    path = Path(ledger_path)
+    path = validate_ledger_path(ledger_path)
     path.parent.mkdir(parents=True, exist_ok=True)
 
     with path.open("a", encoding="utf-8") as f:

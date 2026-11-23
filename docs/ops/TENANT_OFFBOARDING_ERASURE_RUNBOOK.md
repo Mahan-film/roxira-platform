@@ -212,7 +212,7 @@ If server disaster recovery restores a database backup taken yesterday, any tena
    ```bash
    python3 scripts/ops/replay_erased_tenants.py --ledger /var/lib/roxira/erased_tenants.jsonl
    ```
-   This replays the erasure against Postgres, Qdrant, and Valkey, guaranteeing that resurrected data is immediately destroyed. If replay fails or vector compaction cannot complete, `restore.sh` fails closed with exit code 5. In emergency maintenance, set `SKIP_ERASED_REPLAY=1` to bypass replay with an explicit logged warning.
+   This replays the erasure against Postgres, Qdrant, and Valkey, guaranteeing that resurrected data is immediately destroyed. If replay fails or vector compaction cannot complete, `restore.sh` fails closed with exit code 5 (no bypass allowed; strictly fail-closed).
 
    Durable cancellation state is persisted to `data/tenant_cancellations.json` (or `TENANT_CANCELLATION_FILE`), ensuring survival across worker process and container restarts.
 
