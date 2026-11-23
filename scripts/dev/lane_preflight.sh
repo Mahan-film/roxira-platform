@@ -96,10 +96,8 @@ elif [ "$wt_free" -lt 8 ]; then
 else
   ok "disk: ${wt_free} GiB free for worktrees in $wt_home"
 fi
-if [ -n "$sys_free" ] && [ "$sys_free" -lt 3 ]; then
-  fail "disk: only ${sys_free} GiB free on the system disk" "post BLOCKED: disk on issue 592"
-elif [ -n "$sys_free" ] && [ "$sys_free" -lt 6 ]; then
-  warn "system disk has ${sys_free} GiB free: no Docker build and no npm install outside the work disk"
+if [ -n "$sys_free" ] && [ "$sys_free" -lt 8 ]; then
+  fail "disk: only ${sys_free} GiB free on the system disk (need 8)" "post BLOCKED: disk on issue 592"
 fi
 case "$wt_home" in
   /Volumes/*) [ -n "${npm_config_cache:-}" ] || warn "run: source scripts/dev/lane_env.sh   (puts npm, pip and Playwright caches on the work disk)" ;;
