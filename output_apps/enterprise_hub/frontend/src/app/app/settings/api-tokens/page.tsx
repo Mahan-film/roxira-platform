@@ -197,6 +197,22 @@ export default function ApiTokensPage() {
     setCopied(false);
   }
 
+  useEffect(() => {
+    if (!newlyCreatedToken) return;
+    const clear = () => handleDismissRevealedToken();
+    const onVisibility = () => {
+      if (document.hidden) clear();
+    };
+    window.addEventListener("beforeunload", clear);
+    document.addEventListener("visibilitychange", onVisibility);
+    const timer = setTimeout(clear, 60_000);
+    return () => {
+      window.removeEventListener("beforeunload", clear);
+      document.removeEventListener("visibilitychange", onVisibility);
+      clearTimeout(timer);
+    };
+  }, [newlyCreatedToken]);
+
   return (
     <EnterpriseRouteGuard>
       <div className="flex flex-col gap-6">
@@ -245,13 +261,12 @@ export default function ApiTokensPage() {
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  value={newlyCreatedToken.token}
-                  className="h-10 flex-1 rounded-md border border-input bg-background px-3 font-mono text-sm text-start direction-ltr select-all"
+                <code
+                  className="flex h-10 flex-1 items-center rounded-md border border-input bg-background px-3 font-mono text-sm text-start direction-ltr"
                   aria-label="کلید ایجاد شده"
-                />
+                >
+                  {`••••••${newlyCreatedToken.token.slice(-4)}`}
+                </code>
                 <Button
                   type="button"
                   onClick={handleCopyToken}

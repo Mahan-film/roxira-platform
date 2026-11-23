@@ -28,9 +28,16 @@ test("tokens are never logged and never shown twice", () => {
   const clientSource = readFileSync(apiTokensClientPath, "utf8");
 
   // بررسی عدم وجود هرگونه دستور لاگ کردن توکن در کلاینت یا صفحه
-  assert.ok(!pageSource.includes("console.log"), "api-tokens page must not log anything to console");
-  assert.ok(!pageSource.includes("console.info"), "api-tokens page must not log info to console");
-  assert.ok(!clientSource.includes("console.log"), "api-tokens client must not log anything to console");
+  assert.ok(!/\bconsole\./.test(pageSource), "api-tokens page must not use any console.* method");
+  assert.ok(!/\bconsole\./.test(clientSource), "api-tokens client must not use any console.* method");
+  assert.ok(
+    !/(sentry|logrocket|datadog|mixpanel|amplitude|posthog)/i.test(pageSource + clientSource),
+    "api-tokens page/client must not import or send tokens to telemetry/analytics",
+  );
+  assert.ok(
+    !pageSource.includes("value={newlyCreatedToken.token}"),
+    "api-tokens page must not render the raw token in a DOM input value",
+  );
 
   // بررسی وجود مکانیسم پاک‌سازی و نمایش یک‌باره در صفحه
   assert.ok(
