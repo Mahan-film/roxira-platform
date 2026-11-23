@@ -1,7 +1,7 @@
 {
  "_note": "Public pages only. Owner decision 2026-11-23: every public legal source is allowed; politeness, robots.txt and the no-bypass rule stay. enabled=false + manual_import = challenge/WAF host, people save pages by hand. A host with ca_file pins an extra intermediate CA (path relative to this file); tls_max=1.2 is for a server that resets TLS 1.3 clients. TLS verification is never disabled. Left out on purpose: qavanin.ir (challenge), majlis.ir (expired certificate), judiciary.ir and supremecourt.ir (connection reset), ssaa.ir (server error), edaalat.org (proxy-only, owner rule).",
  "delay_s": 3.0,
- "max_requests_per_run": 150,
+ "max_requests_per_run": 500,
  "sources": [
   {
    "id": "rrk",
@@ -154,5 +154,7 @@
    "doc_type": "tax_news",
    "issuer": "Tax Administration (public site)"
   }
- ]
+ ],
+ "details_per_source": 30,
+ "_details_note": "details_per_source = page texts fetched per source per run (new/changed first, then the backlog). With a 3 s per-host delay this is about 1 request per 3-5 s per host."
 }
