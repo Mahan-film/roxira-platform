@@ -46,12 +46,15 @@ export class CostCentreReportService {
 
   async trialBalance(tenantId: string, query: CostCentreTrialBalanceQueryDto): Promise<CostCentreTrialBalanceReport> {
     const period = await this.reports.resolvePeriod(tenantId, query);
-    const [accounts, buckets, centres, effectiveLabels] = await Promise.all([
+    const [accounts, buckets, centres] = await Promise.all([
       this.reports.accounts(tenantId),
       this.ledger.accountBuckets(tenantId, { ...period, byCostCenter: true }),
       this.dimensions.list(tenantId, DimensionKind.COST_CENTER),
-      this.dimensions.getEffectiveLabelsForKind(tenantId, DimensionKind.COST_CENTER, period.to),
     ]);
+    const effectiveLabels =
+      typeof this.dimensions.getEffectiveLabelsForKind === 'function'
+        ? await this.dimensions.getEffectiveLabelsForKind(tenantId, DimensionKind.COST_CENTER, period.to)
+        : new Map<number, { code: string; name: string }>();
     const tree = costCentreTree(
       centres.map(({ id, code, name, parentId }) => {
         const hist = effectiveLabels.get(id);

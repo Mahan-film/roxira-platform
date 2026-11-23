@@ -69,6 +69,7 @@ describe('CostCentreReportService', () => {
         { id: 1, tenantId, kind: DimensionKind.COST_CENTER, code: 'CC1', name: 'مرکز ۱', parentId: null },
         { id: 2, tenantId, kind: DimensionKind.COST_CENTER, code: 'CC2', name: 'مرکز ۲', parentId: 1 },
       ]),
+      getEffectiveLabelsForKind: jest.fn().mockResolvedValue(new Map()),
     };
 
     const module: TestingModule = await Test.createTestingModule({
