@@ -128,6 +128,21 @@ export class AddJournalIntegrityAndPeriodStates1789900023000 implements Migratio
     await enableTenantRls(q, 'fin_accounting_periods');
 
     await q.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'FK_fin_journal_entries_accounting_period'
+        ) THEN
+          ALTER TABLE "fin_journal_entries"
+            ADD CONSTRAINT "FK_fin_journal_entries_accounting_period"
+            FOREIGN KEY ("accounting_period_id")
+            REFERENCES "fin_accounting_periods" ("id")
+            ON DELETE SET NULL;
+        END IF;
+      END $$;
+    `);
+
+    await q.query(`
       CREATE OR REPLACE FUNCTION fin_guard_accounting_period_hard_close() RETURNS trigger AS $$
       BEGIN
         IF OLD.state = 'HARD_CLOSED' THEN
@@ -190,6 +205,9 @@ export class AddJournalIntegrityAndPeriodStates1789900023000 implements Migratio
     await disableTenantRls(q, 'fin_accounting_periods');
     await q.query(`DROP INDEX IF EXISTS "IDX_fin_accounting_periods_tenant_dates"`);
     await q.query(`DROP INDEX IF EXISTS "UQ_fin_accounting_periods_tenant_code"`);
+    await q.query(
+      `ALTER TABLE "fin_journal_entries" DROP CONSTRAINT IF EXISTS "FK_fin_journal_entries_accounting_period"`,
+    );
     await q.query(`DROP TABLE IF EXISTS "fin_accounting_periods"`);
 
     await q.query(`
@@ -205,6 +223,12 @@ export class AddJournalIntegrityAndPeriodStates1789900023000 implements Migratio
         RETURN NEW;
       END;
       $$ LANGUAGE plpgsql
+    `);
+    await q.query(`DROP TRIGGER IF EXISTS "TRG_fin_journal_entries_guard_posted" ON "fin_journal_entries"`);
+    await q.query(`
+      CREATE TRIGGER "TRG_fin_journal_entries_guard_posted"
+        BEFORE UPDATE OR DELETE ON "fin_journal_entries"
+        FOR EACH ROW EXECUTE FUNCTION fin_guard_posted_entry()
     `);
 
     await disableTenantRls(q, 'fin_gl_sequencers');

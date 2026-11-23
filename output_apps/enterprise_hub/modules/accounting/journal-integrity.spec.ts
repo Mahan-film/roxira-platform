@@ -115,7 +115,7 @@ describe('T178 Journal Integrity & Period States (unit + 50 writes/s latency)', 
       expect(truncated.status).toBe('BROKEN');
     });
 
-    it('measures p95 sealing latency under 50 writes/s load (< 25ms)', async () => {
+    it('measures in-memory sealing latency smoke under 50 writes/s simulated load (< 25ms)', async () => {
       let seqNumber = 0n;
       let headHash = GL_CHAIN_GENESIS_HASH;
       const mockManager = {

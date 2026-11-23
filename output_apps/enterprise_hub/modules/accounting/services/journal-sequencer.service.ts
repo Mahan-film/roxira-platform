@@ -188,11 +188,11 @@ export class JournalSequencerService {
           WHERE "tenant_id" = $1
             AND "status" = $2
             AND "gl_audit_number" IS NOT NULL
-          ORDER BY "gl_audit_number" ASC`,
+          ORDER BY "gl_audit_number"::bigint ASC`,
         [tenantId, JournalEntryStatus.POSTED],
       );
 
-      const entryIds = entries.map((e) => e.id);
+      const entryIds = entries.map((e) => Number(e.id));
       const linesByEntry = new Map<number, CanonicalChainLine[]>();
       if (entryIds.length > 0) {
         const allLines: Array<{
@@ -209,12 +209,13 @@ export class JournalSequencerService {
                   "tx_debit"::text, "tx_credit"::text,
                   "book_debit"::text, "book_credit"::text
              FROM "fin_journal_entry_lines"
-            WHERE "tenant_id" = $1 AND "journal_entry_id" = ANY($2)
+            WHERE "tenant_id" = $1 AND "journal_entry_id" = ANY($2::int[])
             ORDER BY "id" ASC`,
           [tenantId, entryIds],
         );
         for (const l of allLines) {
-          const list = linesByEntry.get(l.journal_entry_id) ?? [];
+          const entryIdNum = Number(l.journal_entry_id);
+          const list = linesByEntry.get(entryIdNum) ?? [];
           list.push({
             accountId: Number(l.account_id),
             debit: l.debit,
@@ -224,7 +225,7 @@ export class JournalSequencerService {
             bookDebit: l.book_debit ?? l.debit,
             bookCredit: l.book_credit ?? l.credit,
           });
-          linesByEntry.set(l.journal_entry_id, list);
+          linesByEntry.set(entryIdNum, list);
         }
       }
 
@@ -260,7 +261,7 @@ export class JournalSequencerService {
           entityId: tenantId,
           glAuditNumber: e.gl_audit_number,
           postedAtUtc: postedAtIso,
-          lines: linesByEntry.get(e.id) ?? [],
+          lines: linesByEntry.get(Number(e.id)) ?? [],
         });
         const expectedHash = JournalSequencerService.computeChainHash(prevHash, canonical);
 
