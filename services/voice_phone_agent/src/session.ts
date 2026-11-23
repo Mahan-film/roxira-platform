@@ -39,7 +39,9 @@ class StreamedClip {
 }
 
 export interface Prompts {
-  greeting: Int16Array; filler: Int16Array; repeat: Int16Array;
+  greeting: Int16Array; repeat: Int16Array;
+  /** one per cfg.fillerTexts entry, used in turn */
+  filler: Int16Array[];
   error: Int16Array; busy: Int16Array; goodbye: Int16Array;
   /** said after an answer without any source; empty = off */
   noSource: Int16Array;
@@ -48,6 +50,7 @@ export interface Prompts {
 export class CallSession {
   private room = new Room();
   private player = new Player();
+  private fillerTurn = 0;
   private log: Log;
   private history: Turn[] = [];
   private turnCtl: AbortController | null = null;
@@ -191,9 +194,11 @@ export class CallSession {
     // "one moment" if nothing is audible FILLER_DELAY_MS after the caller stopped; not for echo or noise
     let noFiller = false;
     const fillerTimer = setTimeout(() => {
-      if (ctl.signal.aborted || m.first_audio_ms || noFiller) return;
-      this.player.enqueue(this.prompts.filler);
-      this.noteSaid(cfg.fillerText);
+      const n = this.prompts.filler.length;
+      if (ctl.signal.aborted || m.first_audio_ms || noFiller || !n) return;
+      const i = this.fillerTurn++ % n;
+      this.player.enqueue(this.prompts.filler[i]);
+      this.noteSaid(cfg.fillerTexts[i]);
     }, cfg.fillerDelayMs);
     try {
       const tr = await transcribeDetailed(pcm, ctl.signal, undefined, (w) => {
@@ -223,7 +228,7 @@ export class CallSession {
         await sleep(cfg.turnHoldMs, ctl.signal);
         if (ctl.signal.aborted) return; // the caller continued: merged into the next turn
       }
-      this.log.info('caller:', text, `[${tr.provider.split(' ')[0]}]`);
+      this.log.info('caller:', text, `[${tr.provider.split(' ')[0]}]`, ...(tr.note ? [tr.note] : []));
 
       let answer = '';
       let chain: Promise<void> = Promise.resolve();

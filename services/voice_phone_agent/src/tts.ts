@@ -29,7 +29,7 @@ async function synthEncoded(text: string, signal?: AbortSignal): Promise<Buffer>
     // local edge-tts sidecar (tts_server.py); the sidecar itself goes out through the proxy
     r = await fetchDirect(`${cfg.edgeTtsUrl}/tts`, {
       method: 'POST', signal, headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, voice: cfg.ttsVoice, rate: cfg.ttsRate }),
+      body: JSON.stringify({ text, voice: cfg.ttsVoice, rate: cfg.ttsRate, pitch: cfg.ttsPitch }),
     });
   }
   if (!r.ok) throw new Error(`${cfg.ttsProvider} tts ${r.status}: ${(await r.text()).slice(0, 200)}`);
@@ -52,7 +52,7 @@ export async function synthesizeStream(
   if (cfg.ttsProvider !== 'edge') { onPcm(await synthesize(text, signal)); return; }
   const r = await fetchDirect(`${cfg.edgeTtsUrl}/tts/stream`, {
     method: 'POST', signal, headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, voice: cfg.ttsVoice, rate: cfg.ttsRate }),
+    body: JSON.stringify({ text, voice: cfg.ttsVoice, rate: cfg.ttsRate, pitch: cfg.ttsPitch }),
   });
   if (!r.ok || !r.body) throw new Error(`edge tts stream ${r.status}: ${(await r.text()).slice(0, 200)}`);
 
@@ -113,11 +113,11 @@ function fadeOut(pcm: Int16Array, ms = 8) {
 
 /**
  * Fixed prompts (greeting, filler, ...) are synthesized once and kept as raw PCM on disk,
- * keyed by provider+voice+text, so answering a call costs zero synthesis latency.
+ * keyed by provider+voice+rate+pitch+text, so answering a call costs zero synthesis latency.
  */
 export async function cachedPrompt(text: string, fallbackWav?: string): Promise<Int16Array> {
   fs.mkdirSync(cfg.cacheDir, { recursive: true });
-  const id = createHash('sha1').update(`${cfg.ttsProvider}|${cfg.ttsVoice}|${cfg.ttsRate}|${text}`).digest('hex').slice(0, 16);
+  const id = createHash('sha1').update(`${cfg.ttsProvider}|${cfg.ttsVoice}|${cfg.ttsRate}|${cfg.ttsPitch}|${text}`).digest('hex').slice(0, 16);
   const file = path.join(cfg.cacheDir, `${id}.pcm`);
   if (fs.existsSync(file)) {
     const b = fs.readFileSync(file);
