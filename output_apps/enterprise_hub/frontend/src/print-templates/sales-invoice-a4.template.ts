@@ -104,7 +104,7 @@ thead { display:table-header-group; } tr { page-break-inside:avoid; }
     <dl class="kv">{{#each extraHeaderFacts}}<dt>{{label}}</dt><dd class="num">{{value}}</dd>{{/each}}</dl></div>
   {{/if}}
 
-  <table>
+  <table id="invoice-items-table">
     <thead><tr>
       <th>ردیف</th><th>شناسه کالا/خدمت</th><th>شرح کالا یا خدمت</th><th>تعداد</th><th>واحد</th>
       <th>مبلغ واحد</th><th>مبلغ قبل از تخفیف</th><th>تخفیف</th><th>مبلغ بعد از تخفیف</th>

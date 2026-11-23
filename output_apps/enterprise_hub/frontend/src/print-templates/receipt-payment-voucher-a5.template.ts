@@ -46,7 +46,7 @@ thead { display:table-header-group; } tr { page-break-inside:avoid; }
 <div class="watermark">پیش‌نویس</div>
 <div class="sheet">
   <div class="row" style="align-items:center">
-    <div><b>{{company.name}}</b></div>
+    <div>{{#if logoUrl}}<img src="{{logoUrl}}" alt="" style="max-height:12mm;max-width:35mm;object-fit:contain;margin-bottom:1mm"><br>{{/if}}<b>{{company.name}}</b></div>
     <div><h1>{{docTitle}}</h1></div>
     <div><dl class="kv"><dt>شماره</dt><dd class="num">{{documentNumber}}</dd><dt>تاریخ</dt><dd class="num">{{dateJalali}}</dd></dl></div>
   </div>
@@ -65,6 +65,7 @@ thead { display:table-header-group; } tr { page-break-inside:avoid; }
     <tfoot><tr><td colspan="2">جمع</td><td class="n">{{paymentsTotal}}</td></tr></tfoot>
   </table>
   <div class="sign"><div>{{signerLeftLabel}}</div><div>{{signerRightLabel}}</div><div>تأییدکننده</div></div>
+  {{#if footerText}}<div class="footer-note">{{footerText}}</div>{{/if}}
 </div>
 </body>
 </html>
