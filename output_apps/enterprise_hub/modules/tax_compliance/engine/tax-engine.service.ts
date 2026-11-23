@@ -199,10 +199,18 @@ export class TaxEngineService implements TaxEngine {
     };
 
     if (event === 'PAYMENT') {
-      journalLines.push({ accountCode: accounts.apOrArAccount, debitMinor: input.netMinor, creditMinor: 0n });
-      journalLines.push({ accountCode: accounts.bankAccount, debitMinor: 0n, creditMinor: netPayableMinor });
-      if (withheldMinor > 0n) {
-        journalLines.push({ accountCode: accounts.whtPayableAccount, debitMinor: 0n, creditMinor: withheldMinor });
+      if (docKind === 'INVOICE') {
+        journalLines.push({ accountCode: accounts.bankAccount, debitMinor: netPayableMinor, creditMinor: 0n });
+        if (withheldMinor > 0n) {
+          journalLines.push({ accountCode: accounts.whtReceivableAccount, debitMinor: withheldMinor, creditMinor: 0n });
+        }
+        journalLines.push({ accountCode: accounts.apOrArAccount, debitMinor: 0n, creditMinor: input.netMinor });
+      } else {
+        journalLines.push({ accountCode: accounts.apOrArAccount, debitMinor: input.netMinor, creditMinor: 0n });
+        journalLines.push({ accountCode: accounts.bankAccount, debitMinor: 0n, creditMinor: netPayableMinor });
+        if (withheldMinor > 0n) {
+          journalLines.push({ accountCode: accounts.whtPayableAccount, debitMinor: 0n, creditMinor: withheldMinor });
+        }
       }
       return {
         effectiveTaxPointDate,
@@ -276,7 +284,10 @@ export class TaxEngineService implements TaxEngine {
         });
         outputMinor = taxMinor;
       }
-      journalLines.push({ accountCode: accounts.apOrArAccount, debitMinor: 0n, creditMinor: gross });
+      journalLines.push({ accountCode: accounts.apOrArAccount, debitMinor: 0n, creditMinor: gross - withheldMinor });
+      if (withheldMinor > 0n) {
+        journalLines.push({ accountCode: accounts.whtReceivableAccount, debitMinor: 0n, creditMinor: withheldMinor });
+      }
     } else if (docKind === 'BILL') {
       journalLines.push({ accountCode: accounts.expenseOrRevenueAccount, debitMinor: input.netMinor, creditMinor: 0n });
       if (taxMinor > 0n) {

@@ -167,6 +167,37 @@ describe('TaxEngineService (T180)', () => {
     expect(billWht.withholding.certificateNumber).toBe('WHTI-2026-9001');
     expect(billWht.journalLines.find((l) => l.accountCode === '2010')?.creditMinor).toBe(109_000n);
     expect(billWht.journalLines.reduce((s, l) => s + l.debitMinor, 0n)).toBe(billWht.journalLines.reduce((s, l) => s + l.creditMinor, 0n));
+
+    // Credit note with WHT reverses the invoice withholding line
+    const cnWht = await engine.calculate({
+      ...base,
+      taxCode: 'DE_STD',
+      taxPointDate: '2026-06-20',
+      documentKind: 'CREDIT_NOTE',
+      originalInvoiceTaxPointDate: '2026-06-20',
+      withholdingCode: 'WHT_INV_10',
+      certificateNumber: 'WHTI-2026-9002',
+    });
+    expect(cnWht.withholding.withheldMinor).toBe(10_000n);
+    expect(cnWht.journalLines.find((l) => l.accountCode === '1420')?.creditMinor).toBe(10_000n);
+    expect(cnWht.journalLines.reduce((s, l) => s + l.debitMinor, 0n)).toBe(cnWht.journalLines.reduce((s, l) => s + l.creditMinor, 0n));
+
+    // Customer receipt payment (docKind: INVOICE): debits bank net and whtReceivable, credits AR
+    const receiptPay = await engine.calculate({
+      country: 'DE',
+      netMinor: 100_000n,
+      taxCode: 'NR_RC_15',
+      taxPointDate: '2026-06-20',
+      postingDate: '2026-07-03',
+      documentKind: 'INVOICE',
+      withholdingCode: 'WHT_PAY_5',
+      withholdingEvent: 'PAYMENT',
+    });
+    expect(receiptPay.withholding.withheldMinor).toBe(5_000n);
+    expect(receiptPay.journalLines.find((l) => l.accountCode === '1010')?.debitMinor).toBe(95_000n); // Bank
+    expect(receiptPay.journalLines.find((l) => l.accountCode === '1420')?.debitMinor).toBe(5_000n); // WHT Receivable
+    expect(receiptPay.journalLines.find((l) => l.accountCode === '2010')?.creditMinor).toBe(100_000n); // AR
+    expect(receiptPay.journalLines.reduce((s, l) => s + l.debitMinor, 0n)).toBe(receiptPay.journalLines.reduce((s, l) => s + l.creditMinor, 0n));
   });
 
   it('WHT certificate store is mandatory: no in-memory fallback', async () => {
