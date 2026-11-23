@@ -199,7 +199,7 @@ describe('T196 Accountant-firm access (R16 Test 12)', () => {
         tenantIds[0],
         expect.any(Object),
         undefined,
-        { actorRole: SystemRole.PARTNER_ADVISOR, actorUserId: firmUserId },
+        expect.objectContaining({ actorRole: SystemRole.PARTNER_ADVISOR, actorUserId: firmUserId }),
       );
     });
   });
@@ -275,9 +275,13 @@ describe('T196 Accountant-firm access (R16 Test 12)', () => {
       };
 
       mockRefreshTokens = {
-        revokeAllForUser: jest.fn(async (userId: string) => {
+        revokeAllForUser: jest.fn(async (userId: string, targetTenants?: string[]) => {
           for (const key of Array.from(activeSessions)) {
-            if (key.startsWith(`${userId}:`)) activeSessions.delete(key);
+            if (key.startsWith(`${userId}:`)) {
+              if (!targetTenants || targetTenants.some((t) => key.includes(t))) {
+                activeSessions.delete(key);
+              }
+            }
           }
         }),
       };
@@ -339,9 +343,30 @@ describe('T196 Accountant-firm access (R16 Test 12)', () => {
         service.revokeFirmUser(adminUserId, firmUserId, tenantIds),
       ).rejects.toThrow('transient DB write error');
 
-      // Refresh tokens and cache were STILL revoked despite the mid-loop error!
-      expect(mockRefreshTokens.revokeAllForUser).toHaveBeenCalledWith(firmUserId);
+      // Refresh tokens and cache were STILL revoked for the target tenants despite the mid-loop error!
+      expect(mockRefreshTokens.revokeAllForUser).toHaveBeenCalledWith(firmUserId, tenantIds);
       expect(await service.isSessionActive('sess-crash', firmUserId)).toBe(false);
+    });
+
+    it('does nothing (no-op) and revokes no tokens when targets is empty', async () => {
+      // User is not an advisor in any tenant
+      const result = await service.revokeFirmUser(adminUserId, firmUserId, tenantIds);
+      expect(result).toEqual({ revokedTenantIds: [] });
+      expect(mockRefreshTokens.revokeAllForUser).not.toHaveBeenCalled();
+      expect(mockAccess.invalidateUser).not.toHaveBeenCalled();
+      expect(auditLogs).toHaveLength(0);
+    });
+
+    it('revokeAdvisorInTenant revokes sessions only for actor tenant', async () => {
+      await service.assignAdvisor(buildContext(tenantIds[0], SystemRole.ADMIN, adminUserId), firmUserId);
+      const sid = `sess-${tenantIds[0]}`;
+      activeSessions.add(`${firmUserId}:${sid}`);
+
+      const adminActor = buildContext(tenantIds[0], SystemRole.ADMIN, adminUserId);
+      await service.revokeAdvisorInTenant(adminActor, firmUserId);
+
+      expect(mockRefreshTokens.revokeAllForUser).toHaveBeenCalledWith(firmUserId, [tenantIds[0]]);
+      expect(mockAccess.invalidateUser).toHaveBeenCalledWith(firmUserId, tenantIds[0]);
     });
 
     it('assigns and revokes partner advisor across 3 client organisations within 60 s with audit logs', async () => {

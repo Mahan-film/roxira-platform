@@ -88,4 +88,33 @@ describe('doctors fee advance withholding preview (DTX-04)', () => {
     await controller.preview(request, { ...dto(), tenantId: 'tenant-b' } as never);
     expect(preview.mock.calls[0][0]).toBe('tenant-a');
   });
+
+  it('reads doctor withholding rule keys and country from the pack registry when provided', async () => {
+    const findForYear = jest.fn().mockResolvedValue(PARAMS);
+    const fakePack = {
+      country: 'IR',
+      taxRules: [
+        {
+          kind: 'doctor_withholding',
+          label: 'مالیات پزشکان',
+          statutoryKeys: [
+            'doctor_fee_withholding_rate',
+            'withholding_late_penalty_rate',
+            'withholding_late_penalty_monthly_rate',
+          ],
+        },
+      ],
+    };
+    const packRegistry = {
+      resolve: jest.fn(() => fakePack),
+    };
+    const service = new DoctorWithholdingService(
+      { findForYear } as unknown as StatutoryRepository,
+      packRegistry as never,
+    );
+    const result = await service.preview('tenant-1', dto());
+    expect(packRegistry.resolve).toHaveBeenCalled();
+    expect(findForYear).toHaveBeenCalledWith('tenant-1', 'IR', 1405);
+    expect(result.status).toBe('preview');
+  });
 });

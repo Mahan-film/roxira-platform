@@ -57,6 +57,7 @@ run `python3 scripts/gen_system_inventory.py` (CI-style check: `--check`).
 | rx-automerge.yml | RX auto-merge | workflow_dispatch, workflow_run |
 | tech-radar-weekly.yml | Tech radar weekly | workflow_dispatch |
 | uptime.yml | Uptime check (production) | schedule, workflow_dispatch |
+| zap-baseline-nightly.yml | Nightly OWASP ZAP baseline scan | schedule, workflow_dispatch |
 
 ## Packages
 

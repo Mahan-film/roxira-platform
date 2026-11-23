@@ -3,6 +3,8 @@ Description=Roxira polling merge gate (one tick)
 
 [Service]
 Type=oneshot
+# Telegram for the pause alert: NOTIFY_BOT_TOKEN / NOTIFY_CHAT_ID from this file (mode 600, never in the repo); optional.
+EnvironmentFile=-%h/.config/roxira-merge-gate/notify.env
 ExecStart=/usr/bin/python3 %h/roxira-merge-gate/merge_gate.py --config %h/.config/roxira-merge-gate/merge_gate.toml
 TimeoutStartSec=240
 Nice=10

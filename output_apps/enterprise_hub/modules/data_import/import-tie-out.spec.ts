@@ -561,9 +561,60 @@ describe('T325 R32: Import Tie-Out Engine (TB, AR/AP, Stock Value, Bank)', () =>
           ],
         ]),
       });
-      expect(controlless.passed).toBe(true);
-      expect(controlless.items.map((i) => i.category)).toEqual(['TRIAL_BALANCE']);
+      // AP check without controlTotal or subledger must never pass:
+      expect(controlless.passed).toBe(false);
+      expect(controlless.items.find((i) => i.category === 'ACCOUNTS_PAYABLE')).toMatchObject({
+        matched: false,
+        expectedMinor: 'انجام نشد',
+        expectedMoney: 'انجام نشد',
+        actualMinor: '200000',
+        differenceMinor: 'انجام نشد',
+      });
       expect(controlless.warningsFa?.length).toBe(4);
+
+      // When AP has controlTotal matching opening balance, tie-out passes cleanly
+      const withApControl = harness.tieOutEngine.evaluateTieOuts({
+        controlTotals: { ACCOUNTS_PAYABLE: 200000 },
+        recordsByEntity: new Map([
+          [
+            'accounting-opening-balances',
+            [
+              { rowNumber: 2, values: { accountCode: '2010', description: 'پرداختنی', debit: 0, credit: 200000 } },
+              { rowNumber: 3, values: { accountCode: '3010', description: 'سرمایه', debit: 200000, credit: 0 } },
+            ],
+          ],
+        ]),
+      });
+      expect(withApControl.passed).toBe(true);
+      expect(withApControl.items.find((i) => i.category === 'ACCOUNTS_PAYABLE')).toMatchObject({
+        matched: true,
+        expectedMinor: '200000',
+        actualMinor: '200000',
+      });
+    });
+
+    it('matches accounts strictly by exact code and never falls through to description or substring when code is present', () => {
+      const summary = harness.tieOutEngine.evaluateTieOuts({
+        recordsByEntity: new Map([
+          [
+            'accounting-opening-balances',
+            [
+              // Code 9999 has description 'حساب‌های پرداختنی' but code is NOT 2010 -> must NOT match AP
+              { rowNumber: 2, values: { accountCode: '9999', description: 'حساب‌های پرداختنی متفرقه', debit: 0, credit: 500000 } },
+              // Code 2010 is exact match for AP
+              { rowNumber: 3, values: { accountCode: '2010', description: 'بستانکاران تجاری', debit: 0, credit: 300000 } },
+              { rowNumber: 4, values: { accountCode: '3010', description: 'سرمایه', debit: 800000, credit: 0 } },
+            ],
+          ],
+        ]),
+        controlTotals: { ACCOUNTS_PAYABLE: 300000 },
+      });
+      const apItem = summary.items.find((i) => i.category === 'ACCOUNTS_PAYABLE');
+      expect(apItem).toMatchObject({
+        matched: true,
+        actualMinor: '300000',
+        expectedMinor: '300000',
+      });
     });
 
     it('computes fractional and explicit zero quantities accurately in AR, Inventory, and 3-decimal currencies (KWD/OMR)', () => {
@@ -571,6 +622,10 @@ describe('T325 R32: Import Tie-Out Engine (TB, AR/AP, Stock Value, Bank)', () =>
       expect(multiplyMinorByDecimalQuantity(1000n, 0.5, '1')).toBe(500n);
       expect(multiplyMinorByDecimalQuantity(1000n, 0, '1')).toBe(0n);
       expect(multiplyMinorByDecimalQuantity(10125n, '2.5', '1')).toBe(25313n);
+      expect(multiplyMinorByDecimalQuantity(12345n, '0.125', '1')).toBe(1543n);
+      expect(multiplyMinorByDecimalQuantity(10000n, '0.005', '1')).toBe(50n);
+      expect(formatTieOutMoney(30863n, 'OMR')).toBe('30.863 OMR');
+      expect(formatTieOutMoney(1543n, 'BHD')).toBe('1.543 BHD');
 
       const summary = harness.tieOutEngine.evaluateTieOuts({
         currency: 'KWD',
@@ -652,7 +707,7 @@ describe('T325 R32: Import Tie-Out Engine (TB, AR/AP, Stock Value, Bank)', () =>
         differenceMinor: '-500000',
       });
       expect(report.tieOut?.items.find((i) => i.category === 'ACCOUNTS_RECEIVABLE')).toBeUndefined();
-      expect(report.tieOut?.warningsFa?.some((w) => w.includes('9999'))).toBe(true);
+      expect((report.tieOut?.warningsFa ?? []).some((w) => w.includes('9999'))).toBe(false);
 
       expect(() => parseMoneyValue('not-a-number', 'IRR')).toThrow(BadRequestException);
       expect(() => parseMoneyValue('10.5', 'IRR')).toThrow(BadRequestException);

@@ -1,0 +1,11 @@
+[Unit]
+Description=Roxira phone signals every 5 minutes
+
+[Timer]
+OnCalendar=*:0/5
+RandomizedDelaySec=20
+AccuracySec=30s
+Persistent=false
+
+[Install]
+WantedBy=timers.target
