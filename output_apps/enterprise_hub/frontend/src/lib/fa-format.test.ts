@@ -19,6 +19,11 @@ test("missing values show a dash, never NaN", () => {
   assert.equal(formatMoney(null), "—");
   assert.equal(formatMoney(Number.NaN, "USD"), "—");
   assert.equal(formatNumber(undefined), "—");
+  assert.equal(formatNumber(""), "—");
+  assert.equal(formatNumber(1500), "۱٬۵۰۰");
+  assert.equal(formatNumber("25000"), "۲۵٬۰۰۰");
+  assert.equal(formatNumber(10000000000000000000n), "۱۰٬۰۰۰٬۰۰۰٬۰۰۰٬۰۰۰٬۰۰۰٬۰۰۰");
+  assert.equal(formatNumber("90000000000000000000"), "۹۰٬۰۰۰٬۰۰۰٬۰۰۰٬۰۰۰٬۰۰۰٬۰۰۰");
   assert.equal(formatJalaliNumericDate("garbage"), "—");
 });
 

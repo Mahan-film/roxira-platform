@@ -35,6 +35,12 @@ import type {
 
 type StockReportTab = "cardex" | "balance";
 
+function isPositiveQty(qty?: string | number | null): boolean {
+  if (!qty) return false;
+  const s = String(qty).trim();
+  return s !== "0" && s !== "" && !s.startsWith("-");
+}
+
 export default function InventoryReportsPage() {
   const [activeTab, setActiveTab] = useState<StockReportTab>("cardex");
   const [warehouses, setWarehouses] = useState<WarehouseModel[]>([]);
@@ -279,7 +285,7 @@ function CardexSection({
                 <CardTitle className="text-xs text-muted-foreground">مانده اول دوره</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-lg font-bold">{formatNumber(Number(report.opening.quantity))} عدد</div>
+                <div className="text-lg font-bold">{formatNumber(report.opening.quantity)} عدد</div>
                 <div className="text-xs text-muted-foreground font-mono mt-0.5">
                   ارزش: {formatMoneyRial(report.opening.value)}
                 </div>
@@ -291,7 +297,7 @@ function CardexSection({
                 <CardTitle className="text-xs text-muted-foreground">مانده پایان دوره</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-xl font-bold text-primary">{formatNumber(Number(report.closing.quantity))} عدد</div>
+                <div className="text-xl font-bold text-primary">{formatNumber(report.closing.quantity)} عدد</div>
                 <div className="text-xs text-muted-foreground font-mono mt-0.5">
                   ارزش: {formatMoneyRial(report.closing.value)}
                 </div>
@@ -304,9 +310,9 @@ function CardexSection({
               </CardHeader>
               <CardContent>
                 <div className="text-lg font-bold">
-                  {formatNumber(Number(report.shortageQty))} عدد
+                  {formatNumber(report.shortageQty)} عدد
                 </div>
-                {Number(report.shortageQty) > 0 && (
+                {isPositiveQty(report.shortageQty) && (
                   <Badge variant="destructive" className="mt-1">دارای کسری انبار</Badge>
                 )}
               </CardContent>
@@ -342,10 +348,10 @@ function CardexSection({
                         <TableCell>{formatNumber(idx + 1)}</TableCell>
                         <TableCell className="font-mono text-xs">{row.date}</TableCell>
                         <TableCell className="font-mono text-xs">{row.document}</TableCell>
-                        <TableCell className="text-left font-mono">{formatNumber(Number(row.inQty))}</TableCell>
-                        <TableCell className="text-left font-mono">{formatNumber(Number(row.outQty))}</TableCell>
+                        <TableCell className="text-left font-mono">{formatNumber(row.inQty)}</TableCell>
+                        <TableCell className="text-left font-mono">{formatNumber(row.outQty)}</TableCell>
                         <TableCell className="text-left font-mono">{formatMoneyRial(row.unitCost)}</TableCell>
-                        <TableCell className="text-left font-mono font-semibold">{formatNumber(Number(row.runningQty))}</TableCell>
+                        <TableCell className="text-left font-mono font-semibold">{formatNumber(row.runningQty)}</TableCell>
                         <TableCell className="text-left font-mono font-bold text-primary">{formatMoneyRial(row.runningValue)}</TableCell>
                       </TableRow>
                     ))}
@@ -496,10 +502,10 @@ function StockBalanceSection({ warehouses }: { warehouses: WarehouseModel[] }) {
                         <TableRow key={idx}>
                           <TableCell>{formatNumber(idx + 1)}</TableCell>
                           <TableCell className="font-mono font-medium">{alert.itemId}</TableCell>
-                          <TableCell className="text-left font-mono">{formatNumber(Number(alert.quantity))}</TableCell>
-                          <TableCell className="text-left font-mono">{formatNumber(Number(alert.reorderPoint))}</TableCell>
+                          <TableCell className="text-left font-mono">{formatNumber(alert.quantity)}</TableCell>
+                          <TableCell className="text-left font-mono">{formatNumber(alert.reorderPoint)}</TableCell>
                           <TableCell className="text-left font-mono font-bold text-destructive">
-                            {formatNumber(Number(alert.shortfall))}
+                            {formatNumber(alert.shortfall)}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -537,14 +543,14 @@ function StockBalanceSection({ warehouses }: { warehouses: WarehouseModel[] }) {
                           <TableCell className="font-mono font-medium">{line.itemId}</TableCell>
                           <TableCell>{warehouseMap.get(line.warehouseId) ?? `انبار ${line.warehouseId}`}</TableCell>
                           <TableCell className="text-left font-mono font-semibold">
-                            {formatNumber(Number(line.quantity))}
+                            {formatNumber(line.quantity)}
                           </TableCell>
                           <TableCell className="text-left font-mono font-bold text-primary">
                             {formatMoneyRial(line.value)}
                           </TableCell>
                           <TableCell className="text-left font-mono text-xs">
-                            {Number(line.shortageQty) > 0 ? (
-                              <span className="text-destructive font-bold">{formatNumber(Number(line.shortageQty))}</span>
+                            {isPositiveQty(line.shortageQty) ? (
+                              <span className="text-destructive font-bold">{formatNumber(line.shortageQty)}</span>
                             ) : (
                               "—"
                             )}
