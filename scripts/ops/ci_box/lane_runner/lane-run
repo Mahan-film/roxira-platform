@@ -66,6 +66,14 @@ OPENCODE_BIN="$(conf_get OPENCODE_BIN opencode)"
 BOT_LOGINS="$(conf_get BOT_LOGINS 'github-actions,dependabot,renovate,copilot')"
 OWN_LABEL="$(conf_get OWN_LABEL lane-runner)"
 RUNNER="$REPO/scripts/infra/server_agents/run_task.sh"
+# Builder separation (docs/ops/BUILDER_EGRESS.md), OFF unless ROXIRA_BUILDER=1: the agent process (OpenCode) runs as the
+# unprivileged builder user through the root wrapper verb `run-builder`; this script and run_task.sh stay under the lane
+# user. Mechanism: OPENCODE_BIN becomes the shim; run_task.sh itself is unchanged.
+BUILDER_ON="${ROXIRA_BUILDER:-0}"
+case "$BUILDER_ON" in 0 | 1) ;; *) die "ROXIRA_BUILDER must be 0 or 1" ;; esac
+if [ "$BUILDER_ON" = 1 ]; then
+  OPENCODE_BIN="$SELF_DIR/../builder_egress/builder-shim"
+fi
 LOGFILE="$STATE/logs/lane-run.jsonl"
 
 # tier -> gateway group (same mapping as run_task.sh; model ids live in config/key_pool.yaml, never here)
@@ -165,6 +173,10 @@ if [ -n "$AUTHOR$LABELS" ]; then   # bot-loop guard: never act on events made by
 fi
 case "$LANE" in L5 | L6 | L7 | smoke) ;; *) die "--lane must be L5, L6 or L7" ;; esac
 if [ "$DRY" = 0 ] && [ ! -x "$RUNNER" ]; then die "run_task.sh not found at $RUNNER (set REPO_DIR in $CONF)"; fi
+if [ "$BUILDER_ON" = 1 ] && [ "$DRY" = 0 ]; then
+  [ -x "$OPENCODE_BIN" ] || die "builder shim missing at $OPENCODE_BIN"
+  [ -x "${ROXIRA_BUILDER_ROOT_WRAPPER:-/usr/local/sbin/roxira-lane-root}" ] || die "ROXIRA_BUILDER=1 needs the root wrapper (lane_runner/install_root.sh --apply) and builder_egress/apply_root.sh"
+fi
 
 # stagger: never start in the :00 minute (many timers fire there); wait a lane-specific offset instead
 if [ "$DRY" = 0 ] && [ "$(date +%-M)" = 0 ]; then
@@ -217,6 +229,7 @@ for s in ${SCOPES[@]+"${SCOPES[@]}"}; do ARGS+=(--scope "$s"); done
 
 if [ "$DRY" = 1 ]; then
   log "[dry-run] lane=$LANE tier=$TIER group=$MODEL_GROUP gateway=$GATEWAY_URL state=$STATE"
+  log "[dry-run] builder separation: $([ "$BUILDER_ON" = 1 ] && echo "ON (agent runs as the builder user via $OPENCODE_BIN)" || echo off)"
   log "[dry-run] budget today: $(budget_py show 2>/dev/null || echo unavailable)"
   log "[dry-run] would run: ROXIRA_AGENTS_HOME=$STATE ROXIRA_AGENT_USER= $RUNNER ${ARGS[*]}"
   if [ "$SMOKE" = 0 ]; then

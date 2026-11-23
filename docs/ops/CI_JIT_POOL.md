@@ -6,7 +6,7 @@ Two ephemeral **just-in-time (JIT)** runner slots on the box, plus the offline f
 | Slot | Runs | Isolation | Limits (brief section 7) | Labels |
 |---|---|---|---|---|
 | `light` | lint, unit tests, scanners | fresh container `roxira-ci-light` per job: no Docker socket, `--cap-drop ALL`, `no-new-privileges`, no host loopback (rootless slirp4netns), own tool-cache volume | `--cpus 1 --memory 2g`, 1 job | `self-hosted, linux-box, jit, slot-light` |
-| `docker` | service containers (Postgres, Redis), compose, builds, Playwright | fresh copy of the runner template in its own work dir per job, deleted afterwards; rootless Docker of user `runner`; tool cache `/opt/hostedtoolcache` (the only path where setup-python's builds work) | unit `CPUQuota=400% MemoryMax=6G`, 1 job | `self-hosted, linux-box, jit, slot-docker` |
+| `docker` | service containers (Postgres, Redis), compose, builds, Playwright | fresh copy of the runner template in its own work dir per job, deleted afterwards; rootless Docker of user `runner`; tool cache `/opt/hostedtoolcache` (the only path where setup-python's builds work) | unit `CPUQuota=400% MemoryMax=6G`; runner and steps pinned to CPUs 2–5 (`taskset`, so Jest/npm/Next see 4 CPUs; 0–1 stay with the phone stack), 1 job | `self-hosted, linux-box, jit, slot-docker` |
 
 Everything user `runner` runs, including rootless Docker containers, is also capped as a whole:
 `user@<runner-uid>.service` `CPUQuota=500% MemoryHigh=7G MemoryMax=8G TasksMax=8192`. Service
@@ -77,6 +77,10 @@ ci.yml "Pick runner" (hosted ubuntu-slim) reads CI_RUNNER_MODE + CI_BOX_HEARTBEA
 The runner template follows the old runner's version (`runner_setup.sh`); re-run it as `runner`
 after a runner upgrade. GitHub only accepts runners within a few releases of the latest, so refresh
 it at least monthly (Sunday maintenance).
+
+Updating the launcher: re-run `08_root_ci_pool.sh`. Launchers re-exec themselves between jobs when
+the installed file changed; `runner_setup.sh` also restarts any launcher still running older code,
+but only while no job runs on the box (otherwise it says so; re-run the script when idle).
 
 ## Revert
 

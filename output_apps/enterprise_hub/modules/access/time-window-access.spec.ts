@@ -304,7 +304,6 @@ describe('Access by Time Window (#230 / T76)', () => {
         {} as never,
         {} as never,
         mockLoginWindow as never,
-        {} as never,
       );
 
       const req = {

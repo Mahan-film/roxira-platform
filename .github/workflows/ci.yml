@@ -318,6 +318,22 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
         run: python3 scripts/ci/check_agent_guards.py --base "$BASE_SHA"
+      - name: Check container image licences (no RSAL/SSPL/AGPL)
+        run: python3 scripts/ci/check_image_licences.py
+
+  runtime-licence-gate:
+    name: Runtime licence gate (T252)
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Check runtime licences (no GPL/AGPL/SSPL/RSAL/CC-BY-NC/ELv2)
+        run: python3 scripts/ci/check_runtime_licences.py
 
   ruff:
     name: Ruff (non-blocking)
@@ -719,7 +735,7 @@ jobs:
           --health-timeout 5s
           --health-retries 20
       redis:
-        image: ${{ needs.pick-runner.outputs.image_registry || vars.CI_IMAGE_REGISTRY || 'mirror.gcr.io/library' }}/redis:7
+        image: ${{ needs.pick-runner.outputs.image_registry || vars.CI_IMAGE_REGISTRY || 'mirror.gcr.io/library' }}/redis:7.2
         ports:
           # Host port 16379: 6379 is taken on the CI box (phone stack); same on hosted runners.
           - 16379:6379

@@ -21,6 +21,7 @@ virtual key cannot reach the `private` or product groups anyway.
 | `taskq-runner.sh` | `TASKQ_RUNNER` for the box; hands taskq steps to `lane-run` |
 | `install_user.sh` | part 1, no sudo, dry-run by default |
 | `install_root.sh` | part 2, root, one wrapper and one sudoers line, dry-run by default |
+| `ROXIRA_BUILDER=1` | optional, OFF by default: the agent process runs as the unprivileged builder user through the `run-builder` verb (`docs/ops/BUILDER_EGRESS.md`, pack `../builder_egress/`) |
 | `gateway.env.example`, `tunnel.env.example` | empty templates for the two files outside the repo |
 | `test_lane_run.sh` | offline test (no network, no sudo) |
 
@@ -76,7 +77,7 @@ Names below in angle brackets are placeholders. Do not paste any key, host or us
    (taskq db, worktrees, logs), makes a bare clone of the public repo, creates the tunnel key `~/.ssh/roxira_gateway_tunnel`
    and prints its PUBLIC half for step 2.
 5. **Install, part 2 (admin, once):** `sudo bash install_root.sh --lane-user <lane user> --apply`. It installs
-   `/usr/local/sbin/roxira-lane-root` (verbs `linger-on`, `linger-off`, `status`, no other argument) and the single
+   `/usr/local/sbin/roxira-lane-root` (verbs `linger-on`, `linger-off`, `status` without arguments, and `run-builder <task-id>` with digits only; see `docs/ops/BUILDER_EGRESS.md`) and the single
    sudoers line `<lane user> ALL=(root) NOPASSWD: /usr/local/sbin/roxira-lane-root`, so the user units survive logout.
    Then re-run `install_user.sh --apply` (it calls `linger-on`). Undo: delete those two files.
 6. **Server side, the virtual key.** On the production server the key `laptop-mahansudo-srv` already exists

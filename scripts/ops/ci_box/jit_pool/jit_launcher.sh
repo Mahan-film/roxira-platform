@@ -77,8 +77,21 @@ run_light() {
   return "$rc"
 }
 
+# The docker slot's runner and job steps are pinned to 4 CPUs (brief section 7: phone keeps 0-1).
+# Without it, tools that size by core count (Jest, npm, Next) see 8 threads under a 4-CPU quota and
+# get throttled: the first JIT run timed out a CPU-heavy Jest spec. Service containers run under
+# dockerd and are not pinned. JIT_DOCKER_CPUS="" disables pinning.
+pin_prefix() {
+  local cpus="${JIT_DOCKER_CPUS-2-5}" last
+  [ -n "$cpus" ] && command -v taskset >/dev/null 2>&1 || return 0
+  last="$(printf '%s' "$cpus" | grep -oE '[0-9]+' | sort -n | tail -1)"
+  [ -n "$last" ] && [ "$last" -lt "$(nproc --all)" ] || return 0
+  printf 'taskset -c %s' "$cpus"
+}
+
 run_docker() {
-  local name="$1" cfg="$2" dir rc
+  local name="$1" cfg="$2" dir rc pin
+  pin="$(pin_prefix)"
   dir="$home/docker/$name"
   rm -rf "$dir"
   mkdir -p "$dir"
@@ -86,7 +99,8 @@ run_docker() {
   set +e
   (
     cd "$dir"
-    env -i HOME="$HOME" PATH=/usr/local/bin:/usr/bin:/bin USER="$(id -un)" LANG=C.UTF-8 \
+    # shellcheck disable=SC2086
+    $pin env -i HOME="$HOME" PATH=/usr/local/bin:/usr/bin:/bin USER="$(id -un)" LANG=C.UTF-8 \
       XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" DOCKER_HOST="$DOCKER_HOST" \
       RUNNER_TOOL_CACHE=/opt/hostedtoolcache AGENT_TOOLSDIRECTORY=/opt/hostedtoolcache \
       ACTIONS_RUNNER_INPUT_JITCONFIG="$cfg" \
@@ -100,7 +114,13 @@ run_docker() {
 }
 
 mkdir -p "$spool" "$home"
+# Re-exec between jobs when 08_root_ci_pool.sh installed a newer launcher (never mid-job).
+self_sig="$(stat -c %Y:%i "$0" 2>/dev/null || true)"
 while :; do
+  if [ "$(stat -c %Y:%i "$0" 2>/dev/null || true)" != "$self_sig" ]; then
+    say "launcher updated on disk: re-exec"
+    exec bash "$0" "$slot"
+  fi
   touch "$spool/.alive"
   retire_old_runner
   claimed="$(claim)"

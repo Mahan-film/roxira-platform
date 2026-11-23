@@ -255,7 +255,8 @@ def launcher_env(tmp_path):
     tpl.mkdir()
     (tpl / "run.sh").write_text('#!/bin/bash\n[ -n "$ACTIONS_RUNNER_INPUT_JITCONFIG" ] && echo "ran in $PWD" >> "$HOME/log"\n'
                                'echo "$@" | grep -q -- "$ACTIONS_RUNNER_INPUT_JITCONFIG" && echo LEAK >> "$HOME/log"\n'
-                               'env | grep -q FAKE_LOG && echo ENVLEAK >> "$HOME/log"\nexit 0\n')
+                               'env | grep -q FAKE_LOG && echo ENVLEAK >> "$HOME/log"\n'
+                               'echo "cpus=$(nproc)" >> "$HOME/log"\nexit 0\n')
     (tpl / "run.sh").chmod(0o755)
     spool = tmp_path / "spool"
     run_dir = tmp_path / "xdg"
@@ -340,3 +341,27 @@ def test_launcher_retires_old_runner_only_when_idle(launcher_env, tmp_path):
     (launcher_env["tmp"] / "busy").unlink()
     assert launch(launcher_env, "light").returncode == 0
     assert "systemctl --user disable --now actions-runner" in (launcher_env["tmp"] / "log").read_text()
+
+
+def test_reported_status_is_before_minting(jp, env):
+    alive(env, "light", "docker")
+    res = run_tick(jp, env, FakeApi())
+    assert res["status"]["light"]["present"] == 0 and res["status"]["light"]["pending"] == 0
+    assert any(a.startswith("mint jit-light-") for a in res["actions"])
+
+
+def test_launcher_pins_docker_slot_cpus(launcher_env):
+    if subprocess.run(["sh", "-c", "command -v taskset"], capture_output=True).returncode != 0:
+        pytest.skip("taskset not available")
+    put_config(launcher_env, "docker", f"jit-docker-{NOW}-abcdef")
+    launcher_env["env"]["JIT_DOCKER_CPUS"] = "0"
+    assert launch(launcher_env, "docker").returncode == 0
+    assert "cpus=1" in (launcher_env["tmp"] / "log").read_text()
+
+
+def test_launcher_skips_pinning_beyond_the_machine(launcher_env):
+    put_config(launcher_env, "docker", f"jit-docker-{NOW}-abcdef")
+    launcher_env["env"]["JIT_DOCKER_CPUS"] = "0-4095"
+    r = launch(launcher_env, "docker")
+    assert r.returncode == 0, r.stderr
+    assert "ran in" in (launcher_env["tmp"] / "log").read_text()

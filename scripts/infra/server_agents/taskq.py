@@ -30,7 +30,11 @@ import sys
 import threading
 import time
 import urllib.request
+import weakref
 from pathlib import Path
+
+_UNSET = object()
+_ACTIVE_WORKERS: weakref.WeakSet[Worker] = weakref.WeakSet()
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -127,6 +131,11 @@ def poke() -> None:
         wake.touch()
     except OSError:
         pass
+    for w in list(_ACTIVE_WORKERS):
+        try:
+            w.wakeup.set()
+        except Exception:
+            pass
 
 
 def alive(pid: int | None) -> bool:
@@ -247,6 +256,8 @@ class Worker:
         self.lane_told: dict[str, str] = {}  # lane -> UTC day it was reported over budget
         self.reviews: dict[int, subprocess.Popen] = {}
         self.wakeup = threading.Event()  # same-process nudge; cross-process uses the wakeup file
+        self.last_tick_stamp: int | None | object = _UNSET
+        _ACTIVE_WORKERS.add(self)
 
     def recover(self) -> None:
         for t in self.db.execute("SELECT id FROM tasks WHERE status='done' AND review='running'").fetchall():
@@ -451,8 +462,15 @@ class Worker:
                 del self.reviews[tid]
                 self.finish_review(tid, proc)
 
+    def wake_stamp(self) -> int | None:
+        try:
+            return (state_dir() / WAKEUP_FILE).stat().st_mtime_ns
+        except OSError:
+            return None
+
     def tick(self) -> bool:
         """One scheduling pass; returns True while there is still work (queued or running)."""
+        self.last_tick_stamp = self.wake_stamp()
         self.reap()
         while len(self.running) < self.max_parallel and time.time() - self.last_start >= self.stagger:
             if not self.budget_left():
@@ -464,28 +482,27 @@ class Worker:
         queued = self.db.execute("SELECT COUNT(*) FROM tasks WHERE status='queued'").fetchone()[0]
         return bool(self.running) or bool(self.reviews) or bool(queued)
 
-    def wait(self, timeout: float) -> bool:
+    def wait(self, timeout: float, since_stamp: object = _UNSET) -> bool:
         """Block up to `timeout` seconds; return True when woken early, False on timeout.
 
         Instead of an unconditional sleep, this returns as soon as the queue can make progress:
         a same-process self.wakeup event, the on-disk wakeup file changing (`taskq.py add`/`retry`
         in another process), or a running task/review subprocess having exited so it can be reaped.
         `timeout` (the old fixed sleep) stays the hard upper bound."""
-        wake = state_dir() / WAKEUP_FILE
-        try:
-            stamp = wake.stat().st_mtime_ns
-        except OSError:
-            stamp = None
+        if since_stamp is not _UNSET:
+            stamp = since_stamp
+        elif self.last_tick_stamp is not _UNSET:
+            stamp = self.last_tick_stamp
+        else:
+            stamp = self.wake_stamp()
+        self.last_tick_stamp = _UNSET
         deadline = time.monotonic() + timeout
         while True:
             if self.wakeup.is_set():
                 self.wakeup.clear()
                 return True
-            try:
-                if wake.stat().st_mtime_ns != stamp:
-                    return True
-            except OSError:
-                pass
+            if self.wake_stamp() != stamp:
+                return True
             if self.children_done():
                 return True
             remaining = deadline - time.monotonic()

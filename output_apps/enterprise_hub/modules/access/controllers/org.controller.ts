@@ -15,8 +15,8 @@ import {
 } from '../catalogue';
 import { AnyMember, AuthOnly, ModuleAccess, RequireAction } from '../decorators';
 import {
-  AssignPartnerAdvisorDto, AuditQueryDto, CreateBranchDto, CreateDepartmentDto, CreateInvitationDto, CreateManagedMemberDto, CreateOrganizationDto,
-  CreateRoleDto, RequestModuleDto, ResetManagedPasswordDto, RevokeFirmUserDto, UpdateBranchDto, UpdateMemberDto, UpdateRoleDto, UpdateSecurityPolicyDto,
+  AuditQueryDto, CreateBranchDto, CreateDepartmentDto, CreateInvitationDto, CreateManagedMemberDto, CreateOrganizationDto,
+  CreateRoleDto, RequestModuleDto, ResetManagedPasswordDto, UpdateBranchDto, UpdateMemberDto, UpdateRoleDto, UpdateSecurityPolicyDto,
 } from '../dto/org.dto';
 import {
   effectiveAmountLimits,
@@ -24,7 +24,6 @@ import {
   effectiveScope,
 } from '../policy-evaluator';
 import { AccessService } from '../services/access.service';
-import { AccountantFirmService } from '../services/accountant-firm.service';
 import { AuditService } from '../services/audit.service';
 import { EntitlementsService } from '../services/entitlements.service';
 import { InvitationsService } from '../services/invitations.service';
@@ -56,7 +55,6 @@ export class OrgController {
     private readonly entitlements: EntitlementsService,
     private readonly audit: AuditService,
     private readonly loginWindow: LoginWindowService,
-    private readonly accountantFirm: AccountantFirmService,
   ) {}
 
   // ---------------------------------------------------------------- self
@@ -130,50 +128,7 @@ export class OrgController {
     return this.members.remove(requireAccess(req), id, req);
   }
 
-  // ------------------------------------------------ accountant-firm advisors
-
-  @RequireAction(AccessAction.ADMIN)
-  @Post('advisors')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'انتساب کاربر مؤسسه حسابداری با نقش محدود partner_advisor به این سازمان' })
-  assignPartnerAdvisor(@Req() req: AccessRequest, @Body() dto: AssignPartnerAdvisorDto) {
-    return this.accountantFirm.assignAdvisor(
-      requireAccess(req),
-      dto.userId,
-      { branchId: dto.branchId, departmentId: dto.departmentId },
-      req,
-    );
-  }
-
-  @RequireAction(AccessAction.ADMIN)
-  @Delete('advisors/:userId')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'لغو دسترسی حسابدار مؤسسه در این سازمان و خاتمه فوری نشست‌ها' })
-  revokePartnerAdvisor(
-    @Req() req: AccessRequest,
-    @Param('userId', ParseUUIDPipe) userId: string,
-    @Body() dto?: RevokeFirmUserDto,
-  ) {
-    return this.accountantFirm.revokeAdvisorInTenant(requireAccess(req), userId, dto?.reason, req);
-  }
-
-  @RequireAction(AccessAction.ADMIN)
-  @Post('advisors/:userId/revoke-all')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'لغو دسترسی حسابدار مؤسسه در تمام سازمان‌های تحت مدیریت و ابطال نشست‌ها' })
-  revokeFirmUserAcrossTenants(
-    @Req() req: AccessRequest,
-    @Param('userId', ParseUUIDPipe) userId: string,
-    @Body() dto?: RevokeFirmUserDto,
-  ) {
-    return this.accountantFirm.revokeFirmUser(
-      requireAccess(req).userId,
-      userId,
-      dto?.tenantIds,
-      dto?.reason,
-      req,
-    );
-  }
+  // accountant-firm advisor routes are disabled (revert of #1197, row #1258): see docs/STATE.md
 
   @RequireAction(AccessAction.ADMIN)
   @Get('members/:userId/login-schedule')

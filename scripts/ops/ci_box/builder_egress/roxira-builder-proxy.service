@@ -1,0 +1,22 @@
+[Unit]
+Description=Roxira builder allowlist proxy (tinyproxy, loopback only, default deny)
+After=network.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+ExecStart=/usr/bin/tinyproxy -d -c /etc/tinyproxy/roxira-builder.conf
+Restart=always
+RestartSec=3
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=256M
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

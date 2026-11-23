@@ -3,6 +3,31 @@ import { fetchDirect } from './http.js';
 
 export interface Turn { role: 'user' | 'assistant'; content: string }
 
+/** What the `done` event said about the answer that was just streamed. */
+export interface JudgeInfo {
+  /** true: an answer that cites no source at all (see noSourceAnswer). */
+  noSource: boolean;
+}
+
+const SOURCE_KEYS = ['statutory_basis', 'unified_precedents', 'judicial_practice', 'regulations'];
+
+/**
+ * true when Smart Judge answered from no source: the main answer path (it alone carries
+ * `spoken_reply` in voice mode; the catalog path does too, but always with rulings) with every
+ * source list empty. The server empties them when retrieval found nothing real (FALLBACK rows
+ * never leave it) and shows only the sources the answer cites. Fast-path replies (small talk,
+ * out of scope, abstained, court clarification, busy/upsell) carry no `spoken_reply` and are no
+ * legal claim; a reply that ends in a question is a clarifying question, not a claim either.
+ */
+export function noSourceAnswer(done: unknown): boolean {
+  if (!done || typeof done !== 'object') return false;
+  const d = done as Record<string, unknown>;
+  if (!('spoken_reply' in d) || d.abstained || d.upsell || d.clarification_needed) return false;
+  if (SOURCE_KEYS.some((k) => Array.isArray(d[k]) && (d[k] as unknown[]).length > 0)) return false;
+  const reply = String(d.reply ?? '').trim();
+  return Boolean(reply) && !/[؟?]\s*$/.test(reply);
+}
+
 export class JudgeError extends Error {
   constructor(public status: number, msg: string) { super(msg); }
 }
@@ -12,7 +37,9 @@ export class JudgeError extends Error {
  * sentences as soon as they are available, so TTS can start on sentence 1.
  * Voice mode = short spoken answers and client-held history (server keeps the last 6 turns).
  */
-export async function* askJudge(message: string, history: Turn[], signal: AbortSignal): AsyncGenerator<string> {
+export async function* askJudge(
+  message: string, history: Turn[], signal: AbortSignal, info?: JudgeInfo,
+): AsyncGenerator<string> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'text/event-stream' };
   if (cfg.judgeToken) headers.Authorization = `Bearer ${cfg.judgeToken}`;
   if (cfg.judgeGatewayKey) headers['X-Phone-Gateway-Key'] = cfg.judgeGatewayKey;
@@ -41,6 +68,7 @@ export async function* askJudge(message: string, history: Turn[], signal: AbortS
       } else if (event === 'error') {
         throw new JudgeError(500, String(data?.message ?? data?.code ?? 'stream error'));
       } else if (event === 'done') {
+        if (info) info.noSource = noSourceAnswer(data);
         for (const s of splitter.flush()) yield s;
         return;
       }

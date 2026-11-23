@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import importlib.util
 import json
 import os
 import re
@@ -418,6 +419,27 @@ def collect_tunnel(timeout: float = 3.0) -> dict:
         return {"state": "failed", "text": f"no answer ({type(exc).__name__})"}
 
 
+def _phone_mod():
+    """phone_probes.py next to this file (lazy; None when it is not installed, so the page still works)."""
+    mod = sys.modules.get("phone_probes")
+    if mod is None:
+        path = Path(__file__).with_name("phone_probes.py")
+        if not path.exists():
+            return None
+        spec = importlib.util.spec_from_file_location("phone_probes", path)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules["phone_probes"] = mod
+        spec.loader.exec_module(mod)
+    return mod
+
+
+def collect_phone(env: dict, now: float, runner=run, prev: dict | None = None) -> dict:
+    mod = _phone_mod()
+    if mod is None:
+        return unknown("phone_probes.py not installed")
+    return mod.collect_phone(env, now, runner, prev or {})
+
+
 def parse_docker_ps(text: str) -> list[dict]:
     """`docker ps -a --format '{{.Names}}\\t{{.Status}}'` -> [{name, state: ok|failed|neutral, status}]."""
     out = []
@@ -467,14 +489,15 @@ def collect_backups(env: dict, now: float) -> dict:
 
 
 # ------------------------------------------------------------------ collect + render
-def collect(env: dict | None = None, now: float | None = None, runner=run) -> dict:
+def collect(env: dict | None = None, now: float | None = None, runner=run, prev: dict | None = None) -> dict:
     env = dict(os.environ if env is None else env)
     now = time.time() if now is None else now
     snap = {"generated": now, "generated_iso": datetime.fromtimestamp(now, timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")}
     for key, fn in (("units", lambda: collect_units(runner)), ("orch", lambda: collect_orch(env, now, runner)),
                     ("cost", lambda: collect_cost(env, now)), ("system", lambda: collect_system(env)),
                     ("runners", lambda: collect_runners(env, runner)), ("tunnel", collect_tunnel),
-                    ("containers", lambda: collect_containers(runner)), ("backups", lambda: collect_backups(env, now))):
+                    ("containers", lambda: collect_containers(runner)),
+                    ("phone", lambda: collect_phone(env, now, runner, (prev or {}).get("phone"))), ("backups", lambda: collect_backups(env, now))):
         try:
             snap[key] = fn()
         except Exception as exc:  # one broken source must not blank the page
@@ -611,6 +634,9 @@ def render_html(snap: dict, refresh: int = 120) -> str:
     else:
         body += f"<p>phone stack containers: {dot('unknown', ct.get('error', ''))}</p>"
     sec("tunnel and phone stack", body)
+    pm = _phone_mod()
+    if pm is not None:
+        sec("phone line (SIP, LiveKit, agent)", pm.render_section(snap.get("phone"), e, dot, now))
 
     # backups
     t = "<table>"
@@ -632,7 +658,13 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--out", default=os.environ.get("STATUS_OUT") or str(DEFAULT_OUT))
     c.add_argument("--print", action="store_true", help="print the JSON snapshot instead of writing files")
     a = p.parse_args(argv)
-    snap = collect()
+    prev = None
+    if not a.print:
+        try:  # the previous snapshot carries the last-call memory and restart counters between runs
+            prev = json.loads((Path(a.out) / "status.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            prev = None
+    snap = collect(prev=prev)
     if a.print:
         print(json.dumps(snap, indent=2, sort_keys=True, default=str))
         return 0

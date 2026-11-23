@@ -1,0 +1,33 @@
+[Unit]
+Description=Roxira phone signals: sanitised counters from the ufw log and the voice agent journal
+Documentation=https://github.com/Mahan-film/roxira-platform/blob/main/docs/ops/PHONE_MONITORING.md
+
+[Service]
+Type=oneshot
+# Not root: a dedicated system user (created by the installer) that may only READ the adm-only ufw log and the system journal.
+User=roxira-phone
+Group=roxira-phone
+SupplementaryGroups=adm systemd-journal
+# Output: /var/lib/roxira-phone/phone-signals.json (counts and times only; no address, number, room name or transcript).
+StateDirectory=roxira-phone
+StateDirectoryMode=0755
+# Optional, root-owned, never in git: PHONE_CARRIER_CIDRS=<comma list>, PHONE_SIP_PORTS=5060,5062
+EnvironmentFile=-/etc/roxira-phone/signals.env
+ExecStart=/usr/bin/python3 -I /usr/local/lib/roxira-phone/phone_probes.py signals --out /var/lib/roxira-phone/phone-signals.json
+TimeoutStartSec=90
+Nice=10
+NoNewPrivileges=true
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateNetwork=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallFilter=@system-service

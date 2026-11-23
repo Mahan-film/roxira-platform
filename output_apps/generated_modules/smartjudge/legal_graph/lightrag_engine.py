@@ -1263,6 +1263,22 @@ def _embed_query_sync(text: str) -> Optional[List[float]]:
         except Exception as exc:  # noqa: BLE001
             logger.warning("Shared embedding service failed -> scroll fallback: %s", exc)
             return None
+    from . import onnx_bge_m3 as _onnx_bge_m3
+
+    if _onnx_bge_m3.use_onnx_int8_enabled():
+        onnx_encoder = _onnx_bge_m3.get_onnx_bge_m3_encoder()
+        if onnx_encoder is not None:
+            try:
+                t0 = time.perf_counter()
+                result = onnx_encoder.encode_dense(text)
+                if _chat_fast is not None:
+                    _chat_fast.timing_add("embed_ms", (time.perf_counter() - t0) * 1000)
+                if _embed_cache is not None:
+                    _embed_cache.set(key, result)
+                _embed_redis_set(key, result)
+                return result
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("ONNX INT8 BGE-M3 encoder failed -> legacy fallback: %s", exc)
     model = _get_query_embedder()
     if model is None:
         return None

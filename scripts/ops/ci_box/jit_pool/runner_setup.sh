@@ -4,7 +4,8 @@
 #   1. download the actions/runner release matching the old runner (or RUNNER_VERSION), check its
 #      SHA-256 against the release asset digest, unpack it into ~/jit/runner-template;
 #   2. build the light image roxira-ci-light:latest from that template;
-#   3. install user units roxira-jit@.service with per-slot limits and enable light + docker.
+#   3. install user units roxira-jit@.service with per-slot limits and enable light + docker;
+#      restart a launcher still running older code, only while no job runs.
 # Prints names and statuses only.
 set -euo pipefail
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
@@ -60,5 +61,21 @@ else
   systemctl --user try-restart actions-runner.service && echo "old runner: restarted with /opt/hostedtoolcache"
 fi
 systemctl --user enable --now roxira-jit@light.service roxira-jit@docker.service
+# A launcher started before the installed jit_launcher.sh keeps running the old code (bash holds the
+# old file). Launchers from #1276 on re-exec themselves between jobs; older ones must be restarted.
+# Restart only when no job runs anywhere on the box: the idle JIT runner it holds is dropped, the
+# controller deletes it as offline (stale_after_s) and mints a fresh one.
+lmt="$(stat -c %Y "$lib/jit_launcher.sh")"
+for s in light docker; do
+  started="$(systemctl --user show -p ExecMainStartTimestamp --value "roxira-jit@$s.service" || true)"
+  [ -n "$started" ] || continue
+  st="$(date -d "$started" +%s 2>/dev/null || echo 0)"
+  [ "$st" -lt "$lmt" ] || continue
+  if pgrep -f 'bin/Runner.Worker' >/dev/null 2>&1; then
+    echo "roxira-jit@$s: older launcher, a job is running; rerun this script when idle"
+  else
+    systemctl --user restart "roxira-jit@$s.service" && echo "roxira-jit@$s: restarted with the new launcher"
+  fi
+done
 for s in light docker; do echo "roxira-jit@$s: $(systemctl --user is-active roxira-jit@$s.service || true)"; done
 echo "old runner (actions-runner): $(systemctl --user is-active actions-runner.service || true) (kept until two JIT runs pass)"

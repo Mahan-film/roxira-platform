@@ -1,0 +1,15 @@
+# Reviewed runtime licence exceptions for scripts/ci/check_runtime_licences.py (T252 / #991).
+# Format: <package-or-image>  or  <package-or-image>@<LICENCE-TAG>  # reason and review date
+# Examples:
+#   example-pkg@GPL               # npm package example (owner-reviewed, 2026-11-21)
+#   redis:7.4+@RSAL/SSPL/AGPL      # container image key with licence (owner-reviewed, 2026-11-21)
+#   mongo:7+                      # container image short key
+#
+# Forbidden runtime licences: GPL, AGPL, SSPL, RSAL, CC-BY-NC, ELv2.
+# Forbidden container images: redis:7.4+, mongo:7+, elasticsearch:8+.
+#
+# Runtime packages missing explicit licence metadata in package-lock.json (reviewed 2026-11-22):
+busboy@missing-metadata        # MIT per npm registry / package.json (enterprise_hub runtime dep)
+png-js@missing-metadata        # MIT per npm registry / package.json (enterprise_hub runtime dep)
+streamsearch@missing-metadata  # MIT per npm registry / package.json (enterprise_hub runtime dep)
+services/voice_phone_agent/package-lock.json@missing-metadata # all direct deps are Apache-2.0 (@livekit/rtc-node, livekit-server-sdk, undici); lockfile v3 omits licence tags
