@@ -62,8 +62,8 @@ describePg('BudgetEncumbrance on PostgreSQL (NOSUPERUSER NOBYPASSRLS, FORCE RLS)
         [tid, `Tenant ${tid.slice(0, 4)}`, `t-${tid.slice(0, 8)}`],
       );
       const fyRows = (await ownerDs.query(
-        `INSERT INTO "fin_fiscal_years" ("tenant_id", "name", "start_date", "end_date", "is_closed")
-         VALUES ($1, 'FY2026', '2026-01-01', '2026-12-31', false) RETURNING "id"`,
+        `INSERT INTO "fin_fiscal_years" ("tenant_id", "name", "start_date", "end_date", "status")
+         VALUES ($1, 'FY2026', '2026-01-01', '2026-12-31', 'OPEN') RETURNING "id"`,
         [tid],
       )) as Array<{ id: number }>;
       const dimRows = (await ownerDs.query(
@@ -75,6 +75,18 @@ describePg('BudgetEncumbrance on PostgreSQL (NOSUPERUSER NOBYPASSRLS, FORCE RLS)
         `INSERT INTO "fin_account_budgets" ("tenant_id", "fiscal_year_id", "cost_center_id", "account_code", "budget_amount")
          VALUES ($1, $2, $3, $4, $5)`,
         [tid, fyRows[0].id, dimRows[0].id, T6.account, fromMinor(T6.october).toString()],
+      );
+
+      // Prior fiscal year (FY2025) with a 1,000.00 budget cap to verify multi-fiscal-year scoping
+      const fy2025 = (await ownerDs.query(
+        `INSERT INTO "fin_fiscal_years" ("tenant_id", "name", "start_date", "end_date", "status")
+         VALUES ($1, 'FY2025', '2025-01-01', '2025-12-31', 'CLOSED') RETURNING "id"`,
+        [tid],
+      )) as Array<{ id: number }>;
+      await ownerDs.query(
+        `INSERT INTO "fin_account_budgets" ("tenant_id", "fiscal_year_id", "cost_center_id", "account_code", "budget_amount")
+         VALUES ($1, $2, $3, $4, '1000.00')`,
+        [tid, fy2025[0].id, dimRows[0].id, T6.account],
       );
     }
     await ownerDs.destroy();
@@ -145,6 +157,17 @@ describePg('BudgetEncumbrance on PostgreSQL (NOSUPERUSER NOBYPASSRLS, FORCE RLS)
     });
     expect(po89Revised.allowed).toBe(true);
     expect(po89Revised.remainingMinor).toBe(T6.expected.remainingAfterRevision);
+
+    // Multi-fiscal-year scoping check: period '2025-06' routes to FY2025 cap (1,000.00), blocking PO of 1,200.00
+    await expect(
+      service.checkAndEncumberPo(TENANT_A, {
+        accountCode: T6.account,
+        costCenterCode: T6.costCentre,
+        periodKey: '2025-06',
+        sourceId: 'PO-2025-1',
+        amountMinor: 120_000n,
+      }),
+    ).rejects.toMatchObject({ status: 400 });
 
     // Release PO-88 encumbrance
     await service.releaseEncumbrance(TENANT_A, 'purchase_order', 'PO-88');

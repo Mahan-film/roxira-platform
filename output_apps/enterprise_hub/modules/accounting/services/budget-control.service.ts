@@ -191,13 +191,15 @@ export class BudgetControlService {
       const budgetRows = (await m.query(
         `SELECT b."budget_amount"
          FROM "fin_account_budgets" b
+         JOIN "fin_fiscal_years" fy ON fy."id" = b."fiscal_year_id" AND fy."tenant_id" = b."tenant_id"
          LEFT JOIN "fin_dimensions" cc ON cc."id" = b."cost_center_id" AND cc."tenant_id" = b."tenant_id"
          WHERE b."tenant_id" = $1
            AND b."account_code" = $2
            AND (($3 = '' AND b."cost_center_id" IS NULL) OR cc."code" = $3)
+           AND to_date(substring($4 from 1 for 7), 'YYYY-MM') BETWEEN fy."start_date" AND fy."end_date"
          ORDER BY b."updated_at" DESC
          LIMIT 1`,
-        [tenantId, input.accountCode, costCenterKey],
+        [tenantId, input.accountCode, costCenterKey, input.periodKey],
       )) as Array<{ budget_amount: string | number }>;
 
       const budgetMinor =
@@ -221,7 +223,7 @@ export class BudgetControlService {
            AND a."code" = $2
            AND e."status" = 'POSTED'
            AND to_char(e."date", 'YYYY-MM') = $3
-           AND ($4 = '' OR cc."code" = $4)`,
+           AND (($4 = '' AND l."cost_center_id" IS NULL) OR cc."code" = $4)`,
         [tenantId, input.accountCode, input.periodKey, costCenterKey],
       )) as Array<{ spend: string | number }>;
 
