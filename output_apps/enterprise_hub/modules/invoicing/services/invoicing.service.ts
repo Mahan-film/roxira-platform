@@ -1706,7 +1706,9 @@ export class InvoicingService {
       const resolved = await this.customerIdentity
         .resolve(tenantId, { phone: party.phone, name: party.name })
         .catch((err) => {
-          this.logger.warn(`Failed to resolve customer identity for ${party.phone}: ${err?.message || err}`);
+          this.logger.warn(
+            `Failed to resolve customer identity for tenant ${tenantId} party ${party.id ?? party.code ?? 'unknown'}: ${err?.message || err}`,
+          );
           return null;
         });
       if (resolved && resolved.level !== 'anonymous') {

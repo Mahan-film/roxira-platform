@@ -1,6 +1,6 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
-import { minorToDecimal, parseScaled, toMinor } from '../../accounting/money';
+import { fromDb, minorToDecimal, parseScaled, toMinor } from '../../accounting/money';
 import { decideRoleAccount } from '../../accounting/services/role-account-resolver';
 import { AccountingService } from '../../accounting/services/accounting.service';
 import { CountryPackResolver } from '../../country_packs/country-pack.resolver';
@@ -983,8 +983,11 @@ export class InvoicePostingService {
   }
 
   /** Rial minor units: invoice-currency amount x fx rate (6 decimals), rounded half-up. */
-  private rialMinor(invoice: InvoiceEntity, amount: number): bigint {
-    const amountMinor = toMinor(this.round(Number(amount ?? 0)));
+  private rialMinor(invoice: InvoiceEntity, amount: number | string): bigint {
+    const amountMinor =
+      typeof amount === 'string'
+        ? fromDb(amount)
+        : toMinor(this.round(amount ?? 0));
     const rate = parseScaled(this.resolveFxRate(invoice).toFixed(6), 6);
     const product = amountMinor * rate;
     const divisor = 1_000_000n;

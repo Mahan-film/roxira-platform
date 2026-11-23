@@ -82,7 +82,7 @@ const ev = (status: InvoiceStatus) => ({ tenantId: T, invoiceId: 'inv-1', status
 const shape = (lines: Array<{ accountCode: string; debit?: string | number; credit?: string | number }>) =>
   lines.map((l) => ({ accountCode: l.accountCode, debit: toMinor(l.debit ?? 0), credit: toMinor(l.credit ?? 0) }));
 const legacyShape = (lines: LegacyLine[]) => shape(lines);
-const plain = (i: InvoiceEntity): LegacyInvoice => ({ sale: i.direction === InvoiceDirection.SALE, taxInvoiceNumber: i.taxInvoiceNumber, fxRate: i.fxRate, payments: i.payments });
+const plain = (i: InvoiceEntity): LegacyInvoice => ({ sale: i.direction === InvoiceDirection.SALE, taxInvoiceNumber: i.taxInvoiceNumber, fxRate: Number(i.fxRate), payments: i.payments });
 
 describe('invoice vouchers: engine vs the frozen old line building', () => {
   it('sale: AR 1100 / sales 1000 + VAT 100, stock out at 600 (hand: 110000, 100000, 10000, -60000 minor)', async () => {
