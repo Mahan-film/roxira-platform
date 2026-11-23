@@ -30,7 +30,7 @@ Exit 1 when any item FAILs. WARN and UNKNOWN need a human look. Test: `src/ops/t
 | 9 | Kill switches known and tested once (stop file, KILL file, tunnel) | `docs/ops/BOX_KILL_SWITCHES.md`; try `touch` + `lane-run --dry-run` + `rm` | `switch-files` |
 | 10 | Timers: queue timer disabled, no orch timer yet, merge gate `dry_run` is a conscious choice | `systemctl --user is-enabled roxira-lane-taskq.timer` | `taskq-timer`, `orch-timer`, `merge-gate` |
 | 11 | One smoke call after a gap, within the lane `smoke` cap (5/day; free models are flaky) | `lane-run --smoke` (owner, once; the script never does it) | not run by the script |
-| 12 | Owner decisions recorded: B1 scope meaning (L5 narrowness, `country_packs/de`), repo private, token scope of the orch `GH_TOKEN` | AGENTS.md 4a, `docs/ops/ORCH.md` | `private` (WARN) |
+| 12 | Owner decisions recorded: B1 scope meaning (L5 narrowness; `country_packs/**` is core, decided 2026-11-23), repo private, token scope of the orch `GH_TOKEN` | AGENTS.md 4a, `docs/ops/ORCH.md` | `private` (WARN) |
 
 First `--apply` is then a manual dry run first, then one lane: `orch.py tick --apply --lane L7` (docs-only scope), with
 the stop file ready (`touch ~/.local/state/roxira-lane/STOP`).

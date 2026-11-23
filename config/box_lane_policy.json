@@ -25,10 +25,8 @@
       ]
     },
     "L6": {
-      "purpose": "country packs (Germany, then Gulf): the generic scaffold pack, the German pack (public-law rates and export formats), generic UI building blocks.",
+      "purpose": "generic UI building blocks only. Every country pack (de, xx, my, ir, payment_rails) is tax rules, B1 core, hub-only (owner decision 2026-11-23).",
       "scopes": [
-        "output_apps/enterprise_hub/modules/country_packs/de/",
-        "output_apps/enterprise_hub/modules/country_packs/xx/",
         "output_apps/enterprise_hub/frontend/src/components/ui/",
         "output_apps/enterprise_hub/frontend/src/components/layout/"
       ]
@@ -112,8 +110,7 @@
     "output_apps/enterprise_hub/modules/ai_policy",
     "output_apps/enterprise_hub/modules/public_api",
     "output_apps/enterprise_hub/modules/data_import/migration",
-    "output_apps/enterprise_hub/modules/country_packs/ir",
-    "output_apps/enterprise_hub/modules/country_packs/payment_rails",
+    "output_apps/enterprise_hub/modules/country_packs",
     "output_apps/enterprise_hub/frontend/src/app/api",
     "output_apps/enterprise_hub/frontend/src/app/plans",
     "output_apps/enterprise_hub/frontend/src/app/judge/payment",

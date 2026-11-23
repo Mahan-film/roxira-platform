@@ -125,7 +125,9 @@ class ScopeTest(unittest.TestCase):
         for bad in ("output_apps/enterprise_hub/migrations/", "output_apps/enterprise_hub/migrations/1789000000000-LegacyBaseline.ts",
                     "output_apps/generated_modules/smartjudge/prompt_library.py", "output_apps/enterprise_hub/modules/tax_compliance/",
                     "src/billing/", "output_apps/enterprise_hub/frontend/src/components/auth/", "Dockerfile.prod", "deploy/systemd/",
-                    "output_apps/enterprise_hub/modules/country_packs/payment_rails/", "data/", ".github/workflows/deploy-prod.yml"):
+                    "output_apps/enterprise_hub/modules/country_packs/payment_rails/", "output_apps/enterprise_hub/modules/country_packs/de/",
+                    "output_apps/enterprise_hub/modules/country_packs/xx/", "output_apps/enterprise_hub/modules/country_packs/my/",
+                    "output_apps/enterprise_hub/modules/country_packs/country-pack.registry.ts", "data/", ".github/workflows/deploy-prod.yml"):
             problems = lp.check_scopes(["docs/eval/", bad], self.pol, ROOT)
             self.assertTrue(problems, f"{bad} must be refused")
             self.assertTrue(any("denied" in p for p in problems), problems)

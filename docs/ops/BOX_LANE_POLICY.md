@@ -60,7 +60,7 @@ Default scope table (directories that exist in the repo today; each one is check
 | Lane | Purpose | Default scopes |
 |---|---|---|
 | L5 | core ledger | `output_apps/enterprise_hub/modules/accounting/acceptance/`, `.../accounting/__fixtures__/`, `docs/accounting/` |
-| L6 | country packs | `output_apps/enterprise_hub/modules/country_packs/de/`, `.../country_packs/xx/`, `output_apps/enterprise_hub/frontend/src/components/ui/`, `.../components/layout/` |
+| L6 | generic UI only (country packs are hub-only) | `output_apps/enterprise_hub/frontend/src/components/ui/`, `.../components/layout/` |
 | L7 | box, phone, evals | the box docs in `docs/ops/` one by one (`BOX_*.md`, `LINUX_CI_BOX.md`, `BUILDER_EGRESS.md`), `docs/eval/`, `e2e/` |
 
 Deny-list (summary; the file is authoritative): agent rules and hooks (`AGENTS.md`, `CLAUDE.md`, `.claude`, `.github`,
@@ -68,7 +68,7 @@ Deny-list (summary; the file is authoritative): agent rules and hooks (`AGENTS.m
 (`deploy`, `ops`, `docker`, `nginx*`, `Dockerfile.prod`, compose files, `scripts/ops`, `scripts/infra`, `scripts/ci`,
 `scripts/dev`, `scripts/security`; unit files and prompt, payment, key and secret docs inside `docs/ops`, `docs/infra`, `docs/hub`), **billing and pricing** (`src/billing`, `src/roxira_manager/billing`,
 `output_apps/ecosystem_core/src/billing`, the pricing API and plans pages), **tax rules** (`modules/tax_compliance`,
-`modules/posting_rules`, `country_packs/ir`), **Smart Judge prompts and logic** (the whole `output_apps/generated_modules/smartjudge`
+`modules/posting_rules`, **every path under `modules/country_packs/`**: all packs, including `de`, `xx` and `my`, count as tax rules), **Smart Judge prompts and logic** (the whole `output_apps/generated_modules/smartjudge`
 and `output_apps/smart_judge`), **auth** (`modules/auth`, `modules/access`, `modules/tenants`, frontend `components/auth`,
 `middleware.ts`), **payment** (`country_packs/payment_rails`, `paymentgatewayhub`, the judge payment page), **migrations**
 (`output_apps/enterprise_hub/migrations`, `test/migrations`, `data_import/migration`), plus `docs/strategy` and `docs/decisions`.
@@ -78,8 +78,9 @@ and `output_apps/smart_judge`), **auth** (`modules/auth`, `modules/access`, `mod
   allowing the source next to them. L5 is therefore narrow on purpose: acceptance tests, fixtures and docs only. Ledger
   logic itself stays with the hubs, which means **L5 (core ledger) cannot do most of its issue queue under B1**. Owner decision.
 - `run_task.sh` denies `data/**` outright, so "public-law data" under `data/` is out of reach for lanes by design.
-- `country_packs/de` holds German export formats and rates (public law). If the owner counts them as "tax rules", move `de`
-  to the deny list and L6 keeps only `xx` and the UI scopes.
+- **Decision (owner/hub, 2026-11-23):** everything under `output_apps/enterprise_hub/modules/country_packs/` (all packs, including `de`)
+  counts as tax rules and is B1 core, hub-only. So are Smart Judge core prompts and algorithms, billing, pricing and tax rules.
+  L6 therefore keeps only the generic UI scopes; pack work (Germany, Gulf) stays with the hubs.
 - The policy limits what a lane may **edit**. It does not hide files from reading (the model still reads the checkout).
 - Scopes are enforced by the runner after the fact (changed files outside scope fail the run) and by the OpenCode
   permission overlay (edits outside scope are denied). Neither hides core code from the model: it can still read the
