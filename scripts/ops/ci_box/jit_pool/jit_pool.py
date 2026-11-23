@@ -12,8 +12,9 @@ Each tick:
   1. kill switch `~/.config/roxira-jit/STOP` -> exit; lock so ticks never overlap;
   2. list the repo's runners; delete pool runners (`jit-<slot>-<epoch>-<hex>`) that are offline and
      older than `stale_after_s` (a config that was never started), and their spool files;
-  3. per slot: when the slot has no registered pool runner (a minted config is registered at once,
-     offline until the launcher starts it), and the launcher is alive and `~/.config/roxira-jit/HOLD` (load shedding) is absent, mint one JIT config;
+  3. per slot: while the slot has fewer registered pool runners than live launchers + `ahead`
+     (a minted config is registered at once, offline until a launcher starts it), and no
+     `~/.config/roxira-jit/HOLD` (load shedding), mint a JIT config;
   4. heartbeat: write the repo variable `CI_BOX_HEARTBEAT` = "<epoch> <light-ok> <docker-ok>" (read
      by scripts/ci/pick_runner.sh in auto mode), at most every `heartbeat_every_s` unless it changed.
      A slot is "ok" while its launcher is alive (heartbeat file < 120 s old) and not on HOLD; a busy
@@ -47,12 +48,16 @@ DEFAULTS = {
     "control_dir": "~/.config/roxira-jit",
     "runner_group_id": 1,
     "stale_after_s": 300,
+    # a pre-minted config waiting in the spool (all launchers busy) is not stale until this age
+    "spool_max_age_s": 3600,
     "launcher_alive_s": 120,
     "heartbeat_variable": "CI_BOX_HEARTBEAT",
     "heartbeat_every_s": 120,
     "slots": {
-        "light": {"labels": ["self-hosted", "linux-box", "jit", "slot-light"]},
-        "docker": {"labels": ["self-hosted", "linux-box", "jit", "slot-docker"]},
+        # ahead = configs minted beyond one per live launcher, so a launcher that finishes a job
+        # claims the next one at once instead of waiting for the next tick (35-70 s per job).
+        "light": {"labels": ["self-hosted", "linux-box", "jit", "slot-light"], "ahead": 1},
+        "docker": {"labels": ["self-hosted", "linux-box", "jit", "slot-docker"], "ahead": 1},
     },
 }
 SLOT_RE = re.compile(r"^[a-z]+$")
@@ -113,6 +118,9 @@ def load_config(path: str | None) -> dict:
         if "self-hosted" not in labels or "hp" in labels:
             # `hp` belongs to the old persistent runner; a JIT slot must never steal its jobs.
             raise ValueError(f"slot {slot}: labels must include self-hosted and not hp")
+        ahead = spec.get("ahead", 0)
+        if not isinstance(ahead, int) or isinstance(ahead, bool) or not 0 <= ahead <= 4:
+            raise ValueError(f"slot {slot}: ahead must be an integer 0..4")
     return cfg
 
 
@@ -138,12 +146,24 @@ class Pool:
         d = self.spool / slot
         return sorted(p for p in d.glob("jit-*.jit")) if d.is_dir() else []
 
-    def launcher_alive(self, slot: str) -> bool:
+    def _fresh(self, path: Path) -> bool:
         try:
-            age = self.now - (self.spool / slot / ".alive").stat().st_mtime
+            age = self.now - path.stat().st_mtime
         except OSError:
             return False
         return -60 <= age <= int(self.cfg["launcher_alive_s"])
+
+    def launchers_alive(self, slot: str) -> int:
+        """Live launcher units of a slot: each touches <spool>/<slot>/.alive.<instance>. A launcher from
+        before that change only touches .alive and counts as one."""
+        d = self.spool / slot
+        n = sum(1 for f in d.glob(".alive.*") if self._fresh(f)) if d.is_dir() else 0
+        if n == 0 and self._fresh(d / ".alive"):
+            n = 1
+        return n
+
+    def launcher_alive(self, slot: str) -> bool:
+        return self.launchers_alive(slot) > 0
 
     def write_spool(self, slot: str, name: str, encoded: str) -> None:
         d = self.spool / slot
@@ -187,7 +207,9 @@ class Pool:
                 continue
             slot, ts = parsed
             # never delete a busy runner: a network blip can show a runner offline mid-job
-            if r.get("status") == "offline" and not r.get("busy") and self.now - ts > stale:
+            spooled = (self.spool / slot / f"{r['name']}.jit").exists()
+            limit = int(self.cfg["spool_max_age_s"]) if spooled else stale
+            if r.get("status") == "offline" and not r.get("busy") and self.now - ts > limit:
                 self.actions.append(f"delete stale {r['name']}")
                 if not self.dry:
                     try:
@@ -232,6 +254,7 @@ class Pool:
                 "busy": sum(1 for r in online if r.get("busy")),
                 "pending": len(self.pending(slot)),
                 "alive": self.launcher_alive(slot),
+                "launchers": self.launchers_alive(slot),
                 "held": held,
             }
         return out
@@ -269,10 +292,13 @@ class Pool:
                 log.info("slot %s: HOLD (load shedding), not minting", slot)
             elif not s["alive"]:
                 log.info("slot %s: launcher not alive, not minting", slot)
-            elif s["present"] == 0:
-                self.mint(slot)
-                s["present"] += 1
-                s["pending"] += 1
+            else:
+                # one runner per live launcher plus `ahead` pre-minted configs
+                target = s["launchers"] + int(self.cfg["slots"][slot].get("ahead", 0))
+                while s["present"] < target:
+                    self.mint(slot)
+                    s["present"] += 1
+                    s["pending"] += 1
         self.heartbeat(status, state)
         if not self.dry:
             self.save_state(state)
@@ -308,6 +334,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.status:
         for slot, s in (result.get("status") or {}).items():
             print(f"{slot}: registered={s['present']} online={s['online']} busy={s['busy']} pending={s['pending']} "
+                  f"launchers={s.get('launchers', 0)} "
                   f"launcher={'alive' if s['alive'] else 'down'} hold={'yes' if s['held'] else 'no'}")
         for act in result.get("actions") or []:
             print(f"would {act}" if cfg["dry_run"] else act)

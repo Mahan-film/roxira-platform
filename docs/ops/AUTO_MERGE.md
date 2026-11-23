@@ -4,7 +4,24 @@ This is the owner checklist for `.github/workflows/agent-review.yml` and
 `.github/workflows/agent-automerge.yml`. Read this before setting
 `AUTO_MERGE_ENABLED=true`.
 
+## Status note (2026-11-22): what changed since this page was written
+
+The text below describes the repo as private on Free. That is not the case today: the repository is **public** and is flipped to private
+only after the owners say "go private" (`PRIVATE_FLIP_CHECKLIST.md`, section 0). While it is
+public, the ruleset `main-protection`, the merge queue and `gh pr merge --auto` work as normal.
+After the flip, on GitHub Free, they do not: verified on a throwaway private Free repo, branch
+protection, rulesets and auto-merge answer HTTP 403 with an upgrade message. "Buy GitHub Pro" is
+therefore **not the plan**: the replacement is the box merge gate (`MERGE_GATE_SPEC.md`), with
+the Team plan only as the owners' fallback if the gate slips. After the flip
+`agent-automerge.yml` and `rx-automerge.yml` fail on `--auto` and are disabled (checklist,
+flip step 3). Merges of paths that a deploy follows (migrations, payment, auth, `Dockerfile.prod`,
+deploy scripts, workflows) need an owner sentence (decision B7), enforced by the gate.
+The original text follows unchanged, except where a sentence is marked as superseded.
+
 ## Why this stays off by default
+
+*(Superseded opening: "The repo is private on GitHub Free." It is public today; on private Free
+the API returns an upgrade message for branch protection and rulesets, as the note above says.)*
 
 The repo is **private on GitHub Free**. Branch protection / rulesets on
 `main` are a GitHub Pro (or Team/Enterprise) feature -- the API returns
@@ -18,14 +35,16 @@ The repo is **private on GitHub Free**. Branch protection / rulesets on
   not an enforced gate. It only runs the checks the workflow itself asks for.
 
 `AUTO_MERGE_ENABLED` therefore defaults to unset (off). Turn it on only after
-buying GitHub Pro and creating the ruleset below -- at that point the
+buying GitHub Pro and creating the ruleset below (*superseded: on a private Free repo this
+workflow stays off and the box merge gate merges; on the public repo the ruleset already exists*) -- at that point the
 workflow's gate and the platform's ruleset back each other up, which is the
 actual safety property this was built for.
 
 ## Checklist to go live
 
-1. **Buy GitHub Pro** for the account/org that owns this repo (private repos
-   need Pro or higher for rulesets/branch protection).
+1. ~~**Buy GitHub Pro** for the account/org that owns this repo (private repos
+   need Pro or higher for rulesets/branch protection).~~ *Superseded 2026-11-22: not
+   planned. Public repo: the ruleset exists. Private Free repo: use the box merge gate.*
 2. **Create a ruleset on `main`** (Settings -> Rules -> Rulesets -> New
    branch ruleset):
    - Target branch: `main`.

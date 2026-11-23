@@ -2,16 +2,17 @@
 # lane-run: run ONE L5-L7 task on the box through OpenCode and the free-first key-pool gateway (loopback tunnel).
 # No Claude/Antigravity/consumer login. Wraps scripts/infra/server_agents/run_task.sh. Public data only.
 #
-#   lane-run --lane L5 --public (--task TEXT | --task-file F) [--scope PATH]... [--tier light|strong|best]
+#   lane-run --lane L5 --public (--task TEXT | --task-file F) [--scope PATH]... [--tier light|strong|paid|best]
 #            [--issue-file F] [--comment-file F] [--author LOGIN] [--labels a,b] [--timeout S] [--dry-run]
 #   lane-run --smoke [--lane L5]      runs: run_task.sh --smoke --gateway --public (nothing pushed)
 #   lane-run --budget [--lane L5]     print today's usage against the lane caps
 #
 # Config (one file, KEY=VALUE, never sourced): $LANE_RUN_CONF or ~/.config/roxira-lane/lane-run.conf
 #   GATEWAY_URL (loopback only), TIER, MODEL_GROUP, GATEWAY_ENV, STATE_DIR, REPO_DIR, BUDGETS, OPENCODE_BIN,
-#   BOT_LOGINS, OWN_LABEL.  The gateway key is read from GATEWAY_ENV (mode 600, outside the repo), name KEYPOOL_MASTER_KEY.
+#   BOT_LOGINS, OWN_LABEL, ALLOWED_GROUPS, STOP_FILE.  The gateway key is read from GATEWAY_ENV (mode 600, outside the repo), name KEYPOOL_MASTER_KEY.
 # Exit: 0 ok or skipped (bot event); 2 usage/config; 3 refused (private data, not --public, bad group/URL);
 #       4 over the daily budget; otherwise the exit code of run_task.sh.
+#       Kill switch: a file named STOP in the state dir (or STOP_FILE) makes every run exit 4 before any model call.
 set -euo pipefail
 
 CONF="${LANE_RUN_CONF:-$HOME/.config/roxira-lane/lane-run.conf}"
@@ -56,15 +57,19 @@ done
 
 GATEWAY_URL="$(conf_get GATEWAY_URL http://127.0.0.1:4181/v1)"
 TIER="${TIER_ARG:-$(conf_get TIER strong)}"
-MODEL_GROUP="$(conf_get MODEL_GROUP '')"
+CONF_GROUP="$(conf_get MODEL_GROUP '')"
 GATEWAY_ENV="$(conf_get GATEWAY_ENV "$HOME/.config/roxira-lane/gateway.env")"
 STATE="$(conf_get STATE_DIR "$HOME/.local/state/roxira-lane")"
-SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
+SELF="$0"
+if [ -L "$SELF" ]; then SELF="$(readlink -f "$SELF" 2>/dev/null || printf %s "$SELF")"; fi   # a symlink must still find the pack
+SELF_DIR="$(cd "$(dirname "$SELF")" && pwd)"
 REPO="$(conf_get REPO_DIR "$(cd "$SELF_DIR/../../../.." && pwd)")"
 BUDGETS="$(conf_get BUDGETS "$SELF_DIR/lane_budgets.box.json")"
 OPENCODE_BIN="$(conf_get OPENCODE_BIN opencode)"
 BOT_LOGINS="$(conf_get BOT_LOGINS 'github-actions,dependabot,renovate,copilot')"
 OWN_LABEL="$(conf_get OWN_LABEL lane-runner)"
+# Groups the box key may call (config/key_pool.yaml, virtual key box-lanes). Anything else is refused locally, before a 401.
+ALLOWED_GROUPS="$(conf_get ALLOWED_GROUPS agent-free,agent-light-free,agent-strong-free,agent-free-paid)"
 RUNNER="$REPO/scripts/infra/server_agents/run_task.sh"
 # Builder separation (docs/ops/BUILDER_EGRESS.md), OFF unless ROXIRA_BUILDER=1: the agent process (OpenCode) runs as the
 # unprivileged builder user through the root wrapper verb `run-builder`; this script and run_task.sh stay under the lane
@@ -75,17 +80,32 @@ if [ "$BUILDER_ON" = 1 ]; then
   OPENCODE_BIN="$SELF_DIR/../builder_egress/builder-shim"
 fi
 LOGFILE="$STATE/logs/lane-run.jsonl"
+STOP_FILE="$(conf_get STOP_FILE "$STATE/STOP")"
+# lane_budget treats a missing file as "no caps": refuse instead of running uncapped
+[ -r "$BUDGETS" ] || die "budgets file not readable: $BUDGETS (a missing file means NO daily caps; refusing to run)"
 
 # tier -> gateway group (same mapping as run_task.sh; model ids live in config/key_pool.yaml, never here)
 case "$TIER" in
   light) EXPECT_GROUP=agent-light-free ;;
   strong) EXPECT_GROUP=agent-strong-free ;;
+  paid) EXPECT_GROUP=agent-free-paid ;;
   best) EXPECT_GROUP=best-all ;;
-  *) die "TIER must be light, strong or best" ;;
+  *) die "TIER must be light, strong, paid or best" ;;
 esac
-MODEL_GROUP="${MODEL_GROUP:-$EXPECT_GROUP}"
-[ "$MODEL_GROUP" = "$EXPECT_GROUP" ] || refuse "MODEL_GROUP=$MODEL_GROUP does not match tier $TIER ($EXPECT_GROUP)"
+# A per-call --tier (a taskq ladder step) decides the group. The config's MODEL_GROUP is only a consistency check for
+# the config's own TIER: it must not veto a step the key allows (that turned every non-default step into a refusal).
+case "$CONF_GROUP" in '' | agent-* | best-*) ;; *) refuse "model group '$CONF_GROUP' is not an agent group; this box never uses 'private' or product groups" ;; esac
+if [ -n "$TIER_ARG" ]; then
+  MODEL_GROUP="$EXPECT_GROUP"
+else
+  MODEL_GROUP="${CONF_GROUP:-$EXPECT_GROUP}"
+  [ "$MODEL_GROUP" = "$EXPECT_GROUP" ] || refuse "MODEL_GROUP=$MODEL_GROUP does not match tier $TIER ($EXPECT_GROUP)"
+fi
 case "$MODEL_GROUP" in agent-* | best-*) ;; *) refuse "model group '$MODEL_GROUP' is not an agent group; this box never uses 'private' or product groups" ;; esac
+case ",$ALLOWED_GROUPS," in
+  *",$MODEL_GROUP,"*) ;;
+  *) refuse "model group '$MODEL_GROUP' (tier $TIER) is not allowed for this box key; allowed: $ALLOWED_GROUPS" ;;
+esac
 case "$GATEWAY_URL" in
   http://127.0.0.1:* | http://localhost:*) ;;
   *) refuse "GATEWAY_URL must be a loopback URL (the ssh tunnel); got a non-loopback address" ;;
@@ -129,7 +149,7 @@ usd = Decimal(0)
 tok = 0
 att = 0
 for _, r in recs:
-    if lb.lane_name(str(r.get("lane"))) != lane or r.get("status") in ("skipped_bot", "refused", "over_budget"):
+    if lb.lane_name(str(r.get("lane"))) != lane or r.get("status") in ("skipped_bot", "refused", "over_budget", "stopped"):
         continue
     att += 1
     usd += dec(r.get("cost_usd"))
@@ -146,6 +166,12 @@ PY
 }
 
 if [ "$BUDGET_ONLY" = 1 ]; then budget_py show; exit 0; fi
+
+# ---- kill switch: create "$STATE/STOP" (or STOP_FILE) to stop every lane-run before any model call ------------
+if [ -e "$STOP_FILE" ]; then
+  log_json stopped 4
+  DIE_RC=4 die "stop file present ($STOP_FILE); remove it to resume"
+fi
 
 # ---- guards (all before anything touches the network) -----------------------------------------------
 if [ "$PUBLIC" != 1 ]; then

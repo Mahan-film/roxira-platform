@@ -51,6 +51,7 @@ put() { # put <mode> <src> <dst>: copy only when different
 # The code is copied out of the repo so editing the checkout cannot change what the timers run.
 put 0644 "$SRC/box_status.py" "$BIN/box_status.py"
 put 0644 "$SRC/box_alert.py" "$BIN/box_alert.py"
+put 0644 "$SRC/phone_probes.py" "$BIN/phone_probes.py"
 put 0644 "$OPS/monitor/monitor_common.py" "$BIN/monitor_common.py"
 put 0644 "$OPS/notify/notify.py" "$BIN/notify.py"
 put 0644 "$LANE_PACK/lane_budgets.box.json" "$BIN/lane_budgets.box.json"

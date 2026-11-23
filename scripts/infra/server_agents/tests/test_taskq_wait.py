@@ -104,3 +104,78 @@ def test_once_mode_exit_unchanged(env):
     t = taskq.connect().execute("SELECT * FROM tasks WHERE id=1").fetchone()
     assert t["status"] == "done" and t["branch"].endswith("demo-a1")
     assert json.loads(t["files"]) == ["docs/x.md"]
+
+
+def test_wait_returns_early_when_poke_between_tick_and_wait(env):
+    """Wait returns early when poke() happens after tick() queries DB but before wait()."""
+    home, task = env
+    home.joinpath(taskq.WAKEUP_FILE).touch()
+    w = taskq.Worker(taskq.connect(), 1, 0)
+    assert w.tick() is False
+    w.wakeup.clear()
+    taskq.poke()
+    # Clear in-memory event to strictly verify file stamp comparison against tick stamp
+    w.wakeup.clear()
+    start = time.monotonic()
+    assert w.wait(5) is True
+    assert time.monotonic() - start < 1
+
+
+def test_poke_triggers_wakeup_event_path(env):
+    """poke() triggers wakeup.set() on active workers in the same process."""
+    _, _ = env
+    w = taskq.Worker(taskq.connect(), 1, 0)
+    assert not w.wakeup.is_set()
+    taskq.poke()
+    assert w.wakeup.is_set()
+    start = time.monotonic()
+    assert w.wait(5) is True
+    assert time.monotonic() - start < 1
+    assert not w.wakeup.is_set()
+
+
+def test_cmd_retry_triggers_poke(env, monkeypatch):
+    """cmd_retry calls poke() so running worker loops are notified."""
+    home, task = env
+    assert taskq.main(["add", "--slug", "demo", "--task-file", str(task), "--ladder", "ds-flash"]) == 0
+    db = taskq.connect()
+    taskq.update(db, 1, status="failed")
+
+    poked = False
+    orig_poke = taskq.poke
+
+    def fake_poke():
+        nonlocal poked
+        poked = True
+        orig_poke()
+
+    monkeypatch.setattr(taskq, "poke", fake_poke)
+    assert taskq.main(["retry", "1"]) == 0
+    assert poked is True
+
+
+def test_wait_missing_wakeup_file(env):
+    """When WAKEUP_FILE does not exist, wait() times out cleanly without raising."""
+    home, _ = env
+    wake = home / taskq.WAKEUP_FILE
+    if wake.exists():
+        wake.unlink()
+    w = taskq.Worker(taskq.connect(), 1, 0)
+    start = time.monotonic()
+    assert w.wait(0.2) is False
+    assert time.monotonic() - start >= 0.2
+
+
+def test_wait_stat_raises_oserror(env, monkeypatch):
+    """When stat() raises OSError, wait() catches it and times out cleanly."""
+    _, _ = env
+    w = taskq.Worker(taskq.connect(), 1, 0)
+
+    def fake_stat(*args, **kwargs):
+        raise OSError("Simulated filesystem error")
+
+    monkeypatch.setattr(Path, "stat", fake_stat)
+    start = time.monotonic()
+    assert w.wait(0.2) is False
+    assert time.monotonic() - start >= 0.2
+
