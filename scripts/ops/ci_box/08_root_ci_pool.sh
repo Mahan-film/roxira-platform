@@ -42,7 +42,10 @@ LIB=/usr/local/lib/roxira-jit
 BASE=/srv/data/ci-jit
 RUNNER=runner
 CTRL=mahanfilms
-CPU=500%; MEM_HIGH=7G; MEM_MAX=8G; TASKS=8192
+# MemoryHigh = the brief section 7 CI budget (docker slot 6 GB incl. Postgres + light slot 2 GB). It was 7G:
+# a light job next to a Backend run pushed user@ over it and the reclaim throttling slowed every
+# process under it, the Postgres service included (#230 perf spec at 6 s, best of 3).
+CPU=500%; MEM_HIGH=8G; MEM_MAX=9G; TASKS=8192
 
 ok()   { echo "OK    $*"; }
 todo() { echo "TODO  $*"; }
@@ -96,7 +99,8 @@ fi
 echo "== 3. resource cap for user $RUNNER (user@$RUID.service)"
 cur_cpu="$(systemctl show "user@$RUID.service" -p CPUQuotaPerSecUSec --value 2>/dev/null || true)"
 cur_mem="$(systemctl show "user@$RUID.service" -p MemoryMax --value 2>/dev/null || true)"
-if [ "$cur_cpu" = "5s" ] && [ "$cur_mem" = "$((8 * 1024 * 1024 * 1024))" ]; then ok "CPUQuota=$CPU MemoryMax=$MEM_MAX"; else
+cur_high="$(systemctl show "user@$RUID.service" -p MemoryHigh --value 2>/dev/null || true)"
+if [ "$cur_cpu" = "5s" ] && [ "$cur_mem" = "$((9 * 1024 * 1024 * 1024))" ] && [ "$cur_high" = "$((8 * 1024 * 1024 * 1024))" ]; then ok "CPUQuota=$CPU MemoryMax=$MEM_MAX"; else
   todo "CPUQuota=$CPU MemoryHigh=$MEM_HIGH MemoryMax=$MEM_MAX TasksMax=$TASKS (now: cpu ${cur_cpu:-unknown}, mem ${cur_mem:-unknown})"
   run systemctl set-property "user@$RUID.service" "CPUQuota=$CPU" "MemoryHigh=$MEM_HIGH" "MemoryMax=$MEM_MAX" "TasksMax=$TASKS"
 fi
