@@ -1,10 +1,10 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
- * Migration 1789900028000: Add tax_code (13-digit SSTID) to erp_stock_items (#728 / T71).
+ * Migration 1789900036000: Add tax_code (13-digit SSTID) to erp_stock_items (#728 / T71).
  */
-export class AddProductTaxCode1789900028000 implements MigrationInterface {
-  name = 'AddProductTaxCode1789900028000';
+export class AddProductTaxCode1789900036000 implements MigrationInterface {
+  name = 'AddProductTaxCode1789900036000';
 
   public async up(q: QueryRunner): Promise<void> {
     await q.query(
@@ -30,11 +30,11 @@ export class AddProductTaxCode1789900028000 implements MigrationInterface {
           WHERE table_name = 'erp_stock_items' AND column_name = 'tax_code'
         ) THEN
           IF EXISTS (SELECT 1 FROM "erp_stock_items" WHERE "tax_code" IS NOT NULL LIMIT 1) THEN
-            CREATE TABLE IF NOT EXISTS "_rollback_backup_erp_stock_items_tax_code_1789900028000" AS
+            CREATE TABLE IF NOT EXISTS "_rollback_backup_erp_stock_items_tax_code_1789900036000" AS
             SELECT "id", "tenant_id", "tax_code", now() AS "backed_up_at"
             FROM "erp_stock_items"
             WHERE false;
-            INSERT INTO "_rollback_backup_erp_stock_items_tax_code_1789900028000" ("id", "tenant_id", "tax_code", "backed_up_at")
+            INSERT INTO "_rollback_backup_erp_stock_items_tax_code_1789900036000" ("id", "tenant_id", "tax_code", "backed_up_at")
             SELECT "id", "tenant_id", "tax_code", now()
             FROM "erp_stock_items"
             WHERE "tax_code" IS NOT NULL;
