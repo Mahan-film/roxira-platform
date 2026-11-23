@@ -235,7 +235,7 @@ case "$1" in
     shift
     envf=""; prev=""
     for a in "$@"; do [ "$prev" = "--env-file" ] && envf="$a"; prev="$a"; done
-    grep -q '^ACTIONS_RUNNER_INPUT_JITCONFIG=' "$envf" && echo "envfile-ok mode=$(stat -c %a "$envf")" >> "$log"
+    grep -q '^ACTIONS_RUNNER_INPUT_JITCONFIG=' "$envf" && echo "envfile-ok mode=$(stat -c %a "$envf" 2>/dev/null || stat -f %Lp "$envf")" >> "$log"
     printf 'create %s\\n' "$*" >> "$log"
     echo 0123456789abcdef ;;
   start) echo "start $*" >> "$log"; exit 0 ;;

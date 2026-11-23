@@ -51,6 +51,7 @@ run `python3 scripts/gen_system_inventory.py` (CI-style check: `--check`).
 | model-eval.yml | Model eval (coding smoke + gate) | workflow_dispatch |
 | model-registry-check.yml | Model registry check | schedule, workflow_dispatch |
 | model-tournament.yml | Model Tournament | workflow_dispatch |
+| pr-agent.yml | PR Agent | pull_request, workflow_dispatch |
 | preview-e2e.yml | Preview E2E | workflow_dispatch |
 | project-pages.yml | Factory project pages | workflow_dispatch |
 | review-desk.yml | Review desk | schedule, workflow_dispatch |
