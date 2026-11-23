@@ -262,7 +262,7 @@ export class AccountingPeriodService {
         .createQueryBuilder('p')
         .where('p.tenantId = :tenantId', { tenantId })
         .andWhere('p.isAdjustment = false')
-        .andWhere(':day::date BETWEEN p.periodStart::date AND p.periodEnd::date', { day })
+        .andWhere(':day::date BETWEEN p.periodStart AND p.periodEnd', { day })
         .orderBy('p.id', 'ASC')
         .getMany();
 
