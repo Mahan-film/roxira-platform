@@ -6,10 +6,16 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
-spec = importlib.util.spec_from_file_location("private_flip", ROOT / "scripts/ops/ci_box/private_flip.py")
-pf = importlib.util.module_from_spec(spec)
-sys.modules["private_flip"] = pf
-spec.loader.exec_module(pf)
+pf = None
+
+
+def setUpModule():
+    """Load lazily (no import-time side effects: src/test_ci_quarantine_guard.py)."""
+    global pf
+    spec = importlib.util.spec_from_file_location("private_flip", ROOT / "scripts/ops/ci_box/private_flip.py")
+    pf = importlib.util.module_from_spec(spec)
+    sys.modules["private_flip"] = pf
+    spec.loader.exec_module(pf)
 
 
 def run(i, conclusion="success", status="completed"):
