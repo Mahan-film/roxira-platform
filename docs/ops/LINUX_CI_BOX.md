@@ -29,7 +29,7 @@ Repository variables (set with `gh variable set NAME -b VALUE -R Mahan-film/roxi
 
 | Variable | Values | Effect |
 |---|---|---|
-| `CI_RUNNER_MODE` | `hosted` (unset = hosted), `box`, `auto` | `hosted`: nothing changes. `box`: trusted events use the box labels and queue while it is busy or offline. `auto`: per slot, the box when `CI_BOX_HEARTBEAT` is under 5 min old and the slot has an online runner, else hosted. |
+| `CI_RUNNER_MODE` | `hosted` (unset = hosted), `box`, `auto`, `main` | `hosted`: nothing changes. `main`: `auto` for push, schedule and dispatch; PR and merge-queue CI stay hosted (until the private flip, while hosted minutes are free; one light slot cannot keep up with all agent PRs). `box`: trusted events use the box labels and queue while it is busy or offline. `auto`: per slot, the box when `CI_BOX_HEARTBEAT` is under 5 min old and the slot has an online runner, else hosted. Age is measured at the event time (push, merge_group, pull_request), because `vars` are read when the run is created and a queued main run can start its picker 30+ min later; after 90 min (`MAX_WAIT`) and for schedule/dispatch the clock is used. |
 | `CI_BOX_HEARTBEAT` | `<epoch> <light-online> <docker-online>` | written every ~2 min by the box (`jit_pool.py heartbeat`, #1024). |
 | `CI_BOX_LABELS_LIGHT` / `CI_BOX_LABELS_DOCKER` | JSON label array that contains `"self-hosted"` | after #1024: `["self-hosted","jit","slot-light"]` and `["self-hosted","jit","slot-docker"]`. |
 | `CI_HOSTED_RUNNER` | JSON string, default `"ubuntu-latest"` | the hosted fallback. |

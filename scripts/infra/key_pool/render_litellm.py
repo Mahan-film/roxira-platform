@@ -102,6 +102,9 @@ def render(pool: dict, names: set[str] | None = None, models_path=None, values: 
     router = dict(gw.get("router", {}))
     if fallbacks:
         router["fallbacks"] = router.get("fallbacks", []) + fallbacks
+        # LiteLLM stops a chain after router.max_fallbacks (default 5): raise it to cover the longest ladder.
+        longest = max(len(v) for f in router["fallbacks"] for v in f.values())
+        router.setdefault("max_fallbacks", longest + 1)
     settings = {"drop_params": True, "telemetry": False, "num_retries": router.get("num_retries", 3)}
     if gw.get("cost_log"):
         # LiteLLM loads custom callbacks from the config dir; cost_logger.py is mounted there.
