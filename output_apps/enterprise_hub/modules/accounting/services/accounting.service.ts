@@ -862,7 +862,9 @@ export class AccountingService {
     options?: PostEntryOptions,
     manager?: EntityManager,
   ): Promise<void> {
-    if (options?.isSystem === true) {
+    // Programmatic service-to-service calls (posting rules, banking, treasury) set isSystem: true.
+    // User-initiated requests (which carry actorUserId) must never bypass control accounts.
+    if (options?.isSystem === true && !options?.actorUserId) {
       return;
     }
     const controlViolations = accounts.filter((acc) => acc.systemPostedOnly);

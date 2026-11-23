@@ -142,6 +142,7 @@ export class AccountingController {
       {
         actorRole: this.actorRoleOf(request),
         actorUserId: this.actorUserIdOf(request),
+        isSystem: false,
       },
     );
   }

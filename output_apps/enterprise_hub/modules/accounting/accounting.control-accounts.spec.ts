@@ -526,7 +526,7 @@ describe('T226 Control accounts are system-posted only', () => {
         TENANT_ID,
         expect.any(Object),
         undefined,
-        { actorRole: null, actorUserId: 'u1' },
+        { actorRole: null, actorUserId: 'u1', isSystem: false },
       );
 
       // Verified request.access.roleKey -> forwarded verbatim
@@ -542,7 +542,7 @@ describe('T226 Control accounts are system-posted only', () => {
         TENANT_ID,
         expect.any(Object),
         undefined,
-        { actorRole: 'accountant', actorUserId: 'u2' },
+        { actorRole: 'accountant', actorUserId: 'u2', isSystem: false },
       );
     });
 
