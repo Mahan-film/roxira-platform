@@ -16,7 +16,8 @@
    taskq), the lane circuit breaker is open (3 failures in a row, 1 h), the issue has no `Done when` text, the author
    is a bot, the orch itself or not a collaborator, or an earlier job for it is active or reported.
 5. With `--apply` only: claims (assignee + `in-progress` label, the same REST calls as `claim.sh`), writes the task file,
-   `taskq add` (lane, `--public`, free-first ladder `best,free,ds-flash,strong` minus steps on cooldown), runs the
+   `taskq add` (lane, `--public`, free-first ladder `best,free,ds-flash,strong` minus steps on cooldown; on the box the ladder
+   and the lane scopes come from the box policy, see `docs/ops/BOX_LANE_POLICY.md`), runs the
    taskq worker once, pushes the result branch `agent/server-<lane>-<login>/<n>-orch`, opens or updates the DRAFT PR and
    posts a `REPORT:` comment on the issue (format accepted by `scripts/dev/verify_agent_report.py`; failures post a
    `BLOCKED:` row and release the `in-progress` label). It never calls a merge endpoint.
