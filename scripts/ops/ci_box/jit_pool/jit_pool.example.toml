@@ -16,8 +16,11 @@ heartbeat_variable = "CI_BOX_HEARTBEAT"
 heartbeat_every_s = 120
 
 # Labels never include `hp` (the old persistent runner keeps that one until it is retired).
+# ahead = configs pre-minted beyond one per live launcher (0..4), so the next job starts at once.
 [slots.light]
 labels = ["self-hosted", "linux-box", "jit", "slot-light"]
+ahead = 1
 
 [slots.docker]
 labels = ["self-hosted", "linux-box", "jit", "slot-docker"]
+ahead = 1
