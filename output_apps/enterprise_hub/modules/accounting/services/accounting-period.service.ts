@@ -60,7 +60,7 @@ export class AccountingPeriodService {
     tenantId: string,
     input: CreateAccountingPeriodInput,
   ): Promise<AccountingPeriodEntity> {
-    if (input.periodStart > input.periodEnd) {
+    if (new Date(input.periodStart) > new Date(input.periodEnd)) {
       throw new BadRequestException('periodStart must not be after periodEnd.');
     }
     return this.scope.within(tenantId, undefined, async (m) => {
@@ -241,7 +241,7 @@ export class AccountingPeriodService {
         .createQueryBuilder('p')
         .where('p.tenantId = :tenantId', { tenantId })
         .andWhere('p.isAdjustment = false')
-        .andWhere(':day::date BETWEEN p.periodStart AND p.periodEnd', { day })
+        .andWhere(':day::date BETWEEN p.periodStart::date AND p.periodEnd::date', { day })
         .orderBy('p.id', 'ASC')
         .getMany();
 
@@ -265,11 +265,14 @@ export class AccountingPeriodService {
         );
       }
     }
-    if (period.state === AccountingPeriodState.ADJUSTMENT && period.allowedRoles.length > 0) {
+    if (period.state === AccountingPeriodState.ADJUSTMENT) {
+      const allowed = period.allowedRoles && period.allowedRoles.length > 0
+        ? period.allowedRoles
+        : ['chief-accountant', 'partner-advisor', 'auditor'];
       const role = actorRole?.trim();
-      if (!role || !period.allowedRoles.includes(role)) {
+      if (!role || !allowed.includes(role)) {
         throw new PeriodStateLockedException(
-          `Adjustment period ${period.code} requires an authorised role.`,
+          `Adjustment period ${period.code} requires an authorised role (${allowed.join(', ')}).`,
         );
       }
     }

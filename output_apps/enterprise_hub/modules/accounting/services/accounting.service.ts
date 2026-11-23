@@ -1036,16 +1036,16 @@ export class AccountingService {
           budgetWarning = warnings.join(' | ');
         }
       }
-      if (status === JournalEntryStatus.POSTED && this.periodService) {
-        await this.periodService.assertPostingAllowed(
-          tenantId,
-          date,
-          { actorRole: options.actorRole ?? undefined, accountingPeriodId: options.accountingPeriodId },
-          manager,
-        );
-      }
       try {
         const persistAndSeal = async (txManager?: EntityManager): Promise<JournalEntryEntity> => {
+          if (status === JournalEntryStatus.POSTED && this.periodService) {
+            await this.periodService.assertPostingAllowed(
+              tenantId,
+              date,
+              { actorRole: options.actorRole ?? undefined, accountingPeriodId: options.accountingPeriodId },
+              txManager,
+            );
+          }
           const entry = await this.accountingRepository.persistJournalEntry(
             tenantId,
             {
@@ -1279,11 +1279,14 @@ export class AccountingService {
       actorRole?: string | null;
       actorUserId?: string | null;
     },
+    existingManager?: EntityManager,
   ): Promise<JournalEntryResponseDto> {
     if (target === JournalEntryStatus.POSTED) {
       assertNotAiIdentity(actor, 'post a journal entry');
     }
-    return this.accountingRepository.transaction(tenantId, async (manager) => {
+    return this.accountingRepository.transaction(
+      tenantId,
+      async (manager) => {
       const entry = await this.lockEditableVoucher(tenantId, id, manager);
       if (entry.status === target) {
         throw new ConflictException('سند از قبل در همین وضعیت است.');
@@ -1360,7 +1363,7 @@ export class AccountingService {
       }
       const saved = await this.accountingRepository.findEntryById(tenantId, id, manager);
       return this.toEntryDto(saved as JournalEntryEntity);
-    });
+    }, existingManager);
   }
 
   /** Deletes a DRAFT or TEMPORARY voucher dated in an open period. A final voucher is only ever reversed. */

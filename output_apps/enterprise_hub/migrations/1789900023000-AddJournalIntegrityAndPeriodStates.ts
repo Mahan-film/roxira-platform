@@ -69,7 +69,8 @@ export class AddJournalIntegrityAndPeriodStates1789900023000 implements Migratio
              AND NEW.reverses_entry_id IS NOT DISTINCT FROM OLD.reverses_entry_id
              AND NEW.entry_type IS NOT DISTINCT FROM OLD.entry_type
              AND NEW.permanent_number IS NOT DISTINCT FROM OLD.permanent_number
-             AND NEW.permanent_fiscal_year_id IS NOT DISTINCT FROM OLD.permanent_fiscal_year_id THEN
+             AND NEW.permanent_fiscal_year_id IS NOT DISTINCT FROM OLD.permanent_fiscal_year_id
+             AND NEW.accounting_period_id IS NOT DISTINCT FROM OLD.accounting_period_id THEN
             RETURN NEW;
           END IF;
           RAISE EXCEPTION 'posted journal entry % is immutable; post a reversing entry', OLD.id
