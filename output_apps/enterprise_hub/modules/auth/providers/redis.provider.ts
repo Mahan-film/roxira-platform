@@ -18,8 +18,8 @@ export const redisClientProvider: Provider = {
   inject: [ConfigService],
   useFactory: (config: ConfigService): RedisClient => {
     const host = config.get<string>('REDIS_CACHE_HOST') || config.get<string>('REDIS_HOST', '127.0.0.1');
-    const port = Number(config.get<number | string>('REDIS_CACHE_PORT')) || Number(config.get<number | string>('REDIS_PORT', 6379));
-    const db = Number(config.get<number | string>('REDIS_CACHE_DB', 1));
+    const port = Number(config.get<number | string>('REDIS_CACHE_PORT')) || Number(config.get<number | string>('REDIS_PORT', 6379)) || 6379;
+    const db = Number(config.get<number | string>('REDIS_CACHE_DB', 1)) || 1;
     return new Redis({
       host,
       port,
