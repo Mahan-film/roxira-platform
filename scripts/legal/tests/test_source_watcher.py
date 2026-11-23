@@ -65,6 +65,14 @@ def _opener(pages):
     return op
 
 
+def _everything(body):
+    class P(dict):
+        def get(self, url, default=None):
+            return (404, {}, b"nf") if url.endswith("/robots.txt") else (200, {}, body)
+
+    return _opener(P())
+
+
 def _src(**k):
     return {
         "id": "t",
@@ -128,10 +136,10 @@ def test_waf_page_on_list_stops_and_parses_nothing():
 
 def test_change_detection_new_changed_same(tmp_path):
     con = sw.open_state(tmp_path / "s.db")
-    items = [{"url": "https://a.test/x", "title": "t", "content_sha256": "1"}]
+    items = [{"url": "https://a.test/x", "title": "t", "content_sha256": "1", "list_sha": "1"}]
     sw.save_items(con, "t", sw.diff_items(con, "t", items), "now")
     assert sw.diff_items(con, "t", items)[0]["state"] == "same"
-    items[0]["content_sha256"] = "2"
+    items[0]["list_sha"] = "2"
     assert sw.diff_items(con, "t", items)[0]["state"] == "changed"
 
 
@@ -254,3 +262,88 @@ def test_crash_after_jsonl_loses_nothing(tmp_path, monkeypatch):
     assert con.execute("SELECT COUNT(*) FROM items").fetchone()[0] == 5
     rows = [ln for f in (tmp_path / "staged").glob("*.jsonl") for ln in f.read_text().splitlines()]
     assert len(rows) == 10  # replayed, at-least-once
+
+
+def test_cookie_redirect_and_robots_filters_links(tmp_path):
+    calls = []
+
+    def op(url, headers, ca):
+        calls.append(headers.get("Cookie"))
+        if url.endswith("/robots.txt"):
+            return 200, {}, b"User-agent: *\nDisallow: /fa/archive\n"
+        if headers.get("Cookie") is None:
+            return 302, {"Location": url, "Set-Cookie": "a=1; Path=/\nb=2; Path=/"}, b""
+        body = (
+            b"<html><title>t</title><body>"
+            + b"".join(
+                b'<a href="/fa/news/%d/x">long title number %d</a>' % (i, i) for i in range(4)
+            )
+            + b'<a href="/fa/archive/1">archive entry title</a>'
+            + b"</body></html>"
+            + b"x" * 400
+        )
+        return 200, {}, body
+
+    con = sw.open_state(tmp_path / "s.db")
+    src = _src(list_urls=["https://a.test/"], link_regex="/fa/")
+    rep = sw.run_source(src, _client(op), con)
+    assert rep["host_state"] == sw.OK and "a=1; b=2" in calls
+    urls = [i["url"] for i in rep["items"]]
+    assert len(urls) == 4 and not any("archive" in u for u in urls)
+
+
+def test_ca_file_resolved_relative_to_config(tmp_path):
+    (tmp_path / "ca").mkdir()
+    (tmp_path / "ca" / "x.pem").write_text("x")
+    cfg = tmp_path / "c.json"
+    cfg.write_text(json.dumps({"sources": [_src(ca_file="ca/x.pem")]}))
+    assert sw.load_config(cfg)["sources"][0]["ca_file"] == str(tmp_path / "ca" / "x.pem")
+    cfg.write_text(json.dumps({"sources": [_src(ca_file="ca/missing.pem")]}))
+    try:
+        sw.load_config(cfg)
+        raise AssertionError("missing ca accepted")
+    except SystemExit:
+        pass
+
+
+def test_non_ascii_url_is_percent_encoded():
+    out = sw.iri_to_uri("https://a.test/fa/news/1/تایید-طرح?q=قانون")
+    assert out.isascii() and out.startswith("https://a.test/fa/news/1/%")
+    assert sw.iri_to_uri("https://a.test/x/y?z=1") == "https://a.test/x/y?z=1"
+
+
+def test_backfill_text_over_runs_without_re_emitting_changes(tmp_path, monkeypatch):
+    monkeypatch.setenv("SOURCE_WATCHER_STATE", str(tmp_path))
+    cfg = tmp_path / "c.json"
+    cfg.write_text(json.dumps({"details_per_source": 2, "sources": [_src()]}))
+    real = sw.Client
+    monkeypatch.setattr(
+        sw,
+        "Client",
+        lambda **k: real(opener=_everything(PAGE), sleep=lambda s: None, **k),
+    )
+    con = sqlite3.connect(tmp_path / "state.db")
+
+    def done():
+        return con.execute("SELECT COALESCE(SUM(text_done),0) FROM items").fetchone()[0]
+
+    def rows():
+        return [
+            json.loads(ln)
+            for f in (tmp_path / "staged").glob("*.jsonl")
+            for ln in f.read_text().splitlines()
+        ]
+
+    for want in (2, 4, 5, 5):  # 5 items, 2 pages of text per run, then nothing left to do
+        assert sw.main(["run", "--config", str(cfg), "--commit"]) == 0
+        assert done() == want
+    r = rows()
+    assert len(r) == 5 + 2 + 1  # 5 listing rows, then 2 and 1 text-only rows from the backlog
+    assert sum(1 for x in r if x["text"]) == 5
+    assert all(x["state"] in ("new", "text") for x in r)  # nothing reported as changed
+
+
+def test_status_line(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("SOURCE_WATCHER_STATE", str(tmp_path))
+    assert sw.main(["status", "--line"]) == 0
+    assert "0 items" in capsys.readouterr().out
