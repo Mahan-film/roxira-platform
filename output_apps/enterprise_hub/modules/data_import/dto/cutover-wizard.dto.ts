@@ -59,16 +59,13 @@ class CutoverSupportedCurrencyConstraint implements ValidatorConstraintInterface
 @ValidatorConstraint({ name: 'cutoverNonNegativeAmount', async: false })
 class CutoverNonNegativeAmountConstraint implements ValidatorConstraintInterface {
   validate(value: unknown): boolean {
-    if (typeof value === 'number') {
-      return Number.isFinite(value) && value >= 0;
-    }
     if (typeof value === 'string') {
       return NON_NEGATIVE_AMOUNT_RE.test(value);
     }
     return false;
   }
   defaultMessage(): string {
-    return 'مبلغ بدهکار/بستانکار باید عدد یا رشته اعشاری نامنفی معتبر باشد.';
+    return 'مبلغ بدهکار/بستانکار باید رشته اعشاری یا عدد صحیح نامنفی معتبر باشد.';
   }
 }
 
@@ -88,12 +85,12 @@ export class CutoverOpeningLineDto {
   @ApiPropertyOptional({ example: '1000000' })
   @IsOptional()
   @Validate(CutoverNonNegativeAmountConstraint)
-  debit?: string | number;
+  debit?: string;
 
   @ApiPropertyOptional({ example: '0' })
   @IsOptional()
   @Validate(CutoverNonNegativeAmountConstraint)
-  credit?: string | number;
+  credit?: string;
 }
 
 export class CutoverPreflightRequestDto {

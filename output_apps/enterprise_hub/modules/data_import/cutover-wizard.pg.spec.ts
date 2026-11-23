@@ -89,6 +89,12 @@ describePg('CutoverWizardService end-to-end on PostgreSQL (NOSUPERUSER NOBYPASSR
       journals: await m.getRepository(JournalEntryEntity).count({ where: { tenantId } }),
       locks: await m.getRepository(PeriodLockEntity).count({ where: { tenantId } }),
       cutovers: await m.getRepository(CutoverEntity).count({ where: { tenantId } }),
+      auditLogs: await m
+        .query(
+          `SELECT count(*)::int AS n FROM audit_log WHERE tenant_id = $1 AND (resource_type = 'period_lock' OR action LIKE 'ledger.%')`,
+          [tenantId],
+        )
+        .then((r) => r[0]?.n ?? 0),
     }));
 
   const validGoLiveDto = () => ({
@@ -169,7 +175,7 @@ describePg('CutoverWizardService end-to-end on PostgreSQL (NOSUPERUSER NOBYPASSR
     ).rejects.toThrow('mid-way cutover insert failure');
     spy.mockRestore();
 
-    expect(await countTenantState(TENANT_A)).toEqual({ journals: 0, locks: 0, cutovers: 0 });
+    expect(await countTenantState(TENANT_A)).toEqual({ journals: 0, locks: 0, cutovers: 0, auditLogs: 0 });
   });
 
   it('posts typed OPENING journal, locks pre-cutover period, dry-verifies lock, blocks locked writes & replays', async () => {
@@ -208,7 +214,7 @@ describePg('CutoverWizardService end-to-end on PostgreSQL (NOSUPERUSER NOBYPASSR
     await expect(
       wizard.executeGoLive(TENANT_A, 'user-owner-1', validGoLiveDto()),
     ).rejects.toThrow(ConflictException);
-    expect(await countTenantState(TENANT_A)).toEqual({ journals: 1, locks: 1, cutovers: 1 });
+    expect(await countTenantState(TENANT_A)).toMatchObject({ journals: 1, locks: 1, cutovers: 1 });
   });
 
   it('serializes concurrent go-live attempts so strictly one succeeds and zero duplicate OB journals are posted', async () => {
@@ -222,6 +228,6 @@ describePg('CutoverWizardService end-to-end on PostgreSQL (NOSUPERUSER NOBYPASSR
     expect(fulfilled).toHaveLength(1);
     expect(rejected).toHaveLength(1);
     expect(rejected[0].reason).toBeInstanceOf(ConflictException);
-    expect(await countTenantState(TENANT_B)).toEqual({ journals: 1, locks: 1, cutovers: 1 });
+    expect(await countTenantState(TENANT_B)).toMatchObject({ journals: 1, locks: 1, cutovers: 1 });
   });
 });
