@@ -217,6 +217,20 @@ def extract_page(body: bytes, base_url: str) -> dict:
 # ---- polite client ------------------------------------------------------------------------------------------------
 
 
+def iri_to_uri(url: str) -> str:
+    """Percent-encode non-ASCII path/query (Persian slugs) so the request line is plain ASCII."""
+    u = urllib.parse.urlsplit(url)
+    return urllib.parse.urlunsplit(
+        (
+            u.scheme,
+            u.netloc.encode("idna").decode("ascii") if not u.netloc.isascii() else u.netloc,
+            urllib.parse.quote(u.path, safe="/%:@!$&'()*+,;=~-._"),
+            urllib.parse.quote(u.query, safe="/%:@!$&'()*+,;=?~-._"),
+            "",
+        )
+    )
+
+
 def same_site(a: str, b: str) -> bool:
     ha = urllib.parse.urlparse(a).netloc.split(":")[0].lower().removeprefix("www.")
     hb = urllib.parse.urlparse(b).netloc.split(":")[0].lower().removeprefix("www.")
@@ -238,9 +252,14 @@ class Client:
         self._opener = opener  # test hook: (url, headers, ca_file) -> (status, headers, bytes)
         self._sleep = sleep
         self._robots: dict[str, urllib.robotparser.RobotFileParser | None] = {}
+        self.last_reason: dict[str, str] = {}  # host -> " (reason)" of the last network failure
+        self.tls_max: dict[str, str] = {}  # host -> "1.2": a server that resets TLS 1.3 clients
+        self._cookies: dict[str, dict[str, str]] = {}  # host -> name -> value, this run only
 
-    def _ctx(self, ca_file: str | None) -> ssl.SSLContext:
+    def _ctx(self, ca_file: str | None, host: str = "") -> ssl.SSLContext:
         ctx = ssl.create_default_context()  # verification stays ON
+        if self.tls_max.get(host) == "1.2":
+            ctx.maximum_version = ssl.TLSVersion.TLSv1_2
         if ca_file:
             ctx.load_verify_locations(cafile=ca_file)
         return ctx
@@ -281,6 +300,9 @@ class Client:
             "Accept-Language": "fa,en;q=0.5",
             "Accept-Encoding": "gzip",
         }
+        jar = self._cookies.get(host)
+        if jar:
+            headers["Cookie"] = "; ".join(f"{k}={v}" for k, v in jar.items())
         try:
             if self._opener:
                 status, hdrs, data = self._opener(url, headers, ca_file)
@@ -288,12 +310,19 @@ class Client:
             else:
                 final, status, hdrs, data = self._urlopen(url, headers, ca_file)
         except ssl.SSLError as exc:
+            self.last_reason[host] = f" ({type(exc).__name__})"
             return TLS_ERROR, 0, {"reason": type(exc).__name__}, b"", url
-        except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as exc:
+        except (urllib.error.URLError, TimeoutError, ConnectionError, OSError, ValueError) as exc:
             reason = getattr(exc, "reason", exc)
+            self.last_reason[host] = f" ({type(reason).__name__})"
             if isinstance(reason, ssl.SSLError) or "CERTIFICATE" in str(reason).upper():
                 return TLS_ERROR, 0, {"reason": "certificate verify failed"}, b"", url
             return NET_ERROR, 0, {"reason": type(reason).__name__}, b"", url
+        for line in str(hdrs.get("Set-Cookie", "")).split("\n"):
+            pair = line.split(";", 1)[0]
+            if "=" in pair:
+                k, v = pair.split("=", 1)
+                self._cookies.setdefault(host, {})[k.strip()] = v.strip()
         if hdrs.get("Content-Encoding", "").lower() == "gzip":
             try:
                 data = gzip.decompress(data)
@@ -308,15 +337,28 @@ class Client:
 
         opener = urllib.request.build_opener(  # honours HTTPS_PROXY from the environment
             urllib.request.ProxyHandler(),
-            urllib.request.HTTPSHandler(context=self._ctx(ca_file)),
+            urllib.request.HTTPSHandler(
+                context=self._ctx(ca_file, urllib.parse.urlparse(url).netloc)
+            ),
             _NoRedirect(),
         )
-        req = urllib.request.Request(url, headers=headers)  # http(s) only, checked by caller
+        req = urllib.request.Request(  # http(s) only, checked by caller
+            iri_to_uri(url), headers=headers
+        )
         try:
             with opener.open(req, timeout=30) as r:
-                return r.geturl(), r.status, dict(r.headers), r.read(MAX_BODY)
+                return r.geturl(), r.status, self._hdrs(r.headers), r.read(MAX_BODY)
         except urllib.error.HTTPError as exc:
-            return url, exc.code, dict(exc.headers or {}), exc.read(MAX_BODY) or b""
+            return url, exc.code, self._hdrs(exc.headers), exc.read(MAX_BODY) or b""
+
+    @staticmethod
+    def _hdrs(msg) -> dict:
+        out = dict(msg or {})
+        if msg is not None and hasattr(msg, "get_all"):
+            cookies = msg.get_all("Set-Cookie") or []
+            if cookies:
+                out["Set-Cookie"] = "\n".join(cookies)
+        return out
 
     def robots(
         self, origin: str, ca_file: str | None
@@ -348,9 +390,17 @@ class Client:
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS hosts(host TEXT PRIMARY KEY, state TEXT, last_state_at TEXT, bad_runs INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS items(source_id TEXT, item_key TEXT, url TEXT, title TEXT, content_sha256 TEXT,
-  first_seen TEXT, last_seen TEXT, last_changed TEXT, PRIMARY KEY(source_id, item_key));
+  first_seen TEXT, last_seen TEXT, last_changed TEXT, list_sha TEXT, text_done INTEGER DEFAULT 0,
+  detail_tries INTEGER DEFAULT 0, PRIMARY KEY(source_id, item_key));
 CREATE TABLE IF NOT EXISTS runs(ts TEXT, committed INTEGER, requests INTEGER, summary TEXT);
 """
+
+
+MIGRATIONS = (
+    "ALTER TABLE items ADD COLUMN list_sha TEXT",  # hash of title+url: what the listing change check uses
+    "ALTER TABLE items ADD COLUMN text_done INTEGER DEFAULT 0",  # 1 = page text fetched and staged
+    "ALTER TABLE items ADD COLUMN detail_tries INTEGER DEFAULT 0",  # failed text fetches (give up at 3)
+)
 
 
 def open_state(path: Path) -> sqlite3.Connection:
@@ -358,6 +408,11 @@ def open_state(path: Path) -> sqlite3.Connection:
     con = sqlite3.connect(str(path))
     con.execute("PRAGMA journal_mode=WAL")
     con.executescript(SCHEMA)
+    cols = {r[1] for r in con.execute("PRAGMA table_info(items)")}
+    for stmt in MIGRATIONS:
+        if stmt.split()[5] not in cols:
+            con.execute(stmt)
+    con.commit()
     return con
 
 
@@ -367,34 +422,72 @@ def item_key(url: str) -> str:
 
 
 def diff_items(con: sqlite3.Connection, source_id: str, items: list[dict]) -> list[dict]:
-    """Annotate items with state new|changed|same against saved rows (read-only)."""
+    """Annotate items with state new|changed|same against saved rows (read-only).
+
+    Compares the listing hash (title + url). A row saved before list_sha existed is adopted as unchanged.
+    """
     out = []
     for it in items:
         row = con.execute(
-            "SELECT title, content_sha256 FROM items WHERE source_id=? AND item_key=?",
+            "SELECT list_sha, text_done, detail_tries FROM items WHERE source_id=? AND item_key=?",
             (source_id, item_key(it["url"])),
         ).fetchone()
-        st = "new" if row is None else ("changed" if row[1] != it["content_sha256"] else "same")
-        out.append({**it, "state": st})
+        if row is None:
+            st, done, tries = "new", 0, 0
+        else:
+            st = "changed" if row[0] is not None and row[0] != it["list_sha"] else "same"
+            done, tries = (row[1] or 0), (row[2] or 0)
+        out.append({**it, "state": st, "text_done": done if st == "same" else 0, "tries": tries})
     return out
 
 
 def save_items(con: sqlite3.Connection, source_id: str, items: list[dict], now: str) -> None:
     for it in items:
         k = item_key(it["url"])
+        has_text = "text" in it
+        sha = it["content_sha256"]
         if it["state"] == "new":
             con.execute(
-                "INSERT OR REPLACE INTO items VALUES(?,?,?,?,?,?,?,?)",
-                (source_id, k, it["url"], it["title"], it["content_sha256"], now, now, now),
-            )
-        elif it["state"] == "changed":
-            con.execute(
-                "UPDATE items SET title=?, content_sha256=?, last_seen=?, last_changed=? WHERE source_id=? AND item_key=?",
-                (it["title"], it["content_sha256"], now, now, source_id, k),
+                "INSERT OR REPLACE INTO items(source_id,item_key,url,title,content_sha256,first_seen,last_seen,"
+                "last_changed,list_sha,text_done,detail_tries) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    source_id,
+                    k,
+                    it["url"],
+                    it["title"],
+                    sha,
+                    now,
+                    now,
+                    now,
+                    it["list_sha"],
+                    int(has_text),
+                    0 if has_text else int(it.get("detail_state") is not None),
+                ),
             )
         else:
+            changed = it["state"] == "changed"
             con.execute(
-                "UPDATE items SET last_seen=? WHERE source_id=? AND item_key=?", (now, source_id, k)
+                "UPDATE items SET title=?, list_sha=?, last_seen=?, last_changed=CASE WHEN ? THEN ? ELSE last_changed END, "
+                "content_sha256=CASE WHEN ? OR ? THEN ? ELSE content_sha256 END, "
+                "text_done=CASE WHEN ? THEN 1 WHEN ? THEN 0 ELSE text_done END, "
+                "detail_tries=CASE WHEN ? THEN 0 WHEN ? THEN detail_tries + 1 ELSE detail_tries END "
+                "WHERE source_id=? AND item_key=?",
+                (
+                    it["title"],
+                    it["list_sha"],
+                    now,
+                    changed,
+                    now,
+                    changed,
+                    has_text,
+                    sha,
+                    has_text,
+                    changed,
+                    has_text,
+                    "detail_state" in it,
+                    source_id,
+                    k,
+                ),
             )
 
 
@@ -406,6 +499,13 @@ def load_config(path: Path) -> dict:
     for s in cfg["sources"]:
         if urllib.parse.urlparse(s["list_urls"][0]).scheme != "https":
             raise SystemExit(f"{s['id']}: list_urls must be https")
+        if s.get(
+            "ca_file"
+        ):  # extra intermediate CA for a host that omits it; verification stays ON
+            ca = Path(s["ca_file"])
+            s["ca_file"] = str(ca if ca.is_absolute() else path.parent / ca)
+            if not Path(s["ca_file"]).is_file():
+                raise SystemExit(f"{s['id']}: ca_file not found")
     return cfg
 
 
@@ -422,11 +522,15 @@ def run_source(src: dict, client: Client, con: sqlite3.Connection, details: int 
     }
     ca = src.get("ca_file")
     origin = "https://" + rep["host"]
+    if src.get("tls_max"):
+        client.tls_max[rep["host"]] = src["tls_max"]
     try:
         rp, st = client.robots(origin, ca)
         if st != OK:
             rep["host_state"] = st
-            rep["notes"].append(f"robots.txt page state: {st}")
+            rep["notes"].append(
+                f"robots.txt page state: {st}" + client.last_reason.get(rep["host"], "")
+            )
             return rep
         include = re.compile(src["link_regex"]) if src.get("link_regex") else None
         items: dict[str, dict] = {}
@@ -462,6 +566,8 @@ def run_source(src: dict, client: Client, con: sqlite3.Connection, details: int 
                     continue
                 if include and not include.search(ln["url"]) and not include.search(ln["title"]):
                     continue
+                if rp is not None and not rp.can_fetch(USER_AGENT, ln["url"]):
+                    continue  # robots.txt disallowed path: never stored, never fetched
                 if ln["title"]:
                     items.setdefault(
                         ln["url"],
@@ -469,12 +575,15 @@ def run_source(src: dict, client: Client, con: sqlite3.Connection, details: int 
                             "url": ln["url"],
                             "title": ln["title"],
                             "content_sha256": sha256_text(ln["title"] + " " + ln["url"]),
+                            "list_sha": sha256_text(ln["title"] + " " + ln["url"]),
                         },
                     )
         listed = diff_items(con, sid, list(items.values()))
-        for it in [i for i in listed if i["state"] != "same"][
-            : max(details, 0)
-        ]:  # optional detail fetch, bounded
+        rep["items"] = listed  # kept even if the request budget runs out during the detail pass
+        todo = [i for i in listed if i["state"] != "same"] + [
+            i for i in listed if i["state"] == "same" and not i["text_done"] and i["tries"] < 3
+        ]
+        for it in todo[: max(details, 0)]:
             if rp is not None and not rp.can_fetch(USER_AGENT, it["url"]):
                 continue
             state, _s, _h, body, final = client.fetch(it["url"], ca)
@@ -485,7 +594,6 @@ def run_source(src: dict, client: Client, con: sqlite3.Connection, details: int 
                 it["page_title"] = pg["title"]
             else:
                 it["detail_state"] = state
-        rep["items"] = diff_items(con, sid, listed)
     except Skip as exc:
         rep["host_state"] = "skipped"
         rep["notes"].append(str(exc))
@@ -509,7 +617,7 @@ def to_record(src: dict, it: dict, now: str) -> dict:
         "staging_status": "proposed",
         "needs_review": True,
         "content_sha256": it["content_sha256"],
-        "state": it["state"],
+        "state": it["state"] if it["state"] != "same" else "text",
     }
 
 
@@ -539,6 +647,8 @@ def cmd_run(a) -> int:
         max_requests=a.max_requests or cfg.get("max_requests_per_run", 40),
     )
     now = dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if a.details is None:  # per source per run; the config value keeps the host rate polite
+        a.details = int(cfg.get("details_per_source", 0))
     reports = []
     for src in cfg["sources"]:
         if a.only and src["id"] not in a.only:
@@ -565,7 +675,7 @@ def cmd_run(a) -> int:
             json.dumps(to_record(by_id[r["source"]], it, now), ensure_ascii=False)
             for r in ok_reports
             for it in r["items"]
-            if it["state"] != "same"
+            if it["state"] != "same" or "text" in it
         ]
         # Order matters: staged rows first (flushed + fsynced), DB state last. A crash in between
         # re-emits the rows on the next run (at-least-once; consumers dedupe on doc_id + content_sha256)
@@ -597,10 +707,21 @@ def cmd_status(a) -> int:
         os.environ.get("SOURCE_WATCHER_STATE", Path.home() / ".local/state/roxira-source-watcher")
     )
     con = open_state(state_dir / "state.db")
+    if a.line:  # one line for the daily storage-growth note
+        n, done = con.execute("SELECT COUNT(*), COALESCE(SUM(text_done),0) FROM items").fetchone()
+        staged = sum(f.stat().st_size for f in (state_dir / "staged").glob("*.jsonl"))
+        db = (state_dir / "state.db").stat().st_size
+        print(
+            f"{dt.date.today()}: {n} items, {done} with page text ({n - done} to backfill), "
+            f"staged {staged / 1e6:.1f} MB, state.db {db / 1e6:.1f} MB"
+        )
+        return 0
     for row in con.execute("SELECT host, state, last_state_at, bad_runs FROM hosts ORDER BY host"):
         print(*row, sep="\t")
-    for row in con.execute("SELECT source_id, COUNT(*) FROM items GROUP BY source_id"):
-        print("items", *row, sep="\t")
+    for row in con.execute(
+        "SELECT source_id, COUNT(*), SUM(text_done) FROM items GROUP BY source_id"
+    ):
+        print("items/with_text", *row, sep="\t")
     return 0
 
 
@@ -612,10 +733,16 @@ def main(argv=None) -> int:
     r.add_argument("--only", nargs="*")
     r.add_argument("--commit", action="store_true")
     r.add_argument(
-        "--details", type=int, default=0, help="fetch up to N new/changed item pages per source"
+        "--details",
+        type=int,
+        default=None,
+        help="fetch up to N item pages per source per run (new/changed first, then the backlog); default: config details_per_source",
     )
     r.add_argument("--max-requests", type=int, default=0)
-    sub.add_parser("status")
+    st = sub.add_parser("status")
+    st.add_argument(
+        "--line", action="store_true", help="one summary line (items, text backlog, sizes)"
+    )
     c = sub.add_parser("classify")
     c.add_argument("file")
     a = ap.parse_args(argv)
