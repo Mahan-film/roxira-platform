@@ -21,7 +21,7 @@ There were three answered turns on the 2026-11-23 call:
   - «... in this message» becomes «in my sources».
 - **Sentence chunks.** A streamed sentence without a full stop is cut at a comma after `MAX_SENTENCE_CHARS` (160; it was 220).
 - **Fillers rotate** among three short phrases (`FILLER_TEXT`, separated by `|`).
-- **Greeting.** It is shorter and keeps the "not a lawyer" notice. The wording is a draft for the hub and the lawyer (R18).
+- **Greeting.** Only the opening is shorter: «سلام، قاضی هوشمند هستم.» The notice sentence is kept word for word, because voice answer policy text waits for the owners and the lawyer (HUB-ANSWER on #965, 2026-11-23).
 - **Pitch.** `TTS_PITCH` reaches edge-tts through the sidecar. The prompt cache key includes rate and pitch, so a voice change also re-synthesizes the fixed prompts.
 - **STT log.** The caller line now says why the preferred Gemini model lost, for example `gemini-3-flash-preview lost: 429,timeout`. It gives status codes only, never keys.
 

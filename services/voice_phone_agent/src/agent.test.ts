@@ -282,11 +282,12 @@ test('SentenceSplitter: shaped sentences, runaway text cut at a comma before MAX
   assert.ok(sp.flush()[0].startsWith('باید'));
 });
 
-test('fillers rotate, and the greeting is shorter than the 2026-11 one', () => {
+test('fillers rotate; the greeting is shorter but keeps the notice sentence word for word', () => {
   assert.ok(cfg.fillerTexts.length >= 2);
   assert.equal(new Set(cfg.fillerTexts).size, cfg.fillerTexts.length);
-  assert.ok(cfg.greetingText.length < GREETING.length * 0.75, `${cfg.greetingText.length} vs ${GREETING.length}`);
-  assert.match(cfg.greetingText, /وکیل/); // the notice stays
+  assert.ok(cfg.greetingText.length < GREETING.length, `${cfg.greetingText.length} vs ${GREETING.length}`);
+  // policy text waits for the owners and the lawyer (HUB-ANSWER #965, 2026-11-23)
+  assert.ok(cfg.greetingText.includes('لطفاً توجه داشته باشید که این پاسخ‌ها مشاوره اولیه است و جایگزین وکیل نیست.'));
   assert.match(cfg.ttsPitch, /^[+-]\d{1,2}Hz$/);
 });
 

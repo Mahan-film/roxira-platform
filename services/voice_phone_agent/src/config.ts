@@ -141,9 +141,10 @@ export const cfg = {
   idleHangupSeconds: num('IDLE_HANGUP_SECONDS', 60),
   pollMs: num('POLL_MS', 700),
 
-  // Shorter than the 2026-11 greeting (11.9 s) with the same notice; the wording is a draft for the hub / lawyer (R18).
+  // Only the opening is shorter than the 2026-11 greeting (11.9 s, product named twice). The notice sentence is kept
+  // word for word: voice answer policy text waits for the owners and the lawyer (HUB-ANSWER #965, 2026-11-23).
   greetingText: str('GREETING_TEXT',
-    'سلام، قاضی هوشمند هستم. پاسخ‌های من راهنمایی اولیه است و جای وکیل را نمی‌گیرد. سؤال‌تان را بفرمایید.'),
+    'سلام، قاضی هوشمند هستم. لطفاً توجه داشته باشید که این پاسخ‌ها مشاوره اولیه است و جایگزین وکیل نیست. بفرمایید سوالتان چیست؟'),
   // "|"-separated; turns rotate through them so the caller does not hear the same words every time. Empty = no filler.
   fillerTexts: str('FILLER_TEXT', 'بله، یک لحظه.|چشم، الان بررسی می‌کنم.|یک لحظه لطفاً.')
     .split('|').map((s) => s.trim()).filter(Boolean),
