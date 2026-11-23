@@ -127,7 +127,7 @@ export class PrintTemplateController {
     return this.service.findOne(this.tenantIdOf(request), id);
   }
 
-  @RequireAction(AccessAction.CREATE)
+  @RequireAction(AccessAction.ADMIN)
   @Patch(':id')
   @ApiOperation({ summary: 'ویرایش مشخصات یا ستون‌های قالب چاپ' })
   @ApiResponse({ status: HttpStatus.OK, type: PrintTemplateResponseDto })
@@ -140,7 +140,7 @@ export class PrintTemplateController {
     return this.service.update(this.tenantIdOf(request), id, dto);
   }
 
-  @RequireAction(AccessAction.CREATE)
+  @RequireAction(AccessAction.ADMIN)
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'حذف یک قالب چاپ' })

@@ -150,14 +150,15 @@
     "legacy_member": false
   },
   "DELETE /enterprise-hub/invoicing/print-templates/:id (PrintTemplateController.remove)": {
-    "policy": "invoicing:create",
+    "policy": "invoicing:admin",
     "owner": true,
     "admin": true,
-    "accountant": true,
-    "sales": true,
+    "accountant": false,
+    "sales": false,
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "DELETE /enterprise-hub/mcp/ (McpController.handleDelete)": {
@@ -2026,6 +2027,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/invoicing/print-templates/:id (PrintTemplateController.getOne)": {
@@ -2037,6 +2039,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/invoicing/print-templates/default (PrintTemplateController.getDefault)": {
@@ -2048,6 +2051,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/invoicing/print-templates/preset (PrintTemplateController.getPreset)": {
@@ -2059,6 +2063,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "GET /enterprise-hub/invoicing/reports/gross-profit/ (GrossProfitReportController.report)": {
@@ -3127,14 +3132,15 @@
     "legacy_member": false
   },
   "PATCH /enterprise-hub/invoicing/print-templates/:id (PrintTemplateController.update)": {
-    "policy": "invoicing:create",
+    "policy": "invoicing:admin",
     "owner": true,
     "admin": true,
-    "accountant": true,
-    "sales": true,
+    "accountant": false,
+    "sales": false,
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PATCH /org/branches/:id (OrgController.updateBranch)": {
@@ -5141,6 +5147,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "POST /enterprise-hub/invoicing/print-templates/barcode-sheet (PrintTemplateController.renderBarcodeSheet)": {
@@ -5152,6 +5159,7 @@
     "cheque_reviewer": false,
     "hr": false,
     "read_only": true,
+    "partner_advisor": true,
     "legacy_member": false
   },
   "POST /enterprise-hub/mcp/ (McpController.handlePost)": {

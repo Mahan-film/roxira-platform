@@ -117,7 +117,8 @@ export function buildDynamicTableHtml(
  * by tracking opening and closing table tags instead of fragile regex matching.
  */
 export function replaceTableById(html: string, tableId: string, replacementHtml: string): string {
-  const tableOpenRegex = new RegExp(`<table[^>]*\\bid=["']${tableId}["'][^>]*>`, "i");
+  const escapedTableId = tableId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const tableOpenRegex = new RegExp(`<table[^>]*\\bid=["']${escapedTableId}["'][^>]*>`, "i");
   const match = tableOpenRegex.exec(html);
   if (!match) return html;
 

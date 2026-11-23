@@ -60,6 +60,15 @@ export class CreatePrintFormTemplates1789900030000 implements MigrationInterface
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
+    // Reversible safety: prevent accidental deletion of tenant-wide custom print templates.
+    const [{ count }] = (await queryRunner.query(
+      `SELECT count(*)::int AS count FROM "inv_print_templates"`
+    )) as Array<{ count: number }>;
+    if (count > 0) {
+      throw new Error(
+        `Cannot drop "inv_print_templates": ${count} template records exist. Backup or truncate manually before rollback.`
+      );
+    }
     await disableTenantRls(queryRunner, CreatePrintFormTemplates1789900030000.TABLE);
     await queryRunner.query(`DROP TABLE IF EXISTS "inv_print_templates"`);
   }
