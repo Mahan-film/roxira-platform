@@ -13,7 +13,7 @@ warn() { printf 'WARN  %s\n' "$1"; }
 fail() { printf 'FAIL  %s\n      fix: %s\n' "$1" "$2"; fails=$((fails + 1)); }
 
 case "$LANE" in
-  L1|L2|L3|L4|L5|L6|L7|L8|L9|L10|L11|L12) ok "lane $LANE" ;;
+  L1|L2|L3|L4|L5|L6|L7|L8|L9|L10|L11|L12|RV1|RV2|RV3|RV4) ok "lane $LANE" ;;
   *) fail "lane id missing or wrong ('$LANE')" "bash scripts/dev/lane_preflight.sh L1   (first line of the prompt says which lane)" ;;
 esac
 
@@ -80,6 +80,30 @@ fi
 for t in node; do
   if command -v "$t" >/dev/null 2>&1; then ok "$t $("$t" --version 2>/dev/null | head -1)"; else warn "$t not installed (only needed for its own specs)"; fi
 done
+
+# Disk: new worktrees go to ROXIRA_WT_ROOT, the external work disk, or next to the clone (claim.sh).
+free_gib() { df -Pk "$1" 2>/dev/null | awk 'NR==2 {print int($4 / 1048576)}'; }
+wt_home="${ROXIRA_WT_ROOT:-}"
+if [ -z "$wt_home" ] && [ -d /Volumes/ssd/roxira-work/wt ] && [ -w /Volumes/ssd/roxira-work/wt ]; then
+  wt_home=/Volumes/ssd/roxira-work/wt
+fi
+[ -n "$wt_home" ] || wt_home="${root:-$HOME}"
+wt_free=$(free_gib "$wt_home"); sys_free=$(free_gib /)
+if [ -z "$wt_free" ]; then
+  fail "cannot read free space for $wt_home" "check that the work disk is mounted: ls $wt_home"
+elif [ "$wt_free" -lt 8 ]; then
+  fail "disk: ${wt_free} GiB free where new worktrees go ($wt_home), need 8" "post BLOCKED: disk on issue 592; the hub frees space"
+else
+  ok "disk: ${wt_free} GiB free for worktrees in $wt_home"
+fi
+if [ -n "$sys_free" ] && [ "$sys_free" -lt 3 ]; then
+  fail "disk: only ${sys_free} GiB free on the system disk" "post BLOCKED: disk on issue 592"
+elif [ -n "$sys_free" ] && [ "$sys_free" -lt 6 ]; then
+  warn "system disk has ${sys_free} GiB free: no Docker build and no npm install outside the work disk"
+fi
+case "$wt_home" in
+  /Volumes/*) [ -n "${npm_config_cache:-}" ] || warn "run: source scripts/dev/lane_env.sh   (puts npm, pip and Playwright caches on the work disk)" ;;
+esac
 
 if [ -n "${root:-}" ] && [ -n "$(git status --porcelain 2>/dev/null | head -1)" ]; then
   warn "uncommitted changes in this checkout: commit them on their own branch or stash before a new task"

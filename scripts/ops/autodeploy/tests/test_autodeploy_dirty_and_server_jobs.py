@@ -112,6 +112,7 @@ def _init_git_fixture(tmp_path: pathlib.Path, deploy_script_body: str, extra_com
         "AUTODEPLOY_STATE_DIR": str(state_dir),
         "AUTODEPLOY_LOG_DIR": str(log_dir),
         "AUTODEPLOY_LOCK": str(lock_file),
+        "AUTODEPLOY_SKIP_CI_GATE": "1",
     }
     return work, state_dir, notify_log, target_sha, env
 

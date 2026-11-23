@@ -57,4 +57,6 @@ Before T211:
 - A future Rust service (wrapping TEI + Qdrant + sparse/dense fusion) can be swapped in
   by implementing `RetrievalBackend` over HTTP/UDS with zero changes to `/chat`,
   `/chat/stream`, or frontend SSE parsing.
+- Any such sidecar rewrite is subject to the **Rust Hot-Path Gate** ([RUST_HOT_PATH_GATE.md](RUST_HOT_PATH_GATE.md), T308 / R33):
+  the stage must exceed 30% of retrieval p95 latency and a prototype must prove > 2x speedup before implementation.
 - No new runtime container is added in T211; existing Redis is reused with bounded keys.

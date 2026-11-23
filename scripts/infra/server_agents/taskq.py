@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import signal
 import sqlite3
@@ -47,11 +48,25 @@ STATES = ("queued", "running", "done", "failed", "cancelled")
 WAKEUP_FILE = "taskq_wakeup"
 POLL_SLICE = 0.1
 DEFAULT_LADDER = "best,free,ds-flash,strong"
+# Every step name `add` accepts. light = gateway group agent-light-free, paid = agent-free-paid (see lane_policy.STEP_GROUP).
+LADDER_STEPS = ("best", "free", "ds-flash", "strong", "light", "paid")
+
+
+def default_ladder() -> str:
+    """Ladder used when `add` gets no --ladder and when orch builds one: env TASKQ_LADDER, else the box lane policy
+    (env ROXIRA_LANE_POLICY, lane_policy.py), else DEFAULT_LADDER (unchanged everywhere else)."""
+    env = os.environ.get("TASKQ_LADDER", "").strip()
+    if env:
+        return env
+    import lane_policy  # local import: taskq stays importable without the policy module on odd PYTHONPATHs
+    steps = lane_policy.ladder(lane_policy.load())
+    return ",".join(steps) if steps else DEFAULT_LADDER
 # Steps whose model calls go through the key-pool gateway, so the cost log sees them. ds-flash and strong call
 # OpenRouter directly from run_task.sh: their paid spend is NOT metered (reported as `unmetered` attempts).
-METERED_STEPS = ("best", "free")
+METERED_STEPS = ("best", "free", "light", "paid")
 # Author model per ladder step, so the reviewer can pick a different family (review_hook.py).
-STEP_AUTHOR = {"best": "google/gemini-best", "free": "keypool/agent-strong-free",
+STEP_AUTHOR = {"best": "google/gemini-best", "free": "keypool/agent-strong-free", "light": "keypool/agent-light-free",
+               "paid": "keypool/agent-free-paid",
                "ds-flash": "deepseek/deepseek-v4.1-flash"}
 
 
@@ -157,6 +172,8 @@ def step_args(step: str, public: bool) -> list[str] | None:
         return ["--gateway", "--public", "--tier", "best"] if public else None
     if step == "free":
         return ["--gateway", "--public"] if public else None
+    if step in ("light", "paid"):  # gateway groups agent-light-free / agent-free-paid (the box ladder)
+        return ["--gateway", "--public", "--tier", step] if public else None
     if step == "ds-flash":
         return ["--model", "ds-flash"]
     if step == "strong":
@@ -353,13 +370,16 @@ class Worker:
         if not t["work_file"]:
             shutil.copyfile(t["task_file"], work)
         cmd = [runner_path(), "--task-file", work, "--slug", slug, *margs]
+        env = dict(os.environ)
+        if re.fullmatch(r"l[0-9]+", t["lane"] or ""):  # so the box runner books the attempt on the right lane
+            env["LANE_RUN_LANE"] = t["lane"].upper()
         for s in json.loads(t["scopes"]):
             cmd += ["--scope", s]
         if t["public"] and "--public" not in cmd:
             cmd.append("--public")
         offset = results_size()
         with open(Path(work).parent / f"{t['id']}-a{n}.out", "wb") as logf:
-            proc = subprocess.Popen(cmd, stdout=logf, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True)
+            proc = subprocess.Popen(cmd, stdout=logf, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True, env=env)
         cur = self.db.execute("INSERT INTO attempts (task_id, ts, step, lane) VALUES (?,?,?,?)", (t["id"], time.time(), name, t["lane"]))
         update(self.db, t["id"], status="running", pid=proc.pid, attempts=n, step_idx=idx, work_file=work)
         direct = name not in METERED_STEPS
@@ -534,10 +554,22 @@ def cmd_add(db, a) -> int:
     if not Path(a.task_file).is_file():
         print(f"task file not found: {a.task_file}", file=sys.stderr)
         return 2
-    ladder = [s.strip() for s in a.ladder.split(",") if s.strip()]
-    bad = [s for s in ladder if s not in ("best", "free", "ds-flash", "strong")]
+    try:  # box lane policy (env ROXIRA_LANE_POLICY): box ladder default, and no denied or missing scope
+        import lane_policy
+        ladder_txt = a.ladder or default_ladder()
+        pol = lane_policy.load()
+        problems = lane_policy.check_scopes(a.scope, pol, Path(__file__).resolve().parents[3]) if pol else []
+    except ValueError as exc:
+        print(f"lane policy: {exc}", file=sys.stderr)
+        return 2
+    if problems:
+        print("refused by the box lane policy:\n  " + "\n  ".join(problems), file=sys.stderr)
+        return 2
+    ladder = [s.strip() for s in ladder_txt.split(",") if s.strip()]
+    bad = [s for s in ladder if s not in LADDER_STEPS]
     if not ladder or bad:
-        print(f"bad ladder {a.ladder!r} (best, free, ds-flash, strong)", file=sys.stderr)
+        steps_txt = ", ".join(LADDER_STEPS)
+        print(f"bad ladder {ladder_txt!r} ({steps_txt})", file=sys.stderr)
         return 2
     now = time.time()
     cur = db.execute(
@@ -741,7 +773,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--public", action="store_true")
     s.add_argument("--priority", type=int, default=0)
     s.add_argument("--accept")
-    s.add_argument("--ladder", default=DEFAULT_LADDER)
+    s.add_argument("--ladder", default=None, help="steps, comma separated (default: env TASKQ_LADDER, box policy, best,free,ds-flash,strong)")
     s.add_argument("--lane", default="", help="budget lane (lane_budgets.json): be, fe, data, test, ...")
     s = sub.add_parser("list")
     s.add_argument("--status", choices=STATES)
