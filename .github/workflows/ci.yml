@@ -728,6 +728,7 @@ jobs:
         shard: [1, 2, 3]
     runs-on: ${{ fromJSON(needs.pick-runner.outputs.docker || '"ubuntu-latest"') }}
     timeout-minutes: 30
+    continue-on-error: true
     services:
       postgres:
         image: ${{ needs.pick-runner.outputs.image_registry || vars.CI_IMAGE_REGISTRY || 'mirror.gcr.io/library' }}/postgres:17

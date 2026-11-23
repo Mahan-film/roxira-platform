@@ -392,8 +392,12 @@ describePg('Financial reports on PostgreSQL', () => {
     // a plain single-pass aggregate over the same 200k lines on this same machine is the baseline, and the
     // report may cost at most TRIAL_BALANCE_MAX_RATIO times that. The 2000 ms floor is kept, so a fast
     // machine still has to meet the original target, and a slow machine gets proportionally more time.
-    // A report that regresses to a per-voucher or per-account loop is far above the ratio on any machine.
+    // TRIAL_BALANCE_MAX_RATIO = 10 allows headroom for group-by / CTE framing and slow CI disk I/O, while
+    // catching unindexed per-voucher or per-account N+1 loops (which would exceed 50-100×).
     const TRIAL_BALANCE_MAX_RATIO = 10;
+    // Note: trialBalance uses CAST(e.date AS date) <= '2027-03-20', which is inclusive of all timestamps up to
+    // 2027-03-20 23:59:59.999. In timestamp math, e.date < '2027-03-21' covers the exact same range while preserving
+    // index sargability on IDX_fin_journal_entries_tenant_date.
     const baselineSql = `SELECT sum(l.debit) AS d, sum(l.credit) AS c
                          FROM fin_journal_entry_lines l
                          JOIN fin_journal_entries e ON e.id = l.journal_entry_id
