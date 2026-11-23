@@ -210,6 +210,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         keywords: ["سامانه مودیان", "مالیات", "ارزش افزوده", "صورتحساب الکترونیکی"],
       },
       {
+        href: "/app/tax/previews",
+        label: "پیش‌نمایش‌های مالیاتی",
+        icon: "Calculator",
+        module: "tax",
+        keywords: ["پیش‌نمایش مالیات", "مالیات شرکت‌ها", "مشاغل", "اجاره", "تکلیفی پزشکان", "محاسبه مالیات"],
+      },
+      {
         href: "/app/tax/electronic-books",
         label: "دفاتر تجاری الکترونیکی",
         icon: "FileSpreadsheet",
