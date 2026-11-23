@@ -115,13 +115,14 @@ const buildService = () => {
 };
 
 describe('InvoicingService — jurisdiction and foreign currency', () => {
-  it('creates a EUR invoice in EUR with INTL jurisdiction and zero VAT by default', async () => {
+  it('creates a EUR export invoice with explicit INTL jurisdiction and zero VAT', async () => {
     const { service } = buildService();
     const created = await service.create(
       'tenant-a',
       buildDto({
         currency: Currency.EUR,
         fxRate: 900_000,
+        jurisdiction: InvoiceJurisdiction.INTL,
         items: [{ description: 'Consulting', quantity: 2, unitPrice: 100 }],
       }),
     );
@@ -137,13 +138,14 @@ describe('InvoicingService — jurisdiction and foreign currency', () => {
     expect(created.baseTotalAmount).toBe(100);
   });
 
-  it('applies an explicit VAT rate to a foreign invoice in the invoice currency', async () => {
+  it('applies an explicit VAT rate to a foreign export invoice in the invoice currency', async () => {
     const { service } = buildService();
     const created = await service.create(
       'tenant-a',
       buildDto({
         currency: Currency.USD,
         fxRate: 920_000,
+        jurisdiction: InvoiceJurisdiction.INTL,
         items: [
           { description: 'License', quantity: 1, unitPrice: 100, vatRate: 0.2 },
         ],
@@ -207,7 +209,7 @@ describe('InvoicingService — jurisdiction and foreign currency', () => {
     expect(created.finalPayable).toBe(1100);
   });
 
-  it('switches to INTL and recalculates when the currency changes on update', async () => {
+  it('keeps domestic jurisdiction when currency changes on update without explicit jurisdiction', async () => {
     const { service } = buildService();
     const created = await service.create('tenant-a', buildDto());
 
@@ -217,8 +219,38 @@ describe('InvoicingService — jurisdiction and foreign currency', () => {
     });
 
     expect(updated.currency).toBe(Currency.EUR);
-    expect(updated.jurisdiction).toBe(InvoiceJurisdiction.INTL);
+    expect(updated.jurisdiction).toBe(InvoiceJurisdiction.IR);
     expect(updated.fxRate).toBe(900_000);
     expect(updated.amountFx).toBe(updated.finalPayable);
+  });
+
+  it('treats a foreign-currency invoice without explicit jurisdiction as domestic (not INTL)', async () => {
+    const { service } = buildService();
+    const created = await service.create(
+      'tenant-a',
+      buildDto({ currency: Currency.EUR, fxRate: 900_000 }),
+    );
+
+    expect(created.jurisdiction).toBe(InvoiceJurisdiction.IR);
+    expect(created.totalTax).toBe(100);
+    expect(created.finalPayable).toBe(1100);
+  });
+
+  it('normalises vatRate 1 as 1% (0.01) and 0.5 as 50% (0.5)', async () => {
+    const { service } = buildService();
+    const created = await service.create(
+      'tenant-a',
+      buildDto({
+        items: [
+          { description: 'one percent', quantity: 1, unitPrice: 1000, vatRate: 1 },
+          { description: 'fifty percent', quantity: 1, unitPrice: 1000, vatRate: 0.5 },
+        ],
+      }),
+    );
+
+    expect(created.items[0].vatRate).toBe(0.01);
+    expect(created.items[0].tax).toBe(10);
+    expect(created.items[1].vatRate).toBe(0.5);
+    expect(created.items[1].tax).toBe(500);
   });
 });

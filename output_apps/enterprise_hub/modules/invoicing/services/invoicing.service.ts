@@ -224,7 +224,7 @@ export class InvoicingService {
     if (!Number.isFinite(value) || value < 0) {
       throw new BadRequestException('نرخ مالیات ارزش افزوده نامعتبر است.');
     }
-    const rate = value > 1 ? value / 100 : value;
+    const rate = value >= 1 ? value / 100 : value;
     if (rate > 1) {
       throw new BadRequestException('نرخ مالیات ارزش افزوده نمی‌تواند بیش از ۱۰۰٪ باشد.');
     }
@@ -235,7 +235,7 @@ export class InvoicingService {
     if (!Number.isFinite(value) || value < 0) {
       throw new BadRequestException('نرخ مالیات ارزش افزوده نامعتبر است.');
     }
-    let rate = value > 1 ? value / 100 : value;
+    let rate = value >= 1 ? value / 100 : value;
     if (rate > 1) rate = 1;
     // Six decimals: the same precision the statutory store accepts for rates (statutory-catalogue RATE).
     return Math.round((rate + Number.EPSILON) * 1_000_000) / 1_000_000;
@@ -257,11 +257,9 @@ export class InvoicingService {
     return currency === Currency.IRR || currency === Currency.IRT;
   }
 
-  /** حوزه قضایی پیش‌فرض بر مبنای ارز: IRR/IRT داخلی، سایر ارزها بین‌المللی. */
-  private defaultJurisdiction(currency: Currency): InvoiceJurisdiction {
-    return this.isIranianCurrency(currency)
-      ? InvoiceJurisdiction.IR
-      : InvoiceJurisdiction.INTL;
+  /** حوزه قضایی پیش‌فرض از بسته کشور مستأجر (نه از ارز صورتحساب). */
+  private defaultJurisdiction(): InvoiceJurisdiction {
+    return InvoiceJurisdiction.IR;
   }
 
   /**
@@ -665,7 +663,7 @@ export class InvoicingService {
 
     const currency = source.currency ?? Currency.IRR;
     const jurisdiction =
-      source.jurisdiction ?? this.defaultJurisdiction(currency);
+      source.jurisdiction ?? this.defaultJurisdiction();
     // A new invoice is dated today: issued now, or a draft that takes today's rate.
     const defaultVatRate = await this.defaultVatRateForJurisdiction(
       tenantId,
@@ -1002,7 +1000,7 @@ export class InvoicingService {
     >,
   ): Promise<{ items: InvoiceItem[]; totals: InvoiceTotals; currency: Currency }> {
     const currency = source.currency ?? Currency.IRR;
-    const jurisdiction = source.jurisdiction ?? this.defaultJurisdiction(currency);
+    const jurisdiction = source.jurisdiction ?? this.defaultJurisdiction();
     const defaultVatRate = await this.defaultVatRateForJurisdiction(
       tenantId,
       jurisdiction,
@@ -1223,8 +1221,6 @@ export class InvoicingService {
 
     if (dto.jurisdiction !== undefined) {
       entity.jurisdiction = dto.jurisdiction;
-    } else if (currencyChanged) {
-      entity.jurisdiction = this.defaultJurisdiction(entity.currency);
     }
 
     if (currencyChanged || dto.fxRate !== undefined) {
