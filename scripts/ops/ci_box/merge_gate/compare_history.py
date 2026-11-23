@@ -6,7 +6,7 @@ drift) and prints a table plus a summary. Read-only: only GET requests go out (a
 
 Rules replayed per merged PR, as of the moment it was merged:
   hold        label / title marker / unresolved BLOCKER comment (labels are the current ones)
-  protected   changed files vs protected_globs, owner label added by an allowlisted id
+  protected   changed files vs protected_globs (B7), owner `OWNER-OK #<PR> <sha7>` comment by an allowlisted id
   review      latest review-desk comment (comments after merged_at are ignored) names the head SHA and
               says "no blocker", or an allowlisted human approved that head
   checks      required_checks on the head SHA (current check-runs; a rerun after the merge can skew this)
@@ -59,7 +59,7 @@ class ReadOnlyAsOf:
         return res
 
 
-def merged_prs(api: Callable, repo: str, limit: int) -> list[dict]:
+def merged_prs(api: Callable, repo: str, limit: int, since: str = "") -> list[dict]:
     out: list[dict] = []
     page = 1
     while len(out) < limit and page <= 20:
@@ -69,6 +69,8 @@ def merged_prs(api: Callable, repo: str, limit: int) -> list[dict]:
         out += [p for p in batch if p.get("merged_at")]
         page += 1
     out.sort(key=lambda p: p["merged_at"], reverse=True)
+    if since:  # ISO-8601 UTC, e.g. 2026-11-23T09:00:00Z: only PRs merged at or after it
+        out = [p for p in out if p["merged_at"] >= since]
     return out[:limit]
 
 
@@ -86,8 +88,8 @@ def replay(cfg: dict, api: Callable, brief: dict) -> dict:
     res["hold"] = (not why, why)
     files = api("GET", f"repos/{repo}/pulls/{n}/files?per_page=100", None, True)
     hits = mg.protected_hits(files, cfg["protected_globs"])
-    ok = not hits or gate.owner_approved(n, labels)
-    res["protected"] = (ok, "" if ok else "protected paths without owner approval: " + ", ".join(hits[:3]))
+    ok = not hits or gate.owner_ok(n, head)
+    res["protected"] = (ok, "" if ok else "owner sentence required (protected paths): " + ", ".join(hits[:3]))
     ok, why = gate.review_ok(n, head)
     res["review"] = (ok, "" if ok else why)
     status, why = gate.checks_status(head)
@@ -111,9 +113,9 @@ def replay(cfg: dict, api: Callable, brief: dict) -> dict:
     }
 
 
-def build_report(cfg: dict, api: Callable, limit: int) -> dict:
+def build_report(cfg: dict, api: Callable, limit: int, since: str = "") -> dict:
     rows = []
-    for brief in merged_prs(api, cfg["repo"], limit):
+    for brief in merged_prs(api, cfg["repo"], limit, since):
         try:
             rows.append(replay(cfg, api, brief))
         except mg.GhError as e:
@@ -166,11 +168,12 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Compare gate decisions with merged history (read-only)")
     ap.add_argument("--config", default=os.environ.get("MERGE_GATE_CONFIG"))
     ap.add_argument("--limit", type=int, default=30)
+    ap.add_argument("--since", default="", help="only PRs merged at or after this UTC time (2026-11-23T09:00:00Z)")
     ap.add_argument("--format", choices=("md", "json"), default="md")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s", stream=sys.stderr)
     cfg = mg.load_config(args.config)
-    rep = build_report(cfg, ReadOnlyAsOf(mg.GhApi(cfg["proxy"])), args.limit)
+    rep = build_report(cfg, ReadOnlyAsOf(mg.GhApi(cfg["proxy"])), args.limit, args.since)
     if args.format == "json":
         print(json.dumps(rep, indent=1, default=list))
     else:

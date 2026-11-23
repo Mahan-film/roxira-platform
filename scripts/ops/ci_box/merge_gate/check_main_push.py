@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import argparse
 import fcntl
-import importlib.util
 import logging
 import os
 import sys
@@ -31,19 +30,7 @@ STATE_FILE = "last_main_sha"
 MAX_LIST = 10
 
 
-def load_notify() -> Callable[[str], bool]:
-    """Return notify.send. Looks next to this file (installed copy), then in the repo tree."""
-    here = Path(__file__).resolve()
-    candidates = [Path(os.environ.get("NOTIFY_PY", "")), here.parent / "notify.py",
-                  here.parents[2] / "notify" / "notify.py"]
-    for path in candidates:
-        if path.is_file():
-            spec = importlib.util.spec_from_file_location("roxira_notify", path)
-            mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)
-            return mod.send
-    log.warning("notify.py not found: alerts go to the log only")
-    return lambda text: False
+load_notify = mg.load_notify  # shared with the gate (same notify.py lookup)
 
 
 def is_direct(api, repo: str, sha: str) -> bool:
