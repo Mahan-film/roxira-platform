@@ -39,6 +39,7 @@ describePg('BudgetEncumbrance on PostgreSQL (NOSUPERUSER NOBYPASSRLS, FORCE RLS)
   let admin: DataSource;
   let appDs: DataSource;
   let service: BudgetControlService;
+  const fy2026IdByTenant: Record<string, number> = {};
 
   beforeAll(async () => {
     admin = new DataSource(options(ADMIN_DB));
@@ -66,6 +67,7 @@ describePg('BudgetEncumbrance on PostgreSQL (NOSUPERUSER NOBYPASSRLS, FORCE RLS)
          VALUES ($1, 'FY2026', '2026-01-01', '2026-12-31', 'OPEN') RETURNING "id"`,
         [tid],
       )) as Array<{ id: number }>;
+      fy2026IdByTenant[tid] = fyRows[0].id;
       const dimRows = (await ownerDs.query(
         `INSERT INTO "fin_dimensions" ("tenant_id", "kind", "code", "name")
          VALUES ($1, 'COST_CENTER', $2, 'Marketing') RETURNING "id"`,
@@ -140,11 +142,11 @@ describePg('BudgetEncumbrance on PostgreSQL (NOSUPERUSER NOBYPASSRLS, FORCE RLS)
       }),
     ).rejects.toMatchObject({ status: 400 });
 
-    // Revise Tenant A budget to 5,500.00 -> PO-89 passes leaving 300.00
+    // Revise Tenant A budget to 5,500.00 for FY2026 -> PO-89 passes leaving 300.00
     await new TenantScope(appDs).run(TENANT_A, async (m) => {
       await m.query(
-        `UPDATE "fin_account_budgets" SET "budget_amount" = $1, "updated_at" = now() WHERE "tenant_id" = $2 AND "account_code" = $3`,
-        [fromMinor(T6.revisedBudget).toString(), TENANT_A, T6.account],
+        `UPDATE "fin_account_budgets" SET "budget_amount" = $1, "updated_at" = now() WHERE "tenant_id" = $2 AND "account_code" = $3 AND "fiscal_year_id" = $4`,
+        [fromMinor(T6.revisedBudget).toString(), TENANT_A, T6.account, fy2026IdByTenant[TENANT_A]],
       );
     });
 
