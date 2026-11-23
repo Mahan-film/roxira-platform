@@ -52,7 +52,13 @@ export function InvoiceCreateDrawer({
         const flattenedLines: InvoiceLineState[] = [];
         for (const r of receipts) {
           for (const l of r.lines) {
-            const qtyNormal = (Number(l.quantity) / 100).toString();
+            const q = BigInt(l.quantity);
+            const whole = q / 100n;
+            const frac = q % 100n;
+            const qtyNormal =
+              frac === 0n
+                ? whole.toString()
+                : `${whole}.${frac.toString().padStart(2, "0").replace(/0+$/, "")}`;
             // unit cost minor -> rial
             const unitPriceRials = (BigInt(l.unitCost) / 100n).toString();
             flattenedLines.push({
