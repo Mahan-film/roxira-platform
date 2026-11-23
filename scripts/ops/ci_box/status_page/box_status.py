@@ -39,6 +39,7 @@ TUNNEL_URL = "http://127.0.0.1:4181/health/liveliness"
 BACKUP_STAMP = "/var/lib/roxira/last-backup"
 DATA_DISK = "/srv/data"
 BOX_STATUS_BIN = "/usr/local/bin/box-status"
+BWRAP_MIN = (0, 11, 2)  # docs/ops/SANDBOX_DECISION.md
 
 # (label, unit, kind) kind: service = long-running, oneshot = timer-driven service, timer
 UNITS = [
@@ -488,6 +489,27 @@ def collect_backups(env: dict, now: float) -> dict:
     return {"state": "ok", "items": items}
 
 
+def parse_bwrap_version(text: str) -> tuple[int, ...] | None:
+    """`bubblewrap 0.11.1` -> (0, 11, 1); None if the output has no version."""
+    m = re.search(r"(\d+)\.(\d+)\.(\d+)", text or "")
+    return tuple(int(x) for x in m.groups()) if m else None
+
+
+def collect_sandbox(runner=run) -> dict:
+    """bwrap version; WARN below BWRAP_MIN. Missing binary or unparsable output is unknown, never a failure."""
+    rc, text = runner(["bwrap", "--version"], 10)
+    if rc != 0:
+        return unknown(f"bwrap --version rc {rc}")
+    ver = parse_bwrap_version(text)
+    if ver is None:
+        return unknown("bwrap version not parseable")
+    want = ".".join(str(x) for x in BWRAP_MIN)
+    got = ".".join(str(x) for x in ver)
+    if ver < BWRAP_MIN:
+        return {"state": "warn", "version": got, "text": f"WARN bwrap {got} is below {want}"}
+    return {"state": "ok", "version": got, "text": f"bwrap {got}"}
+
+
 # ------------------------------------------------------------------ collect + render
 def collect(env: dict | None = None, now: float | None = None, runner=run, prev: dict | None = None) -> dict:
     env = dict(os.environ if env is None else env)
@@ -497,7 +519,8 @@ def collect(env: dict | None = None, now: float | None = None, runner=run, prev:
                     ("cost", lambda: collect_cost(env, now)), ("system", lambda: collect_system(env)),
                     ("runners", lambda: collect_runners(env, runner)), ("tunnel", collect_tunnel),
                     ("containers", lambda: collect_containers(runner)),
-                    ("phone", lambda: collect_phone(env, now, runner, (prev or {}).get("phone"))), ("backups", lambda: collect_backups(env, now))):
+                    ("phone", lambda: collect_phone(env, now, runner, (prev or {}).get("phone"))), ("backups", lambda: collect_backups(env, now)),
+                    ("sandbox", lambda: collect_sandbox(runner))):
         try:
             snap[key] = fn()
         except Exception as exc:  # one broken source must not blank the page
@@ -644,6 +667,10 @@ def render_html(snap: dict, refresh: int = 120) -> str:
         st = ("neutral", "none yet") if not x["present"] else (("unknown", "unreadable stamp") if x["ts"] is None else ("ok", age_text(x["age_s"])))
         t += f"<tr><td>{e(x['label'])}</td><td>{dot(*st)}</td><td>{e(fmt_ts(x['ts']))}</td></tr>"
     sec("backup freshness", t + "</table>")
+
+    # sandbox
+    sb = snap.get("sandbox", {})
+    sec("sandbox tooling", f"<p>{dot(sb.get('state', 'unknown'), sb.get('text') or sb.get('error', ''))}</p>")
 
     return (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
             f'<meta http-equiv="refresh" content="{int(refresh)}"><title>Box status</title><style>{CSS}</style></head><body><main>'
