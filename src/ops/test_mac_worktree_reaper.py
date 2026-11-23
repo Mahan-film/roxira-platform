@@ -6,14 +6,17 @@ import subprocess
 import tempfile
 import unittest
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_PATH = os.path.join(_HERE, "..", "..", "scripts", "dev", "mac_worktree_reaper.py")
 reaper = None
+
+
+def _script_path():
+    here = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(here, "..", "..", "scripts", "dev", "mac_worktree_reaper.py")
 
 
 def setUpModule():
     global reaper
-    spec = importlib.util.spec_from_file_location("mac_worktree_reaper", _PATH)
+    spec = importlib.util.spec_from_file_location("mac_worktree_reaper", _script_path())
     reaper = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(reaper)
 
