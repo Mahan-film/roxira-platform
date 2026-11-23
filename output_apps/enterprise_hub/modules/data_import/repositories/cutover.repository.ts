@@ -12,6 +12,7 @@ export interface CreateCutoverInput {
   legacyNumberPrefix: string;
   executedBy: string;
   metadata?: Record<string, unknown> | null;
+  isGoLiveActive?: boolean;
 }
 
 /**
@@ -110,9 +111,9 @@ export class CutoverRepository {
           periodLockId: data.periodLockId,
           openingJournalEntryId: data.openingJournalEntryId ?? null,
           legacyNumberPrefix: data.legacyNumberPrefix,
-          // New cutovers always start active; UQ_data_import_cutovers_one_active_per_tenant
-          // guarantees at most one active row per tenant at the database layer.
-          isGoLiveActive: true,
+          // New cutovers default to active; caller can pass explicit isGoLiveActive.
+          // UQ_data_import_cutovers_one_active_per_tenant guarantees at most one active row per tenant.
+          isGoLiveActive: data.isGoLiveActive ?? true,
           executedBy: data.executedBy,
           metadata: data.metadata ?? null,
         });

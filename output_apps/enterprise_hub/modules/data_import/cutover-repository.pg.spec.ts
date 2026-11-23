@@ -72,7 +72,7 @@ describePg('CutoverRepository FORCE RLS, unique active index & atomic rollback o
     await ownerDs.query(`GRANT CONNECT ON DATABASE "${dbName}" TO ${APP_ROLE}`);
     await ownerDs.query(`GRANT USAGE ON SCHEMA public TO ${APP_ROLE}`);
     await ownerDs.query(
-      `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${APP_ROLE}`,
+      `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE data_import_cutovers, fin_period_locks, audit_log TO ${APP_ROLE}`,
     );
     await ownerDs.query(
       `GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ${APP_ROLE}`,
