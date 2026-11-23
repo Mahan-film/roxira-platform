@@ -25,6 +25,9 @@ home="${JIT_HOME:-/srv/data/ci-cache/jit}"
 template="${JIT_TEMPLATE:-$HOME/jit/runner-template}"
 image="${JIT_IMAGE:-roxira-ci-light:latest}"
 poll="${JIT_POLL:-3}"
+# Wall-time cap per job (jit_watchdog.py): default 1110 s = longest of the last 20 real runs (739 s) + 50%.
+# Override: JIT_MAX_WALL_S, or the control file $control/max-wall-s (seconds; mahanfilms can write it).
+watchdog="${JIT_WATCHDOG:-$(dirname "$(readlink -f "$0")")/jit_watchdog.py}"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 export DOCKER_HOST="${DOCKER_HOST:-unix://$XDG_RUNTIME_DIR/docker.sock}"
 umask 077
@@ -55,6 +58,18 @@ claim() {
   done
 }
 
+# guard <on-timeout cmd> <cmd...>: run cmd under the wall-time watchdog. If the watchdog file is
+# missing, fall back to coreutils timeout: never run an unbounded job.
+guard() {
+  local on_to="$1"; shift
+  if [ -f "$watchdog" ]; then
+    python3 "$watchdog" --control-file "$control/max-wall-s" --on-timeout "$on_to" -- "$@"
+  else
+    say "watchdog missing, falling back to timeout"
+    timeout --kill-after=10 "${JIT_MAX_WALL_S:-1110}" "$@"
+  fi
+}
+
 run_light() {
   local name="$1" cfg="$2" envf cid rc
   envf="$(mktemp "$XDG_RUNTIME_DIR/jit-env.XXXXXX")"
@@ -71,7 +86,7 @@ run_light() {
   rm -f "$envf"
   say "container ${cid:0:12} for $name"
   set +e
-  docker start -a "$cid"
+  guard "docker kill $name" docker start -a "$cid"
   rc=$?
   set -e
   return "$rc"
@@ -100,7 +115,7 @@ run_docker() {
   (
     cd "$dir"
     # shellcheck disable=SC2086
-    $pin env -i HOME="$HOME" PATH=/usr/local/bin:/usr/bin:/bin USER="$(id -un)" LANG=C.UTF-8 \
+    guard "" $pin env -i HOME="$HOME" PATH=/usr/local/bin:/usr/bin:/bin USER="$(id -un)" LANG=C.UTF-8 \
       XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" DOCKER_HOST="$DOCKER_HOST" \
       RUNNER_TOOL_CACHE=/opt/hostedtoolcache AGENT_TOOLSDIRECTORY=/opt/hostedtoolcache \
       ACTIONS_RUNNER_INPUT_JITCONFIG="$cfg" \
