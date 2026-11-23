@@ -11,6 +11,7 @@
  * Opt-in like the other pg specs: skipped unless ROXIRA_TEST_PG_HOST is set.
  */
 import 'reflect-metadata';
+import * as crypto from 'node:crypto';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import * as path from 'path';
 import { DataSource } from 'typeorm';
@@ -37,7 +38,7 @@ const describePg = HOST ? describe : describe.skip;
 const OWNER = process.env.ROXIRA_TEST_PG_USER ?? 'postgres';
 const OWNER_PW = process.env.ROXIRA_TEST_PG_PASSWORD;
 const PORT = Number(process.env.ROXIRA_TEST_PG_PORT ?? 5432);
-const APP_PW = 'quotation-app-test-only';
+const APP_PW = process.env.ROXIRA_TEST_PG_APP_PASSWORD ?? crypto.randomBytes(16).toString('hex');
 const T1 = '11111111-1111-4111-8111-111111111111';
 const T2 = '22222222-2222-4222-8222-222222222222';
 

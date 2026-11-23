@@ -214,7 +214,8 @@ export class QuotationToInvoiceService {
       // Prepare invoice items: quantity is a plain decimal, prices/discounts use exact minor units
       const invoiceItems = quotationLines.map((line) => {
         const rawQty = String(line.quantity ?? '').trim();
-        const normalizedQty = rawQty.includes('.') ? rawQty.replace(/\.?0+$/, '') : rawQty;
+        const cleanQty = rawQty.startsWith('.') ? `0${rawQty}` : rawQty;
+        const normalizedQty = cleanQty.includes('.') ? cleanQty.replace(/\.?0+$/, '') : cleanQty;
         if (!/^\d+(?:\.\d+)?$/.test(normalizedQty)) {
           throw new BadRequestException('مقدار سطر پیش‌فاکتور معتبر نیست.');
         }
@@ -226,6 +227,10 @@ export class QuotationToInvoiceService {
         const discountMinor = line.discount ? toMinor(line.discount) : 0n;
         const unitPriceVal = fromMinor(unitPriceMinor);
         const discountVal = discountMinor > 0n ? fromMinor(discountMinor) : 0;
+        // In modules/accounting/money.ts:90, fromMinor returns `number` for values within MAX_NUMBER_MINOR
+        // (2^51 minor units, ~2.25 quadrillion Rials) and `string` (minorToDecimal) only if it overflows.
+        // InvoiceItemDto requires `number` for unitPrice; if an amount overflows safe float representation,
+        // we fail closed with BadRequestException rather than passing an unsafe string to the invoice service.
         if (typeof unitPriceVal === 'string' || typeof discountVal === 'string') {
           throw new BadRequestException(
             'مبلغ واحد یا تخفیف سطر بیش از حد مجاز برای صدور صورتحساب است.',

@@ -345,6 +345,16 @@ function NewQuotationForm({
       setError("کد طرف‌حساب الزامی است.");
       return;
     }
+    const qtyNum = typeof quantity === "number" ? quantity : parseFloat(String(quantity));
+    if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
+      setError("تعداد واردشده نامعتبر است.");
+      return;
+    }
+    const priceNum = typeof unitPrice === "number" ? unitPrice : parseFloat(String(unitPrice));
+    if (!Number.isFinite(priceNum) || priceNum < 0) {
+      setError("مبلغ واحد واردشده نامعتبر است.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -358,8 +368,8 @@ function NewQuotationForm({
             lineNo: 1,
             itemId: Number(itemId) > 0 ? Number(itemId) : 1,
             description: description.trim() || "کالای آزمایشی",
-            quantity: Number(quantity),
-            unitPrice: Number(unitPrice),
+            quantity: qtyNum,
+            unitPrice: priceNum,
             discount: 0,
           },
         ],

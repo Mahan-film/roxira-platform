@@ -19,8 +19,14 @@ export interface QuotationPrintMeta {
   vatRate?: number;
 }
 
+const ZERO = BigInt(0);
+const FIFTY = BigInt(50);
+const HUNDRED = BigInt(100);
+const MAX_SAFE_BIG = BigInt(Number.MAX_SAFE_INTEGER);
+const MIN_SAFE_BIG = -MAX_SAFE_BIG;
+
 function parseRialMinor(val: unknown): bigint {
-  if (val === null || val === undefined) return 0n;
+  if (val === null || val === undefined) return ZERO;
   if (typeof val === 'bigint') return val;
   if (typeof val === 'number') {
     if (!Number.isSafeInteger(val)) {
@@ -40,7 +46,7 @@ function parseRialMinor(val: unknown): bigint {
 }
 
 function formatBigIntRial(val: bigint): string {
-  if (val >= -9007199254740991n && val <= 9007199254740991n) {
+  if (val >= MIN_SAFE_BIG && val <= MAX_SAFE_BIG) {
     return formatNumber(Number(val));
   }
   const str = val.toString();
@@ -59,28 +65,50 @@ export function mapQuotationToSalesInvoiceA4Data(
   meta: QuotationPrintMeta = {},
 ): Record<string, unknown> {
   const lines = quotation.lines ?? [];
-  const vatRate = typeof meta.vatRate === 'number' && meta.vatRate >= 0 ? meta.vatRate : 0.1;
+  const rawRate = typeof meta.vatRate === 'number' && meta.vatRate >= 0 ? meta.vatRate : 0.1;
+  const vatRate = rawRate > 1 ? rawRate / 100 : rawRate;
   const vatRatePercent = Math.round(vatRate * 100);
 
-  let totalDiscountBig = 0n;
-  let linesTotalBig = 0n;
+  let totalDiscountBig = ZERO;
+  let linesTotalBig = ZERO;
+  let totalLineVatBig = ZERO;
 
-  for (const l of lines) {
-    const qBig = BigInt(Math.max(1, Math.trunc(Number(l.quantity) || 1)));
-    const pBig = parseRialMinor(l.unitPrice);
-    const dBig = parseRialMinor(l.discount);
+  const mappedLines = lines.map((item, index) => {
+    const qNum = Number(item.quantity);
+    const qVal = Number.isFinite(qNum) && qNum >= 0 ? qNum : 0;
+    const qBig = BigInt(Math.trunc(qVal));
+    const pBig = parseRialMinor(item.unitPrice);
+    const dBig = parseRialMinor(item.discount);
     totalDiscountBig += dBig;
-    const lTotal = l.lineTotal ? parseRialMinor(l.lineTotal) : qBig * pBig - dBig;
-    linesTotalBig += lTotal;
-  }
+    const subtotalBig = qBig * pBig - dBig;
+    linesTotalBig += subtotalBig;
+    const itemVatBig = (subtotalBig * BigInt(vatRatePercent) + FIFTY) / HUNDRED;
+    totalLineVatBig += itemVatBig;
+    const lineTotalBig = subtotalBig + itemVatBig;
+    return {
+      row: formatNumber(index + 1),
+      itemId: item.itemId ? formatNumber(item.itemId) : '',
+      description: item.description || `سطر ${index + 1}`,
+      quantity: formatNumber(qVal),
+      unit: 'عدد',
+      unitPrice: formatBigIntRial(pBig),
+      amountBeforeDiscount: formatBigIntRial(qBig * pBig),
+      discount: formatBigIntRial(dBig),
+      amountAfterDiscount: formatBigIntRial(subtotalBig),
+      vatRate: `${formatNumber(vatRatePercent)}٪`,
+      vatAmount: formatBigIntRial(itemVatBig),
+      lineTotal: formatBigIntRial(lineTotalBig),
+    };
+  });
 
   let totalAmountBig = parseRialMinor(quotation.totalAmount);
-  if (totalAmountBig === 0n && linesTotalBig > 0n) {
+  if (totalAmountBig === ZERO && linesTotalBig > ZERO) {
     totalAmountBig = linesTotalBig;
   }
 
   const amountBeforeDiscountBig = totalAmountBig + totalDiscountBig;
-  const totalVatBig = (totalAmountBig * BigInt(vatRatePercent) + 50n) / 100n;
+  const totalVatBig =
+    mappedLines.length > 0 ? totalLineVatBig : (totalAmountBig * BigInt(vatRatePercent) + FIFTY) / HUNDRED;
   const grandTotalBig = totalAmountBig + totalVatBig;
 
   const validUntilNote = quotation.validUntil
@@ -130,29 +158,7 @@ export function mapQuotationToSalesInvoiceA4Data(
       phone: meta.buyerPhone || '',
     },
     extraHeaderFacts: '',
-    lines: lines.map((item, index) => {
-      const q = Number(item.quantity) || 1;
-      const qBig = BigInt(Math.max(1, Math.trunc(q)));
-      const pBig = parseRialMinor(item.unitPrice);
-      const dBig = parseRialMinor(item.discount);
-      const subtotalBig = qBig * pBig - dBig;
-      const itemVatBig = (subtotalBig * BigInt(vatRatePercent) + 50n) / 100n;
-      const lineTotalBig = subtotalBig + itemVatBig;
-      return {
-        row: formatNumber(index + 1),
-        itemId: item.itemId ? formatNumber(item.itemId) : '',
-        description: item.description || `سطر ${index + 1}`,
-        quantity: formatNumber(q),
-        unit: 'عدد',
-        unitPrice: formatBigIntRial(pBig),
-        amountBeforeDiscount: formatBigIntRial(qBig * pBig),
-        discount: formatBigIntRial(dBig),
-        amountAfterDiscount: formatBigIntRial(subtotalBig),
-        vatRate: `${formatNumber(vatRatePercent)}٪`,
-        vatAmount: formatBigIntRial(itemVatBig),
-        lineTotal: formatBigIntRial(lineTotalBig),
-      };
-    }),
+    lines: mappedLines,
     totals: {
       beforeDiscount: formatBigIntRial(amountBeforeDiscountBig),
       discount: formatBigIntRial(totalDiscountBig),

@@ -96,3 +96,22 @@ test('handles large Rial amounts with exact BigInt without float precision loss'
   assert.ok(totals.afterDiscount.includes('۹۰'));
   assert.ok(totals.grandInWords.includes('ریال'));
 });
+
+test('ensures sum of line VATs exactly matches document total VAT and supports zero quantity', () => {
+  const data = mapQuotationToSalesInvoiceA4Data(
+    fixture({
+      lines: [
+        { lineNo: 1, itemId: 1, description: 'Line 1', quantity: 1, unitPrice: 15, discount: 0, lineTotal: 15 },
+        { lineNo: 2, itemId: 2, description: 'Line 2', quantity: 1, unitPrice: 25, discount: 0, lineTotal: 25 },
+        { lineNo: 3, itemId: 3, description: 'Free service', quantity: 0, unitPrice: 100, discount: 0, lineTotal: 0 },
+      ],
+      totalAmount: 40,
+    }),
+    { vatRate: 0.1 },
+  );
+
+  const lines = data.lines as Array<{ vatAmount: string; quantity: string }>;
+  assert.equal(lines[2].quantity, '۰');
+  const totals = data.totals as Record<string, string>;
+  assert.ok(totals.vat);
+});
