@@ -141,20 +141,11 @@ export function getJalaliYear(date: Date | string | null | undefined): number | 
   if (isNaN(d.getTime())) {
     return null;
   }
-  // Tehran-local Gregorian calendar date (tz data only; no Persian-calendar ICU locale data needed).
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Tehran',
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-  }).formatToParts(d);
-  const num = (type: string): number => parseInt(parts.find((p) => p.type === type)?.value ?? '', 10);
-  const gy = num('year');
-  const gm = num('month');
-  const gd = num('day');
-  if (!Number.isFinite(gy) || !Number.isFinite(gm) || !Number.isFinite(gd)) {
-    return null;
-  }
+  // Tehran-local Gregorian calendar date (fixed UTC+03:30 offset; no ICU tzdata needed).
+  const shifted = new Date(d.getTime() + 210 * 60 * 1000);
+  const gy = shifted.getUTCFullYear();
+  const gm = shifted.getUTCMonth() + 1;
+  const gd = shifted.getUTCDate();
   return gregorianToJalaliYear(gy, gm, gd);
 }
 
@@ -535,7 +526,10 @@ export function runMoadianPreFlightValidation(
       ? null
       : typeof options.expectedVatRate === 'bigint'
         ? options.expectedVatRate
-        : numberToScaled(options.expectedVatRate, 4);
+        : numberToScaled(
+            options.expectedVatRate.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits: 20 }),
+            4,
+          );
 
   const lineMaths: LineMathResult[] = [];
   let calculatedTotalDiscountUnits = 0n;

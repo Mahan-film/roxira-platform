@@ -1,16 +1,13 @@
-const TEHRAN_DAY = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'Asia/Tehran',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-});
+const TEHRAN_OFFSET_MS = 210 * 60 * 1000; // UTC+03:30 (no DST since 2022)
 
 /**
  * Returns Gregorian YYYY-MM-DD representing the calendar date in Asia/Tehran timezone.
- * Pure utility function without external module dependencies.
+ * Uses fixed UTC+03:30 offset so it works identically on small-icu Node builds.
  */
 export function tehranIsoDate(date: Date): string {
-  const parts = TEHRAN_DAY.formatToParts(date);
-  const pick = (type: string): string => parts.find((p) => p.type === type)?.value ?? '';
-  return `${pick('year')}-${pick('month')}-${pick('day')}`;
+  const shifted = new Date(date.getTime() + TEHRAN_OFFSET_MS);
+  const y = shifted.getUTCFullYear();
+  const m = String(shifted.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(shifted.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
