@@ -28,6 +28,7 @@ import {
   PAYSLIP_NUMBER_PREFIX,
 } from '../constants/hr.constants';
 import { CountryPackRegistry } from '../../country_packs/country-pack.registry';
+import { tryResolvePack } from '../../country_packs/try-resolve-pack';
 import {
   CreatePayrollRunDto,
   InsuranceListQueryDto,
@@ -147,7 +148,7 @@ export class PayrollRunService {
     year: number,
     month?: number,
   ): Promise<PayrollYearRates> {
-    const pack = this.countryPackRegistry?.resolve();
+    const pack = tryResolvePack(this.countryPackRegistry);
     if (pack?.payroll) {
       const packRates = (await pack.payroll.ratesFor(
         tenantId,
@@ -156,7 +157,7 @@ export class PayrollRunService {
       )) as Partial<PayrollYearRates> | null | undefined;
       if (packRates && typeof packRates === 'object' && Object.keys(packRates).length > 0) {
         const valid =
-          packRates.year === year &&
+          Number(packRates.year) === year &&
           typeof packRates.minDailyWage === 'number' &&
           typeof packRates.minMonthlyWage === 'number' &&
           typeof packRates.monthlyWorkHours === 'number' &&
@@ -168,7 +169,7 @@ export class PayrollRunService {
         if (!valid) {
           throw new BadRequestException(`Country pack payroll adapter returned invalid PayrollYearRates for year ${year} (missing, mistyped or wrong-year fields)`);
         }
-        return packRates as PayrollYearRates;
+        return { ...packRates, year } as PayrollYearRates;
       }
     }
     if (!(await this.statutory.hasYear(tenantId, year))) {

@@ -3,6 +3,7 @@ import { minorToDecimal, parseMinor } from '../../accounting/money';
 import { StatutoryRepository } from '../../hr/statutory/statutory.repository';
 import { StatutoryKey } from '../../hr/statutory/statutory-catalogue';
 import { CountryPackRegistry } from '../../country_packs/country-pack.registry';
+import { tryResolvePack } from '../../country_packs/try-resolve-pack';
 import { RentalTaxPreviewDto } from '../dto/rental-tax-preview.dto';
 import { applyRate, Bracket, bracketTax, readStatutory, StatutoryUse } from '../utils/progressive-tax';
 
@@ -45,7 +46,7 @@ export class RentalTaxService {
     if (!dto.lessorIsOwner && dto.rentPaid === undefined) {
       throw new BadRequestException('وقتی موجر مالک نیست، اجاره‌بهای پرداختی (rentPaid) لازم است.');
     }
-    const pack = this.countryPackRegistry?.resolve();
+    const pack = tryResolvePack(this.countryPackRegistry);
     const rule = pack?.taxRules.find((r) => r.kind === 'rental_tax');
     const keys = rule ? (rule.statutoryKeys as readonly StatutoryKey[]) : KEYS;
     const country = pack?.country || 'IR';

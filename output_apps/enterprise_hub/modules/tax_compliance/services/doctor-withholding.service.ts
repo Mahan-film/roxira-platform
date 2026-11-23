@@ -4,6 +4,7 @@ import { gregorianToJalali, isoDate, jalaliMonthEnd } from '../../hr/services/ja
 import { StatutoryRepository } from '../../hr/statutory/statutory.repository';
 import { StatutoryKey } from '../../hr/statutory/statutory-catalogue';
 import { CountryPackRegistry } from '../../country_packs/country-pack.registry';
+import { tryResolvePack } from '../../country_packs/try-resolve-pack';
 import { DoctorWithholdingPreviewDto } from '../dto/doctor-withholding-preview.dto';
 import { applyRate, readStatutory, StatutoryUse } from '../utils/progressive-tax';
 
@@ -73,7 +74,7 @@ export class DoctorWithholdingService {
   ) {}
 
   async preview(tenantId: string, dto: DoctorWithholdingPreviewDto): Promise<DoctorWithholdingPreview> {
-    const pack = this.countryPackRegistry?.resolve();
+    const pack = tryResolvePack(this.countryPackRegistry);
     const rule = pack?.taxRules.find((r) => r.kind === 'doctor_withholding');
     const keys = rule ? (rule.statutoryKeys as readonly StatutoryKey[]) : KEYS;
     const country = pack?.country || 'IR';

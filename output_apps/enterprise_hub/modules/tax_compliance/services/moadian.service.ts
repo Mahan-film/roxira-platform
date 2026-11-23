@@ -69,6 +69,7 @@ import {
 } from '../utils/secret-box.util';
 import { MoadianApiClient, MoadianApiError, MoadianAuthContext } from './moadian-api.client';
 import { CountryPackRegistry } from '../../country_packs/country-pack.registry';
+import { tryResolvePack } from '../../country_packs/try-resolve-pack';
 
 /** payload کارهای صف `moadian` — فقط شناسه‌ها؛ هیچ کلید یا بسته‌ای در Redis نمی‌رود. */
 export interface MoadianJobData {
@@ -372,7 +373,7 @@ export class MoadianService implements OnModuleInit {
           lateRegistrationAt: options.lateRegistrationAt,
           extras: options.extras,
         };
-        const eInvoiceAdapter = this.countryPackRegistry?.resolve()?.eInvoice;
+        const eInvoiceAdapter = tryResolvePack(this.countryPackRegistry)?.eInvoice;
         if (eInvoiceAdapter) {
           const mapped = eInvoiceAdapter.map(invoice, mappingContext) as Partial<MoadianInvoicePacket> | null | undefined;
           const h = mapped?.header;
