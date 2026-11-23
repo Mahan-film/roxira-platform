@@ -115,3 +115,8 @@ Do not edit past entries — add a new one instead.
 - What changed: merged #999 #1158 #1263 #1298 #1300 #1304 #1305 #1306 #1307 #1308 #1335 #1336 #1337 #1339 #1340; queued with OWNER-OK #1201 #1227 #1271 #1301 #1303 #1275, plus #1342 (SSD work disk, stable prompts in PROMPTS_FA.md, owner guide); closed #889 #1237; WAVE 32 (25-PR fix queue for L8); hub agents fixed #850 #1313 #1314; rows #1343 #1344 #1348; HUB-ANSWER on #965 (box standing rules, approver account invited).
 - Why: 50 open PRs and a full Mac disk were the bottleneck; the owner wants all open PRs finished and maximum Antigravity load.
 - Follow-up: the merge queue stalled (no runner for merge_group jobs since 07:12 UTC; ASK-BOX on #965); #1309 fixes by L1; owner sentences for #831 #663; private flip needs the owners' own sentence.
+
+## 2026-11-23 (evening) - main hub (Opus 5.5) - WAVE 33, CI load rule, site review
+- What changed: posted WAVE 33 (review-first for all lanes, RV1-RV4 again) and a CI load rule on #592; re-queued #1201, reviewed and queued #850, dispatched the review desk once; relayed the owner's private-flip wish on #965 with the preconditions; reviewed roxira.ir and roxira.net public pages (roxira.net header overflows at 375 px).
+- Why: the owner wants maximum speed with less CI and server load, and a real check of the site.
+- Follow-up: frontend row for the roxira.net mobile header; owner signs in to the pane so the logged-in app can be reviewed; owner sentences for #831 #663 #963 and the restart window; merge READY FOR HUB PRs after desk verdicts at their heads.
