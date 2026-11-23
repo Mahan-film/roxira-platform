@@ -65,7 +65,8 @@ gateway:
   # release mirrors, not pulled from this machine: scripts/infra/key_pool/upgrade.py pulls and canary-tests it
   # before switching, and install.sh --apply stops if the pull fails. v1.105.5 fixed a proxy start-up ImportError,
   # so 1.105.6 (newest 1.105 patch seen) is used instead of 1.105.1.
-  image: ghcr.io/berriai/litellm:v1.105.6
+  # Digest-pinned (2026-11-23): tag v1.105.6 resolved to this multi-arch index digest via the ghcr.io registry. See docs/ops/LITELLM_GATEWAY_NOTE.md.
+  image: ghcr.io/berriai/litellm:v1.105.6@sha256:df829230aab5d0b8590afbdb6569a41956c177985201f92949b9d63d88147003
   host: 127.0.0.1
   port: 4000
   master_key_env: KEYPOOL_MASTER_KEY   # callers send it as the OpenAI api key; set with set_server_env.sh --generate
