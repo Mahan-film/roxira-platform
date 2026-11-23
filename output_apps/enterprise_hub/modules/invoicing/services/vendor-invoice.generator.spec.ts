@@ -334,5 +334,40 @@ describe('VendorInvoiceGenerator (T321 / R31)', () => {
         }),
       ).toThrow(/Explicit sequenceNumber or an injected sequencer is required/);
     });
+
+    it('rejects unknown or invalid customer country code with 400', () => {
+      expect(() =>
+        generator.generate(
+          {
+            ...MY_B2B_INVOICE_REQUEST,
+            customer: { ...CUSTOMER_MY_B2B, country: 'UNKNOWN_COUNTRY' },
+          },
+          1,
+        ),
+      ).toThrow(BadRequestException);
+    });
+
+    it('rejects bare string series when sequencer uses PostgresSequencerStore', async () => {
+      const pgSeq = new GaplessNumberSequencer(new PostgresSequencerStore());
+      await expect(pgSeq.nextNumberAsync('INV')).rejects.toThrow(
+        /PostgresSequencerStore requires full DocumentCounterKey with tenantId/,
+      );
+      expect(() => pgSeq.nextNumber('INV')).toThrow(
+        /PostgresSequencerStore is an asynchronous store/,
+      );
+    });
+
+    it('rejects sync generate() when PostgresSequencerStore is injected, directing to generateAsync', () => {
+      const pgGen = new VendorInvoiceGenerator(
+        registry,
+        new GaplessNumberSequencer(new PostgresSequencerStore()),
+      );
+      expect(() =>
+        pgGen.generate({
+          ...MY_B2B_INVOICE_REQUEST,
+          tenantId: '11111111-1111-4111-8111-111111111111',
+        }),
+      ).toThrow(/Injected sequencer uses an asynchronous persistent store/);
+    });
   });
 });

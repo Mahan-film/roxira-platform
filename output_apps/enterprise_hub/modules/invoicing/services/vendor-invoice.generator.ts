@@ -302,16 +302,11 @@ export class EffectiveTaxTreatmentRegistry {
     exempt?: boolean;
   }): EffectiveTaxTreatmentRule {
     assertValidIsoDate(params.date, 'date');
-    let targetJurisdiction = params.exempt && params.jurisdiction === 'MY'
+    const targetJurisdiction = params.exempt && params.jurisdiction === 'MY'
       ? 'MY_EXEMPT'
       : params.jurisdiction;
 
-    let matches = this.filterRules(targetJurisdiction, params);
-    if (matches.length === 0 && targetJurisdiction !== 'MY' && targetJurisdiction !== 'EU' && targetJurisdiction !== 'MY_EXEMPT') {
-      targetJurisdiction = 'EXPORT';
-      matches = this.filterRules(targetJurisdiction, params);
-    }
-
+    const matches = this.filterRules(targetJurisdiction, params);
     if (matches.length === 0) {
       throw new BadRequestException(
         `No effective tax treatment found for jurisdiction ${targetJurisdiction}, ${params.customerType} on date ${params.date}`,
@@ -370,6 +365,8 @@ export class PostgresSequencerStore implements SequencerStore {
       throw new BadRequestException('Valid tenantId is required for persistent document numbering.');
     }
     if (!manager?.query) throw new BadRequestException('EntityManager query runner required for Postgres sequencer.');
+    // Ensure tenant session configuration is set for tenant-isolated table under FORCE RLS
+    await manager.query(`SELECT set_config('app.tenant_id', $1, true)`, [k.tenantId]);
     const rows: Array<{ last_number: string | number }> = await manager.query(
       `INSERT INTO "fin_document_counters" ("tenant_id", "document_type", "channel", "fiscal_year", "series", "last_number")
        VALUES ($1, $2, $3, $4, $5, 1)
@@ -391,6 +388,9 @@ export class GaplessNumberSequencer {
   setStore(store: SequencerStore): void { this.store = store; }
 
   nextNumber(keyOrSeries: string | DocumentCounterKey, manager?: any): { sequenceNumber: number; documentNumber: string } {
+    if (this.store instanceof PostgresSequencerStore) {
+      throw new BadRequestException('PostgresSequencerStore is an asynchronous store; use nextNumberAsync with a transactional manager.');
+    }
     const key = typeof keyOrSeries === 'string' ? { series: keyOrSeries } : keyOrSeries;
     const res = this.store.nextNumber(key, manager);
     if (typeof res !== 'number') throw new BadRequestException('Use nextNumberAsync for async stores.');
@@ -398,6 +398,9 @@ export class GaplessNumberSequencer {
   }
 
   async nextNumberAsync(keyOrSeries: string | DocumentCounterKey, manager?: any): Promise<{ sequenceNumber: number; documentNumber: string }> {
+    if (typeof keyOrSeries === 'string' && this.store instanceof PostgresSequencerStore) {
+      throw new BadRequestException('PostgresSequencerStore requires full DocumentCounterKey with tenantId, not a bare series string.');
+    }
     const key = typeof keyOrSeries === 'string' ? { series: keyOrSeries } : keyOrSeries;
     const res = await this.store.nextNumber(key, manager);
     return { sequenceNumber: res, documentNumber: `${key.series}-${String(res).padStart(6, '0')}` };
@@ -481,13 +484,25 @@ export class VendorInvoiceGenerator {
           'Explicit sequenceNumber or an injected sequencer is required; use generateAsync with a transactional manager for persistent numbering.',
         );
       }
-      seq = this.sequencer.nextNumber({
-        tenantId: request.tenantId,
-        documentType: request.documentType,
-        channel: request.channel,
-        fiscalYear: request.fiscalYear,
-        series: request.series,
-      }).sequenceNumber;
+      try {
+        seq = this.sequencer.nextNumber({
+          tenantId: request.tenantId,
+          documentType: request.documentType,
+          channel: request.channel,
+          fiscalYear: request.fiscalYear,
+          series: request.series,
+        }).sequenceNumber;
+      } catch (err) {
+        if (
+          err instanceof BadRequestException &&
+          (err.message.includes('asynchronous store') || err.message.includes('Use nextNumberAsync'))
+        ) {
+          throw new BadRequestException(
+            'Injected sequencer uses an asynchronous persistent store (PostgresSequencerStore); call generateAsync(request, manager) instead of synchronous generate().',
+          );
+        }
+        throw err;
+      }
     }
 
     if (seq <= 0) {
@@ -497,10 +512,24 @@ export class VendorInvoiceGenerator {
     const documentNumber = `${request.series}-${String(seq).padStart(6, '0')}`;
     const customerType = request.customer.isB2B ? 'B2B' : 'B2C';
 
+    const customerCountry = request.customer.country.trim().toUpperCase();
+    if (!/^[A-Z]{2}$/.test(customerCountry)) {
+      throw new BadRequestException(
+        `Invalid country code: ${request.customer.country}. Expected 2-letter ISO 3166-1 alpha-2.`,
+      );
+    }
+
     const isEuCountry = ['DE', 'FR', 'NL', 'IT', 'ES', 'SE', 'PL', 'BE', 'AT', 'IE', 'FI', 'PT', 'GR', 'CZ', 'RO', 'DK', 'HU', 'SK', 'BG', 'HR', 'LT', 'SI', 'LV', 'EE', 'CY', 'LU', 'MT'].includes(
-      request.customer.country.toUpperCase(),
+      customerCountry,
     );
-    const jurisdiction = isEuCountry ? 'EU' : request.customer.country.toUpperCase();
+    let jurisdiction: string;
+    if (customerCountry === request.supplier.country.trim().toUpperCase()) {
+      jurisdiction = customerCountry;
+    } else if (isEuCountry) {
+      jurisdiction = 'EU';
+    } else {
+      jurisdiction = 'EXPORT';
+    }
 
     const treatment = this.taxRegistry.resolveTreatment({
       jurisdiction,
