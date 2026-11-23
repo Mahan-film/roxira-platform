@@ -527,6 +527,9 @@ export function runMoadianPreFlightValidation(
 
   const scale = getCurrencyScale(invoice.currency);
 
+  // When expectedVatRate is a decimal rate (e.g. 0.1 for 10%), numberToScaled(0.1, 4) produces 1000n basis points.
+  // Below, item.vatRate at LINE_RATE_DECIMALS (6) produces 100000n for 0.1, and divRoundHalfUp(100000n, 100n)
+  // produces 1000n basis points. Both are exact basis points (1000n bp = 10.00%).
   const expectedVatRateBp: bigint | null =
     options?.expectedVatRate === undefined || options?.expectedVatRate === null
       ? null
@@ -551,7 +554,9 @@ export function runMoadianPreFlightValidation(
       options?.itemSstids?.[index] ??
       options?.defaultSstid ??
       '';
-    const sstid = toLatinDigits(rawSstid).replace(/\s+/g, '');
+    const trimmedSstid = rawSstid.trim();
+    // Reject internal whitespace to align with moadian-packet.mapper.ts:digitsOnly
+    const sstid = /\s/.test(trimmedSstid) ? '' : toLatinDigits(trimmedSstid);
 
     if (!sstid || !validateItemTaxCode(sstid)) {
       errors.push({

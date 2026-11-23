@@ -294,7 +294,16 @@ export class MoadianService implements OnModuleInit {
   ): Promise<{ rate: number } | { error: MoadianPreFlightError }> {
     try {
       const rawDate = invoice.issuedAt ?? invoice.createdAt;
-      const dateObj = rawDate ? new Date(rawDate) : new Date();
+      if (!rawDate) {
+        return {
+          error: {
+            field: 'issuedAt',
+            message: 'تاریخ صدور صورتحساب مشخص نیست.',
+            code: 'VAT_RATE_UNRESOLVED',
+          },
+        };
+      }
+      const dateObj = new Date(rawDate);
       if (Number.isNaN(dateObj.getTime())) {
         throw new BadRequestException('Invalid invoice date');
       }
@@ -312,6 +321,10 @@ export class MoadianService implements OnModuleInit {
     }
   }
 
+  /**
+   * اجرای اعتبارسنجی پیش از ارسال مودیان (Idempotent Read-Only).
+   * توجه: قفل ترنزکشنال سطر فاکتور فقط در زمان submitInvoice با withInvoiceLock اعمال می‌شود.
+   */
   async preFlightValidate(
     tenantId: string,
     invoiceId: string,

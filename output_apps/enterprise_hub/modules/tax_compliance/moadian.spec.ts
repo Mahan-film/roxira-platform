@@ -1368,6 +1368,16 @@ describe('Moadian server pre-flight validation & controller', () => {
     await expect(service.submitInvoice(TENANT_A, INVOICE_A)).rejects.toThrow(BadRequestException);
   });
 
+  it('returns VAT_RATE_UNRESOLVED when invoice has neither issuedAt nor createdAt', async () => {
+    const dateless = buildInvoice({ id: 'dateless', issuedAt: undefined, createdAt: undefined });
+    const { service } = buildMoadian({ invoices: [dateless] });
+    await service.putCredential(TENANT_A, credentialDto());
+
+    const res = await service.preFlightValidate(TENANT_A, 'dateless');
+    expect(res.valid).toBe(false);
+    expect(res.errors.some((e) => e.code === 'VAT_RATE_UNRESOLVED')).toBe(true);
+  });
+
   it('validates across fiscal years outside 1404-1405 using resolved statutory rate', async () => {
     const inv1402 = buildInvoice({
       id: 'inv-1402',

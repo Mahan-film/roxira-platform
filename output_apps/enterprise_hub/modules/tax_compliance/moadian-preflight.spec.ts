@@ -434,6 +434,23 @@ describe('Moadian Pre-Flight Validation (T71)', () => {
       expect(resWith.valid).toBe(true);
     });
 
+    it('rejects SSTID with internal whitespace to match packet mapper validation', () => {
+      const whitespaceInvoice = {
+        ...validInvoice,
+        items: [
+          {
+            ...validInvoice.items![0],
+            taxCode: '2330 001234567',
+          },
+        ],
+      };
+      const res = runMoadianPreFlightValidation(whitespaceInvoice as unknown as InvoiceResponseDto, {
+        expectedVatRate: 0.1,
+      });
+      expect(res.valid).toBe(false);
+      expect(res.errors.some((e) => e.code === 'ITEM_SSTID_INVALID')).toBe(true);
+    });
+
     it('validates with options.expectedVatRate', () => {
       const customRateInvoice = {
         ...validInvoice,
