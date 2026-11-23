@@ -117,7 +117,7 @@ describe('TenantCancellationService', () => {
         'Moving away',
       );
       expect(exportQueue.add).toHaveBeenCalledWith(
-        'export-tenant-archive',
+        'tenant-full-export',
         expect.objectContaining({ tenantId: 't1', reason: 'Moving away' }),
         expect.any(Object),
       );

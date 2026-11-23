@@ -95,4 +95,14 @@ describe('CancelledReadonlyGuard', () => {
     const ctx = createContext('GET');
     await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
   });
+
+  it('fails closed and blocks requests if tenant status is missing or null', async () => {
+    (mockTenantsRepo.findById as jest.Mock).mockResolvedValue({
+      id: TENANT_ID,
+      status: null,
+    });
+
+    const ctx = createContext('GET');
+    await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
+  });
 });

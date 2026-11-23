@@ -104,7 +104,7 @@ export class TenantCancellationService implements OnModuleInit {
     if (this.exportQueue) {
       try {
         await this.exportQueue.add(
-          'export-tenant-archive',
+          'tenant-full-export',
           { tenantId, requestedAt: now.toISOString(), reason },
           { attempts: 3, backoff: { type: 'exponential', delay: 5000 } },
         );

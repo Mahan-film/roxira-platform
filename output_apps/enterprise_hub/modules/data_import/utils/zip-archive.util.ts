@@ -29,7 +29,7 @@ export function createZipBuffer(files: Record<string, string | Buffer | Uint8Arr
     const useStore = deflated.length >= dataBuf.length;
     const payload = useStore ? dataBuf : deflated;
     const method = useStore ? 0 : 8;
-    const crc = typeof (zlib as any).crc32 === 'function' ? (zlib as any).crc32(dataBuf) : computeCrc32Fallback(dataBuf);
+    const crc = computeCrc32Fallback(dataBuf);
 
     // Local file header (30 bytes + name)
     const lh = Buffer.alloc(30);
