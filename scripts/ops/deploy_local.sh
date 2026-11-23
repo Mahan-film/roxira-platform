@@ -21,7 +21,11 @@ STATE_DIR="${DEPLOY_STATE_DIR:-/root/deploy-state}"   # outside the git tree
 COMPOSE="docker-compose.prod.yml"
 DOMAINS="${DEPLOY_DOMAINS:-ghazihoushmand.ir roxira.net roxira.ir}"
 CHAT_DOMAIN="${DEPLOY_CHAT_DOMAIN:-ghazihoushmand.ir}"
+APP_DOMAIN="${DEPLOY_APP_DOMAIN:-roxira.ir}"
 API_PATH="${DEPLOY_SMOKE_API_PATH:-/api/v1/apps/judge/pricing/plans}"
+BACKEND_HEALTH_PATH="${DEPLOY_SMOKE_BACKEND_HEALTH_PATH:-/api/backend/health/system}"
+SMOKE_TENANT_ROUTE="${DEPLOY_SMOKE_TENANT_ROUTE:-/api/backend/tenants/me}"
+SMOKE_AUTH_TOKEN="${DEPLOY_SMOKE_AUTH_TOKEN:-${SMOKE_AUTH_TOKEN:-}}"
 REQUIRED_ENV="GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET ADMIN_HEALTH_KEY JWT_SECRET KAVENEGAR_API_KEY"
 FREEZE_FILE=".deploy-freeze"
 # Owner opt-in marker for the server-side autodeploy timer. Only read by
@@ -151,6 +155,7 @@ SMOKE_RESOLVE="${SMOKE_RESOLVE:---resolve ghazihoushmand.ir:443:127.0.0.1 --reso
 http_code() { rsh "curl $SMOKE_RESOLVE -s -o /dev/null -m 15 -A '$SMOKE_UA' -w '%{http_code}' $(printf '%q' "$1")" || true; }
 # Final status after following redirects (Cloudflare may redirect a domain, e.g. roxira.net -> roxira.ir).
 http_code_final() { rsh "curl $SMOKE_RESOLVE -sL --max-redirs 5 -o /dev/null -m 20 -A '$SMOKE_UA' -w '%{http_code}' $(printf '%q' "$1")" || true; }
+http_code_auth() { rsh "curl $SMOKE_RESOLVE -s -o /dev/null -m 15 -A '$SMOKE_UA' -H $(printf '%q' "Authorization: Bearer $2") -w '%{http_code}' $(printf '%q' "$1")" || true; }
 http_body() { rsh "curl $SMOKE_RESOLVE -s -m 15 -A '$SMOKE_UA' $(printf '%q' "$1")" || true; }
 
 # The app warms its embedder on start; wait (bounded) until /health answers 200.
@@ -182,6 +187,37 @@ smoke_test() {
   if [ "$code" = "200" ]; then log "smoke ok: $CHAT_DOMAIN chat page 200"; else log "smoke FAIL: $CHAT_DOMAIN/chat $code"; ok=1; fi
   code="$(http_code "https://$CHAT_DOMAIN$API_PATH")"
   if [ "$code" = "200" ]; then log "smoke ok: GET $API_PATH 200"; else log "smoke FAIL: GET $API_PATH $code"; ok=1; fi
+
+  # Backend system health route (NestJS through nginx; T336 / #1285)
+  code="$(http_code "https://$APP_DOMAIN$BACKEND_HEALTH_PATH")"
+  if [ "$code" = "200" ]; then
+    log "smoke ok: $APP_DOMAIN backend health $BACKEND_HEALTH_PATH 200"
+  else
+    log "smoke FAIL: $APP_DOMAIN backend health $BACKEND_HEALTH_PATH $code (want 200)"
+    ok=1
+  fi
+
+  # Authenticated tenant-scoped read for a seeded smoke tenant through nginx (T336 / #1285)
+  if [ "${DEPLOY_SMOKE_SKIP_AUTH:-0}" = "1" ]; then
+    log "smoke: authenticated tenant read skipped by DEPLOY_SMOKE_SKIP_AUTH"
+  else
+    local token="$SMOKE_AUTH_TOKEN"
+    if [ -z "$token" ]; then
+      token="$(rsh "grep -E '^SMOKE_AUTH_TOKEN=' '$REMOTE_DIR/.env' 2>/dev/null | cut -d= -f2- | tr -d '\r\"\' ' || cat '$STATE_DIR/smoke_token' 2>/dev/null || true")"
+    fi
+    if [ -z "$token" ]; then
+      log "smoke FAIL: SMOKE_AUTH_TOKEN not configured (required for tenant smoke read)"
+      ok=1
+    else
+      code="$(http_code_auth "https://$APP_DOMAIN$SMOKE_TENANT_ROUTE" "$token")"
+      if [ "$code" = "200" ]; then
+        log "smoke ok: $APP_DOMAIN authenticated tenant read $SMOKE_TENANT_ROUTE 200"
+      else
+        log "smoke FAIL: $APP_DOMAIN authenticated tenant read $SMOKE_TENANT_ROUTE $code (want 200)"
+        ok=1
+      fi
+    fi
+  fi
   return "$ok"
 }
 
@@ -567,5 +603,6 @@ case "$sub" in
   migrate) cmd_migrate "${1:-}" ;;
   migrate-rollback) cmd_migrate_rollback "${1:-}" "${2:-}" ;;
   eval-baseline) cmd_eval_baseline "${1:-}" ;;
+  smoke) smoke_test ;;
   *) usage ;;
 esac

@@ -125,7 +125,7 @@ export class RefreshTokenService {
     return (await this.repository.hasAnySession(userId)) && !(await this.repository.hasDevice(userId, deviceHash));
   }
 
-  revokeAllForUser(userId: string): Promise<void> {
-    return this.repository.revokeAllForUser(userId);
+  revokeAllForUser(userId: string, tenantIds?: string[]): Promise<void> {
+    return this.repository.revokeAllForUser(userId, tenantIds);
   }
 }

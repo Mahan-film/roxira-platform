@@ -23,6 +23,9 @@ import { JournalEntryLineEntity } from './journal-entry-line.entity';
   unique: true,
 })
 @Index('IDX_fin_journal_entries_tenant_date', ['tenantId', 'date'])
+@Index('IDX_fin_journal_entries_tenant_tag', ['tenantId', 'tag'], {
+  where: '"tag" IS NOT NULL',
+})
 export class JournalEntryEntity {
   @PrimaryGeneratedColumn()
   id: number;
@@ -91,7 +94,6 @@ export class JournalEntryEntity {
   /**
    * برچسب اختیاری سند (مانند PARTNER_ADJUSTMENT برای اسناد تعدیلی حسابدار مؤسسه).
    */
-  @Index()
   @Column({ type: 'varchar', length: 64, name: 'tag', nullable: true })
   tag: string | null;
 

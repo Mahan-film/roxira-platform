@@ -68,7 +68,7 @@ licence other than ZAP changed; Digital Omnibus final text (only a Council manda
 | L3 security/data | EU tenant AI routing profile: no China-based or may-log providers for tax-advisor/EU tenants | Config flag exists, tested route table, `SUBPROCESSORS.md` updated, one test proves the blocked path |
 | L3 security/data | EU-law AVV + section-62a confidentiality addendum + TOMs annex | Drafts in `docs/legal_customer/`, based on 2021/915 clauses, lawyer review recorded |
 | L3 security/data | Backup and DR evidence pack (reconcile STATE vs audit, quarterly restore test, RPO/RTO, Object Lock copy) | Dated restore-test log in repo, written RPO/RTO, docs consistent |
-| L1 ops | CI scanner hardening: blocking HIGH/CRITICAL, remediation SLA, Trivy checksum, SHA-pinned actions, ZAP baseline nightly | Required checks set, SLA doc merged, pinned-action audit passes |
+| L1 ops | CI scanner hardening: blocking HIGH/CRITICAL, remediation SLA, Trivy checksum, SHA-pinned actions, ZAP baseline nightly | Done (PR #1303): `docs/security/REMEDIATION_SLA.md`, `scripts/dev/install_trivy.sh`, `zap-baseline-nightly.yml`, pinned actions verified |
 | L3 security/data | Trust pack v1: security page, 6 policies, CAIQ v4 Lite on STAR L1, questionnaire answer bank | Public page live, CAIQ filed, answer bank in `docs/security/` |
 | L3 security/data | Tenant-isolation test report and production RLS bypass fix (T105) | CI RLS audit green, report committed, superuser path removed or compensated |
 | L1 ops | Insurance + pentest procurement (broker quotes Tech E&O + cyber; 3 pentest quotes with ASVS L2 scope) | Quote comparison table in `docs/strategy/`, owner decision asked |

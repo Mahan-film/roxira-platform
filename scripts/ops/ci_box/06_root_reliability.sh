@@ -118,10 +118,12 @@ if pgrep -f 'Runner\.Worker' >/dev/null 2>&1; then decide "skip: a runner job is
 # - asterisk container found and 'core show channels count' parses: reboot only at 0 active calls.
 # - LiveKit/asterisk containers are up but calls cannot be counted: assume a call may be active, skip.
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-  names=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -i -E 'livekit|asterisk' || true)
-  if [ -n "$names" ]; then
+  # Match on name OR image: the containers are named lk-*, so a name-only filter finds nothing and
+  # silently skips the active-call guard.
+  found=$(docker ps --format '{{.Names}} {{.Image}}' 2>/dev/null | grep -i -E 'livekit|asterisk' || true)
+  if [ -n "$found" ]; then
     count=""
-    for c in $(echo "$names" | grep -i asterisk || true); do
+    for c in $(echo "$found" | grep -i asterisk | awk '{print $1}' || true); do
       out=$(docker exec "$c" asterisk -rx 'core show channels count' 2>/dev/null || true)
       n=$(echo "$out" | sed -n 's/^\([0-9][0-9]*\) active call.*/\1/p' | head -1)
       [ -n "$n" ] && count=$(( ${count:-0} + n ))

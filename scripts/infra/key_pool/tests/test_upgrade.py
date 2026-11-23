@@ -101,7 +101,7 @@ def test_config_image_is_pinned_stable():
 
 @pytest.mark.parametrize("bad", [
     "ghcr.io/berriai/litellm:main-v1.77.7-stable", "ghcr.io/berriai/litellm:latest", "ghcr.io/berriai/litellm:v1.105.1-nightly",
-    "ghcr.io/berriai/litellm:v1.107.0rc1", "evil.io/berriai/litellm:v1.105.1", "ghcr.io/berriai/litellm"])
+    "ghcr.io/berriai/litellm:v1.107.0rc1", "ghcr.io/berriai/litellm:v1.105.6@sha256:abc", "ghcr.io/berriai/litellm@sha256:"+"0"*64, "evil.io/berriai/litellm:v1.105.1", "ghcr.io/berriai/litellm"])
 def test_validate_image_rejects(bad):
     with pytest.raises(up.UpgradeError):
         up.validate_image(bad)
@@ -110,6 +110,12 @@ def test_validate_image_rejects(bad):
 def test_validate_image_accepts():
     assert up.validate_image("ghcr.io/berriai/litellm:v1.105.1")
     assert up.validate_image("ghcr.io/berriai/litellm:v1.105.6-stable")
+    assert up.validate_image("ghcr.io/berriai/litellm:v1.105.6@sha256:" + "a" * 64)
+
+
+def test_config_image_is_digest_pinned_and_not_1_107_0():
+    img = kc.load_pool()["gateway"]["image"]
+    assert "@sha256:" in img and ":v1.107.0" not in img
 
 
 def test_ports_never_reserved_and_skip_busy():
