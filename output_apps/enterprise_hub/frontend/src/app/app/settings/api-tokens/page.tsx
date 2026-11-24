@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -79,7 +79,8 @@ export default function ApiTokensPage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  // نمایش یک‌بارهٔ توکن تازه ایجاد شده
+  // نمایش یک‌بارهٔ توکن تازه ایجاد شده (فقط ۴ رقم آخر در state و کلید کامل در ref)
+  const rawTokenRef = useRef<string | null>(null);
   const [newlyCreatedToken, setNewlyCreatedToken] = useState<CreatedApiTokenView | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -140,9 +141,7 @@ export default function ApiTokensPage() {
     let expiresAt: string | undefined = undefined;
     if (expiryOption !== "never") {
       const days = parseInt(expiryOption, 10);
-      const d = new Date();
-      d.setDate(d.getDate() + days);
-      expiresAt = d.toISOString();
+      expiresAt = new Date(Date.now() + days * 864e5).toISOString();
     }
 
     try {
@@ -153,7 +152,8 @@ export default function ApiTokensPage() {
         expiresAt,
       });
       // ذخیره در وضعیت نمایش یک‌باره و به‌روزرسانی فهرست
-      setNewlyCreatedToken(created);
+      rawTokenRef.current = created.token;
+      setNewlyCreatedToken({ ...created, token: created.token.slice(-4) });
       setShowCreateForm(false);
       setName("");
       setSelectedScopes(["invoices:read", "items:read"]);
@@ -181,9 +181,11 @@ export default function ApiTokensPage() {
   }
 
   async function handleCopyToken() {
-    if (!newlyCreatedToken?.token) return;
+    const raw = rawTokenRef.current;
+    if (!raw) return;
     try {
-      await navigator.clipboard.writeText(newlyCreatedToken.token);
+      await navigator.clipboard.writeText(raw);
+      rawTokenRef.current = null;
       setCopied(true);
       setTimeout(() => setCopied(false), 3000);
     } catch {
@@ -193,6 +195,7 @@ export default function ApiTokensPage() {
 
   function handleDismissRevealedToken() {
     // پاک‌سازی فوری کلید از حافظه به نحوی که هرگز دوباره نمایش داده نشود
+    rawTokenRef.current = null;
     setNewlyCreatedToken(null);
     setCopied(false);
   }
