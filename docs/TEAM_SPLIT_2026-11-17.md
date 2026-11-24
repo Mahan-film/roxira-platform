@@ -2,6 +2,8 @@
 
 Two machines work in parallel on `Mahan-film/roxira-platform`. Both follow AGENTS.md, `docs/antigravity/LANE_PROMPT_FA.md` (v6) and the latest `## WAVE` comment on issue #592.
 
+**Update 2026-11-24 (owner, main hub):** Antigravity does not run on the laptop, so lane L7 is also run as a Mac chat that only edits repository files (box scripts, phone kit code, docs/ops) and offline tests (block in `docs/antigravity/PROMPTS_FA.md`). Anything that must run or be measured on the laptop is posted as `NEEDS BOX RUN: <command>` on issue 592; the laptop's own headless lane runner (roxira-orch with OpenCode, see `docs/ops/ORCH.md`) and the box hub do it. L5 and L6 may run on either machine. RV1-RV8 (modulo 8) are review-helper chats on the Mac.
+
 **Update 2026-11-18 (owner):** two machines, both driven by the owner. The Mac runs lanes L1–L4 and the main hub. The Linux box `roxira-ci` (`docs/ops/LINUX_CI_BOX.md`) runs lanes L5–L7, a second Claude Code session (the **box hub**, the owner's own Anthropic account under Linux user `mahanfilms`), the CI runner and the phone agent.
 
 | Machine | Antigravity lanes | Claude Code | Owns |

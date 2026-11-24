@@ -4,6 +4,7 @@ import {
   Entity,
   Index,
   PrimaryGeneratedColumn,
+  ValueTransformer,
 } from 'typeorm';
 import { Currency } from '../../currency/enums/currency.enum';
 import { InvoiceJurisdiction } from '../enums/invoice-jurisdiction.enum';
@@ -76,6 +77,50 @@ export interface InvoicePostingMeta {
 }
 
 /**
+ * مبدل ستون‌های numeric درایور Postgres برای جلوگیری از خطای تبدیل شناور و عدم از دست رفتن دقت (LESSONS 8 / LESSONS 28).
+ * مقادیر numeric(20,4) رشته خروجی درایور را دقیقاً حفظ کرده و با fail closed در برابر null یا ورودی نامعتبر خطا می‌دهد.
+ */
+export const numericTransformer: ValueTransformer = {
+  to: (value: string | number | null | undefined): string | number | null | undefined => value,
+  from: (value: string | number | null | undefined): string => {
+    if (value === null || value === undefined) {
+      throw new Error('numericTransformer received null or undefined for non-nullable column (LESSONS 28)');
+    }
+    if (typeof value === 'number') {
+      if (Number.isNaN(value)) {
+        throw new Error('numericTransformer received NaN; fail closed (LESSONS 28)');
+      }
+      return String(value);
+    }
+    const str = String(value).trim();
+    if (!/^-?\d+(?:\.\d+)?$/.test(str)) {
+      throw new Error(`numericTransformer received malformed numeric "${str}"; fail closed (LESSONS 28)`);
+    }
+    return str;
+  },
+};
+
+export const nullableNumericTransformer: ValueTransformer = {
+  to: (value: string | number | null | undefined): string | number | null | undefined => value,
+  from: (value: string | number | null | undefined): string | null => {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    if (typeof value === 'number') {
+      if (Number.isNaN(value)) {
+        throw new Error('nullableNumericTransformer received NaN; fail closed (LESSONS 28)');
+      }
+      return String(value);
+    }
+    const str = String(value).trim();
+    if (!/^-?\d+(?:\.\d+)?$/.test(str)) {
+      throw new Error(`nullableNumericTransformer received malformed numeric "${str}"; fail closed (LESSONS 28)`);
+    }
+    return str;
+  },
+};
+
+/**
  * موجودیت پایگاه‌داده صورتحساب مالیاتی هوشمند (Smart Invoicing).
  * فقط از طریق InvoicingRepository قابل دسترسی است (Rule #3 - AGENTS.md).
  */
@@ -133,50 +178,51 @@ export class InvoiceEntity {
   jurisdiction: InvoiceJurisdiction;
 
   /** نرخ تبدیل ارز اصلی به ارز پایه (واحد ارز پایه به‌ازای ۱ واحد ارز فاکتور). */
-  @Column({ type: 'decimal', precision: 18, scale: 8, default: 1 })
-  exchangeRate: number;
+  @Column({ type: 'numeric', precision: 18, scale: 8, default: '1', transformer: numericTransformer })
+  exchangeRate: string | number;
 
   /** نرخ تبدیل ارز فاکتور به ریال (هسته حسابداری چندارزی). */
-  @Column({ type: 'decimal', precision: 24, scale: 6, name: 'fx_rate', default: 1 })
-  fxRate: number;
+  @Column({ type: 'numeric', precision: 24, scale: 6, name: 'fx_rate', default: '1', transformer: numericTransformer })
+  fxRate: string | number;
 
   /** مبلغ فاکتور به ارز مبدأ (اختیاری) — ردیابی اسناد چندارزی. */
   @Column({
-    type: 'decimal',
+    type: 'numeric',
     precision: 24,
     scale: 6,
     name: 'amount_fx',
     nullable: true,
+    transformer: nullableNumericTransformer,
   })
-  amountFx: number | null;
+  amountFx: string | number | null;
 
   /** ارز پایه مورد استفاده در تجمیع گزارش‌های بین‌المللی (USD). */
   @Column({ type: 'varchar', length: 3, default: 'USD' })
   baseCurrency: Currency;
 
-  @Column({ type: 'decimal', precision: 20, scale: 4 })
-  totalAmount: number;
+  @Column({ type: 'numeric', precision: 20, scale: 4, transformer: numericTransformer })
+  totalAmount: string | number;
 
-  @Column({ type: 'decimal', precision: 20, scale: 4 })
-  totalDiscount: number;
+  @Column({ type: 'numeric', precision: 20, scale: 4, transformer: numericTransformer })
+  totalDiscount: string | number;
 
-  @Column({ type: 'decimal', precision: 20, scale: 4 })
-  totalTax: number;
+  @Column({ type: 'numeric', precision: 20, scale: 4, transformer: numericTransformer })
+  totalTax: string | number;
 
-  @Column({ type: 'decimal', precision: 20, scale: 4 })
-  finalPayable: number;
+  @Column({ type: 'numeric', precision: 20, scale: 4, transformer: numericTransformer })
+  finalPayable: string | number;
 
   /** جمع ناخالص معادل ارز پایه. */
-  @Column({ type: 'decimal', precision: 20, scale: 4, default: 0 })
-  baseTotalAmount: number;
+  @Column({ type: 'numeric', precision: 20, scale: 4, default: '0', transformer: numericTransformer })
+  baseTotalAmount: string | number;
 
   /** جمع مالیات معادل ارز پایه. */
-  @Column({ type: 'decimal', precision: 20, scale: 4, default: 0 })
-  baseTotalTax: number;
+  @Column({ type: 'numeric', precision: 20, scale: 4, default: '0', transformer: numericTransformer })
+  baseTotalTax: string | number;
 
   /** مبلغ نهایی قابل پرداخت معادل ارز پایه. */
-  @Column({ type: 'decimal', precision: 20, scale: 4, default: 0 })
-  baseFinalPayable: number;
+  @Column({ type: 'numeric', precision: 20, scale: 4, default: '0', transformer: numericTransformer })
+  baseFinalPayable: string | number;
 
   @Index()
   @Column({ type: 'enum', enum: InvoiceStatus, default: InvoiceStatus.DRAFT })

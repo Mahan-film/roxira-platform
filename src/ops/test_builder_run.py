@@ -662,7 +662,7 @@ set -eu
 [ "$1" = run-builder ] && [ $# -eq 2 ]
 d="$ROXIRA_BUILDER_TASKS/$2"
 [ -z "${KEYPOOL_MASTER_KEY:-}" ] && [ -z "${OPENCODE_CONFIG_CONTENT:-}" ]      # secrets never in the child env
-[ "$(stat -c %a "$d/gateway.env")" = 600 ] && grep -q "^KEYPOOL_MASTER_KEY=${EXPECT_KEY}$" "$d/gateway.env"
+[ "$(stat -c %a "$d/gateway.env" 2>/dev/null || stat -f %Lp "$d/gateway.env")" = 600 ] && grep -q "^KEYPOOL_MASTER_KEY=${EXPECT_KEY}$" "$d/gateway.env"
 [ "$(cat "$d/prompt.txt")" = "do the task" ] && [ -f "$d/work/.git/HEAD" ] && ! grep -q remote "$d/work/.git/config" && [ -z "$(ls "$d/work/.git/hooks" 2>/dev/null)" ]
 echo edited > "$d/work/docs/a.md"; echo made > "$d/work/docs/b.md"
 echo "builder says hi" > "$d/out/builder.log"; echo '{"exit": 0}' > "$d/out/result.json"
