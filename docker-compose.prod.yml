@@ -123,6 +123,14 @@ services:
     oom_score_adj: -800  # T205: kernel OOM killer must pick anything else first (mid-commit kill = recovery)
     security_opt:
       - no-new-privileges:true
+    # T214 (#928): Sized for 1024m container limit per docs/ops/MEMORY_BUDGET.md
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c effective_cache_size=512MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=64MB
+      -c max_connections=100
     environment:
       POSTGRES_USER: enterprise_admin
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
@@ -170,8 +178,10 @@ services:
       - AUTH_TYPE=scram-sha-256
       - POOL_MODE=transaction
       - MAX_CLIENT_CONN=10000
-      - DEFAULT_POOL_SIZE=200
-      - MAX_DB_CONNECTIONS=500
+      # T214 (#928): Pool size 40 and max db connections 60 per MEMORY_BUDGET.md.
+      # Prevents PgBouncer from exhausting Postgres max_connections (100) under peak load.
+      - DEFAULT_POOL_SIZE=40
+      - MAX_DB_CONNECTIONS=60
       - IGNORE_STARTUP_PARAMETERS=extra_float_digits,options
     ports:
       - "127.0.0.1:6432:6432"

@@ -56,7 +56,7 @@ DEFAULT_ACCOUNTS_URL = os.getenv(
     "http://127.0.0.1:3001/api/backend/enterprise-hub/accounting/accounts",
 )
 
-MAX_DB_CONNECTIONS = int(os.getenv("PGBOUNCER_MAX_DB_CONNECTIONS", "500"))
+MAX_DB_CONNECTIONS = int(os.getenv("PGBOUNCER_MAX_DB_CONNECTIONS", "60"))
 
 
 @dataclass

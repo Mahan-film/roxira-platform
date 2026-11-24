@@ -78,11 +78,18 @@ if [ -n "$wt_root" ] && ! { [ -d "$wt_root" ] && [ -w "$wt_root" ]; }; then
   echo "ROXIRA_WT_ROOT=$wt_root is not a writable folder; unset it or mount the work disk" >&2
   exit 1
 fi
+if [ -z "$wt_root" ] && [ "$(uname)" = "Darwin" ] && [ -z "${ROXIRA_ALLOW_INTERNAL_WT:-}" ]; then
+  echo "work disk /Volumes/ssd/roxira-work/wt is not mounted: refusing to create a worktree on the internal disk (set ROXIRA_ALLOW_INTERNAL_WT=1 to override)" >&2
+  exit 1
+fi
 wt_parent="${wt_root:-$root/../roxira-wt}"
 
 # Disk guard: refuse below 8 GiB free to protect running lanes and system (#1318).
 free_gib() { df -Pk "$1" 2>/dev/null | awk 'NR==2 {print int($4 / 1048576)}'; }
-mkdir -p "$wt_parent" 2>/dev/null || true
+if ! mkdir -p "$wt_parent"; then
+  echo "claim.sh: ERROR: cannot create worktree parent directory ($wt_parent)." >&2
+  exit 1
+fi
 min_free="${ROXIRA_MIN_FREE_GIB:-8}"
 wt_free="$(free_gib "$wt_parent")"
 if [ -n "$wt_free" ] && [ "$wt_free" -lt "$min_free" ]; then

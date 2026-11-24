@@ -9,7 +9,7 @@ import {
   TaxSignatureDetailResponseDto,
   VerifySignatureResponse,
 } from "@/types/tax-compliance";
-import { apiRequest } from "@/lib/api/http-client";
+import { apiRequest, apiRequestText } from "@/lib/api/http-client";
 import {
   API_PROXY_BASE_PATH,
   TAX_COMPLIANCE_RESOURCE_PATH,
@@ -162,6 +162,37 @@ export async function generateCertificateRequest(
   return apiRequest<GenerateCsrResponse>(`${TAX_COMPLIANCE_ENDPOINT}/csr`, {
     method: "POST",
     body: payload,
+    signal,
+  });
+}
+
+/**
+ * خروجی CSV دفتر روزنامه — GET /enterprise-hub/tax-compliance/reports/journal.csv
+ */
+export async function downloadJournalCsv(
+  year: number,
+  quarter?: number,
+  signal?: AbortSignal,
+): Promise<string> {
+  return apiRequestText(`${TAX_COMPLIANCE_ENDPOINT}/reports/journal.csv`, {
+    method: "GET",
+    searchParams: { year, quarter },
+    signal,
+  });
+}
+
+/**
+ * خروجی CSV دفتر کل با مانده جاری — GET /enterprise-hub/tax-compliance/reports/ledger.csv
+ */
+export async function downloadLedgerCsv(
+  year: number,
+  quarter?: number,
+  accountCode?: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  return apiRequestText(`${TAX_COMPLIANCE_ENDPOINT}/reports/ledger.csv`, {
+    method: "GET",
+    searchParams: { year, quarter, accountCode },
     signal,
   });
 }
