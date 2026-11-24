@@ -46,6 +46,10 @@ markers = [
 [dependency-groups]
 dev = [
     "beautifulsoup4>=4.15.0",
+    "pytest-timeout>=2.4.0",
+    "hypothesis>=6.170.15,<7",
+    "fastapi>=0.115.0",
+    "python-multipart>=0.0.33",
 ]
 
 # ── پردازش اسناد (هستهٔ SmartJudge) ──────────────────────────────────────────

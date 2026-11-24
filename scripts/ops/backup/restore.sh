@@ -375,6 +375,17 @@ else
   sleep 15
   docker ps --format '{{.Names}}\t{{.Status}}'
   curl -fsS "$QDRANT_URL/collections" | head -c 300 || warn "qdrant not answering"
+
+  # R25 / T269: Replay erased tenants ledger to prevent ghost resurrection after restore
+  ERASED_LEDGER="${ERASED_TENANTS_LEDGER:-/var/lib/roxira/erased_tenants.jsonl}"
+  REPLAY_SCRIPT="$SCRIPT_DIR/../replay_erased_tenants.py"
+  if [ -f "$ERASED_LEDGER" ] && [ -f "$REPLAY_SCRIPT" ]; then
+    log "Replaying erased-tenants ledger ($ERASED_LEDGER) to prevent ghost resurrection..."
+    if ! python3 "$REPLAY_SCRIPT" --ledger "$ERASED_LEDGER"; then
+      echo "FATAL: Replaying erased tenants failed! Ghost data would be resurrected." >&2
+      exit 5
+    fi
+  fi
 fi
 echo
 if [ -n "$SKIPPED_PG" ]; then

@@ -43,6 +43,8 @@ def scan(root: Path) -> list[str]:
         if path.suffix.lower() in SKIP_SUFFIXES or path.name in SKIP_NAMES or not path.is_file():
             continue
         try:
+            if path.stat().st_size > 500_000:
+                continue
             text = path.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue

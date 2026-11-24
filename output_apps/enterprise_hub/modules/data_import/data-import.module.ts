@@ -55,8 +55,10 @@ import { PackageStoreService } from './services/package-store.service';
 import { UploadStoreService } from './services/upload-store.service';
 import { SepidarChequesFifoAdapter } from './migration/bak/sepidar-cheques-fifo.adapter';
 import { TenantExportService } from './services/tenant-export.service';
+import { TenantRestoreService } from './services/tenant-restore.service';
 import { TenantExportController } from './controllers/tenant-export.controller';
 import { TenantExportRepository } from './repositories/tenant-export.repository';
+import { TenantRestoreRepository } from './repositories/tenant-restore.repository';
 import { SepidarMappingAdapter } from './migration/bak/sepidar-mapping.adapter';
 import { HolooMappingAdapter } from './migration/bak/holoo-mapping.adapter';
 import { ImportDryRunController } from './controllers/import-dry-run.controller';
@@ -207,7 +209,9 @@ import { TenantFullExportProcessor } from './processors/tenant-full-export.proce
     BulkPostService,
     BulkImportProcessor,
     TenantExportRepository,
+    TenantRestoreRepository,
     TenantExportService,
+    TenantRestoreService,
     TenantFullExportProcessor,
     ImportDryRunService,
     {
@@ -221,7 +225,9 @@ import { TenantFullExportProcessor } from './processors/tenant-full-export.proce
     EntityImportService,
     SepidarChequesFifoAdapter,
     TenantExportRepository,
+    TenantRestoreRepository,
     TenantExportService,
+    TenantRestoreService,
     TenantFullExportProcessor,
     ImportDryRunService, // Re-exported for external module injection (single provider instance registered above)
     SepidarMappingAdapter,
