@@ -101,7 +101,19 @@ describePg('EntitlementService & Usage Metering on PostgreSQL (T145)', () => {
 
     await expect(service.consume(T1, 'branches', 1)).rejects.toThrow(/limit reached/i);
 
+    // Simulate StructureService.deleteBranch: delete the branch first, then release.
+    // Must seed used=1 (post-delete count), NOT 0 (no double-decrement off-by-one).
+    await testDb.scope.within(T1, undefined, async (manager) => {
+      await manager.query(
+        `DELETE FROM tenant_branches WHERE tenant_id = $1 AND name = 'West'`,
+        [T1],
+      );
+    });
     await service.release(T1, 'branches', 1);
+    const checkAfterDelete = await service.check(T1, 'branches', 1);
+    expect(checkAfterDelete.used).toBe(1);
+    expect(checkAfterDelete.allowed).toBe(true);
+
     const consumed = await service.consume(T1, 'branches', 1);
     expect(consumed.used).toBe(2);
     expect(consumed.remaining).toBe(0);

@@ -276,14 +276,6 @@ export class EntitlementService implements OnModuleInit {
         [tenantId],
       )) as Array<{ rollover_day: number }>;
       const periodKey = computePeriodKey(meter, now, planRows[0]?.rollover_day ?? 1);
-      if (meter === 'branches') {
-        await manager.query(
-          `INSERT INTO usage_counters (tenant_id, meter, period_key, used)
-           VALUES ($1, $2, $3, (SELECT COUNT(*)::bigint FROM tenant_branches WHERE tenant_id = $1))
-           ON CONFLICT (tenant_id, meter, period_key) DO NOTHING`,
-          [tenantId, meter, periodKey],
-        );
-      }
       const rawReleased = await manager.query(
         `UPDATE usage_counters
             SET used = GREATEST(0, used - $4), updated_at = now()
@@ -295,7 +287,18 @@ export class EntitlementService implements OnModuleInit {
         ? (rawReleased[0] as Array<{ meter: string }>)
         : (rawReleased as Array<{ meter: string }>);
       if (released.length === 0) {
-        this.logger.warn(`release(${meter}) for tenant ${tenantId} period ${periodKey} affected 0 usage_counters rows`);
+        if (meter === 'branches') {
+          // If no counter row existed yet (e.g. deleting a pre-existing branch),
+          // seed directly from the post-delete live count without subtracting n again.
+          await manager.query(
+            `INSERT INTO usage_counters (tenant_id, meter, period_key, used)
+             VALUES ($1, $2, $3, (SELECT COUNT(*)::bigint FROM tenant_branches WHERE tenant_id = $1))
+             ON CONFLICT (tenant_id, meter, period_key) DO NOTHING`,
+            [tenantId, meter, periodKey],
+          );
+        } else {
+          this.logger.warn(`release(${meter}) for tenant ${tenantId} period ${periodKey} affected 0 usage_counters rows`);
+        }
       }
     });
   }
