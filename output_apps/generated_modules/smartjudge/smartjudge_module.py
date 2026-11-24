@@ -1881,6 +1881,9 @@ def _make_chat_opener(api_key: str, messages: list, max_tokens: int, temperature
                 if obj.get("usage"):
                     usage_out.update(obj["usage"])
                 for choice in obj.get("choices", []):
+                    finish = choice.get("finish_reason")
+                    if finish:
+                        usage_out["finish_reason"] = finish
                     piece = (choice.get("delta") or {}).get("content")
                     if piece:
                         yield piece
@@ -1894,13 +1897,15 @@ async def _llm_stream_answer(messages: list, selected_tier: str, is_voice: bool,
     # Free-first key-pool gateway (SMARTJUDGE_LLM_GATEWAY), if configured. A
     # failure here (network/5xx/timeout) falls back to the direct path below.
     if _gateway_ready():
+        gw_usage: dict = {}
         with _llm_gateway.call_context(plan=gateway_plan or selected_tier):
             gw_outcome = await _chat_fast.stream_with_fallback(
                 [(_llm_gateway.model_for(gateway_plan or selected_tier), ttft_s or CHAT_TTFT_FAST_S)],
-                _make_chat_opener(_llm_gateway.api_key(), messages, max_tokens, temperature, {}, gateway=True),
+                _make_chat_opener(_llm_gateway.api_key(), messages, max_tokens, temperature, gw_usage, gateway=True),
                 on_delta, total_timeout=total_timeout or CHAT_LLM_TOTAL_S,
             )
         if gw_outcome.text:
+            gw_outcome.finish_reason = gw_usage.get("finish_reason")
             _llm_gateway.log_served("gateway", gw_outcome.model)
             return gw_outcome, "ok"
         print(f"[LLM-UNAVAILABLE] provider=key-pool-gateway status=None "
@@ -1924,6 +1929,7 @@ async def _llm_stream_answer(messages: list, selected_tier: str, is_voice: bool,
             total_timeout=CHAT_LLM_TOTAL_S,
         )
         if outcome.text:
+            outcome.finish_reason = usage.get("finish_reason")
             if _llm_gateway is not None:
                 _llm_gateway.log_served("direct", outcome.model)
             return outcome, "ok"
@@ -2038,6 +2044,36 @@ def resolve_voice_followup_query(user_text: str, history: Optional[list]) -> str
         return user_text
 
     return f"{user_text} ({' '.join(prev_tokens[:5])})"
+
+
+_TOKEN_LIMIT_FINISH_REASONS = frozenset({"length", "max_tokens"})
+_SENTENCE_END_RE = re.compile(r"(?<![0-9۰-۹٠-٩])[.۔؟?!](?![0-9۰-۹٠-٩])[»\")\]\u200c]*")
+
+
+def trim_at_token_limit(text: str, finish_reason: Optional[str]) -> str:
+    """When generation stopped at the token limit, trim to the last complete sentence.
+
+    Prevents emitting a half-cut word in voice reply / spoken_reply. Leaves
+    complete answers (finish_reason='stop' or None) untouched. If no sentence
+    mark exists, drops the trailing partial word instead of emitting a cut word.
+    """
+    if not text:
+        return ""
+    if (finish_reason or "").strip().lower() not in _TOKEN_LIMIT_FINISH_REASONS:
+        return text
+    stripped = text.rstrip()
+    if not stripped:
+        return ""
+    last_end = None
+    for match in _SENTENCE_END_RE.finditer(stripped):
+        last_end = match.end()
+    if last_end is not None and last_end > 0:
+        return stripped[:last_end].rstrip()
+    # No sentence mark in the truncated text: drop the trailing partial word.
+    last_ws = max(stripped.rfind(" "), stripped.rfind("\n"), stripped.rfind("\t"))
+    if last_ws > 0:
+        return stripped[:last_ws].rstrip()
+    return stripped
 
 
 def clean_spoken_text(text: str) -> str:
@@ -2346,7 +2382,6 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         cat_context_str = _catalog_intent.build_catalog_context(cat_rows, target=target)
         if cat_rows:
             if target == "regulation":
-                from output_apps.generated_modules.smartjudge import regulations_retrieval as _regs
                 precedents = _regs.merge_regulations(precedents, cat_rows)
             else:
                 precedents = _rulings.merge_rulings(precedents, cat_rows)
@@ -2546,6 +2581,14 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
                 reply_msg = routed.content
                 routed_model = routed.model or None
                 _answer_timing.note_router_result(routed)
+                if is_voice and reply_msg:
+                    routed_choices = (routed.raw or {}).get("choices") or []
+                    routed_finish = (
+                        routed_choices[0].get("finish_reason")
+                        if routed_choices and isinstance(routed_choices[0], dict)
+                        else None
+                    )
+                    reply_msg = trim_at_token_limit(reply_msg, routed_finish)
                 if not is_voice and _answer_escalation.enabled() and _llm_gateway.may_use_paid(selected_tier):
                     # B3: flag-gated, one strong-tier re-ask on a deterministic quality trigger.
                     esc = await _answer_escalation.maybe_escalate(
@@ -2573,6 +2616,8 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
                 reply_msg = (outcome.text or "").strip()
                 if _llm_gateway is not None:  # some free models prepend English reasoning text
                     reply_msg = _llm_gateway.strip_leaked_reasoning(reply_msg)
+                if is_voice and reply_msg:
+                    reply_msg = trim_at_token_limit(reply_msg, outcome.finish_reason)
                 routed_model = outcome.model
                 _answer_timing.note_stream_outcome(outcome)
                 bucket = _chat_timing.get()
