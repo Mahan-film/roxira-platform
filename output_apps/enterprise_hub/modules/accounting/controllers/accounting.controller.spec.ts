@@ -2,6 +2,9 @@ import { Test } from '@nestjs/testing';
 import { AccountingController } from './accounting.controller';
 import { AccountingService } from '../services/accounting.service';
 import { VoucherToolsService } from '../services/voucher-tools.service';
+import { JournalSequencerService } from '../services/journal-sequencer.service';
+import { AccountingPeriodService } from '../services/accounting-period.service';
+import { MasterDataChangeLogService } from '../services/master-data-change-log.service';
 import { JournalEntryStatus } from '../enums/accounting.enum';
 import type { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
 
@@ -20,6 +23,18 @@ describe('AccountingController.changeJournalEntryStatus', () => {
         },
         {
           provide: VoucherToolsService,
+          useValue: {},
+        },
+        {
+          provide: JournalSequencerService,
+          useValue: {},
+        },
+        {
+          provide: AccountingPeriodService,
+          useValue: {},
+        },
+        {
+          provide: MasterDataChangeLogService,
           useValue: {},
         },
       ],
