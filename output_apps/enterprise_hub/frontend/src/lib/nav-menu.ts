@@ -104,6 +104,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         module: "inventory",
         keywords: ["bom", "production", "تولید", "فرمول ساخت", "ضایعات"],
       },
+      {
+        href: "/app/inventory/reports",
+        label: "گزارش‌های انبار و کاردکس",
+        icon: "Boxes",
+        module: "inventory",
+        keywords: ["کاردکس", "گزارش انبار", "موجودی کالا", "نقطه سفارش", "کسری"],
+      },
     ],
   },
   {
@@ -253,6 +260,13 @@ export const MENU_GROUPS: MenuGroup[] = [
           "بودجه",
           "پژوهش حقوقی",
         ],
+      },
+      {
+        href: "/app/reports/gross-profit",
+        label: "سود ناخالص",
+        icon: "TrendingUp",
+        module: "invoicing",
+        keywords: ["سود ناخالص", "حاشیه سود", "بهای تمام شده", "gross profit", "cogs"],
       },
       {
         href: "/app/accounting/report-builder",
