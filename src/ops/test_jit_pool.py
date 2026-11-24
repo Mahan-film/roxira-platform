@@ -73,6 +73,19 @@ def alive(env, *slots, age=0):
         os.utime(f, (NOW - age, NOW - age))
 
 
+def no_ahead(env):
+    """The one-runner-per-launcher behaviour (no pre-minted spare)."""
+    for spec in env["cfg"]["slots"].values():
+        spec["ahead"] = 0
+
+
+def alive_instances(env, slot, *instances, age=0):
+    for inst in instances:
+        f = env["spool"] / slot / f".alive.{inst}"
+        f.touch()
+        os.utime(f, (NOW - age, NOW - age))
+
+
 def run_tick(jp, env, api, now=NOW):
     return jp.Pool(env["cfg"], api, now=now).tick()
 
@@ -82,6 +95,7 @@ def mints(api):
 
 
 def test_mints_one_per_live_slot_and_writes_spool(jp, env):
+    no_ahead(env)
     alive(env, "light", "docker")
     api = FakeApi()
     run_tick(jp, env, api)
@@ -99,6 +113,7 @@ def test_mints_one_per_live_slot_and_writes_spool(jp, env):
 
 
 def test_no_second_mint_while_a_runner_is_registered(jp, env):
+    no_ahead(env)
     alive(env, "light", "docker")
     api = FakeApi()
     run_tick(jp, env, api)
@@ -112,6 +127,7 @@ def test_no_second_mint_while_a_runner_is_registered(jp, env):
 
 
 def test_mints_again_after_github_removes_the_finished_runner(jp, env):
+    no_ahead(env)
     alive(env, "light")
     api = FakeApi()
     run_tick(jp, env, api)
@@ -145,8 +161,9 @@ def test_stop_does_nothing(jp, env):
 
 
 def test_cleanup_deletes_only_stale_offline_pool_runners(jp, env):
+    no_ahead(env)
     alive(env, "light", "docker")
-    old = f"jit-light-{NOW - 1000:010d}-abcdef"
+    old = f"jit-light-{NOW - 5000:010d}-abcdef"    # spooled, older than spool_max_age_s
     (env["spool"] / "light" / f"{old}.jit").write_text(SECRET)
     api = FakeApi([
         {"id": 1, "name": "roxira-ci", "status": "offline", "busy": False},          # old runner
@@ -235,7 +252,7 @@ case "$1" in
     shift
     envf=""; prev=""
     for a in "$@"; do [ "$prev" = "--env-file" ] && envf="$a"; prev="$a"; done
-    grep -q '^ACTIONS_RUNNER_INPUT_JITCONFIG=' "$envf" && echo "envfile-ok mode=$(stat -c %a "$envf")" >> "$log"
+    grep -q '^ACTIONS_RUNNER_INPUT_JITCONFIG=' "$envf" && echo "envfile-ok mode=$(stat -c %a "$envf" 2>/dev/null || stat -f %Lp "$envf")" >> "$log"
     printf 'create %s\\n' "$*" >> "$log"
     echo 0123456789abcdef ;;
   start) echo "start $*" >> "$log"; exit 0 ;;
@@ -365,3 +382,89 @@ def test_launcher_skips_pinning_beyond_the_machine(launcher_env):
     r = launch(launcher_env, "docker")
     assert r.returncode == 0, r.stderr
     assert "ran in" in (launcher_env["tmp"] / "log").read_text()
+
+
+# --- capacity: several light launchers and pre-minted configs (#1024 follow-up) ---
+
+
+def test_premints_one_ahead_per_slot(jp, env):
+    alive(env, "light", "docker")
+    api = FakeApi()
+    run_tick(jp, env, api)
+    names = [c[2]["name"] for c in mints(api)]
+    assert sum("-light-" in n for n in names) == 2 and sum("-docker-" in n for n in names) == 2
+    assert len(list((env["spool"] / "light").glob("jit-*.jit"))) == 2
+
+
+def test_three_light_launchers_get_one_runner_each_plus_ahead(jp, env):
+    alive_instances(env, "light", "light", "light-2", "light-3")
+    api = FakeApi()
+    run_tick(jp, env, api)
+    assert sum("-light-" in c[2]["name"] for c in mints(api)) == 4
+    run_tick(jp, env, api, now=NOW + 30)       # all registered: nothing more
+    assert sum("-light-" in c[2]["name"] for c in mints(api)) == 4
+
+
+def test_dead_launcher_instance_is_not_counted(jp, env):
+    alive_instances(env, "light", "light", "light-2")
+    alive_instances(env, "light", "light-3", age=500)
+    pool = jp.Pool(env["cfg"], FakeApi(), now=NOW)
+    assert pool.launchers_alive("light") == 2
+    assert pool.launchers_alive("docker") == 0
+
+
+def test_legacy_alive_file_counts_as_one_launcher(jp, env):
+    alive(env, "light")
+    assert jp.Pool(env["cfg"], FakeApi(), now=NOW).launchers_alive("light") == 1
+
+
+def test_spooled_premint_is_kept_until_spool_max_age(jp, env):
+    no_ahead(env)
+    alive(env, "light")
+    waiting = f"jit-light-{NOW - 1000:010d}-abcdef"   # all launchers busy for 1000 s
+    (env["spool"] / "light" / f"{waiting}.jit").write_text(SECRET)
+    api = FakeApi([{"id": 7, "name": waiting, "status": "offline", "busy": False}])
+    run_tick(jp, env, api)
+    assert [c for c in api.calls if c[0] == "DELETE"] == []
+    run_tick(jp, env, api, now=NOW + 3000)             # now older than 3600 s
+    assert [c[1] for c in api.calls if c[0] == "DELETE"] == ["repos/o/r/actions/runners/7"]
+
+
+def test_claimed_config_that_never_started_is_still_stale_at_300s(jp, env):
+    no_ahead(env)
+    alive(env, "light")
+    gone = f"jit-light-{NOW - 400:010d}-abcdef"      # no spool file: a launcher claimed it
+    api = FakeApi([{"id": 8, "name": gone, "status": "offline", "busy": False}])
+    run_tick(jp, env, api)
+    assert [c[1] for c in api.calls if c[0] == "DELETE"] == ["repos/o/r/actions/runners/8"]
+
+
+@pytest.mark.parametrize("ahead", [-1, 5, "1", True, 1.5])
+def test_config_rejects_bad_ahead(jp, tmp_path, ahead):
+    cfg = tmp_path / "c.toml"
+    val = f'"{ahead}"' if isinstance(ahead, str) else str(ahead).lower()
+    cfg.write_text(f'[slots.light]\nlabels = ["self-hosted", "jit"]\nahead = {val}\n')
+    with pytest.raises(ValueError):
+        jp.load_config(str(cfg))
+
+
+def test_launcher_light_instance_shares_the_light_spool(launcher_env):
+    name = put_config(launcher_env, "light")
+    r = launch(launcher_env, "light-2")
+    assert r.returncode == 0, r.stderr
+    log = (launcher_env["tmp"] / "log").read_text()
+    create = next(line for line in log.splitlines() if line.startswith("create "))
+    assert f"--name {name}" in create
+    assert "roxira-jit-toolcache-light-2:/opt/hostedtoolcache" in create   # own tool cache volume
+    assert "--cpu-shares 512" in create          # yields CPU to the docker slot
+    assert "roxira.jit.instance=light-2" in create
+    light = launcher_env["spool"] / "light"
+    assert not list(light.glob("jit-*"))
+    assert (light / ".alive.light-2").exists() and (light / ".alive").exists()
+    assert (light / ".launcher-sig.light-2").exists()
+    assert not (launcher_env["spool"] / "light-2").exists()
+
+
+@pytest.mark.parametrize("bad", ["light-1", "light-10", "light-x", "docker-2", "light2"])
+def test_launcher_rejects_bad_instances(launcher_env, bad):
+    assert launch(launcher_env, bad).returncode == 2

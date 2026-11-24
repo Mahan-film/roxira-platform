@@ -22,3 +22,59 @@ rules:
       include:
         - "**/*.controller.ts"
     pattern-regex: '(?m)^\s*import\s+(?:type\s+)?(?:[\s\S]*?\s+from\s+)?["''][^"'']+\.repository["'']\s*;?'
+
+  - id: enterprise-hub-money-as-number
+    message: "Money must be represented as bigint minor units via modules/accounting/money.ts; do not use Number(), parseFloat(), or float math on monetary amounts (LESSONS 8)."
+    severity: ERROR
+    languages: [javascript, typescript]
+    paths:
+      include:
+        - output_apps/enterprise_hub/**
+      exclude:
+        - "**/*.spec.ts"
+        - "**/*.test.ts"
+        - "**/modules/accounting/money.ts"
+    pattern-either:
+      - patterns:
+          - pattern: Number($X)
+          - metavariable-regex:
+              metavariable: $X
+              regex: '(?i).*(amount|total|price|fee|balance|debit|credit|subtotal|discount|tax_amount|wage|salary|penalty|cost).*'
+      - patterns:
+          - pattern: parseFloat($X)
+          - metavariable-regex:
+              metavariable: $X
+              regex: '(?i).*(amount|total|price|fee|balance|debit|credit|subtotal|discount|tax_amount|wage|salary|penalty|cost).*'
+      - patterns:
+          - pattern: parseInt($X, ...)
+          - metavariable-regex:
+              metavariable: $X
+              regex: '(?i).*(amount|total|price|fee|balance|debit|credit|subtotal|discount|tax_amount|wage|salary|penalty|cost).*'
+      - patterns:
+          - pattern: +$X
+          - metavariable-regex:
+              metavariable: $X
+              regex: '(?i).*(amount|total|price|fee|balance|debit|credit|subtotal|discount|tax_amount|wage|salary|penalty|cost).*'
+      - patterns:
+          - pattern-either:
+              - pattern: $X * $FLOAT
+              - pattern: $FLOAT * $X
+              - pattern: $X / $FLOAT
+          - metavariable-regex:
+              metavariable: $X
+              regex: '(?i).*(amount|total|price|fee|balance|debit|credit|subtotal|discount|tax_amount|wage|salary|penalty|cost).*'
+          - metavariable-regex:
+              metavariable: $FLOAT
+              regex: '^\d+\.\d+$'
+
+  - id: logger-pii-interpolation
+    message: "Do not log PII or sensitive credentials (phone, email, national ID, token, password, secret) in log messages (LESSONS 6)."
+    severity: ERROR
+    languages: [javascript, typescript, python]
+    paths:
+      exclude:
+        - "**/*.spec.ts"
+        - "**/*.test.ts"
+        - "**/test_*.py"
+        - "**/*_test.py"
+    pattern-regex: '(?is)\b(?:this\.)?(?:logger|logging|console)\s*\.\s*(?:log|info|warn|warning|error|debug|verbose)\s*\([^;)]*?\b(?:phone|email|national_?id|national_?code|token|password|secret|api_?key)\b'

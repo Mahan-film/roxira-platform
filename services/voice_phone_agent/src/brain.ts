@@ -1,5 +1,6 @@
 import { cfg } from './config.js';
 import { fetchDirect } from './http.js';
+import { speakable } from './speak.js';
 
 export interface Turn { role: 'user' | 'assistant'; content: string }
 
@@ -105,17 +106,18 @@ export class SentenceSplitter {
       if (/^\s*\d{1,2}[.)]\s*$/.test(piece)) continue;
       // first sentence: speak early even if short; later ones: merge tiny fragments
       if (this.first || clean(piece).length >= 25) {
-        const s = clean(piece);
+        const s = speakable(clean(piece));
         if (s) { out.push(s); this.first = false; }
         last = end;
       }
     }
     this.buf = this.buf.slice(last);
     // runaway sentence without punctuation: cut at a comma
-    if (this.buf.length > 220) {
-      const c = Math.max(this.buf.lastIndexOf('،', 200), this.buf.lastIndexOf(',', 200));
+    const max = cfg.maxSentenceChars;
+    if (this.buf.length > max) {
+      const c = Math.max(this.buf.lastIndexOf('،', max - 20), this.buf.lastIndexOf(',', max - 20));
       if (c > 40) {
-        const s = clean(this.buf.slice(0, c + 1));
+        const s = speakable(clean(this.buf.slice(0, c + 1)));
         if (s) out.push(s);
         this.buf = this.buf.slice(c + 1);
       }
@@ -124,7 +126,7 @@ export class SentenceSplitter {
   }
 
   flush(): string[] {
-    const s = clean(this.buf);
+    const s = speakable(clean(this.buf));
     this.buf = '';
     return s ? [s] : [];
   }

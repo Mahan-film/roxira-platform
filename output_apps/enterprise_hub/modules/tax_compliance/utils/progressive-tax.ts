@@ -43,14 +43,21 @@ export function bracketTax(incomeMinor: bigint, brackets: Bracket[]): bigint {
   return tax;
 }
 
-/** Statutory values in force at the end of the Jalali fiscal year; missing or malformed ones refuse the preview. */
+/**
+ * Statutory values in force at the end of the Jalali fiscal year; missing or malformed ones refuse the preview.
+ * @param country Explicit ISO country code (e.g. 'IR') resolved from the active country pack.
+ */
 export async function readStatutory(
   repository: StatutoryRepository,
   tenantId: string,
   fiscalYear: number,
   keys: readonly StatutoryKey[],
+  country: string,
 ): Promise<Map<StatutoryKey, StatutoryUse>> {
-  const rows = await repository.findForYear(tenantId, IRAN, fiscalYear);
+  if (!country || !country.trim()) {
+    throw new BadRequestException('کد کشور برای خواندن پارامترهای قانونی الزامی است.');
+  }
+  const rows = await repository.findForYear(tenantId, country, fiscalYear);
   const resolved = resolveParameters(rows, isoDate(jalaliMonthEnd(fiscalYear, 12)));
   const out = new Map<StatutoryKey, StatutoryUse>();
   for (const key of keys) {
