@@ -372,3 +372,136 @@ def test_chat_caller_regulation_question(monkeypatch):
     assert "regulations" in res
     assert len(res["regulations"]) == 1
     assert res["regulations"][0]["number"] == "03/101819"
+
+
+# ---------------------------------------------------------------------------
+# 8. Unreviewed / unofficial wording & active/official preference
+# ---------------------------------------------------------------------------
+def test_unreviewed_unofficial_wording_never_claims_official():
+    unofficial_row = {
+        "title": "بخشنامه بانک مرکزی شماره 03/999",
+        "kind": "regulation",
+        "category": "REGULATION",
+        "number": "03/999",
+        "date": "1403-05-04",
+        "issuer": "بانک مرکزی",
+        "subject": "تسهیلات",
+        "source_tier": "unofficial",
+        "needs_review": True,
+    }
+    ctx = ci.build_catalog_context([unofficial_row], target="regulation")
+    assert "بر اساس منابع غیررسمی و در دست بازبینی" in ctx
+    assert "رسمی" not in ctx.replace("غیررسمی", "")
+    assert "قطعی" not in ctx
+
+    ans_text = ci.format_deterministic_answer([unofficial_row], target="regulation", is_voice=False)
+    assert "بر اساس منابع غیررسمی و در دست بازبینی" in ans_text
+    assert "رسمی" not in ans_text.replace("غیررسمی", "")
+    assert "قطعی" not in ans_text
+
+    ans_voice = ci.format_deterministic_answer([unofficial_row], target="regulation", is_voice=True)
+    assert "بر اساس منابع غیررسمی و در دست بازبینی" in ans_voice
+    assert "رسمی" not in ans_voice.replace("غیررسمی", "")
+    assert "قطعی" not in ans_voice
+
+
+def test_latest_regulations_skips_inactive_and_prefers_official(monkeypatch):
+    rr._LATEST_CACHE.clear()
+    monkeypatch.setenv("SMARTJUDGE_REGULATIONS_COLLECTION", "iran_regulations_v3")
+
+    called_urls: list[str] = []
+    points = [
+        {
+            "payload": {
+                "doc_id": "inactive_flag",
+                "issuer": "بانک مرکزی",
+                "number": "901",
+                "date": "1404-06-01",
+                "status": "active",
+                "is_active": False,
+                "source_tier": "official",
+            }
+        },
+        {
+            "payload": {
+                "doc_id": "draft_status",
+                "issuer": "بانک مرکزی",
+                "number": "902",
+                "date": "1404-06-01",
+                "status": "draft",
+                "source_tier": "official",
+            }
+        },
+        {
+            "payload": {
+                "doc_id": "unofficial_ocr",
+                "issuer": "بانک مرکزی",
+                "number": "903",
+                "date": "1404-05-01",
+                "status": "ACTIVE",
+                "source_tier": "unofficial",
+                "needs_review": True,
+                "text_extraction": "ocr_tesseract_fas",
+            }
+        },
+        {
+            "payload": {
+                "doc_id": "official_reviewed",
+                "issuer": "بانک مرکزی",
+                "number": "904",
+                "date": "1403-11-01",
+                "status": "active",
+                "source_tier": "official",
+                "needs_review": False,
+            }
+        },
+    ]
+
+    fake_client = _fake_qdrant_client({"iran_regulations_v3": points}, called_urls)
+    monkeypatch.setitem(sys.modules, "httpx", types.SimpleNamespace(AsyncClient=fake_client))
+
+    rows = asyncio.run(
+        rr.latest_rulings(limit=5, sub_collection="regulations", issuer="بانک مرکزی")
+    )
+    assert [r["number"] for r in rows] == ["904", "903"]
+
+
+# ---------------------------------------------------------------------------
+# 9. Date trust: OCR reversed / unparsable / future dates never win 'latest'
+# ---------------------------------------------------------------------------
+def test_parse_and_sort_rejects_reversed_ocr_and_future_dates():
+    items = [
+        {
+            "doc_id": "ocr_reversed",
+            "number": "999",
+            "date_iso": "25-05-1404",
+            "approval_date": "25/05/1404",
+            "text_extraction": "ocr_tesseract_fas",
+        },
+        {
+            "doc_id": "ocr_invalid_month",
+            "number": "998",
+            "date_iso": "1404-25-05",
+            "text_extraction": "ocr_tesseract_fas",
+        },
+        {
+            "doc_id": "ocr_future",
+            "number": "997",
+            "date_iso": "1499-01-01",
+            "text_extraction": "ocr_tesseract_fas",
+        },
+        {
+            "doc_id": "ocr_garbage",
+            "number": "996",
+            "date_iso": "نامشخص",
+            "text_extraction": "ocr_tesseract_fas",
+        },
+        {
+            "doc_id": "valid_row",
+            "number": "100",
+            "date_iso": "1403-05-04",
+        },
+    ]
+    sorted_items = rr.parse_and_sort(items)
+    assert sorted_items[0]["doc_id"] == "valid_row"
+    assert sorted_items[0]["number"] == "100"

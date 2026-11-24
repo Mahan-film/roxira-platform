@@ -103,12 +103,20 @@ def detect(text: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _is_unofficial_or_unreviewed(row: Dict[str, Any]) -> bool:
+    """Return True if a catalog row is unreviewed or comes from an unofficial source tier."""
+    if bool(row.get("needs_review")):
+        return True
+    return str(row.get("source_tier") or "").strip().lower() == "unofficial"
+
+
 def build_catalog_context(catalog_rows: List[Dict[str, Any]], target: str = "unity_supreme_court") -> str:
     """Deterministic context block for the prompt."""
     if not catalog_rows:
         return ""
     lines = []
-    for r in catalog_rows[:5]:
+    top_rows = catalog_rows[:5]
+    for r in top_rows:
         title = r.get("title") or (f"مقرره شماره {r.get('number')}" if target == "regulation" else f"رأی شماره {r.get('number')}")
         date = r.get("date") or ""
         subject = r.get("subject") or r.get("summary") or ""
@@ -116,13 +124,18 @@ def build_catalog_context(catalog_rows: List[Dict[str, Any]], target: str = "uni
         line = f"- {title} (تاریخ: {date}، مرجع: {body}): {subject[:250]}"
         lines.append(line)
 
+    has_unreviewed = any(_is_unofficial_or_unreviewed(r) for r in top_rows)
     if target == "regulation":
-        target_fa = "بخشنامه‌ها و مقررات معتبر"
+        target_fa = "بخشنامه‌ها و مقررات" if has_unreviewed else "بخشنامه‌ها و مقررات معتبر"
     elif target == "admin_court":
         target_fa = "آرای هیئت عمومی دیوان عدالت اداری"
     else:
         target_fa = "آرای وحدت رویه دیوان عالی کشور"
-    return f"\nفهرست قطعی و معتبر از پایگاه داده سامانه ({target_fa}):\n" + "\n".join(lines) + "\n"
+    if has_unreviewed:
+        header = f"فهرست بر اساس منابع غیررسمی و در دست بازبینی از پایگاه داده سامانه ({target_fa}):"
+    else:
+        header = f"فهرست قطعی و معتبر از پایگاه داده سامانه ({target_fa}):"
+    return f"\n{header}\n" + "\n".join(lines) + "\n"
 
 
 def format_deterministic_answer(
@@ -143,11 +156,15 @@ def format_deterministic_answer(
     subject = (top.get("subject") or top.get("summary") or "").strip()
     if len(subject) > 200:
         subject = subject[:197] + "…"
+    is_unreviewed = _is_unofficial_or_unreviewed(top)
 
     if is_voice:
         if target == "regulation":
             issuer_part = f" {body}" if body else ""
-            ans = f"پاسخ: آخرین بخشنامه یا مقرره{issuer_part} در پایگاه داده، شماره {num} مورخ {date} است."
+            if is_unreviewed:
+                ans = f"پاسخ: بر اساس منابع غیررسمی و در دست بازبینی، آخرین بخشنامه یا مقرره{issuer_part} شماره {num} مورخ {date} است."
+            else:
+                ans = f"پاسخ: آخرین بخشنامه یا مقرره{issuer_part} در پایگاه داده، شماره {num} مورخ {date} است."
         elif target == "unity_supreme_court":
             ans = f"پاسخ: آخرین رأی وحدت رویه هیئت عمومی دیوان عالی کشور در پایگاه داده، رأی شماره {num} مورخ {date} است."
         else:
@@ -158,7 +175,10 @@ def format_deterministic_answer(
 
     # Text mode answer
     title = top.get("title") or (f"مقرره شماره {num}" if target == "regulation" else f"رأی شماره {num}")
-    ans = f"**پاسخ مستقیم:**\nمطابق داده‌های ثبت‌شده در پایگاه رسمی سامانه، آخرین {title} مورخ **{date}** می‌باشد.\n\n"
+    if is_unreviewed:
+        ans = f"**پاسخ مستقیم:**\nبر اساس منابع غیررسمی و در دست بازبینی، آخرین {title} مورخ **{date}** می‌باشد.\n\n"
+    else:
+        ans = f"**پاسخ مستقیم:**\nمطابق داده‌های ثبت‌شده در پایگاه رسمی سامانه، آخرین {title} مورخ **{date}** می‌باشد.\n\n"
     if subject:
         ans += f"**خلاصه موضوع:**\n{subject}\n\n"
     ans += "این اطلاعات بر اساس آخرین به‌روزرسانی سامانه ارائه گردیده است."

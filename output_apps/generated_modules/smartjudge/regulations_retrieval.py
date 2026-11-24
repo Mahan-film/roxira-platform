@@ -84,6 +84,7 @@ def payload_to_row(payload: Dict[str, Any], vector_score: Optional[float] = None
         "category": CATEGORY,
         "doc_type": doc_type,
         "doc_id": str(payload.get("doc_id") or ""),
+        "chunk_index": payload.get("chunk_index"),
         "ref": str(payload.get("ref") or ""),
         "issuer": str(payload.get("issuer") or ""),
         "number": str(payload.get("number") or ""),
@@ -143,17 +144,19 @@ def merge_regulations(precedents: Optional[Sequence[Any]], regulations: Optional
     """Existing precedents first (unchanged order), regulation rows appended; a regulation whose (doc_id, chunk_index)
     or (ref, title) is already present is not added twice."""
     out = list(precedents or [])
-    have = {(r.get("doc_id"), r.get("chunk_index")) for r in out if is_regulation(r)}
-    have_ref = {(r.get("ref"), r.get("title")) for r in out if is_regulation(r)}
+    have = {(r.get("doc_id"), r.get("chunk_index")) for r in out if is_regulation(r) and (r.get("doc_id") or r.get("chunk_index") is not None)}
+    have_ref = {(r.get("ref"), r.get("title")) for r in out if is_regulation(r) and (r.get("ref") or r.get("title"))}
     for r in regulations or []:
         key = (r.get("doc_id"), r.get("chunk_index"))
-        if key != (None, None) and key in have:
+        if (r.get("doc_id") or r.get("chunk_index") is not None) and key in have:
             continue
         ref_key = (r.get("ref"), r.get("title"))
-        if ref_key != (None, None) and ref_key in have_ref:
+        if (r.get("ref") or r.get("title")) and ref_key in have_ref:
             continue
-        have.add(key)
-        have_ref.add(ref_key)
+        if r.get("doc_id") or r.get("chunk_index") is not None:
+            have.add(key)
+        if r.get("ref") or r.get("title"):
+            have_ref.add(ref_key)
         out.append(r)
     return out
 
