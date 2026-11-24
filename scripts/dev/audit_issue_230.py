@@ -527,7 +527,7 @@ ITEMS: tuple[AuditItem, ...] = (
         "`HR-01`",
         ("/app/hr/payroll",),
         ("hr-client.ts",),
-        "Implemented on main",
+        "Partial on main (payroll runs on main; #305 wizard in PR #518)",
     ),
     AuditItem(
         28,
@@ -575,7 +575,18 @@ def git_show(ref: str, path: str) -> str:
 
 def extract_menu_hrefs(ref: str) -> set[str]:
     nav = git_show(ref, NAV_MENU_PATH)
-    return set(re.findall(r'href:\s*"([^"]+)"', nav))
+    return set(re.findall(r"""href:\s*['"]([^'"]+)['"]""", nav))
+
+
+def page_paths_to_routes(pages: tuple[str, ...]) -> list[str]:
+    routes: list[str] = []
+    prefix = "output_apps/enterprise_hub/frontend/src/app"
+    suffix = "/page.tsx"
+    for p in pages:
+        if p.startswith(prefix) and p.endswith(suffix):
+            route = p[len(prefix) : -len(suffix)] or "/"
+            routes.append(route)
+    return routes
 
 
 def check_frontend_calls(ref: str, clients: tuple[str, ...]) -> str:
@@ -594,12 +605,18 @@ def check_frontend_calls(ref: str, clients: tuple[str, ...]) -> str:
     return f"Yes ({', '.join(present)})"
 
 
-def check_menu_reachability(menu_hrefs: set[str], routes: tuple[str, ...]) -> str:
+def check_menu_reachability(
+    menu_hrefs: set[str], routes: tuple[str, ...], pages: tuple[str, ...]
+) -> str:
     if not routes:
         return "No (public route)"
-    matched = [f"`{r}`" for r in routes if r in menu_hrefs]
-    if matched:
-        return f"Yes ({', '.join(matched)})"
+    page_routes = page_paths_to_routes(pages)
+    direct = [f"`{r}`" for r in page_routes if r in menu_hrefs]
+    if direct:
+        return f"Yes ({', '.join(direct)})"
+    hub_matched = [f"`{r}`" for r in routes if r in menu_hrefs]
+    if hub_matched:
+        return f"Via hub ({', '.join(hub_matched)}; direct page not in nav-menu.ts)"
     return "No"
 
 
@@ -640,7 +657,7 @@ def render_markdown(ref: str) -> str:
         specs_col = "<br>".join(f"`{p}`" for p in item.specs)
         pages_col = "<br>".join(f"`{p}`" for p in item.pages)
         help_col = "<br>".join(f"`{p}`" for p in item.help_docs)
-        menu_col = check_menu_reachability(menu_hrefs, item.menu_routes)
+        menu_col = check_menu_reachability(menu_hrefs, item.menu_routes, item.pages)
         fe_col = check_frontend_calls(ref, item.api_clients)
         lines.append(
             f"| {item.num} | {item.description} | {code_col} | {specs_col} | {pages_col} | {help_col} | {item.req_row} | {menu_col} | {fe_col} | {item.status_note} |"
