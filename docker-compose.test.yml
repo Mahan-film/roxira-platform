@@ -13,7 +13,7 @@ services:
     mem_reservation: 128m
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${ROXIRA_TEST_PG_PASSWORD:-postgres_test_password}
+      POSTGRES_PASSWORD: ${ROXIRA_TEST_PG_PASSWORD}
       POSTGRES_DB: roxira_test
     ports:
       - "127.0.0.1:${ROXIRA_TEST_PG_PORT:-54380}:5432"

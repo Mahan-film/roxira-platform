@@ -15,10 +15,18 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 COMPOSE_FILE="$ROOT/docker-compose.test.yml"
 
 PG_PORT="${ROXIRA_TEST_PG_PORT:-54380}"
-PG_PASSWORD="${ROXIRA_TEST_PG_PASSWORD:-postgres_test_password}"
+PG_PASSWORD="${ROXIRA_TEST_PG_PASSWORD:-}"
+PG_APP_PASSWORD="${ROXIRA_TEST_PG_APP_PASSWORD:-}"
 VALKEY_PORT="${ROXIRA_TEST_VALKEY_PORT:-6385}"
 QDRANT_PORT="${ROXIRA_TEST_QDRANT_PORT:-6338}"
 QDRANT_GRPC_PORT="${ROXIRA_TEST_QDRANT_GRPC_PORT:-6339}"
+
+require_passwords() {
+  if [ -z "$PG_PASSWORD" ] || [ -z "$PG_APP_PASSWORD" ]; then
+    echo "test_stack.sh: ERROR: ROXIRA_TEST_PG_PASSWORD and ROXIRA_TEST_PG_APP_PASSWORD must be set." >&2
+    exit 2
+  fi
+}
 
 print_env() {
   local db="${1:-roxira_test}"
@@ -27,11 +35,11 @@ print_env() {
 export ROXIRA_TEST_PG_HOST=127.0.0.1
 export ROXIRA_TEST_PG_PORT=$PG_PORT
 export ROXIRA_TEST_PG_USER=postgres
-export ROXIRA_TEST_PG_PASSWORD=$PG_PASSWORD
+export ROXIRA_TEST_PG_PASSWORD=${PG_PASSWORD}
 export ROXIRA_TEST_PG_ADMIN_USER=postgres
-export ROXIRA_TEST_PG_ADMIN_PASSWORD=$PG_PASSWORD
+export ROXIRA_TEST_PG_ADMIN_PASSWORD=${PG_PASSWORD}
 export ROXIRA_TEST_PG_APP_USER=roxira_app
-export ROXIRA_TEST_PG_APP_PASSWORD=app-role-test-only
+export ROXIRA_TEST_PG_APP_PASSWORD=${PG_APP_PASSWORD}
 export ROXIRA_TEST_PG_DB=$db
 export ROXIRA_TEST_VALKEY_PORT=$VALKEY_PORT
 export ROXIRA_TEST_REDIS_PORT=$VALKEY_PORT
@@ -54,6 +62,7 @@ check_docker() {
 
 cmd_up() {
   check_docker
+  require_passwords
 
   echo "test_stack.sh: starting local test stack..."
   docker compose -f "$COMPOSE_FILE" up -d
@@ -75,13 +84,12 @@ cmd_up() {
   done
 
   # Verify roxira_app role and default database permissions
-  docker compose -f "$COMPOSE_FILE" exec -T postgres_test psql -U postgres -d roxira_test >/dev/null 2>&1 <<'EOSQL' || true
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'roxira_app') THEN
-    CREATE ROLE roxira_app WITH LOGIN PASSWORD 'app-role-test-only' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
-  END IF;
-END $$;
+  docker compose -f "$COMPOSE_FILE" exec -T postgres_test psql -v ON_ERROR_STOP=1 -v app_pwd="$PG_APP_PASSWORD" -U postgres -d roxira_test >/dev/null <<'EOSQL'
+SELECT format(
+  'CREATE ROLE roxira_app WITH LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE',
+  :'app_pwd'
+)
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'roxira_app') \gexec
 GRANT ALL PRIVILEGES ON DATABASE roxira_test TO roxira_app;
 GRANT ALL ON SCHEMA public TO roxira_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO roxira_app;
@@ -136,9 +144,12 @@ cmd_create_db() {
   esac
 
   echo "test_stack.sh: creating isolated database '$db_name' for lane '$lane_input'..."
-  docker compose -f "$COMPOSE_FILE" exec -T postgres_test psql -U postgres -d roxira_test -c "CREATE DATABASE \"$db_name\" OWNER postgres;" >/dev/null 2>&1 || true
+  docker compose -f "$COMPOSE_FILE" exec -T postgres_test psql -v ON_ERROR_STOP=1 -v db_name="$db_name" -U postgres -d roxira_test >/dev/null <<'EOSQL'
+SELECT format('CREATE DATABASE %I OWNER postgres', :'db_name')
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'db_name') \gexec
+EOSQL
 
-  docker compose -f "$COMPOSE_FILE" exec -T postgres_test psql -U postgres -d "$db_name" >/dev/null 2>&1 <<EOSQL || true
+  docker compose -f "$COMPOSE_FILE" exec -T postgres_test psql -v ON_ERROR_STOP=1 -U postgres -d "$db_name" >/dev/null <<EOSQL
 GRANT ALL PRIVILEGES ON DATABASE "$db_name" TO roxira_app;
 GRANT ALL ON SCHEMA public TO roxira_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO roxira_app;
