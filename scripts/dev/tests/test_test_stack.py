@@ -74,6 +74,17 @@ class TestTestStack(unittest.TestCase):
         self.assertIn("Valkey:", res.stdout)
         self.assertIn("Qdrant:", res.stdout)
 
+    def test_create_db_rejects_invalid_lane_name(self):
+        for bad in ['l1"; DROP DATABASE postgres; --', 'a b', '../evil', 'a' * 51]:
+            res = subprocess.run(
+                ["bash", str(TEST_STACK_SCRIPT), "create-db", bad],
+                capture_output=True,
+                text=True,
+                cwd=str(ROOT),
+            )
+            self.assertEqual(res.returncode, 2, f"Expected exit 2 for {bad!r}, got {res.returncode}")
+            self.assertIn("invalid lane_id_or_db_name", res.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -135,6 +135,10 @@ cmd_create_db() {
     echo "usage: $0 create-db <lane_id_or_db_name> (e.g. l1, l2, roxira_test_l3)" >&2
     exit 2
   fi
+  if ! [[ "$lane_input" =~ ^[a-zA-Z0-9_-]{1,50}$ ]]; then
+    echo "error: invalid lane_id_or_db_name '$lane_input' (allowed: [a-zA-Z0-9_-], max 50 chars)" >&2
+    exit 2
+  fi
   check_docker
 
   local db_name="$lane_input"
@@ -149,8 +153,8 @@ SELECT format('CREATE DATABASE %I OWNER postgres', :'db_name')
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'db_name') \gexec
 EOSQL
 
-  docker compose -f "$COMPOSE_FILE" exec -T postgres_test psql -v ON_ERROR_STOP=1 -U postgres -d "$db_name" >/dev/null <<EOSQL
-GRANT ALL PRIVILEGES ON DATABASE "$db_name" TO roxira_app;
+  docker compose -f "$COMPOSE_FILE" exec -T postgres_test psql -v ON_ERROR_STOP=1 -v db_name="$db_name" -U postgres -d "$db_name" >/dev/null <<'EOSQL'
+SELECT format('GRANT ALL PRIVILEGES ON DATABASE %I TO roxira_app', :'db_name') \gexec
 GRANT ALL ON SCHEMA public TO roxira_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO roxira_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO roxira_app;
