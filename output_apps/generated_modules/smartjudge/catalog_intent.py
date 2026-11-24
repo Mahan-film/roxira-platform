@@ -103,6 +103,15 @@ def detect(text: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+UNOFFICIAL_FA = "بر اساس منابع غیررسمی و در دست بازبینی"
+
+
+def _trusted(r: Dict[str, Any]) -> bool:
+    """Official tier and reviewed. Anything else (OCR, unofficial copy, needs_review) must never be called
+    official or definitive (HUB re-review on #1385)."""
+    return str(r.get("source_tier") or "").strip().lower() == "official" and not r.get("needs_review")
+
+
 def build_catalog_context(catalog_rows: List[Dict[str, Any]], target: str = "unity_supreme_court") -> str:
     """Deterministic context block for the prompt."""
     if not catalog_rows:
@@ -114,15 +123,21 @@ def build_catalog_context(catalog_rows: List[Dict[str, Any]], target: str = "uni
         subject = r.get("subject") or r.get("summary") or ""
         body = r.get("issuer") or r.get("issuing_body") or ""
         line = f"- {title} (تاریخ: {date}، مرجع: {body}): {subject[:250]}"
+        if not _trusted(r):
+            line += f" [{UNOFFICIAL_FA}]"
         lines.append(line)
 
     if target == "regulation":
-        target_fa = "بخشنامه‌ها و مقررات معتبر"
+        target_fa = "بخشنامه‌ها و مقررات"
     elif target == "admin_court":
         target_fa = "آرای هیئت عمومی دیوان عدالت اداری"
     else:
         target_fa = "آرای وحدت رویه دیوان عالی کشور"
-    return f"\nفهرست قطعی و معتبر از پایگاه داده سامانه ({target_fa}):\n" + "\n".join(lines) + "\n"
+    if all(_trusted(r) for r in catalog_rows[:5]):
+        header = f"فهرست از منابع رسمی ثبت‌شده در پایگاه داده سامانه ({target_fa})"
+    else:
+        header = f"فهرست {UNOFFICIAL_FA} از پایگاه داده سامانه ({target_fa})؛ هیچ موردی را رسمی یا قطعی معرفی نکن"
+    return f"\n{header}:\n" + "\n".join(lines) + "\n"
 
 
 def format_deterministic_answer(
@@ -144,6 +159,7 @@ def format_deterministic_answer(
     if len(subject) > 200:
         subject = subject[:197] + "…"
 
+    trusted = _trusted(top)
     if is_voice:
         if target == "regulation":
             issuer_part = f" {body}" if body else ""
@@ -154,11 +170,16 @@ def format_deterministic_answer(
             ans = f"پاسخ: آخرین دادنامه هیئت عمومی دیوان عدالت اداری در پایگاه داده، شماره {num} مورخ {date} است."
         if subject:
             ans += f" موضوع آن در خصوص {subject} می‌باشد."
+        if not trusted:
+            ans += f" این پاسخ {UNOFFICIAL_FA} است."
         return ans
 
     # Text mode answer
     title = top.get("title") or (f"مقرره شماره {num}" if target == "regulation" else f"رأی شماره {num}")
-    ans = f"**پاسخ مستقیم:**\nمطابق داده‌های ثبت‌شده در پایگاه رسمی سامانه، آخرین {title} مورخ **{date}** می‌باشد.\n\n"
+    if trusted:
+        ans = f"**پاسخ مستقیم:**\nمطابق منابع رسمی ثبت‌شده در پایگاه داده سامانه، آخرین {title} مورخ **{date}** می‌باشد.\n\n"
+    else:
+        ans = f"**پاسخ مستقیم:**\n{UNOFFICIAL_FA}، آخرین {title} در پایگاه داده سامانه مورخ **{date}** است.\n\n"
     if subject:
         ans += f"**خلاصه موضوع:**\n{subject}\n\n"
     ans += "این اطلاعات بر اساس آخرین به‌روزرسانی سامانه ارائه گردیده است."

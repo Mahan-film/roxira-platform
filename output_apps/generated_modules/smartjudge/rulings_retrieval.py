@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import datetime as _dt
 import re
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Sequence
 
@@ -268,26 +269,64 @@ def _matches_issuer(payload: dict, issuer_query: str) -> bool:
     return bool(words) and all(w in nf for w in words)
 
 
-def parse_and_sort(rows: Iterable[dict]) -> List[dict]:
-    """Sort ruling/regulation payloads/rows descending by date then by integer number."""
-    def _key(r: dict):
-        date_raw = str(
-            r.get("date_iso")
-            or r.get("approval_date")
-            or r.get("approved_on")
-            or r.get("date")
-            or r.get("meeting_date")
-            or ""
-        ).strip().translate(_DIGIT_TRANS)
-        date_iso = str(r.get("date_iso") or r.get("approval_date") or "").strip().replace("/", "-")
-        fa_tuple = (0, 0, 0)
-        if date_raw:
-            parts = [int(p) for p in re.findall(r"\d+", date_raw)]
-            if len(parts) >= 3:
-                fa_tuple = (parts[0], parts[1], parts[2])
-            elif len(parts) == 1:
-                fa_tuple = (parts[0], 0, 0)
+_INACTIVE_STATUSES = {"repealed", "revoked", "cancelled", "canceled", "superseded", "expired", "inactive",
+                      "منسوخ", "لغو شده", "ملغی", "ابطال شده"}
 
+
+def is_inactive(r: dict) -> bool:
+    """True for rows that must never be shown as a current rule (inactive flag or a repeal-type status)."""
+    if r.get("is_active") is False:
+        return True
+    status = str(r.get("status") or "").strip().lower()
+    return status in _INACTIVE_STATUSES
+
+
+def is_trusted(r: dict) -> bool:
+    """Official tier AND not waiting for review. Everything else is worded as unofficial / under review."""
+    return str(r.get("source_tier") or "").strip().lower() == "official" and not r.get("needs_review")
+
+
+def _today_jalali_year(today: Optional[_dt.date] = None) -> int:
+    t = today or _dt.date.today()
+    return t.year - 621 if (t.month, t.day) >= (3, 21) else t.year - 622
+
+
+def validated_date(r: dict, today: Optional[_dt.date] = None) -> Optional[tuple]:
+    """(y, m, d) on the Jalali scale when the row's date parses, is plausible and not in the future, else None.
+
+    OCR rows often carry reversed (d/m/y) or garbled dates; those must never win 'latest'."""
+    raw = str(
+        r.get("date_iso")
+        or r.get("approval_date")
+        or r.get("approved_on")
+        or r.get("date")
+        or r.get("meeting_date")
+        or ""
+    ).strip().translate(_DIGIT_TRANS)
+    parts = [int(p) for p in re.findall(r"\d+", raw)]
+    if len(parts) < 3:
+        return None
+    y, m, d = parts[0], parts[1], parts[2]
+    if not (1 <= m <= 12 and 1 <= d <= 31):
+        return None
+    t = today or _dt.date.today()
+    if 1900 <= y <= 2100:  # Gregorian: must not be in the future; map to the Jalali scale for ordering
+        try:
+            if _dt.date(y, m, d) > t:
+                return None
+        except ValueError:
+            return None
+        return (y - 621, m, d)
+    if 1300 <= y <= _today_jalali_year(t):
+        return (y, m, d)
+    return None
+
+
+def parse_and_sort(rows: Iterable[dict], today: Optional[_dt.date] = None) -> List[dict]:
+    """Sort ruling/regulation payloads/rows: rows with a validated date first, newest date first,
+    then official-and-reviewed rows, then the higher integer number. Rows without a trusted date sink."""
+    def _key(r: dict):
+        vd = validated_date(r, today)
         raw_num = str(
             r.get("number")
             or r.get("document_number")
@@ -300,7 +339,7 @@ def parse_and_sort(rows: Iterable[dict]) -> List[dict]:
         if not num_m and r.get("title"):
             t_m = re.findall(r"\d+", str(r.get("title")).translate(_DIGIT_TRANS))
             num_val = int(t_m[0]) if t_m else 0
-        return (date_iso, fa_tuple, num_val)
+        return (vd is not None, vd or (0, 0, 0), is_trusted(r), num_val)
 
     return sorted(list(rows or []), key=_key, reverse=True)
 
@@ -436,6 +475,8 @@ async def latest_rulings(
     filtered = []
     for r in raw_payloads:
         if is_reg:
+            if is_inactive(r):
+                continue
             if issuer and not _matches_issuer(r, issuer):
                 continue
             filtered.append(r)
@@ -455,6 +496,16 @@ async def latest_rulings(
     # 4. Sort descending by date and number
     sorted_items = parse_and_sort(filtered)
     if is_reg:
+        # Same circular stored twice (official copy + OCR copy): keep the first, which sorts official-first.
+        seen_keys: set = set()
+        deduped = []
+        for p in sorted_items:
+            k = (str(p.get("number") or "").strip(), validated_date(p))
+            if k[0] and k in seen_keys:
+                continue
+            seen_keys.add(k)
+            deduped.append(p)
+        sorted_items = deduped
         from output_apps.generated_modules.smartjudge import regulations_retrieval as _regs
         rows = [_regs.payload_to_row(p) for p in sorted_items]
     else:
