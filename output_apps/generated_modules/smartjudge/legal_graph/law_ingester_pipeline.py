@@ -95,7 +95,7 @@ def normalize_text(value: str) -> str:
     """Normalise digits/letters/bidi/whitespace via shared ``persian_norm`` so hashing and matching are stable."""
     from output_apps.generated_modules.smartjudge.persian_norm import normalize_persian_search
 
-    return normalize_persian_search(value).replace("\u200c", " ")
+    return normalize_persian_search(value).replace("\u200c", " ").lower()
 
 
 def _to_int(value: str) -> int:

@@ -121,6 +121,8 @@ def test_backfill_compute_payload_update():
         ("تبصرہ ۱ مادھ ۱۰", "تبصره 1 ماده 10"),
         # ZWNJ vs OCR split spaces in sparse tokenization
         ("پرداخت خسارت می\u200cشود", "پرداخت خسارت می شود"),
+        # NBSP and multiple whitespace runs + ASCII case parity
+        ("ماده\u00a0\u00a0ABC123  قانون", "ماده abc123 قانون"),
     ],
 )
 def test_index_and_query_paths_map_all_variants_identically(indexed: str, query: str):
