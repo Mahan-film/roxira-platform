@@ -58,7 +58,7 @@ export interface CreateQuotationDto {
     lineNo: number;
     itemId: number;
     quantity: number;
-    unitPrice: number;
+    unitPrice: string | number;
     discount?: number;
     description?: string;
   }>;

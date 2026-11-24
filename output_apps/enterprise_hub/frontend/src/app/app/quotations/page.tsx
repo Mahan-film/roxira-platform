@@ -33,6 +33,7 @@ import {
 } from "@/lib/api/quotations-client";
 import { getMyTenant } from "@/lib/api/tenants-client";
 import { formatJalaliDate, formatMoneyRial, formatNumber } from "@/lib/fa-format";
+import { normalizeMoneyDigits } from "@/lib/money-input";
 import { printQuotation } from "@/lib/print/open-quotation-window";
 import {
   QUOTATION_STATUS_LABELS,
@@ -334,7 +335,7 @@ function NewQuotationForm({
   const [description, setDescription] = useState("");
   const [itemId, setItemId] = useState<string>("1");
   const [quantity, setQuantity] = useState(1);
-  const [unitPrice, setUnitPrice] = useState(100000);
+  const [unitPrice, setUnitPrice] = useState("100000");
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -350,8 +351,8 @@ function NewQuotationForm({
       setError("تعداد واردشده نامعتبر است.");
       return;
     }
-    const priceNum = typeof unitPrice === "number" ? unitPrice : parseFloat(String(unitPrice));
-    if (!Number.isFinite(priceNum) || priceNum < 0) {
+    const normalizedUnitPrice = normalizeMoneyDigits(unitPrice);
+    if (!normalizedUnitPrice) {
       setError("مبلغ واحد واردشده نامعتبر است.");
       return;
     }
@@ -369,7 +370,7 @@ function NewQuotationForm({
             itemId: Number(itemId) > 0 ? Number(itemId) : 1,
             description: description.trim() || "کالای آزمایشی",
             quantity: qtyNum,
-            unitPrice: priceNum,
+            unitPrice: normalizedUnitPrice,
             discount: 0,
           },
         ],
@@ -449,10 +450,10 @@ function NewQuotationForm({
           <div>
             <label className="mb-1 block text-xs">قیمت واحد (ریال)</label>
             <Input
-              type="number"
-              min="0"
+              type="text"
+              inputMode="numeric"
               value={unitPrice}
-              onChange={(e) => setUnitPrice(Number(e.target.value))}
+              onChange={(e) => setUnitPrice(normalizeMoneyDigits(e.target.value))}
             />
           </div>
         </div>
