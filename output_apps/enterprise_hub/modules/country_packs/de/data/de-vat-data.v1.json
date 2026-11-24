@@ -1,0 +1,163 @@
+{
+  "version": "1.0.0",
+  "country": "DE",
+  "vatRates": [
+    {
+      "code": "DE_VAT_STANDARD",
+      "rate": "0.19",
+      "percent": 19,
+      "label": "Regelsteuersatz (Standard VAT 19%)",
+      "legalBasis": "§ 12 Abs. 1 UStG",
+      "effectiveFrom": "2007-01-01",
+      "sourceUrl": "https://www.gesetze-im-internet.de/ustg_1980/__12.html",
+      "verified": true
+    },
+    {
+      "code": "DE_VAT_REDUCED",
+      "rate": "0.07",
+      "percent": 7,
+      "label": "Ermäßigter Steuersatz (Reduced VAT 7%)",
+      "legalBasis": "§ 12 Abs. 2 UStG",
+      "effectiveFrom": "2007-01-01",
+      "sourceUrl": "https://www.gesetze-im-internet.de/ustg_1980/__12.html",
+      "verified": true
+    },
+    {
+      "code": "DE_VAT_ZERO_INTRA_COMMUNITY",
+      "rate": "0.00",
+      "percent": 0,
+      "label": "Steuerfreie innergemeinschaftliche Lieferung (Zero-rated Intra-Community Supply)",
+      "legalBasis": "§ 4 Nr. 1b i.V.m. § 6a UStG",
+      "effectiveFrom": "1993-01-01",
+      "sourceUrl": "https://www.gesetze-im-internet.de/ustg_1980/__4.html",
+      "verified": true
+    },
+    {
+      "code": "DE_VAT_ZERO_EXPORT",
+      "rate": "0.00",
+      "percent": 0,
+      "label": "Steuerfreie Ausfuhrlieferung (Zero-rated Export Supply)",
+      "legalBasis": "§ 4 Nr. 1a i.V.m. § 6 UStG",
+      "effectiveFrom": "1980-01-01",
+      "sourceUrl": "https://www.gesetze-im-internet.de/ustg_1980/__4.html",
+      "verified": true
+    },
+    {
+      "code": "DE_VAT_ZERO_PHOTOVOLTAIC",
+      "rate": "0.00",
+      "percent": 0,
+      "label": "Nullsteuersatz für Photovoltaikanlagen (Zero-rate Photovoltaic)",
+      "legalBasis": "§ 12 Abs. 3 UStG (JStG 2022)",
+      "effectiveFrom": "2023-01-01",
+      "sourceUrl": "https://www.gesetze-im-internet.de/ustg_1980/__12.html",
+      "verified": true
+    }
+  ],
+  "kleinunternehmer": {
+    "priorYearTurnoverCeilingCents": "2500000",
+    "currentYearTurnoverCeilingCents": "10000000",
+    "warningThresholdPercent": 90,
+    "effectiveFrom": "2025-01-01",
+    "legalBasis": "§ 19 Abs. 1 UStG (Wachstumschancengesetz)",
+    "sourceUrl": "https://www.gesetze-im-internet.de/ustg_1980/__19.html",
+    "verified": true,
+    "notes": "Small business exempt if prior year turnover <= EUR 25,000 and current year expected turnover <= EUR 100,000. Crossing EUR 100,000 mid-year immediately terminates exemption."
+  },
+  "invoiceRequirements": {
+    "section19Notice": "Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.",
+    "section19NoticeEn": "No VAT charged pursuant to section 19 of the German Value Added Tax Act (Kleinunternehmerregelung).",
+    "requiredIdentifiers": [
+      "tax_number",
+      "vat_id",
+      "small_business_id"
+    ],
+    "selfBillingNotice": "Gutschrift",
+    "smallAmountInvoiceThresholdCents": "25000",
+    "legalBasis": "§ 34a UStDV, § 14 Abs. 4 UStG, § 33 UStDV",
+    "sourceUrl": "https://www.gesetze-im-internet.de/ustdv_1980/__34a.html",
+    "verified": true
+  },
+  "returnFrequency": {
+    "monthlyThresholdVatCents": "900000",
+    "annualExemptionThresholdVatCents": "200000",
+    "permanentExtensionDeadline": "02-10",
+    "specialPrepaymentNumerator": 1,
+    "specialPrepaymentDenominator": 11,
+    "legalBasis": "§ 18 Abs. 2 UStG, §§ 46-48 UStDV",
+    "sourceUrl": "https://www.gesetze-im-internet.de/ustg_1980/__18.html",
+    "verified": true,
+    "notes": "Monthly filing if prior year VAT liability > EUR 9,000; quarterly if between EUR 2,000 and EUR 9,000; annual exemption eligible <= EUR 2,000. Permanent 1-month extension requires 1/11th special prepayment for monthly filers by 10 February."
+  },
+  "reverseChargeCodes": [
+    {
+      "code": "13b_foreign_entrepreneur",
+      "label": "Werklieferungen und sonstige Leistungen eines im Ausland ansässigen Unternehmers",
+      "legalBasis": "§ 13b Abs. 1 und Abs. 2 Nr. 1 UStG",
+      "verified": false,
+      "sourceUrl": "https://www.gesetze-im-internet.de/ustg_1980/__13b.html",
+      "description": "Supplies and services performed by foreign entrepreneurs"
+    },
+    {
+      "code": "13b_real_estate_transfer",
+      "label": "Umsätze, die unter das Grunderwerbsteuergesetz fallen",
+      "legalBasis": "§ 13b Abs. 2 Nr. 2 UStG",
+      "verified": false,
+      "sourceUrl": "https://www.gesetze-im-internet.de/ustg_1980/__13b.html",
+      "description": "Real estate transactions subject to GrEStG"
+    },
+    {
+      "code": "13b_construction_services",
+      "label": "Bauleistungen an Unternehmer, die selbst Bauleistungen erbringen",
+      "legalBasis": "§ 13b Abs. 2 Nr. 4 UStG",
+      "verified": false,
+      "sourceUrl": "https://www.gesetze-im-internet.de/ustg_1980/__13b.html",
+      "description": "Construction services rendered to another construction contractor"
+    },
+    {
+      "code": "13b_energy_supplies",
+      "label": "Lieferungen von Gas, Elektrizität, Wärme oder Kälte",
+      "legalBasis": "§ 13b Abs. 2 Nr. 5 UStG",
+      "verified": false,
+      "sourceUrl": "https://www.gesetze-im-internet.de/ustg_1980/__13b.html",
+      "description": "Supplies of gas, electricity, heating or cooling"
+    },
+    {
+      "code": "13b_scrap_metal",
+      "label": "Lieferung von Schrott, Altmetallen und Abfällen",
+      "legalBasis": "§ 13b Abs. 2 Nr. 7 UStG",
+      "verified": false,
+      "sourceUrl": "https://www.gesetze-im-internet.de/ustg_1980/__13b.html",
+      "description": "Supplies of scrap metal and waste materials (Annex 3 UStG)"
+    },
+    {
+      "code": "13b_mobile_phones",
+      "label": "Lieferung von Mobilfunkgeräten und Schaltkreisen ab 5.000 EUR",
+      "legalBasis": "§ 13b Abs. 2 Nr. 10 UStG",
+      "verified": false,
+      "sourceUrl": "https://www.gesetze-im-internet.de/ustg_1980/__13b.html",
+      "description": "Supplies of mobile phones and integrated circuits with invoice total >= EUR 5,000"
+    },
+    {
+      "code": "13b_electronics",
+      "label": "Lieferung von Tablet-Computern, Spielekonsolen und Laptops ab 5.000 EUR",
+      "legalBasis": "§ 13b Abs. 2 Nr. 11 UStG",
+      "verified": false,
+      "sourceUrl": "https://www.gesetze-im-internet.de/ustg_1980/__13b.html",
+      "description": "Supplies of tablets, laptops and gaming consoles with invoice total >= EUR 5,000"
+    },
+    {
+      "code": "13b_telecom_services",
+      "label": "Telekommunikationsdienstleistungen an Wiederverkäufer",
+      "legalBasis": "§ 13b Abs. 2 Nr. 12 UStG",
+      "verified": false,
+      "sourceUrl": "https://www.gesetze-im-internet.de/ustg_1980/__13b.html",
+      "description": "Telecommunication services rendered to resellers"
+    }
+  ],
+  "viesRequirements": {
+    "mandatoryForZeroRatedEuSupply": true,
+    "legalBasis": "§ 4 Nr. 1b i.V.m. § 6a UStG, Art. 138 MwStSystRL",
+    "verified": true,
+    "sourceUrl": "https://www.bzst.de/DE/Unternehmen/Umsatzsteuer/USt-IdNr-Bestaetigung/ust-idnr-bestaetigung_node.html"
+  }
+}

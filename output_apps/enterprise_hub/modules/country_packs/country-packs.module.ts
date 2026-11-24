@@ -9,6 +9,7 @@ import { CountryPackInterceptor } from './country-pack.interceptor';
 import { CountryPackRegistry } from './country-pack.registry';
 import { CountryPackResolver } from './country-pack.resolver';
 import { DatevExtfService } from './de/datev/datev-extf.service';
+import { createGermanyPack } from './de/de.pack';
 import { createIranPack } from './ir/ir.pack';
 import { createMalaysiaPack } from './my/my.pack';
 import { RailSettlementService } from './payment_rails/rail-settlement.service';
@@ -35,6 +36,7 @@ export const DEFAULT_COUNTRY = 'IR';
         const registry = new CountryPackRegistry(DEFAULT_COUNTRY);
         registry.register(createIranPack({ statutory }));
         registry.register(createMalaysiaPack());
+        registry.register(createGermanyPack());
         return registry;
       },
     },
