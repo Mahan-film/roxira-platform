@@ -1,6 +1,6 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
-import { minorToDecimal, parseScaled, toMinor } from '../../accounting/money';
+import { fromDb, minorToDecimal, parseScaled, toMinor } from '../../accounting/money';
 import { decideRoleAccount } from '../../accounting/services/role-account-resolver';
 import { AccountingService } from '../../accounting/services/accounting.service';
 import { CountryPackResolver } from '../../country_packs/country-pack.resolver';
@@ -983,12 +983,29 @@ export class InvoicePostingService {
   }
 
   /** Rial minor units: invoice-currency amount x fx rate (6 decimals), rounded half-up. */
-  private rialMinor(invoice: InvoiceEntity, amount: number): bigint {
-    const amountMinor = toMinor(this.round(Number(amount ?? 0)));
-    const rate = parseScaled(this.resolveFxRate(invoice).toFixed(6), 6);
+  private rialMinor(invoice: InvoiceEntity, amount: number | string): bigint {
+    const amountMinor =
+      typeof amount === 'string'
+        ? fromDb(amount)
+        : toMinor(this.round(amount ?? 0));
+    const rate = parseScaled(this.resolveFxRateString(invoice), 6);
     const product = amountMinor * rate;
     const divisor = 1_000_000n;
     return (product + (product < 0n ? -divisor / 2n : divisor / 2n)) / divisor;
+  }
+
+  private resolveFxRateString(invoice: InvoiceEntity): string {
+    if (typeof invoice.fxRate === 'string') {
+      const trimmed = invoice.fxRate.trim();
+      const match = /^(\d+)(?:\.(\d+))?$/.exec(trimmed);
+      if (match) {
+        const intPart = match[1];
+        const fracPart = (match[2] ?? '').slice(0, 6);
+        return fracPart.length > 0 ? `${intPart}.${fracPart}` : intPart;
+      }
+    }
+    const rate = Number(invoice.fxRate);
+    return Number.isFinite(rate) && rate > 0 ? rate.toFixed(6) : '1';
   }
 
   private resolveFxRate(invoice: InvoiceEntity): number {
