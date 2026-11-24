@@ -35,9 +35,13 @@ if [ -n "${LOCAL_CI_REMOTE:-}" ]; then
 fi
 
 # Self-bootstrap: if ruff or pytest are missing, create a private virtualenv once
-# (LOCAL_CI_VENV, default ~/venvs/roxira), install the CI tools there and use it.
+# (LOCAL_CI_VENV, default .venv at repo root or ~/venvs/roxira), install the CI tools there and use it.
 # Set LOCAL_CI_NO_BOOTSTRAP=1 to disable.
-LOCAL_CI_VENV="${LOCAL_CI_VENV:-$HOME/venvs/roxira}"
+if [ -x "$REPO_ROOT/.venv/bin/python" ]; then
+  LOCAL_CI_VENV="$REPO_ROOT/.venv"
+else
+  LOCAL_CI_VENV="${LOCAL_CI_VENV:-$HOME/venvs/roxira}"
+fi
 if [ -x "$LOCAL_CI_VENV/bin/python" ]; then
   PATH="$LOCAL_CI_VENV/bin:$PATH"
 fi
@@ -45,14 +49,18 @@ fi
 # counts as missing: cloud containers ship a bare pytest that rejects --timeout.
 if [ "${LOCAL_CI_NO_BOOTSTRAP:-0}" != "1" ] \
   && { ! command -v ruff >/dev/null 2>&1 || ! command -v pytest >/dev/null 2>&1 \
-       || ! python3 -c 'import pytest_timeout, hypothesis' >/dev/null 2>&1; }; then
+       || ! "$LOCAL_CI_VENV/bin/python" -c 'import pytest_timeout, hypothesis' >/dev/null 2>&1; }; then
   echo "=== bootstrap: installing CI tools into $LOCAL_CI_VENV (first run only) ==="
-  if [ ! -x "$LOCAL_CI_VENV/bin/python" ]; then
-    python3 -m venv "$LOCAL_CI_VENV"
+  if [ -x "$REPO_ROOT/scripts/dev/dev_env.sh" ]; then
+    bash "$REPO_ROOT/scripts/dev/dev_env.sh"
+  else
+    if [ ! -x "$LOCAL_CI_VENV/bin/python" ]; then
+      python3 -m venv "$LOCAL_CI_VENV"
+    fi
+    "$LOCAL_CI_VENV/bin/python" -m pip install --quiet --upgrade pip
+    "$LOCAL_CI_VENV/bin/python" -m pip install --quiet 'ruff>=0.16.2,<0.17' \
+      -r "$REPO_ROOT/ci/requirements-test.txt"
   fi
-  "$LOCAL_CI_VENV/bin/python" -m pip install --quiet --upgrade pip
-  "$LOCAL_CI_VENV/bin/python" -m pip install --quiet 'ruff>=0.16.2,<0.17' \
-    -r "$REPO_ROOT/ci/requirements-test.txt"
   PATH="$LOCAL_CI_VENV/bin:$PATH"
   echo "=== bootstrap done ==="
 fi

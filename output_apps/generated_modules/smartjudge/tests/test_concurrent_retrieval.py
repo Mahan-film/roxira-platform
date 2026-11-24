@@ -18,7 +18,7 @@ def test_independent_retrieval_stages_run_concurrently(monkeypatch):
         await asyncio.wait_for(both_running.wait(), timeout=0.5)
         return [{"title": "ماده ۱", "summary": "s", "match_level": "EXACT"}], []
 
-    async def fake_latest_rulings(limit=5, sub_collection="unity_rulings"):
+    async def fake_latest_rulings(limit=5, sub_collection="unity_rulings", **kw):
         started.append("cat")
         if "kg" in started:
             both_running.set()
