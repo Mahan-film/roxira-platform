@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, EntityManager } from 'typeorm';
 import { DimensionEntity } from '../entities/dimension.entity';
@@ -180,6 +180,10 @@ export class DimensionRepository {
 
   /** Debit, credit and balance per dimension over POSTED normal and opening lines in the range. */
   async balances(tenantId: string, kind: DimensionKind | string, from: string, to: string): Promise<DimensionBalanceRow[]> {
+    const allowedKinds = new Set<string>(Object.values(DimensionKind));
+    if (!allowedKinds.has(kind as string)) {
+      throw new BadRequestException(`Invalid dimension kind: ${String(kind)}`);
+    }
     const columnMap: Record<string, string> = {
       DETAIL: 'detail_id',
       COST_CENTER: 'cost_center_id',
@@ -190,7 +194,7 @@ export class DimensionRepository {
     const joinClause = column
       ? `LEFT JOIN fin_journal_entry_lines l ON l.${column} = d.id AND l.tenant_id = d.tenant_id`
       : `LEFT JOIN fin_journal_entry_lines l ON (
-           (l.dimensions->>'${kind}' = d.code OR l.dimensions->>'${(kind as string).toLowerCase()}' = d.code)
+           (l.dimensions->>$2 = d.code OR l.dimensions->>LOWER($2) = d.code)
            AND l.tenant_id = d.tenant_id
          )`;
 
