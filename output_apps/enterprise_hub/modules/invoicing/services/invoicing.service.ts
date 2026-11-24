@@ -10,6 +10,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { EntityManager, FindOptionsWhere, ILike } from 'typeorm';
 import { fromMinor } from '../../accounting/money';
+import { CountryPackCls } from '../../country_packs/country-pack.context';
 import { CustomerIdentityService, WALK_IN_NAME } from '../../crm/services/customer-identity.service';
 import { invoiceRuleFor } from '../country/invoice-country-rules';
 import { CrmRepository } from '../../crm/repositories/crm.repository';
@@ -258,8 +259,15 @@ export class InvoicingService {
   }
 
   /** حوزه قضایی پیش‌فرض از بسته کشور مستأجر (نه از ارز صورتحساب). */
-  private defaultJurisdiction(): InvoiceJurisdiction {
-    return InvoiceJurisdiction.IR;
+  private async defaultJurisdiction(tenantId: string): Promise<InvoiceJurisdiction> {
+    const country = (
+      CountryPackCls.current()?.country ??
+      (await this.countryOf(tenantId)) ??
+      'IR'
+    )
+      .trim()
+      .toUpperCase();
+    return country === 'IR' ? InvoiceJurisdiction.IR : InvoiceJurisdiction.INTL;
   }
 
   /**
@@ -663,7 +671,7 @@ export class InvoicingService {
 
     const currency = source.currency ?? Currency.IRR;
     const jurisdiction =
-      source.jurisdiction ?? this.defaultJurisdiction();
+      source.jurisdiction ?? (await this.defaultJurisdiction(tenantId));
     // A new invoice is dated today: issued now, or a draft that takes today's rate.
     const defaultVatRate = await this.defaultVatRateForJurisdiction(
       tenantId,
@@ -1000,7 +1008,7 @@ export class InvoicingService {
     >,
   ): Promise<{ items: InvoiceItem[]; totals: InvoiceTotals; currency: Currency }> {
     const currency = source.currency ?? Currency.IRR;
-    const jurisdiction = source.jurisdiction ?? this.defaultJurisdiction();
+    const jurisdiction = source.jurisdiction ?? (await this.defaultJurisdiction(tenantId));
     const defaultVatRate = await this.defaultVatRateForJurisdiction(
       tenantId,
       jurisdiction,

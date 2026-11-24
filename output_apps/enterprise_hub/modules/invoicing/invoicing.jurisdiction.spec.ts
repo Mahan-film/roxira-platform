@@ -96,9 +96,13 @@ function buildDto(overrides: Partial<CreateInvoiceDto> = {}): CreateInvoiceDto {
   };
 }
 
-const buildService = () => {
+const buildService = (countryCode?: string) => {
   const repository = new InMemoryInvoicingRepository();
-  const tenantsRepository = {} as unknown as TenantsRepository;
+  const tenantsRepository = (
+    countryCode
+      ? { findById: jest.fn().mockResolvedValue({ id: 't', countryCode }) }
+      : {}
+  ) as unknown as TenantsRepository;
 
   const service = new InvoicingService(
     repository as unknown as InvoicingRepository,
@@ -252,5 +256,15 @@ describe('InvoicingService — jurisdiction and foreign currency', () => {
     expect(created.items[0].tax).toBe(10);
     expect(created.items[1].vatRate).toBe(0.5);
     expect(created.items[1].tax).toBe(500);
+  });
+
+  it('derives default jurisdiction from the tenant pack country when omitted', async () => {
+    const { service } = buildService('MY');
+    const created = await service.create(
+      'tenant-non-ir',
+      buildDto({ currency: Currency.IRR }),
+    );
+
+    expect(created.jurisdiction).toBe(InvoiceJurisdiction.INTL);
   });
 });
