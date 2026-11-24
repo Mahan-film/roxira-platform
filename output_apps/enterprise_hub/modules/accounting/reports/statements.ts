@@ -297,16 +297,17 @@ export function balanceSheet(
   const totalLiabilities = currentLiabilities.total + nonCurrentLiabilities.total;
   let totalLiabilitiesAndEquity = totalLiabilities + equity.total;
 
+  let clearingDiff = 0n;
   if (options?.isDimensionFiltered && totalAssets !== totalLiabilitiesAndEquity) {
-    const diff = totalAssets - totalLiabilitiesAndEquity;
+    clearingDiff = totalAssets - totalLiabilitiesAndEquity;
     equity.lines.push({
       line: 'INTER_DIMENSION_CLEARING',
       title: 'حساب واسط تسویه ابعاد',
-      amount: diff,
+      amount: clearingDiff,
       accounts: [],
     });
-    equity.total += diff;
-    totalLiabilitiesAndEquity += diff;
+    equity.total += clearingDiff;
+    totalLiabilitiesAndEquity += clearingDiff;
   }
 
   return {
@@ -324,7 +325,7 @@ export function balanceSheet(
       check(
         'accounts_net_zero',
         'جمع مانده همه حساب‌ها صفر است',
-        options?.isDimensionFiltered ? 0n : sum(balances, ending),
+        sum(balances, ending) - clearingDiff,
         0n,
       ),
     ],

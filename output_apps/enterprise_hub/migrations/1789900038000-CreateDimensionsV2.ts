@@ -78,6 +78,15 @@ export class CreateDimensionsV21789900038000 implements MigrationInterface {
   }
 
   public async down(q: QueryRunner): Promise<void> {
+    const [{ count: newKindCount }] = (await q.query(
+      `SELECT count(*)::int AS count FROM "fin_dimensions" WHERE "kind" NOT IN ('DETAIL','COST_CENTER','PROJECT')`,
+    )) as Array<{ count: number }>;
+    if (newKindCount > 0) {
+      throw new Error(
+        `Cannot revert CreateDimensionsV2: ${newKindCount} fin_dimensions rows use v2 kinds. Migrate or remove them before rollback.`,
+      );
+    }
+
     await q.query(`DROP POLICY IF EXISTS "fin_dimension_label_history_tenant" ON "fin_dimension_label_history"`);
     await q.query(`DROP TABLE IF EXISTS "fin_dimension_label_history"`);
 
