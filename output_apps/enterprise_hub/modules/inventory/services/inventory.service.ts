@@ -149,7 +149,7 @@ export class InventoryService {
       costingMethod: entity.costingMethod ?? CostingMethod.FIFO,
       standardCost:
         entity.standardCost !== null && entity.standardCost !== undefined
-          ? this.roundMoney(Number(entity.standardCost)) // money-ok: serializing decimal entity column to DTO response
+          ? this.roundMoney(entity.standardCost)
           : null,
     };
   }

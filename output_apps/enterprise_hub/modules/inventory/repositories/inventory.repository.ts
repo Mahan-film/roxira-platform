@@ -642,7 +642,7 @@ export class InventoryRepository {
             ? (newTotalValueMinor * 100n + newTotalQtyH / 2n) / newTotalQtyH
             : toMinor(input.unitPurchaseCost);
 
-          const avgCost = Number(fromMinor(avgCostMinor)); // money-ok: converting minor units to number for entity field
+          const avgCost = fromMinor(avgCostMinor) as number; // money-ok: converting minor units to number for entity field
           unitCostToRecord = avgCost;
 
           for (const existingBatch of existingBatches) {
