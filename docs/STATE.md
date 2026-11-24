@@ -1,6 +1,6 @@
 # Current state (read this first)
 
-> **Last update: 2026-11-24 early morning (main hub, Claude Sonnet 5.5 session on the Mac).**
+> **Last update: 2026-11-24 evening (P1 planner refresh, main at `808dee63c`).**
 > New hub: `docs/hub/HUB_START.md` -> `docs/hub/MAIN_HUB_MASTER_BRIEF.md` -> this file. Laptop: `docs/hub/BOX_HUB_MASTER_BRIEF.md`.
 > Live GitHub data beats this file: `gh pr list`, the newest `## WAVE`, `HUB -> LANES`, `BOX:` and `HUB→BOX:` comments on #592, and `HUB-ANSWER`/`ASK-BOX` on #965.
 
@@ -19,7 +19,7 @@ The owner wants maximum pressure on Antigravity lanes and cheap agents (Haiku/So
 ## Box standing rules (accepted on #965, 2026-11-23)
 - The box hub may merge `agent/claude-mahansudo/*` PRs, and its merge gate may merge lane PRs, when: desk no blocker at head, required checks green, no B1 core.
   Main-hub conditions: also refuse on any newer `Verdict: blocker`, the Held list, or a desk note that a critical file was truncated. The main hub may revert.
-- `CI_RUNNER_MODE=auto` is agreed; never set `CI_RUNS_ON`. Never edit box timers, gate config or runners: ask with `ASK-BOX:` on #965.
+- `CI_RUNNER_MODE` is currently `main` (verified via `gh variable list`; box merge gate is live with `dry_run = false` since 2026-11-23 13:08 UTC per #965). Never edit box timers, gate config or runners: ask with `ASK-BOX:` on #965.
 - Owner approver account (numeric id 243877284) invited read-level; the box registers it in `owner_approver_ids`.
 
 ## Fleet (Antigravity, all on the Mac until the laptop's Antigravity works)
@@ -30,15 +30,16 @@ The owner wants maximum pressure on Antigravity lanes and cheap agents (Haiku/So
   The other SSD partition is exFAT: not for git. Mac system disk had about 14 GiB free on 2026-11-23.
 - Owner guide: `docs/owner/ANTIGRAVITY_GUIDE_FA.md`.
 
-## WAVE 34 (2026-11-24) and what the hub did overnight
-- WAVE 34 on #592: WIP cap 8, one push per PR per round, rows per lane (L1 #1413 first, then #1403 #1388-#1391; L4 #1381-#1383 #1392 #1393; new rows #1414-#1419 for L9 L10 L11 L3 L2 L12). R36 infra research digest: #1387 (rows #1388-#1396).
-- Review desk ran 6 rounds from a background loop (every open PR had a verdict at its head at 05:00). 15 safe PRs were queued to merge (#1253 merged; check the rest). Merged by the hub: #1072 #1200 (both NOT deployed, see Production), #1347 queued earlier, #1402 (RV1-RV8, Mac L7), #1404 (Mac disk reaper), #1411.
-- Hub reviews still owed (B1 core): #1385 has a hub **blocker** (OCR/unreviewed regulation rows must not be called official; validate dates), #1374 (law validity dates), #943 (tax engine), #1266 (tenant export), #1359 and #350 (queued).
-- Mac disk: internal disk was at 2.9 GB; the hub removed 64 safe worktrees (free 34 GB) and installed the launchd job `ir.roxira.reaper` (15 min, #1404; L1 extends it in #1403). `caffeinate -dimsu` runs in a Terminal tab to keep the Mac awake.
-- Legal corpus is NOT lost: prod Qdrant has laws v6 (served, 6304), v7b (7229, not served), regulations_v3b (1322), rulings_v1 (1732), judiciary_circulars (250, no code reads it: #1382). Raw files are on the production host under data/legal. Switching the served law collection needs the owner's sentence.
+## WAVE 35 (2026-11-24 evening) and verified status
+- WAVE 35 posted on #592 (71 open PRs, 241 open issues, WIP cap 8 open PRs per lane) with a Production readiness table.
+- Merged since WAVE 34: #1266 (tenant export), #1365/#1370 (tax/report UI), #1366 (first-customer journey QA), #1369 (sales cycle UI), #1371 (a11y/RTL audit), #1384 (locked Python dev env), #1385 (latest-circular regulations), #1397 (R36/Tech Radar docs), #1398 (corpus inventory doc), #1400 (laptop CI capacity probe), #1401 (Persian golden set), #1407 (prod disk reclaim plan), #1408 (licence/model guard), #1409 (aarch64 wheel matrix), #1412 (T178 actorRole fix), #1420 (handoff). Main CI runs `45375049847` and `45374659383` are green.
+- Open PRs at WIP cap (8/8): L1 (`#1427 #1424 #1405 #1378 #1376 #1349 #1309(held) #1198`), L2 (`#1440 #1436 #1429 #1423 #1386 #1242 #1229 #1226`), L6 (`#1445 #1439 #1438 #1435 #1433 #1410 #1406 #1297`). L4 has 7/8; L3/L5 have 5/8; L7 has 3/8; L9–L11 have 1–2/8; L8/L12 have 0/8.
+- Hub/owner reviews still owed (B1 core / protected): `#1374` (law validity dates), `#1432` (embedding weights), `#943` (tax engine), `#663`, `#831`, `#963`, `#1198`, `#1229`, `#1242`, `#1262`, `#1297`, `#1349`, `#1379`, `#1386`.
+- Mac disk: internal disk had ~14 GiB free on 2026-11-23; SSD work disk (`/Volumes/ssd/roxira-work/wt`) has 314 GiB free (2026-11-24).
+- Legal corpus is NOT lost: prod Qdrant has laws v6 (served, 6304), v7b (7229, not served), regulations_v3b (1322), rulings_v1 (1732), judiciary_circulars (250, wired in open PR `#1431` for `#1382`). Switching the served law collection needs the owner's sentence.
 
 ## Production (read-only facts, 2026-11-24)
-- **Autodeploy is blocked.** Since 22:26 UTC every deploy was rolled back by the smoke gate (missing SMOKE_AUTH_TOKEN, a 404 health path, a quoting bug); prod repo HEAD stays at 71c80e51. #1072 and #1200 are merged but not running (SSE keepalive code, Postgres sizing). Fix row #1413 (L1, protected path: needs an owner sentence before merge). After it deploys, recreate postgres_prod and pgbouncer_prod (owner runs the compose command) so the sizing applies.
+- **Autodeploy smoke gate fix ready to merge:** PR `#1424` (for `#1413`) is `MERGEABLE`, CI green at job level, and has `OWNER-OK #1424 c320dc9` from `mahansudo`. Until `#1424` merges and deploys, prod stays on `71c80e51` (`#1072` and `#1200` merged on `main` but not running). After `#1424` deploys, recreate `postgres_prod` and `pgbouncer_prod` (owner runs the compose command) so the sizing applies.
 - Host: aarch64, 4 vCPU, **7.7 GB RAM** (5 GB used), disk 78%. Postgres 17 is tiny (137 MB, 9 connections). Qdrant v1.19.0 (upgrade row #1388). AI core image python:3.11 (#1391 matrix decides 3.14 or 3.15; #1309 held).
 - Kavenegar key was rotated (Mac env and prod .env match, containers recreated, SMS arrives). Owner is creating new SMS templates with the last line `@domain #%token` (ghazi-verify2, roxira-verify2); then the hub gives the .env template-name change.
 

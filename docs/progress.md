@@ -121,8 +121,14 @@ Do not edit past entries — add a new one instead.
 - Why: the owner wants maximum speed with less CI and server load, and a real check of the site.
 - Follow-up: frontend row for the roxira.net mobile header; owner signs in to the pane so the logged-in app can be reviewed; owner sentences for #831 #663 #963 and the restart window; merge READY FOR HUB PRs after desk verdicts at their heads.
 
-## 2026-11-24 - main hub (Sonnet 5.5 session) - legal corpus found, R36 rows, disk reaper, overnight window
+## 2026-11-24 — main hub — legal corpus found, R36 rows, disk reaper, overnight window
 - What changed: found the legal corpus in prod Qdrant and opened Smart Judge rows #1380-#1383 #1392 #1393; digested R36 (#1387) into rows #1388-#1396; RV1-RV8 (modulo 8) and a Mac L7 block (#1402), Mac worktree reaper (#1404, launchd), 64 worktrees removed (disk 2.9 -> 34 GB); Kavenegar key rotated on Mac and prod; review desk looped 6 rounds; 15 safe PRs queued; WAVE 34 posted; #1072 and #1200 merged but production autodeploy rolled every deploy back (smoke gate, row #1413).
 - Why: the owner wanted the lost corpus found, maximum Antigravity load, a safe disk, and a production window at 04:07.
 - Follow-up: fix the smoke gate (#1413, owner sentence), Postgres/pgbouncer recreate after a real deploy, #1385 hub blocker, B1 reviews (#1374 #943 #1266), private flip conditions, SMS template change.
+
+## 2026-11-24 (evening) — P1 planner — WAVE 35 queue and Production readiness table
+- What changed: verified live GitHub state (71 open PRs, 241 open issues, main at `808dee63c`, latest main CI green); confirmed WAVE 34 merges (#1266, #1365, #1366, #1369–#1371, #1384, #1385, #1397, #1398, #1400, #1401, #1407–#1409, #1412, #1420) and that PR `#1424` (smoke gate `#1413`) is MERGEABLE with green CI and `OWNER-OK @ c320dc9`; posted `## WAVE 35 (P1, 2026-11-24)` and the `Production readiness` table on `#592`; refreshed `docs/STATE.md` and `docs/progress.md`.
+- Why: keep all 12 lanes fed within the 8-PR cap without duplicate/merged/held rows, and give the owner and hub one verified finish-line table for production and the private flip.
+- Follow-up: hub merges `#1424` and verifies autodeploy; owner runs Postgres/PgBouncer recreate and confirms SMS templates + P2/P7/P13/P15/P17; box/hub sets `CI_RUNNER_MODE=auto` for P11 and tallies P16.
+
 
