@@ -1,7 +1,7 @@
 import { DEFAULT_ROLE_ACCOUNTS, POSTING_ROLES, PostingRole } from '../constants/posting-roles';
 import { minorToDecimal } from '../../accounting/money';
 import { PostingRuleError } from './posting-error';
-import { findTemplate, PostingTemplate } from './posting-templates';
+import { findTemplate, PostingTemplate, PostingSide } from './posting-templates';
 
 /** Integer minor units, same unit as accounting/money.ts. */
 export type Amounts = Readonly<Record<string, bigint>>;
@@ -23,9 +23,20 @@ export interface VoucherProposal {
   total: bigint;
 }
 
+export interface VariableLineInput {
+  role?: PostingRole;
+  side: PostingSide;
+  amount: bigint;
+  accountCode?: string;
+  description?: string;
+  partyCode?: string;
+}
+
 export interface BuildInput {
   docType: string;
-  amounts: Amounts;
+  amounts?: Amounts;
+  /** Variable/repeated lines for documents whose lines cannot be predicted by a fixed template schema. */
+  variableLines?: readonly VariableLineInput[];
   /** Tenant mapping for this doc type (already merged with the tenant-wide mapping). */
   mapping?: RoleAccounts;
   /** Explicit accounts that win over the mapping (bank ledger code, petty cash fund...). */
@@ -51,8 +62,23 @@ export function resolveRole(template: PostingTemplate, role: PostingRole, mappin
  */
 export function buildProposal(input: BuildInput): VoucherProposal {
   const template = requireTemplate(input.docType);
+  const inputAmounts = input.amounts ?? {};
+
+  if (input.variableLines && input.variableLines.length > 0 && !template.variableLines) {
+    throw new PostingRuleError(
+      'UNKNOWN_DOC_TYPE',
+      `قالب «${template.title}» ثبت خطوط متغیر را پشتیبانی نمی‌کند.`,
+    );
+  }
+
   for (const name of template.amounts) {
-    const value = input.amounts[name];
+    const value = inputAmounts[name];
+    if (value === undefined) {
+      if (template.variableLines) {
+        continue;
+      }
+      throw new PostingRuleError('MISSING_AMOUNT', `مبلغ «${name}» برای سند ${template.title} ارسال نشده است.`);
+    }
     if (typeof value !== 'bigint') {
       throw new PostingRuleError('MISSING_AMOUNT', `مبلغ «${name}» برای سند ${template.title} ارسال نشده است.`);
     }
@@ -63,8 +89,8 @@ export function buildProposal(input: BuildInput): VoucherProposal {
 
   const lines: ProposalLine[] = [];
   for (const spec of template.lines) {
-    const amount = input.amounts[spec.amount];
-    if (amount === 0n) continue;
+    const amount = inputAmounts[spec.amount];
+    if (!amount || amount === 0n) continue;
     const accountCode = resolveRole(template, spec.role, input.mapping, input.overrides);
     if (!accountCode) {
       throw new PostingRuleError(
@@ -80,6 +106,39 @@ export function buildProposal(input: BuildInput): VoucherProposal {
       description: spec.description,
       ...(spec.party && input.partyCode ? { partyCode: input.partyCode } : {}),
     });
+  }
+
+  if (input.variableLines) {
+    for (const vLine of input.variableLines) {
+      if (typeof vLine.amount !== 'bigint') {
+        throw new PostingRuleError('MISSING_AMOUNT', `مبلغ خط متغیر برای سند ${template.title} ارسال نشده است.`);
+      }
+      if (vLine.amount < 0n) {
+        throw new PostingRuleError('NEGATIVE_AMOUNT', `مبلغ خط متغیر برای سند ${template.title} نمی‌تواند منفی باشد.`);
+      }
+      if (vLine.amount === 0n) continue;
+
+      let accountCode = vLine.accountCode;
+      if (!accountCode && vLine.role) {
+        accountCode = resolveRole(template, vLine.role, input.mapping, input.overrides);
+      }
+      if (!accountCode) {
+        const roleLabel = vLine.role && POSTING_ROLES[vLine.role] ? POSTING_ROLES[vLine.role].label : 'ناشناخته';
+        throw new PostingRuleError(
+          'UNMAPPED_ROLE',
+          `برای نقش «${roleLabel}» در سند ${template.title} حسابی تعیین نشده است؛ از تنظیمات ثبت خودکار حساب را انتخاب کنید.`,
+        );
+      }
+
+      lines.push({
+        role: vLine.role ?? ('counter' as PostingRole),
+        accountCode,
+        debit: vLine.side === 'debit' ? vLine.amount : 0n,
+        credit: vLine.side === 'credit' ? vLine.amount : 0n,
+        description: vLine.description ?? '',
+        ...(vLine.partyCode ? { partyCode: vLine.partyCode } : {}),
+      });
+    }
   }
 
   const debit = lines.reduce((sum, l) => sum + l.debit, 0n);

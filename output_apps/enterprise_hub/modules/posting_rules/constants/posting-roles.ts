@@ -58,6 +58,10 @@ export const POSTING_ROLES = {
   clearing_rail: { label: 'حساب واسط تسویه پایانه و درگاه / Payment Rail Clearing', types: [AccountType.ASSET] },
   payment_fee: { label: 'کارمزد تراکنش و درگاه پرداخت / Payment & Gateway Processing Fee', types: [AccountType.EXPENSE] },
   platform_commission: { label: 'کمیسیون پلتفرم و بازارگاه / Platform Commission Expense', types: [AccountType.EXPENSE] },
+  customer_advances: { label: 'پیش‌دریافت مشتریان', types: [AccountType.LIABILITY] },
+  supplier_advances: { label: 'پیش‌پرداخت به تأمین‌کنندگان', types: [AccountType.ASSET] },
+  writeoff_receipt: { label: 'تخفیفات نقدی اعطایی (هزینه کسورات دریافت)', types: [AccountType.REVENUE, AccountType.EXPENSE] },
+  writeoff_payment: { label: 'تخفیفات نقدی دریافتی (درآمد کسورات پرداخت)', types: [AccountType.REVENUE] },
 } as const;
 
 export type PostingRole = keyof typeof POSTING_ROLES;
@@ -121,4 +125,7 @@ export const DEFAULT_ROLE_ACCOUNTS: Readonly<Partial<Record<PostingRole, string>
   monetary_asset: '1012',
   fx_gain: '4120',
   fx_loss: '5210',
+  customer_advances: '2070',
+  supplier_advances: '1040',
+  writeoff_receipt: '4030',
 };
