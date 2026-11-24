@@ -9,8 +9,8 @@ import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
  * platform scope (`00000000-0000-0000-0000-000000000000`). Messages and stacks are scrubbed
  * and truncated before persistence (see ops-errors.util.ts).
  */
-export class CreateOpsErrorEvents1789900019400 implements MigrationInterface {
-  name = 'CreateOpsErrorEvents1789900019400';
+export class CreateOpsErrorEvents1789900040000 implements MigrationInterface {
+  name = 'CreateOpsErrorEvents1789900040000';
 
   public async up(q: QueryRunner): Promise<void> {
     await q.query(`
