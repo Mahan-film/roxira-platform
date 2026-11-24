@@ -707,8 +707,17 @@ def _get_query_embedder() -> Any:
             from sentence_transformers import SentenceTransformer  # لازی، وابستهٔ اختیاری
 
             model_name = get_default_embed_model()
-            logger.info("Loading query embedder %s for Qdrant search ...", model_name)
-            _embedder_instance = SentenceTransformer(model_name)
+            revision = (
+                os.environ.get("EMBED_MODEL_REVISION", "5617a9f61b028005a4858fdac845db406aefb181").strip()
+                or "5617a9f61b028005a4858fdac845db406aefb181"
+            )
+            logger.info("Loading query embedder %s (rev=%s) for Qdrant search ...", model_name, revision[:12])
+            _embedder_instance = SentenceTransformer(
+                model_name,
+                revision=revision,
+                trust_remote_code=False,
+                model_kwargs={"use_safetensors": True},
+            )
         except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "Qdrant query embedder unavailable (%s) -> scroll fallback: %s",

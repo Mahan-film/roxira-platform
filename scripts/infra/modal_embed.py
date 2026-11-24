@@ -187,9 +187,16 @@ if modal is not None:
     _GPU = os.environ.get("MODAL_GPU", DEFAULT_GPU)
     _FP16 = os.environ.get("MODAL_EMBED_FP16") == "1"
 
+    _REVISION = os.environ.get("EMBED_MODEL_REVISION", "5617a9f61b028005a4858fdac845db406aefb181")
+
     def _download_model() -> None:
         from sentence_transformers import SentenceTransformer
-        SentenceTransformer(MODEL)
+        SentenceTransformer(
+            MODEL,
+            revision=_REVISION,
+            trust_remote_code=False,
+            model_kwargs={"use_safetensors": True},
+        )
 
     app = modal.App("roxira-bge-m3-embed")
     image = (
@@ -203,7 +210,13 @@ if modal is not None:
         @modal.enter()
         def load(self) -> None:
             from sentence_transformers import SentenceTransformer
-            self.model = SentenceTransformer(MODEL, device="cuda")
+            self.model = SentenceTransformer(
+                MODEL,
+                device="cuda",
+                revision=_REVISION,
+                trust_remote_code=False,
+                model_kwargs={"use_safetensors": True},
+            )
             self.model.max_seq_length = 8192  # bge-m3 limit; TEI does not truncate either
             if _FP16:
                 self.model.half()

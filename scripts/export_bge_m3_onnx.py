@@ -34,6 +34,7 @@ from output_apps.generated_modules.smartjudge.legal_graph.onnx_bge_m3 import (  
 
 # model-ok: BAAI/bge-m3 is the MIT-licensed open-source embedding model specified by T235 (#974).
 BGE_M3_HF_REPO = "BAAI/bge-m3"
+BGE_M3_HF_REVISION = os.environ.get("EMBED_MODEL_REVISION", "5617a9f61b028005a4858fdac845db406aefb181")
 
 
 def export_fp32_onnx(output_dir: Path, opset: int = 17) -> Path:
@@ -42,10 +43,19 @@ def export_fp32_onnx(output_dir: Path, opset: int = 17) -> Path:
     from transformers import AutoModel, AutoTokenizer  # type: ignore
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    tokenizer = AutoTokenizer.from_pretrained(BGE_M3_HF_REPO)
+    tokenizer = AutoTokenizer.from_pretrained(
+        BGE_M3_HF_REPO,
+        revision=BGE_M3_HF_REVISION,
+        trust_remote_code=False,
+    )
     tokenizer.save_pretrained(str(output_dir))
 
-    base_model = AutoModel.from_pretrained(BGE_M3_HF_REPO)
+    base_model = AutoModel.from_pretrained(
+        BGE_M3_HF_REPO,
+        revision=BGE_M3_HF_REVISION,
+        trust_remote_code=False,
+        use_safetensors=True,
+    )
     base_model.eval()
     hidden_size = base_model.config.hidden_size
 

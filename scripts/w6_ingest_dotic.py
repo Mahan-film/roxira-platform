@@ -583,7 +583,16 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     from sentence_transformers import SentenceTransformer  # lazy
 
     print("[dotic] loading BAAI/bge-m3 (local, CPU) ...")
-    model = SentenceTransformer("BAAI/bge-m3")
+    revision = (
+        os.environ.get("EMBED_MODEL_REVISION", "5617a9f61b028005a4858fdac845db406aefb181").strip()
+        or "5617a9f61b028005a4858fdac845db406aefb181"
+    )
+    model = SentenceTransformer(
+        "BAAI/bge-m3",
+        revision=revision,
+        trust_remote_code=False,
+        model_kwargs={"use_safetensors": True},
+    )
     vectors = model.encode(texts, normalize_embeddings=True, show_progress_bar=True)
     return [v.tolist() for v in vectors]
 
