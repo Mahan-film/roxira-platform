@@ -56,6 +56,13 @@ export const MENU_GROUPS: MenuGroup[] = [
     icon: "ShoppingCart",
     items: [
       {
+        href: "/app/sales",
+        label: "چرخه فروش و سفارشات",
+        icon: "ClipboardList",
+        module: "invoicing",
+        keywords: ["sales", "order", "quotation", "سفارش", "پیش‌فاکتور", "حواله", "فروش", "سطح قیمت"],
+      },
+      {
         href: "/app/invoicing",
         label: "صورتحساب‌ها",
         icon: "ReceiptText",
@@ -103,6 +110,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         icon: "Factory",
         module: "inventory",
         keywords: ["bom", "production", "تولید", "فرمول ساخت", "ضایعات"],
+      },
+      {
+        href: "/app/inventory/reports",
+        label: "گزارش‌های انبار و کاردکس",
+        icon: "Boxes",
+        module: "inventory",
+        keywords: ["کاردکس", "گزارش انبار", "موجودی کالا", "نقطه سفارش", "کسری"],
       },
     ],
   },
@@ -217,6 +231,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         keywords: ["سامانه مودیان", "مالیات", "ارزش افزوده", "صورتحساب الکترونیکی"],
       },
       {
+        href: "/app/tax/previews",
+        label: "پیش‌نمایش‌های مالیاتی",
+        icon: "Calculator",
+        module: "tax",
+        keywords: ["پیش‌نمایش مالیات", "مالیات شرکت‌ها", "مشاغل", "اجاره", "تکلیفی پزشکان", "محاسبه مالیات"],
+      },
+      {
         href: "/app/tax/electronic-books",
         label: "دفاتر تجاری الکترونیکی",
         icon: "FileSpreadsheet",
@@ -246,6 +267,13 @@ export const MENU_GROUPS: MenuGroup[] = [
           "بودجه",
           "پژوهش حقوقی",
         ],
+      },
+      {
+        href: "/app/reports/gross-profit",
+        label: "سود ناخالص",
+        icon: "TrendingUp",
+        module: "invoicing",
+        keywords: ["سود ناخالص", "حاشیه سود", "بهای تمام شده", "gross profit", "cogs"],
       },
       {
         href: "/app/accounting/report-builder",
