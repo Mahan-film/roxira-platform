@@ -17,6 +17,7 @@ import {
 export { assertValidQuantityScale };
 import { CreateStockItemDto } from '../dto/create-stock-item.dto';
 import { CreateWarehouseDto, UpdateWarehouseDto } from '../dto/create-warehouse.dto';
+import { CostingMethod } from '../enums/costing-method.enum';
 import { FifoBatchResponseDto } from '../dto/fifo-batch-response.dto';
 import {
   FifoValuationResponseDto,
@@ -145,6 +146,11 @@ export class InventoryService {
       isLowStock: this.isLowStock(Number(available) / 100, Number(entity.minQuantity)),
       batchNumber: entity.batchNumber,
       fifoValuation: this.roundMoney(fifoValuation),
+      costingMethod: entity.costingMethod ?? CostingMethod.FIFO,
+      standardCost:
+        entity.standardCost !== null && entity.standardCost !== undefined
+          ? this.roundMoney(Number(entity.standardCost)) // money-ok: serializing decimal entity column to DTO response
+          : null,
     };
   }
 
@@ -305,6 +311,8 @@ export class InventoryService {
       quantity: this.roundQuantity(dto.quantity ?? 0),
       minQuantity: this.roundQuantity(dto.minQuantity ?? 0),
       batchNumber: dto.batchNumber ?? null,
+      costingMethod: dto.costingMethod ?? CostingMethod.FIFO,
+      standardCost: dto.standardCost !== undefined ? dto.standardCost : null,
     });
 
     return this.toStockItemResponse(created, 0);
@@ -438,6 +446,21 @@ export class InventoryService {
     if (dto.minQuantity !== undefined) {
       assertValidQuantityScale(dto.minQuantity, QUANTITY_SCALE, 'حداقل موجودی');
       entity.minQuantity = this.roundQuantity(dto.minQuantity);
+    }
+    if (dto.costingMethod !== undefined) {
+      entity.costingMethod = dto.costingMethod;
+    }
+    if (dto.standardCost !== undefined) {
+      entity.standardCost =
+        dto.standardCost !== null ? this.roundMoney(dto.standardCost) : null;
+    }
+    if (
+      entity.costingMethod === CostingMethod.STANDARD &&
+      (entity.standardCost === null || entity.standardCost === undefined)
+    ) {
+      throw new BadRequestException(
+        'برای روش قیمت‌گذاری استاندارد، تعیین بهای تمام‌شده استاندارد الزامی است.',
+      );
     }
 
     const saved = await this.inventoryRepository.saveStockItem(tenantId, entity);
@@ -606,6 +629,7 @@ export class InventoryService {
         totalCost: layer.value,
         layers: [layer],
         processedAt: new Date(),
+        priceVariance: result.priceVariance,
       };
     } catch (error) {
       this.rethrowDomainError(error);

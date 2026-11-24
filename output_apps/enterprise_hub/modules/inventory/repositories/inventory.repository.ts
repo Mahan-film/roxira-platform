@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
-import { parseScaled, toMinor } from '../../accounting/money';
+import { fromDb, fromMinor, parseScaled, toMinor } from '../../accounting/money';
 import {
   assertValidQuantityScale,
   MONEY_SCALE,
@@ -12,6 +12,7 @@ import { FifoBatchEntity } from '../entities/fifo-batch.entity';
 import { StoreEntity } from '../entities/store.entity';
 import { StockItemEntity } from '../entities/stock-item.entity';
 import { WarehouseEntity } from '../entities/warehouse.entity';
+import { CostingMethod } from '../enums/costing-method.enum';
 import {
   InsufficientStockError,
   StockItemMissingError,
@@ -43,6 +44,7 @@ export interface InboundPersistInput {
 export interface InboundPersistResult {
   item: StockItemEntity;
   batch: FifoBatchEntity;
+  priceVariance?: number;
 }
 
 /** ورودی پرسیستنس خروج کالا در یک Transaction. */
@@ -602,12 +604,59 @@ export class InventoryRepository {
 
         assertValidQuantityScale(input.quantity, QUANTITY_SCALE, 'مقدار ورودی کالا');
 
+        let unitCostToRecord = input.unitPurchaseCost;
+        let priceVariance: number | undefined;
+
+        if (item.costingMethod === CostingMethod.STANDARD) {
+          const stdMinor = item.standardCost !== null && item.standardCost !== undefined
+            ? fromDb(item.standardCost)
+            : toMinor(input.unitPurchaseCost);
+          unitCostToRecord = Number(fromMinor(stdMinor)); // money-ok: converting minor units to number for entity field
+          const inCostMinor = toMinor(input.unitPurchaseCost);
+          const inQtyH = BigInt(Math.round(input.quantity * 100));
+          const varianceMinor = ((stdMinor - inCostMinor) * inQtyH) / 100n;
+          priceVariance = Number(fromMinor(varianceMinor)); // money-ok: converting minor units to number for DTO
+        } else if (item.costingMethod === CostingMethod.AVCO) {
+          const existingBatches = await manager
+            .createQueryBuilder(FifoBatchEntity, 'batch')
+            .setLock('pessimistic_write')
+            .where('batch.tenantId = :tenantId', { tenantId })
+            .andWhere('batch.sku = :sku', { sku: input.sku })
+            .andWhere('batch.quantityRemaining > 0')
+            .getMany();
+
+          const inQtyH = BigInt(Math.round(input.quantity * 100));
+          const inValueMinor = (inQtyH * toMinor(input.unitPurchaseCost)) / 100n;
+
+          let currentQtyH = 0n;
+          let currentValueMinor = 0n;
+          for (const b of existingBatches) {
+            const bQtyH = BigInt(Math.round(Number(b.quantityRemaining) * 100)); // money-ok: quantity remaining is a count
+            currentQtyH += bQtyH;
+            currentValueMinor += (bQtyH * fromDb(b.unitPurchaseCost)) / 100n;
+          }
+
+          const newTotalQtyH = currentQtyH + inQtyH;
+          const newTotalValueMinor = currentValueMinor + inValueMinor;
+          const avgCostMinor = newTotalQtyH > 0n
+            ? (newTotalValueMinor * 100n + newTotalQtyH / 2n) / newTotalQtyH
+            : toMinor(input.unitPurchaseCost);
+
+          const avgCost = Number(fromMinor(avgCostMinor)); // money-ok: converting minor units to number for entity field
+          unitCostToRecord = avgCost;
+
+          for (const existingBatch of existingBatches) {
+            existingBatch.unitPurchaseCost = avgCost;
+            await manager.save(existingBatch);
+          }
+        }
+
         const batch = manager.create(FifoBatchEntity, {
           tenantId,
           sku: input.sku,
           batchNumber: input.batchNumber,
           quantityRemaining: this.roundQuantity(input.quantity),
-          unitPurchaseCost: this.roundMoney(input.unitPurchaseCost),
+          unitPurchaseCost: this.roundMoney(unitCostToRecord),
           receivedDate: input.receivedDate ?? new Date(),
           warehouseId: input.warehouseId,
         });
@@ -619,7 +668,7 @@ export class InventoryRepository {
         }
         const savedItem = await manager.save(item);
 
-        return { item: savedItem, batch: savedBatch };
+        return { item: savedItem, batch: savedBatch, priceVariance };
       },
       outerManager,
     );

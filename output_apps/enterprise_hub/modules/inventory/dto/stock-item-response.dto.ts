@@ -1,4 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { CostingMethod } from '../enums/costing-method.enum';
 
 /**
  * DTO خروجی کالای انبار همراه با وضعیت هشدار کسری.
@@ -36,4 +37,10 @@ export class StockItemResponseDto {
 
   @ApiProperty({ description: 'ارزش موجودی کالا بر پایه FIFO (ریال)' })
   fifoValuation: number;
+
+  @ApiPropertyOptional({ description: 'روش ارزش‌گذاری موجودی (FIFO, AVCO, STANDARD)', enum: CostingMethod })
+  costingMethod?: CostingMethod;
+
+  @ApiPropertyOptional({ description: 'بهای تمام‌شده استاندارد برای روش STANDARD', nullable: true })
+  standardCost?: number | null;
 }

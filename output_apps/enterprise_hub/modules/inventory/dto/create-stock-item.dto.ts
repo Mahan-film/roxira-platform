@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNumber, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
+import { CostingMethod } from '../enums/costing-method.enum';
 
 /**
  * DTO ایجاد کالای جدید در فهرست انبار
@@ -51,4 +52,22 @@ export class CreateStockItemDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   quantity?: number;
+
+  @ApiPropertyOptional({
+    description: 'روش ارزش‌گذاری موجودی (FIFO, AVCO, STANDARD)',
+    enum: CostingMethod,
+    default: CostingMethod.FIFO,
+  })
+  @IsOptional()
+  @IsEnum(CostingMethod)
+  costingMethod?: CostingMethod;
+
+  @ApiPropertyOptional({
+    description: 'بهای تمام‌شده استاندارد کالا برای روش STANDARD (ریال)',
+    example: 1100000,
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  standardCost?: number;
 }

@@ -49,6 +49,9 @@ export class StockMovementResultDto {
   @ApiProperty({ description: 'زمان ثبت گردش' })
   processedAt: Date;
 
+  @ApiPropertyOptional({ description: 'انحراف نرخ خرید (PPV) برای روش بهای استاندارد' })
+  priceVariance?: number;
+
   @ApiPropertyOptional({ description: 'هشدار خط‌مشی (مثلاً موجودی منفی)' })
   warning?: string;
 }
