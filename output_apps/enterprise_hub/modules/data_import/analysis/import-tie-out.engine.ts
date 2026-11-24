@@ -87,27 +87,42 @@ function matchesBoundedPattern(normalisedText: string, pattern: string): boolean
   return re.test(normalisedText);
 }
 
+export interface MoneyCellContext {
+  column?: string;
+  rowNumber?: number;
+}
+
+function formatCellPrefix(context?: MoneyCellContext): string {
+  if (!context) return '';
+  const parts: string[] = [];
+  if (context.column) parts.push(`ستون «${context.column}»`);
+  if (context.rowNumber !== undefined) parts.push(`ردیف ${context.rowNumber}`);
+  return parts.length > 0 ? `${parts.join(' در ')}: ` : '';
+}
+
 /**
  * تبدیل مقادیر ورودی (عدد، رشته، bigint) به واحدهای minor بر مبنای توان ارزی ISO 4217.
  */
 export function parseMoneyValue(
   value: number | string | bigint,
   currencyCode: string = 'IRR',
+  context?: MoneyCellContext,
 ): bigint {
   if (typeof value === 'bigint') {
     return value;
   }
+  const prefix = formatCellPrefix(context);
   const normCurrency = currencyCode.trim().toUpperCase();
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) {
-      throw new BadRequestException(`مبلغ نامعتبر است: ${value}`);
+      throw new BadRequestException(`${prefix}مبلغ نامعتبر است: ${value}`);
     }
     if (value === 0) return 0n;
     try {
       return parseCurrencyMinor(value, normCurrency);
     } catch (error) {
       if (error instanceof MoneyFormatError || error instanceof UnsupportedCurrencyError) {
-        throw new BadRequestException(error.message);
+        throw new BadRequestException(`${prefix}${error.message}`);
       }
       throw error;
     }
@@ -121,7 +136,10 @@ export function parseMoneyValue(
   const stripped = raw
     .replace(/(تومان|ریال|irr|irt|rial|toman)/gi, '')
     .replace(/^[(\-−]+|[)\-−]+$/g, '');
-  if (stripped === '' || stripped === '0') {
+  if (stripped === '') {
+    throw new BadRequestException(`${prefix}مبلغ نامعتبر است: «${String(value)}»`);
+  }
+  if (stripped === '0') {
     return 0n;
   }
   const signed = negative ? `-${stripped}` : stripped;
@@ -130,7 +148,7 @@ export function parseMoneyValue(
     return isToman ? parsed * 10n : parsed;
   } catch (error) {
     if (error instanceof MoneyFormatError || error instanceof UnsupportedCurrencyError) {
-      throw new BadRequestException(error.message);
+      throw new BadRequestException(`${prefix}${error.message}`);
     }
     throw error;
   }
@@ -376,16 +394,24 @@ export class ImportTieOutEngine {
     let totalCreditUnits = 0n;
 
     for (const record of records) {
+      const debitCol = record.values.debit !== undefined ? 'debit' : 'debitRial';
+      const creditCol = record.values.credit !== undefined ? 'credit' : 'creditRial';
       const debitRaw =
         record.values.debit ?? record.values.debitRial ?? 0;
       const creditRaw =
         record.values.credit ?? record.values.creditRial ?? 0;
 
       if (debitRaw !== null && debitRaw !== undefined && debitRaw !== '') {
-        totalDebitUnits += parseMoneyValue(debitRaw as number | string, currency);
+        totalDebitUnits += parseMoneyValue(debitRaw as number | string, currency, {
+          column: debitCol,
+          rowNumber: record.rowNumber,
+        });
       }
       if (creditRaw !== null && creditRaw !== undefined && creditRaw !== '') {
-        totalCreditUnits += parseMoneyValue(creditRaw as number | string, currency);
+        totalCreditUnits += parseMoneyValue(creditRaw as number | string, currency, {
+          column: creditCol,
+          rowNumber: record.rowNumber,
+        });
       }
     }
 
@@ -489,11 +515,17 @@ export class ImportTieOutEngine {
       const creditRaw = record.values.credit;
       const d =
         debitRaw !== undefined && debitRaw !== null && debitRaw !== ''
-          ? parseMoneyValue(debitRaw as number | string, currency)
+          ? parseMoneyValue(debitRaw as number | string, currency, {
+              column: 'debit',
+              rowNumber: record.rowNumber,
+            })
           : 0n;
       const c =
         creditRaw !== undefined && creditRaw !== null && creditRaw !== ''
-          ? parseMoneyValue(creditRaw as number | string, currency)
+          ? parseMoneyValue(creditRaw as number | string, currency, {
+              column: 'credit',
+              rowNumber: record.rowNumber,
+            })
           : 0n;
       result[target.category].found = true;
       result[target.category].balance += target.creditNormal ? c - d : d - c;
@@ -505,6 +537,16 @@ export class ImportTieOutEngine {
   private sumInvoiceSubledger(records: NormalisedRecord[], currency: string): bigint {
     let total = 0n;
     for (const inv of records) {
+      const totalCol =
+        inv.values.totalRial !== undefined
+          ? 'totalRial'
+          : inv.values.totalAmount !== undefined
+            ? 'totalAmount'
+            : inv.values.totalPrice !== undefined
+              ? 'totalPrice'
+              : inv.values.total !== undefined
+                ? 'total'
+                : 'amount';
       const totalVal =
         inv.values.totalRial ??
         inv.values.totalAmount ??
@@ -512,12 +554,19 @@ export class ImportTieOutEngine {
         inv.values.total ??
         inv.values.amount;
       if (totalVal !== undefined && totalVal !== null && totalVal !== '') {
-        total += parseMoneyValue(totalVal as number | string, currency);
+        total += parseMoneyValue(totalVal as number | string, currency, {
+          column: totalCol,
+          rowNumber: inv.rowNumber,
+        });
         continue;
       }
+      const unitPriceCol = inv.values.unitPrice !== undefined ? 'unitPrice' : 'price';
       const unitPriceVal = inv.values.unitPrice ?? inv.values.price;
       if (unitPriceVal !== undefined && unitPriceVal !== null && unitPriceVal !== '') {
-        const unitMinor = parseMoneyValue(unitPriceVal as number | string, currency);
+        const unitMinor = parseMoneyValue(unitPriceVal as number | string, currency, {
+          column: unitPriceCol,
+          rowNumber: inv.rowNumber,
+        });
         total += multiplyMinorByDecimalQuantity(
           unitMinor,
           inv.values.quantity ?? inv.values.qty,
@@ -531,14 +580,27 @@ export class ImportTieOutEngine {
   private sumInventorySubledger(records: NormalisedRecord[], currency: string): bigint {
     let total = 0n;
     for (const item of records) {
+      const totalCostCol = item.values.totalCost !== undefined ? 'totalCost' : 'totalValue';
       const totalCostVal = item.values.totalCost ?? item.values.totalValue;
       if (totalCostVal !== undefined && totalCostVal !== null && totalCostVal !== '') {
-        total += parseMoneyValue(totalCostVal as number | string, currency);
+        total += parseMoneyValue(totalCostVal as number | string, currency, {
+          column: totalCostCol,
+          rowNumber: item.rowNumber,
+        });
         continue;
       }
+      const costCol =
+        item.values.unitCost !== undefined
+          ? 'unitCost'
+          : item.values.cost !== undefined
+            ? 'cost'
+            : 'fee';
       const costVal = item.values.unitCost ?? item.values.cost ?? item.values.fee;
       if (costVal !== undefined && costVal !== null && costVal !== '') {
-        const costMinor = parseMoneyValue(costVal as number | string, currency);
+        const costMinor = parseMoneyValue(costVal as number | string, currency, {
+          column: costCol,
+          rowNumber: item.rowNumber,
+        });
         total += multiplyMinorByDecimalQuantity(
           costMinor,
           item.values.quantity ?? item.values.qty,
@@ -565,7 +627,10 @@ export class ImportTieOutEngine {
           closingRow = row;
         }
       }
-      return parseMoneyValue(closingRow.values.balance as number | string, currency);
+      return parseMoneyValue(closingRow.values.balance as number | string, currency, {
+        column: 'balance',
+        rowNumber: closingRow.rowNumber,
+      });
     }
 
     let net = 0n;
@@ -573,10 +638,23 @@ export class ImportTieOutEngine {
       const hasDep = r.values.deposit !== undefined && r.values.deposit !== null && r.values.deposit !== '';
       const hasWth = r.values.withdrawal !== undefined && r.values.withdrawal !== null && r.values.withdrawal !== '';
       if (hasDep || hasWth) {
-        if (hasDep) net += parseMoneyValue(r.values.deposit as number | string, currency);
-        if (hasWth) net -= parseMoneyValue(r.values.withdrawal as number | string, currency);
+        if (hasDep) {
+          net += parseMoneyValue(r.values.deposit as number | string, currency, {
+            column: 'deposit',
+            rowNumber: r.rowNumber,
+          });
+        }
+        if (hasWth) {
+          net -= parseMoneyValue(r.values.withdrawal as number | string, currency, {
+            column: 'withdrawal',
+            rowNumber: r.rowNumber,
+          });
+        }
       } else if (r.values.amount !== undefined && r.values.amount !== null && r.values.amount !== '') {
-        net += parseMoneyValue(r.values.amount as number | string, currency);
+        net += parseMoneyValue(r.values.amount as number | string, currency, {
+          column: 'amount',
+          rowNumber: r.rowNumber,
+        });
       }
     }
     return net;
