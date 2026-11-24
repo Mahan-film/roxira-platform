@@ -1,0 +1,76 @@
+{
+  "_note": "Effective-dated STT bake-off vendor configuration for #1116 (T293 R30). All unverified prices are marked requires-primary-check.",
+  "effective_date": "2026-11-21",
+  "winner_criteria": {
+    "max_entity_error_rate": 0.10,
+    "require_no_training": true
+  },
+  "vendors": {
+    "groq:whisper-large-v3-turbo": {
+      "provider": "groq",
+      "model": "whisper-large-v3-turbo",
+      "usd_per_hour": 0.04,
+      "min_bill_seconds": 10,
+      "prompt_max_tokens": 224,
+      "languages": ["fa", "de"],
+      "streaming": false,
+      "training_opt_out": true,
+      "accept_training_discount": false,
+      "status": "requires-primary-check",
+      "source": "docs/strategy/research/R30_DIGEST.md (2026-11-21)"
+    },
+    "deepgram:nova-3": {
+      "provider": "deepgram",
+      "model": "nova-3",
+      "usd_per_hour": 0.35,
+      "min_bill_seconds": 0,
+      "languages": ["fa", "de"],
+      "streaming": true,
+      "eu_endpoint": true,
+      "training_opt_out": true,
+      "accept_training_discount": false,
+      "status": "requires-primary-check",
+      "source": "docs/strategy/research/R30_DIGEST.md (2026-11-21)"
+    },
+    "soniox:realtime": {
+      "provider": "soniox",
+      "model": "stt-rt-preview",
+      "usd_per_hour": 0.12,
+      "min_bill_seconds": 0,
+      "languages": ["fa", "de"],
+      "streaming": true,
+      "training_opt_out": true,
+      "accept_training_discount": false,
+      "status": "requires-primary-check",
+      "source": "docs/strategy/research/R30_DIGEST.md (2026-11-21)"
+    },
+    "azure:speech": {
+      "provider": "azure",
+      "model": "neural-stt",
+      "usd_per_hour": 1.00,
+      "free_hours_per_month": 5.0,
+      "min_bill_seconds": 0,
+      "languages": ["fa-IR", "de-DE"],
+      "streaming": true,
+      "training_opt_out": true,
+      "accept_training_discount": false,
+      "status": "requires-primary-check",
+      "source": "docs/strategy/research/R30_DIGEST.md (2026-11-21)"
+    },
+    "speechmatics:enhanced": {
+      "provider": "speechmatics",
+      "model": "enhanced",
+      "usd_per_hour": 0.40,
+      "min_bill_seconds": 0,
+      "languages": ["fa", "de"],
+      "streaming": true,
+      "eu_endpoint": true,
+      "custom_dictionary_max_words": 1000,
+      "training_opt_out": true,
+      "accept_training_discount": false,
+      "never_accept_training_discount": true,
+      "status": "requires-primary-check",
+      "source": "docs/strategy/research/R30_DIGEST.md (2026-11-21, Second opinion)"
+    }
+  }
+}
