@@ -21,6 +21,7 @@ export class StatementResponseDto {
   @ApiProperty({ type: Object }) cumulativeAmount: number | string;
   @ApiProperty({ type: Object }) previousAmount: number | string;
   @ApiProperty({ type: Object }) periodAmount: number | string;
+  @ApiProperty({ type: Object }) vatAmount: number | string;
   @ApiProperty({ type: Object }) retentionAmount: number | string;
   @ApiProperty({ type: Object }) insuranceAmount: number | string;
   @ApiProperty({ type: Object }) advanceRecoveryAmount: number | string;

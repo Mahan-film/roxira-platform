@@ -89,12 +89,12 @@ export default function ContractDetailPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>شماره</TableHead><TableHead>تاریخ</TableHead><TableHead>مبلغ تجمعی</TableHead><TableHead>این دوره</TableHead>
+                <TableHead>شماره</TableHead><TableHead>تاریخ</TableHead><TableHead>مبلغ تجمعی</TableHead><TableHead>این دوره</TableHead><TableHead>ارزش افزوده</TableHead>
                 <TableHead>حسن انجام کار</TableHead><TableHead>کسور بیمه</TableHead><TableHead>استهلاک پیش‌پرداخت</TableHead><TableHead>خالص</TableHead><TableHead>وضعیت</TableHead><TableHead />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {statements.length === 0 && <TableRow><TableCell colSpan={10} className="text-muted-foreground">هنوز صورت وضعیتی ثبت نشده است.</TableCell></TableRow>}
+              {statements.length === 0 && <TableRow><TableCell colSpan={11} className="text-muted-foreground">هنوز صورت وضعیتی ثبت نشده است.</TableCell></TableRow>}
               {statements.map((s) => {
                 const action = nextAction(s.status);
                 return (
@@ -103,6 +103,7 @@ export default function ContractDetailPage() {
                     <TableCell>{formatJalaliDate(s.statementDate)}</TableCell>
                     <TableCell><Money value={s.cumulativeAmount} /></TableCell>
                     <TableCell><Money value={s.periodAmount} /></TableCell>
+                    <TableCell><Money value={s.vatAmount} /></TableCell>
                     <TableCell><Money value={s.retentionAmount} /></TableCell>
                     <TableCell><Money value={s.insuranceAmount} /></TableCell>
                     <TableCell><Money value={s.advanceRecoveryAmount} /></TableCell>

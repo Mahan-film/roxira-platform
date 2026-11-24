@@ -25,6 +25,7 @@ export const CONTRACT_TERM_KEYS: StatutoryKey[] = [
   'contract_unemployment_addon_fraction',
   'contract_tax_withholding_rate',
   'contract_advance_payment_max_rate',
+  'vat_general_rate',
 ];
 
 /**
@@ -50,6 +51,7 @@ export interface ContractTerms {
   unemploymentAddon: ContractTerm;
   taxWithholding: ContractTerm;
   advancePaymentMax: ContractTerm;
+  vatRate: ContractTerm;
 }
 
 const missing = (key: StatutoryKey): ContractTerm => ({
@@ -98,5 +100,6 @@ export function buildContractTerms(
     unemploymentAddon: term('contract_unemployment_addon_fraction'),
     taxWithholding: term('contract_tax_withholding_rate'),
     advancePaymentMax: term('contract_advance_payment_max_rate'),
+    vatRate: term('vat_general_rate'),
   };
 }

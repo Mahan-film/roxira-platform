@@ -86,15 +86,18 @@ export interface DeductionInput {
 }
 
 export interface Deductions {
+  vat: bigint;
   retention: bigint;
   insurance: bigint;
   advance: bigint;
   used: TermUse[];
 }
 
-/** All deductions of one statement from the store's figures. Throws UnclearTermError before returning anything partial. */
+/** All deductions and VAT of one statement from the store's figures. Throws UnclearTermError before returning anything partial. */
 export function computeDeductions(i: DeductionInput): Deductions {
   const used: TermUse[] = [];
+  const vat = percentOf(i.period, requireRate(i.terms.vatRate));
+  used.push(termUse(i.terms.vatRate));
   const retention = percentOf(i.period, requireRate(i.terms.retention));
   used.push(termUse(i.terms.retention));
   let insurance = 0n;
@@ -104,5 +107,5 @@ export function computeDeductions(i: DeductionInput): Deductions {
     used.push(termUse(base), termUse(i.terms.unemploymentAddon));
   }
   const advance = advanceRecovery(i.advancePosted, i.contractAmount, i.cumulative, i.advanceRecovered, i.period);
-  return { retention, insurance, advance, used };
+  return { vat, retention, insurance, advance, used };
 }

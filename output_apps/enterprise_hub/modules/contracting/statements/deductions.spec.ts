@@ -69,24 +69,26 @@ describe('computeDeductions', () => {
     unemploymentAddon: T('0.1', 'contract_unemployment_addon_fraction', { tenantOverride: true }),
     taxWithholding: T(null, 'contract_tax_withholding_rate'),
     advancePaymentMax: T(null, 'contract_advance_payment_max_rate'),
+    vatRate: T('0.1', 'vat_general_rate'),
     ...over,
   });
   const base = { period: 40_000_000_000n, cumulative: 70_000_000_000n, contractAmount: 100_000_000_000n, advancePosted: 0n, advanceRecovered: 0n };
 
-  it('statement 2 of a 1,000,000,000 contract: period 400m -> retention 40m, mechanical insurance 30.8m', () => {
+  it('statement 2 of a 1,000,000,000 contract: period 400m -> vat 40m, retention 40m, mechanical insurance 30.8m', () => {
     const d = computeDeductions({ ...base, insuranceType: 'MECHANICAL', terms: terms() });
-    expect([d.retention, d.insurance, d.advance]).toEqual([4_000_000_000n, 3_080_000_000n, 0n]);
+    expect([d.vat, d.retention, d.insurance, d.advance]).toEqual([4_000_000_000n, 4_000_000_000n, 3_080_000_000n, 0n]);
     expect(d.used.map((u) => [u.key, u.legalFact])).toEqual([
-      ['contract_retention_rate', false], ['contract_insurance_rate_mechanical', false], ['contract_unemployment_addon_fraction', false],
+      ['vat_general_rate', false], ['contract_retention_rate', false], ['contract_insurance_rate_mechanical', false], ['contract_unemployment_addon_fraction', false],
     ]);
   });
   it('no insurance type means no insurance deduction and needs no insurance figure', () => {
     const d = computeDeductions({ ...base, insuranceType: null, terms: terms({ unemploymentAddon: T(null, 'contract_unemployment_addon_fraction') }) });
     expect(d.insurance).toBe(0n);
   });
-  it('an unclear figure blocks: civil executive rate, unemployment addon, or retention', () => {
+  it('an unclear figure blocks: civil executive rate, unemployment addon, retention, or VAT', () => {
     expect(() => computeDeductions({ ...base, insuranceType: 'CIVIL_EXECUTIVE', terms: terms() })).toThrow('ضریب بیمه پیمان عمرانی اجرایی');
     expect(() => computeDeductions({ ...base, insuranceType: 'MECHANICAL', terms: terms({ unemploymentAddon: T(null, 'contract_unemployment_addon_fraction') }) })).toThrow('کسر بیمه بیکاری');
     expect(() => computeDeductions({ ...base, insuranceType: null, terms: terms({ retention: T(null, 'contract_retention_rate') }) })).toThrow('سپرده حسن انجام کار');
+    expect(() => computeDeductions({ ...base, insuranceType: null, terms: terms({ vatRate: T(null, 'vat_general_rate') }) })).toThrow('مالیات بر ارزش افزوده');
   });
 });

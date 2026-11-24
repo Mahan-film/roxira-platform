@@ -6,11 +6,11 @@ import { StatementService } from '../services/statement.service';
 const T = '11111111-1111-4111-8111-111111111111';
 const row = (over: Record<string, unknown> = {}) => ({
   id: 5, contractId: 1, number: 1, statementDate: '2026-11-01', cumulativeAmount: '300000000.00', previousAmount: '0.00', periodAmount: '300000000.00',
-  retentionAmount: '0.00', insuranceAmount: '0.00', advanceRecoveryAmount: '0.00', status: StatementStatus.DRAFT,
+  vatAmount: '0.00', retentionAmount: '0.00', insuranceAmount: '0.00', advanceRecoveryAmount: '0.00', status: StatementStatus.DRAFT,
   journalEntryId: null, journalEntryNumber: null, approvedAt: null, postedAt: null, ...over,
 });
 
-function build(opts: { contract?: Record<string, unknown>; last?: any; found?: any; retentionRate?: string | null } = {}) {
+function build(opts: { contract?: Record<string, unknown>; last?: any; found?: any; retentionRate?: string | null; vatRate?: string | null } = {}) {
   const inserted: any[] = [];
   const repository: any = {
     runInTransaction: (_t: string, work: (m: unknown) => unknown) => work({}),
@@ -26,6 +26,7 @@ function build(opts: { contract?: Record<string, unknown>; last?: any; found?: a
   const term = (key: string, rate: string | null) => ({ key, rate, unclear: rate === null, verified: false, version: 1, effectiveFrom: '2026-03-21', source: 's', tenantOverride: false });
   const statutory: any = {
     contractTermsOn: jest.fn(async () => ({
+      vatRate: term('vat_general_rate', opts.vatRate === undefined ? '0.1' : opts.vatRate),
       retention: term('contract_retention_rate', opts.retentionRate === undefined ? '0.1' : opts.retentionRate),
       insuranceByType: {}, unemploymentAddon: term('contract_unemployment_addon_fraction', null),
     })),
@@ -63,13 +64,13 @@ describe('StatementService.post', () => {
     await expect(service.post(T, 5)).rejects.toThrow('تأیید');
     expect(postingRules.post).not.toHaveBeenCalled();
   });
-  it('posts an approved contractor statement with gross = net = 300,000,000, then replays without a second voucher', async () => {
-    const { service, postingRules } = build({ found: row({ status: StatementStatus.APPROVED }) });
+  it('posts an approved contractor statement with gross = 300,000,000, vat = 30,000,000, net = 330,000,000, then replays without a second voucher', async () => {
+    const { service, postingRules } = build({ found: row({ status: StatementStatus.APPROVED, vatAmount: '30000000.00' }) });
     const first = await service.post(T, 5);
     expect(first).toMatchObject({ status: 'posted', journalEntryId: 9, replayed: false });
     expect(postingRules.post.mock.calls[0][1]).toMatchObject({
       docType: 'contract.statement.contractor', sourceType: 'progress_statement', sourceId: '5', partyCode: 'C1',
-      amounts: { gross: 30000000000n, retention: 0n, insurance: 0n, advance: 0n, net: 30000000000n },
+      amounts: { gross: 30000000000n, vat: 3000000000n, retention: 0n, insurance: 0n, advance: 0n, net: 33000000000n },
     });
     const again = build({ found: row({ status: StatementStatus.POSTED, journalEntryId: 9 }) });
     expect((await again.service.post(T, 5)).replayed).toBe(true);
@@ -83,16 +84,20 @@ describe('StatementService.post', () => {
 });
 
 describe('StatementService.approve', () => {
-  it('stores retention 10% of 300,000,000 = 30,000,000 and no insurance for a contract without insurance type', async () => {
+  it('stores vat 10% and retention 10% of 300,000,000 = 30,000,000 and no insurance for a contract without insurance type', async () => {
     const { service, repository } = build({ found: row() });
     const out = await service.approve(T, 5);
-    expect(repository.approveWith.mock.calls[0][2]).toMatchObject({ retentionAmount: '30000000.00', insuranceAmount: '0.00', advanceRecoveryAmount: '0.00' });
+    expect(repository.approveWith.mock.calls[0][2]).toMatchObject({ vatAmount: '30000000.00', retentionAmount: '30000000.00', insuranceAmount: '0.00', advanceRecoveryAmount: '0.00' });
     expect(out.status).toBe('approved');
   });
-  it('refuses when the retention figure is unclear, naming it, and approves nothing', async () => {
+  it('refuses when the retention or VAT figure is unclear, naming it, and approves nothing', async () => {
     const { service, repository } = build({ found: row(), retentionRate: null });
     await expect(service.approve(T, 5)).rejects.toThrow('سپرده حسن انجام کار');
     expect(repository.approveWith).not.toHaveBeenCalled();
+
+    const vatUnclear = build({ found: row(), vatRate: null });
+    await expect(vatUnclear.service.approve(T, 5)).rejects.toThrow('مالیات بر ارزش افزوده');
+    expect(vatUnclear.repository.approveWith).not.toHaveBeenCalled();
   });
   it('refuses a statement that is not a draft', async () => {
     await expect(build({ found: row({ status: StatementStatus.APPROVED }) }).service.approve(T, 5)).rejects.toBeInstanceOf(ConflictException);

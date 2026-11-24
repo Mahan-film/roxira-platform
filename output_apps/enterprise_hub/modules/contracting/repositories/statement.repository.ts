@@ -63,11 +63,11 @@ export class StatementRepository {
     });
   }
 
-  /** draft -> approved, storing the deductions computed at approval and the figures they came from. */
+  /** draft -> approved, storing the VAT and deductions computed at approval and the figures they came from. */
   approveWith(
     tenantId: string,
     id: number,
-    d: { retentionAmount: string; insuranceAmount: string; advanceRecoveryAmount: string; termsSnapshot: unknown },
+    d: { vatAmount?: string; retentionAmount: string; insuranceAmount: string; advanceRecoveryAmount: string; termsSnapshot: unknown },
     manager?: EntityManager,
   ) {
     return this.transition(tenantId, id, StatementStatus.DRAFT, { status: StatementStatus.APPROVED, approvedAt: () => 'now()', ...d }, manager);
