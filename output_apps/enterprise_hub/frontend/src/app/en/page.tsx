@@ -25,8 +25,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { PasskeyLoginButton } from "@/components/en/passkey-login-button";
-import { AccountButton } from "@/components/en/account-button";
+import { EnSiteHeader } from "@/components/en/en-site-header";
 import { EnSettlementPanel } from "@/components/en/en-settlement-panel";
 import { INTERNATIONAL_CURRENCIES } from "@/types/currency";
 import ModuleSandboxModal, { ModuleKey } from "@/components/en/ModuleSandboxModal";
@@ -164,68 +163,7 @@ export default function InternationalPortal() {
   return (
     <div className="dark flex min-h-full flex-1 flex-col bg-background text-foreground scroll-smooth">
       {/* HEADER */}
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#020617]/90 text-slate-100 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3.5 sm:px-6">
-          <Link href="/" className="flex items-center gap-2.5">
-            <span className="flex size-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-black text-white shadow-lg shadow-indigo-600/30">
-              R
-            </span>
-            <span className="flex flex-col leading-tight">
-              <span className="text-sm font-bold text-white">
-                Roxira International
-              </span>
-              <span className="font-mono text-[10px] text-slate-500">
-                roxira.net
-              </span>
-            </span>
-          </Link>
-
-          <nav className="hidden items-center gap-1 text-sm md:flex">
-            <a
-              href="#modules"
-              className="rounded-lg px-3 py-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
-            >
-              Modules
-            </a>
-            <a
-              href="#api"
-              className="rounded-lg px-3 py-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
-            >
-              API
-            </a>
-            <a
-              href="#fx"
-              className="rounded-lg px-3 py-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
-            >
-              FX & Settlement
-            </a>
-            <a
-              href="#pricing"
-              className="rounded-lg px-3 py-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
-            >
-              Pricing & Tiers
-            </a>
-            <button
-              onClick={openApiModal}
-              className="rounded-lg px-3 py-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
-            >
-              Request API access
-            </button>
-          </nav>
-
-          <div className="flex items-center gap-2">
-            <AccountButton />
-            <PasskeyLoginButton />
-            <button
-              onClick={openApiModal}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-l from-indigo-500 to-violet-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-indigo-600/30 transition-transform hover:-translate-y-0.5"
-            >
-              <BookOpen className="size-3.5" />
-              Request API access
-            </button>
-          </div>
-        </div>
-      </header>
+      <EnSiteHeader onRequestApiAccess={openApiModal} />
 
       <main className="flex-1">
         {/* HERO SECTION */}
