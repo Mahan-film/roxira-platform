@@ -99,6 +99,7 @@ describePg('T3 gate: contract, 3 statements, retention and release, advance and 
       const map: Record<string, string> = {
         receivable: '1201', revenue: '4101', retention_receivable: '1250', contract_insurance_expense: '5250', advance_received: '2250',
         purchases: '5201', payable: '2101', retention_payable: '2260',
+        vat_output: '2301', vat_input: '1401',
       };
       for (const [role, code] of Object.entries(map)) await postingRepo.upsertMapping(t, '*', role, code);
     }
