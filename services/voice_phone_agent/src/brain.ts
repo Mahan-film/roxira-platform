@@ -112,6 +112,25 @@ export class SentenceSplitter {
       }
     }
     this.buf = this.buf.slice(last);
+
+    // Clause-level flushing (، : ؛ after >= 6 words) (T251)
+    const clauseRe = /([،؛:])(?=\s|$)/g;
+    let cm: RegExpExecArray | null;
+    let clauseLast = 0;
+    while ((cm = clauseRe.exec(this.buf))) {
+      const end = cm.index + cm[0].length;
+      const piece = this.buf.slice(clauseLast, end);
+      const words = piece.trim().split(/\s+/).filter(Boolean).length;
+      if (words >= 6) {
+        const s = speakable(clean(piece));
+        if (s) { out.push(s); this.first = false; }
+        clauseLast = end;
+      }
+    }
+    if (clauseLast > 0) {
+      this.buf = this.buf.slice(clauseLast);
+    }
+
     // runaway sentence without punctuation: cut at a comma
     const max = cfg.maxSentenceChars;
     if (this.buf.length > max) {
