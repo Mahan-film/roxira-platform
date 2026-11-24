@@ -152,11 +152,14 @@ echo "== 5. phone-stack wrapper"
 install -d -m 755 -o root -g root /usr/local/lib/phone-stack
 T=$(mktemp); from_main healthcheck.sh > "$T"; install -m 755 -o root -g root "$T" /usr/local/lib/phone-stack/healthcheck.sh; rm -f "$T"
 T=$(mktemp); from_main livekit_keys.sh > "$T"; install -m 755 -o root -g root "$T" /usr/local/lib/phone-stack/livekit_keys.sh; rm -f "$T"
+T=$(mktemp); from_main check_phone_costs.py > "$T"; install -m 755 -o root -g root "$T" /usr/local/lib/phone-stack/check_phone_costs.py; rm -f "$T"
 printf 'COMPOSE=%q\nSTACK=%q\nAGENT_ENV=%q\nAGENT_USER=%q\n' "$COMPOSE" "$STACK" "$AGENT/.env" "$U" > /usr/local/lib/phone-stack/phone-stack.conf
 chmod 644 /usr/local/lib/phone-stack/phone-stack.conf
-# Model registry for the agent (MODELS_YAML in voice-ai-agent.service); the agent copy has no repo tree.
+# Model registry and pricing config for the agent (the agent copy has no repo tree).
 git -c safe.directory="$REPO" -C "$REPO" show origin/main:config/models.yaml > /usr/local/lib/phone-stack/models.yaml
 chown root:root /usr/local/lib/phone-stack/models.yaml; chmod 644 /usr/local/lib/phone-stack/models.yaml
+git -c safe.directory="$REPO" -C "$REPO" show origin/main:config/phone_pricing.json > /usr/local/lib/phone-stack/phone_pricing.json 2>/dev/null || true
+[ -f /usr/local/lib/phone-stack/phone_pricing.json ] && { chown root:root /usr/local/lib/phone-stack/phone_pricing.json; chmod 644 /usr/local/lib/phone-stack/phone_pricing.json; }
 TMP_BIN=$(mktemp)
 cat > "$TMP_BIN" <<'WRAPPER'
 #!/bin/bash
@@ -202,12 +205,17 @@ case "${1:-status}" in
   status)
     /usr/local/lib/phone-stack/healthcheck.sh
     ;;
+  costs)
+    PRICING=/usr/local/lib/phone-stack/phone_pricing.json
+    STATE=/srv/data/phone/state/phone_usage_state.json
+    python3 /usr/local/lib/phone-stack/check_phone_costs.py --pricing-file "$PRICING" --state-file "$STATE" "${@:2}"
+    ;;
   logs)
     n=${2:-100}; [[ "$n" =~ ^[0-9]{1,4}$ ]] || n=100
     echo "== containers"; "${DC[@]}" logs --no-color --tail "$n" 2>&1 | scrub
     echo "== units"; journalctl -u voice-ai-tts -u voice-ai-agent -n "$n" -o cat --no-pager 2>&1 | scrub
     ;;
-  *) echo "usage: phone-stack up|down|status|keys|logs [lines]" >&2; exit 2 ;;
+  *) echo "usage: phone-stack up|down|status|costs|keys|logs [lines]" >&2; exit 2 ;;
 esac
 WRAPPER
 install -m 0755 -o root -g root "$TMP_BIN" /usr/local/bin/phone-stack

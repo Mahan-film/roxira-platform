@@ -2,6 +2,7 @@ import * as path from 'node:path';
 import { RoomServiceClient, SipClient } from 'livekit-server-sdk';
 import { dispose } from '@livekit/rtc-node';
 import { cfg, validateConfig } from './config.js';
+import { PhoneCostTracker } from './cost-caps.js';
 import { closeHttp, fetchDirect } from './http.js';
 import { logger } from './log.js';
 import { CallSession, type Prompts } from './session.js';
@@ -10,6 +11,7 @@ import { cachedPrompt } from './tts.js';
 
 const log = logger('main');
 let rooms: RoomServiceClient;
+let costTracker: PhoneCostTracker;
 const sessions = new Map<string, CallSession>();
 const finished = new Map<string, number>(); // room -> ended at (avoid re-joining a closing room)
 let stopping = false;
@@ -53,14 +55,26 @@ async function poll(prompts: Prompts) {
     const ps = await rooms.listParticipants(r.name).catch(() => []);
     if (!ps.some((p) => p.identity.startsWith(cfg.sipIdentityPrefix))) continue;
     if (ps.some((p) => p.identity === cfg.agentIdentity)) continue;
-    const busy = sessions.size >= cfg.maxConcurrentCalls;
+    const callerId = ps.find((p) => p.identity.startsWith(cfg.sipIdentityPrefix))?.identity ?? '';
+    const admission = costTracker.checkCallAdmission(callerId);
+    const busy = !admission.allowed || sessions.size >= cfg.maxConcurrentCalls;
+    const refusalReason = !admission.allowed
+      ? admission.reason
+      : (sessions.size >= cfg.maxConcurrentCalls ? 'max_concurrent_calls' : undefined);
+
     const s = new CallSession(r.name, prompts, rooms, (done) => {
       sessions.delete(done.roomName);
       finished.set(done.roomName, Date.now());
+      const durationSeconds = Math.max(0, Math.round((Date.now() - done.startedAt) / 1000));
+      costTracker.recordCompletedCall({
+        callerId: done.callerId || callerId,
+        roomName: done.roomName,
+        durationSeconds,
+      });
       log.info(`active calls: ${sessions.size}`);
-    }, busy);
+    }, busy, callerId, refusalReason);
     sessions.set(r.name, s);
-    log.info(`${busy ? 'BUSY ' : ''}new call ${r.name} (active ${sessions.size})`);
+    log.info(`${busy ? `REFUSED(${refusalReason}) ` : ''}new call ${r.name} (active ${sessions.size})`);
     s.start().catch((e) => {
       log.error('session start failed', r.name, e?.message ?? e);
       void s.end('start failed');
@@ -70,6 +84,7 @@ async function poll(prompts: Prompts) {
 
 async function main() {
   validateConfig();
+  costTracker = new PhoneCostTracker();
   rooms = new RoomServiceClient(cfg.livekitHttp, cfg.livekitKey, cfg.livekitSecret);
   log.info(`STT=${cfg.sttProvider} TTS=${cfg.ttsProvider}(${cfg.ttsVoice}) brain=${cfg.judgeBase} max_calls=${cfg.maxConcurrentCalls}`);
   // Inbound trunk + dispatch rule live only in LiveKit's Redis; re-create them if missing (#1039).

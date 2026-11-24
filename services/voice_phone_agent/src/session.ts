@@ -62,7 +62,7 @@ export class CallSession {
    */
   private pending: Int16Array[] = [];
   private pendingMs = 0;
-  private callerId = '';
+  public callerId = '';
   private turnNo = 0;
   private lastActivity = Date.now();
   private timers: NodeJS.Timeout[] = [];
@@ -76,7 +76,10 @@ export class CallSession {
     private rooms: RoomServiceClient,
     private onEnd: (s: CallSession) => void,
     private busyOnly = false,
+    callerId = '',
+    private refusalReason?: string,
   ) {
+    this.callerId = callerId;
     this.log = logger(roomName.slice(0, 40));
   }
 
@@ -107,9 +110,12 @@ export class CallSession {
     }
 
     if (this.busyOnly) {
+      if (this.refusalReason) {
+        this.log.info(`refusing call (${this.refusalReason})`);
+      }
       this.player.enqueue(this.prompts.busy);
       await this.player.idle();
-      return this.hangup('busy');
+      return this.hangup(this.refusalReason ?? 'busy');
     }
 
     this.player.enqueue(this.prompts.greeting);
@@ -125,7 +131,8 @@ export class CallSession {
   private listen(track: RemoteTrack) {
     if (this.listening || this.busyOnly) return;
     this.listening = true;
-    this.callerId = [...this.room.remoteParticipants.keys()].find((k) => k.startsWith(cfg.sipIdentityPrefix)) ?? '';
+    const remoteId = [...this.room.remoteParticipants.keys()].find((k) => k.startsWith(cfg.sipIdentityPrefix));
+    if (remoteId) this.callerId = remoteId;
     this.log.info('listening to caller audio');
     const stream = new AudioStream(track, { sampleRate: IN_RATE, numChannels: 1, frameSizeMs: 20 });
     const vad = new EnergyVad({
