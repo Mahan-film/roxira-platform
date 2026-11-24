@@ -280,3 +280,26 @@ export interface PosSyncResult {
 export interface SyncPosSalesDto {
   sales: CreatePosSaleDto[];
 }
+
+export interface GrossProfitGroup {
+  key: string;
+  revenue: string;
+  cogs: string;
+  profit: string;
+  marginBp: string | null;
+  margin: string;
+}
+
+export interface GrossProfitReportResponse {
+  groupBy: "invoice" | "item" | "customer";
+  from: string | null;
+  to: string | null;
+  groups: GrossProfitGroup[];
+}
+
+export interface GrossProfitReportQueryDto {
+  groupBy: "invoice" | "item" | "customer";
+  from?: string;
+  to?: string;
+  format?: "xlsx" | "pdf";
+}

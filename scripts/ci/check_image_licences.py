@@ -62,6 +62,24 @@ def _normalize_image(raw: str) -> str:
     return cleaned.lower()
 
 
+# Denied licences for runtime images and runtime dependencies
+DENIED_LICENCES = ("BUSL", "AGPL", "SSPL", "ELv2", "HFOIL", "MPL")
+
+# Per-image allowlist: unmodified upstream images explicitly approved
+ALLOWED_AGPL_UPSTREAM_IMAGES = {
+    "twentycrm/twenty": "AGPL-3.0 (allowed only as unmodified upstream image)",
+}
+
+
+def check_licence_tag(licence: str) -> str | None:
+    """Return a disallow reason if a runtime dependency/image licence is in DENIED_LICENCES."""
+    upper = licence.upper()
+    for denied in DENIED_LICENCES:
+        if denied.upper() in upper:
+            return f"Licence '{licence}' matches denied runtime licence '{denied}'"
+    return None
+
+
 def check_image_ref(raw_image: str) -> str | None:
     """Return a disallow reason if the image uses a blocked licence, else None."""
     norm = _normalize_image(raw_image)
@@ -83,6 +101,10 @@ def check_image_ref(raw_image: str) -> str | None:
 
     # Valkey is BSD-3-Clause -> explicitly allowed
     if name == "valkey" or org_name == "valkey/valkey":
+        return None
+
+    # Twenty (AGPL) is allowed only as unmodified upstream image
+    if org_name in ALLOWED_AGPL_UPSTREAM_IMAGES:
         return None
 
     # Redis: only 7.2.x is supported BSD-3-Clause; 7.4+, 8+, latest, or unpinned `7` / `7-alpine` are RSALv2/SSPLv1
