@@ -1,12 +1,7 @@
-"""Golden comparison tests for pypdfium2 vs PyMuPDF (Issue #1235).
+"""Synthetic pypdfium2 backend and fast-path tests (Issue #1235).
 
-Validates text extraction, Persian digit preservation, word order, and scan detection
-across 5 representative legal PDF corpora:
-1. Born-digital statute (ماده قانون مدنی)
-2. Supreme Court precedent (رأی وحدت رویه دیوان عالی کشور)
-3. Administrative regulation (آیین‌نامه اجرایی هیأت وزیران)
-4. Digital contract / invoice (قرارداد و صورتحساب با مبالغ ریالی)
-5. Scanned image PDF (0 text layer verifying scan-detection signal)
+Validates pypdfium2 document opening, page counting, empty-page scan detection,
+PNG rendering, and Persian fast-path text normalization.
 """
 
 from __future__ import annotations
@@ -91,7 +86,11 @@ def test_scan_detection_signal():
     corpora = _create_synthetic_corpora()
     scanned_data = corpora["5_scanned"]
     with pdf_backend.open_pdf(scanned_data) as doc:
-        is_clean, norm_text, reason = inspect_and_extract_fast_path(doc[0])
+        page = doc[0]
+        try:
+            is_clean, norm_text, reason = inspect_and_extract_fast_path(page)
+        finally:
+            page.close()
         assert is_clean is False
         assert reason == "INSUFFICIENT_TEXT"
         assert norm_text == ""
@@ -106,23 +105,14 @@ def test_rendering_pipeline():
         assert pngs[0].startswith(b"\x89PNG\r\n\x1a\n")
 
 
-def test_golden_comparison_with_benchmarks():
-    """Benchmark comparing pypdfium2 vs PyMuPDF metrics across 5 corpora.
-    
-    PyMuPDF exhibits known issues on Persian RTL text:
-    - Injects null bytes or replacement characters for certain Arabic/Persian ligatures.
-    - Word ordering is reversed or split incorrectly across line wraps.
-    pypdfium2 provides clean text layers with standard Apache-2.0 / BSD-3 licensing.
-    """
-    benchmarks = {
-        "1_statute": {"digits": "۱۱۰۲", "fast_path": True},
-        "2_precedent": {"digits": "۸۱۰", "fast_path": True},
-        "3_regulation": {"digits": "۱۴۰۳۵۴", "fast_path": True},
-        "4_contract": {"digits": "۵۰۰۰۰۰۰۰۰۴۵۲۱۴۰۳", "fast_path": True},
-        "5_scanned": {"digits": "", "fast_path": False},
-    }
-
-    assert len(benchmarks) == 5
-    # Verify scan detection accuracy
-    assert benchmarks["5_scanned"]["fast_path"] is False
-    assert all(benchmarks[k]["fast_path"] is True for k in benchmarks if k != "5_scanned")
+def test_persian_fast_path_digit_normalization():
+    """Verify Persian/Arabic digit normalization and clean digital fast-path detection."""
+    sample = (
+        "ماده ۱۱۰۲ قانون مدنی: نکاح صحیح به محض وقوع آثار قانونی خود را برقرار می‌نماید "
+        "و مبلغ 500000000 ریال بابت مهریه تعیین گردید."
+    )
+    is_clean, norm_text, reason = inspect_and_extract_fast_path(sample)
+    assert is_clean is True
+    assert reason == "CLEAN_DIGITAL_FAST_PATH"
+    assert "۵۰۰۰۰۰۰۰۰" in norm_text
+    assert "۱۱۰۲" in norm_text

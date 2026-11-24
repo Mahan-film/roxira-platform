@@ -319,7 +319,7 @@ def _recover_reverse_bidi(text: str) -> str:
 
 
 def inspect_and_extract_fast_path(page: Any) -> tuple[bool, str, str]:
-    """Inspect page in < 2ms using text layer. Returns (is_clean, normalized_text, reason).
+    """Inspect page in < 2ms using pypdfium2 text layer. Returns (is_clean, normalized_text, reason).
     
     Checks:
     - Minimum length threshold (OCR_PAGE_MIN_CHARS)
@@ -337,16 +337,9 @@ def inspect_and_extract_fast_path(page: Any) -> tuple[bool, str, str]:
                     raw_text = tp.get_text_range() or ""
                 elif hasattr(tp, "extractText"):
                     raw_text = tp.extractText() or ""
-                else:
-                    raw_text = page.get_text("text") if hasattr(page, "get_text") else ""
             finally:
                 if hasattr(tp, "close"):
                     tp.close()
-        except Exception as exc:
-            return False, "", f"EXTRACT_ERROR: {type(exc).__name__}"
-    elif hasattr(page, "get_text"):
-        try:
-            raw_text = page.get_text("text") or ""
         except Exception as exc:
             return False, "", f"EXTRACT_ERROR: {type(exc).__name__}"
     elif isinstance(page, str):
@@ -405,18 +398,6 @@ def render_and_enhance_page_to_webp(page: Any, dpi: int = 160) -> bytes:
             img = bitmap.to_pil().convert("L")
         finally:
             bitmap.close()
-    elif hasattr(page, "get_pixmap"):
-        try:
-            import fitz
-        except ImportError:
-            try:
-                import pymupdf as fitz
-            except ImportError as exc:
-                raise CaseFileError(MSG_CORRUPT, 503, "PDF_UNAVAILABLE") from exc
-        zoom = dpi / 72.0
-        mat = fitz.Matrix(zoom, zoom)
-        pix = page.get_pixmap(matrix=mat, colorspace=fitz.csGRAY, alpha=False)
-        img = Image.frombytes("L", (pix.width, pix.height), pix.samples)
     elif isinstance(page, Image.Image):
         img = ImageOps.exif_transpose(page).convert("L")
     elif isinstance(page, bytes):
@@ -929,6 +910,8 @@ class _PdfSource:
         try:
             self.doc = pdfium.PdfDocument(data)
         except Exception as exc:  # noqa: BLE001
+            if "password" in str(exc).lower():
+                raise CaseFileError(MSG_ENCRYPTED, 400, "PDF_ENCRYPTED") from exc
             raise CaseFileError(MSG_CORRUPT, 400, "CORRUPT_FILE") from exc
         try:
             self.count = len(self.doc)
