@@ -68,7 +68,12 @@ describe('EntitlementService & Metering Wiring (T145)', () => {
     expect(computePeriodKey('branches', new Date('2026-11-15T00:00:00Z'), 15)).toBe('current');
   });
 
-  it('fails closed on unknown meter or unknown plan', async () => {
+  it('fails closed on unknown meter, missing tenant plan, or unknown plan', async () => {
+    const { scope: missingScope } = makeMockScope(0, undefined);
+    const missingService = new EntitlementService(missingScope);
+    await expect(missingService.check(T1, 'ai_messages')).rejects.toThrow(ForbiddenException);
+    await expect(missingService.consume(T1, 'ai_messages')).rejects.toThrow(ForbiddenException);
+
     const { scope } = makeMockScope(0, { plan_key: 'nonexistent', limits: {}, rollover_day: 1 });
     const service = new EntitlementService(scope);
     await expect(service.check(T1, 'bogus_meter' as any)).rejects.toThrow(BadRequestException);

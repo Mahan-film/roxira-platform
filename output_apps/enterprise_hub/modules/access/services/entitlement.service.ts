@@ -153,9 +153,12 @@ export class EntitlementService implements OnModuleInit {
         [tenantId],
       )) as Array<{ plan_key: string; limits: Record<string, unknown>; rollover_day: number }>;
 
-      const planKey = planRows[0]?.plan_key ?? this.getPlanConfig().defaultPlan;
-      const overrides = planRows[0]?.limits ?? null;
-      const rolloverDay = planRows[0]?.rollover_day ?? 1;
+      if (!planRows[0]) {
+        throw new ForbiddenException('No plan assigned to tenant.');
+      }
+      const planKey = planRows[0].plan_key;
+      const overrides = planRows[0].limits ?? null;
+      const rolloverDay = planRows[0].rollover_day ?? 1;
       const limit = this.resolveLimit(planKey, overrides, meter);
       const periodKey = computePeriodKey(meter, now, rolloverDay);
 
@@ -201,9 +204,12 @@ export class EntitlementService implements OnModuleInit {
         [tenantId],
       )) as Array<{ plan_key: string; limits: Record<string, unknown>; rollover_day: number }>;
 
-      const planKey = planRows[0]?.plan_key ?? this.getPlanConfig().defaultPlan;
-      const overrides = planRows[0]?.limits ?? null;
-      const rolloverDay = planRows[0]?.rollover_day ?? 1;
+      if (!planRows[0]) {
+        throw new ForbiddenException('No plan assigned to tenant.');
+      }
+      const planKey = planRows[0].plan_key;
+      const overrides = planRows[0].limits ?? null;
+      const rolloverDay = planRows[0].rollover_day ?? 1;
       const limit = this.resolveLimit(planKey, overrides, meter);
       const periodKey = computePeriodKey(meter, now, rolloverDay);
 
