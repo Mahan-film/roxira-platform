@@ -125,7 +125,7 @@ test.describe('prod feature tour', () => {
     const creds = freshCredentials();
     const email = `qa-noorg-${Date.now()}@example.invalid`;
     const signup = await page.request.post(`${BASE}/api/backend/auth/signup`, {
-      data: { email, password: creds.password },
+      data: { email, password: creds.password, acceptTerms: true },
     });
     expect(signup.status(), `signup without org: ${(await signup.text()).slice(0, 300)}`).toBeLessThan(300);
 

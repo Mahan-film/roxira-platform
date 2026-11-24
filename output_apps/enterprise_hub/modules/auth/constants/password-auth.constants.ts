@@ -80,3 +80,7 @@ export const SMS_DELIVERY_FAILED_ERROR =
   'We could not send the SMS code. Sign in with your password, or try again in a few minutes.';
 
 export type UiLocale = 'fa' | 'en';
+
+export const CURRENT_TERMS_VERSION = '2026-11-24-placeholder';
+export const CURRENT_PRIVACY_VERSION = '2026-11-24-placeholder';
+export const TERMS_ACCEPTANCE_REQUIRED_ERROR = 'You must accept the terms and privacy policy.';

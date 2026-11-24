@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { CheckCircle2, Loader2, Mail } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import {
 } from "@/lib/api/auth-client";
 import { ApiClientError } from "@/lib/api/http-client";
 import { PASSWORD_AUTH_COPY, type PasswordAuthCopy } from "@/components/auth/password-auth-copy";
+import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal/legal-versions";
 
 type Mode = "login" | "signup" | "forgot";
 
@@ -60,6 +62,7 @@ export function PasswordAuthPanel({ locale, onSession, initialMode = "login", in
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [organization, setOrganization] = useState("");
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -69,6 +72,7 @@ export function PasswordAuthPanel({ locale, onSession, initialMode = "login", in
 
   const switchMode = (next: Mode) => {
     setMode(next);
+    setAcceptTerms(false);
     setError(null);
     setNotice(null);
   };
@@ -99,6 +103,7 @@ export function PasswordAuthPanel({ locale, onSession, initialMode = "login", in
       if (username.trim() && !USERNAME_RE.test(username.trim().toLowerCase())) return setError(t.errUsername);
       if (password.length < MIN_PASSWORD) return setError(t.errPasswordShort);
       if (locale === "fa" && !inviteToken && organization.trim().length < 2) return setError(t.errOrganization);
+      if (!acceptTerms) return setError(t.errAcceptTerms);
     }
 
     setLoading(true);
@@ -114,6 +119,9 @@ export function PasswordAuthPanel({ locale, onSession, initialMode = "login", in
           password,
           organizationName: inviteToken ? undefined : organization.trim() || undefined,
           inviteToken,
+          acceptTerms: true,
+          termsVersion: TERMS_VERSION,
+          privacyVersion: PRIVACY_VERSION,
         });
         if (isMfaChallenge(result)) setChallenge(result.challenge);
         else onSession(result);
@@ -246,6 +254,29 @@ export function PasswordAuthPanel({ locale, onSession, initialMode = "login", in
           />
           <p className="text-xs text-slate-500">{t.organizationHint}</p>
         </div>
+      )}
+
+      {mode === "signup" && (
+        <label className="flex items-start gap-2.5 text-xs text-slate-300 cursor-pointer">
+          <input
+            id="pw-accept-terms"
+            type="checkbox"
+            checked={acceptTerms}
+            onChange={(e) => setAcceptTerms(e.target.checked)}
+            className="mt-0.5 size-4 rounded border-white/20 bg-black/40 accent-sky-500"
+          />
+          <span>
+            {t.acceptTermsPrefix}
+            <Link href="/terms" target="_blank" className="text-sky-300 underline hover:text-sky-200">
+              {t.termsLink}
+            </Link>
+            {t.acceptTermsAnd}
+            <Link href="/privacy" target="_blank" className="text-sky-300 underline hover:text-sky-200">
+              {t.privacyLink}
+            </Link>
+            {t.acceptTermsSuffix}
+          </span>
+        </label>
       )}
 
       {notice && (

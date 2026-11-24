@@ -115,7 +115,7 @@ suite('Org access control (e2e, real Postgres)', () => {
     const res = await http()
       .post('/v1/auth/signup')
       .set('X-Forwarded-For', freshIp())
-      .send({ username: `ac-${name}`, email: `ac-${name}@example.com`, password: PW, ...extra })
+      .send({ username: `ac-${name}`, email: `ac-${name}@example.com`, password: PW, acceptTerms: true, ...extra })
       .expect(201);
     return res.body as { accessToken: string; refreshToken: string; user: { id: string } };
   };

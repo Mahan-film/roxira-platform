@@ -11,6 +11,8 @@ import {
 } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 import {
+  CURRENT_PRIVACY_VERSION,
+  CURRENT_TERMS_VERSION,
   FORGOT_GENERIC_RESPONSE,
   FORGOT_LIMIT_PER_IDENTIFIER,
   FORGOT_LIMIT_PER_IP,
@@ -28,6 +30,7 @@ import {
   SIGNUP_LIMIT_PER_IP,
   SIGNUP_LIMIT_REDIS_PREFIX,
   SIGNUP_UNAVAILABLE_ERROR,
+  TERMS_ACCEPTANCE_REQUIRED_ERROR,
   UiLocale,
 } from '../constants/password-auth.constants';
 import { REDIS_CLIENT } from '../constants/auth.constants';
@@ -126,6 +129,10 @@ export class PasswordAuthService {
       throw new HttpException(LOGIN_RATE_LIMIT_ERROR, HttpStatus.TOO_MANY_REQUESTS);
     }
 
+    if (dto.acceptTerms !== true) {
+      throw new BadRequestException(TERMS_ACCEPTANCE_REQUIRED_ERROR);
+    }
+
     const username = dto.username ? normalizeUsername(dto.username) : null;
     const email = dto.email ? normalizeEmail(dto.email) : null;
     if (!username && !email) {
@@ -153,6 +160,9 @@ export class PasswordAuthService {
     }
 
     const passwordHash = await hashPassword(dto.password);
+    const acceptedAt = new Date();
+    const termsAcceptedVersion = dto.termsVersion?.trim() || CURRENT_TERMS_VERSION;
+    const privacyAcceptedVersion = dto.privacyVersion?.trim() || CURRENT_PRIVACY_VERSION;
     let user: UserEntity;
     try {
       user = await this.authRepository.create({
@@ -162,9 +172,13 @@ export class PasswordAuthService {
         email,
         displayName: dto.displayName || null,
         passwordHash,
-        passwordUpdatedAt: new Date(),
+        passwordUpdatedAt: acceptedAt,
         serviceDomain: AuthServiceDomain.ROXIRA,
-        lastLoginAt: new Date(),
+        lastLoginAt: acceptedAt,
+        termsAcceptedVersion,
+        termsAcceptedAt: acceptedAt,
+        privacyAcceptedVersion,
+        privacyAcceptedAt: acceptedAt,
       });
     } catch (error) {
       if (isUniqueViolation(error)) {

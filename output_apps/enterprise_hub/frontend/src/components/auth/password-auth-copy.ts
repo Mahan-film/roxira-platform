@@ -34,6 +34,12 @@ export interface PasswordAuthCopy {
   mfaSubmit: string;
   errMfa: string;
   inviteNote: string;
+  acceptTermsPrefix: string;
+  termsLink: string;
+  acceptTermsAnd: string;
+  privacyLink: string;
+  acceptTermsSuffix: string;
+  errAcceptTerms: string;
 }
 
 const fa: PasswordAuthCopy = {
@@ -70,6 +76,12 @@ const fa: PasswordAuthCopy = {
   mfaSubmit: "تأیید و ورود",
   errMfa: "کد درست نیست یا منقضی شده است.",
   inviteNote: "با دعوت‌نامه عضو سازمان می‌شوید؛ نیازی به نام سازمان نیست.",
+  acceptTermsPrefix: "با ",
+  termsLink: "قوانین و مقررات",
+  acceptTermsAnd: " و ",
+  privacyLink: "سیاست حفظ حریم خصوصی",
+  acceptTermsSuffix: " موافقم.",
+  errAcceptTerms: "برای ساخت حساب باید قوانین و سیاست حفظ حریم خصوصی را بپذیرید.",
 };
 
 const en: PasswordAuthCopy = {
@@ -106,6 +118,12 @@ const en: PasswordAuthCopy = {
   mfaSubmit: "Verify and sign in",
   errMfa: "That code is not correct or has expired.",
   inviteNote: "You are joining an organization by invitation; no organization name is needed.",
+  acceptTermsPrefix: "I accept the ",
+  termsLink: "Terms of Service",
+  acceptTermsAnd: " and ",
+  privacyLink: "Privacy Policy",
+  acceptTermsSuffix: ".",
+  errAcceptTerms: "You must accept the Terms of Service and Privacy Policy to create an account.",
 };
 
 export const PASSWORD_AUTH_COPY: Record<UiLocale, PasswordAuthCopy> = { fa, en };

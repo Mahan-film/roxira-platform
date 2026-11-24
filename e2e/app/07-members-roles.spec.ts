@@ -21,7 +21,7 @@ const RUN = `${Date.now()}${Math.floor(Math.random() * 1000)}`.slice(-9);
 interface Session { accessToken: string; refreshToken: string; expiresIn: number; refreshExpiresIn: number; tokenType: string; user: unknown }
 
 async function signup(api: APIRequestContext, name: string, extra: Record<string, unknown> = {}): Promise<Session> {
-  const res = await api.post(`${API}/auth/signup`, { headers: { 'X-Forwarded-For': freshIp() }, data: { email: `pw-${name}-${RUN}@example.com`, password: PW, ...extra } });
+  const res = await api.post(`${API}/auth/signup`, { headers: { 'X-Forwarded-For': freshIp() }, data: { email: `pw-${name}-${RUN}@example.com`, password: PW, acceptTerms: true, ...extra } });
   expect(res.status(), await res.text()).toBe(201);
   return res.json();
 }
