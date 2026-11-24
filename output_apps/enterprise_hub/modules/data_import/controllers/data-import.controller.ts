@@ -132,6 +132,16 @@ export class DataImportController {
     return this.entityImportService.listEntities();
   }
 
+  @Get('entities/:entity/template')
+  @RequireAction(AccessAction.READ)
+  @ApiOperation({ summary: 'دریافت قالب خام CSV با سربرگ‌های فارسی برای یک موجودیت' })
+  @ApiParam({ name: 'entity', description: 'کلید موجودیت (مثلاً sales-invoices)' })
+  @ApiResponse({ status: HttpStatus.OK, description: 'قالب خام CSV موجودیت' })
+  @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'موجودیت یافت نشد' })
+  getBlankTemplate(@Param('entity', EntityKeyPipe) entity: string) {
+    return this.entityImportService.getBlankTemplate(entity);
+  }
+
   @Get('batches')
   @ApiOperation({ summary: 'آخرین دسته‌های ورود داده مستأجر' })
   @ApiResponse({ status: HttpStatus.OK, type: [BatchSummaryDto] })

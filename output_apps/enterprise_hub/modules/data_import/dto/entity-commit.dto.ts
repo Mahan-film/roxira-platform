@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  IsIn,
   IsInt,
   IsObject,
   IsOptional,
@@ -88,4 +89,12 @@ export class EntityCommitDto {
   @IsInt({ message: 'شناسه حساب بانکی نامعتبر است.' })
   @Min(1)
   bankAccountId?: number;
+
+  @ApiPropertyOptional({
+    description: 'قالب تاریخ فایل ورودی برای ذخیره در الگوی نگاشت (jalali | gregorian | auto)',
+    enum: ['jalali', 'gregorian', 'auto'],
+  })
+  @IsOptional()
+  @IsIn(['jalali', 'gregorian', 'auto'], { message: 'قالب تاریخ نامعتبر است.' })
+  dateFormat?: 'jalali' | 'gregorian' | 'auto';
 }

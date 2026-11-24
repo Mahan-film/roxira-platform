@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { createHash, randomUUID } from 'crypto';
 import * as path from 'path';
@@ -45,6 +46,11 @@ import { OpenRouterMappingService } from './openrouter-mapping.service';
 import { UploadedFilePayload } from './data-import.service';
 import { UploadStoreService } from './upload-store.service';
 import { DailyImportQuotaService } from './daily-import-quota.service';
+import {
+  alignMappingToHeaders,
+  headerSignature,
+  MappingMemoryService,
+} from './mapping-memory.service';
 
 /** نتیجه ساخت نگاشت یک موجودیت. */
 interface ResolvedMapping {
@@ -72,11 +78,42 @@ export class EntityImportService {
     private readonly uploadStore: UploadStoreService,
     private readonly batchRepository: DataImportBatchRepository,
     private readonly quota: DailyImportQuotaService,
+    @Optional() private readonly mappingMemory?: MappingMemoryService,
   ) {}
 
   /** فهرست موجودیت‌های قابل ورود و فیلدهای آن‌ها. */
   listEntities(): EntityDescriptorDto[] {
     return this.registry.descriptors();
+  }
+
+  /** ساخت قالب خام CSV (با BOM و امن‌سازی فرمول اکسل) برای یک موجودیت. */
+  getBlankTemplate(entityKey: string): {
+    entity: string;
+    labelFa: string;
+    fileName: string;
+    headers: string[];
+    csv: string;
+  } {
+    const adapter = this.registry.get(entityKey);
+    if (!adapter) {
+      throw new NotFoundException(`موجودیت «${entityKey}» پشتیبانی نمی‌شود.`);
+    }
+    const headers = adapter.fields.map((field) => field.labelFa);
+    const csvHeader = headers
+      .map((h) => {
+        const trimmed = h.trimStart();
+        const safe = /^[=+\-@\t\r]/.test(trimmed) ? `'${h}` : h;
+        const escaped = safe.replace(/"/g, '""');
+        return /[",\n\r]/.test(escaped) ? `"${escaped}"` : escaped;
+      })
+      .join(',');
+    return {
+      entity: adapter.key,
+      labelFa: adapter.labelFa,
+      fileName: `${adapter.key}-template.csv`,
+      headers,
+      csv: `\uFEFF${csvHeader}\n`,
+    };
   }
 
   /** پیش‌نمایش فایل با تشخیص خودکار موجودیت (یا موجودیت اجباری). */
@@ -95,18 +132,37 @@ export class EntityImportService {
     }
 
     const sampleRows = parsed.rows.slice(0, MAX_SAMPLE_ROWS);
+    const signature = headerSignature(parsed.headers);
+    const remembered = this.mappingMemory
+      ? await this.mappingMemory.recall(tenantId, signature)
+      : null;
+
+    const recalledEntity =
+      !forcedEntity && remembered && this.registry.get(remembered.entity)
+        ? remembered.entity
+        : forcedEntity;
+
     const { adapter, confidence } = await this.resolveEntity(
       parsed.headers,
       sampleRows,
-      forcedEntity,
+      recalledEntity,
     );
 
-    const { mapping } = await this.resolveMapping(
-      adapter,
-      parsed.headers,
-      sampleRows,
-      confidence < 1,
-    );
+    const matchedRemembered =
+      remembered && remembered.entity === adapter.key ? remembered : null;
+
+    const alignedRemembered = matchedRemembered
+      ? alignMappingToHeaders(parsed.headers, matchedRemembered.mapping)
+      : null;
+
+    const { mapping } = alignedRemembered
+      ? { mapping: this.toConcreteMapping(adapter, alignedRemembered) }
+      : await this.resolveMapping(
+          adapter,
+          parsed.headers,
+          sampleRows,
+          confidence < 1,
+        );
 
     const { records, errors } = this.buildRecords(adapter, {
       headers: parsed.headers,
@@ -131,10 +187,16 @@ export class EntityImportService {
       detectedEntity: adapter.key,
       confidence,
       headers: parsed.headers,
-      mapping: this.toNullableMapping(parsed.headers, mapping),
+      mapping: alignedRemembered ?? this.toNullableMapping(parsed.headers, mapping),
       sampleRows: this.buildSampleRows(parsed.headers, sampleRows),
       rowCount: parsed.rows.length,
       errors: errors.slice(0, MAX_REPORTED_ERRORS),
+      ...(matchedRemembered
+        ? {
+            templateVersion: matchedRemembered.version,
+            ...(matchedRemembered.dateFormat ? { dateFormat: matchedRemembered.dateFormat } : {}),
+          }
+        : {}),
     };
   }
 
@@ -266,6 +328,15 @@ export class EntityImportService {
       this.uploadStore.remove(tenantId, dto.uploadId);
       if (result.inserted.length > 0) {
         await this.quota.recordImport(tenantId);
+      }
+      if (this.mappingMemory) {
+        await this.mappingMemory.remember(
+          tenantId,
+          headerSignature(upload.headers),
+          adapter.key,
+          dto.mapping,
+          dto.dateFormat,
+        );
       }
 
       return {

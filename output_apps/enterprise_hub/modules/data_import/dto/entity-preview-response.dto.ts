@@ -35,4 +35,10 @@ export class EntityPreviewResponseDto {
 
   @ApiProperty({ type: [ImportRowFieldErrorDto] })
   errors: ImportRowFieldErrorDto[];
+
+  @ApiProperty({ description: 'نسخه الگوی نگاشت ذخیره‌شده (در صورت بازیابی)', required: false })
+  templateVersion?: number;
+
+  @ApiProperty({ description: 'قالب تاریخ ذخیره‌شده با الگوی نگاشت', required: false })
+  dateFormat?: 'jalali' | 'gregorian' | 'auto';
 }
