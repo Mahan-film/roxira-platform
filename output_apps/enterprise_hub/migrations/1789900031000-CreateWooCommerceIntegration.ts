@@ -86,8 +86,25 @@ export class CreateWooCommerceIntegration1789900031000 implements MigrationInter
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    // Non-reversible schema rollback warning: dropping these tables drops recorded sync logs
-    // and encrypted WooCommerce credentials. In production disaster recovery, restore from database snapshots before rollback.
+    // Reversible safety: prevent silent deletion of sync logs or encrypted WooCommerce credentials.
+    const [{ count: logCount }] = (await queryRunner.query(
+      `SELECT count(*)::int AS count FROM "woocommerce_sync_logs"`,
+    )) as Array<{ count: number }>;
+    if (logCount > 0) {
+      throw new Error(
+        `Cannot drop "woocommerce_sync_logs": ${logCount} sync log records exist. Backup or truncate manually before rollback.`,
+      );
+    }
+
+    const [{ count: configCount }] = (await queryRunner.query(
+      `SELECT count(*)::int AS count FROM "woocommerce_configs"`,
+    )) as Array<{ count: number }>;
+    if (configCount > 0) {
+      throw new Error(
+        `Cannot drop "woocommerce_configs": ${configCount} config records exist. Backup or truncate manually before rollback.`,
+      );
+    }
+
     await queryRunner.query(`DROP POLICY IF EXISTS "woocommerce_sync_logs_tenant" ON "woocommerce_sync_logs"`);
     await queryRunner.query(`ALTER TABLE "woocommerce_sync_logs" NO FORCE ROW LEVEL SECURITY`);
     await queryRunner.query(`ALTER TABLE "woocommerce_sync_logs" DISABLE ROW LEVEL SECURITY`);
