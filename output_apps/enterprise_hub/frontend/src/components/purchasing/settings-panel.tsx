@@ -43,6 +43,11 @@ export function SettingsPanel({ canAdmin = false }: SettingsPanelProps) {
       .finally(() => setLoading(false));
   }, []);
 
+  const parseBasisPoints = (raw: string): number => {
+    const parsed = parseInt(raw, 10);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canAdmin) return;
@@ -51,8 +56,8 @@ export function SettingsPanel({ canAdmin = false }: SettingsPanelProps) {
     try {
       const minorAbs = (parseDecimalToScaledBigInt(priceAbsRials || "0", 2) ?? 0n).toString();
       const res = await updatePurchaseSettings({
-        overReceiptToleranceBp: parseInt(overBp, 10) || 0,
-        priceToleranceBp: parseInt(priceBp, 10) || 0,
+        overReceiptToleranceBp: parseBasisPoints(overBp),
+        priceToleranceBp: parseBasisPoints(priceBp),
         priceToleranceAbs: minorAbs,
       });
       setSettings(res);
@@ -109,7 +114,7 @@ export function SettingsPanel({ canAdmin = false }: SettingsPanelProps) {
               required
             />
             <p className="text-xs text-muted-foreground">
-              معادل: {(parseInt(overBp, 10) / 100 || 0).toLocaleString("fa-IR")} درصد اضافه‌دریافت نسبت به سفارش
+              معادل: {(parseBasisPoints(overBp) / 100).toLocaleString("fa-IR")} درصد اضافه‌دریافت نسبت به سفارش
             </p>
           </div>
 
@@ -128,7 +133,7 @@ export function SettingsPanel({ canAdmin = false }: SettingsPanelProps) {
               required
             />
             <p className="text-xs text-muted-foreground">
-              معادل: {(parseInt(priceBp, 10) / 100 || 0).toLocaleString("fa-IR")} درصد تفاوت قیمت
+              معادل: {(parseBasisPoints(priceBp) / 100).toLocaleString("fa-IR")} درصد تفاوت قیمت
             </p>
           </div>
 
