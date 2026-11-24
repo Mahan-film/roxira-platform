@@ -18,7 +18,7 @@ _LATEST_KW = r"(?:آخرین|جدیدترین|تازه‌ترین|تازه تر�
 _UNITY_KW = r"(?:وحدت\s*رویه|رای\s*وسط\s*روی|آرای\s*وحدت\s*رویه|ارای\s*وحدت\s*رویه)"
 _SUPREME_KW = r"(?:دیوان\s*عالی(?:\s*کشور)?|دیوان\s*آلی(?:\s*کشور)?)"
 _ADMIN_KW = r"(?:دیوان\s*عدالت(?:\s*اداری)?|هیئت\s*عمومی\s*دیوان\s*عدالت)"
-_REG_KW = r"(?:بخشنامه|مصوبه|مقررات|تصویب‌نامه|تصویب\s*نامه|آیین‌نامه|آیین\s*نامه)"
+_REG_KW = r"(?:بخشنامه|مصوبه|مقررات|تصویب‌نامه|تصویب\s*نامه|آیین‌نامه|آیین\s*نامه|نظریه(?:\s*مشورتی)?)"
 
 _RE_LATEST_UNITY = re.compile(
     rf"(?:{_LATEST_KW}.*?{_UNITY_KW}|{_UNITY_KW}.*?{_LATEST_KW}|{_LATEST_KW}.*?{_SUPREME_KW}.*?ر[اأ]ی|شماره.*?(?:آخرین|اخرین|جدیدترین).*?{_UNITY_KW})",
@@ -41,12 +41,33 @@ _RE_NUMBER_QUERY = re.compile(
 
 def _norm(text: str) -> str:
     s = str(text or "").translate(_DIGIT_TRANS)
-    s = s.replace("ي", "ی").replace("ك", "ک").replace("‌", " ").replace("ٔ", "")
+    s = s.replace("ي", "ی").replace("ك", "ک").replace("‌", " ").replace("ٔ", "").replace("ة", "ه").replace("ئ", "ی").replace("أ", "ا").replace("إ", "ا").replace("ؤ", "و")
     return re.sub(r"\s+", " ", s).strip()
 
 
+_ISSUER_PATTERNS = [
+    ("بانک مرکزی", re.compile(r"(?:بانک\s*مرکزی(?:\s*جمهوری\s*اسلامی(?:\s*ایران)?)?|cbi)", re.UNICODE | re.IGNORECASE)),
+    ("رئیس قوه قضاییه", re.compile(r"(?:رییس\s*قوه\s*قضاییه|ریاست\s*قوه\s*قضاییه|رییس\s*دستگاه\s*قضا)", re.UNICODE | re.IGNORECASE)),
+    ("اداره حقوقی قوه قضاییه", re.compile(r"(?:اداره\s*(?:کل\s*)?حقوقی(?:\s*قوه\s*قضاییه)?)", re.UNICODE | re.IGNORECASE)),
+    ("هیئت مقررات‌زدایی", re.compile(r"(?:هی[ییت]\s*مقررات\s*زدایی|مقررات\s*زدایی)", re.UNICODE | re.IGNORECASE)),
+    ("سازمان امور مالیاتی", re.compile(r"(?:(?:سازمان\s*)?امور\s*مالیاتی|سازمان\s*مالیاتی)", re.UNICODE | re.IGNORECASE)),
+    ("سازمان ثبت اسناد", re.compile(r"(?:(?:سازمان\s*)?ثبت\s*اسناد(?:\s*و\s*املاک)?)", re.UNICODE | re.IGNORECASE)),
+    ("سازمان تامین اجتماعی", re.compile(r"(?:(?:سازمان\s*)?تامین\s*اجتماعی)", re.UNICODE | re.IGNORECASE)),
+    ("دیوان عدالت اداری", re.compile(r"(?:دیوان\s*عدالت(?:\s*اداری)?)", re.UNICODE | re.IGNORECASE)),
+]
+
+
+def detect_issuer(text: str) -> Optional[str]:
+    """Detect issuing authority in query text using normalized Persian matching."""
+    norm_text = _norm(text)
+    for canonical, pat in _ISSUER_PATTERNS:
+        if pat.search(norm_text):
+            return canonical
+    return None
+
+
 def detect(user_text: str) -> Optional[Dict[str, Any]]:
-    """Detect if user query is asking for catalog metadata (latest rulings/regulations)."""
+    """Detect meta-queries for latest rulings/regulations."""
     if not user_text:
         return None
     if len(user_text.strip()) > 300:
@@ -74,11 +95,14 @@ def detect(user_text: str) -> Optional[Dict[str, Any]]:
         }
 
     if _RE_LATEST_REG.search(norm_text):
+        issuer = detect_issuer(norm_text)
+        is_num_ask = bool(re.search(r"شمار[هۀ]", norm_text) and _RE_NUMBER_QUERY.search(norm_text))
         return {
             "intent": "latest_regulation",
             "target": "regulation",
             "sub_collection": "regulations",
-            "is_number_ask": False,
+            "issuer": issuer,
+            "is_number_ask": is_num_ask,
         }
 
     return None
@@ -128,15 +152,11 @@ def format_deterministic_answer(
         subject = subject[:197] + "…"
 
     if is_voice:
-        if target == "unity_supreme_court":
+        if target == "regulation":
+            issuer_part = f" {body}" if body else ""
+            ans = f"پاسخ: آخرین بخشنامه یا مقرره{issuer_part} در پایگاه داده، شماره {num} مورخ {date} است."
+        elif target == "unity_supreme_court":
             ans = f"پاسخ: آخرین رأی وحدت رویه هیئت عمومی دیوان عالی کشور در پایگاه داده، رأی شماره {num} مورخ {date} است."
-        elif target == "regulation":
-            title = top.get("title")
-            if num and (not title or num not in str(title)):
-                title_str = f"{title} (شماره {num})" if title else f"بخشنامه شماره {num}"
-            else:
-                title_str = title or "بخشنامه"
-            ans = f"پاسخ: آخرین بخشنامه ثبت‌شده در پایگاه داده، {title_str} مورخ {date} از سوی {body} است."
         else:
             ans = f"پاسخ: آخرین دادنامه هیئت عمومی دیوان عدالت اداری در پایگاه داده، شماره {num} مورخ {date} است."
         if subject:

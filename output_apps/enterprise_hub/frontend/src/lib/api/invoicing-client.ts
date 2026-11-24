@@ -1,6 +1,8 @@
 import {
   CreateInvoiceDto,
   CreatePosSaleDto,
+  GrossProfitReportQueryDto,
+  GrossProfitReportResponse,
   PosSaleResponse,
   PosSyncResult,
   SyncPosSalesDto,
@@ -140,6 +142,22 @@ export async function syncPosSales(
   return apiRequest<PosSyncResult>(`${INVOICING_ENDPOINT}/pos-sales/sync`, {
     method: "POST",
     body: payload,
+    signal,
+  });
+}
+
+/** دریافت گزارش سود ناخالص به تفکیک فاکتور، کالا یا مشتری — GET /enterprise-hub/invoicing/reports/gross-profit */
+export async function getGrossProfitReport(
+  query: GrossProfitReportQueryDto,
+  signal?: AbortSignal,
+): Promise<GrossProfitReportResponse> {
+  return apiRequest<GrossProfitReportResponse>(`${INVOICING_ENDPOINT}/reports/gross-profit`, {
+    method: "GET",
+    searchParams: {
+      groupBy: query.groupBy,
+      from: query.from,
+      to: query.to,
+    },
     signal,
   });
 }
