@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { createGoodsReceipt } from "@/lib/api/purchasing-client";
-import { formatQuantity } from "./purchasing-format";
+import { formatQuantity, parseDecimalToScaledBigInt, scaledBigIntToDecimalString } from "./purchasing-format";
 import type { GoodsReceipt, PurchaseOrder } from "@/types/purchasing";
 
 interface ReceiptLineState {
@@ -16,7 +16,7 @@ interface ReceiptLineState {
   sku: string;
   orderedQty: string;
   alreadyReceivedQty: string;
-  remainingQty: number; // in normal units
+  remainingQty: string; // hundredths string
   receiveQty: string; // normal units string
   weightKg: string; // kg string
 }
@@ -42,16 +42,16 @@ export function ReceiptCreateDrawer({
   useEffect(() => {
     if (!order) return;
     const initial: ReceiptLineState[] = order.lines.map((l) => {
-      const ord = Number(l.quantity) / 100;
-      const rec = Number(l.receivedQuantity) / 100;
-      const rem = Math.max(0, ord - rec);
+      const ord = BigInt(l.quantity);
+      const rec = BigInt(l.receivedQuantity);
+      const rem = ord > rec ? ord - rec : 0n;
       return {
         orderLineId: l.id,
         sku: l.sku,
         orderedQty: l.quantity,
         alreadyReceivedQty: l.receivedQuantity,
-        remainingQty: rem,
-        receiveQty: rem > 0 ? rem.toString() : "0",
+        remainingQty: rem.toString(),
+        receiveQty: rem > 0n ? scaledBigIntToDecimalString(rem, 2) : "0",
         weightKg: "",
       };
     });
@@ -71,27 +71,40 @@ export function ReceiptCreateDrawer({
     e.preventDefault();
     setError(null);
 
-    const activeLines = lines.filter((l) => parseFloat(l.receiveQty) > 0);
+    const activeLines = lines.filter((l) => {
+      const q = parseDecimalToScaledBigInt(l.receiveQty, 2);
+      return q !== null && q > 0n;
+    });
     if (activeLines.length === 0) {
       setError("حداقل برای یک قلم کالا مقدار دریافت باید بیشتر از صفر باشد.");
       return;
     }
 
+    const payloadLines: Array<{ orderLineId: string; quantity: string; weight?: string }> = [];
+    for (const l of activeLines) {
+      const qtyHundredths = parseDecimalToScaledBigInt(l.receiveQty, 2);
+      if (qtyHundredths === null || qtyHundredths <= 0n) {
+        setError(`مقدار دریافتی برای کالای ${l.sku} نامعتبر است.`);
+        return;
+      }
+      let weightThousandths: string | undefined;
+      if (l.weightKg.trim()) {
+        const w = parseDecimalToScaledBigInt(l.weightKg, 3);
+        if (w === null) {
+          setError(`وزن واردشده برای کالای ${l.sku} نامعتبر است.`);
+          return;
+        }
+        weightThousandths = w.toString();
+      }
+      payloadLines.push({
+        orderLineId: l.orderLineId,
+        quantity: qtyHundredths.toString(),
+        weight: weightThousandths,
+      });
+    }
+
     setSubmitting(true);
     try {
-      const payloadLines = activeLines.map((l) => {
-        const qtyHundredths = Math.round(parseFloat(l.receiveQty) * 100).toString();
-        const weightThousandths = l.weightKg.trim()
-          ? Math.round(parseFloat(l.weightKg) * 1000).toString()
-          : undefined;
-
-        return {
-          orderLineId: l.orderLineId,
-          quantity: qtyHundredths,
-          weight: weightThousandths,
-        };
-      });
-
       const res = await createGoodsReceipt(order.id, {
         lines: payloadLines,
         idempotencyKey: idempotencyKey.trim() || undefined,
@@ -155,7 +168,7 @@ export function ReceiptCreateDrawer({
                       {formatQuantity(l.alreadyReceivedQty)}
                     </TableCell>
                     <TableCell className="text-center tabular-nums font-semibold text-amber-600">
-                      {l.remainingQty.toLocaleString("fa-IR")}
+                      {formatQuantity(l.remainingQty)}
                     </TableCell>
                     <TableCell>
                       <Input

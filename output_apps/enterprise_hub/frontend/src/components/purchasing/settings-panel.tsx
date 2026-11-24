@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getPurchaseSettings, updatePurchaseSettings } from "@/lib/api/purchasing-client";
-import { formatMinorMoney } from "./purchasing-format";
+import { formatMinorMoney, parseDecimalToScaledBigInt } from "./purchasing-format";
 import type { PurchaseSettings } from "@/types/purchasing";
 
 interface SettingsPanelProps {
@@ -49,7 +49,7 @@ export function SettingsPanel({ canAdmin = false }: SettingsPanelProps) {
     setMessage(null);
     setSubmitting(true);
     try {
-      const minorAbs = (BigInt(Math.round(parseFloat(priceAbsRials) || 0)) * 100n).toString();
+      const minorAbs = (parseDecimalToScaledBigInt(priceAbsRials || "0", 2) ?? 0n).toString();
       const res = await updatePurchaseSettings({
         overReceiptToleranceBp: parseInt(overBp, 10) || 0,
         priceToleranceBp: parseInt(priceBp, 10) || 0,

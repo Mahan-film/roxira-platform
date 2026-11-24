@@ -33,8 +33,8 @@ const MATCH_MAP: Record<MatchStatus, { label: string; color: string }> = {
 export function InvoiceDetailDrawer({
   invoice,
   open,
-  canApprove = true,
-  canPost = true,
+  canApprove = false,
+  canPost = false,
   onClose,
   onUpdated,
 }: InvoiceDetailDrawerProps) {

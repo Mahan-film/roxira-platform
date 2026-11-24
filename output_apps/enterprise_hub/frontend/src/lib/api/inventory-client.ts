@@ -1,4 +1,6 @@
 import {
+  CardexQueryDto,
+  CardexReportResponse,
   OpeningLine,
   OpeningReview,
   CreateAdjustmentDto,
@@ -6,6 +8,8 @@ import {
   CreateReceiptDto,
   CreateStoreDto,
   CreateTransferDto,
+  StockBalanceQueryDto,
+  StockBalanceReportResponse,
   StockDocument,
   Store,
   UpdateStoreDto,
@@ -343,6 +347,38 @@ export async function completeProductionOrder(
   return apiRequest<ProductionOrderResponse>(`${PRODUCTION_ENDPOINT}/orders/${id}/complete`, {
     method: "POST",
     body: payload,
+    signal,
+  });
+}
+
+/** دریافت گزارش کاردکس کالا — GET /enterprise-hub/inventory/reports/cardex */
+export async function getCardexReport(
+  query: CardexQueryDto,
+  signal?: AbortSignal,
+): Promise<CardexReportResponse> {
+  return apiRequest<CardexReportResponse>(`${INVENTORY_ENDPOINT}/reports/cardex`, {
+    method: "GET",
+    searchParams: {
+      sku: query.sku,
+      warehouseId: query.warehouseId,
+      from: query.from,
+      to: query.to,
+    },
+    signal,
+  });
+}
+
+/** دریافت گزارش موجودی انبار یا هشدارهای نقطه سفارش — GET /enterprise-hub/inventory/reports/stock-balance */
+export async function getStockBalanceReport(
+  query: StockBalanceQueryDto = {},
+  signal?: AbortSignal,
+): Promise<StockBalanceReportResponse> {
+  return apiRequest<StockBalanceReportResponse>(`${INVENTORY_ENDPOINT}/reports/stock-balance`, {
+    method: "GET",
+    searchParams: {
+      asOf: query.asOf,
+      view: query.view,
+    },
     signal,
   });
 }

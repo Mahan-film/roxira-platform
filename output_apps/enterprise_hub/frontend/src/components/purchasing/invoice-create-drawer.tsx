@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { createSupplierInvoice, listGoodsReceipts } from "@/lib/api/purchasing-client";
-import { formatMinorMoney, formatQuantity } from "./purchasing-format";
+import { formatMinorMoney, formatQuantity, parseDecimalToScaledBigInt } from "./purchasing-format";
 import type { GoodsReceipt, PurchaseOrder, SupplierInvoice } from "@/types/purchasing";
 
 interface InvoiceLineState {
@@ -101,28 +101,42 @@ export function InvoiceCreateDrawer({
       return;
     }
 
-    const activeLines = lines.filter((l) => parseFloat(l.invoiceQty) > 0);
+    const activeLines = lines.filter((l) => {
+      const q = parseDecimalToScaledBigInt(l.invoiceQty, 2);
+      return q !== null && q > 0n;
+    });
     if (activeLines.length === 0) {
       setError("حداقل یک قلم کالا با مقدار بیشتر از صفر باید انتخاب شود.");
       return;
     }
 
+    const payloadLines: Array<{ receiptLineId: string; quantity: string; unitPrice: string }> = [];
+    for (const l of activeLines) {
+      const qtyHundredths = parseDecimalToScaledBigInt(l.invoiceQty, 2);
+      const priceMinor = parseDecimalToScaledBigInt(l.invoiceUnitPriceRials, 2);
+      if (qtyHundredths === null || qtyHundredths <= 0n || priceMinor === null) {
+        setError(`مقدار یا قیمت واحد برای کالای ${l.sku} نامعتبر است.`);
+        return;
+      }
+      payloadLines.push({
+        receiptLineId: l.receiptLineId,
+        quantity: qtyHundredths.toString(),
+        unitPrice: priceMinor.toString(),
+      });
+    }
+
+    let vatMinor: string | undefined;
+    if (vatRials.trim()) {
+      const parsedVat = parseDecimalToScaledBigInt(vatRials, 2);
+      if (parsedVat === null) {
+        setError("مبلغ مالیات بر ارزش افزوده نامعتبر است.");
+        return;
+      }
+      vatMinor = parsedVat.toString();
+    }
+
     setSubmitting(true);
     try {
-      const payloadLines = activeLines.map((l) => {
-        const qtyHundredths = Math.round(parseFloat(l.invoiceQty) * 100).toString();
-        const priceMinor = (BigInt(Math.round(parseFloat(l.invoiceUnitPriceRials))) * 100n).toString();
-        return {
-          receiptLineId: l.receiptLineId,
-          quantity: qtyHundredths,
-          unitPrice: priceMinor,
-        };
-      });
-
-      const vatMinor = vatRials.trim()
-        ? (BigInt(Math.round(parseFloat(vatRials))) * 100n).toString()
-        : undefined;
-
       const res = await createSupplierInvoice(order.id, {
         supplierRef: supplierRef.trim(),
         invoiceDate: invoiceDate.trim(),

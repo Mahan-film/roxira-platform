@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { createLandedCost } from "@/lib/api/purchasing-client";
-import { formatMinorMoney } from "./purchasing-format";
+import { formatMinorMoney, parseDecimalToScaledBigInt } from "./purchasing-format";
 import type { GoodsReceipt, LandedCost, LandedCostBasis, LandedCostCategory } from "@/types/purchasing";
 
 interface LandedCostDrawerProps {
@@ -54,8 +54,8 @@ export function LandedCostDrawer({
     e.preventDefault();
     setError(null);
 
-    const parsedAmount = parseFloat(amountRials);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+    const parsedMinor = parseDecimalToScaledBigInt(amountRials, 2);
+    if (parsedMinor === null || parsedMinor <= 0n) {
       setError("لطفاً مبلغ هزینه سربار را به درستی وارد کنید.");
       return;
     }
@@ -72,7 +72,7 @@ export function LandedCostDrawer({
 
     setSubmitting(true);
     try {
-      const minorAmount = (BigInt(Math.round(parsedAmount)) * 100n).toString();
+      const minorAmount = parsedMinor.toString();
       const res = await createLandedCost(receipt.id, {
         category,
         basis,

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { createPurchaseOrder } from "@/lib/api/purchasing-client";
-import { formatMinorMoney } from "./purchasing-format";
+import { formatMinorMoney, parseDecimalToScaledBigInt } from "./purchasing-format";
 import type { PurchaseOrder } from "@/types/purchasing";
 
 interface OrderLineInput {
@@ -74,13 +74,13 @@ export function OrderCreateDrawer({
         setError(`لطفاً کد کالای سطر ${i + 1} را وارد کنید.`);
         return;
       }
-      const qtyNum = parseFloat(l.quantity);
-      if (isNaN(qtyNum) || qtyNum <= 0) {
+      const qtyHundredths = parseDecimalToScaledBigInt(l.quantity, 2);
+      if (qtyHundredths === null || qtyHundredths <= 0n) {
         setError(`مقدار سطر ${i + 1} نامعتبر است.`);
         return;
       }
-      const priceNum = parseFloat(l.unitPrice);
-      if (isNaN(priceNum) || priceNum < 0) {
+      const priceMinor = parseDecimalToScaledBigInt(l.unitPrice, 2);
+      if (priceMinor === null) {
         setError(`قیمت واحد سطر ${i + 1} نامعتبر است.`);
         return;
       }
@@ -89,12 +89,12 @@ export function OrderCreateDrawer({
     setSubmitting(true);
     try {
       const orderLines = lines.map((l) => {
-        const qtyHundredths = Math.round(parseFloat(l.quantity) * 100).toString();
-        const priceMinor = (BigInt(Math.round(parseFloat(l.unitPrice))) * 100n).toString();
+        const qtyHundredths = parseDecimalToScaledBigInt(l.quantity, 2) ?? 0n;
+        const priceMinor = parseDecimalToScaledBigInt(l.unitPrice, 2) ?? 0n;
         return {
           sku: l.sku.trim(),
-          quantity: qtyHundredths,
-          unitPrice: priceMinor,
+          quantity: qtyHundredths.toString(),
+          unitPrice: priceMinor.toString(),
         };
       });
 
@@ -184,10 +184,9 @@ export function OrderCreateDrawer({
 
           <div className="flex flex-col gap-2.5">
             {lines.map((line, idx) => {
-              const estRials = Math.round(
-                (parseFloat(line.quantity) || 0) * (parseFloat(line.unitPrice) || 0)
-              );
-              const estMinor = (BigInt(estRials) * 100n).toString();
+              const qtyH = parseDecimalToScaledBigInt(line.quantity, 2) ?? 0n;
+              const priceM = parseDecimalToScaledBigInt(line.unitPrice, 2) ?? 0n;
+              const estMinor = ((qtyH * priceM) / 100n).toString();
 
               return (
                 <div

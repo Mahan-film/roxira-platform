@@ -82,7 +82,7 @@ const ev = (status: InvoiceStatus) => ({ tenantId: T, invoiceId: 'inv-1', status
 const shape = (lines: Array<{ accountCode: string; debit?: string | number; credit?: string | number }>) =>
   lines.map((l) => ({ accountCode: l.accountCode, debit: toMinor(l.debit ?? 0), credit: toMinor(l.credit ?? 0) }));
 const legacyShape = (lines: LegacyLine[]) => shape(lines);
-const plain = (i: InvoiceEntity): LegacyInvoice => ({ sale: i.direction === InvoiceDirection.SALE, taxInvoiceNumber: i.taxInvoiceNumber, fxRate: i.fxRate, payments: i.payments });
+const plain = (i: InvoiceEntity): LegacyInvoice => ({ sale: i.direction === InvoiceDirection.SALE, taxInvoiceNumber: i.taxInvoiceNumber, fxRate: Number(i.fxRate), payments: i.payments });
 
 describe('invoice vouchers: engine vs the frozen old line building', () => {
   it('sale: AR 1100 / sales 1000 + VAT 100, stock out at 600 (hand: 110000, 100000, 10000, -60000 minor)', async () => {
@@ -106,6 +106,15 @@ describe('invoice vouchers: engine vs the frozen old line building', () => {
 
   it('foreign-currency sale at rate 920000 (hand: 1100 USD x 920000 = 1,012,000,000 rial; VAT 92,000,000)', async () => {
     const i = invoice({ currency: Currency.USD, fxRate: 920000 });
+    const { posting, dto } = harness([i]);
+    await posting.handle(ev(InvoiceStatus.ISSUED));
+    const old = legacyDocumentLines(plain(i), { receivable: toMinor(1012000000), vat: toMinor(92000000), net: toMinor(920000000), stock: -60000n }, LEGACY, false);
+    expect(shape(dto(0).lines)).toEqual(legacyShape(old));
+    expect(dto(0).lines[0]).toMatchObject({ accountCode: '1201', debit: '1012000000.00' });
+  });
+
+  it('handles string fxRate without calling .toFixed or losing precision (LESSONS 8)', async () => {
+    const i = invoice({ currency: Currency.USD, fxRate: '920000.000000' } as never);
     const { posting, dto } = harness([i]);
     await posting.handle(ev(InvoiceStatus.ISSUED));
     const old = legacyDocumentLines(plain(i), { receivable: toMinor(1012000000), vat: toMinor(92000000), net: toMinor(920000000), stock: -60000n }, LEGACY, false);
