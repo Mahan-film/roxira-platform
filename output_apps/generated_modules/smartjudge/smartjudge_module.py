@@ -2355,7 +2355,6 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         cat_context_str = _catalog_intent.build_catalog_context(cat_rows, target=target)
         if cat_rows:
             if target == "regulation":
-                from output_apps.generated_modules.smartjudge import regulations_retrieval as _regs
                 precedents = _regs.merge_regulations(precedents, cat_rows)
             else:
                 precedents = _rulings.merge_rulings(precedents, cat_rows)
