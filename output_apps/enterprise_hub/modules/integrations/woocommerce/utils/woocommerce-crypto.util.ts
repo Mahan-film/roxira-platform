@@ -91,6 +91,8 @@ export function assertSafeStoreUrl(rawUrl: string): URL {
   return parsed;
 }
 
+const DNS_LOOKUP_TIMEOUT_MS = 5000;
+
 /**
  * Validates `rawUrl` and resolves DNS A/AAAA records, rejecting any private/loopback IP.
  */
@@ -100,7 +102,15 @@ export async function assertSafeStoreUrlWithDns(rawUrl: string): Promise<{ parse
   if (net.isIP(host)) {
     return { parsed, resolvedIps: [host] };
   }
-  const records = await dns.lookup(host, { all: true });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const records = await Promise.race([
+    dns.lookup(host, { all: true }),
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('WooCommerce storeUrl DNS lookup timed out')), DNS_LOOKUP_TIMEOUT_MS);
+    }),
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
   const resolvedIps = records.map((r) => r.address);
   if (resolvedIps.length === 0 || resolvedIps.some((ip) => isPrivateIp(ip))) {
     throw new Error('WooCommerce storeUrl resolves to a private or loopback address');

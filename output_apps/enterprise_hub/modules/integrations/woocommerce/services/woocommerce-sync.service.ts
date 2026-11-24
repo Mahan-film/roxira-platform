@@ -52,10 +52,10 @@ function minorToNumber(minor: bigint): number {
   const decStr = minorToDecimal(minor);
   const n = Number(decStr);
   if (!Number.isFinite(n)) {
-    throw new Error(`Amount ${decStr} cannot be safely converted to number`);
+    throw new BadRequestException(`Amount ${decStr} cannot be safely converted to number`);
   }
   if (Math.abs(n) > Number.MAX_SAFE_INTEGER) {
-    throw new Error(`Amount ${decStr} exceeds Number.MAX_SAFE_INTEGER precision`);
+    throw new BadRequestException(`Amount ${decStr} exceeds Number.MAX_SAFE_INTEGER precision`);
   }
   return n;
 }
@@ -181,8 +181,8 @@ export class WooCommerceSyncService {
 
     let webhookSecretEncrypted: string;
     let generatedWebhookSecret: string | undefined;
-    if (!isMaskedSecretInput(dto.webhookSecret)) {
-      webhookSecretEncrypted = sealSecret(dto.webhookSecret!.trim(), tenantId);
+    if (typeof dto.webhookSecret === 'string' && !isMaskedSecretInput(dto.webhookSecret)) {
+      webhookSecretEncrypted = sealSecret(dto.webhookSecret.trim(), tenantId);
     } else if (existing?.webhookSecretEncrypted) {
       webhookSecretEncrypted = existing.webhookSecretEncrypted;
     } else {
