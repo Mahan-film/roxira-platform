@@ -271,7 +271,7 @@ describePg('R16 core acceptance on PostgreSQL', () => {
         `SELECT gl_audit_number::text, prev_chain_hash, chain_hash FROM fin_journal_entries WHERE id = $1`,
         [j43!.id],
       );
-      expect(Number(row43.gl_audit_number)).toBe(Number(row42.gl_audit_number) + 1);
+      expect(BigInt(row43.gl_audit_number)).toBe(BigInt(row42.gl_audit_number) + 1n);
       expect(row43.prev_chain_hash).toBe(row42.chain_hash);
       expect(row43.chain_hash).toMatch(/^[a-f0-9]{64}$/);
     });
