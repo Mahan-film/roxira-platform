@@ -16,14 +16,46 @@ export interface QuotationPrintMeta {
   buyerEconomicCode?: string;
   buyerAddress?: string;
   buyerPhone?: string;
-  vatRate?: number;
+  vatRate?: number | string;
 }
 
 const ZERO = BigInt(0);
-const FIFTY = BigInt(50);
 const HUNDRED = BigInt(100);
+const FIVE_THOUSAND = BigInt(5000);
+const TEN_THOUSAND = BigInt(10000);
+const DEFAULT_VAT_BPS = BigInt(1000);
 const MAX_SAFE_BIG = BigInt(Number.MAX_SAFE_INTEGER);
 const MIN_SAFE_BIG = -MAX_SAFE_BIG;
+
+function parseVatRateBps(val?: number | string): bigint {
+  if (val === undefined || val === null) return DEFAULT_VAT_BPS;
+  const s = String(val).trim();
+  if (!s) return DEFAULT_VAT_BPS;
+  const match = /^(\d+)(?:\.(\d+))?$/.exec(s);
+  if (!match) {
+    throw new Error(`Invalid VAT rate: ${s}`);
+  }
+  const whole = BigInt(match[1]);
+  const fracRaw = match[2] ?? '';
+  const frac4 = BigInt(fracRaw.padEnd(4, '0').slice(0, 4));
+  // Values > 1 are percentages (e.g. 9 -> 900 bps, 9.5 -> 950 bps); <= 1 are fractions (e.g. 0.09 -> 900 bps).
+  if (whole > BigInt(1) || (whole === BigInt(1) && frac4 > ZERO)) {
+    const frac2 = BigInt(fracRaw.padEnd(2, '0').slice(0, 2));
+    return whole * HUNDRED + frac2;
+  }
+  return whole * TEN_THOUSAND + frac4;
+}
+
+function formatVatRatePercent(bps: bigint): string {
+  const whole = bps / HUNDRED;
+  const rem = bps % HUNDRED;
+  if (rem === ZERO) {
+    return `${formatNumber(Number(whole))}٪`;
+  }
+  const remStr = rem.toString().padStart(2, '0').replace(/0+$/, '');
+  const remFa = remStr.replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
+  return `${formatNumber(Number(whole))}.${remFa}٪`;
+}
 
 function parseRialMinor(val: unknown): bigint {
   if (val === null || val === undefined) return ZERO;
@@ -65,9 +97,8 @@ export function mapQuotationToSalesInvoiceA4Data(
   meta: QuotationPrintMeta = {},
 ): Record<string, unknown> {
   const lines = quotation.lines ?? [];
-  const rawRate = typeof meta.vatRate === 'number' && meta.vatRate >= 0 ? meta.vatRate : 0.1;
-  const vatRate = rawRate > 1 ? rawRate / 100 : rawRate;
-  const vatRatePercent = Math.round(vatRate * 100);
+  const vatBps = parseVatRateBps(meta.vatRate);
+  const vatRateLabel = formatVatRatePercent(vatBps);
 
   let totalDiscountBig = ZERO;
   let linesTotalBig = ZERO;
@@ -82,7 +113,7 @@ export function mapQuotationToSalesInvoiceA4Data(
     totalDiscountBig += dBig;
     const subtotalBig = qBig * pBig - dBig;
     linesTotalBig += subtotalBig;
-    const itemVatBig = (subtotalBig * BigInt(vatRatePercent) + FIFTY) / HUNDRED;
+    const itemVatBig = (subtotalBig * vatBps + FIVE_THOUSAND) / TEN_THOUSAND;
     totalLineVatBig += itemVatBig;
     const lineTotalBig = subtotalBig + itemVatBig;
     return {
@@ -95,7 +126,7 @@ export function mapQuotationToSalesInvoiceA4Data(
       amountBeforeDiscount: formatBigIntRial(qBig * pBig),
       discount: formatBigIntRial(dBig),
       amountAfterDiscount: formatBigIntRial(subtotalBig),
-      vatRate: `${formatNumber(vatRatePercent)}٪`,
+      vatRate: vatRateLabel,
       vatAmount: formatBigIntRial(itemVatBig),
       lineTotal: formatBigIntRial(lineTotalBig),
     };
@@ -108,7 +139,7 @@ export function mapQuotationToSalesInvoiceA4Data(
 
   const amountBeforeDiscountBig = totalAmountBig + totalDiscountBig;
   const totalVatBig =
-    mappedLines.length > 0 ? totalLineVatBig : (totalAmountBig * BigInt(vatRatePercent) + FIFTY) / HUNDRED;
+    mappedLines.length > 0 ? totalLineVatBig : (totalAmountBig * vatBps + FIVE_THOUSAND) / TEN_THOUSAND;
   const grandTotalBig = totalAmountBig + totalVatBig;
 
   const validUntilNote = quotation.validUntil

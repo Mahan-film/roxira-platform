@@ -115,3 +115,14 @@ test('ensures sum of line VATs exactly matches document total VAT and supports z
   const totals = data.totals as Record<string, string>;
   assert.ok(totals.vat);
 });
+
+test('computes 0.09 and 10 VAT rates with exact BigInt basis-point arithmetic', () => {
+  const q09 = mapQuotationToSalesInvoiceA4Data(fixture(), { vatRate: 0.09 });
+  const lines09 = q09.lines as Array<{ vatRate: string; vatAmount: string }>;
+  assert.equal(lines09[0].vatRate, '۹٪');
+  assert.equal(lines09[0].vatAmount, '۹۰٬۰۰۰');
+  assert.equal((q09.totals as { vat: string }).vat, '۹۰٬۰۰۰');
+
+  const q10 = mapQuotationToSalesInvoiceA4Data(fixture({ lines: [] }), { vatRate: 10 });
+  assert.equal((q10.totals as { vat: string }).vat, '۱۰۰٬۰۰۰');
+});
