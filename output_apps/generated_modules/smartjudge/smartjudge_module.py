@@ -33,6 +33,7 @@ from output_apps.generated_modules.smartjudge import prompt_library as _prompt_l
 from output_apps.generated_modules.smartjudge import source_filter as _source_filter
 from output_apps.generated_modules.smartjudge import rulings_retrieval as _rulings
 from output_apps.generated_modules.smartjudge import catalog_intent as _catalog_intent
+from output_apps.generated_modules.smartjudge import judiciary_circulars_retrieval as _circulars
 from output_apps.generated_modules.smartjudge import regulations_retrieval as _regs
 from output_apps.generated_modules.smartjudge import laws_public as _laws_public
 from output_apps.generated_modules.smartjudge import regulations_public as _regulations_public
@@ -1043,12 +1044,18 @@ async def _aquery_knowledge_graph_uncached(query_text: str, limit: int = 3, meta
     rulings_task = asyncio.ensure_future(_rulings.retrieve_rulings(query_text)) if _rulings.enabled() else None
     # بخشنامه‌ها و مقررات: فقط با SMARTJUDGE_REGULATIONS_COLLECTION، موازی با قوانین.
     regs_task = asyncio.ensure_future(_regs.retrieve_regulations(query_text)) if _regs.enabled() else None
+    # بخشنامه‌های قوه قضائیه: فقط با JUDICIARY_CIRCULARS_COLLECTION و برای پرسش‌های بخشنامه‌ای.
+    circulars_task = (
+        asyncio.ensure_future(_circulars.retrieve_judiciary_circulars(query_text))
+        if (_circulars.enabled() and _circulars.is_circular_question(query_text))
+        else None
+    )
     try:
         retrieval, sql_result, lr_exc, sql_exc = await _chat_fast.parallel_retrieve(
             _qdrant_branch, _sql_branch if _dual_retrieve is not None else None
         )
     except BaseException:
-        for task in (rulings_task, regs_task):
+        for task in (rulings_task, regs_task, circulars_task):
             if task is not None and not task.done():
                 task.cancel()  # never leave a parallel search pending
         raise
@@ -1117,6 +1124,14 @@ async def _aquery_knowledge_graph_uncached(query_text: str, limit: int = 3, meta
             print(f"[SMARTJUDGE][REGULATIONS-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
             reg_rows = []
         precedents = list(precedents or []) + [r for r in reg_rows if r not in (precedents or [])]
+
+    if circulars_task is not None:
+        try:
+            circular_rows = await circulars_task
+        except Exception as exc:  # pragma: no cover - defensive; retrieve_judiciary_circulars already swallows errors
+            print(f"[SMARTJUDGE][CIRCULARS-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
+            circular_rows = []
+        precedents = _circulars.merge_circulars(precedents, circular_rows)
 
     if meta_out is not None:
         meta_out.update(
@@ -2346,7 +2361,6 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         cat_context_str = _catalog_intent.build_catalog_context(cat_rows, target=target)
         if cat_rows:
             if target == "regulation":
-                from output_apps.generated_modules.smartjudge import regulations_retrieval as _regs
                 precedents = _regs.merge_regulations(precedents, cat_rows)
             else:
                 precedents = _rulings.merge_rulings(precedents, cat_rows)
