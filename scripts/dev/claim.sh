@@ -78,8 +78,8 @@ if [ -n "$wt_root" ] && ! { [ -d "$wt_root" ] && [ -w "$wt_root" ]; }; then
   echo "ROXIRA_WT_ROOT=$wt_root is not a writable folder; unset it or mount the work disk" >&2
   exit 1
 fi
-if [ -z "$wt_root" ] && [ "${ROXIRA_ALLOW_INTERNAL_WT:-0}" != "1" ]; then
-  echo "Work disk is not mounted (ROXIRA_WT_ROOT is unset). Mount /Volumes/ssd/roxira-work or set ROXIRA_ALLOW_INTERNAL_WT=1 to override." >&2
+if [ -z "$wt_root" ] && [ "$(uname)" = "Darwin" ] && [ -z "${ROXIRA_ALLOW_INTERNAL_WT:-}" ]; then
+  echo "ROXIRA_WT_ROOT is unset and work disk is not mounted: refusing to create a worktree on the internal disk (set ROXIRA_ALLOW_INTERNAL_WT=1 to override)" >&2
   exit 1
 fi
 wt="${wt_root:-$root/../roxira-wt}/$issue-$slug"

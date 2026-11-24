@@ -47,6 +47,8 @@ def box(tmp_path):
     _stub(bindir / "sleep", "exit 0\n")
     _stub(bindir / "id", 'if [ "$1" = -u ] && [ -n "${2:-}" ]; then echo 1001; else echo 0; fi\n')
     _stub(bindir / "df", "echo df-ok\n")
+    _stub(bindir / "rm", '/bin/rm "$@"\n')
+    _stub(bindir / "realpath", 'for a in "$@"; do if [ "$a" != -e ]; then python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$a"; fi; done\n')
     src_dir = tmp / "home/Secrets"
     src_dir.mkdir(parents=True)
     dst_dir = tmp / "srv/agent"
@@ -61,7 +63,8 @@ def box(tmp_path):
         "SRC_ENV": str(src), "DST_ENV": str(dst), "LOCK": str(tmp / "lock"), "REBOOT_FLAG": str(tmp / "none"),
         "SENSORS": str(tmp / "nosensors"), "PROXY": "http://127.0.0.1:1",
         **{n: str(bindir / b) for n, b in [("CURL", "curl"), ("SYSTEMCTL", "systemctl"), ("RUNUSER", "runuser"), ("LOGGER", "logger"),
-                                              ("FLOCK", "flock"), ("IDBIN", "id"), ("CHOWN", "chown"), ("SLEEP", "sleep"), ("DFBIN", "df")]},
+                                              ("FLOCK", "flock"), ("IDBIN", "id"), ("CHOWN", "chown"), ("SLEEP", "sleep"), ("DFBIN", "df"),
+                                              ("REALPATH", "realpath"), ("RMBIN", "rm")]},
     }
     for k, v in repl.items():
         text, n = re.subn(rf"^{k}=.*$", f"{k}={v}", text, flags=re.M)

@@ -50,7 +50,24 @@ export function formatJalaliDateTime(
 }
 
 /** Plain number with Persian digits and thousand separators. */
-export function formatNumber(value?: number | null): string {
+export function formatNumber(value?: number | string | bigint | null): string {
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "bigint") {
+    return NUMBER_FMT.format(value);
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return "—";
+    if (/^-?\d+$/.test(trimmed)) {
+      try {
+        return NUMBER_FMT.format(BigInt(trimmed));
+      } catch {
+        // fallback
+      }
+    }
+    const n = Number(trimmed);
+    return Number.isFinite(n) ? NUMBER_FMT.format(n) : "—";
+  }
   return typeof value === "number" && Number.isFinite(value)
     ? NUMBER_FMT.format(value)
     : "—";

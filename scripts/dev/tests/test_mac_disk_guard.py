@@ -87,6 +87,7 @@ def test_tier2_removes_only_idle_safe_worktree(tmp_path: Path) -> None:
     idle_safe = _make_worktree(repo, wt_root / "idle-safe", "idle-safe", push=True, age_hours=6)
 
     proc = subprocess.Popen(["sleep", "30"], cwd=str(in_use))
+    time.sleep(0.1)
     try:
         env = os.environ.copy()
         env.update(

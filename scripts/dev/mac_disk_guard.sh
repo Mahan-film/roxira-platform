@@ -92,8 +92,8 @@ is_wt_idle() {
 
 is_cwd_in_use() {
   local wt="$1"
-  command -v lsof >/dev/null 2>&1 || return 1
-  lsof -d cwd -Fn 2>/dev/null | grep -q "^n${wt}"
+  command -v lsof >/dev/null 2>&1 || return 0
+  lsof -d cwd -Fn 2>/dev/null | grep -Fq "n${wt}"
 }
 
 is_wt_safe_to_remove() {
@@ -148,6 +148,7 @@ clean_rvdesk_tmp() {
   [ -d "$TMP_RVDESK" ] || { echo 0; return; }
   for wt in "$TMP_RVDESK"/wt-*; do
     [ -d "$wt" ] || continue
+    git -C "$wt" rev-parse --git-dir >/dev/null 2>&1 || continue
     is_cwd_in_use "$wt" && continue
     is_wt_idle "$wt" "$hours" || continue
     [ -n "$(git -C "$wt" status --porcelain 2>/dev/null)" ] && continue
@@ -210,8 +211,9 @@ fi
 # Tier 3 (< 8 GB): same rule with 1h idle + alert.
 if ! enough "$TIER3_GB"; then
   r3=$(remove_safe_worktrees "$TIER3_IDLE_HOURS")
+  t3=$(clean_rvdesk_tmp "$TIER3_IDLE_HOURS")
   end=$(free_gb)
-  log "ALERT: internal disk critically low (${end} GB free); tier 3 removed $r3 worktrees"
+  log "ALERT: internal disk critically low (${end} GB free); tier 3 removed $r3 worktrees, $t3 rvdesk temp"
   osascript -e "display notification \"Only ${end} GB free after tier 3 cleanup.\" with title \"Roxira disk guard\"" >/dev/null 2>&1 || true
 fi
 
