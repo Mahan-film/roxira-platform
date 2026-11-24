@@ -14,6 +14,7 @@ Rulings are an unofficial copy (ekhtebar.ir), shown as such: ``source_tier`` tra
 from __future__ import annotations
 
 import asyncio
+import datetime
 import logging
 import os
 import re
@@ -268,26 +269,81 @@ def _matches_issuer(payload: dict, issuer_query: str) -> bool:
     return bool(words) and all(w in nf for w in words)
 
 
-def parse_and_sort(rows: Iterable[dict]) -> List[dict]:
-    """Sort ruling/regulation payloads/rows descending by date then by integer number."""
-    def _key(r: dict):
-        date_raw = str(
-            r.get("date_iso")
-            or r.get("approval_date")
-            or r.get("approved_on")
-            or r.get("date")
-            or r.get("meeting_date")
-            or ""
-        ).strip().translate(_DIGIT_TRANS)
-        date_iso = str(r.get("date_iso") or r.get("approval_date") or "").strip().replace("/", "-")
-        fa_tuple = (0, 0, 0)
-        if date_raw:
-            parts = [int(p) for p in re.findall(r"\d+", date_raw)]
-            if len(parts) >= 3:
-                fa_tuple = (parts[0], parts[1], parts[2])
-            elif len(parts) == 1:
-                fa_tuple = (parts[0], 0, 0)
+_ISO_DATE_RE = re.compile(r"^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$")
 
+
+def _jalali_to_gregorian(jy: int, jm: int, jd: int) -> Optional[datetime.date]:
+    """Convert a Jalali (Solar Hijri) date to Gregorian datetime.date, or None if invalid."""
+    if not (1280 <= jy <= 1500 and 1 <= jm <= 12):
+        return None
+    max_day = 31 if jm <= 6 else 30
+    if not (1 <= jd <= max_day):
+        return None
+    jy_adj = jy - 979
+    jm_adj = jm - 1
+    jd_adj = jd - 1
+    j_day_no = 365 * jy_adj + (jy_adj // 33) * 8 + ((jy_adj % 33 + 3) // 4)
+    for i in range(jm_adj):
+        j_day_no += 31 if i < 6 else 30
+    j_day_no += jd_adj
+    g_day_no = j_day_no + 79
+    gy = 1600 + 400 * (g_day_no // 146097)
+    g_day_no %= 146097
+    leap = True
+    if g_day_no >= 36525:
+        g_day_no -= 1
+        gy += 100 * (g_day_no // 36524)
+        g_day_no %= 36524
+        if g_day_no >= 365:
+            g_day_no += 1
+        else:
+            leap = False
+    gy += 4 * (g_day_no // 1461)
+    g_day_no %= 1461
+    if g_day_no >= 366:
+        leap = False
+        g_day_no -= 1
+        gy += g_day_no // 365
+        g_day_no %= 365
+    gd_months = [31, 29 if leap else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    gm = 0
+    while gm < 12 and g_day_no >= gd_months[gm]:
+        g_day_no -= gd_months[gm]
+        gm += 1
+    try:
+        return datetime.date(gy, gm + 1, g_day_no + 1)
+    except ValueError:
+        return None
+
+
+def _validated_iso_date_tuple(r: dict) -> tuple[int, int, int]:
+    """Parse only a validated, plausible, non-future ISO YYYY-MM-DD date (Jalali or Gregorian)."""
+    today = datetime.date.today()
+    for field in ("date_iso", "approval_date", "approved_on", "date", "meeting_date"):
+        raw = str(r.get(field) or "").strip().translate(_DIGIT_TRANS)
+        if not raw:
+            continue
+        m = _ISO_DATE_RE.match(raw)
+        if not m:
+            continue
+        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        g_date: Optional[datetime.date] = None
+        if 1900 <= y <= today.year:
+            try:
+                g_date = datetime.date(y, mo, d)
+            except ValueError:
+                g_date = None
+        elif 1280 <= y <= 1500:
+            g_date = _jalali_to_gregorian(y, mo, d)
+        if g_date is not None and g_date <= today:
+            return (g_date.year, g_date.month, g_date.day)
+    return (0, 0, 0)
+
+
+def parse_and_sort(rows: Iterable[dict]) -> List[dict]:
+    """Sort ruling/regulation payloads/rows descending by validated ISO date then by integer number."""
+    def _key(r: dict):
+        date_tuple = _validated_iso_date_tuple(r)
         raw_num = str(
             r.get("number")
             or r.get("document_number")
@@ -299,8 +355,8 @@ def parse_and_sort(rows: Iterable[dict]) -> List[dict]:
         num_val = int(num_m[-1]) if num_m else 0
         if not num_m and r.get("title"):
             t_m = re.findall(r"\d+", str(r.get("title")).translate(_DIGIT_TRANS))
-            num_val = int(t_m[0]) if t_m else 0
-        return (date_iso, fa_tuple, num_val)
+            num_val = int(t_m[-1]) if t_m else 0
+        return (date_tuple, num_val)
 
     return sorted(list(rows or []), key=_key, reverse=True)
 
@@ -436,6 +492,10 @@ async def latest_rulings(
     filtered = []
     for r in raw_payloads:
         if is_reg:
+            if r.get("is_active") is False:
+                continue
+            if str(r.get("status") or "") not in ("active", "ACTIVE"):
+                continue
             if issuer and not _matches_issuer(r, issuer):
                 continue
             filtered.append(r)
@@ -452,9 +512,19 @@ async def latest_rulings(
         else:
             filtered.append(r)
 
-    # 4. Sort descending by date and number
+    # 4. Sort descending by date and number; for regulations, prefer official reviewed rows over unofficial/unreviewed
     sorted_items = parse_and_sort(filtered)
     if is_reg:
+        sorted_items = sorted(
+            sorted_items,
+            key=lambda r: 1
+            if (
+                str(r.get("source_tier") or "").strip().lower() == "official"
+                and not bool(r.get("needs_review"))
+            )
+            else 0,
+            reverse=True,
+        )
         from output_apps.generated_modules.smartjudge import regulations_retrieval as _regs
         rows = [_regs.payload_to_row(p) for p in sorted_items]
     else:
