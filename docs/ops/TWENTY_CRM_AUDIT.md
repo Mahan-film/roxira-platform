@@ -22,16 +22,25 @@ This audit evaluates the licensing, production status, and strategic architectur
 
 | Component | Upstream Licence | Classification in Licence Gate (#999) | Impact on Roxira Platform |
 |---|---|:---:|---|
-| **Twenty Server Core** (`twentyhq/twenty`) | **AGPLv3** (GNU Affero GPL v3) | **BLOCKED** | Section 13 requires complete source code disclosure to all users interacting with the software across a computer network. Incompatible with Roxira's commercial proprietary enterprise architecture. |
+| **Twenty Server Core** (`twentyhq/twenty`) | **AGPLv3** (GNU Affero GPL v3) | **BLOCKED** | Section 13 requires complete source code disclosure to all users interacting with the software across a computer network. Incompatible with Roxira's commercial proprietary enterprise architecture if modified. |
 | **Twenty Enterprise Modules** | **Proprietary Commercial** (`@license Enterprise`) | **BLOCKED** | Server features (e.g. enterprise SSO, advanced RBAC, audit logs) require paid commercial licenses from TwentyHQ and cannot be freely self-hosted in multi-tenant commercial offerings. |
 | **Twenty Client SDK** | **MIT** | PERMISSIVE | Permissive client library, but unused since Roxira uses native REST/OpenAPI client contracts. |
 | **Twenty Stack Databases** (`postgres:16`, `redis:7`) | PostgreSQL / RSALv2-SSPL | SEPARATE | Redundant database engines requiring dual-major PostgreSQL maintenance (Postgres 16 alongside Roxira's primary Postgres 17). |
 
-### Autonomous Engineering Standard Compliance:
-Per `AGENTS.md` and `docs/strategy/ARCHITECTURE_DECISIONS_2026-11-16.md`:
+### Autonomous Engineering Standard Compliance & AGPLv3 Section 13 Boundary:
+Per `AGENTS.md`, `docs/strategy/ARCHITECTURE_DECISIONS_2026-11-16.md`, and issue #1387 / #1396:
 > *"No adoption of outside suites (Twenty, NocoBase, Teable, Plane, Huly, Medusa). They are AGPL or a second platform... We use them as UX references only."*
 
-Twenty CRM is classified as **BLOCKED** under the runtime licence gate.
+#### Exact AGPLv3 Boundary & File:Line Evidence:
+1. **Unmodified Upstream Image**: Roxira runs strictly the unmodified upstream image `twentycrm/twenty:v2.41.0` (`docs/ops/TWENTY_CRM_AUDIT.md#L41`). We do not maintain, build, or fork Twenty code.
+2. **Strict API-Only Isolation**: We talk to Twenty exclusively over its HTTP REST API via `scripts/ops/crm/sync_to_twenty.py`:
+   - `scripts/ops/crm/sync_to_twenty.py#L2-L15`: Python stdlib script reading our Postgres read-only and upserting into Twenty over its REST API (`TWENTY_API_URL`, default `http://roxira_twenty_crm:3000`).
+   - `scripts/ops/crm/sync_to_twenty.py#L190-L224`: `TwentyClient._req` uses Python's standard `urllib.request` to issue standard HTTP requests (`POST`, `PATCH`, `GET`) to `/rest/{path}`.
+   - `scripts/ops/crm/sync_to_twenty.py#L14-L28`: Zero imports of Twenty libraries or npm packages; standard library and psycopg only.
+   - `scripts/ops/crm/roxira-crm-sync.service#L14`: Integration executed as a decoupled background service stdin script.
+3. **AGPL Section 13 Trigger**: AGPLv3 Section 13 (Remote Network Interaction) requires source code disclosure if an entity **modifies** the program and provides network access. Running an unmodified upstream container behind a decoupled REST API prevents copyleft contagion. **ANY modification of Twenty itself triggers AGPLv3 section 13 and strictly requires owner approval and explicit sentence.** Modifying Twenty core is prohibited.
+
+Twenty CRM is classified as **BLOCKED** for core adoption or modification under the runtime licence gate.
 
 ---
 

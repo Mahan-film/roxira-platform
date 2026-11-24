@@ -139,6 +139,25 @@ def split_regulations(rows: Optional[Sequence[Any]]) -> tuple:
     return regs, others
 
 
+def merge_regulations(precedents: Optional[Sequence[Any]], regulations: Optional[Sequence[Any]]) -> List[Any]:
+    """Existing precedents first (unchanged order), regulation rows appended; a regulation whose (doc_id, chunk_index)
+    or (ref, title) is already present is not added twice."""
+    out = list(precedents or [])
+    have = {(r.get("doc_id"), r.get("chunk_index")) for r in out if is_regulation(r)}
+    have_ref = {(r.get("ref"), r.get("title")) for r in out if is_regulation(r)}
+    for r in regulations or []:
+        key = (r.get("doc_id"), r.get("chunk_index"))
+        if key != (None, None) and key in have:
+            continue
+        ref_key = (r.get("ref"), r.get("title"))
+        if ref_key != (None, None) and ref_key in have_ref:
+            continue
+        have.add(key)
+        have_ref.add(ref_key)
+        out.append(r)
+    return out
+
+
 def _short(text: Any, limit: int) -> str:
     s = " ".join(str(text or "").split())
     return s if len(s) <= limit else s[: max(0, limit - 1)].rstrip() + "…"
@@ -218,3 +237,20 @@ async def retrieve_regulations(
     except Exception as exc:  # noqa: BLE001 - regulations are an optional extra, never break the answer
         logger.warning("regulations retrieval failed: %s", exc)
         return []
+
+
+async def latest_regulations(
+    limit: int = 5,
+    coll_name: Optional[str] = None,
+    issuer: Optional[str] = None,
+    as_of: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Return latest regulations sorted descending by date/number (cached 10m)."""
+    from output_apps.generated_modules.smartjudge import rulings_retrieval as _rr
+    return await _rr.latest_rulings(
+        limit=limit,
+        sub_collection="regulations",
+        coll_name=coll_name,
+        issuer=issuer,
+        as_of=as_of,
+    )
