@@ -42,7 +42,17 @@ export class ChartTemplateService {
       const missing = template.accounts.filter((account) => !existing.has(account.code));
       await this.accountingRepository.insertMissingAccounts(
         tenantId,
-        missing.map((account) => ({ ...account, currency: Currency.IRR, balance: '0' })),
+        // standardKolCode and contra are template metadata only; the account row has no column for them.
+        missing.map(({ code, name, accountType, level, parentCode, reportLine }) => ({
+          code,
+          name,
+          accountType,
+          level,
+          parentCode,
+          reportLine,
+          currency: Currency.IRR,
+          balance: '0',
+        })),
         manager,
       );
       let classified = 0;

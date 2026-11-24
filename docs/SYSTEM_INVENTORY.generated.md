@@ -57,6 +57,7 @@ run `python3 scripts/gen_system_inventory.py` (CI-style check: `--check`).
 | rx-automerge.yml | RX auto-merge | workflow_dispatch, workflow_run |
 | tech-radar-weekly.yml | Tech radar weekly | workflow_dispatch |
 | uptime.yml | Uptime check (production) | schedule, workflow_dispatch |
+| zap-baseline-nightly.yml | Nightly OWASP ZAP baseline scan | schedule, workflow_dispatch |
 
 ## Packages
 
@@ -69,7 +70,7 @@ run `python3 scripts/gen_system_inventory.py` (CI-style check: `--check`).
 
 - pyproject requires-python: `>=3.13`
 - Dockerfile.prod base image: `python:3.11-slim`
-- pyproject.toml: httpx >=0.28.1, pydantic >=2.13.4
+- pyproject.toml: fastapi >=0.115.0, httpx >=0.28.1, pydantic >=2.13.4
 - Dockerfile.prod: fastapi ==0.143.0, httpx (unpinned), pydantic (unpinned)
 
 ## Model roles (config/models.yaml)

@@ -86,6 +86,20 @@ gateway:
     # Groq answers 403 and Gemini 400 ("location not supported") when the caller IP is wrong; OpenRouter flips.
     # LiteLLM only cools 429/401/5xx by default: count 400/403 (and timeouts) too so a bad key/region leaves the
     # rotation at once and traffic moves on (owner 2026-11-05, gateway on srv1).
+    # Retries per error type (each retry lands on ANOTHER deployment: the failed one is already cooling).
+    # 429 / 401 / 5xx move to a sibling key twice before the rank ladder drops a tier; a 400 once (wrong-region
+    # 400s are key-specific, see below); content-policy blocks never (same prompt, same answer). Overrides
+    # num_retries per error type. Added 2026-11-23 with the fallback-chain audit.
+    retry_policy:
+      RateLimitErrorRetries: 2
+      AuthenticationErrorRetries: 2
+      InternalServerErrorRetries: 2
+      TimeoutErrorRetries: 1
+      BadRequestErrorRetries: 1
+      ContentPolicyViolationErrorRetries: 0
+    # max_fallbacks is NOT set here: render_litellm.py sets it to the longest rendered chain + 1. LiteLLM caps
+    # a fallback chain at 5 by default, and ladders such as gemini-best (10 ranks) or best-product-free (12)
+    # would otherwise never reach their lower ranks or the paid/private tail.
     allowed_fails_policy:
       BadRequestErrorAllowedFails: 1
       AuthenticationErrorAllowedFails: 1

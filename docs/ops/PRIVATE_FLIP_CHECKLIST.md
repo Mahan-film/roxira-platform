@@ -4,7 +4,7 @@ Goal: make `Mahan-film/roxira-platform` private on the **Free** plan without mer
 stopping. Plan and owner decision: `docs/strategy/PRIVATE_REPO_PLAN_2026-11-17.md` (option A,
 2026-11-18). **The flip is decided by the owners only** (section 0); the main hub or an owner runs the
 commands, the box hub never does.
-Status as of 2026-11-22 (box hub). Update the Status column as items land; every command below is
+Status as of 2026-11-23 07:00 UTC (box hub). The flip is scripted: section 4a (`scripts/ops/ci_box/private_flip.sh`, dry-run by default). Update the Status column as items land; every command below is
 read-only unless the row says otherwise.
 
 ## 0. Owner policy: when the repo flips
@@ -51,23 +51,29 @@ Re-check that page right before the flip.
 
 | # | Prerequisite | Status | Verify (read-only) |
 |---|---|---|---|
-| P1 | Scanners: gitleaks pre-push + CI, OSV, Semgrep (#1032) | **done** (merged) | `gh pr view 1032 -R Mahan-film/roxira-platform --json state -q .state` |
-| P2 | gitleaks hook installed in every clone and worktree (box, Mac, colleague) | box: done; Mac and colleague: unknown | in each clone: `grep -c gitleaks .git/hooks/pre-push` (expect ≥1); fix with `bash scripts/dev/install_hooks.sh` |
-| P3 | Semgrep CE blocking on new findings, named `Semgrep CE (new findings)` (#949) | PR #1044 **merged** (checked 2026-11-22) | `gh pr view 1044 -R Mahan-film/roxira-platform --json state -q .state` |
-| P4 | Secret guard (`Agent guards (money, tenant scope, model ids, secrets)`) in the merge gate's required checks | **done** | `grep -n "Agent guards" ~/.config/roxira-merge-gate/merge_gate.toml` (box, mahanfilms) |
-| P5 | Merge gate installed, dry-run, proxy set, `required_checks` equal to real check names; B7 settings (`protected_globs` synced from the example, `owner_approver_ids`) in the live toml, see `MERGE_GATE_SPEC.md` section 4 | **done** (dry-run). #1044 is merged: add `"Semgrep CE (new findings)"` to the live toml. Decision B7-2 (2026-11-23): `require_up_to_date = false`, one merge per tick, a pause plus Telegram alert when main CI fails after a gate merge, and the gate dispatches the review desk for a head without a verdict (spec section 6) | `systemctl --user is-active roxira-merge-gate.timer`; `journalctl --user -u roxira-merge-gate -n 20` |
-| P6 | Merge gate works with gh 2.46 on the box (no `--slurp`) | PR #1035 **merged** (checked 2026-11-22) | `gh pr view 1035 -R Mahan-film/roxira-platform --json state -q .state` |
-| P7 | Nightly mirror + weekly issue/PR export live (#1030) | **not installed** on the box yet (needs #1035, then `07_user_mirror_export.sh`; `06_root_reliability.sh` by the owner) | `ls ~/.config/systemd/user/ \| grep -i mirror`; `box-backup-status` (after 06) |
-| P8 | Runner picker in `ci.yml`, fork guard, `runner` dispatch input, nightly run (#949) | PR #1044 **merged** (checked 2026-11-22) | `gh variable list -R Mahan-film/roxira-platform` (expect `CI_RUNNER_MODE` unset until P11) |
-| P9 | Remote local CI `LOCAL_CI_REMOTE` (#947) | PR #1045 **merged** (checked 2026-11-22) | `LOCAL_CI_REMOTE=runner@roxira-ci scripts/dev/local_ci.sh` from the Mac |
-| P10 | JIT pool: owner root script run, controller live, two green JIT runs, fallback tested (#1024) | PR #1046 **merged** (checked 2026-11-22); box side (root script, controller, green runs) not re-verified here. JIT registration itself works on a private Free repo (verified) | `python3 ~/roxira-jit/jit_pool.py --status` (both `launcher=alive`); `docs/ops/CI_JIT_POOL.md` steps 5–6 |
-| P11 | `CI_RUNNER_MODE=auto` for a full day before the flip, CI green on the box | not started | `gh variable get CI_RUNNER_MODE -R Mahan-film/roxira-platform`; job `runner_name` of the last CI runs starts with `jit-` |
-| P12 | Direct-push-to-main alert (#951) | PR #1005 was closed; the alert was re-done in #1088 (**merged**). Not yet installed on the box (see `MERGE_GATE_SPEC.md` section 3) | `gh pr view 1005 -R Mahan-film/roxira-platform --json state -q .state` |
-| P13 | Hosted-minute budget fits USD 12 | **at risk**, see section 3 | GitHub → Mahan-film → Settings → Billing and licensing → Usage (org owner) |
-| P14 | Production deploy no longer needs the `production` environment | main hub (#1020) | `grep -n "environment:" .github/workflows/deploy-prod.yml` |
-| P15 | No payment method on the org, so overage blocks instead of billing | owner check | GitHub → Mahan-film → Settings → Billing and licensing |
-| P16 | Merge gate proven on 20 real PRs (section 0 for the definition) | **not started**: the gate is in dry-run | count on #592 (hub tally of the dry-run log vs what was merged) |
-| P17 | Full-history secret scan done, counts only | **not started** | on a full clone: `gitleaks detect --source . --log-opts=--all --redact --no-banner` and report only the final `leaks found: N`; never paste findings. Anything real: stop, ask the owners |
+| P1 | Scanners: gitleaks pre-push + CI, OSV, Semgrep (#1032) | **done** (merged). Evidence: #1032 MERGED 2026-11-20 | `gh pr view 1032 -R Mahan-film/roxira-platform --json state -q .state` |
+| P2 | gitleaks hook installed in every clone and worktree (box, Mac, colleague) | box: done; Mac and colleague: **open** (not checkable from the box) | in each clone: `grep -c gitleaks .git/hooks/pre-push` (expect ≥1); fix with `bash scripts/dev/install_hooks.sh` |
+| P3 | Semgrep CE blocking on new findings, named `Semgrep CE (new findings)` (#949) | **done**: #1044 MERGED; `Semgrep CE (new findings)` is in the live gate toml (checked 2026-11-23) | `gh pr view 1044 -R Mahan-film/roxira-platform --json state -q .state` |
+| P4 | Secret guard (`Agent guards (money, tenant scope, model ids, secrets)`) in the merge gate's required checks | **done** (in the live toml `required_checks`, checked 2026-11-23) | `grep -n "Agent guards" ~/.config/roxira-merge-gate/merge_gate.toml` (box, mahanfilms) |
+| P5 | Merge gate installed, dry-run, proxy set, `required_checks` equal to real check names; B7 settings (`protected_globs` synced from the example, `owner_approver_ids`) in the live toml, see `MERGE_GATE_SPEC.md` section 4 | **done, still dry-run**: timer active, live toml has `Semgrep CE (new findings)` and `owner_approver_ids` with 1 id (B7 done); merge gate fixed in #1274 (MERGED 2026-11-23 00:48 UTC; B7-2: `require_up_to_date = false`, one merge per tick, pause plus Telegram alert when main CI fails after a gate merge, desk dispatch, see spec section 6). **Open**: `dry_run = false` (flip step 4, on the main hub's go-live) | `systemctl --user is-active roxira-merge-gate.timer`; `journalctl --user -u roxira-merge-gate -n 20` |
+| P6 | Merge gate works with gh 2.46 on the box (no `--slurp`) | **done**: #1035 MERGED 2026-11-21 | `gh pr view 1035 -R Mahan-film/roxira-platform --json state -q .state` |
+| P7 | Nightly mirror + weekly issue/PR export live (#1030) | **done on the box**: `roxira-mirror.timer` and `roxira-gh-export.service` installed (checked 2026-11-23). **Open**: `06_root_reliability.sh` by the owner, then `box-backup-status` | `ls ~/.config/systemd/user/ \| grep -i mirror`; `box-backup-status` (after 06) |
+| P8 | Runner picker in `ci.yml`, fork guard, `runner` dispatch input, nightly run (#949) | **done**: #1044 MERGED (and the runner picker is live: `CI_RUNNER_MODE` is set, see P11) | `gh variable list -R Mahan-film/roxira-platform` (expect `CI_RUNNER_MODE` unset until P11) |
+| P9 | Remote local CI `LOCAL_CI_REMOTE` (#947) | **done**: #1045 MERGED 2026-11-21. The Mac-side run is not checked from the box | `LOCAL_CI_REMOTE=runner@roxira-ci scripts/dev/local_ci.sh` from the Mac |
+| P10 | JIT pool: owner root script run, controller live, two green JIT runs, fallback tested (#1024) | **done**: #1046 MERGED 2026-11-22; `jit_pool.py --status` on 2026-11-23: light and docker `registered=1 online=1 launcher=alive`; old runner retired (`roxira-ci` offline in the runner list, `actions-runner.service` inactive); root runner installed (`/usr/local/sbin/roxira-root`, #1317; `roxira-root box-status` and `jit-status` work from the mahan user) | `python3 ~/roxira-jit/jit_pool.py --status` (both `launcher=alive`); `docs/ops/CI_JIT_POOL.md` steps 5–6 |
+| P11 | `CI_RUNNER_MODE=auto` for a full day before the flip, CI green on the box | **set, not yet proven**: `CI_RUNNER_MODE=auto` since 2026-11-23 00:11 UTC (a full day passes at 00:11 UTC on 2026-11-24). **Open**: the last 3 completed main CI runs are not all on JIT: run 45118378279 ran every job on hosted runners (the picker fell back to hosted while both JIT slots were busy) and run 45097487901 (2026-11-23 01:58 UTC) failed. `private_flip.sh` checks this and refuses `--apply` until it holds | `gh variable get CI_RUNNER_MODE -R Mahan-film/roxira-platform`; job `runner_name` of the last CI runs starts with `jit-` |
+| P12 | Direct-push-to-main alert (#951) | **done on the box**: #1088 MERGED; `roxira-check-main-push.timer` is installed (checked 2026-11-23). (#1005 was closed, re-done in #1088) | `gh pr view 1005 -R Mahan-film/roxira-platform --json state -q .state` |
+| P13 | Hosted-minute budget fits USD 12 | **at risk**, see section 3. **Open** (owner) | GitHub → Mahan-film → Settings → Billing and licensing → Usage (org owner) |
+| P14 | Production deploy no longer needs the `production` environment | **open** (main hub, #1020): `deploy-prod.yml` still has `environment: production` (line 45, checked 2026-11-23) | `grep -n "environment:" .github/workflows/deploy-prod.yml` |
+| P15 | No payment method on the org, so overage blocks instead of billing | **open** (owner check) | GitHub → Mahan-film → Settings → Billing and licensing |
+| P16 | Merge gate proven on 20 real PRs (section 0 for the definition) | **open**: the gate is in dry-run; the count is on #592 | count on #592 (hub tally of the dry-run log vs what was merged) |
+| P17 | Full-history secret scan done, counts only | **open**: not started | on a full clone: `gitleaks detect --source . --log-opts=--all --redact --no-banner` and report only the final `leaks found: N`; never paste findings. Anything real: stop, ask the owners |
+
+Summary on 2026-11-23: done P1, P3-P10, P12 (box side); set but not proven P11; open P2 (Mac, colleague), P13, P14,
+P15, P16, P17 and the live switch of the gate. Two flip-day findings: the repo label `merge-queue` does not exist yet (open
+gate PRs rely on the auto-merge flag, which a private Free repo does not have; the script creates the label on `--apply`
+and flip step 3 must be followed by agents using the label), and `agent-automerge.yml` and `rx-automerge.yml` are already
+`disabled_manually` (the script treats that as done).
 
 ## 3. Hosted minutes after the flip (estimate)
 
@@ -89,6 +95,21 @@ until the 1st. Options, cheapest first (owner / main hub decide):
    needs the review keys in the box environment, part of #1021/#1022).
 3. Pick runner: set `CI_RUNNER_MODE=box` (static) and skip the picker job; the fallback becomes the
    manual `-f runner=hosted` dispatch only (saves ≈ USD 3.6).
+
+## 4a. Scripted flip (preferred)
+
+On the box as `mahanfilms` (gh through the local proxy; dry-run is the default and changes nothing):
+
+```
+HTTPS_PROXY=http://127.0.0.1:10809 NODE_USE_ENV_PROXY=1 bash scripts/ops/ci_box/private_flip.sh --dry-run
+```
+
+It verifies: gate `dry_run = false`, `CI_RUNNER_MODE` is `auto` or `box`, the last 3 completed main CI runs are green and
+their box jobs ran on `jit-` runners. `--apply --owner-go` (only after the owners say "go private" and the freeze is
+announced) refuses to start if any of these fails; otherwise it runs `gh api -X PATCH repos/Mahan-film/roxira-platform -F private=true`,
+disables `agent-automerge.yml`, checks the merge gate sees the `merge-queue` label (creates the label if missing, one gate
+dry-run tick) and prints the rollback commands without running them. It does not replace flip steps 1, 2, 3 (other workflows),
+4 (gate live) and 6 (verification) below. Unit tests: `python3 -m unittest src/ops/test_box_private_flip.py`.
 
 ## 4. Flip (main hub or owner; in this order)
 

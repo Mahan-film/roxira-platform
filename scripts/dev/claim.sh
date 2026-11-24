@@ -68,7 +68,21 @@ gh api -X POST "repos/$REPO/issues/$issue/labels" -f "labels[]=in-progress" >/de
 
 root="$(git rev-parse --show-toplevel)"
 git -C "$root" fetch -q origin main
-wt="$root/../roxira-wt/$issue-$slug"
+# Worktree home: ROXIRA_WT_ROOT if set, else the external work disk when it is mounted
+# (scripts/dev/lane_env.sh, #1341), else the old sibling folder next to the clone.
+wt_root="${ROXIRA_WT_ROOT:-}"
+if [ -z "$wt_root" ] && [ -d /Volumes/ssd/roxira-work/wt ] && [ -w /Volumes/ssd/roxira-work/wt ]; then
+  wt_root=/Volumes/ssd/roxira-work/wt
+fi
+if [ -n "$wt_root" ] && ! { [ -d "$wt_root" ] && [ -w "$wt_root" ]; }; then
+  echo "ROXIRA_WT_ROOT=$wt_root is not a writable folder; unset it or mount the work disk" >&2
+  exit 1
+fi
+if [ -z "$wt_root" ] && [ "$(uname)" = "Darwin" ] && [ -z "${ROXIRA_ALLOW_INTERNAL_WT:-}" ]; then
+  echo "work disk /Volumes/ssd/roxira-work/wt is not mounted: refusing to create a worktree on the internal disk (set ROXIRA_ALLOW_INTERNAL_WT=1 to override)" >&2
+  exit 1
+fi
+wt="${wt_root:-$root/../roxira-wt}/$issue-$slug"
 git -C "$root" worktree add -q -b "$branch" "$wt" origin/main
 git -C "$wt" commit -q --allow-empty -m "chore: start #$issue $title"
 git -C "$wt" push -q -u origin "$branch"
