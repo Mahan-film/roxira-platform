@@ -179,14 +179,9 @@ export class TenantCancellationService implements OnModuleInit {
         `)) || [];
       const targetTables = this.sortTablesChildrenFirst(rawTargetTables, fkRows);
 
-      // 2. Prevent posted lines trigger block by marking journal entries PURGED first if exists.
-      // Do not swallow errors: if this UPDATE fails, abort and roll back the purge transaction.
-      if (targetTables.includes('fin_journal_entries')) {
-        await manager.query(
-          `UPDATE "fin_journal_entries" SET "status" = 'PURGED' WHERE "tenant_id" = $1`,
-          [tenantId],
-        );
-      }
+      // 2. Enable transaction-local tenant_purge flag so fin_guard_posted_entry/lines
+      // allow DELETE of posted journal entries during a verified tenant purge.
+      await manager.query(`SELECT set_config('roxira.tenant_purge', 'on', true)`);
 
       // 3. Delete records from each tenant table.
       // Do not swallow DELETE errors: any failure must abort and roll back the

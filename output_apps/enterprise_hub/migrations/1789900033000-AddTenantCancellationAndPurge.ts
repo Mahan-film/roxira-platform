@@ -49,6 +49,46 @@ export class AddTenantCancellationAndPurge1789900033000 implements MigrationInte
         ON "tenants" ("status", "delete_after")
         WHERE "delete_after" IS NOT NULL;
     `);
+
+    // Allow DELETE on posted journal entries/lines ONLY when transaction-local
+    // roxira.tenant_purge = 'on' is set inside TenantCancellationService.purgeTenant.
+    await queryRunner.query(`
+      CREATE OR REPLACE FUNCTION fin_guard_posted_entry() RETURNS trigger AS $$
+      BEGIN
+        IF TG_OP = 'DELETE' AND current_setting('roxira.tenant_purge', true) = 'on' THEN
+          RETURN OLD;
+        END IF;
+        IF OLD.status = 'POSTED' THEN
+          RAISE EXCEPTION 'posted journal entry % is immutable; post a reversing entry', OLD.id
+            USING ERRCODE = 'RX001';
+        END IF;
+        IF TG_OP = 'DELETE' THEN
+          RETURN OLD;
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
+    await queryRunner.query(`
+      CREATE OR REPLACE FUNCTION fin_guard_posted_lines() RETURNS trigger AS $$
+      BEGIN
+        IF TG_OP = 'DELETE' AND current_setting('roxira.tenant_purge', true) = 'on' THEN
+          RETURN OLD;
+        END IF;
+        IF EXISTS (
+          SELECT 1 FROM fin_journal_entries e
+           WHERE e.id = OLD.journal_entry_id AND e.status = 'POSTED'
+        ) THEN
+          RAISE EXCEPTION 'lines of posted journal entry % are immutable', OLD.journal_entry_id
+            USING ERRCODE = 'RX001';
+        END IF;
+        IF TG_OP = 'DELETE' THEN
+          RETURN OLD;
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

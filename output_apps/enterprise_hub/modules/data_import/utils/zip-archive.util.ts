@@ -1,12 +1,15 @@
+import { promisify } from 'util';
 import * as zlib from 'zlib';
+
+const deflateRawAsync = promisify(zlib.deflateRaw);
 
 /**
  * Pure Node.js zero-dependency ZIP archive creator (PKZIP 2.0 format).
- * Deflates all entries and writes valid Local File Headers, Central Directory,
- * and End of Central Directory record with accurate CRC-32 checksums.
+ * Deflates all entries asynchronously (off the main event loop) and writes valid
+ * Local File Headers, Central Directory, and End of Central Directory record.
  * Completely compliant with unzip, 7z, Windows Explorer, macOS Archive Utility, and Python zipfile.
  */
-export function createZipBuffer(files: Record<string, string | Buffer | Uint8Array>): Buffer {
+export async function createZipBuffer(files: Record<string, string | Buffer | Uint8Array>): Promise<Buffer> {
   const localHeaders: Buffer[] = [];
   const centralHeaders: Buffer[] = [];
   let offset = 0;
@@ -25,7 +28,7 @@ export function createZipBuffer(files: Record<string, string | Buffer | Uint8Arr
         ? Buffer.from(content, 'utf-8')
         : Buffer.from(content);
 
-    const deflated = zlib.deflateRawSync(dataBuf);
+    const deflated = await deflateRawAsync(dataBuf);
     const useStore = deflated.length >= dataBuf.length;
     const payload = useStore ? dataBuf : deflated;
     const method = useStore ? 0 : 8;

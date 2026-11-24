@@ -214,7 +214,7 @@ export class TenantExportService {
 
     zipFiles['metadata.json'] = JSON.stringify(metadata, null, 2);
 
-    const buffer = createZipBuffer(zipFiles);
+    const buffer = await createZipBuffer(zipFiles);
     const dateSlug = exportedAt.slice(0, 10);
     const filename = `tenant-export-${tenantId.slice(0, 8)}-${dateSlug}.zip`;
 

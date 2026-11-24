@@ -193,7 +193,7 @@ describe('TenantCancellationService', () => {
       expect(res.purgedTables).toEqual([]);
     });
 
-    it('fails instead of swallowing fin_journal_entries UPDATE errors', async () => {
+    it('sets transaction-local roxira.tenant_purge and propagates errors', async () => {
       tenantsRepo.findById.mockResolvedValue({ id: 't1', status: TenantStatus.CANCELLED_READONLY });
       mockManager.query.mockImplementation(async (sql: string) => {
         if (sql.includes('FOR UPDATE SKIP LOCKED')) {
@@ -202,13 +202,13 @@ describe('TenantCancellationService', () => {
         if (sql.includes('information_schema.columns')) {
           return [{ table_name: 'fin_journal_entries' }];
         }
-        if (sql.includes('UPDATE "fin_journal_entries"')) {
-          throw new Error('trigger rejected PURGED');
+        if (sql.includes("set_config('roxira.tenant_purge'")) {
+          throw new Error('failed to set purge flag');
         }
         return [];
       });
 
-      await expect(service.purgeTenant('t1')).rejects.toThrow('trigger rejected PURGED');
+      await expect(service.purgeTenant('t1')).rejects.toThrow('failed to set purge flag');
     });
 
     it('aborts and does not mark PURGED when a table DELETE fails', async () => {

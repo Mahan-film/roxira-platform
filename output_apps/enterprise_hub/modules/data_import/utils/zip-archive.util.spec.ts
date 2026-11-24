@@ -2,14 +2,14 @@ import { createZipBuffer } from './zip-archive.util';
 import * as zlib from 'zlib';
 
 describe('createZipBuffer (Zero-dependency ZIP archive generator)', () => {
-  it('creates a valid ZIP buffer with multiple text and json files', () => {
+  it('creates a valid ZIP buffer with multiple text and json files', async () => {
     const files = {
       'customers.csv': 'id,name,role\n1,شرکت آلفا,customer\n2,شرکت بتا,supplier',
       'invoices.csv': 'id,number,amount\nINV-001,1001,15000000',
       'metadata.json': JSON.stringify({ version: '1.0', tenantId: 'tenant-123' }),
     };
 
-    const zipBuffer = createZipBuffer(files);
+    const zipBuffer = await createZipBuffer(files);
 
     expect(zipBuffer).toBeInstanceOf(Buffer);
     expect(zipBuffer.length).toBeGreaterThan(100);
@@ -27,9 +27,9 @@ describe('createZipBuffer (Zero-dependency ZIP archive generator)', () => {
     expect(zipString).toContain('metadata.json');
   });
 
-  it('handles empty and binary buffers cleanly', () => {
+  it('handles empty and binary buffers cleanly', async () => {
     const binary = Buffer.from([0x01, 0x02, 0x03, 0x04]);
-    const zipBuffer = createZipBuffer({
+    const zipBuffer = await createZipBuffer({
       'empty.txt': '',
       'bin.dat': binary,
     });
