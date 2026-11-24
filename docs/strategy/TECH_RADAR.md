@@ -222,3 +222,64 @@ checks the primary source and runs a benchmark on our workload.
 
 Not candidates (decided already in the repo): Unleash (AGPL, refused), Cube Core (deferred), MinIO
 (archived), a bigger server (decide on the RAM trigger in R19, T205).
+
+## 4. Verified Licence Table and Decision Pack (R36 Research, 2026-11-23)
+
+Source: `docs/strategy/research/R36_DIGEST.md` (issue #1387, #1396). Primary sources verified against upstream repositories and production audits.
+
+### Verified Licences (Primary Sources)
+Runtime dependencies must satisfy permissive licensing: MIT, Apache-2.0, BSD, ISC, CC0.
+
+| Component | Verified Upstream Licence | Status / Primary Source Evidence |
+|---|---|---|
+| **Valkey** | BSD-3-Clause | Valkey server GA; drop-in replacement for Redis |
+| **BullMQ** | MIT | Upstream test suite passes on Valkey |
+| **Qdrant** | Apache-2.0 | v1.20.0 out, 1.20.2 on main; rustls-webpki fix |
+| **Text Embeddings Inference (TEI)** | Apache-2.0 | High-performance embedding server (Rust); runs `BAAI/bge-m3` |
+| **bge-m3** | MIT | Multilingual embedding model repo |
+| **LightRAG** | MIT | Graph-augmented retrieval (`lightrag-hku`) |
+| **restic** | BSD-2-Clause | Encrypted offsite backup tool (Go) |
+| **Caddy** | Apache-2.0 | Extensible web server / reverse proxy (Go) |
+| **Temporal** | MIT (+CLA) | Durable workflow orchestration engine |
+| **TigerBeetle** | Apache-2.0 | High-performance double-entry tracking database (official aarch64 binary available; pre-allocates storage; client/cluster not backward compatible) |
+| **KoSIT validator** | Apache-2.0 | E-invoicing validator (XRechnung / Peppol) |
+| **VictoriaMetrics OSS** | Apache-2.0 | Time-series / metrics database (enterprise flags require commercial key) |
+
+### Rejected & Held Components (Licence Rule & Risk Analysis)
+Copyleft or source-available runtime dependencies are strictly rejected.
+
+| Component | Licence | Assessment & Decision |
+|---|---|---|
+| **Restate** | BUSL 1.1 | **REJECT**: Non-permissive source-available license. |
+| **OpenBao** | MPL-2.0 | **REJECT**: Refused as a runtime dependency. |
+| **SOPS** | MPL-2.0 | **REJECT**: Refused as a runtime dependency (build-time CLI usage is an owner decision). |
+| **bge-reranker-v2-m3** | No license tag | **HOLD**: Model card has no explicit license tag; community ONNX unverified. Keep `SMARTJUDGE_RERANKER=off`. |
+| **Twenty CRM (core)** | AGPLv3 | **REJECT (modifications)**: Unmodified upstream Docker image running behind an external REST API (`sync_to_twenty.py`) is permitted. Any internal code modification triggers AGPLv3 Section 13 (network copyleft) and requires owner approval. |
+
+### Decision Pack (Verified Only)
+- **ADOPT**:
+  - **Valkey** (replace Redis 7)
+  - **Qdrant 1.20.2** (upgrade from 1.19.0)
+  - **restic** (primary encrypted backup utility)
+  - **Node 26 LTS** (base image standardization)
+  - **JIT Self-Hosted Runners** (ephemeral laptop runners on private repo)
+- **TRIAL**:
+  - **TEI + bge-m3** with `safetensors`/ONNX
+  - **BullMQ on Valkey**
+  - **VictoriaMetrics OSS**
+- **HOLD**:
+  - **TigerBeetle** (hold until production root disk drops below 50%)
+  - **Temporal** (defer until distributed microservices require durable queues)
+  - **LightRAG** (keep outside latency-critical hot paths)
+  - **Python Target** (await owner sentence on Python 3.13 vs 3.14; #1309 stays held)
+  - **bge-reranker** (hold until official permissive license and ONNX release)
+- **REJECT**:
+  - **Restate** (BUSL 1.1)
+  - **OpenBao / SOPS** (MPL-2.0 at runtime)
+  - **Twenty CRM core modifications** (AGPLv3 Section 13)
+
+### Mandatory Rewrite Guardrail
+**No Rust or Go rewrite without measured evidence**: TEI and Qdrant are already Rust. No service rewrite is allowed without a measured hot path exceeding **30% of p95 latency** AND a prototype demonstrating **> 2x speedup** on our hardware (`docs/strategy/ADR_RUST_READY_HOT_PATH.md`, `RUST_HOT_PATH_GATE.md`).
+
+### Unverified Candidates (Not Approved)
+The following candidates remain unverified and are not approved: `zod`, `valibot`, `biome`, `oxlint`, `vitest`, `forgejo`, `woodpecker`, `tailscale`, `headscale`, `wireguard`, `teleport`, `medici`, `meilisearch`, `tantivy`, `otel collector`, `alloy`, `envoy`, `pingora`. Each requires an upstream LICENSE check and an `aarch64` validation before evaluation.

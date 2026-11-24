@@ -115,4 +115,33 @@ describe('business owner tax preview (DTX-02)', () => {
     await controller.preview(request, { ...dto(), tenantId: 'tenant-b' } as never);
     expect(preview.mock.calls[0][0]).toBe('tenant-a');
   });
+
+  it('reads business tax rule keys and country from the pack registry when provided', async () => {
+    const findForYear = jest.fn().mockResolvedValue(PARAMS);
+    const fakePack = {
+      country: 'IR',
+      taxRules: [
+        {
+          kind: 'business_income_tax',
+          label: 'مالیات مشاغل',
+          statutoryKeys: [
+            'income_tax_art131_brackets',
+            'income_exemption_ceiling_art57_art101',
+            'civil_partnership_max_exemptions',
+          ],
+        },
+      ],
+    };
+    const packRegistry = {
+      resolve: jest.fn(() => fakePack),
+    };
+    const service = new BusinessTaxService(
+      { findForYear } as unknown as StatutoryRepository,
+      packRegistry as never,
+    );
+    const result = await service.preview('tenant-1', dto());
+    expect(packRegistry.resolve).toHaveBeenCalled();
+    expect(findForYear).toHaveBeenCalledWith('tenant-1', 'IR', 1405);
+    expect(result.status).toBe('preview');
+  });
 });
