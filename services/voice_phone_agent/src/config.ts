@@ -99,12 +99,18 @@ export const cfg = {
   // Terms come from real phone-call misrecognitions (legal-terms.ts).
   sttPrompt: str('STT_PROMPT', `پرسش حقوقی تلفنی: ${LEGAL_VOCAB.join('، ')}.`),
 
-  ttsProvider: str('TTS_PROVIDER', 'edge') as 'edge' | 'openai' | 'smartjudge',
+  ttsProvider: str('TTS_PROVIDER', 'edge') as 'edge' | 'openai' | 'smartjudge' | 'azure',
   edgeTtsUrl: str('EDGE_TTS_URL', 'http://127.0.0.1:5055'),
   ttsVoice: str('TTS_VOICE', 'fa-IR-FaridNeural'),
   ttsRate: str('TTS_RATE', '+8%'),
   // edge-tts pitch ("-4Hz" .. "+4Hz"); +0Hz = the voice as Microsoft ships it. Samples: docs/eval/PHONE_VOICE_2026-11-23.md
   ttsPitch: str('TTS_PITCH', '+0Hz'),
+  azureSpeechKey: str('AZURE_SPEECH_KEY'),
+  azureSpeechRegion: str('AZURE_SPEECH_REGION', 'westeurope'),
+  azureTtsVoice: str('AZURE_TTS_VOICE', 'fa-IR-FaridNeural'),
+  azureTtsEndpoint: str('AZURE_TTS_ENDPOINT'),
+  ttsFallbackProvider: str('TTS_FALLBACK_PROVIDER', 'edge') as 'edge' | 'none',
+  ttsEuResidencyRequired: str('TTS_EU_RESIDENCY_REQUIRED', 'true').toLowerCase() !== 'false',
   // a streamed sentence without . ! ? ؛ is cut at a comma after this many characters (shorter = earlier audio, natural pauses)
   maxSentenceChars: num('MAX_SENTENCE_CHARS', 160),
   openaiTtsModel: str('OPENAI_TTS_MODEL', defaultOpenaiTtsModel),

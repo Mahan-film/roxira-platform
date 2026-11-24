@@ -3,8 +3,12 @@ import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { OUT_RATE, decodeTo48k, fadeEdges } from './audio.js';
+import { streamAzureTtsPcm } from './azure-tts.js';
 import { cfg } from './config.js';
 import { fetchDirect, fetchProxied } from './http.js';
+import { logger } from './log.js';
+
+const log = logger('tts');
 
 /** Persian text -> 48 kHz mono PCM. */
 export async function synthesize(text: string, signal?: AbortSignal): Promise<Int16Array> {
@@ -49,7 +53,53 @@ const TAIL_BYTES = FRAME_BYTES * 4; // held back so the last 40 ms can be faded
 export async function synthesizeStream(
   text: string, signal: AbortSignal, onPcm: (pcm: Int16Array) => void,
 ): Promise<void> {
-  if (cfg.ttsProvider !== 'edge') { onPcm(await synthesize(text, signal)); return; }
+  await synthesizeStreamWithFallback(text, signal, onPcm);
+}
+
+export interface StreamFallbackOptions {
+  provider?: 'edge' | 'openai' | 'smartjudge' | 'azure';
+  fallbackProvider?: 'edge' | 'none';
+  azureRunner?: (text: string, signal: AbortSignal, onPcm: (pcm: Int16Array) => void) => Promise<void>;
+  edgeRunner?: (text: string, signal: AbortSignal, onPcm: (pcm: Int16Array) => void) => Promise<void>;
+}
+
+/**
+ * Streaming synthesis with automatic edge-tts fallback when Azure Speech fails before emitting audio.
+ */
+export async function synthesizeStreamWithFallback(
+  text: string,
+  signal: AbortSignal,
+  onPcm: (pcm: Int16Array) => void,
+  opts?: StreamFallbackOptions,
+): Promise<{ provider: string; fellBack: boolean }> {
+  const provider = opts?.provider ?? cfg.ttsProvider;
+  const fallback = opts?.fallbackProvider ?? cfg.ttsFallbackProvider;
+  const runEdge = opts?.edgeRunner ?? streamEdgeTts;
+  const runAzure = opts?.azureRunner ?? (async (t, sig, cb) => { await streamAzureTtsPcm(t, sig, cb); });
+
+  if (provider === 'azure') {
+    let emitted = false;
+    try {
+      await runAzure(text, signal, (pcm) => { emitted = true; onPcm(pcm); });
+      return { provider: 'azure', fellBack: false };
+    } catch (e) {
+      if (signal.aborted || emitted || fallback !== 'edge') throw e;
+      log.warn('tts.azure.fallback', { err: (e as Error).message.slice(0, 120) });
+      await runEdge(text, signal, onPcm);
+      return { provider: 'edge', fellBack: true };
+    }
+  }
+  if (provider !== 'edge') {
+    onPcm(await synthesize(text, signal));
+    return { provider, fellBack: false };
+  }
+  await runEdge(text, signal, onPcm);
+  return { provider: 'edge', fellBack: false };
+}
+
+async function streamEdgeTts(
+  text: string, signal: AbortSignal, onPcm: (pcm: Int16Array) => void,
+): Promise<void> {
   const r = await fetchDirect(`${cfg.edgeTtsUrl}/tts/stream`, {
     method: 'POST', signal, headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text, voice: cfg.ttsVoice, rate: cfg.ttsRate, pitch: cfg.ttsPitch }),
