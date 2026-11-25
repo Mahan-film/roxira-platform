@@ -2352,7 +2352,6 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         cat_context_str = _catalog_intent.build_catalog_context(cat_rows, target=target)
         if cat_rows:
             if target == "regulation":
-                from output_apps.generated_modules.smartjudge import regulations_retrieval as _regs
                 precedents = _regs.merge_regulations(precedents, cat_rows)
             else:
                 precedents = _rulings.merge_rulings(precedents, cat_rows)
@@ -4275,7 +4274,6 @@ async def generate_speech(request: Request, payload: dict = Body(...),
     if len(text) > chat_auth.MAX_SPEAK_CHARS:
         return chat_auth.error_json(413, chat_auth.MSG_SPEAK_TOO_LONG, code="PAYLOAD_TOO_LARGE")
 
-    import re
     # تمیزسازی متن از کاراکترهای مارک‌داون
     clean_text = re.sub(r"[*#_`>\[\]\(\)\n]", " ", text).strip()
     clean_text = " ".join(clean_text.split())[:1200]
@@ -4637,7 +4635,6 @@ async def _start_cache_priming() -> None:
         print("[SMARTJUDGE][CACHE-PRIME] disabled or no API key; skipping.", file=sys.stderr)
         return
     _CACHE_PRIME_STARTED = True
-    import asyncio
     asyncio.create_task(_cache_prime_loop())
     print(f"[SMARTJUDGE][CACHE-PRIME] background primer started "
           f"(interval={_CACHE_PRIME_INTERVAL}s, prefix_chars={len(_system_prefix_text())}, "

@@ -10,6 +10,8 @@ import re
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("smartjudge.catalog_intent")
+# Safe: rulings_retrieval never imports catalog_intent.
+from output_apps.generated_modules.smartjudge.rulings_retrieval import is_trusted
 
 _DIGIT_TRANS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
 
@@ -108,6 +110,17 @@ def detect(user_text: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+UNOFFICIAL_FA = "بر اساس منابع غیررسمی و در دست بازبینی"
+
+
+def _trusted(r: Dict[str, Any]) -> bool:
+    """Official tier and reviewed (shared definition in rulings_retrieval.is_trusted).
+
+    Anything else (OCR, unofficial copy, needs_review) is never called official
+    (#1385 hub blocker)."""
+    return is_trusted(r)
+
+
 def build_catalog_context(catalog_rows: List[Dict[str, Any]], target: str = "unity_supreme_court") -> str:
     """Deterministic context block for the prompt."""
     if not catalog_rows:
@@ -121,15 +134,22 @@ def build_catalog_context(catalog_rows: List[Dict[str, Any]], target: str = "uni
         subject = r.get("subject") or r.get("summary") or ""
         body = r.get("issuer") or r.get("issuing_body") or ""
         line = f"- {title} (تاریخ: {date}، مرجع: {body}): {subject[:250]}"
+        if not _trusted(r):
+            line += f" [{UNOFFICIAL_FA}]"
         lines.append(line)
 
-    if target == "unity_supreme_court":
-        target_fa = "آرای وحدت رویه دیوان عالی کشور"
-    elif target == "regulation":
-        target_fa = "بخشنامه‌ها و مقررات اجرایی"
-    else:
+    if target == "regulation":
+        target_fa = "بخشنامه‌ها و مقررات"
+    elif target == "admin_court":
         target_fa = "آرای هیئت عمومی دیوان عدالت اداری"
-    return f"\nفهرست قطعی و معتبر از پایگاه داده سامانه ({target_fa}):\n" + "\n".join(lines) + "\n"
+    else:
+        target_fa = "آرای وحدت رویه دیوان عالی کشور"
+    if all(_trusted(r) for r in catalog_rows[:5]):  # the header describes only the 5 rows listed
+        header = f"فهرست از منابع رسمی ثبت‌شده در پایگاه داده سامانه ({target_fa})"
+    else:
+        header = (f"فهرست {UNOFFICIAL_FA} از پایگاه داده سامانه ({target_fa})؛ "
+                  "هیچ موردی را رسمی یا قطعی معرفی نکن")
+    return f"\n{header}:\n" + "\n".join(lines) + "\n"
 
 
 def format_deterministic_answer(
@@ -151,6 +171,7 @@ def format_deterministic_answer(
     if len(subject) > 200:
         subject = subject[:197] + "…"
 
+    trusted = _trusted(top)
     if is_voice:
         if target == "regulation":
             issuer_part = f" {body}" if body else ""
@@ -160,12 +181,19 @@ def format_deterministic_answer(
         else:
             ans = f"پاسخ: آخرین دادنامه هیئت عمومی دیوان عدالت اداری در پایگاه داده، شماره {num} مورخ {date} است."
         if subject:
-            ans += f" موضوع در خصوص {subject} می‌باشد."
+            ans += f" موضوع آن در خصوص {subject} می‌باشد."
+        if not trusted:
+            ans += f" این پاسخ {UNOFFICIAL_FA} است."
         return ans
 
     # Text mode answer
-    title = top.get("title") or (f"بخشنامه شماره {num}" if target == "regulation" else f"رأی شماره {num}")
-    ans = f"**پاسخ مستقیم:**\nمطابق داده‌های ثبت‌شده در پایگاه رسمی سامانه، آخرین {title} مورخ **{date}** می‌باشد.\n\n"
+    title = top.get("title") or (f"مقرره شماره {num}" if target == "regulation" else f"رأی شماره {num}")
+    if trusted:
+        ans = ("**پاسخ مستقیم:**\nمطابق منابع رسمی ثبت‌شده در پایگاه داده سامانه، "
+               f"آخرین {title} مورخ **{date}** می‌باشد.\n\n")
+    else:
+        ans = (f"**پاسخ مستقیم:**\n{UNOFFICIAL_FA}، "
+               f"آخرین {title} در پایگاه داده سامانه مورخ **{date}** است.\n\n")
     if subject:
         ans += f"**خلاصه موضوع:**\n{subject}\n\n"
     ans += "این مورد بر اساس آخرین به‌روزرسانی سامانه ارائه گردیده است."
