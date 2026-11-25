@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install the daily Mac disk guard (launchd agent ir.roxira.diskguard, 10:15 local time and at login).
+# Install the 15-minute Mac disk guard (launchd agent ir.roxira.diskguard, every 900s and at login).
 # Usage: install_mac_disk_guard.sh [--uninstall]
 set -euo pipefail
 LABEL="ir.roxira.diskguard"
@@ -21,7 +21,7 @@ cat > "$PLIST" <<EOF
 <plist version="1.0"><dict>
   <key>Label</key><string>$LABEL</string>
   <key>ProgramArguments</key><array><string>/bin/bash</string><string>$DEST</string></array>
-  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>10</integer><key>Minute</key><integer>15</integer></dict>
+  <key>StartInterval</key><integer>900</integer>
   <key>RunAtLoad</key><true/>
   <key>StandardOutPath</key><string>$HOME/Library/Logs/roxira-disk-guard.out</string>
   <key>StandardErrorPath</key><string>$HOME/Library/Logs/roxira-disk-guard.out</string>
