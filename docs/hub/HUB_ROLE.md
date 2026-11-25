@@ -13,7 +13,7 @@ The owner starts the hub session and stays in it. One acting hub session at a ti
 | OpenCode | an interactive session with a strong model from `config/models.yaml` | same rules as H1 |
 
 Rule for every tool: the reviewer of a PR must be a different model family from its author.
-The review desk enforces this (`scripts/dev/check_reviewer_family.py`).
+The review desk enforces this: `scripts/dev/review_desk.py` skips reviewers from the author's family, and `scripts/dev/check_reviewer_family.py` checks the model config.
 So a Gemini hub's own review never counts as the verdict for a Gemini-authored PR.
 
 ## What already runs without a hub
