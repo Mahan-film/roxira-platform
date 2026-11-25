@@ -72,6 +72,8 @@ LESSONS = ROOT / "docs" / "agents" / "LESSONS.md"
 SECRETS_FILE = "~/Secrets/roxira/roxira.env"
 DEFAULT_PROXY = "http://127.0.0.1:10808"
 HEADER_PREFIX = "Cross-family review"
+DEFAULT_REPO = "Mahan-film/roxira-platform"
+STATUS_CONTEXT = "review-desk"
 
 PROVIDER_LABELS = {
     "gemini": "Gemini API",
@@ -503,6 +505,8 @@ WHAT COUNTS:
 - Major: a real bug on a less common path, a missing test for a risky path, a race/idempotency hole, a misleading claim in the PR body, a rule below broken without immediate damage.
 - Minor: small correctness, clarity or consistency issues. Do not report pure style, formatting or naming taste.
 - Cite every finding as `path:line` using the line numbers printed at the left of the diff (new-file numbers). Only cite files and lines that appear in the diff. Do not invent files, functions or tests. If you are not sure something is a bug, say so in the finding or leave it out.
+- Pytest built-in fixtures (`monkeypatch`, `tmp_path`, `caplog`, `capsys`, `request`) are injected automatically and need no import; never flag them as missing imports or undefined names.
+- Never call a Blocker on code outside the visible/truncated part of a file or diff; when uncertainty comes from truncation, report it as Major at most (or omit it).
 - Your training data is older than this repo. Never claim that a version, release, model id, API, package or GitHub Action "does not exist" or "is not released yet" from memory: this repo's own CI already runs on versions newer than you may know. Flag a version only if the diff itself shows a contradiction (e.g. two different versions of the same action in one change).
 
 PROJECT RULES (from AGENTS.md and docs/agents/LESSONS.md):
@@ -1078,6 +1082,99 @@ class Outcome:
     served: list[Served] = field(default_factory=list)
 
 
+def _repo_slug() -> str:
+    return os.environ.get("GITHUB_REPOSITORY") or os.environ.get("ROXIRA_REPO") or DEFAULT_REPO
+
+
+def _parse_comment_pages(raw: str) -> list[dict]:
+    data = json.loads(raw) if raw.strip() else []
+    if isinstance(data, list) and data and isinstance(data[0], list):
+        flat: list[dict] = []
+        for page in data:
+            flat.extend(page)
+        return flat
+    return data if isinstance(data, list) else []
+
+
+def find_desk_comment_id(comments: list[dict]) -> int | None:
+    """Return the numeric id of the existing desk comment to edit (bot-owned preferred)."""
+    bot_match: int | None = None
+    any_match: int | None = None
+    for c in reversed(comments):
+        body = (c.get("body") or "").lstrip()
+        cid = c.get("id")
+        if not body.startswith(HEADER_PREFIX) or not isinstance(cid, int):
+            continue
+        login = ((c.get("user") or {}).get("login") or "").lower()
+        if login == "github-actions[bot]":
+            bot_match = cid
+            break
+        if any_match is None:
+            any_match = cid
+    return bot_match if bot_match is not None else any_match
+
+
+def upsert_desk_comment(
+    n: int,
+    comment: str,
+    *,
+    repo: str | None = None,
+    gh: Runner = gh_run,
+) -> tuple[str, str]:
+    """Edit the existing Cross-family review comment in place, or post a new one.
+
+    Returns (action, html_url) where action is "edited" or "posted".
+    """
+    r = repo or _repo_slug()
+    comments_raw = gh(["api", "--paginate", "--slurp", f"repos/{r}/issues/{n}/comments?per_page=100"])
+    cid = find_desk_comment_id(_parse_comment_pages(comments_raw))
+    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as fh:
+        fh.write(comment)
+        tmp = fh.name
+    try:
+        if cid is not None:
+            try:
+                resp = gh(["api", "-X", "PATCH", f"repos/{r}/issues/comments/{cid}", "-F", f"body=@{tmp}"])
+                data = json.loads(resp) if resp.strip() else {}
+                return "edited", str(data.get("html_url") or "")
+            except RuntimeError:
+                pass
+        resp = gh(["api", "-X", "POST", f"repos/{r}/issues/{n}/comments", "-F", f"body=@{tmp}"])
+        data = json.loads(resp) if resp.strip() else {}
+        return "posted", str(data.get("html_url") or "")
+    finally:
+        os.unlink(tmp)
+
+
+def set_commit_status(
+    head: str,
+    verdict: str | None,
+    *,
+    repo: str | None = None,
+    target_url: str = "",
+    gh: Runner = gh_run,
+) -> None:
+    """Publish the `review-desk` commit status for the reviewed head SHA."""
+    r = repo or _repo_slug()
+    state = "success" if verdict == "no blocker" else "failure"
+    desc = f"Cross-family review: {verdict or 'error'}"[:140]
+    args = [
+        "api",
+        "-X",
+        "POST",
+        f"repos/{r}/statuses/{head}",
+        "-f",
+        f"state={state}",
+        "-f",
+        f"context={STATUS_CONTEXT}",
+        "-f",
+        f"description={desc}",
+    ]
+    if target_url:
+        args.extend(["-f", f"target_url={target_url}"])
+    gh(args)
+
+
 def review_pr(
     n: int,
     *,
@@ -1168,14 +1265,12 @@ def review_pr(
     now_head = json.loads(gh(["pr", "view", str(n), "--json", "headRefOid"]))["headRefOid"]
     if now_head != head:
         return Outcome(n, "skipped:head moved during review", rev.verdict, comment, served)
-    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as fh:
-        fh.write(comment)
-        tmp = fh.name
+    action, comment_url = upsert_desk_comment(n, comment, gh=gh)
     try:
-        gh(["pr", "comment", str(n), "--body-file", tmp])
-    finally:
-        os.unlink(tmp)
-    return Outcome(n, "posted", rev.verdict, comment, served)
+        set_commit_status(head, rev.verdict, target_url=comment_url, gh=gh)
+    except RuntimeError as exc:
+        log(f"PR #{n}: commit status skipped ({redact(str(exc))[:200]})", file=sys.stderr)
+    return Outcome(n, action, rev.verdict, comment, served)
 
 
 def check_models(log=print) -> int:
