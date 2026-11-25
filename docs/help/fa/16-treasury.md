@@ -1,9 +1,7 @@
-<!-- Sources (origin/main): output_apps/enterprise_hub/modules/treasury/controllers/treasury.controller.ts, output_apps/enterprise_hub/modules/treasury/dto/treasury.dto.ts, output_apps/enterprise_hub/modules/treasury/allocation/allocation-engine.ts, output_apps/enterprise_hub/modules/treasury/enums/treasury.enum.ts, output_apps/enterprise_hub/frontend/src/print-templates/receipt-payment-voucher-a5.html, output_apps/enterprise_hub/frontend/src/components/app/app-shell.tsx -->
+<!-- Sources (origin/main): output_apps/enterprise_hub/modules/treasury/controllers/treasury.controller.ts, output_apps/enterprise_hub/modules/treasury/dto/treasury.dto.ts, output_apps/enterprise_hub/modules/treasury/allocation/allocation-engine.ts, output_apps/enterprise_hub/modules/treasury/enums/treasury.enum.ts, output_apps/enterprise_hub/frontend/src/print-templates/receipt-payment-voucher-a5.template.ts, output_apps/enterprise_hub/frontend/src/app/app/treasury/page.tsx, output_apps/enterprise_hub/frontend/src/app/app/money/page.tsx -->
 # خزانه: رسید دریافت و پرداخت
 
-هنوز صفحه‌ای برای خزانه در برنامه ساخته نشده است.
-
-TODO: not built yet — فرم ثبت و فهرست اسناد در رابط کاربری وجود ندارد؛ در حال حاضر فقط API در دسترس است.
+صفحهٔ **«خزانه‌داری و تسویه فاکتورها»** (`/app/treasury`، قابل دسترس از **مدیریت وجوه و خزانه‌داری** در `/app/money`) برای مشاهدهٔ اسناد خزانه، ثبت و صدور سند حسابداری خزانه‌داری، تسویهٔ فاکتورهای باز طرف‌حساب و چاپ رسید دریافت و پرداخت A5 در برنامه فعال است.
 
 ## از طریق API
 این نقطه‌های پایانی زیر ماژول **بانک و تطبیق** (نقش حسابدار) و با شناسهٔ سازمان از توکن فعال‌اند:
