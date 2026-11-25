@@ -187,15 +187,21 @@ export class DimensionService {
         effectiveFrom: idOrFrom.effective,
       };
     } else if (typeof idOrFrom === 'string') {
+      if (!dto) {
+        throw new BadRequestException('Rename payload is required.');
+      }
       const existing = await this.repository.findByCode(tenantId, DimensionKind.COST_CENTER, idOrFrom);
       if (!existing) {
         throw new NotFoundException(`Dimension COST_CENTER:${idOrFrom} not found.`);
       }
       dimensionId = existing.id;
-      renameDto = dto!;
+      renameDto = dto;
     } else {
+      if (!dto) {
+        throw new BadRequestException('Rename payload is required.');
+      }
       dimensionId = idOrFrom;
-      renameDto = dto!;
+      renameDto = dto;
     }
 
     const existing = await this.repository.findById(tenantId, dimensionId);

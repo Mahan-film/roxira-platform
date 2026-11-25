@@ -173,7 +173,7 @@ export class AccountingService {
     /** Optional so unit tests and tools can build the service without the access module. */
     @Optional() private readonly ledgerAudit?: LedgerAuditService,
     private readonly budgetControl?: BudgetControlService,
-    @Optional() private readonly dimensionService?: DimensionService,
+    private readonly dimensionService?: DimensionService,
   ) {}
 
   private toAccountDto(entity: ChartOfAccountEntity): AccountResponseDto {
