@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { TenantScope } from '../../access/services/tenant-scope';
 import { TenantEntity } from '../entities/tenant.entity';
 
 /**
@@ -13,6 +14,7 @@ export class TenantsRepository {
   constructor(
     @InjectRepository(TenantEntity)
     private readonly repository: Repository<TenantEntity>,
+    @Optional() private readonly scope?: TenantScope,
   ) {}
 
   async create(data: Partial<TenantEntity>): Promise<TenantEntity> {
@@ -21,6 +23,11 @@ export class TenantsRepository {
   }
 
   async findById(id: string): Promise<TenantEntity | null> {
+    if (this.scope) {
+      return this.scope.run(id, (manager) =>
+        manager.getRepository(TenantEntity).findOne({ where: { id } }),
+      );
+    }
     return this.repository.findOne({ where: { id } });
   }
 
