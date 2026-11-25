@@ -291,26 +291,26 @@ def _convert_with_docling(
 # لایهٔ ۲ — استخراج سبک بومی
 # ──────────────────────────────────────────────────────────────────────────────
 def _extract_pdf_native(data: bytes) -> tuple[str, List[str], bool]:
-    """استخراج متن انتخابی PDF با PyMuPDF؛ در صورت نبود لایهٔ متنی، سیگنال اسکن‌بودن."""
+    """استخراج متن انتخابی PDF با pypdfium2؛ در صورت نبود لایهٔ متنی، سیگنال اسکن‌بودن."""
     try:
-        import fitz  # type: ignore  # PyMuPDF
+        from output_apps.generated_modules.smartjudge.documents import pdf_backend
     except Exception as exc:  # noqa: BLE001
-        return "", [f"PyMuPDF در دسترس نیست ({type(exc).__name__})."], False
+        return "", [f"pdf_backend در دسترس نیست ({type(exc).__name__})."], False
 
     warnings: List[str] = []
     parts: List[str] = []
     try:
-        with fitz.open(stream=data, filetype="pdf") as doc:
-            page_count = doc.page_count
-            for index, page in enumerate(doc, start=1):
+        with pdf_backend.open_pdf(data) as doc:
+            count = pdf_backend.page_count(doc)
+            for index in range(count):
                 try:
-                    page_text = page.get_text("text") or ""
+                    page_text = pdf_backend.extract_page_text(doc, index) or ""
                 except Exception:  # noqa: BLE001
                     page_text = ""
                 if page_text.strip():
-                    parts.append(f"## صفحه {index}\n\n{page_text.strip()}")
+                    parts.append(f"## صفحه {index + 1}\n\n{page_text.strip()}")
             joined = "\n\n".join(parts)
-            avg = len(joined) / max(page_count, 1)
+            avg = len(joined) / max(count, 1)
             if avg < SCANNED_TEXT_THRESHOLD:
                 warnings.append(
                     "سند فاقد لایهٔ متنی است (اسکن‌شده)؛ برای استخراج دقیق، نصب Docling توصیه می‌شود."
@@ -318,7 +318,7 @@ def _extract_pdf_native(data: bytes) -> tuple[str, List[str], bool]:
                 return joined, warnings, True
             return joined, warnings, False
     except Exception as exc:  # noqa: BLE001
-        return "", [f"خواندن PDF با PyMuPDF ناموفق بود ({type(exc).__name__})."], False
+        return "", [f"خواندن PDF با pypdfium2 ناموفق بود ({type(exc).__name__})."], False
 
 
 def _extract_docx_native(data: bytes) -> tuple[str, List[str]]:
@@ -456,20 +456,13 @@ async def _vision_ocr_image(image_bytes: bytes, mime: str = "image/png") -> str:
 
 
 def _render_pdf_pages(data: bytes, max_pages: int) -> tuple[List[bytes], List[str]]:
-    """رندر صفحات PDF به PNG برای ارسال به OCR بینایی."""
+    """رندر صفحات PDF به PNG برای ارسال به OCR بینایی با pypdfium2."""
     try:
-        import fitz  # type: ignore
+        from output_apps.generated_modules.smartjudge.documents import pdf_backend
+        images = pdf_backend.render_pages_png(data, max_pages=max_pages, dpi=OCR_RENDER_DPI)
+        return images, []
     except Exception as exc:  # noqa: BLE001
         return [], [f"رندر صفحات برای OCR ناموفق بود ({type(exc).__name__})."]
-    images: List[bytes] = []
-    try:
-        with fitz.open(stream=data, filetype="pdf") as doc:
-            for page in list(doc)[:max_pages]:
-                pixmap = page.get_pixmap(dpi=OCR_RENDER_DPI)
-                images.append(pixmap.tobytes("png"))
-    except Exception as exc:  # noqa: BLE001
-        return images, [f"رندر صفحات برای OCR ناموفق بود ({type(exc).__name__})."]
-    return images, []
 
 
 async def _vision_ocr_document(data: bytes, fmt: str) -> tuple[str, List[str]]:

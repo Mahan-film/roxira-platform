@@ -25,13 +25,15 @@ def page_count(doc: pdfium.PdfDocument) -> int:
 
 
 def extract_page_text(doc: pdfium.PdfDocument, page_idx: int) -> str:
-    """Extract text from a single 0-based page index."""
+    """Extract text from a single 0-based page index, closing both page and textpage handles."""
     page = doc[page_idx]
-    textpage = page.get_textpage()
+    textpage = None
     try:
+        textpage = page.get_textpage()
         return textpage.get_text_range() or ""
     finally:
-        textpage.close()
+        if textpage is not None:
+            textpage.close()
         page.close()
 
 
