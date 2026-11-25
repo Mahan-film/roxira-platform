@@ -269,12 +269,14 @@ def _matches_issuer(payload: dict, issuer_query: str) -> bool:
     return bool(words) and all(w in nf for w in words)
 
 
-_INACTIVE_STATUSES = {"repealed", "revoked", "cancelled", "canceled", "superseded", "expired", "inactive",
-                      "منسوخ", "لغو شده", "ملغی", "ابطال شده"}
+_INACTIVE_STATUSES = {
+    "repealed", "revoked", "cancelled", "canceled", "superseded", "expired", "inactive",
+    "منسوخ", "لغو شده", "ملغی", "ابطال شده",  # Persian has no case; .lower() leaves these as-is
+}
 
 
 def is_inactive(r: dict) -> bool:
-    """True for rows that must never be shown as a current rule (inactive flag or a repeal-type status)."""
+    """True for rows never shown as a current rule (inactive flag or repeal-type status)."""
     if r.get("is_active") is False:
         return True
     status = str(r.get("status") or "").strip().lower()
@@ -282,17 +284,33 @@ def is_inactive(r: dict) -> bool:
 
 
 def is_trusted(r: dict) -> bool:
-    """Official tier AND not waiting for review. Everything else is worded as unofficial / under review."""
-    return str(r.get("source_tier") or "").strip().lower() == "official" and not r.get("needs_review")
+    """Official tier AND not waiting for review (single definition; catalog_intent imports it).
+
+    Everything else is worded as unofficial / under review."""
+    tier = str(r.get("source_tier") or "").strip().lower()
+    return tier == "official" and not r.get("needs_review")
 
 
-def _today_jalali_year(today: Optional[_dt.date] = None) -> int:
-    t = today or _dt.date.today()
-    return t.year - 621 if (t.month, t.day) >= (3, 21) else t.year - 622
+def gregorian_to_jalali(gy: int, gm: int, gd: int) -> tuple:
+    """Exact Gregorian -> Jalali conversion (standard 33-year-cycle arithmetic, stdlib only)."""
+    g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
+    gy2 = gy + 1 if gm > 2 else gy
+    days = (355666 + 365 * gy + (gy2 + 3) // 4 - (gy2 + 99) // 100 + (gy2 + 399) // 400
+            + gd + g_d_m[gm - 1])
+    jy = -1595 + 33 * (days // 12053)
+    days %= 12053
+    jy += 4 * (days // 1461)
+    days %= 1461
+    if days > 365:
+        jy += (days - 1) // 365
+        days = (days - 1) % 365
+    if days < 186:
+        return (jy, 1 + days // 31, 1 + days % 31)
+    return (jy, 7 + (days - 186) // 30, 1 + (days - 186) % 30)
 
 
 def validated_date(r: dict, today: Optional[_dt.date] = None) -> Optional[tuple]:
-    """(y, m, d) on the Jalali scale when the row's date parses, is plausible and not in the future, else None.
+    """Jalali (y, m, d) when the row's date parses, is plausible and not in the future, else None.
 
     OCR rows often carry reversed (d/m/y) or garbled dates; those must never win 'latest'."""
     raw = str(
@@ -310,21 +328,23 @@ def validated_date(r: dict, today: Optional[_dt.date] = None) -> Optional[tuple]
     if not (1 <= m <= 12 and 1 <= d <= 31):
         return None
     t = today or _dt.date.today()
-    if 1900 <= y <= 2100:  # Gregorian: must not be in the future; map to the Jalali scale for ordering
+    today_j = gregorian_to_jalali(t.year, t.month, t.day)
+    if 1900 <= y <= 2100:  # Gregorian: real, not in the future, converted to Jalali for ordering
         try:
-            if _dt.date(y, m, d) > t:
-                return None
+            g = _dt.date(y, m, d)
         except ValueError:
             return None
-        return (y - 621, m, d)
-    if 1300 <= y <= _today_jalali_year(t):
+        if g > t:
+            return None
+        return gregorian_to_jalali(y, m, d)
+    if 1300 <= y and (m <= 6 or d <= 30) and (y, m, d) <= today_j:
         return (y, m, d)
     return None
 
 
 def parse_and_sort(rows: Iterable[dict], today: Optional[_dt.date] = None) -> List[dict]:
-    """Sort ruling/regulation payloads/rows: rows with a validated date first, newest date first,
-    then official-and-reviewed rows, then the higher integer number. Rows without a trusted date sink."""
+    """Sort payloads/rows: validated date first (newest first), then official-and-reviewed rows,
+    then the higher integer number. Rows without a trusted date sink."""
     def _key(r: dict):
         vd = validated_date(r, today)
         raw_num = str(
@@ -496,7 +516,7 @@ async def latest_rulings(
     # 4. Sort descending by date and number
     sorted_items = parse_and_sort(filtered)
     if is_reg:
-        # Same circular stored twice (official copy + OCR copy): keep the first, which sorts official-first.
+        # Same circular stored twice (official + OCR copy): keep the first; official sorts first.
         seen_keys: set = set()
         deduped = []
         for p in sorted_items:

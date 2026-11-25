@@ -107,9 +107,13 @@ UNOFFICIAL_FA = "بر اساس منابع غیررسمی و در دست بازب
 
 
 def _trusted(r: Dict[str, Any]) -> bool:
-    """Official tier and reviewed. Anything else (OCR, unofficial copy, needs_review) must never be called
-    official or definitive (HUB re-review on #1385)."""
-    return str(r.get("source_tier") or "").strip().lower() == "official" and not r.get("needs_review")
+    """Official tier and reviewed (shared definition in rulings_retrieval.is_trusted).
+
+    Anything else (OCR, unofficial copy, needs_review) is never called official
+    (#1385 hub blocker)."""
+    from output_apps.generated_modules.smartjudge.rulings_retrieval import is_trusted
+
+    return is_trusted(r)
 
 
 def build_catalog_context(catalog_rows: List[Dict[str, Any]], target: str = "unity_supreme_court") -> str:
@@ -136,7 +140,8 @@ def build_catalog_context(catalog_rows: List[Dict[str, Any]], target: str = "uni
     if all(_trusted(r) for r in catalog_rows[:5]):
         header = f"فهرست از منابع رسمی ثبت‌شده در پایگاه داده سامانه ({target_fa})"
     else:
-        header = f"فهرست {UNOFFICIAL_FA} از پایگاه داده سامانه ({target_fa})؛ هیچ موردی را رسمی یا قطعی معرفی نکن"
+        header = (f"فهرست {UNOFFICIAL_FA} از پایگاه داده سامانه ({target_fa})؛ "
+                  "هیچ موردی را رسمی یا قطعی معرفی نکن")
     return f"\n{header}:\n" + "\n".join(lines) + "\n"
 
 
@@ -177,9 +182,11 @@ def format_deterministic_answer(
     # Text mode answer
     title = top.get("title") or (f"مقرره شماره {num}" if target == "regulation" else f"رأی شماره {num}")
     if trusted:
-        ans = f"**پاسخ مستقیم:**\nمطابق منابع رسمی ثبت‌شده در پایگاه داده سامانه، آخرین {title} مورخ **{date}** می‌باشد.\n\n"
+        ans = ("**پاسخ مستقیم:**\nمطابق منابع رسمی ثبت‌شده در پایگاه داده سامانه، "
+               f"آخرین {title} مورخ **{date}** می‌باشد.\n\n")
     else:
-        ans = f"**پاسخ مستقیم:**\n{UNOFFICIAL_FA}، آخرین {title} در پایگاه داده سامانه مورخ **{date}** است.\n\n"
+        ans = (f"**پاسخ مستقیم:**\n{UNOFFICIAL_FA}، "
+               f"آخرین {title} در پایگاه داده سامانه مورخ **{date}** است.\n\n")
     if subject:
         ans += f"**خلاصه موضوع:**\n{subject}\n\n"
     ans += "این اطلاعات بر اساس آخرین به‌روزرسانی سامانه ارائه گردیده است."
