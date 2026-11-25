@@ -385,7 +385,11 @@ def inspect_and_extract_fast_path(page: Any) -> tuple[bool, str, str]:
 
 def render_and_enhance_page_to_webp(page: Any, dpi: int = 160) -> bytes:
     """Render page at 160 DPI in 8-bit grayscale, apply border crop, autocontrast,
-    contrast boost and unsharp mask, and save as WebP (65-95 KB per page)."""
+    contrast boost and unsharp mask, and save as WebP (65-95 KB per page).
+
+    When ``page`` is a pypdfium2 ``PdfPage``, this function closes the rendered
+    bitmap only; the caller retains ownership of ``page`` and must close it.
+    """
     try:
         from PIL import Image, ImageOps, ImageEnhance, ImageFilter
     except ImportError as exc:
@@ -909,9 +913,25 @@ class _PdfSource:
         self._pdf_backend = pdf_backend
         try:
             self.doc = pdfium.PdfDocument(data)
-        except Exception as exc:  # noqa: BLE001
-            if "password" in str(exc).lower():
+        except pdfium.PdfiumError as exc:
+            # pypdfium2 raises PdfiumError before returning a PdfDocument on
+            # password-protected PDFs (there is no post-open doc.is_encrypted).
+            raw = getattr(pdfium, "raw", None)
+            err_code = None
+            if raw is not None and hasattr(raw, "FPDF_GetLastError"):
+                try:
+                    err_code = raw.FPDF_GetLastError()
+                except Exception:  # noqa: BLE001
+                    err_code = None
+            enc_codes = {
+                getattr(raw, "FPDF_ERR_PASSWORD", None),
+                getattr(raw, "FPDF_ERR_SECURITY", None),
+            } - {None}
+            msg = str(exc).lower()
+            if (err_code in enc_codes) or ("password" in msg) or ("encrypted" in msg):
                 raise CaseFileError(MSG_ENCRYPTED, 400, "PDF_ENCRYPTED") from exc
+            raise CaseFileError(MSG_CORRUPT, 400, "CORRUPT_FILE") from exc
+        except Exception as exc:  # noqa: BLE001
             raise CaseFileError(MSG_CORRUPT, 400, "CORRUPT_FILE") from exc
         try:
             self.count = len(self.doc)
@@ -925,6 +945,7 @@ class _PdfSource:
         out: List[str] = []
         for i in range(len(self.doc)):
             try:
+                # pdf_backend.extract_page_text opens and closes both PdfPage and PdfTextPage in finally.
                 out.append(self._pdf_backend.extract_page_text(self.doc, i).strip())
             except Exception:  # noqa: BLE001
                 out.append("")

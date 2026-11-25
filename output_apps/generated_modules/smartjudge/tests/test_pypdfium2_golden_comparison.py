@@ -116,3 +116,60 @@ def test_persian_fast_path_digit_normalization():
     assert reason == "CLEAN_DIGITAL_FAST_PATH"
     assert "۵۰۰۰۰۰۰۰۰" in norm_text
     assert "۱۱۰۲" in norm_text
+
+
+def test_extract_page_text_closes_handles_even_on_error():
+    """Verify extract_page_text always closes both PdfPage and PdfTextPage handles."""
+    events: list[str] = []
+
+    class _FakeTextPage:
+        def get_text_range(self):
+            return "متن نمونه"
+
+        def close(self):
+            events.append("textpage.close")
+
+    class _FakePage:
+        def __init__(self, fail: bool = False):
+            self._fail = fail
+
+        def get_textpage(self):
+            if self._fail:
+                raise RuntimeError("boom")
+            return _FakeTextPage()
+
+        def close(self):
+            events.append("page.close")
+
+    assert pdf_backend.extract_page_text([_FakePage(fail=False)], 0) == "متن نمونه"
+    assert events == ["textpage.close", "page.close"]
+
+    events.clear()
+    with pytest.raises(RuntimeError, match="boom"):
+        pdf_backend.extract_page_text([_FakePage(fail=True)], 0)
+    assert events == ["page.close"]
+
+
+def test_pdf_source_encrypted_vs_corrupt_classification(monkeypatch):
+    """Verify _PdfSource distinguishes encrypted PDFs from corrupt PDFs via PdfiumError."""
+    from output_apps.generated_modules.smartjudge.case_files import CaseFileError, _PdfSource
+
+    def _raise_password(_data):
+        raise pdfium.PdfiumError("Failed to load document (PYPDFIUM_ERR_PASSWORD).")
+
+    monkeypatch.setattr(pdfium, "PdfDocument", _raise_password)
+    with pytest.raises(CaseFileError) as exc_enc:
+        _PdfSource(b"%PDF-1.4 encrypted")
+    assert exc_enc.value.code == "PDF_ENCRYPTED"
+    assert exc_enc.value.status_code == 400
+
+    def _raise_format(_data):
+        raise pdfium.PdfiumError("Failed to load document (PYPDFIUM_ERR_FORMAT).")
+
+    monkeypatch.setattr(pdfium, "PdfDocument", _raise_format)
+    monkeypatch.setattr(pdfium.raw, "FPDF_GetLastError", lambda: pdfium.raw.FPDF_ERR_FORMAT)
+    with pytest.raises(CaseFileError) as exc_bad:
+        _PdfSource(b"not-a-pdf")
+    assert exc_bad.value.code == "CORRUPT_FILE"
+    assert exc_bad.value.status_code == 400
+
