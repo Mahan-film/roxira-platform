@@ -7,7 +7,8 @@ trigger: always_on
 Read `docs/agents/LESSONS.md` before every task. Your task queue is the newest `## WAVE` comment on issue 592.
 
 ## Never
-- Never merge a PR, use `--admin`, `--no-verify`, or push to `main`. The review desk merges.
+- Never merge a PR, use `--admin`, `--no-verify`, or push to `main`. The merge gate merges on a review-desk no-blocker at the PR head.
+  B1 core needs the hub review; protected paths need `OWNER-OK #<PR> <sha7>` from the owner approver account. The hub is a role (`docs/hub/HUB_ROLE.md`); Claude is optional.
 - Never rename, retimestamp or edit a migration that is already on `main`. New migrations get a timestamp after the newest one on `main`.
 - Never weaken, skip or delete a test to make CI green. Never move a file so a check stops seeing it.
 - Never put a key, token or password in code, tests, PR text or frontend. Never read `repomix-output.xml`, `database_snapshots/`, `*.sql`, `*.tar.gz`.

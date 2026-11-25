@@ -23,6 +23,9 @@ runtime). Read it via `output_apps/generated_modules/smartjudge/model_registry.p
 or run `python3 scripts/check_models.py` to check every id against the live
 OpenRouter catalogue. Do not hardcode a model id anywhere else — add or change
 it in `config/models.yaml`.
+The hub is a role, not a tool: Claude Code, Antigravity (Gemini) or OpenCode with a
+strong model may run it (`docs/hub/HUB_ROLE.md`). Claude is optional. The reviewer of a
+PR must be a different model family from its author; the review desk enforces it.
 
 ## 4. Hard rules
 - Never put a service key or token in frontend code (`output_apps/enterprise_hub/frontend/`).
@@ -39,12 +42,13 @@ it in `config/models.yaml`.
   only (`docs/strategy/research/R8_FACT_CHECK.md`, "Owner answers"). Never send secrets/keys
   to any model.
 - Subagent roles for this repo are defined in `.claude/agents/` (`implementer`, `tester`,
-  `reviewer`); use them instead of re-deriving the same scope/model split ad hoc.
+  `reviewer`); use them instead of re-deriving the same scope/model split ad hoc. Other tools
+  read the same rules from `.agents/` (always-on rules and skills; role copies go there too).
 
 ## 4a. Private-repo code policy (effective at the private flip; owner delegated 2026-11-22)
 - Applies to proprietary CODE, not to the product-data rule in section 4. Many providers' pages state nothing on retention or training, so even paid providers are not assumed safe.
-- After the repo is private, lanes (box lanes and interactive lanes) work only on non-sensitive paths: docs, tests, scaffolding, public-law data, generic UI. Core business logic (billing, pricing, tax rules, Smart Judge prompts, customer-facing algorithms) is touched only by the two human-driven hubs. The box enforces this with path allowlists (ORCH_SCOPE_*).
-- Changes to migrations, payment, auth, Dockerfile.prod and deploy scripts are never merged by a hub alone: they wait for an owner sentence in chat (main autodeploys, so a merge is a production write).
+- After the repo is private, lanes (box lanes and interactive lanes) work only on non-sensitive paths: docs, tests, scaffolding, public-law data, generic UI. Core business logic (billing, pricing, tax rules, Smart Judge prompts, customer-facing algorithms) is touched only by the two owner-driven hub sessions (in any tool, with the owner present; the Antigravity hub lane H1 reviews this code but never edits it). The box enforces this with path allowlists (ORCH_SCOPE_*).
+- Changes to migrations, payment, auth, Dockerfile.prod and deploy scripts are never merged by a hub alone: they wait for an owner sentence: the line `OWNER-OK #<PR> <sha7>` posted from the owner approver account (main autodeploys, so a merge is a production write).
 - The box (Linux laptop) sees only synthetic and public data, never real customer data.
 - Until `docs/strategy/research/PROVIDER_DATA_POLICY.md` (issue row 1230) proves a provider passes a live zero-retention / no-training test, it counts as public-code-only.
 

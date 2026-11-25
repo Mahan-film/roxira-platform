@@ -13,7 +13,8 @@ The owner wants maximum pressure on Antigravity lanes and cheap agents (Haiku/So
 - **Merge = production write** (autodeploy about every 5 min). Merge check (lesson 37): desk `Verdict: no blocker` naming the CURRENT head, CI green at job level,
   no comment newer than the head with `Verdict: blocker`, not on the Held list. Use the merge queue: `gh pr merge N --auto --match-head-commit <sha>`.
 - Protected paths (migrations, auth, payment, Dockerfile.prod, deploy scripts, workflows, nginx, production compose) need the owner's answer for that PR;
-  the hub then posts `OWNER-OK @ <sha>` and queues it. B1 core (Smart Judge core prompts/algorithms, billing, pricing, tax rules, ALL `country_packs/**`) is human-hub only.
+  the owner then posts `OWNER-OK #<PR> <sha7>` from the owner approver account (the hub prepares the packet and the exact line) and the hub queues it.
+  B1 core (Smart Judge core prompts/algorithms, billing, pricing, tax rules, ALL `country_packs/**`) is owner-driven-hub only (any tool; `docs/hub/HUB_ROLE.md`).
 - Private flip: only the owners say "go private". The box plans it for 2026-11-25 after its merge gate goes live; the hub told the box on #965 it needs the owners' own sentence.
 
 ## Box standing rules (accepted on #965, 2026-11-23)

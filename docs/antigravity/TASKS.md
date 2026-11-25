@@ -1,6 +1,7 @@
 # Antigravity task pack (visual and small frontend work only)
 
-Claude reviews, tests and merges everything from this pack. You only do the task you are given.
+The review desk (a different model family) reviews every PR from this pack. The merge gate merges on a desk no-blocker at the PR head.
+B1 core needs the hub review; protected paths need `OWNER-OK #<PR> <sha7>` from the owner approver account. You only do the task you are given.
 
 ## Fixed rules
 
