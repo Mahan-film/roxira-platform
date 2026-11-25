@@ -1,4 +1,7 @@
 import 'reflect-metadata';
+import { CountryPackRegistry } from '../../country_packs/country-pack.registry';
+import { createIranPack } from '../../country_packs/ir/ir.pack';
+import { createMalaysiaPack } from '../../country_packs/my/my.pack';
 import { TenantsService } from './tenants.service';
 
 interface Mocks {
@@ -20,7 +23,18 @@ const createService = () => {
     },
   };
 
-  const service = new TenantsService(mocks.tenantsRepository as never);
+  const registry = new CountryPackRegistry('IR');
+  registry.register(
+    createIranPack({
+      statutory: {
+        findForYear: jest.fn().mockResolvedValue([]),
+        findLatest: jest.fn().mockResolvedValue(null),
+      } as never,
+    }),
+  );
+  registry.register(createMalaysiaPack());
+
+  const service = new TenantsService(mocks.tenantsRepository as never, registry);
 
   return { service, mocks };
 };
@@ -46,6 +60,7 @@ describe('TenantsService', () => {
       locale: 'fa-IR',
       fiscalYearStartMonth: 1,
     };
+    mocks.tenantsRepository.findById.mockResolvedValue({ id: 'tenant-1', countryCode: 'IR', bookCurrencyCode: 'IRR' });
     mocks.tenantsRepository.updateSettings.mockResolvedValue(updated);
 
     const res = await service.updateSettings('tenant-1', {

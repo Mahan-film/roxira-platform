@@ -418,14 +418,16 @@ export default function MoadianWizardPage() {
             <div className="flex items-center gap-2">
               <Link
                 href="/app/tax"
-                className={buttonVariants({ variant: "outline", size: "sm", className: "gap-1" })}
+                className={buttonVariants({ variant: "outline", size: "sm", className: "gap-1 min-h-[44px] min-w-[44px]" })}
               >
-                <ArrowRight className="h-4 w-4" />
+                <ArrowRight className="h-4 w-4 rtl:rotate-180" />
                 بازگشت به پنل مالیات
               </Link>
               <Button
                 variant="ghost"
-                size="sm"
+                size="icon"
+                className="size-11 min-h-[44px] min-w-[44px]"
+                aria-label="بروزرسانی وضعیت"
                 onClick={() => void fetchStatusAndCreds()}
                 disabled={loading}
               >
@@ -525,8 +527,9 @@ export default function MoadianWizardPage() {
               <button
                 key={step.id}
                 type="button"
+                aria-current={isActive ? "step" : undefined}
                 onClick={() => setCurrentStep(step.id)}
-                className={`flex flex-col text-right transition-colors ${
+                className={`flex flex-col text-start min-h-[44px] justify-center p-2 rounded-md transition-colors ${
                   isActive
                     ? "text-primary font-semibold"
                     : isCompleted
@@ -536,7 +539,7 @@ export default function MoadianWizardPage() {
               >
                 <div className="flex items-center gap-1.5 text-sm">
                   {isCompleted ? (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                   ) : (
                     <span
                       className={`flex h-5 w-5 items-center justify-center rounded-full text-xs ${
@@ -550,7 +553,7 @@ export default function MoadianWizardPage() {
                   )}
                   <span>{step.title}</span>
                 </div>
-                <span className="text-xs text-muted-foreground hidden sm:inline mr-6">
+                <span className="text-xs text-muted-foreground hidden sm:inline me-6">
                   {step.desc}
                 </span>
               </button>
@@ -594,9 +597,10 @@ export default function MoadianWizardPage() {
                     <Button
                       variant="outline"
                       size="sm"
+                      className="min-h-[44px]"
                       onClick={() => copyToClipboard("https://sandboxrc.tax.gov.ir", "آدرس سندباکس")}
                     >
-                      <Copy className="h-3.5 w-3.5 ml-1" />
+                      <Copy className="h-3.5 w-3.5 me-1" />
                       کپی پیوند
                     </Button>
                   </div>
@@ -604,7 +608,7 @@ export default function MoadianWizardPage() {
 
                 <div className="space-y-2">
                   <h4 className="font-semibold text-foreground">اقدامات لازم در این مرحله:</h4>
-                  <ul className="list-inside list-disc space-y-1.5 text-muted-foreground mr-2">
+                  <ul className="list-inside list-disc space-y-1.5 text-muted-foreground me-2">
                     <li>ورود به درگاه سندباکس با استفاده از حساب کاربری تستی سازمان.</li>
                     <li>
                       در صورتی که هنوز ثبت‌نام نکرده‌اید، با استفاده از اطلاعات شرکت فرضی یا مشخصات اقتصادی تست، پرونده تشکیل دهید.
@@ -619,7 +623,7 @@ export default function MoadianWizardPage() {
                 </div>
 
                 <Alert className="border-amber-400 bg-amber-50 text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
-                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                   <AlertTitle>نکته مهم امنیتی</AlertTitle>
                   <AlertDescription>
                     در محیط سندباکس، هرگز از کلید خصوصی و گواهی تجاری واقعی سازمان خود استفاده نکنید. در گام بعدی، یک زوج‌کلید مجزا و کاملاً امن اختصاصی توسط رکسایرا تولید می‌شود.
@@ -627,9 +631,9 @@ export default function MoadianWizardPage() {
                 </Alert>
               </CardContent>
               <CardFooter className="flex justify-end gap-2 border-t pt-4">
-                <Button onClick={() => setCurrentStep(2)} className="gap-2">
+                <Button onClick={() => setCurrentStep(2)} className="min-h-[44px] gap-2">
                   رفتن به گام ۲: تولید زوج‌کلید
-                  <ArrowLeft className="h-4 w-4" />
+                  <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
                 </Button>
               </CardFooter>
             </Card>
@@ -700,6 +704,7 @@ export default function MoadianWizardPage() {
                     <Button
                       type="button"
                       size="sm"
+                      className="min-h-[44px]"
                       variant={modulusLength === 2048 ? "default" : "outline"}
                       onClick={() => setModulusLength(2048)}
                     >
@@ -708,6 +713,7 @@ export default function MoadianWizardPage() {
                     <Button
                       type="button"
                       size="sm"
+                      className="min-h-[44px]"
                       variant={modulusLength === 4096 ? "default" : "outline"}
                       onClick={() => setModulusLength(4096)}
                     >
@@ -746,19 +752,19 @@ export default function MoadianWizardPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-7 text-xs"
+                            className="min-h-[44px] text-xs px-3"
                             onClick={() => copyToClipboard(generatedKey.publicKeyPem, "کلید عمومی")}
                           >
-                            <Copy className="h-3 w-3 ml-1" />
+                            <Copy className="h-3.5 w-3.5 me-1" />
                             کپی
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-7 text-xs"
+                            className="min-h-[44px] text-xs px-3"
                             onClick={() => downloadTextFile("public-key.pem", generatedKey.publicKeyPem)}
                           >
-                            <Download className="h-3 w-3 ml-1" />
+                            <Download className="h-3.5 w-3.5 me-1" />
                             دانلود فایل public-key.pem
                           </Button>
                         </div>
@@ -779,19 +785,19 @@ export default function MoadianWizardPage() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-7 text-xs"
+                              className="min-h-[44px] text-xs px-3"
                               onClick={() => copyToClipboard(generatedCsr, "درخواست گواهی (CSR)")}
                             >
-                              <Copy className="h-3 w-3 ml-1" />
+                              <Copy className="h-3.5 w-3.5 me-1" />
                               کپی
                             </Button>
                             <Button
                               variant="outline"
                               size="sm"
-                              className="h-7 text-xs"
+                              className="min-h-[44px] text-xs px-3"
                               onClick={() => downloadTextFile("request.csr", generatedCsr)}
                             >
-                              <Download className="h-3 w-3 ml-1" />
+                              <Download className="h-3.5 w-3.5 me-1" />
                               دانلود فایل request.csr
                             </Button>
                           </div>
@@ -808,12 +814,12 @@ export default function MoadianWizardPage() {
                 )}
               </CardContent>
               <CardFooter className="flex justify-between border-t pt-4">
-                <Button variant="outline" onClick={() => setCurrentStep(1)}>
+                <Button variant="outline" className="min-h-[44px]" onClick={() => setCurrentStep(1)}>
                   بازگشت به گام ۱
                 </Button>
-                <Button onClick={() => setCurrentStep(3)} className="gap-2">
+                <Button onClick={() => setCurrentStep(3)} className="min-h-[44px] gap-2">
                   رفتن به گام ۳: ثبت در کارپوشه و رکسایرا
-                  <ArrowLeft className="h-4 w-4" />
+                  <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
                 </Button>
               </CardFooter>
             </Card>
@@ -837,7 +843,7 @@ export default function MoadianWizardPage() {
               <CardContent className="flex flex-col gap-5 text-sm">
                 <div className="rounded-lg border bg-muted/40 p-4 space-y-2 text-xs leading-relaxed">
                   <h4 className="font-semibold text-foreground text-sm">مراحل در کارپوشه مالیاتی:</h4>
-                  <ol className="list-inside list-decimal space-y-1 text-muted-foreground mr-1">
+                  <ol className="list-inside list-decimal space-y-1 text-muted-foreground me-1">
                     <li>ورود به کارپوشه مالیاتی (سندباکس یا عملیاتی) &larr; بخش مدیریت پرونده.</li>
                     <li>انتخاب «عضویت و ثبت پایانه» &larr; انتخاب روش ارسال: «توسط مؤدی».</li>
                     <li>آپلود فایل <code>public-key.pem</code> دانلودشده از گام قبل.</li>
@@ -855,7 +861,7 @@ export default function MoadianWizardPage() {
                       value={memoryIdInput}
                       onChange={(e) => setMemoryIdInput(e.target.value.toUpperCase())}
                       placeholder="مثال: A1B2C3"
-                      className="font-mono"
+                      className="font-mono min-h-[44px]"
                     />
                     <p className="text-xs text-muted-foreground">دقیقاً ۶ حرف و عدد انگلیسی بزرگ دریافتی از کارپوشه.</p>
                   </div>
@@ -959,7 +965,7 @@ export default function MoadianWizardPage() {
                   <Button
                     onClick={handleSaveCredential}
                     disabled={savingCred}
-                    className="gap-2"
+                    className="min-h-[44px] gap-2"
                   >
                     <ShieldCheck className="h-4 w-4" />
                     {savingCred ? "در حال ذخیره و اعتبارسنجی…" : "ذخیره اطلاعات مودیان در سیستم"}
@@ -967,12 +973,12 @@ export default function MoadianWizardPage() {
                 </div>
               </CardContent>
               <CardFooter className="flex justify-between border-t pt-4">
-                <Button variant="outline" onClick={() => setCurrentStep(2)}>
+                <Button variant="outline" className="min-h-[44px]" onClick={() => setCurrentStep(2)}>
                   بازگشت به گام ۲
                 </Button>
-                <Button onClick={() => setCurrentStep(4)} className="gap-2">
+                <Button onClick={() => setCurrentStep(4)} className="min-h-[44px] gap-2">
                   رفتن به گام ۴: تست ارسال
-                  <ArrowLeft className="h-4 w-4" />
+                  <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
                 </Button>
               </CardFooter>
             </Card>
@@ -1041,6 +1047,7 @@ export default function MoadianWizardPage() {
                         <Button
                           size="sm"
                           variant="outline"
+                          className="min-h-[44px]"
                           onClick={() => void loadUnsentInvoices()}
                         >
                           تلاش مجدد
@@ -1054,7 +1061,9 @@ export default function MoadianWizardPage() {
                   ) : (
                     <div className="flex flex-wrap items-center gap-3">
                       <select
-                        className="h-9 rounded-md border border-input bg-background px-3 text-sm min-w-[280px]"
+                        id="wizard-select-invoice"
+                        aria-label="انتخاب صورتحساب جهت ارسال آزمایشی"
+                        className="h-11 min-h-[44px] rounded-md border border-input bg-background px-3 text-sm min-w-[280px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         value={selectedInvoiceId}
                         onChange={(e) => {
                           setSelectedInvoiceId(e.target.value);
@@ -1116,19 +1125,19 @@ export default function MoadianWizardPage() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                       <div>
-                        <span className="text-muted-foreground ml-1">شناسه مالیاتی (TaxID ۲۲ رقمی):</span>
+                        <span className="text-muted-foreground me-1">شناسه مالیاتی (TaxID ۲۲ رقمی):</span>
                         <code dir="ltr" className="font-mono font-medium">{submissionResult.taxId}</code>
                       </div>
                       <div>
-                        <span className="text-muted-foreground ml-1">کد پیگیری (UID):</span>
+                        <span className="text-muted-foreground me-1">کد پیگیری (UID):</span>
                         <code dir="ltr" className="font-mono">{submissionResult.uid}</code>
                       </div>
                       <div>
-                        <span className="text-muted-foreground ml-1">شماره ارجاع مودیان:</span>
+                        <span className="text-muted-foreground me-1">شماره ارجاع مودیان:</span>
                         <span>{submissionResult.referenceNumber || "—"}</span>
                       </div>
                       <div>
-                        <span className="text-muted-foreground ml-1">تعداد دفعات استعلام:</span>
+                        <span className="text-muted-foreground me-1">تعداد دفعات استعلام:</span>
                         <span>{submissionResult.pollCount} بار</span>
                       </div>
                     </div>
@@ -1169,12 +1178,12 @@ export default function MoadianWizardPage() {
                 )}
               </CardContent>
               <CardFooter className="flex justify-between border-t pt-4">
-                <Button variant="outline" onClick={() => setCurrentStep(3)}>
+                <Button variant="outline" className="min-h-[44px]" onClick={() => setCurrentStep(3)}>
                   بازگشت به گام ۳
                 </Button>
-                <Button onClick={() => setCurrentStep(5)} className="gap-2">
+                <Button onClick={() => setCurrentStep(5)} className="min-h-[44px] gap-2">
                   رفتن به گام ۵: انتقال به محیط عملیاتی
-                  <ArrowLeft className="h-4 w-4" />
+                  <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
                 </Button>
               </CardFooter>
             </Card>
@@ -1258,11 +1267,11 @@ export default function MoadianWizardPage() {
                 </div>
 
                 <div className="flex items-center gap-2 border-t pt-4">
-                  <Link href="/app/tax" className={buttonVariants({ className: "gap-2" })}>
+                  <Link href="/app/tax" className={buttonVariants({ className: "gap-2 min-h-[44px]" })}>
                     اتمام و بازگشت به داشبورد مالیات
-                    <ArrowLeft className="h-4 w-4" />
+                    <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
                   </Link>
-                  <Button variant="outline" onClick={() => setCurrentStep(3)}>
+                  <Button variant="outline" className="min-h-[44px]" onClick={() => setCurrentStep(3)}>
                     ویرایش تنظیمات اتصال در رکسایرا
                   </Button>
                 </div>
@@ -1319,6 +1328,7 @@ export default function MoadianWizardPage() {
                   <Button
                     size="sm"
                     variant="outline"
+                    className="min-h-[44px]"
                     onClick={() => void loadUnsentInvoices()}
                   >
                     تلاش مجدد
@@ -1334,10 +1344,10 @@ export default function MoadianWizardPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="text-right">شماره صورتحساب</TableHead>
-                      <TableHead className="text-right">تاریخ صدور</TableHead>
-                      <TableHead className="text-right">خریدار</TableHead>
-                      <TableHead className="text-right">مبلغ کل</TableHead>
+                      <TableHead className="text-start">شماره صورتحساب</TableHead>
+                      <TableHead className="text-start">تاریخ صدور</TableHead>
+                      <TableHead className="text-start">خریدار</TableHead>
+                      <TableHead className="text-start">مبلغ کل</TableHead>
                       <TableHead className="text-center">سپری‌شده / مهلت</TableHead>
                       <TableHead className="text-center">وضعیت مهلت</TableHead>
                       <TableHead className="text-center">اقدام</TableHead>
@@ -1372,7 +1382,7 @@ export default function MoadianWizardPage() {
                           <Button
                             size="sm"
                             variant={deadline.isExpired ? "destructive" : "outline"}
-                            className="h-7 text-xs gap-1"
+                            className="min-h-[44px] text-xs gap-1"
                             onClick={() => {
                               setSelectedInvoiceId(invoice.id);
                               setCurrentStep(4);

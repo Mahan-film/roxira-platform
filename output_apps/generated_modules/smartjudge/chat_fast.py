@@ -215,6 +215,7 @@ class StreamOutcome:
     model: Optional[str] = None
     ttft_ms: Optional[int] = None
     interrupted: bool = False
+    finish_reason: Optional[str] = None
     failures: list = field(default_factory=list)  # [(model, http_status|None, kind)]
     attempts: list = field(default_factory=list)  # [(model, "ok"|"timeout"|"empty"|"error:<Type>")]
 

@@ -69,7 +69,10 @@ describePg('Onboarding progress (NOSUPERUSER NOBYPASSRLS)', () => {
     }
 
     appDs = await new DataSource(dsOptions(db, ROLE_NAME, ROLE_PW)).initialize();
-    const tenants = new TenantsService(new TenantsRepository(appDs.getRepository(TenantEntity)));
+    const tenants = new TenantsService(
+      new TenantsRepository(appDs.getRepository(TenantEntity)),
+      { getOrThrow: jest.fn(), listSupported: jest.fn() } as never,
+    );
     service = new OnboardingService(new OnboardingRepository(new TenantScope(appDs)), tenants);
   });
 

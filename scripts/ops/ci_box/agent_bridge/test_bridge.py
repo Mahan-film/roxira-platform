@@ -260,3 +260,66 @@ def test_empty_allowlist_fails_closed(tmp_path):
     p.write_text("[bridge]\nallowed_user_ids = []\n")
     with pytest.raises(SystemExit):
         bridge.load_config(p)
+
+
+def test_invalid_auth_mode_fails_closed(tmp_path):
+    p = tmp_path / "c.toml"
+    p.write_text('[bridge]\nallowed_user_ids = [1]\nauth_mode = "bad"\n')
+    with pytest.raises(SystemExit):
+        bridge.load_config(p)
+
+
+def test_subscription_mode_default_unchanged(tmp_path):
+    p = tmp_path / "c.toml"
+    p.write_text("[bridge]\nallowed_user_ids = [1]\n")
+    cfg = bridge.load_config(p)
+    assert cfg["auth_mode"] == "subscription"
+    w = {"id": "w1", "lane": "l7", "task": "x", "acceptance": [], "mode": "read", "max_turns": 40}
+    env, turns, timeout_m = bridge.resolve_execution_env_and_limits(cfg, w)
+    assert env is None
+    assert turns == 40
+    assert timeout_m == cfg["timeout_minutes"]
+
+
+def test_api_key_mode_requires_env_key(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    cfg = {**bridge.DEFAULTS, "auth_mode": "api_key", "api_key_env": "ANTHROPIC_API_KEY"}
+    w = {"id": "w1", "lane": "l7", "task": "x", "acceptance": [], "mode": "read", "max_turns": 40}
+    with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
+        bridge.resolve_execution_env_and_limits(cfg, w)
+
+
+def test_api_key_mode_enforces_caps_and_redacts_fake_key(monkeypatch):
+    fake = "sk-ant-" + "api03-" + ("z" * 20)
+    monkeypatch.setenv("BRIDGE_TEST_KEY", fake)
+    cfg = {
+        **bridge.DEFAULTS,
+        "auth_mode": "api_key",
+        "api_key_env": "BRIDGE_TEST_KEY",
+        "api_key_max_turns": 12,
+        "api_key_timeout_minutes": 10,
+        "timeout_minutes": 45,
+    }
+    w = {"id": "w2", "lane": "l7", "task": "x", "acceptance": [], "mode": "read", "max_turns": 50}
+    seen = {}
+
+    def fake_run(args, input_text=None, timeout=None, cwd=None, env=None):
+        if "--help" in args:
+            return subprocess.CompletedProcess(args, 0, "--max-turns", "")
+        seen["args"] = args
+        seen["timeout"] = timeout
+        seen["env_key"] = (env or {}).get("ANTHROPIC_API_KEY")
+        return subprocess.CompletedProcess(
+            args, 0, json.dumps({"result": f"ok {fake}", "num_turns": 3}), ""
+        )
+
+    monkeypatch.setattr(bridge, "run_cmd", fake_run)
+    bridge._help_cache.clear()
+    report = bridge.execute_wave(cfg, w)
+    assert seen["env_key"] == fake
+    assert seen["timeout"] == 10 * 60
+    assert "--max-turns" in seen["args"]
+    idx = seen["args"].index("--max-turns")
+    assert seen["args"][idx + 1] == "12"
+    assert "status: done" in report
+    assert fake not in report

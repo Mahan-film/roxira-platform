@@ -1,4 +1,5 @@
 import { Global, Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { CalendarModule } from '../calendar/calendar.module';
 import { HrModule } from '../hr/hr.module';
 import { StatutoryService } from '../hr/statutory/statutory.service';
@@ -40,6 +41,10 @@ export const DEFAULT_COUNTRY = 'IR';
     },
     CountryPackResolver,
     CountryPackInterceptor,
+    {
+      provide: APP_INTERCEPTOR,
+      useExisting: CountryPackInterceptor,
+    },
     DatevExtfService,
     {
       provide: CURRENT_COUNTRY_PACK,

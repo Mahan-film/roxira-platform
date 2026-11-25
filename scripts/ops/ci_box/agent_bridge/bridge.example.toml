@@ -10,3 +10,8 @@ workdir = "~/roxira-platform"
 timeout_minutes = 45
 max_budget_usd = 5.0
 allow_write = true
+# Auth mode: "subscription" (default) or "api_key" (off until owner supplies a key in env outside repo).
+auth_mode = "subscription"
+# api_key_env = "ANTHROPIC_API_KEY"
+# api_key_max_turns = 20
+# api_key_timeout_minutes = 15

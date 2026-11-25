@@ -88,6 +88,15 @@ def test_site_down_over_15_min_is_urgent_telegram_only_with_cooldown(env):
     assert len(http.calls) == 2                                                              # next hour: one more
 
 
+def test_chat_answer_down_over_15_min_is_urgent_but_slowness_is_not(env):
+    db, http = env
+    failing = [("FAIL", "chat", "UnboundLocalError"), ("FAIL", "chat_p95", "slow")]
+    notify.enqueue_alerts(failing, "synthetic", now=T0, db=db, http=http)
+    assert notify.enqueue_alerts([], "synthetic", now=T0 + 20 * 60, db=db, http=http) == 1
+    assert len(http.calls) == 1
+    assert "chat is down" in http.calls[0] and "chat_p95" not in http.calls[0]
+
+
 def test_non_site_failure_is_never_urgent(env):
     db, http = env
     notify.enqueue_alerts([("FAIL", "tls:roxira.net", "5 days left")], "synthetic", now=T0, db=db, http=http)

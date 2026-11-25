@@ -8,8 +8,8 @@ import { disableTenantRls, enableTenantRls } from './data/tenant-rls';
  *
  * Revert: `down()` drops triggers, functions, tables, indexes, and columns in reverse order.
  */
-export class AddJournalIntegrityAndPeriodStates1789900029000 implements MigrationInterface {
-  name = 'AddJournalIntegrityAndPeriodStates1789900029000';
+export class AddJournalIntegrityAndPeriodStates1789900053000 implements MigrationInterface {
+  name = 'AddJournalIntegrityAndPeriodStates1789900053000';
 
   public async up(q: QueryRunner): Promise<void> {
     await q.query(`SET LOCAL lock_timeout = '2s'`);

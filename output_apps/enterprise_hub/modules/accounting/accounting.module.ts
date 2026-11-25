@@ -64,6 +64,7 @@ import { VoucherToolsService } from './services/voucher-tools.service';
 import { AccountBudgetEntity } from './entities/account-budget.entity';
 import { AccountBudgetRepository } from './repositories/account-budget.repository';
 import { BudgetVsActualService } from './services/budget-vs-actual.service';
+import { IntercompanyService } from './intercompany/intercompany.service';
 
 /**
  * ماژول حسابداری دوطرفه و دفتر روزنامه سازمانی
@@ -154,7 +155,8 @@ import { BudgetVsActualService } from './services/budget-vs-actual.service';
     AccountingPeriodService,
     JournalSequencerService,
     MasterDataChangeLogService,
+    IntercompanyService,
   ],
-  exports: [AccountingService, FinancialReportsService, ReportExportService, CostCentreReportService, BudgetVsActualService, BudgetControlService, ConsolidatedReportService, AccountingPeriodService, JournalSequencerService, MasterDataChangeLogService],
+  exports: [AccountingService, FinancialReportsService, ReportExportService, CostCentreReportService, BudgetVsActualService, BudgetControlService, ConsolidatedReportService, AccountingPeriodService, JournalSequencerService, MasterDataChangeLogService, IntercompanyService],
 })
 export class AccountingModule {}

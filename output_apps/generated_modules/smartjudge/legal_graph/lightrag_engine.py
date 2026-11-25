@@ -32,7 +32,7 @@ import re
 import threading
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 logger = logging.getLogger("smartjudge.lightrag")
 
@@ -218,6 +218,8 @@ HYBRID_SPARSE_ENV = "SMARTJUDGE_HYBRID_SPARSE"
 HYBRID_SPARSE_VECTOR = os.environ.get("SMARTJUDGE_HYBRID_SPARSE_VECTOR", "bm25")
 HYBRID_DENSE_PREFETCH = int(os.environ.get("SMARTJUDGE_HYBRID_DENSE_PREFETCH", "30"))
 HYBRID_SPARSE_PREFETCH = int(os.environ.get("SMARTJUDGE_HYBRID_SPARSE_PREFETCH", "30"))
+HYBRID_NATIVE_BM25_VECTOR = os.environ.get("SMARTJUDGE_HYBRID_BM25_VECTOR", "")
+HYBRID_BM25_PREFETCH = int(os.environ.get("SMARTJUDGE_HYBRID_BM25_PREFETCH", "30"))
 
 
 def hybrid_sparse_enabled() -> bool:
@@ -673,6 +675,69 @@ def active_point_filter(active_only: Optional[bool] = None) -> Optional[Dict[str
     else:
         condition = {"key": "is_active", "match": {"value": True}}
     return {"must": [condition]}
+
+
+_AS_OF_DIGIT_TRANS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+
+
+def normalize_as_of_int(as_of: Optional[Union[str, int]]) -> Optional[int]:
+    """Normalize a date string or int (``YYYY-MM-DD``, ``YYYY/MM/DD``, ``YYYYMMDD``) to int ``YYYYMMDD``."""
+    if as_of is None or isinstance(as_of, bool):
+        return None
+    if isinstance(as_of, int):
+        return as_of if 10000101 <= as_of <= 99991231 else None
+    digits = re.sub(r"[^\d]", "", str(as_of).translate(_AS_OF_DIGIT_TRANS))
+    if len(digits) != 8:
+        return None
+    val = int(digits)
+    return val if 10000101 <= val <= 99991231 else None
+
+
+def build_point_filter(
+    *,
+    active_only: Optional[bool] = None,
+    as_of: Optional[Union[str, int]] = None,
+    authority_tiers: Optional[Sequence[Union[str, int]]] = None,
+    law_id: Optional[str] = None,
+    status: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Build a Qdrant pre-filter combining ``is_active``, ``valid_from``/``valid_to`` as-of range, and metadata."""
+    must: List[Dict[str, Any]] = []
+    base = active_point_filter(active_only)
+    if base and base.get("must"):
+        must.extend(base["must"])
+
+    as_of_int = normalize_as_of_int(as_of)
+    if as_of_int is not None:
+        must.append(
+            {
+                "should": [
+                    {"key": "valid_from", "range": {"lte": as_of_int}},
+                    {"is_empty": {"key": "valid_from"}},
+                ]
+            }
+        )
+        must.append(
+            {
+                "should": [
+                    {"key": "valid_to", "range": {"gte": as_of_int}},
+                    {"is_empty": {"key": "valid_to"}},
+                ]
+            }
+        )
+
+    if authority_tiers:
+        tiers = [t for t in authority_tiers if t is not None and str(t).strip() != ""]
+        if tiers:
+            must.append({"key": "authority_tier", "match": {"any": tiers}})
+
+    if law_id and str(law_id).strip():
+        must.append({"key": "law_id", "match": {"value": str(law_id).strip()}})
+
+    if status and str(status).strip():
+        must.append({"key": "status", "match": {"value": str(status).strip()}})
+
+    return {"must": must} if must else None
 
 
 def _only_active(payloads: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -1410,8 +1475,11 @@ def build_hybrid_query_body(
     sparse_limit: int = HYBRID_SPARSE_PREFETCH,
     limit: int = 10,
     point_filter: Optional[Dict[str, Any]] = None,
+    bm25_text: Optional[str] = None,
+    bm25_using: Optional[str] = None,
+    bm25_limit: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """بدنهٔ خالص درخواست Query API: دو prefetch (dense + sparse «bm25») و ادغام RRF.
+    """بدنهٔ خالص درخواست Query API: prefetch (dense + sparse + optional native BM25) و ادغام RRF.
 
     بدون I/O تا تست واحد ساختار درخواست را بسنجد (بدون شبکه).
     """
@@ -1424,11 +1492,20 @@ def build_hybrid_query_body(
         "using": HYBRID_SPARSE_VECTOR,
         "limit": max(1, sparse_limit),
     }
+    prefetches: List[Dict[str, Any]] = [dense_prefetch, sparse_prefetch]
+    if bm25_text and str(bm25_text).strip() and bm25_using and str(bm25_using).strip():
+        prefetches.append(
+            {
+                "query": {"text": str(bm25_text).strip()},
+                "using": str(bm25_using).strip(),
+                "limit": max(1, bm25_limit if bm25_limit is not None else sparse_limit),
+            }
+        )
     if point_filter:
-        dense_prefetch["filter"] = point_filter
-        sparse_prefetch["filter"] = point_filter
+        for entry in prefetches:
+            entry["filter"] = point_filter
     body: Dict[str, Any] = {
-        "prefetch": [dense_prefetch, sparse_prefetch],
+        "prefetch": prefetches,
         "query": {"fusion": "rrf"},
         "limit": max(1, limit),
         "with_payload": True,
@@ -1461,19 +1538,35 @@ async def _qdrant_hybrid_search_httpx(
     collection: str,
     limit: int,
     active_only: Optional[bool] = None,
+    *,
+    as_of: Optional[Union[str, int]] = None,
+    authority_tiers: Optional[Sequence[Union[str, int]]] = None,
+    law_id: Optional[str] = None,
+    status: Optional[str] = None,
 ) -> Optional[List[Dict[str, Any]]]:
-    """جست‌وجوی ترکیبی dense+sparse با RRF؛ ``None`` یعنی شکست (تنزل به dense)."""
+    """جست‌وجوی ترکیبی dense+sparse (و در صورت تنظیم BM25 بومی) با RRF و فیلتر as-of؛ ``None`` یعنی شکست."""
     global _qdrant_last_reachable
     indices, values = _lt.query_sparse_vector(text)
     if not indices:
         return None
+    point_filter = build_point_filter(
+        active_only=active_only,
+        as_of=as_of,
+        authority_tiers=authority_tiers,
+        law_id=law_id,
+        status=status,
+    )
+    bm25_using = HYBRID_NATIVE_BM25_VECTOR.strip() or None
     body = build_hybrid_query_body(
         vector,
         {"indices": indices, "values": values},
         dense_limit=HYBRID_DENSE_PREFETCH,
         sparse_limit=HYBRID_SPARSE_PREFETCH,
         limit=max(1, limit),
-        point_filter=active_point_filter(active_only),
+        point_filter=point_filter,
+        bm25_text=_lt.normalize(text) if bm25_using else None,
+        bm25_using=bm25_using,
+        bm25_limit=HYBRID_BM25_PREFETCH,
     )
     try:
         import httpx

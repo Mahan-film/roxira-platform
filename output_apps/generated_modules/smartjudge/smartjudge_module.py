@@ -33,6 +33,7 @@ from output_apps.generated_modules.smartjudge import prompt_library as _prompt_l
 from output_apps.generated_modules.smartjudge import source_filter as _source_filter
 from output_apps.generated_modules.smartjudge import rulings_retrieval as _rulings
 from output_apps.generated_modules.smartjudge import catalog_intent as _catalog_intent
+from output_apps.generated_modules.smartjudge import judiciary_circulars_retrieval as _circulars
 from output_apps.generated_modules.smartjudge import regulations_retrieval as _regs
 from output_apps.generated_modules.smartjudge import laws_public as _laws_public
 from output_apps.generated_modules.smartjudge import regulations_public as _regulations_public
@@ -992,14 +993,21 @@ _RETRIEVAL_CACHE = _chat_fast.TTLCache(
 )
 
 
-async def aquery_knowledge_graph(query_text: str, limit: int = 3, meta_out: Optional[dict] = None):
+async def aquery_knowledge_graph(
+    query_text: str,
+    limit: int = 3,
+    meta_out: Optional[dict] = None,
+    as_of: Optional[str] = None,
+    tz: Optional[Any] = None,
+):
     """Cached (10 min) wrapper around the dual-level retrieval below.
 
     Only real corpus hits are cached (never the FALLBACK placeholder), and callers get a
     deep copy so in-place merging by the caller cannot poison the cache.
+    Applies temporal as-of validity date filter before chunks reach the caller.
     """
     import copy
-    key = (" ".join(str(query_text or "").split()), int(limit))
+    key = (" ".join(str(query_text or "").split()), int(limit), str(as_of or ""), str(tz or ""))
     hit = _RETRIEVAL_CACHE.get(key)
     if hit is not None:
         laws_c, prec_c, meta_c = copy.deepcopy(hit)
@@ -1008,6 +1016,8 @@ async def aquery_knowledge_graph(query_text: str, limit: int = 3, meta_out: Opti
         return laws_c, prec_c
     local_meta: dict = {}
     laws, precedents = await _aquery_knowledge_graph_uncached(query_text, limit=limit, meta_out=local_meta)
+    laws = _abstention_gate.filter_by_as_of(laws, as_of_date=as_of, tz=tz)
+    precedents = _abstention_gate.filter_by_as_of(precedents, as_of_date=as_of, tz=tz)
     if meta_out is not None:
         meta_out.update(local_meta)
     if _chat_safety.is_grounded(laws, precedents):
@@ -1043,12 +1053,18 @@ async def _aquery_knowledge_graph_uncached(query_text: str, limit: int = 3, meta
     rulings_task = asyncio.ensure_future(_rulings.retrieve_rulings(query_text)) if _rulings.enabled() else None
     # بخشنامه‌ها و مقررات: فقط با SMARTJUDGE_REGULATIONS_COLLECTION، موازی با قوانین.
     regs_task = asyncio.ensure_future(_regs.retrieve_regulations(query_text)) if _regs.enabled() else None
+    # بخشنامه‌های قوه قضائیه: فقط با JUDICIARY_CIRCULARS_COLLECTION و برای پرسش‌های بخشنامه‌ای.
+    circulars_task = (
+        asyncio.ensure_future(_circulars.retrieve_judiciary_circulars(query_text))
+        if (_circulars.enabled() and _circulars.is_circular_question(query_text))
+        else None
+    )
     try:
         retrieval, sql_result, lr_exc, sql_exc = await _chat_fast.parallel_retrieve(
             _qdrant_branch, _sql_branch if _dual_retrieve is not None else None
         )
     except BaseException:
-        for task in (rulings_task, regs_task):
+        for task in (rulings_task, regs_task, circulars_task):
             if task is not None and not task.done():
                 task.cancel()  # never leave a parallel search pending
         raise
@@ -1117,6 +1133,14 @@ async def _aquery_knowledge_graph_uncached(query_text: str, limit: int = 3, meta
             print(f"[SMARTJUDGE][REGULATIONS-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
             reg_rows = []
         precedents = list(precedents or []) + [r for r in reg_rows if r not in (precedents or [])]
+
+    if circulars_task is not None:
+        try:
+            circular_rows = await circulars_task
+        except Exception as exc:  # pragma: no cover - defensive; retrieve_judiciary_circulars already swallows errors
+            print(f"[SMARTJUDGE][CIRCULARS-FAIL] {type(exc).__name__}: {exc}", file=sys.stderr)
+            circular_rows = []
+        precedents = _circulars.merge_circulars(precedents, circular_rows)
 
     if meta_out is not None:
         meta_out.update(
@@ -1881,6 +1905,9 @@ def _make_chat_opener(api_key: str, messages: list, max_tokens: int, temperature
                 if obj.get("usage"):
                     usage_out.update(obj["usage"])
                 for choice in obj.get("choices", []):
+                    finish = choice.get("finish_reason")
+                    if finish:
+                        usage_out["finish_reason"] = finish
                     piece = (choice.get("delta") or {}).get("content")
                     if piece:
                         yield piece
@@ -1894,13 +1921,15 @@ async def _llm_stream_answer(messages: list, selected_tier: str, is_voice: bool,
     # Free-first key-pool gateway (SMARTJUDGE_LLM_GATEWAY), if configured. A
     # failure here (network/5xx/timeout) falls back to the direct path below.
     if _gateway_ready():
+        gw_usage: dict = {}
         with _llm_gateway.call_context(plan=gateway_plan or selected_tier):
             gw_outcome = await _chat_fast.stream_with_fallback(
                 [(_llm_gateway.model_for(gateway_plan or selected_tier), ttft_s or CHAT_TTFT_FAST_S)],
-                _make_chat_opener(_llm_gateway.api_key(), messages, max_tokens, temperature, {}, gateway=True),
+                _make_chat_opener(_llm_gateway.api_key(), messages, max_tokens, temperature, gw_usage, gateway=True),
                 on_delta, total_timeout=total_timeout or CHAT_LLM_TOTAL_S,
             )
         if gw_outcome.text:
+            gw_outcome.finish_reason = gw_usage.get("finish_reason")
             _llm_gateway.log_served("gateway", gw_outcome.model)
             return gw_outcome, "ok"
         print(f"[LLM-UNAVAILABLE] provider=key-pool-gateway status=None "
@@ -1924,6 +1953,7 @@ async def _llm_stream_answer(messages: list, selected_tier: str, is_voice: bool,
             total_timeout=CHAT_LLM_TOTAL_S,
         )
         if outcome.text:
+            outcome.finish_reason = usage.get("finish_reason")
             if _llm_gateway is not None:
                 _llm_gateway.log_served("direct", outcome.model)
             return outcome, "ok"
@@ -1977,12 +2007,15 @@ def _court_suggestion_for_chat(user_text: str, payload: dict) -> tuple:
 
 
 def _consult_body(*, conv_id, reply, prob, draft, laws, precedents, court_suggestion,
-                  case_file_refs, model, tier, t0, **extra) -> dict:
+                  case_file_refs, model, tier, t0, grounded: Optional[bool] = None, **extra) -> dict:
     """The one builder for the /chat success body (normal and early-return paths share its keys)."""
+    if grounded is None:
+        grounded = _chat_safety.is_grounded(laws, precedents)
     body = {
         "status": "SUCCESS",
         "conversation_id": conv_id,
         "reply": reply,
+        "grounded": bool(grounded),
         "success_probability": prob,
         "defense_draft": draft,
         "statutory_basis": _chat_fast.trim_sources(laws),
@@ -2038,6 +2071,36 @@ def resolve_voice_followup_query(user_text: str, history: Optional[list]) -> str
         return user_text
 
     return f"{user_text} ({' '.join(prev_tokens[:5])})"
+
+
+_TOKEN_LIMIT_FINISH_REASONS = frozenset({"length", "max_tokens"})
+_SENTENCE_END_RE = re.compile(r"(?<![0-9۰-۹٠-٩])[.۔؟?!](?![0-9۰-۹٠-٩])[»\")\]\u200c]*")
+
+
+def trim_at_token_limit(text: str, finish_reason: Optional[str]) -> str:
+    """When generation stopped at the token limit, trim to the last complete sentence.
+
+    Prevents emitting a half-cut word in voice reply / spoken_reply. Leaves
+    complete answers (finish_reason='stop' or None) untouched. If no sentence
+    mark exists, drops the trailing partial word instead of emitting a cut word.
+    """
+    if not text:
+        return ""
+    if (finish_reason or "").strip().lower() not in _TOKEN_LIMIT_FINISH_REASONS:
+        return text
+    stripped = text.rstrip()
+    if not stripped:
+        return ""
+    last_end = None
+    for match in _SENTENCE_END_RE.finditer(stripped):
+        last_end = match.end()
+    if last_end is not None and last_end > 0:
+        return stripped[:last_end].rstrip()
+    # No sentence mark in the truncated text: drop the trailing partial word.
+    last_ws = max(stripped.rfind(" "), stripped.rfind("\n"), stripped.rfind("\t"))
+    if last_ws > 0:
+        return stripped[:last_ws].rstrip()
+    return stripped
 
 
 def clean_spoken_text(text: str) -> str:
@@ -2122,8 +2185,7 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
             return chat_auth.error_json(404, chat_auth.MSG_NOT_FOUND, code="NOT_FOUND", label="ERROR")
         conv_id = parsed_conv
     tier = user.tier
-
-    selected_tier = "VIP" if tier == "VIP" else "FREE"
+    selected_tier = "VIP" if (tier == "VIP" or chat_auth.user_level(user) == "vip") else "FREE"
     cfg = OPENROUTER_TIERS[selected_tier]
 
     # پرونده‌های بارگذاری‌شده: فقط متعلق به همین کاربر (در غیر این صورت 404 یکسان)
@@ -2346,7 +2408,6 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         cat_context_str = _catalog_intent.build_catalog_context(cat_rows, target=target)
         if cat_rows:
             if target == "regulation":
-                from output_apps.generated_modules.smartjudge import regulations_retrieval as _regs
                 precedents = _regs.merge_regulations(precedents, cat_rows)
             else:
                 precedents = _rulings.merge_rulings(precedents, cat_rows)
@@ -2388,10 +2449,11 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
     laws = _source_filter.filter_relevant(laws)
     precedents = _source_filter.filter_relevant(precedents)
 
-    as_of = payload.get("as_of_date") or payload.get("as_of")
-    if as_of:
-        laws = _abstention_gate.filter_by_as_of(laws, as_of)
-        precedents = _abstention_gate.filter_by_as_of(precedents, as_of)
+    req_tz = payload.get("timezone") or payload.get("tz")
+    explicit_as_of = payload.get("as_of_date") or payload.get("as_of")
+    as_of = _abstention_gate.resolve_as_of_date(explicit_as_of, tz=req_tz)
+    laws = _abstention_gate.filter_by_as_of(laws, as_of_date=as_of, tz=req_tz)
+    precedents = _abstention_gate.filter_by_as_of(precedents, as_of_date=as_of, tz=req_tz)
 
     # Abstention gate (R6 Decision 3): low score / no grounding, version conflict, out of scope, false premise, or missing as-of
     if not review_mode and not case_records:
@@ -2406,7 +2468,7 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
             user_text,
             retrieved_chunks=all_chunks,
             rerank_score=top_rerank_score,
-            as_of_date=as_of,
+            as_of_date=explicit_as_of,
             require_grounding=True,
         )
         if gate_decision.should_abstain:
@@ -2546,6 +2608,14 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
                 reply_msg = routed.content
                 routed_model = routed.model or None
                 _answer_timing.note_router_result(routed)
+                if is_voice and reply_msg:
+                    routed_choices = (routed.raw or {}).get("choices") or []
+                    routed_finish = (
+                        routed_choices[0].get("finish_reason")
+                        if routed_choices and isinstance(routed_choices[0], dict)
+                        else None
+                    )
+                    reply_msg = trim_at_token_limit(reply_msg, routed_finish)
                 if not is_voice and _answer_escalation.enabled() and _llm_gateway.may_use_paid(selected_tier):
                     # B3: flag-gated, one strong-tier re-ask on a deterministic quality trigger.
                     esc = await _answer_escalation.maybe_escalate(
@@ -2573,6 +2643,8 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
                 reply_msg = (outcome.text or "").strip()
                 if _llm_gateway is not None:  # some free models prepend English reasoning text
                     reply_msg = _llm_gateway.strip_leaked_reasoning(reply_msg)
+                if is_voice and reply_msg:
+                    reply_msg = trim_at_token_limit(reply_msg, outcome.finish_reason)
                 routed_model = outcome.model
                 _answer_timing.note_stream_outcome(outcome)
                 bucket = _chat_timing.get()
@@ -2607,6 +2679,9 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         await asyncio.to_thread(chat_auth.decr, daily_key)  # unanswered: does not use up the daily quota
         if top_key:
             await asyncio.to_thread(chat_auth.decr, top_key)
+        if chat_auth.is_phone_gateway(user):
+            # Telephone agent callers never receive consumer subscription/upsell prompts.
+            return _llm_unavailable_response()
         if _llm_gateway is not None and not _llm_gateway.may_use_paid(selected_tier):
             # Free tier, free models exhausted: friendly upsell instead of a paid model or a 503.
             return _consult_body(
@@ -2672,6 +2747,7 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         conv_id=conv_id, reply=reply_msg, prob=prob, draft=draft, laws=laws, precedents=precedents,
         court_suggestion=court_suggestion, case_file_refs=case_file_refs,
         model=routed_model or cfg["primary_model"], tier=selected_tier, t0=t0,
+        grounded=is_grounded_flag,
         **({"spoken_reply": spoken_reply} if is_voice else {}),
         **({"model_notice": top_note} if top_note else {}),
         **({"review": {"kind": _contract_review.MODE, "risk_score": _contract_review.extract_risk_score(reply_msg),
@@ -4265,7 +4341,6 @@ async def generate_speech(request: Request, payload: dict = Body(...),
     if len(text) > chat_auth.MAX_SPEAK_CHARS:
         return chat_auth.error_json(413, chat_auth.MSG_SPEAK_TOO_LONG, code="PAYLOAD_TOO_LARGE")
 
-    import re
     # تمیزسازی متن از کاراکترهای مارک‌داون
     clean_text = re.sub(r"[*#_`>\[\]\(\)\n]", " ", text).strip()
     clean_text = " ".join(clean_text.split())[:1200]
@@ -4627,7 +4702,6 @@ async def _start_cache_priming() -> None:
         print("[SMARTJUDGE][CACHE-PRIME] disabled or no API key; skipping.", file=sys.stderr)
         return
     _CACHE_PRIME_STARTED = True
-    import asyncio
     asyncio.create_task(_cache_prime_loop())
     print(f"[SMARTJUDGE][CACHE-PRIME] background primer started "
           f"(interval={_CACHE_PRIME_INTERVAL}s, prefix_chars={len(_system_prefix_text())}, "
@@ -6770,7 +6844,7 @@ class RulingDraftRequest(_BaseModel):
     jurisdiction: Optional[str] = _Field(None, min_length=1, max_length=_ruling_draft.MAX_NAME)
 
 
-async def _ruling_retrieve_laws(query: str) -> list:
+async def _ruling_retrieve_laws(query: str, as_of: Optional[str] = None, tz: Optional[Any] = None) -> list:
     """Qdrant retrieval (active laws only) mapped to {law_name, article_no, text}."""
     result = await _lightrag_qdrant_retrieve(
         query, limit=_RULING_RETRIEVE_LIMIT, active_only=CITATION_QDRANT_ACTIVE_ONLY
@@ -6784,9 +6858,12 @@ async def _ruling_retrieve_laws(query: str) -> list:
                 "law_name": law.get("law_name"),
                 "article_no": law.get("article_no"),
                 "text": law.get("summary") or law.get("text") or "",
+                "valid_from": law.get("valid_from"),
+                "valid_to": law.get("valid_to"),
+                "status": law.get("status"),
             }
         )
-    return rows
+    return _abstention_gate.filter_by_as_of(rows, as_of_date=as_of, tz=tz)
 
 
 async def _core_article_fetch(law_names, article_no):
@@ -6796,7 +6873,7 @@ async def _core_article_fetch(law_names, article_no):
     )
 
 
-async def _ruling_retrieve_laws_with_core(query: str, match_text: str) -> list:
+async def _ruling_retrieve_laws_with_core(query: str, match_text: str, as_of: Optional[str] = None, tz: Optional[Any] = None) -> list:
     """Vector retrieval plus the deterministic core articles for the claim type
     (config/drafting_core_articles.yaml), core first, so the prompt and the citation guard
     see them. A failed core lookup never fails the draft; a failed main retrieval still does."""
@@ -6807,8 +6884,9 @@ async def _ruling_retrieve_laws_with_core(query: str, match_text: str) -> list:
         except Exception:  # noqa: BLE001
             return []
 
-    retrieved, core = await asyncio.gather(_ruling_retrieve_laws(query), _core())
-    return _drafting_core.merge_articles(core, retrieved, _ruling_draft.MAX_PROMPT_ARTICLES)
+    retrieved, core = await asyncio.gather(_ruling_retrieve_laws(query, as_of=as_of, tz=tz), _core())
+    merged = _drafting_core.merge_articles(core, retrieved, _ruling_draft.MAX_PROMPT_ARTICLES)
+    return _abstention_gate.filter_by_as_of(merged, as_of_date=as_of, tz=tz)
 
 
 async def _ruling_complete(prompt: str) -> str:

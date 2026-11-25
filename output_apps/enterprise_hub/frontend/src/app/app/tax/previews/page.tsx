@@ -59,7 +59,7 @@ export default function TaxPreviewsPage() {
             aria-selected={activeTab === "corporate"}
             aria-controls="panel-corporate"
             variant={activeTab === "corporate" ? "default" : "outline"}
-            size="sm"
+            className="min-h-[44px] min-w-[44px] px-4"
             onClick={() => setActiveTab("corporate")}
           >
             مالیات بر درآمد شرکت‌ها
@@ -70,7 +70,7 @@ export default function TaxPreviewsPage() {
             aria-selected={activeTab === "business"}
             aria-controls="panel-business"
             variant={activeTab === "business" ? "default" : "outline"}
-            size="sm"
+            className="min-h-[44px] min-w-[44px] px-4"
             onClick={() => setActiveTab("business")}
           >
             مشاغل و مشارکت (ماده ۱۰۱)
@@ -81,7 +81,7 @@ export default function TaxPreviewsPage() {
             aria-selected={activeTab === "rental"}
             aria-controls="panel-rental"
             variant={activeTab === "rental" ? "default" : "outline"}
-            size="sm"
+            className="min-h-[44px] min-w-[44px] px-4"
             onClick={() => setActiveTab("rental")}
           >
             املاک و اجاره (ماده ۵۳ و ۵۷)
@@ -92,7 +92,7 @@ export default function TaxPreviewsPage() {
             aria-selected={activeTab === "doctor"}
             aria-controls="panel-doctor"
             variant={activeTab === "doctor" ? "default" : "outline"}
-            size="sm"
+            className="min-h-[44px] min-w-[44px] px-4"
             onClick={() => setActiveTab("doctor")}
           >
             تکلیفی حق‌الزحمه پزشکان
@@ -254,8 +254,8 @@ function CorporateTaxWorkbench() {
               />
             </div>
             <div className="flex items-end md:col-span-2 lg:col-span-2">
-              <Button type="submit" disabled={loading} className="w-full sm:w-auto">
-                {loading ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Calculator className="ml-2 h-4 w-4" />}
+              <Button type="submit" disabled={loading} className="w-full sm:w-auto min-h-[44px]">
+                {loading ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <Calculator className="me-2 h-4 w-4" />}
                 محاسبه پیش‌نمایش
               </Button>
             </div>
@@ -312,24 +312,26 @@ function CorporateTaxWorkbench() {
               <CardTitle className="text-base">برگه محاسباتی (Worksheet)</CardTitle>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-16">ردیف</TableHead>
-                    <TableHead>مرحله محاسباتی</TableHead>
-                    <TableHead className="text-left">مبلغ (ریال)</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {result.worksheet.map((step, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell>{formatNumber(idx + 1)}</TableCell>
-                      <TableCell className="font-medium">{step.step}</TableCell>
-                      <TableCell className="text-left font-mono">{formatMoneyRial(step.amount)}</TableCell>
+              <div className="w-full overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-16">ردیف</TableHead>
+                      <TableHead>مرحله محاسباتی</TableHead>
+                      <TableHead className="text-end">مبلغ (ریال)</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {result.worksheet.map((step, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell>{formatNumber(idx + 1)}</TableCell>
+                        <TableCell className="font-medium">{step.step}</TableCell>
+                        <TableCell className="text-end font-mono">{formatMoneyRial(step.amount)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
 
@@ -339,26 +341,28 @@ function CorporateTaxWorkbench() {
                 <CardTitle className="text-base">پیش‌نمایش سند حسابداری (ثبت‌نشده)</CardTitle>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>کد حساب</TableHead>
-                      <TableHead>شرح ردیف سند</TableHead>
-                      <TableHead className="text-left">بدهکار (ریال)</TableHead>
-                      <TableHead className="text-left">بستانکار (ریال)</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {result.voucher.lines.map((line, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell className="font-mono">{line.accountCode || "—"}</TableCell>
-                        <TableCell>{line.description}</TableCell>
-                        <TableCell className="text-left font-mono">{formatMoneyRial(line.debit)}</TableCell>
-                        <TableCell className="text-left font-mono">{formatMoneyRial(line.credit)}</TableCell>
+                <div className="w-full overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>کد حساب</TableHead>
+                        <TableHead>شرح ردیف سند</TableHead>
+                        <TableHead className="text-end">بدهکار (ریال)</TableHead>
+                        <TableHead className="text-end">بستانکار (ریال)</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {result.voucher.lines.map((line, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell className="font-mono">{line.accountCode || "—"}</TableCell>
+                          <TableCell>{line.description}</TableCell>
+                          <TableCell className="text-end font-mono">{formatMoneyRial(line.debit)}</TableCell>
+                          <TableCell className="text-end font-mono">{formatMoneyRial(line.credit)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </CardContent>
             </Card>
           )}
@@ -472,15 +476,17 @@ function BusinessTaxWorkbench() {
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-semibold">واحدهای کسب‌وکار (ماده ۱۰۱ تبصره ۲)</Label>
-                <Button type="button" variant="outline" size="sm" onClick={addUnit}>
-                  <Plus className="ml-1 h-3.5 w-3.5" /> افزودن واحد
+                <Button type="button" variant="outline" size="sm" className="min-h-[44px]" onClick={addUnit}>
+                  <Plus className="me-1 h-3.5 w-3.5" /> افزودن واحد
                 </Button>
               </div>
               {units.map((unit, idx) => (
                 <div key={idx} className="flex items-center gap-3">
                   <div className="flex-1">
                     <Input
+                      aria-label="درآمد ناخالص واحد (ریال)"
                       placeholder="درآمد ناخالص واحد (ریال)"
+                      className="h-11 min-h-[44px]"
                       value={unit.revenue}
                       onChange={(e) => updateUnit(idx, "revenue", e.target.value)}
                       required
@@ -488,7 +494,9 @@ function BusinessTaxWorkbench() {
                   </div>
                   <div className="flex-1">
                     <Input
+                      aria-label="هزینه‌های قابل قبول (ریال)"
                       placeholder="هزینه‌های قابل قبول (ریال)"
+                      className="h-11 min-h-[44px]"
                       value={unit.deductibleExpenses}
                       onChange={(e) => updateUnit(idx, "deductibleExpenses", e.target.value)}
                       required
@@ -499,6 +507,7 @@ function BusinessTaxWorkbench() {
                       type="button"
                       variant="ghost"
                       size="icon"
+                      className="size-11 min-h-[44px] min-w-[44px]"
                       onClick={() => removeUnit(idx)}
                       aria-label="حذف واحد"
                     >
@@ -513,23 +522,27 @@ function BusinessTaxWorkbench() {
               <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-semibold">شرکا و درصد تسهیم (مجموع ۱۰٬۰۰۰ سهم = ۱۰۰٪)</Label>
-                  <Button type="button" variant="outline" size="sm" onClick={addPartner}>
-                    <Plus className="ml-1 h-3.5 w-3.5" /> افزودن شریک
+                  <Button type="button" variant="outline" size="sm" className="min-h-[44px]" onClick={addPartner}>
+                    <Plus className="me-1 h-3.5 w-3.5" /> افزودن شریک
                   </Button>
                 </div>
                 {partners.map((partner, idx) => (
                   <div key={idx} className="flex flex-wrap items-center gap-3">
                     <div className="flex-1 min-w-[140px]">
                       <Input
+                        aria-label="نام شریک"
                         placeholder="نام شریک"
+                        className="h-11 min-h-[44px]"
                         value={partner.name || ""}
                         onChange={(e) => updatePartner(idx, "name", e.target.value)}
                       />
                     </div>
                     <div className="w-32">
                       <Input
+                        aria-label="سهم (از ۱۰٬۰۰۰)"
                         type="number"
                         placeholder="سهم (از ۱۰٬۰۰۰)"
+                        className="h-11 min-h-[44px]"
                         value={partner.shareBps}
                         onChange={(e) => updatePartner(idx, "shareBps", Number(e.target.value))}
                         required
@@ -537,14 +550,17 @@ function BusinessTaxWorkbench() {
                     </div>
                     <div className="w-32">
                       <Input
+                        aria-label="شناسه زوج"
                         placeholder="شناسه زوج"
+                        className="h-11 min-h-[44px]"
                         value={partner.spouseGroup || ""}
                         onChange={(e) => updatePartner(idx, "spouseGroup", e.target.value)}
                       />
                     </div>
-                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground min-h-[44px]">
                       <input
                         type="checkbox"
+                        className="size-4 rounded border-input"
                         checked={partner.isHusband || false}
                         onChange={(e) => updatePartner(idx, "isHusband", e.target.checked)}
                       />
@@ -555,6 +571,7 @@ function BusinessTaxWorkbench() {
                         type="button"
                         variant="ghost"
                         size="icon"
+                        className="size-11 min-h-[44px] min-w-[44px]"
                         onClick={() => removePartner(idx)}
                         aria-label="حذف شریک"
                       >
@@ -567,8 +584,8 @@ function BusinessTaxWorkbench() {
             )}
 
             <div>
-              <Button type="submit" disabled={loading} className="w-full sm:w-auto">
-                {loading ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Calculator className="ml-2 h-4 w-4" />}
+              <Button type="submit" disabled={loading} className="w-full sm:w-auto min-h-[44px]">
+                {loading ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <Calculator className="me-2 h-4 w-4" />}
                 محاسبه پیش‌نمایش مشاغل
               </Button>
             </div>
@@ -613,30 +630,32 @@ function BusinessTaxWorkbench() {
               <CardTitle className="text-base">سهم و مالیات هر مؤدی / شریک</CardTitle>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>عنوان مؤدی</TableHead>
-                    <TableHead className="text-left">سهم درآمد (ریال)</TableHead>
-                    <TableHead className="text-left">معافیت تخصیصی (ریال)</TableHead>
-                    <TableHead className="text-left">درآمد مشمول مالیات (ریال)</TableHead>
-                    <TableHead className="text-left">مالیات محاسبه‌شده (ریال)</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {result.taxpayers.map((t, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell className="font-medium">{t.label}</TableCell>
-                      <TableCell className="text-left font-mono">{formatMoneyRial(t.incomeShare)}</TableCell>
-                      <TableCell className="text-left font-mono">{formatMoneyRial(t.exemption)}</TableCell>
-                      <TableCell className="text-left font-mono">{formatMoneyRial(t.taxableIncome)}</TableCell>
-                      <TableCell className="text-left font-mono font-bold text-primary">
-                        {formatMoneyRial(t.tax)}
-                      </TableCell>
+              <div className="w-full overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>عنوان مؤدی</TableHead>
+                      <TableHead className="text-end">سهم درآمد (ریال)</TableHead>
+                      <TableHead className="text-end">معافیت تخصیصی (ریال)</TableHead>
+                      <TableHead className="text-end">درآمد مشمول مالیات (ریال)</TableHead>
+                      <TableHead className="text-end">مالیات محاسبه‌شده (ریال)</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {result.taxpayers.map((t, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell className="font-medium">{t.label}</TableCell>
+                        <TableCell className="text-end font-mono">{formatMoneyRial(t.incomeShare)}</TableCell>
+                        <TableCell className="text-end font-mono">{formatMoneyRial(t.exemption)}</TableCell>
+                        <TableCell className="text-end font-mono">{formatMoneyRial(t.taxableIncome)}</TableCell>
+                        <TableCell className="text-end font-mono font-bold text-primary">
+                          {formatMoneyRial(t.tax)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
 
@@ -743,9 +762,10 @@ function RentalTaxWorkbench() {
             </div>
 
             <div className="flex flex-col gap-3 justify-center md:col-span-2 lg:col-span-1">
-              <label className="flex items-center gap-2 text-sm">
+              <label className="flex items-center gap-2 text-sm min-h-[44px] cursor-pointer">
                 <input
                   type="checkbox"
+                  className="size-4 rounded border-input"
                   checked={lessorIsOwner}
                   onChange={(e) => setLessorIsOwner(e.target.checked)}
                 />
@@ -756,15 +776,17 @@ function RentalTaxWorkbench() {
                   <Label htmlFor="rental-paid">اجاره پرداختی توسط موجر دست‌اول (ریال)</Label>
                   <Input
                     id="rental-paid"
+                    className="h-11 min-h-[44px]"
                     value={rentPaid}
                     onChange={(e) => setRentPaid(e.target.value)}
                     required={!lessorIsOwner}
                   />
                 </div>
               )}
-              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <label className="flex items-center gap-2 text-sm text-muted-foreground min-h-[44px] cursor-pointer">
                 <input
                   type="checkbox"
+                  className="size-4 rounded border-input"
                   checked={minorUnderGuardianship}
                   onChange={(e) => setMinorUnderGuardianship(e.target.checked)}
                 />
@@ -773,8 +795,8 @@ function RentalTaxWorkbench() {
             </div>
 
             <div className="flex items-end md:col-span-2 lg:col-span-3">
-              <Button type="submit" disabled={loading} className="w-full sm:w-auto">
-                {loading ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Calculator className="ml-2 h-4 w-4" />}
+              <Button type="submit" disabled={loading} className="w-full sm:w-auto min-h-[44px]">
+                {loading ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <Calculator className="me-2 h-4 w-4" />}
                 محاسبه پیش‌نمایش اجاره
               </Button>
             </div>
@@ -827,24 +849,26 @@ function RentalTaxWorkbench() {
               <CardTitle className="text-base">برگه محاسباتی اجاره (Worksheet)</CardTitle>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-16">ردیف</TableHead>
-                    <TableHead>مرحله محاسباتی</TableHead>
-                    <TableHead className="text-left">مبلغ (ریال)</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {result.worksheet.map((step, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell>{formatNumber(idx + 1)}</TableCell>
-                      <TableCell className="font-medium">{step.step}</TableCell>
-                      <TableCell className="text-left font-mono">{formatMoneyRial(step.amount)}</TableCell>
+              <div className="w-full overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-16">ردیف</TableHead>
+                      <TableHead>مرحله محاسباتی</TableHead>
+                      <TableHead className="text-end">مبلغ (ریال)</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {result.worksheet.map((step, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell>{formatNumber(idx + 1)}</TableCell>
+                        <TableCell className="font-medium">{step.step}</TableCell>
+                        <TableCell className="text-end font-mono">{formatMoneyRial(step.amount)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
 
@@ -936,8 +960,8 @@ function DoctorWithholdingWorkbench() {
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-semibold">پرداخت‌ها به کادر درمانی</Label>
-                <Button type="button" variant="outline" size="sm" onClick={addPayment}>
-                  <Plus className="ml-1 h-3.5 w-3.5" /> افزودن پرداخت
+                <Button type="button" variant="outline" size="sm" className="min-h-[44px]" onClick={addPayment}>
+                  <Plus className="me-1 h-3.5 w-3.5" /> افزودن پرداخت
                 </Button>
               </div>
 
@@ -945,7 +969,9 @@ function DoctorWithholdingWorkbench() {
                 <div key={idx} className="flex flex-wrap items-center gap-3">
                   <div className="w-36">
                     <Input
+                      aria-label="تاریخ پرداخت"
                       type="date"
+                      className="h-11 min-h-[44px]"
                       value={p.paidOn}
                       onChange={(e) => updatePayment(idx, "paidOn", e.target.value)}
                       required
@@ -953,7 +979,9 @@ function DoctorWithholdingWorkbench() {
                   </div>
                   <div className="flex-1 min-w-[120px]">
                     <Input
+                      aria-label="شناسه یا نام پزشک"
                       placeholder="شناسه / نام پزشک"
+                      className="h-11 min-h-[44px]"
                       value={p.doctorRef}
                       onChange={(e) => updatePayment(idx, "doctorRef", e.target.value)}
                       required
@@ -961,7 +989,9 @@ function DoctorWithholdingWorkbench() {
                   </div>
                   <div className="flex-1 min-w-[140px]">
                     <Input
+                      aria-label="مبلغ ناخالص (ریال)"
                       placeholder="مبلغ ناخالص (ریال)"
+                      className="h-11 min-h-[44px]"
                       value={p.amount}
                       onChange={(e) => updatePayment(idx, "amount", e.target.value)}
                       required
@@ -969,7 +999,8 @@ function DoctorWithholdingWorkbench() {
                   </div>
                   <div className="w-36">
                     <select
-                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      aria-label="نوع پرداخت"
+                      className="h-11 min-h-[44px] w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       value={p.kind}
                       onChange={(e) => updatePayment(idx, "kind", e.target.value as DoctorPaymentKind)}
                     >
@@ -983,6 +1014,7 @@ function DoctorWithholdingWorkbench() {
                       type="button"
                       variant="ghost"
                       size="icon"
+                      className="size-11 min-h-[44px] min-w-[44px]"
                       onClick={() => removePayment(idx)}
                       aria-label="حذف پرداخت"
                     >
@@ -994,8 +1026,8 @@ function DoctorWithholdingWorkbench() {
             </div>
 
             <div>
-              <Button type="submit" disabled={loading} className="w-full sm:w-auto">
-                {loading ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Calculator className="ml-2 h-4 w-4" />}
+              <Button type="submit" disabled={loading} className="w-full sm:w-auto min-h-[44px]">
+                {loading ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <Calculator className="me-2 h-4 w-4" />}
                 محاسبه پیش‌نمایش کسر علی‌الحساب
               </Button>
             </div>
@@ -1038,38 +1070,40 @@ function DoctorWithholdingWorkbench() {
               <CardTitle className="text-base">جزئیات پرداخت‌ها و کسورات</CardTitle>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>پزشک</TableHead>
-                    <TableHead>نوع</TableHead>
-                    <TableHead>تاریخ پرداخت</TableHead>
-                    <TableHead className="text-left">مبلغ ناخالص (ریال)</TableHead>
-                    <TableHead className="text-left">مالیات مکسوره (ریال)</TableHead>
-                    <TableHead className="text-left">خالص پرداختی (ریال)</TableHead>
-                    <TableHead>مهلت ایصال</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {result.lines.map((line, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell className="font-medium">{line.doctorRef}</TableCell>
-                      <TableCell>
-                        <Badge variant={line.kind === "FEE" ? "default" : "secondary"}>
-                          {line.kind === "FEE" ? "حق‌الزحمه" : line.kind === "SALARY" ? "حقوق" : "کارانه"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">{line.paidOn}</TableCell>
-                      <TableCell className="text-left font-mono">{formatMoneyRial(line.amount)}</TableCell>
-                      <TableCell className="text-left font-mono font-bold text-primary">
-                        {formatMoneyRial(line.withheld)}
-                      </TableCell>
-                      <TableCell className="text-left font-mono">{formatMoneyRial(line.netToDoctor)}</TableCell>
-                      <TableCell className="font-mono text-xs">{line.remitBy}</TableCell>
+              <div className="w-full overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>پزشک</TableHead>
+                      <TableHead>نوع</TableHead>
+                      <TableHead>تاریخ پرداخت</TableHead>
+                      <TableHead className="text-end">مبلغ ناخالص (ریال)</TableHead>
+                      <TableHead className="text-end">مالیات مکسوره (ریال)</TableHead>
+                      <TableHead className="text-end">خالص پرداختی (ریال)</TableHead>
+                      <TableHead>مهلت ایصال</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {result.lines.map((line, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell className="font-medium">{line.doctorRef}</TableCell>
+                        <TableCell>
+                          <Badge variant={line.kind === "FEE" ? "default" : "secondary"}>
+                            {line.kind === "FEE" ? "حق‌الزحمه" : line.kind === "SALARY" ? "حقوق" : "کارانه"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{line.paidOn}</TableCell>
+                        <TableCell className="text-end font-mono">{formatMoneyRial(line.amount)}</TableCell>
+                        <TableCell className="text-end font-mono font-bold text-primary">
+                          {formatMoneyRial(line.withheld)}
+                        </TableCell>
+                        <TableCell className="text-end font-mono">{formatMoneyRial(line.netToDoctor)}</TableCell>
+                        <TableCell className="font-mono text-xs">{line.remitBy}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
 
@@ -1096,7 +1130,7 @@ function NotesAndParameters({
         <Alert>
           <AlertTitle className="text-sm font-semibold">توضیحات و مستندات قانونی</AlertTitle>
           <AlertDescription>
-            <ul className="list-disc pr-5 text-xs text-muted-foreground space-y-1 mt-2">
+            <ul className="list-disc ps-5 text-xs text-muted-foreground space-y-1 mt-2">
               {notes.map((note, idx) => (
                 <li key={idx}>{note}</li>
               ))}
@@ -1111,30 +1145,32 @@ function NotesAndParameters({
             <CardTitle className="text-sm text-muted-foreground">پارامترهای قانونی خوانده‌شده از سامانه</CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>کلید پارامتر</TableHead>
-                  <TableHead>تاریخ اجرا</TableHead>
-                  <TableHead>منبع</TableHead>
-                  <TableHead>وضعیت تأیید رسمی</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {parameters.map((param, idx) => (
-                  <TableRow key={idx}>
-                    <TableCell className="font-mono text-xs">{param.key}</TableCell>
-                    <TableCell className="font-mono text-xs">{param.effectiveFrom}</TableCell>
-                    <TableCell className="text-xs">{param.source || "—"}</TableCell>
-                    <TableCell>
-                      <Badge variant={param.verified ? "default" : "outline"} className="text-xs">
-                        {param.verified ? "تأییدشده رسمی" : "برآورد / نیازمند تأیید"}
-                      </Badge>
-                    </TableCell>
+            <div className="w-full overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>کلید پارامتر</TableHead>
+                    <TableHead>تاریخ اجرا</TableHead>
+                    <TableHead>منبع</TableHead>
+                    <TableHead>وضعیت تأیید رسمی</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {parameters.map((param, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell className="font-mono text-xs">{param.key}</TableCell>
+                      <TableCell className="font-mono text-xs">{param.effectiveFrom}</TableCell>
+                      <TableCell className="text-xs">{param.source || "—"}</TableCell>
+                      <TableCell>
+                        <Badge variant={param.verified ? "default" : "outline"} className="text-xs">
+                          {param.verified ? "تأییدشده رسمی" : "برآورد / نیازمند تأیید"}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
       )}
