@@ -64,7 +64,7 @@ export function RowActionsMenu({ label, actions }: { label: string; actions: Row
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+        className="inline-flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground sm:size-8"
       >
         <MoreVertical className="size-4" aria-hidden="true" />
       </button>
