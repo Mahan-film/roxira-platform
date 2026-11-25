@@ -340,7 +340,7 @@ export const QUICK_CREATE: QuickCreate[] = [
   },
   {
     id: "import-file",
-    label: "ورود فایل",
+    label: "ورود از اکسل",
     href: "/app/import",
     module: "data_import",
     action: "create",
