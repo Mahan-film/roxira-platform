@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "_comment": "Effective-dated pricing, provider fees, carrier billing increments, and abuse caps for the phone voice agent (T298 / R30). All facts require primary check; unverified facts are flagged verified=false. Never hardcode statutory rates or prices.",
+  "version": "2026-11-24",
+  "effective_dates": {
+    "valid_from": "2026-11-01T00:00:00Z",
+    "valid_to": "2027-12-31T23:59:59Z"
+  },
+  "platform_plans": {
+    "livekit_cloud_scale": {
+      "name": "LiveKit Cloud Scale Plan (EU Pinning)",
+      "monthly_fee_usd_cents": 50000,
+      "agent_minute_usd_cents": 1.0,
+      "observability_minute_usd_cents": 1.0,
+      "minimum_duration_seconds": 10,
+      "billing_increment_seconds": 1,
+      "verified": false,
+      "source": "R30 Second Opinion PR #1221; LiveKit Cloud Scale plan with EU region and SIP pinning",
+      "notes": "USD 500/mo fixed plan fee for EU pinning, $0.01/agent-min, $0.01/observability-min, 10s minimum call duration."
+    },
+    "livekit_cloud_ship": {
+      "name": "LiveKit Cloud Ship Plan (Dev / Pre-launch)",
+      "monthly_fee_usd_cents": 5000,
+      "agent_minute_usd_cents": 1.0,
+      "observability_minute_usd_cents": 1.0,
+      "minimum_duration_seconds": 10,
+      "billing_increment_seconds": 1,
+      "verified": false,
+      "source": "R30 Second Opinion PR #1221; LiveKit Cloud standard Ship tier",
+      "notes": "USD 50/mo dev tier without dedicated EU region pinning."
+    },
+    "self_hosted": {
+      "name": "Self-Hosted Sovereign LiveKit Stack",
+      "monthly_fee_usd_cents": 0,
+      "agent_minute_usd_cents": 0.0,
+      "observability_minute_usd_cents": 0.0,
+      "minimum_duration_seconds": 0,
+      "billing_increment_seconds": 1,
+      "verified": true,
+      "source": "Local infrastructure / self-hosted open-source LiveKit",
+      "notes": "No platform fee or per-minute agent fee."
+    }
+  },
+  "carriers": {
+    "telnyx": {
+      "name": "Telnyx Elastic SIP (Frankfurt PoP)",
+      "did_monthly_usd_cents": 100,
+      "inbound_per_minute_usd_cents": 0.32,
+      "outbound_landline_per_minute_usd_cents": 1.20,
+      "outbound_mobile_per_minute_usd_cents": 3.10,
+      "voice_api_fee_per_minute_usd_cents": 0.20,
+      "billing_increment_seconds": 60,
+      "minimum_duration_seconds": 60,
+      "verified": false,
+      "source": "R30 Stage 1 Blueprint & PR #1221; 60/60 billing increment",
+      "notes": "60/60 rounding: each partial minute rounds up to the next full 60 seconds."
+    },
+    "twilio": {
+      "name": "Twilio Elastic SIP (Ireland / Frankfurt edge)",
+      "did_monthly_usd_cents": 135,
+      "inbound_per_minute_usd_cents": 0.60,
+      "outbound_landline_per_minute_usd_cents": 2.43,
+      "outbound_mobile_per_minute_usd_cents": 3.80,
+      "billing_increment_seconds": 60,
+      "minimum_duration_seconds": 60,
+      "verified": true,
+      "source": "https://www.twilio.com/en-us/sip-trunking/pricing/de; 60/60 rounding",
+      "notes": "60/60 rounding on Elastic SIP trunks."
+    },
+    "sipgate": {
+      "name": "sipgate trunking (Frankfurt / Düsseldorf)",
+      "did_monthly_usd_cents": 550,
+      "inbound_per_minute_usd_cents": 0.0,
+      "outbound_landline_per_minute_usd_cents": 0.55,
+      "outbound_mobile_per_minute_usd_cents": 5.50,
+      "billing_increment_seconds": 60,
+      "minimum_duration_seconds": 60,
+      "verified": true,
+      "source": "https://www.sipgatetrunking.de/tarife; trunking 10/50 rates converted from EUR net (~1.10 USD/EUR)",
+      "notes": "Flow API 60/60 rounding."
+    },
+    "easybell": {
+      "name": "easybell Business / Volume SIP",
+      "did_monthly_usd_cents": 215,
+      "inbound_per_minute_usd_cents": 0.0,
+      "outbound_landline_per_minute_usd_cents": 0.73,
+      "outbound_mobile_per_minute_usd_cents": 3.96,
+      "billing_increment_seconds": 1,
+      "minimum_duration_seconds": 1,
+      "verified": true,
+      "source": "https://en.easybell.de/business/sip-trunks/volume/; 1/1 per-second billing",
+      "notes": "Per-second 1/1 billing increment."
+    },
+    "sabanet": {
+      "name": "SabaNet SIP Trunk (Local Asterisk Bridge)",
+      "did_monthly_usd_cents": 0,
+      "inbound_per_minute_usd_cents": 0.0,
+      "outbound_landline_per_minute_usd_cents": 0.0,
+      "outbound_mobile_per_minute_usd_cents": 0.0,
+      "billing_increment_seconds": 60,
+      "minimum_duration_seconds": 60,
+      "verified": false,
+      "source": "Local PSTN trunk behind Asterisk bridge",
+      "notes": "Local trunk configuration."
+    }
+  },
+  "speech_models": {
+    "stt": {
+      "speechmatics_melia": {
+        "usd_cents_per_minute": 0.333,
+        "verified": true,
+        "source": "https://www.speechmatics.com/pricing ($0.20/hr)"
+      },
+      "speechmatics_linden": {
+        "usd_cents_per_minute": 0.250,
+        "verified": true,
+        "source": "https://www.speechmatics.com/pricing ($0.15/hr voice-agent model)"
+      },
+      "deepgram_nova3": {
+        "usd_cents_per_minute": 0.917,
+        "verified": true,
+        "source": "https://deepgram.com/pricing ($0.55/hr multi)"
+      },
+      "edge_or_local": {
+        "usd_cents_per_minute": 0.0,
+        "verified": true,
+        "source": "local compute"
+      }
+    },
+    "tts": {
+      "elevenlabs_v4_turbo": {
+        "usd_cents_per_1k_chars": 4.0,
+        "verified": true,
+        "source": "https://elevenlabs.io/pricing ($40/1M chars)"
+      },
+      "cartesia_sonic": {
+        "usd_cents_per_1k_chars": 3.8,
+        "verified": true,
+        "source": "https://cartesia.ai/pricing (~$38/1M chars)"
+      },
+      "deepgram_aura2": {
+        "usd_cents_per_1k_chars": 3.0,
+        "verified": true,
+        "source": "https://deepgram.com/pricing ($30/1M chars)"
+      },
+      "edge_or_local": {
+        "usd_cents_per_1k_chars": 0.0,
+        "verified": true,
+        "source": "Microsoft Edge free neural voice / local piper"
+      }
+    }
+  },
+  "abuse_caps": {
+    "per_caller_daily": {
+      "max_calls": 5,
+      "max_connected_seconds": 1800,
+      "notes": "Max 5 calls per 24-hour day per caller phone number; max 30 minutes total daily duration."
+    },
+    "global_daily": {
+      "max_calls": 200,
+      "max_connected_seconds": 36000,
+      "notes": "Global circuit breaker across all callers: 200 calls/day or 10 hours connected audio/day."
+    },
+    "monthly_spend_cap": {
+      "cap_usd_cents": 100000,
+      "alert_threshold_ratio": 0.80,
+      "notes": "Monthly ceiling of USD 1,000.00 (100,000 cents). Alert threshold at 80% (USD 800.00)."
+    }
+  }
+}

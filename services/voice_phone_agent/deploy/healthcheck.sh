@@ -43,4 +43,15 @@ qual=$(docker exec "$BRIDGE" asterisk -rx 'pjsip show contacts' 2>/dev/null \
 [ -n "$qual" ] || qual=none
 [ "$qual" = Avail ] && ok "carrier contact qualify $qual" || bad "carrier contact qualify $qual"
 
+# Cost and abuse caps audit (T298 / R30)
+COST_SCRIPT="/usr/local/lib/phone-stack/check_phone_costs.py"
+[ -f "$COST_SCRIPT" ] || COST_SCRIPT="$(dirname "$0")/../../../scripts/ops/ci_box/check_phone_costs.py"
+if [ -f "$COST_SCRIPT" ]; then
+  if python3 "$COST_SCRIPT" --check 2>/dev/null; then
+    ok "phone cost and abuse caps"
+  else
+    bad "phone cost or abuse cap alert triggered"
+  fi
+fi
+
 exit $fail

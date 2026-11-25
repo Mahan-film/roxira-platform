@@ -27,7 +27,9 @@ sudo phone-stack keys rotate   # random openssl pair -> agent env (600) + stack 
 sudo phone-stack up            # refuses to start while the dev pair is present
 sudo phone-stack status     # OK/FAIL lines: 4 containers, 2 units, LiveKit, TTS sidecar,
                             # synthetic TTS path, SIP registration and carrier
-                            # contact qualify (one word each)
+                            # contact qualify (one word each), and cost caps
+sudo phone-stack costs      # Phone cost audit & abuse caps report
+sudo phone-stack costs --simulate-call 120 # Simulate call duration with carrier rounding
 sudo phone-stack logs 200   # filtered: no env, keys, numbers or IPs
 sudo phone-stack down
 ```
@@ -45,6 +47,17 @@ carrier's UDP path through the host firewall open, so inbound INVITEs are not dr
 
 Open: a pinned-digest compose file in git that mounts the bundle's configs (after the first run shows
 the bundle's images and service names).
+
+## Phone Cost Caps & Abuse Prevention (T298 / R30)
+Telephony and cloud speech pricing is loaded from effective-dated configuration (`config/phone_pricing.json`).
+Features:
+- **Per-number daily caps**: 5 calls/day, max 1,800s (30m) connected audio per caller. Excess calls are refused with busy/prompt.
+- **Global daily limits**: 200 calls/day, max 36,000s (10h) connected audio.
+- **Monthly spend cap**: USD 1,000.00 ceiling. When spend reaches 80% (USD 800.00), an alert is triggered in the box status page and logs.
+- **Pricing models**:
+  - LiveKit Cloud Scale plan ($500/mo EU pinning, $0.01 agent-min, $0.01 obs-min, 10s min duration).
+  - Carrier minute rounding: 60/60 rounding on Telnyx, Twilio, and sipgate vs 1/1 per-second on easybell.
+- State is persisted at `/srv/data/phone/state/phone_usage_state.json`.
 
 Notes: `phone-stack logs` drops whole lines that mention keys, tokens or env on purpose: safety over
 detail. `box-proxy on` stays on after `up`, because all traffic on the box goes through the proxy
