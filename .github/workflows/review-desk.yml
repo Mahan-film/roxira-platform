@@ -11,10 +11,15 @@ on:
     - cron: "17 */2 * * *"
   workflow_dispatch:
     inputs:
-      pr:
-        description: "Review only this PR number (empty = every open PR not reviewed at its head)"
+      prs:
+        description: "Review only these PR numbers, comma list e.g. 1197,1219 (empty = every open PR not reviewed at its head)"
         required: false
         default: ""
+      force:
+        description: "Review again even if the PR head already has a review (needs prs)"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -45,7 +50,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REVIEW_DESK_PROXY: ""
-          PR_INPUT: ${{ inputs.pr }}
+          PRS_INPUT: ${{ inputs.prs }}
+          FORCE_INPUT: ${{ inputs.force }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
           GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
@@ -55,9 +61,15 @@ jobs:
           GROQ_API_KEY_3: ${{ secrets.GROQ_API_KEY_3 }}
           OPENROUTER_API_KEY_AGENTS: ${{ secrets.OPENROUTER_API_KEY_AGENTS }}
         run: |
-          if [ -n "$PR_INPUT" ]; then
-            case "$PR_INPUT" in (*[!0-9]*) echo "pr must be a number"; exit 2;; esac
-            python scripts/dev/review_desk.py --pr "$PR_INPUT" --max 1
+          # inputs only reach the shell through env vars; review_desk.py validates the PR list itself
+          args=()
+          if [ -n "$PRS_INPUT" ]; then
+            args+=(--prs "$PRS_INPUT")
           else
-            python scripts/dev/review_desk.py --max 8
+            args+=(--max 8)
           fi
+          if [ "$FORCE_INPUT" = "true" ]; then
+            if [ -z "$PRS_INPUT" ]; then echo "force needs prs"; exit 2; fi
+            args+=(--force)
+          fi
+          python scripts/dev/review_desk.py "${args[@]}"
