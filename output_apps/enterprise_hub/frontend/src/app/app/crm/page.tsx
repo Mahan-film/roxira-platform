@@ -158,7 +158,7 @@ function CrmPage() {
   return (
     <>
       <PageHeader
-        title="مشتریان (CRM)"
+        title="مشتریان و سرنخ‌ها"
         description="سرنخ‌ها، مراحل فروش و یادداشت‌ها"
         icon={<Contact className="size-6 text-indigo-500" />}
         actions={

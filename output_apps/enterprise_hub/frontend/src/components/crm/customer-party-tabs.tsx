@@ -79,6 +79,7 @@ export function CustomerPartyTabs({ lead }: { lead: Lead }) {
             role="tab"
             aria-selected={tab === key}
             size="sm"
+            className="min-h-11 sm:min-h-8"
             variant={tab === key ? "default" : "outline"}
             onClick={() => setTab(key)}
           >
@@ -190,7 +191,7 @@ function PartyTabBody({ tab, lead, data }: { tab: PartyTab; lead: Lead; data: Pa
                 <span className="text-xs text-muted-foreground">سررسید {formatJalaliDate(c.dueDate)}</span>
               </span>
               <span className="flex items-center gap-2">
-                <span>{formatMoneyRial(Number(c.amount))}</span>
+                <span>{formatMoneyRial(c.amount)}</span>
                 <Badge variant="outline">{STATUS_LABELS.received[c.status]}</Badge>
               </span>
             </li>
