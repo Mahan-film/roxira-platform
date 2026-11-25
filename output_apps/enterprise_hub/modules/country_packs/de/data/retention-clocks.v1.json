@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "jurisdiction": "DE",
+  "description": "Effective-dated statutory retention periods for accounting records, vouchers, and commercial correspondence under AO § 147 / HGB § 257 (BEG IV)",
+  "sources": [
+    "Abgabenordnung (AO) § 147, https://www.gesetze-im-internet.de/ao_1977/__147.html",
+    "Handelsgesetzbuch (HGB) § 257, https://www.gesetze-im-internet.de/hgb/__257.html"
+  ],
+  "classes": [
+    {
+      "code": "ledgers_and_statements",
+      "label": "Books, records, inventories, annual financial statements",
+      "years": 10,
+      "effectiveFrom": "2002-01-01",
+      "effectiveTo": null,
+      "sourceUrl": "https://www.gesetze-im-internet.de/ao_1977/__147.html",
+      "verified": false,
+      "notes": "Requires primary check. AO § 147(1) Nr. 1, 4a, (3). Proposed 15-year extension bill is not enacted."
+    },
+    {
+      "code": "accounting_vouchers",
+      "label": "Accounting vouchers (Buchungsbelege)",
+      "years": 10,
+      "effectiveFrom": "2002-01-01",
+      "effectiveTo": "2024-12-31",
+      "sourceUrl": "https://www.gesetze-im-internet.de/ao_1977/__147.html",
+      "verified": false,
+      "notes": "Requires primary check. Pre-BEG IV retention period for Buchungsbelege."
+    },
+    {
+      "code": "accounting_vouchers",
+      "label": "Accounting vouchers (Buchungsbelege, BEG IV)",
+      "years": 8,
+      "effectiveFrom": "2025-01-01",
+      "effectiveTo": null,
+      "sourceUrl": "https://www.gesetze-im-internet.de/ao_1977/__147.html",
+      "verified": false,
+      "notes": "Requires primary check. Reduced from 10 to 8 years by BEG IV (AO § 147(1) Nr. 4, (3))."
+    },
+    {
+      "code": "commercial_correspondence",
+      "label": "Commercial and business letters, other tax-relevant documents",
+      "years": 6,
+      "effectiveFrom": "2002-01-01",
+      "effectiveTo": null,
+      "sourceUrl": "https://www.gesetze-im-internet.de/ao_1977/__147.html",
+      "verified": false,
+      "notes": "Requires primary check. AO § 147(1) Nr. 2, 3, 5, (3)."
+    }
+  ]
+}
