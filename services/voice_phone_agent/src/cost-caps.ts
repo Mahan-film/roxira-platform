@@ -137,16 +137,32 @@ const HALF_CENT_IN_MICRO_CENTS = 500_000n;
 const UNKNOWN_CALLER_BUCKET = '__unknown__';
 
 /** Converts a decimal value with up to 6 fractional digits into scaled bigint units. */
-function decimalToScaledBigInt(value: number, scaleDigits: number): bigint {
-  if (!Number.isFinite(value) || value <= 0) return 0n;
-  const raw = value.toFixed(scaleDigits);
-  const [whole, frac = ''] = raw.split('.');
+function decimalToScaledBigInt(value: number | string, scaleDigits: number): bigint {
+  let raw: string;
+  if (typeof value === 'string') {
+    raw = value.trim();
+  } else {
+    if (!Number.isFinite(value)) {
+      throw new RangeError(`Monetary rate must be finite, got: ${value}`);
+    }
+    raw = value.toString();
+  }
+  if (raw.startsWith('-')) {
+    throw new RangeError(`Monetary rate must be non-negative, got: ${value}`);
+  }
+  const match = /^(\d+)(?:\.(\d+))?$/.exec(raw);
+  if (!match) {
+    throw new RangeError(`Invalid monetary rate format: ${value}`);
+  }
+  const whole = match[1];
+  const frac = match[2] ?? '';
+  if (whole === '0' && /^0*$/.test(frac)) return 0n;
   const digits = `${whole}${frac.padEnd(scaleDigits, '0').slice(0, scaleDigits)}`;
   return BigInt(digits);
 }
 
 /** Converts a USD-cent rate (up to 6 decimal places) into integer micro-cents (1e-6 cents). */
-function rateCentsToMicroCents(rateCents: number): bigint {
+function rateCentsToMicroCents(rateCents: number | string): bigint {
   return decimalToScaledBigInt(rateCents, 6);
 }
 
@@ -211,6 +227,22 @@ export function loadPricingConfig(customPath?: string): PricingConfig {
   if (!parsed.effective_dates?.valid_from || !parsed.effective_dates?.valid_to) {
     throw new Error(`Pricing config at ${resolved} is missing effective_dates`);
   }
+  if (
+    !parsed.abuse_caps?.monthly_spend_cap ||
+    !parsed.abuse_caps?.global_daily ||
+    !parsed.abuse_caps?.per_caller_daily
+  ) {
+    throw new Error(`Pricing config at ${resolved} is missing required abuse_caps sections`);
+  }
+  if (!parsed.platform_plans || typeof parsed.platform_plans !== 'object' || Object.keys(parsed.platform_plans).length === 0) {
+    throw new Error(`Pricing config at ${resolved} is missing platform_plans`);
+  }
+  if (!parsed.carriers || typeof parsed.carriers !== 'object' || Object.keys(parsed.carriers).length === 0) {
+    throw new Error(`Pricing config at ${resolved} is missing carriers`);
+  }
+  if (!parsed.speech_models?.stt || !parsed.speech_models?.tts) {
+    throw new Error(`Pricing config at ${resolved} is missing speech_models (stt/tts)`);
+  }
 
   return parsed;
 }
@@ -254,8 +286,14 @@ export function calculateCallCost(
 ): CallCostBreakdown {
   const carrierKey = params.carrierKey ?? 'sabanet';
   const planKey = params.planKey ?? 'self_hosted';
-  const carrier = config.carriers[carrierKey] ?? config.carriers.sabanet;
-  const plan = config.platform_plans[planKey] ?? config.platform_plans.self_hosted;
+  const carrier = config.carriers[carrierKey];
+  if (!carrier) {
+    throw new Error(`Unknown carrierKey "${carrierKey}" in pricing config`);
+  }
+  const plan = config.platform_plans[planKey];
+  if (!plan) {
+    throw new Error(`Unknown planKey "${planKey}" in pricing config`);
+  }
 
   const durationSeconds = Math.max(0, Math.round(params.durationSeconds));
   const carrierBillableSeconds = calculateCarrierBillableSeconds(durationSeconds, carrier);
@@ -490,6 +528,11 @@ export class PhoneCostTracker {
   checkCallAdmission(callerId: string, now: Date = new Date()): AdmissionDecision {
     if (!isConfigEffective(this.config.effective_dates, now)) {
       this.log.warn(`Phone pricing config is expired or not yet effective!`);
+      return {
+        allowed: false,
+        reason: 'config_expired',
+        detail: 'Phone pricing configuration is expired or not yet effective',
+      };
     }
 
     const month = this.getCurrentMonthKey(now);

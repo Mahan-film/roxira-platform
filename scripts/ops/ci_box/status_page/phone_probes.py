@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import ipaddress
 import json
+from decimal import Decimal, ROUND_HALF_UP
 import math
 import os
 import re
@@ -365,8 +366,12 @@ def read_phone_costs(state_path: str, pricing_path: str, now: float) -> dict:
     except (OSError, ValueError, KeyError, TypeError):
         return {"state": "unknown", "error": "pricing config unreadable"}
 
-    monthly_total = int(round(float(data.get("monthlyTotalCents", 0))))
-    alert_bps = int(round(float(alert_ratio_raw) * 10000))
+    monthly_total = int(
+        Decimal(str(data.get("monthlyTotalCents", 0))).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    )
+    alert_bps = int(
+        (Decimal(str(alert_ratio_raw)) * Decimal("10000")).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    )
     ratio_bps = (monthly_total * 10000) // spend_cap_cents if spend_cap_cents > 0 else 0
     ratio = ratio_bps / 10000
     alert_80 = (monthly_total * 10000) >= (spend_cap_cents * alert_bps) if spend_cap_cents > 0 else False
