@@ -75,3 +75,82 @@ def repair_legal_phonetics(transcript: str) -> str:
         text = pattern.sub(replacement, text)
 
     return " ".join(text.split())
+
+
+_PERSIAN_ONES = {
+    "صفر": 0, "یک": 1, "دو": 2, "سه": 3, "چهار": 4, "پنج": 5,
+    "شش": 6, "شیش": 6, "هفت": 7, "هشت": 8, "نه": 9,
+}
+_PERSIAN_TEENS = {
+    "ده": 10, "یازده": 11, "دوازده": 12, "سیزده": 13, "چهارده": 14,
+    "پانزده": 15, "پونزده": 15, "شانزده": 16, "شونزده": 16,
+    "هفده": 17, "هجده": 18, "نوزده": 19,
+}
+_PERSIAN_TENS = {
+    "بیست": 20, "سی": 30, "چهل": 40, "پنجاه": 50,
+    "شصت": 60, "هفتاد": 70, "هشتاد": 80, "نود": 90,
+}
+_PERSIAN_HUNDREDS = {
+    "صد": 100, "یکصد": 100, "دویست": 200, "سیصد": 300, "چهارصد": 400,
+    "پانصد": 500, "پونصد": 500, "ششصد": 600, "هفتصد": 700,
+    "هشتصد": 800, "نهصد": 900,
+}
+_ALL_NUMBER_WORDS = {**_PERSIAN_ONES, **_PERSIAN_TEENS, **_PERSIAN_TENS, **_PERSIAN_HUNDREDS}
+_PERSIAN_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+
+
+def normalize_spoken_numbers(text: str) -> str:
+    """Convert Persian spoken number phrases (e.g. 'ماده پانصد و بیست و دو') into ASCII digits."""
+    if not text:
+        return ""
+    tokens = text.translate(_PERSIAN_DIGITS).split()
+    out: list[str] = []
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        if tok in _ALL_NUMBER_WORDS or tok == "هزار":
+            total = 0
+            current = 0
+            consumed = False
+            while i < len(tokens):
+                w = tokens[i]
+                if w == "و" and i + 1 < len(tokens) and (tokens[i + 1] in _ALL_NUMBER_WORDS or tokens[i + 1] == "هزار"):
+                    i += 1
+                    continue
+                if w in _ALL_NUMBER_WORDS:
+                    current += _ALL_NUMBER_WORDS[w]
+                    consumed = True
+                    i += 1
+                elif w == "هزار":
+                    total += (current if current > 0 else 1) * 1000
+                    current = 0
+                    consumed = True
+                    i += 1
+                else:
+                    break
+            if consumed:
+                out.append(str(total + current))
+                continue
+        out.append(tok)
+        i += 1
+    return " ".join(out)
+
+
+def fuzzy_match_statute(query: str, candidates: list[str]) -> str | None:
+    """Return the best matching statute title from candidates using normalized token overlap."""
+    if not query or not candidates:
+        return None
+    norm_q = normalize_spoken_numbers(repair_legal_phonetics(query)).strip()
+    q_tokens = set(norm_q.split())
+    best_cand: str | None = None
+    best_score = 0.0
+    for cand in candidates:
+        norm_c = normalize_spoken_numbers(cand).strip()
+        c_tokens = set(norm_c.split())
+        if not c_tokens:
+            continue
+        overlap = len(q_tokens & c_tokens) / max(len(q_tokens | c_tokens), 1)
+        if overlap > best_score and overlap >= 0.4:
+            best_score = overlap
+            best_cand = cand
+    return best_cand
