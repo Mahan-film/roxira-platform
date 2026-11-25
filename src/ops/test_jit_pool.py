@@ -468,3 +468,57 @@ def test_launcher_light_instance_shares_the_light_spool(launcher_env):
 @pytest.mark.parametrize("bad", ["light-1", "light-10", "light-x", "docker-2", "light2"])
 def test_launcher_rejects_bad_instances(launcher_env, bad):
     assert launch(launcher_env, bad).returncode == 2
+
+
+def test_launcher_mounts_toolcache_read_only_and_isolates_pip_venv(launcher_env):
+    put_config(launcher_env, "light")
+    r = launch(launcher_env, "light")
+    assert r.returncode == 0, r.stderr
+    log = (launcher_env["tmp"] / "log").read_text()
+    create = next(line for line in log.splitlines() if line.startswith("create "))
+    assert "roxira-jit-toolcache-light:/opt/hostedtoolcache:ro" in create
+    assert "BASH_ENV=/usr/local/share/roxira-pip-venv.sh" in create
+    assert "PIP_CACHE_DIR=/tmp/pip-cache" in create
+
+
+def test_dockerfile_light_creates_runner_temp_venv_hook(tmp_path):
+    df = (POOL_DIR / "Dockerfile.light").read_text()
+    assert "/usr/local/share/roxira-pip-venv.sh" in df
+    assert "$RUNNER_TEMP/venv" in df
+
+    # Extract the bash hook lines and run them with a read-only toolcache dir.
+    ro_cache = tmp_path / "toolcache"
+    ro_cache.mkdir()
+    ro_cache.chmod(0o555)
+    runner_temp = tmp_path / "runner_temp"
+    runner_temp.mkdir()
+    hook = tmp_path / "hook.sh"
+    hook.write_text(
+        'if [ -n "${RUNNER_TEMP:-}" ] && [ -d "$RUNNER_TEMP" ]; then\n'
+        '  _rx_venv="$RUNNER_TEMP/venv"\n'
+        '  _rx_py="$(command -v python3 2>/dev/null || true)"\n'
+        '  if [ -n "$_rx_py" ] && [ "$_rx_py" != "$_rx_venv/bin/python3" ]; then\n'
+        '    _rx_prev="$(cat "$_rx_venv/.py_base" 2>/dev/null || true)"\n'
+        '    if [ ! -x "$_rx_venv/bin/python3" ] || [ "$_rx_prev" != "$_rx_py" ]; then\n'
+        '      rm -rf "$_rx_venv" && "$_rx_py" -m venv --system-site-packages "$_rx_venv" >/dev/null 2>&1 && printf "%s\\n" "$_rx_py" > "$_rx_venv/.py_base" || true\n'
+        '    fi\n'
+        '  fi\n'
+        '  if [ -x "$_rx_venv/bin/python3" ]; then\n'
+        '    export VIRTUAL_ENV="$_rx_venv"\n'
+        '    case ":$PATH:" in *":$_rx_venv/bin:"*) ;; *) export PATH="$_rx_venv/bin:$PATH" ;; esac\n'
+        '  fi\n'
+        '  unset _rx_venv _rx_py _rx_prev\n'
+        'fi\n',
+        encoding="utf-8",
+    )
+    env = {**os.environ, "RUNNER_TEMP": str(runner_temp), "BASH_ENV": str(hook)}
+    res = subprocess.run(
+        ["bash", "-c", 'printf "%s|%s" "$VIRTUAL_ENV" "$(command -v python3)"'],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    venv_dir = str(runner_temp / "venv")
+    assert res.stdout.startswith(f"{venv_dir}|{venv_dir}/bin/python3")
+    ro_cache.chmod(0o755)
