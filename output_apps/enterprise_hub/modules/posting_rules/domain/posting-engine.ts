@@ -24,7 +24,7 @@ export interface VoucherProposal {
 }
 
 export interface VariableLineInput {
-  role?: PostingRole;
+  role: PostingRole;
   side: PostingSide;
   amount: bigint;
   accountCode?: string;
@@ -64,7 +64,8 @@ export function buildProposal(input: BuildInput): VoucherProposal {
   const template = requireTemplate(input.docType);
   const inputAmounts = input.amounts ?? {};
 
-  if (input.variableLines && input.variableLines.length > 0 && !template.variableLines) {
+  const usingVariableLines = Boolean(template.variableLines && input.variableLines !== undefined);
+  if (input.variableLines !== undefined && !template.variableLines) {
     throw new PostingRuleError(
       'UNKNOWN_DOC_TYPE',
       `قالب «${template.title}» ثبت خطوط متغیر را پشتیبانی نمی‌کند.`,
@@ -74,7 +75,7 @@ export function buildProposal(input: BuildInput): VoucherProposal {
   for (const name of template.amounts) {
     const value = inputAmounts[name];
     if (value === undefined) {
-      if (template.variableLines) {
+      if (usingVariableLines) {
         continue;
       }
       throw new PostingRuleError('MISSING_AMOUNT', `مبلغ «${name}» برای سند ${template.title} ارسال نشده است.`);
@@ -110,6 +111,12 @@ export function buildProposal(input: BuildInput): VoucherProposal {
 
   if (input.variableLines) {
     for (const vLine of input.variableLines) {
+      if (!vLine.role || !POSTING_ROLES[vLine.role]) {
+        throw new PostingRuleError(
+          'UNMAPPED_ROLE',
+          `برای خط متغیر سند ${template.title} نقش معتبر تعیین نشده است.`,
+        );
+      }
       if (typeof vLine.amount !== 'bigint') {
         throw new PostingRuleError('MISSING_AMOUNT', `مبلغ خط متغیر برای سند ${template.title} ارسال نشده است.`);
       }
@@ -118,20 +125,17 @@ export function buildProposal(input: BuildInput): VoucherProposal {
       }
       if (vLine.amount === 0n) continue;
 
-      let accountCode = vLine.accountCode;
-      if (!accountCode && vLine.role) {
-        accountCode = resolveRole(template, vLine.role, input.mapping, input.overrides);
-      }
+      const accountCode =
+        vLine.accountCode ?? resolveRole(template, vLine.role, input.mapping, input.overrides);
       if (!accountCode) {
-        const roleLabel = vLine.role && POSTING_ROLES[vLine.role] ? POSTING_ROLES[vLine.role].label : 'ناشناخته';
         throw new PostingRuleError(
           'UNMAPPED_ROLE',
-          `برای نقش «${roleLabel}» در سند ${template.title} حسابی تعیین نشده است؛ از تنظیمات ثبت خودکار حساب را انتخاب کنید.`,
+          `برای نقش «${POSTING_ROLES[vLine.role].label}» در سند ${template.title} حسابی تعیین نشده است؛ از تنظیمات ثبت خودکار حساب را انتخاب کنید.`,
         );
       }
 
       lines.push({
-        role: vLine.role ?? ('counter' as PostingRole),
+        role: vLine.role,
         accountCode,
         debit: vLine.side === 'debit' ? vLine.amount : 0n,
         credit: vLine.side === 'credit' ? vLine.amount : 0n,

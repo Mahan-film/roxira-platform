@@ -150,4 +150,21 @@ describe('buildProposal', () => {
       ['2010', 0n, 49_000_000n],
     ]);
   });
+
+  it('requires fixed amounts when variableLines is omitted on a variableLines-enabled template', () => {
+    expect(() => buildProposal({ docType: 'bank.receipt', amounts: {} })).toThrow(/ارسال نشده/);
+  });
+
+  it('rejects a variable line without a valid role', () => {
+    expect(() =>
+      buildProposal({
+        docType: 'bank.receipt',
+        amounts: {},
+        variableLines: [
+          { role: 'bank', side: 'debit', amount: 100n, accountCode: '1010' },
+          { role: 'not_a_role' as PostingRole, side: 'credit', amount: 100n, accountCode: '1020' },
+        ],
+      }),
+    ).toThrow(/نقش معتبر/);
+  });
 });

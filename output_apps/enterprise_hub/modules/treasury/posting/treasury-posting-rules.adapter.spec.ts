@@ -77,9 +77,12 @@ function setup(options: { missingTreasuryAccounts?: boolean; mappings?: MappingR
     ),
   };
 
+  const tenantScope = {
+    within: jest.fn(async (_t: string, _m: unknown, work: (m: unknown) => unknown) => work(manager)),
+  };
   const postingRules = new PostingRulesService(repo as never, accounting as never);
-  const adapter = new TreasuryPostingRulesAdapter(postingRules, accounting as never);
-  return { adapter, accounting, accounts };
+  const adapter = new TreasuryPostingRulesAdapter(postingRules, accounting as never, tenantScope as never);
+  return { adapter, accounting, accounts, tenantScope };
 }
 
 const context: PostingContext = { docNumber: 'RC-000001', date: '2026-11-04', description: 'دریافت از مشتری' };
@@ -235,14 +238,17 @@ describe('TreasuryPostingRulesAdapter', () => {
     expect(accounting.createJournalEntry).toHaveBeenCalledTimes(1);
   });
 
-  it('uses deterministic sourceId so duplicate calls replay the first voucher without writing again', async () => {
-    const { adapter, accounting } = setup();
+  it('uses deterministic sourceId including kind so receipt and payment with the same docNumber do not collide', async () => {
+    const { adapter, accounting, tenantScope } = setup();
     const firstId = await adapter.postDocument(T, context, doc(), manager);
-    const secondId = await adapter.postDocument(T, context, doc(), manager);
+    const replayId = await adapter.postDocument(T, context, doc(), manager);
+    const paymentId = await adapter.postDocument(T, context, doc({ kind: TreasuryDocKind.PAYMENT }), manager);
 
     expect(firstId).toBe(500);
-    expect(secondId).toBe(500);
-    expect(accounting.createJournalEntry).toHaveBeenCalledTimes(1);
+    expect(replayId).toBe(500);
+    expect(paymentId).toBe(501);
+    expect(accounting.createJournalEntry).toHaveBeenCalledTimes(2);
+    expect(tenantScope.within).toHaveBeenCalledWith(T, manager, expect.any(Function));
   });
 
   it('refuses a document with nothing to post and writes nothing', async () => {

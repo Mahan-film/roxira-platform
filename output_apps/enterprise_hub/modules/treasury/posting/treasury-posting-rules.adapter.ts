@@ -1,5 +1,6 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
+import { TenantScope } from '../../access/services/tenant-scope';
 import { AccountType } from '../../accounting/enums/accounting.enum';
 import { AccountingService } from '../../accounting/services/accounting.service';
 import { VariableLineInput } from '../../posting_rules/domain/posting-engine';
@@ -15,6 +16,12 @@ const DOC_TYPE: Record<TreasuryDocKind, string> = {
   [TreasuryDocKind.PAYMENT]: 'bank.payment',
 };
 
+function isDuplicateAccountError(error: unknown): boolean {
+  if (error instanceof ConflictException) return true;
+  const err = error as { code?: string; driverError?: { code?: string } } | null;
+  return err?.code === '23505' || err?.driverError?.code === '23505';
+}
+
 /**
  * The `TreasuryPostingPort` implementation over `modules/posting_rules`: it ensures required
  * treasury accounts exist in the tenant's chart, maps a treasury document or advance allocation
@@ -27,6 +34,7 @@ export class TreasuryPostingRulesAdapter implements TreasuryPostingPort {
   constructor(
     private readonly postingRules: PostingRulesService,
     private readonly accountingService: AccountingService,
+    private readonly tenantScope: TenantScope,
   ) {}
 
   async postDocument(
@@ -35,7 +43,7 @@ export class TreasuryPostingRulesAdapter implements TreasuryPostingPort {
     input: DocumentPostingInput,
     manager: EntityManager,
   ): Promise<number> {
-    await this.ensureAccounts(tenantId);
+    await this.ensureAccounts(tenantId, manager);
     const receipt = input.kind === TreasuryDocKind.RECEIPT;
     const variableLines: VariableLineInput[] = [];
 
@@ -88,7 +96,7 @@ export class TreasuryPostingRulesAdapter implements TreasuryPostingPort {
       {
         docType: DOC_TYPE[input.kind],
         sourceType: 'treasury_document',
-        sourceId: context.docNumber,
+        sourceId: `${context.docNumber}:${input.kind}`,
         date: `${context.date}T00:00:00.000Z`,
         amounts: {},
         variableLines,
@@ -107,7 +115,7 @@ export class TreasuryPostingRulesAdapter implements TreasuryPostingPort {
     input: AdvanceAllocationInput,
     manager: EntityManager,
   ): Promise<number> {
-    await this.ensureAccounts(tenantId);
+    await this.ensureAccounts(tenantId, manager);
     const receipt = input.kind === TreasuryDocKind.RECEIPT;
     const settled = input.applied + input.writeoff;
     const variableLines: VariableLineInput[] = [];
@@ -167,7 +175,7 @@ export class TreasuryPostingRulesAdapter implements TreasuryPostingPort {
       {
         docType: DOC_TYPE[input.kind],
         sourceType: 'treasury_advance_allocation',
-        sourceId: context.docNumber,
+        sourceId: `${context.docNumber}:${input.kind}`,
         date: `${context.date}T00:00:00.000Z`,
         amounts: {},
         variableLines,
@@ -181,19 +189,21 @@ export class TreasuryPostingRulesAdapter implements TreasuryPostingPort {
   }
 
   /** Creates any missing treasury accounts in the tenant's chart before the engine validates them. */
-  private async ensureAccounts(tenantId: string): Promise<void> {
-    const existing = new Set((await this.accountingService.listAccounts(tenantId)).map((a) => a.code));
-    for (const definition of TREASURY_ACCOUNT_DEFINITIONS) {
-      if (existing.has(definition.code)) continue;
-      try {
-        await this.accountingService.createAccount(tenantId, {
-          code: definition.code,
-          name: definition.name,
-          accountType: definition.accountType as AccountType,
-        });
-      } catch (error) {
-        if (!(error instanceof ConflictException)) throw error;
+  private async ensureAccounts(tenantId: string, manager: EntityManager): Promise<void> {
+    await this.tenantScope.within(tenantId, manager, async () => {
+      const existing = new Set((await this.accountingService.listAccounts(tenantId)).map((a) => a.code));
+      for (const definition of TREASURY_ACCOUNT_DEFINITIONS) {
+        if (existing.has(definition.code)) continue;
+        try {
+          await this.accountingService.createAccount(tenantId, {
+            code: definition.code,
+            name: definition.name,
+            accountType: definition.accountType as AccountType,
+          });
+        } catch (error) {
+          if (!isDuplicateAccountError(error)) throw error;
+        }
       }
-    }
+    });
   }
 }
