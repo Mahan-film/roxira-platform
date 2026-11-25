@@ -6,7 +6,7 @@
  */
 
 import * as path from 'path';
-import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
+import initSqlJs, { Database, SqlJsConfig, SqlJsStatic } from 'sql.js';
 import { PACKAGE_PAGE_SIZE } from '../constants/package-import.constants';
 import {
   PackageColumn,
@@ -20,9 +20,10 @@ let sqlJsPromise: Promise<SqlJsStatic> | null = null;
 export function loadSqlJs(): Promise<SqlJsStatic> {
   if (!sqlJsPromise) {
     const distDir = path.join(process.cwd(), 'node_modules', 'sql.js', 'dist');
-    sqlJsPromise = initSqlJs({
+    const config: SqlJsConfig = {
       locateFile: (file: string) => path.join(distDir, file),
-    });
+    };
+    sqlJsPromise = initSqlJs(config);
   }
   return sqlJsPromise;
 }
