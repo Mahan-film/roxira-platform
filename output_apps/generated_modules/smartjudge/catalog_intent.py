@@ -1,9 +1,7 @@
 """
-Deterministic Catalog and Meta-Query Intent Recognition (SmartJudge).
-
-Detects queries asking for catalog/registry metadata (e.g. 'what is the latest Supreme Court unity ruling?',
-'what is the number of the last unity ruling?'), injects verified database catalog rows into context,
-or answers deterministically from the catalog with zero LLM hallucination.
+Catalog Intent Recognition & Meta-Retrieval Helper for SmartJudge.
+Detects queries asking for 'the latest / newest / last unity ruling or regulation'
+and provides deterministic, hallucination-free catalog retrieval.
 """
 from __future__ import annotations
 
@@ -16,7 +14,7 @@ from output_apps.generated_modules.smartjudge.rulings_retrieval import is_truste
 _DIGIT_TRANS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
 
 # Match patterns for "latest / newest / last number" of rulings
-_LATEST_KW = r"(?:آخرین|جدیدترین|تازه‌ترین|تازه ترین|اخرین|واپسین)"
+_LATEST_KW = r"(?:آخرین|جدیدترین|تازه‌ترین|تازه ترین|اخرین|واپسین|\bآخر\b|\bاخر\b)"
 _UNITY_KW = r"(?:وحدت\s*رویه|رای\s*وسط\s*روی|آرای\s*وحدت\s*رویه|ارای\s*وحدت\s*رویه)"
 _SUPREME_KW = r"(?:دیوان\s*عالی(?:\s*کشور)?|دیوان\s*آلی(?:\s*کشور)?)"
 _ADMIN_KW = r"(?:دیوان\s*عدالت(?:\s*اداری)?|هیئت\s*عمومی\s*دیوان\s*عدالت)"
@@ -68,11 +66,12 @@ def detect_issuer(text: str) -> Optional[str]:
     return None
 
 
-def detect(text: str) -> Optional[Dict[str, Any]]:
+def detect(user_text: str) -> Optional[Dict[str, Any]]:
     """Detect meta-queries for latest rulings/regulations."""
-    if not text:
+    if not user_text:
         return None
-    norm_text = _norm(text)
+
+    norm_text = _norm(user_text)
 
     if _RE_LATEST_UNITY.search(norm_text):
         is_num_ask = bool(_RE_NUMBER_QUERY.search(norm_text))
@@ -123,7 +122,9 @@ def build_catalog_context(catalog_rows: List[Dict[str, Any]], target: str = "uni
         return ""
     lines = []
     for r in catalog_rows[:5]:
-        title = r.get("title") or (f"مقرره شماره {r.get('number')}" if target == "regulation" else f"رأی شماره {r.get('number')}")
+        title = r.get("title") or (
+            f"بخشنامه شماره {r.get('number')}" if target == "regulation" else f"رأی شماره {r.get('number')}"
+        )
         date = r.get("date") or ""
         subject = r.get("subject") or r.get("summary") or ""
         body = r.get("issuer") or r.get("issuing_body") or ""
@@ -160,7 +161,7 @@ def format_deterministic_answer(
     top = catalog_rows[0]
     num = top.get("number") or ""
     date = top.get("date") or ""
-    body = top.get("issuer") or top.get("issuing_body") or ("دیوان عالی کشور" if target != "regulation" else "")
+    body = top.get("issuer") or top.get("issuing_body") or ("" if target == "regulation" else "دیوان عالی کشور")
     subject = (top.get("subject") or top.get("summary") or "").strip()
     if len(subject) > 200:
         subject = subject[:197] + "…"
@@ -190,5 +191,5 @@ def format_deterministic_answer(
                f"آخرین {title} در پایگاه داده سامانه مورخ **{date}** است.\n\n")
     if subject:
         ans += f"**خلاصه موضوع:**\n{subject}\n\n"
-    ans += "این اطلاعات بر اساس آخرین به‌روزرسانی سامانه ارائه گردیده است."
+    ans += "این مورد بر اساس آخرین به‌روزرسانی سامانه ارائه گردیده است."
     return ans

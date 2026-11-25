@@ -438,7 +438,7 @@ def phone_gateway_user(headers: Optional[Mapping[str, str]], env_key: Optional[s
         return None
     if not hmac.compare_digest(str(value).strip(), key):
         return _INVALID
-    return CurrentUser(phone=PHONE_GATEWAY_ID, tier="VIP", authenticated=True, plan_level="free")
+    return CurrentUser(phone=PHONE_GATEWAY_ID, tier="VIP", authenticated=True, plan_level="pro")
 
 
 def is_phone_gateway(user: "CurrentUser") -> bool:
@@ -560,6 +560,8 @@ CONTRACT_REVIEW_LEVELS = ("premium", "team")
 
 def user_level(user: "CurrentUser") -> str:
     """guest | free | basic | pro | premium | team | vip (legacy VIP without a plan level)."""
+    if is_phone_gateway(user):
+        return "vip"
     if not user.authenticated:
         return "guest"
     if user.plan_level in PAID_LEVELS:
