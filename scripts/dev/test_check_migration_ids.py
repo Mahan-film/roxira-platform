@@ -115,7 +115,7 @@ def test_newest_is_taken_from_base_not_merge_base(repo):
 
 def test_open_prs_skips_without_gh(repo, monkeypatch):
     monkeypatch.setattr(m.shutil, "which", lambda _n: None)
-    seen, why = m.open_pr_ids(str(repo), "feat")
+    seen, why = m.open_pr_ids(str(repo), None)
     assert seen is None and "gh" in why
     write(repo, "1789200000000")
     commit(repo)
@@ -125,7 +125,8 @@ def test_open_prs_skips_without_gh(repo, monkeypatch):
 def test_open_prs_detects_clash(repo, monkeypatch):
     write(repo, "1789200000000", "Mine")
     commit(repo)
-    monkeypatch.setattr(m, "open_pr_ids", lambda cwd, own: ({"1789200000000": ["PR #9 (x)"]}, ""))
+    monkeypatch.setattr(m, "local_pr_number", lambda cwd=None: None)
+    monkeypatch.setattr(m, "open_pr_ids", lambda cwd, own, limit=300: ({"1789200000000": [(9, "x")]}, ""))
     assert any("PR #9" in p for p in m.check("origin/main", MIG, True, str(repo)))
 
 
