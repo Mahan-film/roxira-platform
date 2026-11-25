@@ -154,11 +154,15 @@ jobs:
   gitleaks:
     name: Secret scan (new commits only)
     needs: pick-runner
-    runs-on: ${{ fromJSON(needs.pick-runner.outputs.light || '"ubuntu-latest"') }}
+    # GitHub-hosted on purpose: since 2026-11-24 23:25 UTC the full-history checkout hung on jit-light box runners
+    # (4 of 5 main pushes hit the 10 min timeout), which cancelled main CI and paused the merge gate after every merge.
+    # A required check must not depend on one box's network; this job is ~30 s and free on a public repo.
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       # Blobless clone: full commit graph, blobs fetched lazily only for the scanned range.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        timeout-minutes: 5
         with:
           fetch-depth: 0
           filter: blob:none
