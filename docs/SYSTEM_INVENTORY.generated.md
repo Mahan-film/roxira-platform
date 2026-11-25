@@ -36,28 +36,10 @@ run `python3 scripts/gen_system_inventory.py` (CI-style check: `--check`).
 
 | File | name | Triggers |
 | --- | --- | --- |
-| agent-automerge.yml | Agent auto-merge | workflow_dispatch, workflow_run |
-| agent-review.yml | Agent review | pull_request_target, workflow_dispatch |
-| agent-task.yml | Agent task | issues, workflow_dispatch |
 | ci.yml | CI | merge_group, pull_request, push, schedule, workflow_dispatch |
 | codeql.yml | CodeQL | push, schedule |
-| deploy-prod.yml | Deploy prod | workflow_dispatch, workflow_run |
-| deps-audit-weekly.yml | Weekly dependency audit | schedule, workflow_dispatch |
-| e2e-smoke.yml | E2E smoke (production) | schedule, workflow_dispatch |
-| factory-build.yml | Factory build | pull_request |
-| factory-plan.yml | Factory plan | issue_comment, issues |
-| factory-research.yml | Factory research | issues, workflow_dispatch |
-| factory-status.yml | Factory status | issue_comment |
-| model-eval.yml | Model eval (coding smoke + gate) | workflow_dispatch |
-| model-registry-check.yml | Model registry check | schedule, workflow_dispatch |
-| model-tournament.yml | Model Tournament | workflow_dispatch |
-| preview-e2e.yml | Preview E2E | workflow_dispatch |
-| project-pages.yml | Factory project pages | workflow_dispatch |
 | review-desk.yml | Review desk | schedule, workflow_dispatch |
-| rx-automerge.yml | RX auto-merge | workflow_dispatch, workflow_run |
-| tech-radar-weekly.yml | Tech radar weekly | workflow_dispatch |
 | uptime.yml | Uptime check (production) | schedule, workflow_dispatch |
-| zap-baseline-nightly.yml | Nightly OWASP ZAP baseline scan | schedule, workflow_dispatch |
 
 ## Packages
 
