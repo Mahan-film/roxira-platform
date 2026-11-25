@@ -664,7 +664,7 @@ jobs:
           POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: rxfresh
         ports:
-          - 5432:5432
+          - 5432
         options: >-
           --health-cmd "pg_isready -U postgres -d rxfresh"
           --health-interval 5s
@@ -672,12 +672,18 @@ jobs:
           --health-retries 20
     env:
       DATABASE_HOST: 127.0.0.1
-      DATABASE_PORT: "5432"
       # Admin user: only migrations run here. The pg specs create roxira_app themselves (test-pg.ts).
       DATABASE_USER: postgres
       DATABASE_NAME: rxfresh
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Export dynamic Postgres port
+        run: |
+          PG_PORT="${{ job.services.postgres.ports['5432'] }}"
+          PG_PORT="${PG_PORT:-5432}"
+          echo "DATABASE_PORT=$PG_PORT" >> "$GITHUB_ENV"
+          echo "PGPORT=$PG_PORT" >> "$GITHUB_ENV"
+          echo "ROXIRA_TEST_PG_PORT=$PG_PORT" >> "$GITHUB_ENV"
       - name: psql client on the CI box (shim to the Postgres service container)
         # GitHub-hosted images ship psql; the box host may not (08_root_ci_pool.sh installs it).
         if: runner.environment == 'self-hosted'
@@ -707,7 +713,6 @@ jobs:
         # Every tenant_id table needs ENABLE + FORCE RLS and a tenant policy; global tables are in scripts/dev/rls_allowlist.txt.
         env:
           PGHOST: 127.0.0.1
-          PGPORT: "5432"
           PGUSER: postgres
           PGDATABASE: rxfresh
         run: bash ../../scripts/dev/rls_coverage.sh
@@ -718,7 +723,6 @@ jobs:
         # Each spec creates and drops its own database on this server.
         env:
           ROXIRA_TEST_PG_HOST: 127.0.0.1
-          ROXIRA_TEST_PG_PORT: "5432"
           ROXIRA_TEST_PG_USER: postgres
         run: npx jest --runInBand --testPathPattern '\.pg\.spec\.ts$'
 
@@ -779,7 +783,7 @@ jobs:
           POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: rxfresh
         ports:
-          - 5432:5432
+          - 5432
         options: >-
           --health-cmd "pg_isready -U postgres -d rxfresh"
           --health-interval 5s
@@ -788,17 +792,14 @@ jobs:
       redis:
         image: ${{ needs.pick-runner.outputs.image_registry || vars.CI_IMAGE_REGISTRY || 'mirror.gcr.io/library' }}/redis:7.2
         ports:
-          # Host port 16379: 6379 is taken on the CI box (phone stack); same on hosted runners.
-          - 16379:6379
+          - 6379
     env:
       DATABASE_HOST: 127.0.0.1
-      DATABASE_PORT: "5432"
       DATABASE_USER: postgres
       # The service uses trust auth, the value is ignored but the app requires the key.
       DATABASE_PASSWORD: ci-trust-auth
       DATABASE_NAME: rxfresh
       REDIS_HOST: 127.0.0.1
-      REDIS_PORT: "16379"
       # Throwaway per-run secret for this job's own backend; never a real key.
       JWT_SECRET: ci-m1-gate-throwaway-secret-0123456789abcdef
       JWT_SECRET_KEY: ci-m1-gate-throwaway-secret-0123456789abcdef
@@ -807,6 +808,15 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Export dynamic Postgres and Redis ports
+        run: |
+          PG_PORT="${{ job.services.postgres.ports['5432'] }}"
+          PG_PORT="${PG_PORT:-5432}"
+          RD_PORT="${{ job.services.redis.ports['6379'] }}"
+          RD_PORT="${RD_PORT:-6379}"
+          echo "DATABASE_PORT=$PG_PORT" >> "$GITHUB_ENV"
+          echo "PGPORT=$PG_PORT" >> "$GITHUB_ENV"
+          echo "REDIS_PORT=$RD_PORT" >> "$GITHUB_ENV"
       - name: psql client on the CI box (shim to the Postgres service container)
         # GitHub-hosted images ship psql; the box host may not (08_root_ci_pool.sh installs it).
         if: runner.environment == 'self-hosted'
