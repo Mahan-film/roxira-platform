@@ -2,15 +2,18 @@ import 'reflect-metadata';
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { Reflector } from '@nestjs/core';
+import { JwtService } from '@nestjs/jwt';
 import * as fs from 'fs';
 import * as path from 'path';
 import { AccessStub } from '../../test/support/access-stub';
 import { IS_PUBLIC_KEY } from '../auth/decorators/public.decorator';
 import { ROLES_KEY } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../auth/enums/user-role.enum';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AccessGuard } from './access.guard';
 import { AccessService } from './services/access.service';
+import { LoginWindowService } from './services/login-window.service';
 import {
   AccessAction,
   AccessModule,
@@ -30,20 +33,60 @@ import {
 } from './decorators';
 
 /**
- * T355 (issue #1328): QA: authorization tests for every mutating controller route.
+ * T355 (issue #1328): QA authorization tests for every mutating controller route.
  *
- * Generated table test that:
- *  1. Identifies every mutating route (POST, PUT, PATCH, DELETE) across all controllers.
- *  2. Lists all mutating routes with no role/access policy guard.
- *  3. Verifies that unauthenticated callers are rejected with 401 Unauthorized (unless @Public).
- *  4. Verifies that authenticated members of ANOTHER tenant are rejected with 403 Forbidden.
- *  5. Verifies that every system role matches the permission matrix (403 Forbidden when unauthorized).
- *  6. Prints the exact offending route and controller on any discrepancy.
+ * Exercises the full guard chain (`JwtAuthGuard` -> `RolesGuard` -> `AccessGuard`)
+ * against every mutating route (POST, PUT, PATCH, DELETE) across all controllers:
+ *  1. Verifies every mutating route declares an explicit access policy (no unguarded routes).
+ *  2. Verifies unauthenticated callers are rejected with 401 Unauthorized (unless @Public).
+ *  3. Verifies `@Roles()` platform-operator routes reject tenant owners with 403 Forbidden.
+ *  4. Verifies `@AuthOnly()` mutating routes match the explicit user-scoped allowlist.
+ *  5. Verifies authenticated members of another tenant are rejected with 403 Forbidden.
+ *  6. Verifies every system role matches the permission matrix (403 Forbidden when unauthorized).
  */
 
-const ROOT = path.resolve(__dirname, '../..');
 const HTTP = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'ALL', 'OPTIONS', 'HEAD'];
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const PRIMARY_TENANT = 'tenant-target-1';
+const OTHER_TENANT = 'tenant-unrelated-2';
+
+/**
+ * Explicit allowlist of mutating routes permitted to use `@AuthOnly()` (purely
+ * user-scoped auth/session/onboarding endpoints that execute before or outside a
+ * single tenant's data scope). Any new `@AuthOnly()` mutating route outside this
+ * allowlist fails the cross-tenant isolation suite.
+ */
+const ALLOWED_AUTH_ONLY_MUTATING_CONTROLLERS = new Set(['AuthController']);
+const ALLOWED_AUTH_ONLY_MUTATING_ROUTE_IDS = new Set([
+  'POST /invitations/accept (InvitationsController.accept)',
+  'POST /org/ (OrgController.create)',
+]);
+
+interface Route {
+  id: string;
+  controller: Function;
+  handler: Function;
+  method: string;
+  url: string;
+}
+
+type Kind = 'public' | 'authOnly' | 'platformAdmin' | 'anyMember' | 'module' | 'none';
+
+interface RouteClassification {
+  kind: Kind;
+  platformRoles?: UserRole[];
+  module?: AccessModule;
+  also?: AccessModule[];
+  action?: AccessAction;
+  field?: SensitiveField;
+}
+
+interface GuardResult {
+  allowed: boolean;
+  statusCode: 200 | 401 | 403;
+  errorCode?: string;
+  errorMessage?: string;
+}
 
 function controllerFiles(dir: string, out: string[] = []): string[] {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -55,17 +98,10 @@ function controllerFiles(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-interface Route {
-  id: string;
-  controller: Function;
-  handler: Function;
-  method: string;
-  url: string;
-}
-
-function loadRoutes(): Route[] {
+function loadRoutes(rootDir: string): Route[] {
   const routes: Route[] = [];
-  for (const file of controllerFiles(ROOT)) {
+  for (const file of controllerFiles(rootDir)) {
+    // Jest runs against TypeScript sources via ts-jest (`testPathIgnorePatterns: ['/dist/']`).
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const mod = require(file) as Record<string, unknown>;
     for (const exported of Object.values(mod)) {
@@ -98,22 +134,7 @@ function loadRoutes(): Route[] {
   return routes.sort((a, b) => a.id.localeCompare(b.id));
 }
 
-const allRoutes = loadRoutes();
-const mutatingRoutes = allRoutes.filter((r) => MUTATING_METHODS.has(r.method));
-const reflector = new Reflector();
-
-type Kind = 'public' | 'authOnly' | 'platformAdmin' | 'anyMember' | 'module' | 'none';
-
-const GLOBAL_USER_ROLES = new Set<string>(Object.values(UserRole));
-
-function classify(r: Route): {
-  kind: Kind;
-  platformRoles?: UserRole[];
-  module?: AccessModule;
-  also?: AccessModule[];
-  action?: AccessAction;
-  field?: SensitiveField;
-} {
+function classify(reflector: Reflector, r: Route): RouteClassification {
   const targets = [r.handler, r.controller];
   if (reflector.getAllAndOverride(IS_PUBLIC_KEY, targets)) return { kind: 'public' };
   if (reflector.getAllAndOverride(AUTH_ONLY_KEY, targets)) return { kind: 'authOnly' };
@@ -138,85 +159,104 @@ function classify(r: Route): {
   };
 }
 
-const PRIMARY_TENANT = 'tenant-target-1';
-const OTHER_TENANT = 'tenant-unrelated-2';
-
-const dummyLoginWindow = {
-  assertAllowed: jest.fn(async () => undefined),
-  checkLoginWindow: jest.fn(() => ({ allowed: true })),
-} as any;
-
-interface GuardResult {
-  allowed: boolean;
-  statusCode: 200 | 401 | 403;
-  errorCode?: string;
-  errorMessage?: string;
-}
-
-async function invokeGuard(
-  r: Route,
-  setup: (stub: AccessStub) => void,
-  user?: Record<string, unknown>,
-): Promise<GuardResult> {
-  const stub = new AccessStub();
-  setup(stub);
-  const rolesGuard = new RolesGuard(reflector);
-  const accessGuard = new AccessGuard(reflector, stub as unknown as AccessService, dummyLoginWindow);
-  const request = {
-    method: r.method,
-    originalUrl: r.url,
-    url: r.url,
-    user: user ? { ...user } : undefined,
-  };
-  const context = {
-    getHandler: () => r.handler,
-    getClass: () => r.controller,
-    switchToHttp: () => ({ getRequest: () => request }),
-  } as unknown as ExecutionContext;
-
-  try {
-    // Mirror the real NestJS global guard chain: JwtAuthGuard (401 when user absent) -> RolesGuard -> AccessGuard.
-    if (request.user) {
-      const rolesOk = rolesGuard.canActivate(context);
-      if (!rolesOk) {
-        return { allowed: false, statusCode: 403 };
-      }
-    }
-    const ok = await accessGuard.canActivate(context);
-    return { allowed: ok, statusCode: ok ? 200 : 403 };
-  } catch (err: any) {
-    if (err instanceof UnauthorizedException) {
-      return { allowed: false, statusCode: 401, errorMessage: err.message };
-    }
-    const response = typeof err?.getResponse === 'function' ? err.getResponse() : null;
-    return {
-      allowed: false,
-      statusCode: (err?.status as 401 | 403) || 403,
-      errorCode: response?.error || response?.code || err?.name,
-      errorMessage: response?.message || err?.message,
-    };
-  }
-}
-
-const roleKeys = SYSTEM_ROLES.map((r) => r.key);
-
 describe('T355: QA authorization tests for every mutating controller route', () => {
+  let reflector: Reflector;
+  let allRoutes: Route[];
+  let mutatingRoutes: Route[];
+  let globalUserRoles: Set<string>;
+
+  beforeAll(() => {
+    const rootDir = path.resolve(__dirname, '../..');
+    reflector = new Reflector();
+    allRoutes = loadRoutes(rootDir);
+    mutatingRoutes = allRoutes.filter((r) => MUTATING_METHODS.has(r.method));
+    globalUserRoles = new Set<string>(Object.values(UserRole));
+  });
+
+  function createDummyLoginWindow(): LoginWindowService {
+    return {
+      assertAllowed: jest.fn(async () => undefined),
+      checkLoginWindow: jest.fn(() => ({ allowed: true })),
+    } as unknown as LoginWindowService;
+  }
+
+  async function invokeGuardChain(
+    r: Route,
+    setup: (stub: AccessStub) => void,
+    user?: Record<string, unknown>,
+    options: { includeJwtGuard?: boolean } = { includeJwtGuard: true },
+  ): Promise<GuardResult> {
+    const stub = new AccessStub();
+    setup(stub);
+    const jwtServiceStub = {
+      verifyAsync: jest.fn(async () => {
+        if (!user) throw new UnauthorizedException('Missing user');
+        return { ...user };
+      }),
+    } as unknown as JwtService;
+    const jwtAuthGuard = new JwtAuthGuard(jwtServiceStub, reflector);
+    const rolesGuard = new RolesGuard(reflector);
+    const accessGuard = new AccessGuard(
+      reflector,
+      stub as unknown as AccessService,
+      createDummyLoginWindow(),
+    );
+    const request: {
+      method: string;
+      originalUrl: string;
+      url: string;
+      headers: Record<string, string>;
+      user?: Record<string, unknown>;
+    } = {
+      method: r.method,
+      originalUrl: r.url,
+      url: r.url,
+      headers: user ? { authorization: 'Bearer test-token' } : {},
+      user: options.includeJwtGuard === false && user ? { ...user } : undefined,
+    };
+    const context = {
+      getHandler: () => r.handler,
+      getClass: () => r.controller,
+      switchToHttp: () => ({ getRequest: () => request }),
+    } as unknown as ExecutionContext;
+
+    try {
+      if (options.includeJwtGuard !== false) {
+        const jwtOk = await jwtAuthGuard.canActivate(context);
+        if (!jwtOk) {
+          return { allowed: false, statusCode: 401 };
+        }
+      }
+      if (request.user) {
+        const rolesOk = rolesGuard.canActivate(context);
+        if (!rolesOk) {
+          return { allowed: false, statusCode: 403 };
+        }
+      }
+      const ok = await accessGuard.canActivate(context);
+      return { allowed: ok, statusCode: ok ? 200 : 403 };
+    } catch (err: unknown) {
+      if (err instanceof UnauthorizedException) {
+        return { allowed: false, statusCode: 401, errorMessage: err.message };
+      }
+      const httpErr = err as { status?: number; name?: string; getResponse?: () => Record<string, unknown>; message?: string };
+      const response = typeof httpErr?.getResponse === 'function' ? httpErr.getResponse() : null;
+      return {
+        allowed: false,
+        statusCode: (httpErr?.status as 401 | 403) || 403,
+        errorCode: (response?.error as string | undefined) || (response?.code as string | undefined) || httpErr?.name,
+        errorMessage: (response?.message as string | undefined) || httpErr?.message,
+      };
+    }
+  }
+
   it('discovers mutating routes across all application controllers', () => {
     expect(mutatingRoutes.length).toBeGreaterThan(0);
   });
 
   describe('mutating routes with no role guard', () => {
     it('identifies and lists mutating routes lacking an explicit access policy', () => {
-      const unguardedRoutes = mutatingRoutes.filter((r) => classify(r).kind === 'none');
-      if (unguardedRoutes.length > 0) {
-        // Output for audit / issue reporting
-        // eslint-disable-next-line no-console
-        console.warn(
-          `[T355 FINDING] ${unguardedRoutes.length} mutating route(s) have no access policy:\n` +
-            unguardedRoutes.map((r) => `  - ${r.id}`).join('\n'),
-        );
-      }
-      // Every route must be guarded; unguarded routes fail the default-deny policy
+      const unguardedRoutes = mutatingRoutes.filter((r) => classify(reflector, r).kind === 'none');
       expect(unguardedRoutes.map((r) => r.id)).toEqual([]);
     });
 
@@ -231,7 +271,7 @@ describe('T355: QA authorization tests for every mutating controller route', () 
         method: 'POST',
         url: '/api/unguarded',
       };
-      const res = await invokeGuard(
+      const res = await invokeGuardChain(
         fakeRoute,
         (s) => s.grant('u-owner', PRIMARY_TENANT, 'owner'),
         { sub: 'u-owner', tenantId: PRIMARY_TENANT, sid: 's-1' },
@@ -242,17 +282,24 @@ describe('T355: QA authorization tests for every mutating controller route', () 
   });
 
   describe('unauthenticated invocation (expects 401 Unauthorized)', () => {
-    it('refuses unauthenticated calls on every non-public mutating route with 401', async () => {
+    it('refuses unauthenticated calls through JwtAuthGuard -> RolesGuard -> AccessGuard with 401', async () => {
       const violations: string[] = [];
 
       for (const r of mutatingRoutes) {
-        const { kind } = classify(r);
+        const { kind } = classify(reflector, r);
         if (kind === 'public') continue;
 
-        const res = await invokeGuard(r, () => {});
-        if (res.allowed || res.statusCode !== 401) {
+        const fullChainRes = await invokeGuardChain(r, () => {}, undefined, { includeJwtGuard: true });
+        if (fullChainRes.allowed || fullChainRes.statusCode !== 401) {
           violations.push(
-            `${r.id} -> expected 401 Unauthorized, got statusCode=${res.statusCode} (allowed=${res.allowed})`,
+            `${r.id} [JwtAuthGuard chain] -> expected 401 Unauthorized, got statusCode=${fullChainRes.statusCode} (allowed=${fullChainRes.allowed})`,
+          );
+        }
+
+        const accessOnlyRes = await invokeGuardChain(r, () => {}, undefined, { includeJwtGuard: false });
+        if (accessOnlyRes.allowed || accessOnlyRes.statusCode !== 401) {
+          violations.push(
+            `${r.id} [AccessGuard fallback] -> expected 401 Unauthorized, got statusCode=${accessOnlyRes.statusCode} (allowed=${accessOnlyRes.allowed})`,
           );
         }
       }
@@ -262,14 +309,13 @@ describe('T355: QA authorization tests for every mutating controller route', () 
   });
 
   describe('platform-operator @Roles() routes', () => {
-    const platformRoutes = mutatingRoutes.filter((r) => classify(r).kind === 'platformAdmin');
-
     it('uses only global UserRole enum values (never tenant-scoped roles) in @Roles()', () => {
+      const platformRoutes = mutatingRoutes.filter((r) => classify(reflector, r).kind === 'platformAdmin');
       const violations: string[] = [];
 
       for (const r of platformRoutes) {
-        const roles = classify(r).platformRoles ?? [];
-        const invalid = roles.filter((role) => !GLOBAL_USER_ROLES.has(String(role)));
+        const roles = classify(reflector, r).platformRoles ?? [];
+        const invalid = roles.filter((role) => !globalUserRoles.has(String(role)));
         if (invalid.length > 0) {
           violations.push(`${r.id} -> non-global @Roles values: ${invalid.join(', ')}`);
         }
@@ -279,10 +325,11 @@ describe('T355: QA authorization tests for every mutating controller route', () 
     });
 
     it('refuses non-operator tenant owners with 403 Forbidden via RolesGuard', async () => {
+      const platformRoutes = mutatingRoutes.filter((r) => classify(reflector, r).kind === 'platformAdmin');
       const violations: string[] = [];
 
       for (const r of platformRoutes) {
-        const res = await invokeGuard(
+        const res = await invokeGuardChain(
           r,
           (s) => s.grant('u-tenant-owner', PRIMARY_TENANT, 'owner'),
           { sub: 'u-tenant-owner', tenantId: PRIMARY_TENANT, role: UserRole.USER, sid: 's-owner', mfa: false },
@@ -300,18 +347,31 @@ describe('T355: QA authorization tests for every mutating controller route', () 
   });
 
   describe('cross-tenant isolation (expects 403 Forbidden)', () => {
+    it('restricts @AuthOnly() mutating routes to the explicit user-scoped allowlist', () => {
+      const unexpectedAuthOnly = mutatingRoutes
+        .filter((r) => classify(reflector, r).kind === 'authOnly')
+        .filter(
+          (r) =>
+            !ALLOWED_AUTH_ONLY_MUTATING_CONTROLLERS.has(r.controller.name) &&
+            !ALLOWED_AUTH_ONLY_MUTATING_ROUTE_IDS.has(r.id),
+        )
+        .map((r) => r.id);
+
+      expect(unexpectedAuthOnly).toEqual([]);
+    });
+
     it('refuses mutating route invocation when user belongs to ANOTHER tenant', async () => {
       const violations: string[] = [];
 
       for (const r of mutatingRoutes) {
-        const { kind } = classify(r);
-        // Public and purely user-auth endpoints are not tenant-scoped.
+        const { kind } = classify(reflector, r);
+        // Public routes and verified user-scoped @AuthOnly routes (auth, org creation, invitation accept)
+        // are not bound to a single pre-existing tenant's data.
         // platformAdmin (@Roles) routes are NOT skipped: a non-operator member of OTHER_TENANT
         // (role: UserRole.USER) must also be rejected with 403 Forbidden by RolesGuard.
         if (kind === 'public' || kind === 'authOnly') continue;
 
-        // User is granted owner membership in OTHER_TENANT, but attempts request for PRIMARY_TENANT
-        const res = await invokeGuard(
+        const res = await invokeGuardChain(
           r,
           (s) => s.grant('u-alien', OTHER_TENANT, 'owner'),
           { sub: 'u-alien', tenantId: PRIMARY_TENANT, role: UserRole.USER, sid: 's-alien', mfa: false },
@@ -333,23 +393,24 @@ describe('T355: QA authorization tests for every mutating controller route', () 
   });
 
   describe('permission matrix validation per system role', () => {
-    const moduleMutatingRoutes = mutatingRoutes.filter((r) => classify(r).kind === 'module');
+    it('enforces exact mutating permissions for every system role (403 when forbidden)', async () => {
+      const moduleMutatingRoutes = mutatingRoutes.filter((r) => classify(reflector, r).kind === 'module');
+      const violations: string[] = [];
 
-    describe.each(roleKeys)('role %s', (role) => {
-      it(`enforces exact mutating permissions for role ${role} (403 when forbidden)`, async () => {
-        const roleDef = SYSTEM_ROLES.find((x) => x.key === role)!;
-        const violations: string[] = [];
-
+      for (const roleDef of SYSTEM_ROLES) {
+        const role = roleDef.key;
         for (const r of moduleMutatingRoutes) {
-          const { module, also, action, field } = classify(r);
-          const res = await invokeGuard(
+          const { module, also, action, field } = classify(reflector, r);
+          const res = await invokeGuardChain(
             r,
             (s) => s.grant('u-role-test', PRIMARY_TENANT, role),
             { sub: 'u-role-test', tenantId: PRIMARY_TENANT, sid: 's-role-test', mfa: false },
           );
 
           const alternatives = [module!, ...(also ?? [])];
-          const hasPerm = alternatives.some((m) => roleDef.permissions.includes(`${m}:${action!}` as never));
+          const hasPerm = alternatives.some((m) =>
+            roleDef.permissions.some((p) => String(p) === `${m}:${action!}`),
+          );
           const hasField = !field || systemRoleFieldVisibility(role)[field];
           const shouldBeAllowed = hasPerm && hasField;
 
@@ -359,9 +420,9 @@ describe('T355: QA authorization tests for every mutating controller route', () 
             );
           }
         }
+      }
 
-        expect(violations).toEqual([]);
-      });
+      expect(violations).toEqual([]);
     });
   });
 });
