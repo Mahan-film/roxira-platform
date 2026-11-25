@@ -99,6 +99,7 @@ import { InvoicePaymentLinkController } from './controllers/invoice-payment-link
     InvoicePaymentLinkRepository,
     EffectiveTaxTreatmentRegistry,
     VendorInvoiceGenerator,
+    VatRateResolver,
   ],
 })
 export class InvoicingModule {}

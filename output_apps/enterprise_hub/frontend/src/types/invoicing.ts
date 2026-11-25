@@ -99,6 +99,7 @@ export interface InvoicePartyInfo {
   economicCode?: string;
   registrationNumber?: string;
   address?: string;
+  postalCode?: string;
   phone?: string;
   email?: string;
 }
@@ -106,6 +107,10 @@ export interface InvoicePartyInfo {
 export interface InvoiceItem {
   itemId?: number | null;
   sku?: string | null;
+  /** شناسه ۱۳ رقمی کالا/خدمت در سامانه مودیان (SSTID). */
+  taxCode?: string | null;
+  /** @deprecated Use `taxCode` instead. Legacy alias for SSTID. */
+  sstid?: string | null;
   description: string;
   quantity: number;
   unitPrice: number;
@@ -121,6 +126,7 @@ export interface InvoiceItem {
 export interface CreateInvoiceItemDto {
   itemId?: number;
   sku?: string;
+  taxCode?: string;
   description?: string;
   quantity: number;
   unitPrice: number;

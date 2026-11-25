@@ -78,6 +78,7 @@ import { CountryPacksModule } from '../country_packs/country-packs.module';
       CaptureDocumentEntity,
       StatutoryParameterEntity,
     ]),
+    // InvoicingModule exports VatRateResolver and InvoicingService for MoadianService injection (Rule 15)
     InvoicingModule,
     TenantPolicyModule,
     AccessModule,

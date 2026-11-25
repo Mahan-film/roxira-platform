@@ -12,6 +12,7 @@ import type {
   SeasonalVatReport,
   VatReturnDraft,
 } from "@/types/moadian-seasonal";
+import type { MoadianPreFlightResult } from "@/lib/moadian-preflight";
 
 const BASE = `${API_PROXY_BASE_PATH}/${TAX_COMPLIANCE_RESOURCE_PATH}`;
 
@@ -32,6 +33,14 @@ export function putMoadianCredential(payload: PutMoadianCredentialDto, signal?: 
     body: payload,
     signal,
   });
+}
+
+/** POST moadian/invoices/:id/pre-flight */
+export function preflightMoadianInvoice(invoiceId: string, signal?: AbortSignal) {
+  return apiRequest<MoadianPreFlightResult>(
+    `${BASE}/moadian/invoices/${encodeURIComponent(invoiceId)}/pre-flight`,
+    { method: "POST", signal },
+  );
 }
 
 /** POST moadian/invoices/:id/submit (queued; 503 when the flag is off). */

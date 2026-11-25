@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNumber, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsNumber, IsOptional, IsString, Matches, MaxLength, Min, MinLength } from 'class-validator';
 
 /**
  * DTO ایجاد کالای جدید در فهرست انبار
@@ -51,4 +52,23 @@ export class CreateStockItemDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   quantity?: number;
+
+  @ApiPropertyOptional({
+    description: 'شناسه ۱۳ رقمی کالا/خدمت مودیان (SSTID)',
+    example: '2330001234567',
+  })
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }) => {
+    if (typeof value !== 'string') return value;
+    const cleaned = value
+      .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776))
+      .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632))
+      .replace(/\s+/g, '');
+    return cleaned === '' ? undefined : cleaned;
+  })
+  @Matches(/^\d{13}$/, {
+    message: 'شناسه کالا/خدمت مودیان (SSTID) باید دقیقاً ۱۳ رقم عددی باشد.',
+  })
+  taxCode?: string;
 }

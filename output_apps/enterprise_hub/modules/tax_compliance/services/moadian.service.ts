@@ -20,6 +20,9 @@ import {
   randomUUID,
 } from 'crypto';
 import { InvoicingService } from '../../invoicing/services/invoicing.service';
+import { InvoiceResponseDto } from '../../invoicing/dto/invoice-response.dto';
+import { VatRateResolver } from '../../invoicing/services/vat-rate.resolver';
+import { tehranIsoDate } from '../utils/tehran-date.util';
 import {
   MOADIAN_DEFAULT_MAX_POLLS,
   MOADIAN_DEFAULT_POLL_DELAY_MS,
@@ -55,6 +58,11 @@ import {
   validateCounterpartyAgainstInvoiceType,
   MoadianCounterpartyValidationError,
 } from '../utils/moadian-payload.transformer';
+import {
+  runMoadianPreFlightValidation,
+  MoadianPreFlightResult,
+  MoadianPreFlightError,
+} from '../utils/moadian-preflight.validator';
 import { SubmitMoadianInvoiceDto } from '../dto/submit-moadian-invoice.dto';
 import {
   MoadianInvoicePacket,
@@ -97,6 +105,7 @@ export class MoadianService implements OnModuleInit {
     private readonly config: ConfigService,
     @InjectQueue(MOADIAN_QUEUE) private readonly queue: Queue<MoadianJobData>,
     private readonly taxComplianceRepository: TaxComplianceRepository,
+    private readonly vatRateResolver: VatRateResolver,
     @Optional() private readonly countryPackRegistry?: CountryPackRegistry,
   ) {}
 
@@ -124,9 +133,13 @@ export class MoadianService implements OnModuleInit {
   }
 
   /** Flag + whether this tenant has stored credentials; never throws when the flag is off. */
-  async getStatus(tenantId: string): Promise<{ enabled: boolean; configured: boolean }> {
+  async getStatus(tenantId: string): Promise<{ enabled: boolean; configured: boolean; defaultSstid: string | null }> {
     const credential = await this.repository.findCredential(tenantId);
-    return { enabled: this.isEnabled(), configured: credential !== null };
+    return {
+      enabled: this.isEnabled(),
+      configured: credential !== null,
+      defaultSstid: credential?.defaultSstid ?? null,
+    };
   }
 
   private numberSetting(name: string, fallback: number): number {
@@ -275,6 +288,79 @@ export class MoadianService implements OnModuleInit {
   // ارسال صورتحساب
   // ---------------------------------------------------------------------------
 
+  private resolveInvoiceType(invoice: InvoiceResponseDto): MoadianInvoiceType {
+    const buyerBid = invoice.buyerInfo?.nationalId?.replace(/\s+/g, '') ?? null;
+    const buyerTinb = invoice.buyerInfo?.economicCode?.replace(/\s+/g, '') ?? null;
+    return buyerBid || buyerTinb
+      ? MoadianInvoiceType.WITH_BUYER
+      : MoadianInvoiceType.WITHOUT_BUYER;
+  }
+
+  private async resolveExpectedVatRate(
+    tenantId: string,
+    invoice: InvoiceResponseDto,
+  ): Promise<{ rate: number } | { error: MoadianPreFlightError }> {
+    try {
+      const rawDate = invoice.issuedAt ?? invoice.createdAt;
+      if (!rawDate) {
+        return {
+          error: {
+            field: 'issuedAt',
+            message: 'تاریخ صدور صورتحساب مشخص نیست.',
+            code: 'VAT_RATE_UNRESOLVED',
+          },
+        };
+      }
+      const dateObj = new Date(rawDate);
+      if (Number.isNaN(dateObj.getTime())) {
+        throw new BadRequestException('Invalid invoice date');
+      }
+      const dateStr = tehranIsoDate(dateObj);
+      const res = await this.vatRateResolver.generalRate(tenantId, dateStr);
+      return { rate: res.rate };
+    } catch {
+      return {
+        error: {
+          field: 'vatRate',
+          message: 'نرخ قانونی مالیات بر ارزش افزوده برای تاریخ صورتحساب یافت نشد.',
+          code: 'VAT_RATE_UNRESOLVED',
+        },
+      };
+    }
+  }
+
+  /**
+   * اجرای اعتبارسنجی پیش از ارسال مودیان (Idempotent Read-Only).
+   * توجه: قفل ترنزکشنال سطر فاکتور فقط در زمان submitInvoice با withInvoiceLock اعمال می‌شود.
+   */
+  async preFlightValidate(
+    tenantId: string,
+    invoiceId: string,
+  ): Promise<MoadianPreFlightResult> {
+    this.assertEnabled();
+    const invoice = await this.invoicingService.findOne(tenantId, invoiceId);
+    const credential = await this.repository.findCredential(tenantId);
+    const invoiceType = this.resolveInvoiceType(invoice);
+    const vatResolution = await this.resolveExpectedVatRate(tenantId, invoice);
+    if ('error' in vatResolution) {
+      const baseResult = runMoadianPreFlightValidation(invoice, {
+        defaultSstid: credential?.defaultSstid,
+        memoryId: credential?.memoryId,
+        invoiceType,
+      });
+      return {
+        valid: false,
+        errors: [vatResolution.error, ...baseResult.errors],
+      };
+    }
+    return runMoadianPreFlightValidation(invoice, {
+      defaultSstid: credential?.defaultSstid,
+      memoryId: credential?.memoryId,
+      expectedVatRate: vatResolution.rate,
+      invoiceType,
+    });
+  }
+
   async submitInvoice(
     tenantId: string,
     invoiceId: string,
@@ -345,122 +431,149 @@ export class MoadianService implements OnModuleInit {
       throw new BadRequestException('ابتدا اطلاعات اتصال مودیان را ثبت کنید.');
     }
 
-    const existing = await this.repository.findSubmissionByInvoice(tenantId, invoiceId);
-    if (existing?.status === MoadianSubmissionStatus.SUCCESS) {
-      throw new ConflictException('این صورتحساب قبلاً در سامانه مودیان ثبت شده است.');
-    }
-    if (
-      existing?.status === MoadianSubmissionStatus.QUEUED ||
-      existing?.status === MoadianSubmissionStatus.SENT ||
-      existing?.status === MoadianSubmissionStatus.UNKNOWN
-    ) {
-      return this.toSubmissionResponse(existing);
-    }
+    return this.repository.withInvoiceLock(tenantId, invoiceId, async () => {
+      const existing = await this.repository.findSubmissionByInvoice(tenantId, invoiceId);
+      if (existing?.status === MoadianSubmissionStatus.SUCCESS) {
+        throw new ConflictException('این صورتحساب قبلاً در سامانه مودیان ثبت شده است.');
+      }
+      if (
+        existing?.status === MoadianSubmissionStatus.QUEUED ||
+        existing?.status === MoadianSubmissionStatus.SENT ||
+        existing?.status === MoadianSubmissionStatus.UNKNOWN
+      ) {
+        return this.toSubmissionResponse(existing);
+      }
 
-    const mapWith = (serial: number) => {
-      try {
-        const mappingContext = {
-          memoryId: credential.memoryId,
-          sellerEconomicCode: credential.economicCode,
-          serial,
+      const vatResolution = await this.resolveExpectedVatRate(tenantId, invoice);
+      let preFlight: MoadianPreFlightResult;
+      if ('error' in vatResolution) {
+        const baseResult = runMoadianPreFlightValidation(invoice, {
           defaultSstid: credential.defaultSstid,
-          defaultMeasurementUnit: credential.defaultMeasurementUnit,
-          settlementMethod: Number(credential.settlementMethod) as MoadianSettlementMethod,
-          pattern,
-          subject,
-          referenceTaxId,
-          cashPortion: options.cashPortion,
-          lateRegistrationAt: options.lateRegistrationAt,
-          extras: options.extras,
+          memoryId: credential.memoryId,
+          invoiceType: computedInty,
+        });
+        preFlight = {
+          valid: false,
+          errors: [vatResolution.error, ...baseResult.errors],
         };
-        const eInvoiceAdapter = tryResolvePack(this.countryPackRegistry)?.eInvoice;
-        if (eInvoiceAdapter) {
-          const mapped = eInvoiceAdapter.map(invoice, mappingContext) as Partial<MoadianInvoicePacket> | null | undefined;
-          const h = mapped?.header;
-          const bodyValid =
-            Array.isArray(mapped?.body) &&
-            mapped.body.every(
-              (item) =>
-                item &&
-                typeof item === 'object' &&
-                typeof item.sstid === 'string' &&
-                typeof item.tsstam === 'number',
-            );
-          const headerValid =
-            h &&
-            typeof h === 'object' &&
-            typeof h.taxid === 'string' &&
-            h.taxid.length > 0 &&
-            typeof h.indatim === 'number' &&
-            typeof h.inty === 'number' &&
-            typeof h.inno === 'string' &&
-            typeof h.inp === 'number' &&
-            typeof h.ins === 'number' &&
-            typeof h.tins === 'string' &&
-            typeof h.setm === 'number' &&
-            typeof h.tbill === 'number';
-          if (!mapped || typeof mapped !== 'object' || !headerValid || !bodyValid || !Array.isArray(mapped.payments)) {
-            throw new BadRequestException('Country pack eInvoice adapter returned an invalid Moadian packet');
+      } else {
+        preFlight = runMoadianPreFlightValidation(invoice, {
+          defaultSstid: credential.defaultSstid,
+          memoryId: credential.memoryId,
+          invoiceType: computedInty,
+          expectedVatRate: vatResolution.rate,
+        });
+      }
+      if (!preFlight.valid) {
+        const messages = preFlight.errors.map((e) => `${e.field}: ${e.message}`).join(' | ');
+        throw new BadRequestException(`اعتبارسنجی پیش از ارسال مودیان: ${messages}`);
+      }
+
+      const mapWith = (serial: number) => {
+        try {
+          const mappingContext = {
+            memoryId: credential.memoryId,
+            sellerEconomicCode: credential.economicCode,
+            serial,
+            defaultSstid: credential.defaultSstid,
+            defaultMeasurementUnit: credential.defaultMeasurementUnit,
+            settlementMethod: Number(credential.settlementMethod) as MoadianSettlementMethod,
+            pattern,
+            subject,
+            referenceTaxId,
+            cashPortion: options.cashPortion,
+            lateRegistrationAt: options.lateRegistrationAt,
+            extras: options.extras,
+          };
+          const eInvoiceAdapter = tryResolvePack(this.countryPackRegistry)?.eInvoice;
+          if (eInvoiceAdapter) {
+            const mapped = eInvoiceAdapter.map(invoice, mappingContext) as Partial<MoadianInvoicePacket> | null | undefined;
+            const h = mapped?.header;
+            const bodyValid =
+              Array.isArray(mapped?.body) &&
+              mapped.body.every(
+                (item) =>
+                  item &&
+                  typeof item === 'object' &&
+                  typeof item.sstid === 'string' &&
+                  typeof item.tsstam === 'number',
+              );
+            const headerValid =
+              h &&
+              typeof h === 'object' &&
+              typeof h.taxid === 'string' &&
+              h.taxid.length > 0 &&
+              typeof h.indatim === 'number' &&
+              typeof h.inty === 'number' &&
+              typeof h.inno === 'string' &&
+              typeof h.inp === 'number' &&
+              typeof h.ins === 'number' &&
+              typeof h.tins === 'string' &&
+              typeof h.setm === 'number' &&
+              typeof h.tbill === 'number';
+            if (!mapped || typeof mapped !== 'object' || !headerValid || !bodyValid || !Array.isArray(mapped.payments)) {
+              throw new BadRequestException('Country pack eInvoice adapter returned an invalid Moadian packet');
+            }
+            return mapped as MoadianInvoicePacket;
           }
-          return mapped as MoadianInvoicePacket;
+          return mapInvoiceToMoadianPacket(invoice, mappingContext);
+        } catch (error) {
+          if (error instanceof MoadianMappingError) {
+            throw new BadRequestException(error.message);
+          }
+          throw error;
         }
-        return mapInvoiceToMoadianPacket(invoice, mappingContext);
+      };
+      // Validate the invoice first (placeholder serial) so a rejected invoice
+      // never burns a serial number; the real mapping happens after reservation.
+      mapWith(1);
+      const serial = await this.repository.reserveSerial(tenantId);
+      const packet = mapWith(serial);
+
+      const fields: Partial<MoadianSubmissionEntity> = {
+        invoiceId,
+        ins: subject,
+        uid: randomUUID(),
+        taxId: packet.header.taxid,
+        serial: String(serial),
+        referenceNumber: null,
+        status: MoadianSubmissionStatus.QUEUED,
+        errors: [],
+        warnings: [],
+        pollCount: 0,
+        sentAt: null,
+        lastPolledAt: null,
+        packet: packet as unknown as Record<string, unknown>,
+      };
+      let submission: MoadianSubmissionEntity;
+      try {
+        submission = existing
+          ? ((await this.repository.updateSubmission(tenantId, existing.id, fields)) as MoadianSubmissionEntity)
+          : await this.repository.createSubmission(tenantId, fields);
       } catch (error) {
-        if (error instanceof MoadianMappingError) {
-          throw new BadRequestException(error.message);
+        // A concurrent submit of the same invoice hit the (tenant_id, invoice_id) unique index.
+        const code =
+          (error as { code?: string; driverError?: { code?: string } }).code ??
+          (error as { driverError?: { code?: string } }).driverError?.code;
+        if (code === '23505') {
+          throw new ConflictException('این صورتحساب هم‌زمان در حال ارسال به سامانه مودیان است.');
         }
         throw error;
       }
-    };
-    // Validate the invoice first (placeholder serial) so a rejected invoice
-    // never burns a serial number; the real mapping happens after reservation.
-    mapWith(1);
-    const serial = await this.repository.reserveSerial(tenantId);
-    const packet = mapWith(serial);
 
-    const fields: Partial<MoadianSubmissionEntity> = {
-      invoiceId,
-      ins: subject,
-      uid: randomUUID(),
-      taxId: packet.header.taxid,
-      serial: String(serial),
-      referenceNumber: null,
-      status: MoadianSubmissionStatus.QUEUED,
-      errors: [],
-      warnings: [],
-      pollCount: 0,
-      sentAt: null,
-      lastPolledAt: null,
-      packet: packet as unknown as Record<string, unknown>,
-    };
-    let submission: MoadianSubmissionEntity;
-    try {
-      submission = existing
-        ? ((await this.repository.updateSubmission(tenantId, existing.id, fields)) as MoadianSubmissionEntity)
-        : await this.repository.createSubmission(tenantId, fields);
-    } catch (error) {
-      // A concurrent submit of the same invoice hit the (tenant_id, invoice_id) unique index.
-      const code =
-        (error as { code?: string; driverError?: { code?: string } }).code ??
-        (error as { driverError?: { code?: string } }).driverError?.code;
-      if (code === '23505') {
-        throw new ConflictException('این صورتحساب هم‌زمان در حال ارسال به سامانه مودیان است.');
-      }
-      throw error;
-    }
-
-    await this.queue.add(
-      MOADIAN_SEND_JOB,
-      { tenantId, submissionId: submission.id },
-      {
-        jobId: `moadian-send-${submission.id}-${serial}`,
-        attempts: MOADIAN_JOB_ATTEMPTS,
-        backoff: { type: 'exponential', delay: MOADIAN_JOB_BACKOFF_MS },
-        removeOnComplete: 1000,
-        removeOnFail: 1000,
-      },
-    );
-    return this.toSubmissionResponse(submission);
+      await this.queue.add(
+        MOADIAN_SEND_JOB,
+        { tenantId, submissionId: submission.id },
+        {
+          jobId: `moadian-send-${submission.id}-${serial}`,
+          attempts: MOADIAN_JOB_ATTEMPTS,
+          backoff: { type: 'exponential', delay: MOADIAN_JOB_BACKOFF_MS },
+          removeOnComplete: 1000,
+          removeOnFail: 1000,
+        },
+      );
+      return this.toSubmissionResponse(submission);
+    });
   }
 
   async getSubmission(tenantId: string, invoiceId: string): Promise<MoadianSubmissionResponseDto> {
