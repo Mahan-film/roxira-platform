@@ -664,7 +664,7 @@ jobs:
           POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: rxfresh
         ports:
-          - 5432:5432
+          - 5432
         options: >-
           --health-cmd "pg_isready -U postgres -d rxfresh"
           --health-interval 5s
@@ -672,7 +672,7 @@ jobs:
           --health-retries 20
     env:
       DATABASE_HOST: 127.0.0.1
-      DATABASE_PORT: "5432"
+      DATABASE_PORT: ${{ job.services.postgres.ports['5432'] || '5432' }}
       # Admin user: only migrations run here. The pg specs create roxira_app themselves (test-pg.ts).
       DATABASE_USER: postgres
       DATABASE_NAME: rxfresh
@@ -779,7 +779,7 @@ jobs:
           POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: rxfresh
         ports:
-          - 5432:5432
+          - 5432
         options: >-
           --health-cmd "pg_isready -U postgres -d rxfresh"
           --health-interval 5s
@@ -788,17 +788,16 @@ jobs:
       redis:
         image: ${{ needs.pick-runner.outputs.image_registry || vars.CI_IMAGE_REGISTRY || 'mirror.gcr.io/library' }}/redis:7.2
         ports:
-          # Host port 16379: 6379 is taken on the CI box (phone stack); same on hosted runners.
-          - 16379:6379
+          - 6379
     env:
       DATABASE_HOST: 127.0.0.1
-      DATABASE_PORT: "5432"
+      DATABASE_PORT: ${{ job.services.postgres.ports['5432'] || '5432' }}
       DATABASE_USER: postgres
       # The service uses trust auth, the value is ignored but the app requires the key.
       DATABASE_PASSWORD: ci-trust-auth
       DATABASE_NAME: rxfresh
       REDIS_HOST: 127.0.0.1
-      REDIS_PORT: "16379"
+      REDIS_PORT: ${{ job.services.redis.ports['6379'] || '6379' }}
       # Throwaway per-run secret for this job's own backend; never a real key.
       JWT_SECRET: ci-m1-gate-throwaway-secret-0123456789abcdef
       JWT_SECRET_KEY: ci-m1-gate-throwaway-secret-0123456789abcdef
