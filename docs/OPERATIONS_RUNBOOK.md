@@ -43,6 +43,7 @@ Complements `docs/SYSTEM_MAP.md` (what exists) and `docs/STATE.md` (current stat
 - Old generated `TEST-*`/`USER-*` router modules print `LOAD-FAIL` at startup; harmless.
 
 ## 7. Merging PRs (facts)
+- A hub merges only with `python3 scripts/dev/hub_merge.py <pr>` (dry run) and then `--apply`, which enqueues the PR in the merge queue (#1282; never a direct merge); the raw `gh pr merge` lines below are the facts about GitHub, not the hub procedure.
 - Auto-merge is enabled on `Mahan-film/roxira-platform` (`allow_auto_merge=true`; squash only; branches delete on merge).
 - Owner's stated preference (2026-10-01): reviewed, green PRs are merged by the hub without a further question.
 - While CI is pending: `gh pr merge <n> --repo Mahan-film/roxira-platform --auto --squash`.

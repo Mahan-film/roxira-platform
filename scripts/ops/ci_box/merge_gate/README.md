@@ -91,6 +91,7 @@ through the gate rules (read-only, GET only) and prints what would have been blo
 - `protected_globs` in the live toml replaces the code default: the B1 core globs (decision 2026-11-25) only take effect
   on the box once copied from `merge_gate.example.toml`.
 - `OWNER-OK` is tied to the head SHA (a later push voids it); there is no revoke command, push or add `do-not-merge`.
+- Rule 4 reads only the latest desk comment, so a `Verdict: blocker` comment newer than the head from another author (a hub re-review) is not seen. `scripts/dev/hub_merge.py` (#1282) closes this for hub merges; the box gate still needs the same check against the head commit date.
 - Only check-runs are read (not legacy commit statuses). Review comments from authors not in the allowlist are ignored.
 
 ## Tests
