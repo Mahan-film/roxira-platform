@@ -17,6 +17,8 @@ export interface SuiteInvoiceStatusEvent {
   tenantId: string;
   invoiceId: string;
   status: string;
+  /** Optional fund/cash/bank account code chosen by the user when paying the invoice. */
+  fundAccountCode?: string;
 }
 
 /**

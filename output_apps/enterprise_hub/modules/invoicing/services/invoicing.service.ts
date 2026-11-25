@@ -9,7 +9,9 @@ import {
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { EntityManager, FindOptionsWhere, ILike } from 'typeorm';
+import { AccountType } from '../../accounting/enums/accounting.enum';
 import { fromMinor } from '../../accounting/money';
+import { AccountingService } from '../../accounting/services/accounting.service';
 import { CustomerIdentityService, WALK_IN_NAME } from '../../crm/services/customer-identity.service';
 import { PipelineStage } from '../../crm/enums/crm.enums';
 import { invoiceRuleFor } from '../country/invoice-country-rules';
@@ -40,6 +42,7 @@ import {
   InvoicePartyInfoDto,
 } from '../dto/create-invoice.dto';
 import { InvoiceResponseDto } from '../dto/invoice-response.dto';
+import { PayInvoiceDto } from '../dto/pay-invoice.dto';
 import { QueryInvoiceDto } from '../dto/query-invoice.dto';
 import { UpdateInvoiceDto } from '../dto/update-invoice.dto';
 import {
@@ -154,6 +157,7 @@ export class InvoicingService {
     @Optional() private readonly customerIdentity?: CustomerIdentityService,
     @Optional() vatRateResolver?: VatRateResolver,
     @Optional() private readonly partiesService?: PartiesService,
+    @Optional() private readonly accountingService?: AccountingService,
   ) {
     // Without the store (unit tests that build the service by hand) no general rate exists: an
     // invoice line without an explicit rate is refused (#126). Specs pass __fixtures__/vat-rate.fixture.
@@ -170,6 +174,7 @@ export class InvoicingService {
     tenantId: string,
     invoiceId: string,
     status: InvoiceStatus,
+    fundAccountCode?: string,
   ): Promise<void> {
     if (!this.suiteEventsQueue) {
       return;
@@ -177,7 +182,7 @@ export class InvoicingService {
     try {
       await this.suiteEventsQueue.add(
         SUITE_EVENT_INVOICE_STATUS_JOB,
-        { tenantId, invoiceId, status },
+        fundAccountCode ? { tenantId, invoiceId, status, fundAccountCode } : { tenantId, invoiceId, status },
         { removeOnComplete: true, removeOnFail: true },
       );
     } catch (error) {
@@ -1372,7 +1377,11 @@ export class InvoicingService {
    * علامت‌گذاری صورتحساب به‌عنوان پرداخت‌شده. صورتحساب ابطال‌شده یا
    * پرداخت‌شده قبلی پذیرفته نمی‌شود.
    */
-  async pay(tenantId: string, id: string): Promise<InvoiceResponseDto> {
+  async pay(
+    tenantId: string,
+    id: string,
+    dto?: PayInvoiceDto,
+  ): Promise<InvoiceResponseDto> {
     const entity = await this.invoicingRepository.findById(tenantId, id);
     if (!entity) {
       throw new NotFoundException(`صورتحساب با شناسه ${id} یافت نشد.`);
@@ -1387,6 +1396,32 @@ export class InvoicingService {
       throw new ConflictException('این صورتحساب قبلاً پرداخت شده است.');
     }
 
+    let fundAccountCode: string | undefined;
+    if (dto?.fundAccountCode !== undefined) {
+      const trimmed = dto.fundAccountCode.trim();
+      if (!trimmed) {
+        throw new BadRequestException('کد حساب صندوق/بانک نباید خالی باشد.');
+      }
+      if (!this.accountingService) {
+        throw new BadRequestException('سرویس حسابداری برای بررسی حساب صندوق در دسترس نیست.');
+      }
+      const accounts = await this.accountingService.listAccounts(tenantId);
+      const fund = accounts.find((a) => a.code === trimmed);
+      if (!fund) {
+        throw new BadRequestException(`حساب صندوق/بانک با کد ${trimmed} در کدینگ یافت نشد.`);
+      }
+      if (fund.accountType !== AccountType.ASSET) {
+        throw new BadRequestException(
+          `حساب ${trimmed} از نوع دارایی (صندوق/بانک) نیست و نمی‌تواند برای تسویه استفاده شود.`,
+        );
+      }
+      fundAccountCode = trimmed;
+      entity.postingMeta = {
+        ...(entity.postingMeta ?? { stockValue: 0, lines: [] }),
+        paymentFundAccountCode: fundAccountCode,
+      };
+    }
+
     entity.status = InvoiceStatus.PAID;
     entity.paidAt = new Date();
     if (!entity.issuedAt) {
@@ -1394,7 +1429,7 @@ export class InvoicingService {
     }
 
     const saved = await this.invoicingRepository.save(tenantId, entity);
-    await this.emitStatusEvent(tenantId, saved.id, InvoiceStatus.PAID);
+    await this.emitStatusEvent(tenantId, saved.id, InvoiceStatus.PAID, fundAccountCode);
     return this.toResponseDto(saved);
   }
 
