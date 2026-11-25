@@ -2,7 +2,7 @@ import * as path from 'node:path';
 import { RoomServiceClient, SipClient } from 'livekit-server-sdk';
 import { dispose } from '@livekit/rtc-node';
 import { cfg, validateConfig } from './config.js';
-import { PhoneCostTracker } from './cost-caps.js';
+import { PhoneCostTracker, type AdmissionDecision } from './cost-caps.js';
 import { closeHttp, fetchDirect } from './http.js';
 import { logger } from './log.js';
 import { CallSession, type Prompts } from './session.js';
@@ -56,7 +56,13 @@ async function poll(prompts: Prompts) {
     if (!ps.some((p) => p.identity.startsWith(cfg.sipIdentityPrefix))) continue;
     if (ps.some((p) => p.identity === cfg.agentIdentity)) continue;
     const callerId = ps.find((p) => p.identity.startsWith(cfg.sipIdentityPrefix))?.identity ?? '';
-    const admission = costTracker.checkCallAdmission(callerId);
+    let admission: AdmissionDecision;
+    try {
+      admission = costTracker.checkCallAdmission(callerId);
+    } catch (e) {
+      log.error('costTracker.checkCallAdmission failed (failing closed):', (e as Error)?.message ?? e);
+      admission = { allowed: false, reason: 'cost_tracker_error' };
+    }
     const busy = !admission.allowed || sessions.size >= cfg.maxConcurrentCalls;
     const refusalReason = !admission.allowed
       ? admission.reason
@@ -66,11 +72,15 @@ async function poll(prompts: Prompts) {
       sessions.delete(done.roomName);
       finished.set(done.roomName, Date.now());
       const durationSeconds = Math.max(0, Math.round((Date.now() - done.startedAt) / 1000));
-      costTracker.recordCompletedCall({
-        callerId: done.callerId || callerId,
-        roomName: done.roomName,
-        durationSeconds,
-      });
+      try {
+        costTracker.recordCompletedCall({
+          callerId: done.callerId || callerId,
+          roomName: done.roomName,
+          durationSeconds,
+        });
+      } catch (e) {
+        log.error('costTracker.recordCompletedCall failed:', (e as Error)?.message ?? e);
+      }
       log.info(`active calls: ${sessions.size}`);
     }, busy, callerId, refusalReason);
     sessions.set(r.name, s);

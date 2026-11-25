@@ -94,7 +94,7 @@ In accordance with Roxira Autonomous Engineering Standards, **no price or statut
 - **Monitoring Integration**:
   - `phone:monthly-spend-cap`: Asserts monthly total < 100% of cap.
   - `phone:spend-alert-80`: Asserts monthly total < 80% of cap (fails warning check at 80%).
-  - `phone:daily-caps`: Asserts global daily calls and duration within limits.
+  - `phone:daily-caps`: Asserts global and per-caller daily calls and duration within limits.
 
 ---
 

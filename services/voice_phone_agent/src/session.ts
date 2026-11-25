@@ -62,13 +62,17 @@ export class CallSession {
    */
   private pending: Int16Array[] = [];
   private pendingMs = 0;
-  public callerId = '';
+  private _callerId = '';
   private turnNo = 0;
   private lastActivity = Date.now();
   private timers: NodeJS.Timeout[] = [];
   private listening = false;
   private ended = false;
   readonly startedAt = Date.now();
+
+  get callerId(): string {
+    return this._callerId;
+  }
 
   constructor(
     readonly roomName: string,
@@ -79,7 +83,7 @@ export class CallSession {
     callerId = '',
     private refusalReason?: string,
   ) {
-    this.callerId = callerId;
+    this._callerId = callerId;
     this.log = logger(roomName.slice(0, 40));
   }
 
@@ -132,7 +136,7 @@ export class CallSession {
     if (this.listening || this.busyOnly) return;
     this.listening = true;
     const remoteId = [...this.room.remoteParticipants.keys()].find((k) => k.startsWith(cfg.sipIdentityPrefix));
-    if (remoteId) this.callerId = remoteId;
+    if (remoteId) this._callerId = remoteId;
     this.log.info('listening to caller audio');
     const stream = new AudioStream(track, { sampleRate: IN_RATE, numChannels: 1, frameSizeMs: 20 });
     const vad = new EnergyVad({

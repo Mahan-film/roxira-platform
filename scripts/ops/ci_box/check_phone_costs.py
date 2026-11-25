@@ -17,12 +17,73 @@ import math
 import os
 import sys
 from datetime import UTC, datetime
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_PRICING_PATH = REPO_ROOT / "config/phone_pricing.json"
+INSTALLED_PRICING_PATH = Path("/usr/local/lib/phone-stack/phone_pricing.json")
+MICRO_CENTS_PER_CENT = 1_000_000
+HALF_CENT_IN_MICRO_CENTS = 500_000
+
+
+def resolve_default_pricing_path() -> Path:
+    """Resolve pricing config from env, installed phone-stack dir, or repo config/."""
+    env_path = os.getenv("PHONE_PRICING_JSON")
+    if env_path:
+        return Path(env_path)
+    sibling = Path(__file__).resolve().with_name("phone_pricing.json")
+    if sibling.is_file():
+        return sibling
+    if INSTALLED_PRICING_PATH.is_file():
+        return INSTALLED_PRICING_PATH
+    return REPO_ROOT / "config/phone_pricing.json"
+
+
+DEFAULT_PRICING_PATH = resolve_default_pricing_path()
 DEFAULT_STATE_PATH = Path("/srv/data/phone/state/phone_usage_state.json")
+
+
+def _rate_to_micro_cents(rate_cents: Any) -> int:
+    """Convert a USD-cent rate (up to 6 decimal places) into integer micro-cents."""
+    if rate_cents is None:
+        return 0
+    dec = Decimal(str(rate_cents))
+    if dec <= 0:
+        return 0
+    scaled = (dec * Decimal(MICRO_CENTS_PER_CENT)).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    return int(scaled)
+
+
+def _prorate_micro_cents(units: int, rate_micro_cents: int, divisor: int) -> int:
+    """Integer half-up proration in micro-cents: round((units * rate) / divisor)."""
+    if units <= 0 or rate_micro_cents <= 0 or divisor <= 0:
+        return 0
+    return (units * rate_micro_cents + divisor // 2) // divisor
+
+
+def _micro_cents_to_cents(micro_cents: int) -> int:
+    """Round integer micro-cents half-up to nearest integer USD cent."""
+    if micro_cents <= 0:
+        return 0
+    return (micro_cents + HALF_CENT_IN_MICRO_CENTS) // MICRO_CENTS_PER_CENT
+
+
+def _format_cents_usd(cents: int) -> str:
+    """Format integer USD cents as D.CC using integer divmod only."""
+    sign = "-" if cents < 0 else ""
+    dollars, rem = divmod(abs(cents), 100)
+    return f"{sign}{dollars}.{rem:02d}"
+
+
+def _ratio_to_bps(ratio_val: Any) -> int:
+    """Convert a decimal ratio (e.g. 0.80) into integer basis points (8000)."""
+    if ratio_val is None:
+        return 0
+    dec = Decimal(str(ratio_val))
+    if dec <= 0:
+        return 0
+    return int((dec * Decimal("10000")).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
 
 def parse_iso(ts: str) -> datetime:
@@ -82,7 +143,7 @@ def calculate_call_cost(
     tts_chars: int = 0,
     enable_observability: bool = False,
 ) -> dict[str, Any]:
-    """Compute complete cost breakdown for a call in USD cents."""
+    """Compute complete cost breakdown for a call using integer micro-cents."""
     carriers = config.get("carriers", {})
     plans = config.get("platform_plans", {})
     speech = config.get("speech_models", {})
@@ -90,54 +151,60 @@ def calculate_call_cost(
     carrier = carriers.get(carrier_key) or carriers.get("sabanet", {})
     plan = plans.get(plan_key) or plans.get("self_hosted", {})
 
-    dur = max(0, duration_seconds)
+    dur = max(0, int(duration_seconds))
     carrier_billable = calculate_carrier_billable_seconds(dur, carrier)
     livekit_billable = calculate_livekit_billable_seconds(dur, plan)
 
-    inbound_rate = float(carrier.get("inbound_per_minute_usd_cents", 0.0))
-    voice_api_rate = float(carrier.get("voice_api_fee_per_minute_usd_cents", 0.0))
-    carrier_cost_cents = (carrier_billable / 60.0) * (inbound_rate + voice_api_rate)
+    inbound_micro = _rate_to_micro_cents(carrier.get("inbound_per_minute_usd_cents", 0))
+    voice_api_micro = _rate_to_micro_cents(carrier.get("voice_api_fee_per_minute_usd_cents", 0))
+    carrier_cost_micro = _prorate_micro_cents(carrier_billable, inbound_micro + voice_api_micro, 60)
 
-    agent_rate = float(plan.get("agent_minute_usd_cents", 0.0))
-    obs_rate = (
-        float(plan.get("observability_minute_usd_cents", 0.0))
+    agent_micro = _rate_to_micro_cents(plan.get("agent_minute_usd_cents", 0))
+    obs_micro = (
+        _rate_to_micro_cents(plan.get("observability_minute_usd_cents", 0))
         if enable_observability
-        else 0.0
+        else 0
     )
 
-    livekit_agent_cost_cents = (livekit_billable / 60.0) * agent_rate
-    livekit_obs_cost_cents = (livekit_billable / 60.0) * obs_rate
+    livekit_agent_cost_micro = _prorate_micro_cents(livekit_billable, agent_micro, 60)
+    livekit_obs_cost_micro = _prorate_micro_cents(livekit_billable, obs_micro, 60)
 
-    stt_cost_cents = 0.0
+    stt_cost_micro = 0
     if stt_key:
         stt_info = speech.get("stt", {}).get(stt_key, {})
-        stt_rate = float(stt_info.get("usd_cents_per_minute", 0.0))
-        stt_cost_cents = (dur / 60.0) * stt_rate
+        stt_micro = _rate_to_micro_cents(stt_info.get("usd_cents_per_minute", 0))
+        stt_cost_micro = _prorate_micro_cents(dur, stt_micro, 60)
 
-    tts_cost_cents = 0.0
+    tts_cost_micro = 0
     if tts_key and tts_chars > 0:
         tts_info = speech.get("tts", {}).get(tts_key, {})
-        tts_rate = float(tts_info.get("usd_cents_per_1k_chars", 0.0))
-        tts_cost_cents = (tts_chars / 1000.0) * tts_rate
+        tts_micro = _rate_to_micro_cents(tts_info.get("usd_cents_per_1k_chars", 0))
+        tts_cost_micro = _prorate_micro_cents(int(tts_chars), tts_micro, 1000)
 
-    total_cost_cents = (
-        carrier_cost_cents
-        + livekit_agent_cost_cents
-        + livekit_obs_cost_cents
-        + stt_cost_cents
-        + tts_cost_cents
+    total_cost_micro = (
+        carrier_cost_micro
+        + livekit_agent_cost_micro
+        + livekit_obs_cost_micro
+        + stt_cost_micro
+        + tts_cost_micro
     )
 
     return {
         "duration_seconds": dur,
         "carrier_billable_seconds": carrier_billable,
         "livekit_billable_seconds": livekit_billable,
-        "carrier_cost_cents": round(carrier_cost_cents, 4),
-        "livekit_agent_cost_cents": round(livekit_agent_cost_cents, 4),
-        "livekit_obs_cost_cents": round(livekit_obs_cost_cents, 4),
-        "stt_cost_cents": round(stt_cost_cents, 4),
-        "tts_cost_cents": round(tts_cost_cents, 4),
-        "total_cost_cents": round(total_cost_cents, 4),
+        "carrier_cost_micro_cents": carrier_cost_micro,
+        "livekit_agent_cost_micro_cents": livekit_agent_cost_micro,
+        "livekit_obs_cost_micro_cents": livekit_obs_cost_micro,
+        "stt_cost_micro_cents": stt_cost_micro,
+        "tts_cost_micro_cents": tts_cost_micro,
+        "total_cost_micro_cents": total_cost_micro,
+        "carrier_cost_cents": _micro_cents_to_cents(carrier_cost_micro),
+        "livekit_agent_cost_cents": _micro_cents_to_cents(livekit_agent_cost_micro),
+        "livekit_obs_cost_cents": _micro_cents_to_cents(livekit_obs_cost_micro),
+        "stt_cost_cents": _micro_cents_to_cents(stt_cost_micro),
+        "tts_cost_cents": _micro_cents_to_cents(tts_cost_micro),
+        "total_cost_cents": _micro_cents_to_cents(total_cost_micro),
     }
 
 
@@ -147,16 +214,19 @@ def audit_phone_costs(
     plan_key: str = "self_hosted",
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    """Audit phone usage state against budget and abuse caps."""
+    """Audit phone usage state against budget and abuse caps (monthly, global daily, per-caller)."""
     now = now or datetime.now(UTC)
     config = load_pricing_config(pricing_path)
     effective = is_effective(config["effective_dates"], now)
 
     caps = config.get("abuse_caps", {})
-    spend_cap_cents = caps.get("monthly_spend_cap", {}).get("cap_usd_cents", 100000)
+    spend_cap_cents = int(caps.get("monthly_spend_cap", {}).get("cap_usd_cents", 100000))
     alert_ratio = caps.get("monthly_spend_cap", {}).get("alert_threshold_ratio", 0.80)
-    global_max_calls = caps.get("global_daily", {}).get("max_calls", 200)
-    global_max_sec = caps.get("global_daily", {}).get("max_connected_seconds", 36000)
+    alert_bps = _ratio_to_bps(alert_ratio)
+    global_max_calls = int(caps.get("global_daily", {}).get("max_calls", 200))
+    global_max_sec = int(caps.get("global_daily", {}).get("max_connected_seconds", 36000))
+    per_caller_max_calls = int(caps.get("per_caller_daily", {}).get("max_calls", 5))
+    per_caller_max_sec = int(caps.get("per_caller_daily", {}).get("max_connected_seconds", 1800))
 
     if not state_path.is_file():
         return {
@@ -167,6 +237,7 @@ def audit_phone_costs(
             "ratio": 0.0,
             "alert_80": False,
             "cap_exceeded": False,
+            "per_caller_exceeded_count": 0,
             "detail": f"State file {state_path} absent",
         }
 
@@ -182,16 +253,29 @@ def audit_phone_costs(
     current_month = now.strftime("%Y-%m")
     today_str = now.strftime("%Y-%m-%d")
 
-    monthly_total = float(data.get("monthlyTotalCents", 0.0))
-    ratio = monthly_total / spend_cap_cents if spend_cap_cents > 0 else 0.0
-    alert_80 = ratio >= alert_ratio
-    cap_exceeded = ratio >= 1.0
+    monthly_total = int(Decimal(str(data.get("monthlyTotalCents", 0))).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    ratio_bps = (monthly_total * 10000) // spend_cap_cents if spend_cap_cents > 0 else 0
+    ratio = ratio_bps / 10000
+    alert_80 = (monthly_total * 10000) >= (spend_cap_cents * alert_bps) if spend_cap_cents > 0 else False
+    cap_exceeded = monthly_total >= spend_cap_cents if spend_cap_cents > 0 else False
 
     today_usage = data.get("dailyUsage", {}).get(today_str, {})
     today_calls = int(today_usage.get("totalCalls", 0))
     today_seconds = int(today_usage.get("totalConnectedSeconds", 0))
 
-    daily_exceeded = today_calls >= global_max_calls or today_seconds >= global_max_sec
+    callers = today_usage.get("callers", {})
+    per_caller_exceeded_count = 0
+    if isinstance(callers, dict):
+        for c_usage in callers.values():
+            if not isinstance(c_usage, dict):
+                continue
+            c_calls = int(c_usage.get("calls", 0))
+            c_secs = int(c_usage.get("connectedSeconds", 0))
+            if c_calls >= per_caller_max_calls or c_secs >= per_caller_max_sec:
+                per_caller_exceeded_count += 1
+
+    global_daily_exceeded = today_calls >= global_max_calls or today_seconds >= global_max_sec
+    daily_exceeded = global_daily_exceeded or per_caller_exceeded_count > 0
 
     return {
         "state": "ok",
@@ -199,15 +283,17 @@ def audit_phone_costs(
         "current_month": current_month,
         "cap_cents": spend_cap_cents,
         "spend_cents": monthly_total,
-        "spend_usd": round(monthly_total / 100.0, 2),
-        "cap_usd": round(spend_cap_cents / 100.0, 2),
-        "ratio": round(ratio, 4),
+        "spend_usd": _format_cents_usd(monthly_total),
+        "cap_usd": _format_cents_usd(spend_cap_cents),
+        "ratio": ratio,
         "alert_80": alert_80,
         "cap_exceeded": cap_exceeded,
         "today_calls": today_calls,
         "max_daily_calls": global_max_calls,
         "today_seconds": today_seconds,
         "max_daily_seconds": global_max_sec,
+        "per_caller_exceeded_count": per_caller_exceeded_count,
+        "global_daily_exceeded": global_daily_exceeded,
         "daily_exceeded": daily_exceeded,
     }
 
@@ -255,9 +341,9 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(f"  Carrier billable duration: {result['carrier_billable_seconds']}s")
             print(f"  LiveKit billable duration: {result['livekit_billable_seconds']}s")
-            print(f"  Carrier cost: {result['carrier_cost_cents']} cents")
-            print(f"  LiveKit agent cost: {result['livekit_agent_cost_cents']} cents")
-            print(f"  Total cost: {result['total_cost_cents']} cents")
+            print(f"  Carrier cost: {result['carrier_cost_cents']} cents ({result['carrier_cost_micro_cents']} micro-cents)")
+            print(f"  LiveKit agent cost: {result['livekit_agent_cost_cents']} cents ({result['livekit_agent_cost_micro_cents']} micro-cents)")
+            print(f"  Total cost: {result['total_cost_cents']} cents ({result['total_cost_micro_cents']} micro-cents)")
         return 0
 
     audit = audit_phone_costs(args.state_file, args.pricing_file, plan_key=args.plan)
@@ -279,6 +365,7 @@ def main(argv: list[str] | None = None) -> int:
             today_sec = audit.get('today_seconds')
             max_sec = audit.get('max_daily_seconds')
             print(f"  Today connected seconds: {today_sec} / {max_sec}s")
+            print(f"  Per-caller caps hit today: {audit.get('per_caller_exceeded_count', 0)}")
 
     if args.check:
         if audit.get("cap_exceeded"):
@@ -292,7 +379,11 @@ def main(argv: list[str] | None = None) -> int:
             sys.stderr.write(f"WARNING: Monthly spend reached 80% threshold: {spend} cents\n")
             return 1
         if audit.get("daily_exceeded"):
-            sys.stderr.write("WARNING: Global daily cap exceeded\n")
+            per_caller = audit.get("per_caller_exceeded_count", 0)
+            if per_caller > 0 and not audit.get("global_daily_exceeded"):
+                sys.stderr.write(f"WARNING: Per-caller daily cap hit for {per_caller} caller(s)\n")
+            else:
+                sys.stderr.write("WARNING: Daily call/duration cap exceeded\n")
             return 1
 
     return 0

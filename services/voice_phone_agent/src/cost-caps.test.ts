@@ -99,7 +99,7 @@ test('calculateLiveKitBillableSeconds enforces 10s minimum on Scale plan', () =>
   assert.equal(calculateLiveKitBillableSeconds(45, planScale), 45);
 });
 
-test('calculateCallCost accurately models carrier rounding and LiveKit Scale fee', () => {
+test('calculateCallCost accurately models carrier rounding and LiveKit Scale fee in integer micro-cents', () => {
   const config = loadPricingConfig();
   // 65s call on Telnyx (60s rounding -> 120s billable) on LiveKit Scale
   const cost = calculateCallCost({
@@ -113,12 +113,51 @@ test('calculateCallCost accurately models carrier rounding and LiveKit Scale fee
   assert.equal(cost.carrierBillableSeconds, 120); // 65s rounded up to 2 mins
   assert.equal(cost.livekitBillableSeconds, 65);
 
-  // Telnyx inbound: (0.32 + 0.20) = 0.52 cents/min * 2 mins = 1.04 cents
-  assert.ok(Math.abs(cost.carrierCostCents - 1.04) < 1e-4);
-  // LiveKit: (65 / 60) * 1.0 = 1.0833 cents agent + 1.0833 cents obs
-  assert.ok(Math.abs(cost.livekitAgentCostCents - 1.0833) < 0.01);
-  assert.ok(Math.abs(cost.livekitObsCostCents - 1.0833) < 0.01);
-  assert.ok(cost.totalCostCents > 3.0 && cost.totalCostCents < 3.5);
+  // Telnyx inbound: (0.32 + 0.20) = 0.52 cents/min * 2 mins = 1.04 cents = 1,040,000 micro-cents
+  assert.equal(cost.carrierCostMicroCents, 1_040_000);
+  assert.equal(cost.carrierCostCents, 1);
+  // LiveKit: (65 / 60) * 1.0 = 1.083333 cents = 1,083,333 micro-cents each
+  assert.equal(cost.livekitAgentCostMicroCents, 1_083_333);
+  assert.equal(cost.livekitObsCostMicroCents, 1_083_333);
+  assert.equal(cost.totalCostMicroCents, 3_206_666);
+  assert.equal(cost.totalCostCents, 3);
+});
+
+test('PhoneCostTracker accumulates micro-cents without sub-cent rounding loss and buckets empty callerId', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'phone-test-'));
+  const statePath = path.join(tmpDir, 'usage.json');
+  const config = loadPricingConfig();
+
+  const tracker = new PhoneCostTracker({
+    config,
+    statePath,
+    planKey: 'livekit_cloud_scale',
+    carrierKey: 'telnyx',
+  });
+
+  const now = new Date('2026-11-24T10:00:00Z');
+  // Five 20s calls with empty callerId -> hits per-caller cap in __unknown__ bucket
+  // Each 20s Telnyx + LiveKit Scale call: 60s carrier (520,000 uC) + 20s LK (333,333 uC) = 853,333 uC
+  for (let i = 0; i < 5; i++) {
+    assert.equal(tracker.checkCallAdmission('', now).allowed, true);
+    tracker.recordCompletedCall({
+      callerId: '',
+      roomName: `unknown-${i}`,
+      durationSeconds: 20,
+      now,
+    });
+  }
+
+  const denied = tracker.checkCallAdmission('', now);
+  assert.equal(denied.allowed, false);
+  assert.equal(denied.reason, 'caller_daily_calls_exceeded');
+
+  // 5 * 853,333 = 4,266,665 uC -> 4 cents (whereas rounding 1 cent per call would lose/drift to 5)
+  const st = tracker.getState();
+  assert.equal(st.monthlyVariableMicroCents, 4_266_665);
+  assert.equal(st.monthlyVariableCents, 4);
+
+  fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
 test('PhoneCostTracker enforces per-caller daily call cap', () => {

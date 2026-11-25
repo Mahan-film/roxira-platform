@@ -152,7 +152,7 @@ echo "== 5. phone-stack wrapper"
 install -d -m 755 -o root -g root /usr/local/lib/phone-stack
 T=$(mktemp); from_main healthcheck.sh > "$T"; install -m 755 -o root -g root "$T" /usr/local/lib/phone-stack/healthcheck.sh; rm -f "$T"
 T=$(mktemp); from_main livekit_keys.sh > "$T"; install -m 755 -o root -g root "$T" /usr/local/lib/phone-stack/livekit_keys.sh; rm -f "$T"
-T=$(mktemp); from_main check_phone_costs.py > "$T"; install -m 755 -o root -g root "$T" /usr/local/lib/phone-stack/check_phone_costs.py; rm -f "$T"
+T=$(mktemp); git -c safe.directory="$REPO" -C "$REPO" show "origin/main:scripts/ops/ci_box/check_phone_costs.py" > "$T"; install -m 755 -o root -g root "$T" /usr/local/lib/phone-stack/check_phone_costs.py; rm -f "$T"
 printf 'COMPOSE=%q\nSTACK=%q\nAGENT_ENV=%q\nAGENT_USER=%q\n' "$COMPOSE" "$STACK" "$AGENT/.env" "$U" > /usr/local/lib/phone-stack/phone-stack.conf
 chmod 644 /usr/local/lib/phone-stack/phone-stack.conf
 # Model registry and pricing config for the agent (the agent copy has no repo tree).

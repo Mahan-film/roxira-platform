@@ -95,7 +95,9 @@ class TestPhoneCostModel(unittest.TestCase):
         self.assertEqual(cost["duration_seconds"], 65)
         self.assertEqual(cost["carrier_billable_seconds"], 120)  # 60s rounding
         self.assertEqual(cost["livekit_billable_seconds"], 65)
-        self.assertGreater(cost["total_cost_cents"], 3.0)
+        self.assertEqual(cost["carrier_cost_micro_cents"], 1_040_000)
+        self.assertEqual(cost["total_cost_micro_cents"], 3_206_666)
+        self.assertEqual(cost["total_cost_cents"], 3)
 
     def test_audit_phone_costs_normal_and_alert_thresholds(self):
         with tempfile.TemporaryDirectory() as td:
@@ -129,9 +131,21 @@ class TestPhoneCostModel(unittest.TestCase):
             res_normal = self.cpc.audit_phone_costs(state_file, PRICING_PATH, now=now)
             self.assertEqual(res_normal["state"], "ok")
             self.assertEqual(res_normal["spend_cents"], 60000)
-            self.assertEqual(res_normal["ratio"], 0.6)
+            self.assertAlmostEqual(res_normal["ratio"], 0.6)
             self.assertFalse(res_normal["alert_80"])
             self.assertFalse(res_normal["cap_exceeded"])
+            self.assertFalse(res_normal["daily_exceeded"])
+            self.assertEqual(res_normal["per_caller_exceeded_count"], 0)
+
+            # 2b. Per-caller daily cap breach triggers daily_exceeded
+            state_data["dailyUsage"]["2026-11-24"]["callers"] = {
+                "sip_+989120000000": {"calls": 5, "connectedSeconds": 300}
+            }
+            state_file.write_text(json.dumps(state_data), encoding="utf-8")
+            res_caller_cap = self.cpc.audit_phone_costs(state_file, PRICING_PATH, now=now)
+            self.assertEqual(res_caller_cap["per_caller_exceeded_count"], 1)
+            self.assertTrue(res_caller_cap["daily_exceeded"])
+            self.assertFalse(res_caller_cap["global_daily_exceeded"])
 
             # 3. 80% Alert threshold: $500 fixed + $320 variable = $820 (82% of $1000 cap)
             state_data["monthlyVariableCents"] = 32000
@@ -198,6 +212,21 @@ class TestPhoneCostModel(unittest.TestCase):
             costs["ratio"] = 1.05
             results_100 = self.pp.derive_phone_results(phone_snap, {}, now_ts)
             self.assertFalse(results_100["phone:monthly-spend-cap"][0])
+
+            # Per-caller daily cap breach triggers phone:daily-caps alert without leaking caller id
+            state_data["dailyUsage"]["2027-01-15"]["callers"] = {
+                "sip_+989121234567": {"calls": 6, "connectedSeconds": 400}
+            }
+            state_file.write_text(json.dumps(state_data), encoding="utf-8")
+            costs_caller = self.pp.read_phone_costs(str(state_file), str(PRICING_PATH), now_ts)
+            self.assertEqual(costs_caller["per_caller_exceeded_count"], 1)
+            self.assertTrue(costs_caller["daily_exceeded"])
+            results_caller = self.pp.derive_phone_results(
+                {"containers": {"sip": {"state": "ok"}}, "costs": costs_caller}, {}, now_ts
+            )
+            self.assertFalse(results_caller["phone:daily-caps"][0])
+            self.assertIn("1 caller(s) capped", results_caller["phone:daily-caps"][1])
+            self.assertNotIn("989121234567", results_caller["phone:daily-caps"][1])
 
     def test_cli_execution(self):
         # Run CLI --simulate-call

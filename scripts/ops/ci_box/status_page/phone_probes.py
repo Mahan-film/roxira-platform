@@ -350,32 +350,47 @@ def read_phone_costs(state_path: str, pricing_path: str, now: float) -> dict:
     except (OSError, ValueError):
         return {"state": "unknown", "error": "usage state unreadable"}
 
-    spend_cap_cents = 100000
-    alert_ratio = 0.80
-    global_max_calls = 200
-    global_max_seconds = 36000
     pp = Path(pricing_path)
-    if pp.exists():
-        try:
-            cfg = json.loads(pp.read_text(encoding="utf-8"))
-            caps = cfg.get("abuse_caps", {})
-            spend_cap_cents = caps.get("monthly_spend_cap", {}).get("cap_usd_cents", 100000)
-            alert_ratio = caps.get("monthly_spend_cap", {}).get("alert_threshold_ratio", 0.80)
-            global_max_calls = caps.get("global_daily", {}).get("max_calls", 200)
-            global_max_seconds = caps.get("global_daily", {}).get("max_connected_seconds", 36000)
-        except (OSError, ValueError):
-            pass
+    if not pp.exists():
+        return {"state": "unknown", "error": "pricing config absent"}
+    try:
+        cfg = json.loads(pp.read_text(encoding="utf-8"))
+        caps = cfg.get("abuse_caps", {})
+        spend_cap_cents = int(caps["monthly_spend_cap"]["cap_usd_cents"])
+        alert_ratio_raw = caps["monthly_spend_cap"]["alert_threshold_ratio"]
+        global_max_calls = int(caps["global_daily"]["max_calls"])
+        global_max_seconds = int(caps["global_daily"]["max_connected_seconds"])
+        per_caller_max_calls = int(caps["per_caller_daily"]["max_calls"])
+        per_caller_max_seconds = int(caps["per_caller_daily"]["max_connected_seconds"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return {"state": "unknown", "error": "pricing config unreadable"}
 
-    monthly_total = float(data.get("monthlyTotalCents", 0.0))
-    ratio = monthly_total / spend_cap_cents if spend_cap_cents > 0 else 0.0
-    alert_80 = ratio >= alert_ratio
-    cap_exceeded = ratio >= 1.0
+    monthly_total = int(round(float(data.get("monthlyTotalCents", 0))))
+    alert_bps = int(round(float(alert_ratio_raw) * 10000))
+    ratio_bps = (monthly_total * 10000) // spend_cap_cents if spend_cap_cents > 0 else 0
+    ratio = ratio_bps / 10000
+    alert_80 = (monthly_total * 10000) >= (spend_cap_cents * alert_bps) if spend_cap_cents > 0 else False
+    cap_exceeded = monthly_total >= spend_cap_cents if spend_cap_cents > 0 else False
 
     today_str = datetime.fromtimestamp(now, timezone.utc).strftime("%Y-%m-%d")
     today_usage = data.get("dailyUsage", {}).get(today_str, {})
     today_calls = int(today_usage.get("totalCalls", 0))
     today_seconds = int(today_usage.get("totalConnectedSeconds", 0))
-    daily_exceeded = today_calls >= global_max_calls or today_seconds >= global_max_seconds
+
+    callers = today_usage.get("callers", {})
+    per_caller_exceeded_count = 0
+    if isinstance(callers, dict):
+        for c_usage in callers.values():
+            if not isinstance(c_usage, dict):
+                continue
+            if (
+                int(c_usage.get("calls", 0)) >= per_caller_max_calls
+                or int(c_usage.get("connectedSeconds", 0)) >= per_caller_max_seconds
+            ):
+                per_caller_exceeded_count += 1
+
+    global_daily_exceeded = today_calls >= global_max_calls or today_seconds >= global_max_seconds
+    daily_exceeded = global_daily_exceeded or per_caller_exceeded_count > 0
 
     return {
         "state": "ok",
@@ -388,6 +403,8 @@ def read_phone_costs(state_path: str, pricing_path: str, now: float) -> dict:
         "max_daily_calls": global_max_calls,
         "today_seconds": today_seconds,
         "max_daily_seconds": global_max_seconds,
+        "per_caller_exceeded_count": per_caller_exceeded_count,
+        "global_daily_exceeded": global_daily_exceeded,
         "daily_exceeded": daily_exceeded,
     }
 
@@ -578,20 +595,30 @@ def derive_phone_results(phone: dict | None, state: dict, now: float, env=None) 
 
     costs = phone.get("costs") or {}
     if costs.get("state") == "ok":
-        spend = costs.get("spend_cents", 0.0)
-        cap = costs.get("cap_cents", 100000)
+        spend_cents = int(costs.get("spend_cents", 0))
+        cap_cents = int(costs.get("cap_cents", 100000))
+        spend_d, spend_c = divmod(abs(spend_cents), 100)
+        cap_d, cap_c = divmod(abs(cap_cents), 100)
+        spend_str = f"${spend_d}.{spend_c:02d}"
+        cap_str = f"${cap_d}.{cap_c:02d}"
         ratio = costs.get("ratio", 0.0)
+        per_caller_hits = int(costs.get("per_caller_exceeded_count", 0))
         res["phone:monthly-spend-cap"] = (
             not costs.get("cap_exceeded", False),
-            f"phone monthly spend is ${spend / 100:.2f} of ${cap / 100:.2f} cap ({ratio * 100:.1f}%)",
+            f"phone monthly spend is {spend_str} of {cap_str} cap ({ratio * 100:.1f}%)",
         )
         res["phone:spend-alert-80"] = (
             not costs.get("alert_80", False),
-            f"phone monthly spend is ${spend / 100:.2f} ({ratio * 100:.1f}% of ${cap / 100:.2f} cap; alert threshold 80%)",
+            f"phone monthly spend is {spend_str} ({ratio * 100:.1f}% of {cap_str} cap; alert threshold 80%)",
+        )
+        daily_detail = (
+            f"phone daily usage: {costs.get('today_calls', 0)}/{costs.get('max_daily_calls', 0)} calls "
+            f"({costs.get('today_seconds', 0)}s connected"
+            + (f", {per_caller_hits} caller(s) capped)" if per_caller_hits > 0 else ")")
         )
         res["phone:daily-caps"] = (
             not costs.get("daily_exceeded", False),
-            f"phone daily usage: {costs.get('today_calls', 0)}/{costs.get('max_daily_calls', 0)} calls ({costs.get('today_seconds', 0)}s connected)",
+            daily_detail,
         )
     elif costs.get("state") == "unknown":
         res["phone:monthly-spend-cap"] = (False, f"phone usage state unreadable: {costs.get('error')}")
