@@ -52,7 +52,7 @@ const POLL_INTERVAL_MS = 5_000;
 const MAX_POLLS = 24;
 const QUARTER_LABELS = ["بهار", "تابستان", "پاییز", "زمستان"];
 const selectClass =
-  "h-9 rounded-md border border-input bg-background px-3 text-sm";
+  "h-11 min-h-[44px] rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 function DeadlineCard({ input }: { input: NextDeadlineInput }) {
   const view = nextDeadlineView(input);
@@ -228,14 +228,14 @@ function MoadianCard() {
           <div className="flex flex-wrap items-center gap-2">
             <Link
               href="/app/tax/kartable"
-              className={buttonVariants({ variant: "outline", size: "sm", className: "gap-1.5 text-xs" })}
+              className={buttonVariants({ variant: "outline", size: "sm", className: "gap-1.5 text-xs min-h-[44px] min-w-[44px]" })}
             >
               <FileText className="h-3.5 w-3.5 text-primary" />
               مغایرت‌گیری کارپوشه
             </Link>
             <Link
               href="/app/tax/wizard"
-              className={buttonVariants({ variant: "outline", size: "sm", className: "gap-1.5 text-xs" })}
+              className={buttonVariants({ variant: "outline", size: "sm", className: "gap-1.5 text-xs min-h-[44px] min-w-[44px]" })}
             >
               <Sparkles className="h-3.5 w-3.5 text-primary" />
               ویزارد راه‌اندازی مودیان
@@ -268,7 +268,7 @@ function MoadianCard() {
                 className={buttonVariants({
                   variant: "outline",
                   size: "sm",
-                  className: "gap-1 text-xs whitespace-nowrap",
+                  className: "gap-1 text-xs whitespace-nowrap min-h-[44px] min-w-[44px]",
                 })}
               >
                 <Sparkles className="h-3.5 w-3.5 text-primary" />
@@ -290,9 +290,10 @@ function MoadianCard() {
 
         <div className="flex flex-wrap items-center gap-2">
           <input
+            id="moadian-search-invoice"
             aria-label="جست‌وجوی صورتحساب"
             placeholder="شماره یا نام خریدار"
-            className={`${selectClass} w-48`}
+            className={`${selectClass} w-full sm:w-48`}
             value={search}
             disabled={!enabled}
             onChange={(e) => setSearch(e.target.value)}
@@ -300,12 +301,19 @@ function MoadianCard() {
               if (e.key === "Enter") void searchInvoices(search.trim());
             }}
           />
-          <Button variant="outline" size="sm" disabled={!enabled} onClick={() => void searchInvoices(search.trim())}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="min-h-[44px] min-w-[44px]"
+            disabled={!enabled}
+            onClick={() => void searchInvoices(search.trim())}
+          >
             جست‌وجو
           </Button>
           <select
+            id="moadian-select-invoice"
             aria-label="صورتحساب"
-            className={selectClass}
+            className={`${selectClass} w-full sm:w-auto flex-1`}
             value={invoiceId}
             disabled={!enabled || busy}
             onChange={(e) => void selectInvoice(e.target.value)}
@@ -317,7 +325,11 @@ function MoadianCard() {
               </option>
             ))}
           </select>
-          <Button onClick={submit} disabled={!canSubmit}>
+          <Button
+            className="min-h-[44px] min-w-[44px]"
+            onClick={submit}
+            disabled={!canSubmit}
+          >
             {busy ? "در حال ارسال…" : "ارسال به مودیان"}
           </Button>
         </div>
@@ -357,7 +369,7 @@ function MoadianCard() {
               </ul>
             )}
             {!polling && (submission.status === "QUEUED" || submission.status === "SENT") && (
-              <Button variant="outline" size="sm" onClick={() => poll(submission.invoiceId, 0)}>
+              <Button variant="outline" size="sm" className="min-h-[44px]" onClick={() => poll(submission.invoiceId, 0)}>
                 ادامه پیگیری وضعیت
               </Button>
             )}
@@ -461,25 +473,25 @@ function SeasonalCard({ onDeadline }: { onDeadline: (input: NextDeadlineInput) =
               </option>
             ))}
           </select>
-          <Button variant="outline" size="sm" onClick={() => download("vat-seasonal")} disabled={loading || !vat}>
+          <Button variant="outline" size="sm" className="min-h-[44px]" onClick={() => download("vat-seasonal")} disabled={loading || !vat}>
             <Download className="size-4" /> CSV ارزش افزوده
           </Button>
-          <Button variant="outline" size="sm" onClick={() => download("seasonal-transactions")} disabled={loading || !tx}>
+          <Button variant="outline" size="sm" className="min-h-[44px]" onClick={() => download("seasonal-transactions")} disabled={loading || !tx}>
             <Download className="size-4" /> CSV فهرست فروش
           </Button>
-          <Button variant="outline" size="sm" onClick={() => download("seasonal-purchases")} disabled={loading || !tx}>
+          <Button variant="outline" size="sm" className="min-h-[44px]" onClick={() => download("seasonal-purchases")} disabled={loading || !tx}>
             <Download className="size-4" /> CSV خرید و مالیات ورودی
           </Button>
-          <Button variant="outline" size="sm" onClick={() => downloadReturn("xlsx")} disabled={loading || !ret}>
+          <Button variant="outline" size="sm" className="min-h-[44px]" onClick={() => downloadReturn("xlsx")} disabled={loading || !ret}>
             <Download className="size-4" /> اظهارنامه Excel
           </Button>
-          <Button variant="outline" size="sm" onClick={() => downloadReturn("pdf")} disabled={loading || !ret}>
+          <Button variant="outline" size="sm" className="min-h-[44px]" onClick={() => downloadReturn("pdf")} disabled={loading || !ret}>
             <Download className="size-4" /> اظهارنامه PDF
           </Button>
-          <Button variant="outline" size="sm" onClick={() => download("journal")} disabled={loading}>
+          <Button variant="outline" size="sm" className="min-h-[44px]" onClick={() => download("journal")} disabled={loading}>
             <Download className="size-4" /> CSV دفتر روزنامه (قالب تأییدنشده)
           </Button>
-          <Button variant="outline" size="sm" onClick={() => download("ledger")} disabled={loading}>
+          <Button variant="outline" size="sm" className="min-h-[44px]" onClick={() => download("ledger")} disabled={loading}>
             <Download className="size-4" /> CSV دفتر کل (قالب تأییدنشده)
           </Button>
         </div>
@@ -506,32 +518,34 @@ function SeasonalCard({ onDeadline }: { onDeadline: (input: NextDeadlineInput) =
             <p className="text-sm text-muted-foreground">
               بازه: <span dir="ltr">{vat.period.label}</span> — {formatNumber(vat.sales.invoiceCount)} صورتحساب
             </p>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>نرخ</TableHead>
-                  <TableHead>تعداد سطر</TableHead>
-                  <TableHead>مبلغ مشمول</TableHead>
-                  <TableHead>مالیات</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {vat.sales.byRate.map((r) => (
-                  <TableRow key={r.rate}>
-                    <TableCell>{formatNumber(r.rate * 100)}٪</TableCell>
-                    <TableCell>{formatNumber(r.invoiceLines)}</TableCell>
-                    <TableCell>{formatMoneyRial(Number(r.taxableBase))}</TableCell>
-                    <TableCell>{formatMoneyRial(Number(r.vat))}</TableCell>
+            <div className="w-full overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>نرخ</TableHead>
+                    <TableHead>تعداد سطر</TableHead>
+                    <TableHead>مبلغ مشمول</TableHead>
+                    <TableHead>مالیات</TableHead>
                   </TableRow>
-                ))}
-                <TableRow className="font-semibold">
-                  <TableCell>جمع فروش</TableCell>
-                  <TableCell />
-                  <TableCell>{formatMoneyRial(Number(vat.sales.taxableBase))}</TableCell>
-                  <TableCell>{formatMoneyRial(Number(vat.sales.vat))}</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {vat.sales.byRate.map((r) => (
+                    <TableRow key={r.rate}>
+                      <TableCell>{formatNumber(r.rate * 100)}٪</TableCell>
+                      <TableCell>{formatNumber(r.invoiceLines)}</TableCell>
+                      <TableCell>{formatMoneyRial(Number(r.taxableBase))}</TableCell>
+                      <TableCell>{formatMoneyRial(Number(r.vat))}</TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="font-semibold">
+                    <TableCell>جمع فروش</TableCell>
+                    <TableCell />
+                    <TableCell>{formatMoneyRial(Number(vat.sales.taxableBase))}</TableCell>
+                    <TableCell>{formatMoneyRial(Number(vat.sales.vat))}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
             <Alert>
               <AlertTitle>خرید و مالیات ورودی</AlertTitle>
               <AlertDescription>
@@ -550,28 +564,30 @@ function SeasonalCard({ onDeadline }: { onDeadline: (input: NextDeadlineInput) =
         )}
 
         {tx && tx.rows.length > 0 && (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>شماره</TableHead>
-                <TableHead>تاریخ</TableHead>
-                <TableHead>خریدار</TableHead>
-                <TableHead>مشمول</TableHead>
-                <TableHead>مالیات</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {tx.rows.map((r) => (
-                <TableRow key={r.taxInvoiceNumber}>
-                  <TableCell dir="ltr">{r.taxInvoiceNumber}</TableCell>
-                  <TableCell dir="ltr">{r.issuedAtJalali}</TableCell>
-                  <TableCell>{r.buyerName}</TableCell>
-                  <TableCell>{formatMoneyRial(Number(r.taxableBase))}</TableCell>
-                  <TableCell>{formatMoneyRial(Number(r.vat))}</TableCell>
+          <div className="w-full overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>شماره</TableHead>
+                  <TableHead>تاریخ</TableHead>
+                  <TableHead>خریدار</TableHead>
+                  <TableHead>مشمول</TableHead>
+                  <TableHead>مالیات</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {tx.rows.map((r) => (
+                  <TableRow key={r.taxInvoiceNumber}>
+                    <TableCell dir="ltr">{r.taxInvoiceNumber}</TableCell>
+                    <TableCell dir="ltr">{r.issuedAtJalali}</TableCell>
+                    <TableCell>{r.buyerName}</TableCell>
+                    <TableCell>{formatMoneyRial(Number(r.taxableBase))}</TableCell>
+                    <TableCell>{formatMoneyRial(Number(r.vat))}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
         {tx && tx.rows.length === 0 && !loading && (
           <p className="text-sm text-muted-foreground">در این فصل صورتحساب صادرشده‌ای ثبت نشده است.</p>
@@ -607,7 +623,7 @@ export default function TaxPage() {
             role="tab"
             aria-selected={tab === "vat"}
             aria-controls="tax-panel-vat"
-            size="sm"
+            className="min-h-[44px] min-w-[44px] px-4"
             variant={tab === "vat" ? "default" : "outline"}
             onClick={() => setTab("vat")}
           >
@@ -618,7 +634,7 @@ export default function TaxPage() {
             role="tab"
             aria-selected={tab === "moadian"}
             aria-controls="tax-panel-moadian"
-            size="sm"
+            className="min-h-[44px] min-w-[44px] px-4"
             variant={tab === "moadian" ? "default" : "outline"}
             onClick={() => setTab("moadian")}
           >

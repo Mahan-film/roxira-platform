@@ -26,6 +26,7 @@ import {
  */
 
 const VIEWPORTS = [
+  { name: 'phone-375px', width: 375, height: 667 },
   { name: 'phone-390px', width: 390, height: 844 },
   { name: 'desktop-1440px', width: 1440, height: 900 },
 ] as const;
