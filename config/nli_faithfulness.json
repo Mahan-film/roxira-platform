@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "_comment": "Effective-dated configuration for T249 async Persian NLI faithfulness audit on roxira-ci. All model downloads/licences flagged verified=false until checked live on the box.",
+  "version": "2026-11-25",
+  "effective_dates": {
+    "valid_from": "2026-11-01T00:00:00Z",
+    "valid_to": "2027-12-31T23:59:59Z"
+  },
+  "nli_model": {
+    "id": "MoritzLaurer/mDeBERTa-v3-base-mnli-xnli",
+    "runtime": "onnxruntime-int8",
+    "license": "MIT",
+    "verified": false,
+    "source": "R18 Smart Judge v2 (T249)",
+    "max_length": 512,
+    "intra_op_threads": 4
+  },
+  "cosine_fallback_model": {
+    "id": "BAAI/bge-m3",
+    "runtime": "onnxruntime-int8",
+    "license": "MIT",
+    "verified": false,
+    "source": "R18 Smart Judge v2 (T235 / T249)"
+  },
+  "calibration_dataset": {
+    "name": "FarsTail",
+    "license": "check_before_box_run",
+    "verified": false,
+    "target_hand_labeled_claims": 50
+  },
+  "thresholds": {
+    "entailment_threshold": 0.55,
+    "contradiction_threshold": 0.45,
+    "cosine_fallback_threshold": 0.65,
+    "min_claim_chars": 12,
+    "max_claim_chars": 400
+  }
+}
