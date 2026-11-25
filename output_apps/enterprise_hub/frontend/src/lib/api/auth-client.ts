@@ -222,6 +222,9 @@ export interface SignupPayload {
   organizationName?: string;
   /** Join this organisation by invitation instead of creating one. */
   inviteToken?: string;
+  acceptTerms: boolean;
+  termsVersion?: string;
+  privacyVersion?: string;
 }
 
 /** Returned instead of tokens when the account has an authenticator app (TOTP). */

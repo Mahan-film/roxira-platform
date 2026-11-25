@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { GhaziHeader } from "@/components/layout/ghazi-header";
 import { EnamadFooter } from "@/components/layout/enamad-footer";
+import { TERMS_VERSION } from "@/lib/legal/legal-versions";
 
 export const metadata: Metadata = {
   title: "قوانین و مقررات | سامانه هوشمند قاضی هوشمند",
@@ -22,9 +23,18 @@ export default function TermsPage() {
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-white">قوانین و مقررات سامانه قاضی هوشمند</h1>
           <p className="text-xs sm:text-sm text-slate-400">
-            آخرین به‌روزرسانی: شهریور ۱۴۰۵ | مطالعه و پذیرش این مقررات برای کلیه کاربران الزامی است.
+            نسخهٔ سند: <code className="text-amber-300">{TERMS_VERSION}</code> | مطالعه و پذیرش این مقررات برای کلیه کاربران الزامی است.
           </p>
         </section>
+
+        <article className="bg-amber-950/30 border border-amber-500/40 p-5 sm:p-6 rounded-2xl space-y-2 text-xs sm:text-sm text-amber-100">
+          <h2 className="text-sm sm:text-base font-bold text-amber-300">
+            [PLACEHOLDER — PENDING LAWYER WORDING] بخش محصول کسب‌وکار (Roxira Business)
+          </h2>
+          <p>
+            متن حقوقی مربوط به شرایط استفاده از محصول کسب‌وکار (حسابداری، صدور صورتحساب، مالیات و مدیریت مالی) پس از تأیید وکیل در این بخش جایگزین می‌شود.
+          </p>
+        </article>
 
         <div className="space-y-6 text-xs sm:text-sm text-slate-300 leading-relaxed">
           {/* ماده ۱ */}

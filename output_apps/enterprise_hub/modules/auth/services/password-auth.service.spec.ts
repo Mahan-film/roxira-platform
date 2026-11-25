@@ -64,7 +64,7 @@ const setup = () => {
 };
 
 const signup = (service: PasswordAuthService, over: Partial<SignupDto> = {}, ip = IP) =>
-  service.signup({ email: 'jane@example.com', password: PW, ...over } as SignupDto, ip);
+  service.signup({ email: 'jane@example.com', password: PW, acceptTerms: true, ...over } as SignupDto, ip);
 
 describe('PasswordAuthService.signup', () => {
   it('creates the user with a hashed password and a session, and no organisation by default', async () => {
@@ -108,11 +108,31 @@ describe('PasswordAuthService.signup', () => {
   it('requires an identifier and enforces the password policy', async () => {
     const { service } = setup();
     await expect(
-      service.signup({ password: PW } as SignupDto, IP),
+      service.signup({ password: PW, acceptTerms: true } as SignupDto, IP),
     ).rejects.toThrow('Provide a username or an email');
     await expect(signup(service, { password: 'short' })).rejects.toBeInstanceOf(BadRequestException);
     await expect(signup(service, { password: 'password123' })).rejects.toThrow(/easy to guess/);
     await expect(signup(service, { email: 'not-an-email' })).rejects.toThrow(/Email format/);
+  });
+
+  it('requires terms acceptance and stores accepted versions and timestamps per user', async () => {
+    const { service, repo } = setup();
+    await expect(signup(service, { acceptTerms: false })).rejects.toThrow(/accept the terms/i);
+    await expect(
+      service.signup({ email: 'jane@example.com', password: PW } as SignupDto, IP),
+    ).rejects.toThrow(/accept the terms/i);
+
+    await signup(service, {
+      username: 'jane',
+      acceptTerms: true,
+      termsVersion: '2026-11-24-v1',
+      privacyVersion: '2026-11-24-p1',
+    });
+    const user = [...repo.users.values()][0];
+    expect(user.termsAcceptedVersion).toBe('2026-11-24-v1');
+    expect(user.privacyAcceptedVersion).toBe('2026-11-24-p1');
+    expect(user.termsAcceptedAt).toBeInstanceOf(Date);
+    expect(user.privacyAcceptedAt).toBeInstanceOf(Date);
   });
 
   it('rate-limits signups per IP', async () => {
@@ -125,13 +145,24 @@ describe('PasswordAuthService.signup', () => {
     await expect(signup(service, { email: 'u12@example.com' }, '198.51.100.9')).resolves.toBeDefined();
   });
 
-  it('validates the DTO shape (whitelisted, normalised)', async () => {
-    const dto = plainToInstance(SignupDto, { username: ' Jane.Doe ', email: ' A@B.CO ', password: PW });
+  it('validates the DTO shape (whitelisted, normalised, no implicit "false" -> true)', async () => {
+    const dto = plainToInstance(
+      SignupDto,
+      { username: ' Jane.Doe ', email: ' A@B.CO ', password: PW, acceptTerms: true },
+      { enableImplicitConversion: true },
+    );
     expect(await validate(dto)).toHaveLength(0);
     expect(dto.username).toBe('jane.doe');
     expect(dto.email).toBe('a@b.co');
-    const bad = plainToInstance(SignupDto, { username: 'x y', password: PW });
+    expect(dto.acceptTerms).toBe(true);
+    const bad = plainToInstance(SignupDto, { username: 'x y', password: PW, acceptTerms: true });
     expect((await validate(bad)).length).toBeGreaterThan(0);
+    const strFalse = plainToInstance(
+      SignupDto,
+      { username: 'jane.doe', password: PW, acceptTerms: 'false' },
+      { enableImplicitConversion: true },
+    );
+    expect((await validate(strFalse)).length).toBeGreaterThan(0);
   });
 });
 

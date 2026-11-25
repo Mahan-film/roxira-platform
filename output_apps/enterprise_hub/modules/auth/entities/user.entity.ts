@@ -98,6 +98,18 @@ export class UserEntity {
   @Column({ type: 'timestamp', nullable: true })
   lastLoginAt: Date | null;
 
+  @Column({ type: 'varchar', length: 64, name: 'terms_accepted_version', nullable: true })
+  termsAcceptedVersion: string | null;
+
+  @Column({ type: 'timestamp', name: 'terms_accepted_at', nullable: true })
+  termsAcceptedAt: Date | null;
+
+  @Column({ type: 'varchar', length: 64, name: 'privacy_accepted_version', nullable: true })
+  privacyAcceptedVersion: string | null;
+
+  @Column({ type: 'timestamp', name: 'privacy_accepted_at', nullable: true })
+  privacyAcceptedAt: Date | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

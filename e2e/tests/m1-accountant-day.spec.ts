@@ -395,6 +395,7 @@ test.describe('Accountant day · go-live gate on the local stack', () => {
         password,
         displayName: 'Accountant Day',
         organizationName: orgName,
+        acceptTerms: true,
       },
     });
     state.orgName = orgName;

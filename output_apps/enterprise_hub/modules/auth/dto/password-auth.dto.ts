@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
+  IsBoolean,
   IsIn,
   IsOptional,
   IsString,
@@ -65,6 +66,25 @@ export class SignupDto {
   @IsString()
   @Length(20, 200)
   inviteToken?: string;
+
+  @ApiProperty({ description: 'Must be true: user accepted terms of service and privacy policy.' })
+  @Transform(({ obj, key }) => (obj as Record<string, unknown>)[key])
+  @IsBoolean({ message: 'You must accept the terms and privacy policy.' })
+  acceptTerms: boolean;
+
+  @ApiPropertyOptional({ description: 'Accepted terms version.' })
+  @IsOptional()
+  @Transform(trimmed)
+  @IsString()
+  @MaxLength(64)
+  termsVersion?: string;
+
+  @ApiPropertyOptional({ description: 'Accepted privacy policy version.' })
+  @IsOptional()
+  @Transform(trimmed)
+  @IsString()
+  @MaxLength(64)
+  privacyVersion?: string;
 }
 
 export class PasswordLoginDto {
