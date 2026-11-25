@@ -10,6 +10,9 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional
 
+# Safe: rulings_retrieval never imports catalog_intent.
+from output_apps.generated_modules.smartjudge.rulings_retrieval import is_trusted
+
 _DIGIT_TRANS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
 
 # Match patterns for "latest / newest / last number" of rulings
@@ -111,8 +114,6 @@ def _trusted(r: Dict[str, Any]) -> bool:
 
     Anything else (OCR, unofficial copy, needs_review) is never called official
     (#1385 hub blocker)."""
-    from output_apps.generated_modules.smartjudge.rulings_retrieval import is_trusted
-
     return is_trusted(r)
 
 
@@ -137,7 +138,7 @@ def build_catalog_context(catalog_rows: List[Dict[str, Any]], target: str = "uni
         target_fa = "آرای هیئت عمومی دیوان عدالت اداری"
     else:
         target_fa = "آرای وحدت رویه دیوان عالی کشور"
-    if all(_trusted(r) for r in catalog_rows[:5]):
+    if all(_trusted(r) for r in catalog_rows[:5]):  # the header describes only the 5 rows listed
         header = f"فهرست از منابع رسمی ثبت‌شده در پایگاه داده سامانه ({target_fa})"
     else:
         header = (f"فهرست {UNOFFICIAL_FA} از پایگاه داده سامانه ({target_fa})؛ "

@@ -38,6 +38,10 @@ def test_gregorian_dates_are_converted_exactly():
     assert rr.gregorian_to_jalali(2026, 11, 25) == (1405, 9, 4)
     assert rr.gregorian_to_jalali(2025, 3, 21) == (1404, 1, 1)
     assert rr.gregorian_to_jalali(2024, 3, 20) == (1403, 1, 1)
+    assert rr.is_jalali_leap(1403) and not rr.is_jalali_leap(1404)
+    assert rr.validated_date(_row(date="1403-12-30"), _today()) == (1403, 12, 30)
+    assert rr.validated_date(_row(date="1404-12-30"), _today()) is None
+    assert rr.validated_date(_row(date="1404-07-31"), _today()) is None
     assert rr.validated_date(_row(date="2026-11-25"), _today()) == (1405, 9, 4)
     greg = _row(number="1", date="2026-06-01", source_tier="official")  # Jalali 1405-03-11
     jal = _row(number="2", date="1405-05-01", source_tier="official")

@@ -292,7 +292,11 @@ def is_trusted(r: dict) -> bool:
 
 
 def gregorian_to_jalali(gy: int, gm: int, gd: int) -> tuple:
-    """Exact Gregorian -> Jalali conversion (standard 33-year-cycle arithmetic, stdlib only)."""
+    """Exact Gregorian -> Jalali conversion, stdlib only.
+
+    Standard day-count arithmetic used by jalaali-js / jdatetime: 355666 is the day offset between the
+    two epochs, 12053 days = one 33-year Jalali cycle, 1461 days = a 4-year group, and months 1-6 have
+    31 days (186 days) while 7-12 have 30."""
     g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
     gy2 = gy + 1 if gm > 2 else gy
     days = (355666 + 365 * gy + (gy2 + 3) // 4 - (gy2 + 99) // 100 + (gy2 + 399) // 400
@@ -307,6 +311,28 @@ def gregorian_to_jalali(gy: int, gm: int, gd: int) -> tuple:
     if days < 186:
         return (jy, 1 + days // 31, 1 + days % 31)
     return (jy, 7 + (days - 186) // 30, 1 + (days - 186) % 30)
+
+
+def is_jalali_leap(jy: int) -> bool:
+    """Jalali leap year: 1 Farvardin of the next year falls 366 days later."""
+    return (_dt.date(*_jalali_new_year(jy + 1)) - _dt.date(*_jalali_new_year(jy))).days == 366
+
+
+def _jalali_new_year(jy: int) -> tuple:
+    """Gregorian (y, m, d) of 1 Farvardin jy (Nowruz falls on 19-22 March)."""
+    gy = jy + 621
+    for day in (19, 20, 21, 22):
+        if gregorian_to_jalali(gy, 3, day) == (jy, 1, 1):
+            return (gy, 3, day)
+    raise ValueError(f"no Nowruz found for {jy}")
+
+
+def _jalali_month_days(jy: int, jm: int) -> int:
+    if jm <= 6:
+        return 31
+    if jm <= 11:
+        return 30
+    return 30 if is_jalali_leap(jy) else 29
 
 
 def validated_date(r: dict, today: Optional[_dt.date] = None) -> Optional[tuple]:
@@ -337,7 +363,7 @@ def validated_date(r: dict, today: Optional[_dt.date] = None) -> Optional[tuple]
         if g > t:
             return None
         return gregorian_to_jalali(y, m, d)
-    if 1300 <= y and (m <= 6 or d <= 30) and (y, m, d) <= today_j:
+    if 1300 <= y and (y, m, d) <= today_j and d <= _jalali_month_days(y, m):
         return (y, m, d)
     return None
 
