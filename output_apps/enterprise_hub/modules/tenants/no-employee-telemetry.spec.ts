@@ -125,7 +125,8 @@ describe('T265 tenant no-employee-telemetry mode (works-council safe)', () => {
     const repo = {
       updateSettings: jest.fn().mockResolvedValue(updatedTenant),
     };
-    const service = new TenantsService(repo as never);
+    const packRegistry = { getOrThrow: jest.fn(), listSupported: jest.fn() };
+    const service = new TenantsService(repo as never, packRegistry as never);
     const result = await service.updateSettings('t-1', {
       noEmployeeTelemetry: true,
     });
