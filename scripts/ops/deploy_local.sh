@@ -25,6 +25,7 @@ APP_DOMAIN="${DEPLOY_APP_DOMAIN:-roxira.ir}"
 API_PATH="${DEPLOY_SMOKE_API_PATH:-/api/v1/apps/judge/pricing/plans}"
 BACKEND_HEALTH_PATH="${DEPLOY_SMOKE_BACKEND_HEALTH_PATH:-/api/backend/enterprise-hub/currency}"
 SMOKE_TENANT_ROUTE="${DEPLOY_SMOKE_TENANT_ROUTE:-/api/backend/tenants/me}"
+SMOKE_CHAT_PATH="${DEPLOY_SMOKE_CHAT_PATH:-/api/v1/apps/judge/chat}"
 SMOKE_AUTH_TOKEN="${DEPLOY_SMOKE_AUTH_TOKEN:-${SMOKE_AUTH_TOKEN:-}}"
 REQUIRED_ENV="GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET ADMIN_HEALTH_KEY JWT_SECRET KAVENEGAR_API_KEY"
 FREEZE_FILE=".deploy-freeze"
@@ -87,7 +88,7 @@ confirm_read() {  # confirm_read <prompt>
   fi
 }
 rgit() { rsh "cd '$REMOTE_DIR' && git $*"; }
-rcompose() { rsh "cd '$REMOTE_DIR' && docker compose -f $COMPOSE $*"; }
+rcompose() { rsh "cd '$REMOTE_DIR' && walg=''; [ -r /etc/roxira/walg.env ] && [ -f docker-compose.walg.yml ] && walg='-f docker-compose.walg.yml'; docker compose -f $COMPOSE \$walg $*"; }
 
 local_root() { git rev-parse --show-toplevel 2>/dev/null || die "run inside the repo checkout"; }
 
@@ -114,7 +115,9 @@ compute_services() {
       output_apps/enterprise_hub/*) need_be=1 ;;
       output_apps/nginx_config/*) need_nginx=1 ;;
       docker-compose.prod.yml) need_app=1; need_be=1; need_fe=1 ;;
-      docs/*|*.md|src/*|tests/*|scripts/*|.github/*|.claude/*|config/*|.agents/*) ;;
+      src/*/test_*.py|src/test_*.py|src/ops/*|src/*/tests/*) ;;
+      src/*|config/*.yaml) need_app=1 ;;
+      docs/*|*.md|tests/*|scripts/*|.github/*|.claude/*|config/*|.agents/*) ;;
       *) need_app=1 ;;
     esac
   done <<<"$CHANGED"
@@ -213,6 +216,17 @@ smoke_test() {
         log "smoke ok: $APP_DOMAIN authenticated tenant read $SMOKE_TENANT_ROUTE 200"
       else
         log "smoke FAIL: $APP_DOMAIN authenticated tenant read $SMOKE_TENANT_ROUTE $code (want 200)"
+        ok=1
+      fi
+      local chat_resp chat_code chat_body chat_reply
+      chat_resp="$(rsh "curl $SMOKE_RESOLVE -s -m 20 -A '$SMOKE_UA' -H $(printf '%q' "Authorization: Bearer $token") -H 'Content-Type: application/json' -d '{\"message\":\"سلام\"}' -w '\n%{http_code}' $(printf '%q' "https://$CHAT_DOMAIN$SMOKE_CHAT_PATH")" || true)"
+      chat_code="$(printf '%s\n' "$chat_resp" | tail -n 1)"
+      chat_body="$(printf '%s\n' "$chat_resp" | sed '$d')"
+      chat_reply="$(printf '%s' "$chat_body" | python3 -c 'import sys,json; d=json.load(sys.stdin); print((d.get("reply") or "").strip())' 2>/dev/null || true)"
+      if [ "$chat_code" = "200" ] && [ -n "$chat_reply" ]; then
+        log "smoke ok: $CHAT_DOMAIN chat probe $SMOKE_CHAT_PATH 200"
+      else
+        log "smoke FAIL: $CHAT_DOMAIN chat probe $SMOKE_CHAT_PATH code=$chat_code reply_len=${#chat_reply}"
         ok=1
       fi
     fi
@@ -327,7 +341,7 @@ do_rollback_remote() {
         repo=\${img%%:*}; docker tag \"\$img\" \"\$repo:latest\" || true
       fi
     done
-    [ -z \"\$svcs\" ] || docker compose -f $COMPOSE up -d --no-deps \$svcs
+    [ -z \"\$svcs\" ] || { walg=''; [ -r /etc/roxira/walg.env ] && [ -f docker-compose.walg.yml ] && walg='-f docker-compose.walg.yml'; docker compose -f $COMPOSE \$walg up -d --no-deps \$svcs; }
     docker exec roxira_nginx_prod nginx -s reload || true
     echo \"rolled back to \$prev\""
 }
@@ -406,9 +420,10 @@ cmd_deploy() {
     git fetch origin main
     git merge --ff-only '$TARGET_SHA'
     export GIT_SHA='$TARGET_SHA'   # image label org.roxira.git_sha (Gate 4 in autodeploy.sh)
-    docker compose -f $COMPOSE config -q
-    if [ -n '$svcs' ]; then docker compose -f $COMPOSE build $svcs; docker compose -f $COMPOSE up -d --no-deps $svcs; fi
-    if [ '$NGINX_CHANGED' = 1 ]; then docker compose -f $COMPOSE up -d --no-deps --force-recreate nginx_gateway
+    walg=''; [ -r /etc/roxira/walg.env ] && [ -f docker-compose.walg.yml ] && walg='-f docker-compose.walg.yml'
+    docker compose -f $COMPOSE \$walg config -q
+    if [ -n '$svcs' ]; then docker compose -f $COMPOSE \$walg build $svcs; docker compose -f $COMPOSE \$walg up -d --no-deps $svcs; fi
+    if [ '$NGINX_CHANGED' = 1 ]; then docker compose -f $COMPOSE \$walg up -d --no-deps --force-recreate nginx_gateway
     else docker exec roxira_nginx_prod nginx -s reload; fi" || rc=$?
   if [ "$rc" -ne 0 ]; then
     log "remote deploy step failed (rc=$rc); rolling back"

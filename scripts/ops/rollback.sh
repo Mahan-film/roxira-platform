@@ -9,6 +9,11 @@
 #
 # deploy.sh calls this automatically when a healthcheck fails. It is also
 # meant to be run by hand: "the site is broken after a deploy, roll it back".
+#
+# Note: enterprise_app bind-mounts ./src and ./output_apps from /opt/roxira_platform,
+# so retagging :prev alone does not revert bind-mounted host code. For a full
+# runtime rollback of enterprise_app, run `git checkout <prev sha>` in
+# /opt/roxira_platform and restart the service (`docker compose ... restart enterprise_app`).
 set -euo pipefail
 
 PROJECT_DIR="/opt/roxira_platform"
