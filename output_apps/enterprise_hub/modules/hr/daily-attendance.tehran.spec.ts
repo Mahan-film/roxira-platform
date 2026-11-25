@@ -139,4 +139,40 @@ describe('DailyAttendanceService Asia/Tehran day handling (T129)', () => {
     const saved = (hrRepo.saveAttendance.mock.calls[0] as unknown[])[1] as Record<string, unknown>;
     expect(saved.workDays).toBe(1); // same Tehran day
   });
+
+  it('matches employeeNumber before numeric database id during CSV import and rejects partial numeric prefixes', async () => {
+    const { service, attendanceRepo } = makeService({
+      employees: [
+        { id: 123, employeeNumber: 'E-900', firstName: 'By', lastName: 'Id' },
+        { id: 456, employeeNumber: '123', firstName: 'By', lastName: 'Badge' },
+      ],
+    });
+    const res = await service.importCsv(
+      TENANT,
+      '123,2026-11-17 08:15,in\n123abc,2026-11-17 08:15,in',
+    );
+    expect(res.inserted).toBe(1);
+    expect(res.skipped).toBe(1);
+    const rows = attendanceRepo.bulkCreateEvents.mock.calls[0][1] as Array<{ employeeId: number }>;
+    expect(rows[0].employeeId).toBe(456);
+  });
+
+  it('excludes unpaid midday breaks from both daily workedMinutes and monthly overtimeHours', async () => {
+    // 09:00-13:00 and 14:00-18:00 Tehran = 8h net (480 min) over a 9h span
+    const events = [
+      { employeeId: 1, kind: AttendanceEventKind.IN, occurredAt: new Date('2026-11-16T05:30:00.000Z') },
+      { employeeId: 1, kind: AttendanceEventKind.OUT, occurredAt: new Date('2026-11-16T09:30:00.000Z') },
+      { employeeId: 1, kind: AttendanceEventKind.IN, occurredAt: new Date('2026-11-16T10:30:00.000Z') },
+      { employeeId: 1, kind: AttendanceEventKind.OUT, occurredAt: new Date('2026-11-16T14:30:00.000Z') },
+    ];
+    const { service, hrRepo } = makeService({ events });
+
+    const daily = await service.getDailySummary(TENANT, '2026-11-16');
+    expect(daily.records.find((r) => r.employeeId === 1)?.workedMinutes).toBe(480);
+
+    await service.rollupMonthly(TENANT, 1405, 8, 1);
+    const saved = (hrRepo.saveAttendance.mock.calls[0] as unknown[])[1] as Record<string, unknown>;
+    expect(saved.workDays).toBe(1);
+    expect(saved.overtimeHours).toBe(0);
+  });
 });

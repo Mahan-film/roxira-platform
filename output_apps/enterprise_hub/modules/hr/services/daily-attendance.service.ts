@@ -25,6 +25,37 @@ import {
 
 export const MAX_IMPORT_ROWS = 10_000;
 
+/**
+ * Sums paired chronological IN -> OUT intervals in rounded minutes.
+ * Returns null when no valid IN -> OUT pair exists on the day.
+ */
+function computeNetWorkedMinutes(
+  events: ReadonlyArray<Pick<AttendanceEventEntity, 'kind' | 'occurredAt'>>,
+): number | null {
+  const ordered = [...events].sort(
+    (a, b) => a.occurredAt.getTime() - b.occurredAt.getTime(),
+  );
+  let openInMs: number | null = null;
+  let totalMs = 0;
+  let pairedCount = 0;
+  for (const ev of ordered) {
+    const ts = ev.occurredAt.getTime();
+    if (ev.kind === AttendanceEventKind.IN) {
+      if (openInMs === null) {
+        openInMs = ts;
+      }
+    } else if (ev.kind === AttendanceEventKind.OUT) {
+      if (openInMs !== null && ts > openInMs) {
+        totalMs += ts - openInMs;
+        pairedCount++;
+        openInMs = null;
+      }
+    }
+  }
+  // money-ok: converting duration from milliseconds to minutes, not currency
+  return pairedCount > 0 ? Math.round(totalMs / 60000) : null;
+}
+
 @Injectable()
 export class DailyAttendanceService {
   constructor(
@@ -162,12 +193,8 @@ export class DailyAttendanceService {
           presentCount++;
         }
 
-        if (lastOut && lastOut.getTime() > firstIn.getTime()) {
-          workedMinutes = Math.round((lastOut.getTime() - firstIn.getTime()) / 60000);
-        } else {
-          // Standard full day assumption when checked in
-          workedMinutes = 480;
-        }
+        const netMinutes = computeNetWorkedMinutes(empEvents);
+        workedMinutes = netMinutes !== null ? netMinutes : 480; // Standard full day assumption when checked in without OUT
       } else if (leaveEmpIds.has(emp.id)) {
         status = DailyAttendanceStatus.ON_LEAVE;
         onLeaveCount++;
@@ -265,13 +292,15 @@ export class DailyAttendanceService {
       const rawKind = parts[2] ? parts[2].toLowerCase() : 'in';
       const rawBranch = parts[3] ? parseInt(parts[3], 10) : defaultBranchId;
 
-      // Match employee
+      // Match employee: biometric exports carry badge/employeeNumber; fall back to exact numeric PK id only if no number matches.
       let resolvedEmpId: number | undefined;
-      const parsedNum = parseInt(rawIdentifier, 10);
-      if (!isNaN(parsedNum) && empById.has(parsedNum)) {
-        resolvedEmpId = parsedNum;
-      } else if (empByNum.has(rawIdentifier)) {
+      if (empByNum.has(rawIdentifier)) {
         resolvedEmpId = empByNum.get(rawIdentifier);
+      } else if (/^\d+$/.test(rawIdentifier)) {
+        const parsedId = Number(rawIdentifier);
+        if (empById.has(parsedId)) {
+          resolvedEmpId = parsedId;
+        }
       }
 
       if (!resolvedEmpId) {
@@ -379,19 +408,13 @@ export class DailyAttendanceService {
       let totalOvertimeHours = 0;
 
       for (const [, dayEvents] of dayMap.entries()) {
-        const inEvents = dayEvents.filter((e: AttendanceEventEntity) => e.kind === AttendanceEventKind.IN);
-        const outEvents = dayEvents.filter((e: AttendanceEventEntity) => e.kind === AttendanceEventKind.OUT);
+        const hasIn = dayEvents.some((e: AttendanceEventEntity) => e.kind === AttendanceEventKind.IN);
 
-        if (inEvents.length > 0) {
+        if (hasIn) {
           workDays++;
-          const firstIn = inEvents[0].occurredAt;
-          const lastOut = outEvents.length > 0 ? outEvents[outEvents.length - 1].occurredAt : null;
-
-          if (lastOut && lastOut.getTime() > firstIn.getTime()) {
-            const hours = (lastOut.getTime() - firstIn.getTime()) / (1000 * 3600);
-            if (hours > 8.0) {
-              totalOvertimeHours += hours - 8.0;
-            }
+          const netMinutes = computeNetWorkedMinutes(dayEvents);
+          if (netMinutes !== null && netMinutes > 480) {
+            totalOvertimeHours += (netMinutes - 480) / 60;
           }
         }
       }
