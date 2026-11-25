@@ -172,3 +172,41 @@ def test_engine_wiring_flag_on_fetches_top_n_and_returns_top_k(monkeypatch):
     rows = asyncio.run(eng.qdrant_fallback_laws("q", limit=5))
     assert calls == [20] and len(rows) == 5
     assert [r["article_no"] for r in rows] == ["19", "18", "17", "16", "15"]
+
+
+def test_reranker_mode_flag(monkeypatch):
+    monkeypatch.delenv("SMARTJUDGE_RERANKER_MODE", raising=False)
+    assert rr.reranker_mode() == "cross_encoder"
+    monkeypatch.setenv("SMARTJUDGE_RERANKER_MODE", "colbert_maxsim")
+    assert rr.reranker_mode() == "colbert_maxsim"
+    monkeypatch.setenv("SMARTJUDGE_RERANKER_MODE", "invalid")
+    assert rr.reranker_mode() == "cross_encoder"
+
+
+def test_colbert_maxsim_reranks_and_preserves_pinned(monkeypatch):
+    monkeypatch.setenv("SMARTJUDGE_RERANKER_TOP_N", "30")
+    q_mv = [[1.0, 0.0], [0.0, 1.0]]
+    rows = [
+        {"article_no": "1", "match_level": "QDRANT_EXACT", "colbert_multivec": [[0.1, 0.0]]},
+        {"article_no": "2", "colbert_multivec": [[0.2, 0.0], [0.0, 0.2]]},
+        {"article_no": "3", "colbert_multivec": [[0.9, 0.0], [0.0, 0.9]]},
+    ]
+    out = rr.rerank_colbert_maxsim(q_mv, rows, top_k=2)
+    assert [r["article_no"] for r in out] == ["1", "3"]
+
+
+def test_colbert_maxsim_offline_p95_under_260ms(monkeypatch):
+    monkeypatch.setenv("SMARTJUDGE_RERANKER_TOP_N", "30")
+    q_mv = [[0.5] * 16 for _ in range(8)]
+    rows = [
+        {"article_no": str(i), "colbert_multivec": [[0.1 * (i % 5)] * 16 for _ in range(12)]}
+        for i in range(30)
+    ]
+    latencies_ms = []
+    for _ in range(20):
+        t0 = time.monotonic()
+        out = rr.rerank_colbert_maxsim(q_mv, rows, top_k=5)
+        latencies_ms.append((time.monotonic() - t0) * 1000.0)
+        assert len(out) == 5
+    p95 = sorted(latencies_ms)[int(0.95 * len(latencies_ms)) - 1]
+    assert p95 <= 260.0
