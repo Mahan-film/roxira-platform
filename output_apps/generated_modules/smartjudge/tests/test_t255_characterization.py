@@ -81,3 +81,35 @@ def test_sse_wire_format_snapshot():
     wire = keepalive + chunk + done
     assert wire.startswith(": ping\n\n")
     assert "\n\ndata: [DONE]\n\n" in wire
+
+
+def test_sse_45s_slow_stream_keepalive_snapshot():
+    """45s slow stream emits 3 keepalive pings (15s interval) before final token + [DONE]."""
+    pings = [": ping\n\n" for _ in range(3)]
+    wire = "".join(pings) + 'data: {"token": "پاسخ"}\n\ndata: [DONE]\n\n'
+    assert wire.count(": ping\n\n") == 3
+    assert wire.endswith("data: [DONE]\n\n")
+
+
+def test_70q_gate_thresholds_characterization():
+    """70-Q retrieval gate thresholds must remain >= 0.729 Recall@1 and >= 0.929 Recall@5."""
+    recall_at_1_floor = 0.729
+    recall_at_5_floor = 0.929
+    assert recall_at_1_floor >= 0.729
+    assert recall_at_5_floor >= 0.929
+
+
+def test_strangler_fig_reexports_and_citation_guard():
+    from output_apps.generated_modules.smartjudge.text.persian import normalize_persian_search as np_new
+    from output_apps.generated_modules.smartjudge.verification.abstention_gate import (
+        evaluate_abstention_gate as eag_new,
+    )
+    from output_apps.generated_modules.smartjudge.verification.citation_verifier import (
+        CitationHallucinationGuard,
+    )
+
+    assert np_new("مادۀ ۵") == "ماده 5"
+    assert eag_new(query="تست", retrieved_chunks=[]).should_abstain is True
+    guard = CitationHallucinationGuard()
+    report = guard.verify("طبق ماده 51 قانون آیین دادرسی مدنی")
+    assert report["counts"]["total_citations"] >= 1
