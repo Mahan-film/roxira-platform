@@ -151,6 +151,11 @@ export class InvoiceEntity {
   @Column({ type: 'int', name: 'customer_id', nullable: true })
   customerId: number | null;
 
+  /** پیوند اختیاری به کاربر/مسئول فروش در همان مستأجر (#440). */
+  @Index()
+  @Column({ type: 'uuid', name: 'salesperson_id', nullable: true })
+  salespersonId?: string | null;
+
   @Column({ type: 'jsonb' })
   sellerInfo: InvoicePartyInfo;
 

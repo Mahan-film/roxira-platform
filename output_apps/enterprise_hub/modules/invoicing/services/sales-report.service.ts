@@ -7,7 +7,7 @@ import { InvoicingRepository } from '../repositories/invoicing.repository';
 import { quantityText } from '../reports/invoice-docs';
 import { salesReport, salesReportTable } from '../reports/sales-report';
 
-/** Sales by item or customer (#243) over the tenant's issued and paid sale invoices, by issue date. */
+/** Sales by item, customer, or salesperson (#243 / #440) over the tenant's issued and paid sale invoices, by issue date. */
 @Injectable()
 export class SalesReportService {
   constructor(private readonly invoices: InvoicingRepository) {}

@@ -487,6 +487,31 @@ export class InvoicingRepository {
     }
     return map;
   }
+
+  /**
+   * Verifies that the salesperson belongs to the tenant (active membership or tenant-owned user).
+   * Fails closed when TenantScope is unavailable or UUID format is invalid.
+   */
+  async isSalespersonInTenant(tenantId: string, salespersonId: string): Promise<boolean> {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(salespersonId)) {
+      return false;
+    }
+    const scope = this.getScope();
+    if (!scope) {
+      return false;
+    }
+    const rows = await scope.run(tenantId, (m) =>
+      // tenant-scope-ok: executes inside TenantScope.run(tenantId) with RLS on tenant_memberships and users
+      m.query(
+        `SELECT 1 FROM "tenant_memberships" WHERE "tenant_id" = $1 AND "user_id" = $2 AND "status" = 'ACTIVE'
+         UNION
+         SELECT 1 FROM "users" WHERE "id" = $2 AND ("tenant_id" = $1 OR "managed_by_tenant_id" = $1)
+         LIMIT 1`,
+        [tenantId, salespersonId],
+      ),
+    );
+    return Array.isArray(rows) && rows.length > 0;
+  }
 }
 
 /** یک ردیف خلاصه صورتحساب‌ها (به تفکیک ارز و وضعیت). */

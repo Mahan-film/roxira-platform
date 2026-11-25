@@ -5,9 +5,9 @@ const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Query of the sales report: grouping, an optional issue-date range (Tehran days, inclusive), JSON or a file. */
 export class SalesReportQueryDto {
-  @ApiProperty({ enum: ['item', 'customer'] })
-  @IsIn(['item', 'customer'])
-  groupBy: 'item' | 'customer';
+  @ApiProperty({ enum: ['item', 'customer', 'salesperson'] })
+  @IsIn(['item', 'customer', 'salesperson'])
+  groupBy: 'item' | 'customer' | 'salesperson';
 
   @ApiPropertyOptional({ example: '2026-05-01' })
   @IsOptional()

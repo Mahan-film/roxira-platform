@@ -19,6 +19,7 @@ export type ReportDoc = Pick<
   | 'totalTax'
   | 'buyerInfo'
   | 'sellerInfo'
+  | 'salespersonId'
   | 'items'
 >;
 

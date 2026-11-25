@@ -3,24 +3,33 @@ import { ReportColumn, ReportRow, ReportTable } from '../../accounting/reports/r
 import { InvoiceDirection } from '../enums/invoice-kind.enum';
 import { DocGroup, foreignText, foreignTotal, groupDocs, quantityText, ReportDoc } from './invoice-docs';
 
-export type SalesGroupBy = 'item' | 'customer';
+export type SalesGroupBy = 'item' | 'customer' | 'salesperson';
 export type SalesDoc = ReportDoc;
 export type SalesGroup = DocGroup;
 
 const KEY_OF: Record<SalesGroupBy, (doc: ReportDoc, item: InvoiceItem) => string> = {
   item: (_doc, item) => item.sku || item.description,
   customer: (doc) => doc.buyerInfo?.name || 'بدون نام',
+  salesperson: (doc) => doc.salespersonId || 'بدون فروشنده',
 };
 
-/** Sales grouped by item or customer, in the amounts the ledger posted. */
+/** Sales grouped by item, customer, or salesperson, in the amounts the ledger posted. */
 export function salesReport(docs: readonly SalesDoc[], groupBy: SalesGroupBy): SalesGroup[] {
   return [...groupDocs(docs, InvoiceDirection.SALE, KEY_OF[groupBy]).values()].sort((a, b) =>
     a.key.localeCompare(b.key, 'fa'),
   );
 }
 
-const TITLES: Record<SalesGroupBy, string> = { item: 'فروش به تفکیک کالا', customer: 'فروش به تفکیک مشتری' };
-const KEY_COLUMNS: Record<SalesGroupBy, string> = { item: 'کالا', customer: 'مشتری' };
+const TITLES: Record<SalesGroupBy, string> = {
+  item: 'فروش به تفکیک کالا',
+  customer: 'فروش به تفکیک مشتری',
+  salesperson: 'فروش به تفکیک فروشنده',
+};
+const KEY_COLUMNS: Record<SalesGroupBy, string> = {
+  item: 'کالا',
+  customer: 'مشتری',
+  salesperson: 'فروشنده',
+};
 
 export function salesReportTable(groups: readonly SalesGroup[], groupBy: SalesGroupBy, subtitle = ''): ReportTable {
   const columns: ReportColumn[] = [

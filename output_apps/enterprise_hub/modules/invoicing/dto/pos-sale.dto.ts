@@ -196,6 +196,11 @@ export class CreatePosSaleDto {
   @IsOptional()
   @IsUUID()
   branchId?: string;
+
+  @ApiPropertyOptional({ description: 'شناسه کاربر فروشنده/مسئول فروش در همان سازمان' })
+  @IsOptional()
+  @IsUUID()
+  salespersonId?: string;
 }
 
 export class PosSaleResponseDto {

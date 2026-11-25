@@ -586,6 +586,7 @@ export class InvoicingService {
       id: entity.id,
       taxInvoiceNumber: entity.taxInvoiceNumber,
       customerId: entity.customerId ?? null,
+      salespersonId: entity.salespersonId ?? null,
       sellerInfo: entity.sellerInfo,
       buyerInfo: entity.buyerInfo,
       items: this.lineOwnDiscounts(entity),
@@ -692,6 +693,10 @@ export class InvoicingService {
 
     const exchangeRate = this.currencyService.getRate(currency, BASE_CURRENCY);
     const status = source.status ?? InvoiceStatus.DRAFT;
+    const salespersonId = await this.resolveSalespersonId(
+      tenantId,
+      source.salespersonId,
+    );
 
     const entity = {
       taxInvoiceNumber,
@@ -702,6 +707,7 @@ export class InvoicingService {
       warehouseId: source.warehouseId ?? null,
       branchId: source.branchId ?? related?.branchId ?? null,
       customerId,
+      salespersonId,
       sellerInfo: source.sellerInfo,
       buyerInfo,
       items,
@@ -878,6 +884,7 @@ export class InvoicingService {
       sellerInfo: related.sellerInfo,
       buyerInfo: related.buyerInfo,
       customerId: related.customerId ?? undefined,
+      salespersonId: related.salespersonId ?? undefined,
       currency: related.currency,
       jurisdiction: related.jurisdiction,
       fxRate: Number(related.fxRate),
@@ -1018,6 +1025,25 @@ export class InvoicingService {
       this.invoiceDiscountOf(source),
     );
     return { items, totals: this.computeTotals(items, currency), currency };
+  }
+
+  private async resolveSalespersonId(
+    tenantId: string,
+    salespersonId?: string | null,
+  ): Promise<string | null> {
+    if (salespersonId === undefined || salespersonId === null) {
+      return null;
+    }
+    const valid = await this.invoicingRepository.isSalespersonInTenant(
+      tenantId,
+      salespersonId,
+    );
+    if (!valid) {
+      throw new NotFoundException(
+        `فروشنده با شناسه ${salespersonId} در سازمان شما یافت نشد.`,
+      );
+    }
+    return salespersonId;
   }
 
   private async ownName(tenantId: string): Promise<string> {
@@ -1312,6 +1338,12 @@ export class InvoicingService {
     }
     if (dto.sellerInfo !== undefined) {
       entity.sellerInfo = dto.sellerInfo;
+    }
+    if (dto.salespersonId !== undefined) {
+      entity.salespersonId = await this.resolveSalespersonId(
+        tenantId,
+        dto.salespersonId,
+      );
     }
     if (dto.warehouseId !== undefined) {
       entity.warehouseId = dto.warehouseId;

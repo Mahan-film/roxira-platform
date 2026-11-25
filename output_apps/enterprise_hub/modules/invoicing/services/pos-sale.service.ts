@@ -116,6 +116,7 @@ export class PosSaleService {
       fxRate: dto.fxRate,
       warehouseId: dto.warehouseId,
       branchId: dto.branchId,
+      salespersonId: dto.salespersonId,
       // Anonymous sales name no customer: the invoice service attaches the walk-in customer and
       // picks the country's anonymous type. A known customer is passed by id.
       ...(identity.level === 'anonymous' ? {} : { customerId: identity.lead.id }),
