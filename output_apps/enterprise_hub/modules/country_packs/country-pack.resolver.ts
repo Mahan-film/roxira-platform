@@ -22,6 +22,7 @@ export class CountryPackResolver {
 
   /**
    * Resolves the country pack belonging to `tenantId` by inspecting the tenant's organisation record.
+   * `TenantsRepository.findById` runs inside `TenantScope` when `TenantScope` is provided by `TenantsModule`.
    * If the tenant does not exist or has no country_code, falls back to the default pack.
    */
   async resolveForTenant(tenantId: string): Promise<CountryPack> {

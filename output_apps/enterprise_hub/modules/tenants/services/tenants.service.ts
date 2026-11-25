@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import { CountryPackRegistry } from '../../country_packs/country-pack.registry';
 import { UpdateTenantSettingsDto } from '../dto/update-tenant-settings.dto';
 import { TenantEntity } from '../entities/tenant.entity';
 import { TenantsRepository } from '../repositories/tenants.repository';
@@ -19,7 +20,10 @@ const SLUG_SUFFIX_LENGTH = 6;
  */
 @Injectable()
 export class TenantsService {
-  constructor(private readonly tenantsRepository: TenantsRepository) {}
+  constructor(
+    private readonly tenantsRepository: TenantsRepository,
+    @Optional() private readonly packRegistry?: CountryPackRegistry,
+  ) {}
 
   /** ایجاد سازمان جدید با اسلاگ یکتا ساخته‌شده از نام + پسوند تصادفی کوتاه. */
   async create(name: string): Promise<TenantEntity> {
@@ -45,8 +49,48 @@ export class TenantsService {
     dto: UpdateTenantSettingsDto,
   ): Promise<TenantEntity> {
     const fields: Partial<TenantEntity> = {};
-    if (dto.countryCode !== undefined) fields.countryCode = dto.countryCode.toUpperCase();
-    if (dto.bookCurrencyCode !== undefined) fields.bookCurrencyCode = dto.bookCurrencyCode.toUpperCase();
+
+    if (dto.countryCode !== undefined || dto.bookCurrencyCode !== undefined) {
+      if (!this.packRegistry) {
+        throw new BadRequestException(
+          'Country pack registry is unavailable; cannot validate country or book currency.',
+        );
+      }
+      const existing = await this.tenantsRepository.findById(tenantId);
+      if (!existing) {
+        throw new NotFoundException('سازمانی برای حساب شما یافت نشد.');
+      }
+      const effectiveCountry = (
+        dto.countryCode ??
+        existing.countryCode ??
+        this.packRegistry.defaultCountry
+      ).toUpperCase();
+      if (!this.packRegistry.has(effectiveCountry)) {
+        throw new BadRequestException(
+          `کد کشور «${effectiveCountry}» در بسته‌های کشوری ثبت‌شده پشتیبانی نمی‌شود.`,
+        );
+      }
+      const pack = this.packRegistry.get(effectiveCountry);
+      const expectedCurrency = pack.locale.currency.code.toUpperCase();
+
+      if (dto.bookCurrencyCode !== undefined) {
+        const requestedCurrency = dto.bookCurrencyCode.toUpperCase();
+        if (requestedCurrency !== expectedCurrency) {
+          throw new BadRequestException(
+            `ارز مبنا «${requestedCurrency}» با بسته کشوری ${effectiveCountry} (ارز مجاز: ${expectedCurrency}) همخوانی ندارد.`,
+          );
+        }
+        fields.bookCurrencyCode = requestedCurrency;
+      }
+
+      if (dto.countryCode !== undefined) {
+        fields.countryCode = effectiveCountry;
+        if (dto.bookCurrencyCode === undefined) {
+          fields.bookCurrencyCode = expectedCurrency;
+        }
+      }
+    }
+
     if (dto.defaultCalendar !== undefined) fields.defaultCalendar = dto.defaultCalendar;
     if (dto.timezone !== undefined) fields.timezone = dto.timezone;
     if (dto.locale !== undefined) fields.locale = dto.locale;

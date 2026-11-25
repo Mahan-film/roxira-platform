@@ -26,6 +26,8 @@ export interface TenantMe {
 
 /** بدنه به‌روزرسانی تنظیمات سازمان — PATCH /tenants/me/settings */
 export interface UpdateTenantSettingsPayload {
+  countryCode?: string;
+  bookCurrencyCode?: string;
   noEmployeeTelemetry?: boolean;
 }
 

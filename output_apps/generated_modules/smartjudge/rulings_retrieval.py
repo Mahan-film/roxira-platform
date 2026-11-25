@@ -14,6 +14,7 @@ Rulings are an unofficial copy (ekhtebar.ir), shown as such: ``source_tier`` tra
 from __future__ import annotations
 
 import asyncio
+import datetime as _dt
 import logging
 import os
 import re
@@ -204,6 +205,8 @@ async def retrieve_rulings(
     embed: Optional[EmbedFn] = None,
     search: Optional[SearchFn] = None,
     embedder_name: Optional[str] = None,
+    as_of: Optional[str] = None,
+    tz: Optional[Any] = None,
 ) -> List[Dict[str, Any]]:
     """Ruling rows for ``query`` (best effort: any failure -> []). OFF unless the flag names a collection."""
     name = collection()
@@ -229,7 +232,9 @@ async def retrieve_rulings(
         if vector is None:
             return []
         payloads = await search(vector, name, max(k * 4, 8))
-        return hits_to_rows(payloads or [], limit=k)
+        rows = hits_to_rows(payloads or [], limit=k)
+        from output_apps.generated_modules.smartjudge import abstention_gate as _ag
+        return _ag.filter_by_as_of(rows, as_of_date=as_of, tz=tz)
     except Exception as exc:  # noqa: BLE001 - rulings are an optional extra, never break the answer
         logger.warning("rulings retrieval failed: %s", exc)
         return []
@@ -268,26 +273,110 @@ def _matches_issuer(payload: dict, issuer_query: str) -> bool:
     return bool(words) and all(w in nf for w in words)
 
 
-def parse_and_sort(rows: Iterable[dict]) -> List[dict]:
-    """Sort ruling/regulation payloads/rows descending by date then by integer number."""
-    def _key(r: dict):
-        date_raw = str(
-            r.get("date_iso")
-            or r.get("approval_date")
-            or r.get("approved_on")
-            or r.get("date")
-            or r.get("meeting_date")
-            or ""
-        ).strip().translate(_DIGIT_TRANS)
-        date_iso = str(r.get("date_iso") or r.get("approval_date") or "").strip().replace("/", "-")
-        fa_tuple = (0, 0, 0)
-        if date_raw:
-            parts = [int(p) for p in re.findall(r"\d+", date_raw)]
-            if len(parts) >= 3:
-                fa_tuple = (parts[0], parts[1], parts[2])
-            elif len(parts) == 1:
-                fa_tuple = (parts[0], 0, 0)
+_INACTIVE_STATUSES = {
+    "repealed", "revoked", "cancelled", "canceled", "superseded", "expired", "inactive",
+    "منسوخ", "لغو شده", "ملغی", "ابطال شده",  # Persian has no case; .lower() leaves these as-is
+}
 
+
+def is_inactive(r: dict) -> bool:
+    """True for rows never shown as a current rule (inactive flag or repeal-type status)."""
+    if r.get("is_active") is False:
+        return True
+    status = str(r.get("status") or "").strip().lower()
+    return status in _INACTIVE_STATUSES
+
+
+def is_trusted(r: dict) -> bool:
+    """Official tier AND not waiting for review (single definition; catalog_intent imports it).
+
+    Everything else is worded as unofficial / under review."""
+    tier = str(r.get("source_tier") or "").strip().lower()
+    return tier == "official" and not r.get("needs_review")
+
+
+def gregorian_to_jalali(gy: int, gm: int, gd: int) -> tuple:
+    """Exact Gregorian -> Jalali conversion, stdlib only.
+
+    Standard day-count arithmetic used by jalaali-js / jdatetime: 355666 is the day offset between the
+    two epochs, 12053 days = one 33-year Jalali cycle, 1461 days = a 4-year group, and months 1-6 have
+    31 days (186 days) while 7-12 have 30."""
+    g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
+    gy2 = gy + 1 if gm > 2 else gy
+    days = (355666 + 365 * gy + (gy2 + 3) // 4 - (gy2 + 99) // 100 + (gy2 + 399) // 400
+            + gd + g_d_m[gm - 1])
+    jy = -1595 + 33 * (days // 12053)
+    days %= 12053
+    jy += 4 * (days // 1461)
+    days %= 1461
+    if days > 365:
+        jy += (days - 1) // 365
+        days = (days - 1) % 365
+    if days < 186:
+        return (jy, 1 + days // 31, 1 + days % 31)
+    return (jy, 7 + (days - 186) // 30, 1 + (days - 186) % 30)
+
+
+def is_jalali_leap(jy: int) -> bool:
+    """Jalali leap year: 1 Farvardin of the next year falls 366 days later."""
+    return (_dt.date(*_jalali_new_year(jy + 1)) - _dt.date(*_jalali_new_year(jy))).days == 366
+
+
+def _jalali_new_year(jy: int) -> tuple:
+    """Gregorian (y, m, d) of 1 Farvardin jy (Nowruz falls on 19-22 March)."""
+    gy = jy + 621
+    for day in (19, 20, 21, 22):
+        if gregorian_to_jalali(gy, 3, day) == (jy, 1, 1):
+            return (gy, 3, day)
+    raise ValueError(f"no Nowruz found for {jy}")
+
+
+def _jalali_month_days(jy: int, jm: int) -> int:
+    if jm <= 6:
+        return 31
+    if jm <= 11:
+        return 30
+    return 30 if is_jalali_leap(jy) else 29
+
+
+def validated_date(r: dict, today: Optional[_dt.date] = None) -> Optional[tuple]:
+    """Jalali (y, m, d) when the row's date parses, is plausible and not in the future, else None.
+
+    OCR rows often carry reversed (d/m/y) or garbled dates; those must never win 'latest'."""
+    raw = str(
+        r.get("date_iso")
+        or r.get("approval_date")
+        or r.get("approved_on")
+        or r.get("date")
+        or r.get("meeting_date")
+        or ""
+    ).strip().translate(_DIGIT_TRANS)
+    parts = [int(p) for p in re.findall(r"\d+", raw)]
+    if len(parts) < 3:
+        return None
+    y, m, d = parts[0], parts[1], parts[2]
+    if not (1 <= m <= 12 and 1 <= d <= 31):
+        return None
+    t = today or _dt.date.today()
+    today_j = gregorian_to_jalali(t.year, t.month, t.day)
+    if 1900 <= y <= 2100:  # Gregorian: real, not in the future, converted to Jalali for ordering
+        try:
+            g = _dt.date(y, m, d)
+        except ValueError:
+            return None
+        if g > t:
+            return None
+        return gregorian_to_jalali(y, m, d)
+    if 1300 <= y and (y, m, d) <= today_j and d <= _jalali_month_days(y, m):
+        return (y, m, d)
+    return None
+
+
+def parse_and_sort(rows: Iterable[dict], today: Optional[_dt.date] = None) -> List[dict]:
+    """Sort payloads/rows: validated date first (newest first), then official-and-reviewed rows,
+    then the higher integer number. Rows without a trusted date sink."""
+    def _key(r: dict):
+        vd = validated_date(r, today)
         raw_num = str(
             r.get("number")
             or r.get("document_number")
@@ -300,7 +389,7 @@ def parse_and_sort(rows: Iterable[dict]) -> List[dict]:
         if not num_m and r.get("title"):
             t_m = re.findall(r"\d+", str(r.get("title")).translate(_DIGIT_TRANS))
             num_val = int(t_m[0]) if t_m else 0
-        return (date_iso, fa_tuple, num_val)
+        return (vd is not None, vd or (0, 0, 0), is_trusted(r), num_val)
 
     return sorted(list(rows or []), key=_key, reverse=True)
 
@@ -317,6 +406,9 @@ def _scroll_filter(sub_collection: Optional[str]) -> Optional[dict]:
     elif sub_collection in ("admin_court_board", "admin_court"):
         pairs = [("sub_collection", "admin_court_board"), ("ruling_type", "admin_court"),
                  ("ruling_type", "admin_court_board")]
+    elif sub_collection in ("regulations", "regulation"):
+        pairs = [("sub_collection", "regulations"), ("category", "REGULATION"),
+                 ("doc_type", "circular"), ("doc_type", "board_resolution")]
     else:
         return None
     return {"should": [{"key": k, "match": {"value": v}} for k, v in pairs]}
@@ -436,6 +528,8 @@ async def latest_rulings(
     filtered = []
     for r in raw_payloads:
         if is_reg:
+            if is_inactive(r):
+                continue
             if issuer and not _matches_issuer(r, issuer):
                 continue
             filtered.append(r)
@@ -449,12 +543,25 @@ async def latest_rulings(
             sub_c = str(r.get("sub_collection") or "")
             if sub_c == "admin_court_board" or rtype.startswith("admin_court") or "دیوان عدالت" in str(r.get("issuing_body") or ""):
                 filtered.append(r)
+        elif sub_collection in ("regulations", "regulation"):
+            if sub_c == "regulations" or r.get("category") == "REGULATION" or r.get("doc_type") in ("circular", "board_resolution"):
+                filtered.append(r)
         else:
             filtered.append(r)
 
     # 4. Sort descending by date and number
     sorted_items = parse_and_sort(filtered)
     if is_reg:
+        # Same circular stored twice (official + OCR copy): keep the first; official sorts first.
+        seen_keys: set = set()
+        deduped = []
+        for p in sorted_items:
+            k = (str(p.get("number") or "").strip(), validated_date(p))
+            if k[0] and k in seen_keys:
+                continue
+            seen_keys.add(k)
+            deduped.append(p)
+        sorted_items = deduped
         from output_apps.generated_modules.smartjudge import regulations_retrieval as _regs
         rows = [_regs.payload_to_row(p) for p in sorted_items]
     else:
@@ -462,8 +569,7 @@ async def latest_rulings(
 
     # 5. Law validity filtering per #1348/#1374
     from output_apps.generated_modules.smartjudge import abstention_gate as _ag
-    rows = _ag.filter_by_as_of(rows, as_of_date=as_of)[:limit]
-
+    rows = _ag.filter_by_as_of(rows, as_of_date=as_of, tz=tz)[:limit]
     if rows:  # never cache an empty answer: a transient outage would hide rulings for the whole TTL
         _LATEST_CACHE[cache_key] = (now, rows)
     return rows

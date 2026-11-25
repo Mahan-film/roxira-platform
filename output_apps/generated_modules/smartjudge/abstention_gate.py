@@ -13,7 +13,9 @@ Implements R6 decisions 1, 3, 4, 5 (docs/strategy/research/R5_R6_R7_GTM_LEGAL_PO
 
 from __future__ import annotations
 
+import datetime
 import re
+import zoneinfo
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
@@ -54,6 +56,46 @@ class AbstentionDecision:
     notices: List[str] = field(default_factory=list)
 
 
+def jalali_to_gregorian(jy: int, jm: int, jd: int) -> Tuple[int, int, int]:
+    """Convert Jalali (solar Hijri) date (jy, jm, jd) to Gregorian (gy, gm, gd)."""
+    g_days_in_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    j_days_in_month = [31, 31, 31, 31, 31, 31, 30, 30, 30, 30, 30, 29]
+    jy2 = jy - 979
+    jm2 = jm - 1
+    jd2 = jd - 1
+    j_day_no = 365 * jy2 + (jy2 // 33) * 8 + ((jy2 % 33) + 3) // 4
+    for i in range(jm2):
+        j_day_no += j_days_in_month[i]
+    j_day_no += jd2
+    g_day_no = j_day_no + 79
+    gy = 1600 + 400 * (g_day_no // 146097)
+    g_day_no %= 146097
+    leap = True
+    if g_day_no >= 36525:
+        g_day_no -= 1
+        gy += 100 * (g_day_no // 36524)
+        g_day_no %= 36524
+        if g_day_no >= 365:
+            g_day_no += 1
+        else:
+            leap = False
+    gy += 4 * (g_day_no // 1461)
+    g_day_no %= 1461
+    if g_day_no >= 366:
+        leap = False
+        g_day_no -= 1
+        gy += g_day_no // 365
+        g_day_no %= 365
+    for i in range(12):
+        dim = g_days_in_month[i]
+        if i == 1 and leap:
+            dim += 1
+        if g_day_no < dim:
+            return gy, i + 1, g_day_no + 1
+        g_day_no -= dim
+    return gy, 12, g_day_no + 1
+
+
 def _parse_date_tuple(raw: Any) -> Optional[Tuple[int, int, int]]:
     """Parse YYYY-MM-DD, YYYY/MM/DD, or DD/MM/YYYY into (year, month, day)."""
     s = norm(raw).replace("/", "-")
@@ -68,57 +110,87 @@ def _parse_date_tuple(raw: Any) -> Optional[Tuple[int, int, int]]:
     return None
 
 
+def _to_gregorian_tuple(t: Optional[Tuple[int, int, int]]) -> Optional[Tuple[int, int, int]]:
+    """Convert (year, month, day) tuple to Gregorian (gy, gm, gd) for consistent comparisons across calendar systems."""
+    if not t:
+        return None
+    y, m, d = t
+    if y < 1700:
+        return jalali_to_gregorian(y, m, d)
+    return y, m, d
+
+
+def resolve_as_of_date(as_of: Optional[str] = None, tz: Optional[Any] = None) -> str:
+    """Return explicit as_of string, or default to today's date in the request's timezone (default Asia/Tehran)."""
+    if as_of and str(as_of).strip():
+        return str(as_of).strip()
+
+    target_tz = None
+    if isinstance(tz, datetime.tzinfo):
+        target_tz = tz
+    elif isinstance(tz, str) and tz.strip():
+        tz_str = tz.strip()
+        try:
+            target_tz = zoneinfo.ZoneInfo(tz_str)
+        except Exception:
+            m = re.match(r"^([+-])(\d{1,2}):?(\d{2})?$", tz_str)
+            if m:
+                sign = 1 if m.group(1) == "+" else -1
+                hours = int(m.group(2))
+                mins = int(m.group(3) or 0)
+                target_tz = datetime.timezone(sign * datetime.timedelta(hours=hours, minutes=mins))
+            elif tz_str.upper() in ("Z", "UTC"):
+                target_tz = datetime.timezone.utc
+
+    if target_tz is None:
+        try:
+            target_tz = zoneinfo.ZoneInfo("Asia/Tehran")
+        except Exception:
+            target_tz = datetime.timezone(datetime.timedelta(hours=3, minutes=30), "Tehran")
+
+    now = datetime.datetime.now(target_tz)
+    return now.strftime("%Y-%m-%d")
+
+
 def filter_by_as_of(
     chunks: Sequence[dict],
     as_of_date: Optional[str] = None,
+    tz: Optional[Any] = None,
 ) -> List[dict]:
-    """Filters chunks to those in force as of the given date.
-    
-    If as_of_date is None, returns chunks with status 'active' or 'transitional'
-    (or chunks lacking temporal bounds).
-    If as_of_date is provided, checks valid_from <= as_of_date <= valid_to.
+    """Filters chunks to those in force as of the given date (defaulting to today in request timezone).
+
+    Checks valid_from <= as_of_date <= valid_to, and drops repealed/superseded/obsolete chunks.
     """
     if not chunks:
         return []
 
-    if not as_of_date:
-        # Default view: active or unversioned rows
-        out = []
-        for c in chunks:
-            status = str(c.get("status") or "").lower()
-            if status in ("repealed", "superseded", "obsolete"):
-                continue
-            out.append(c)
-        return out
+    target_date_str = resolve_as_of_date(as_of_date, tz)
+    norm_target = norm(target_date_str).replace("/", "-")
+    target_tuple = _to_gregorian_tuple(_parse_date_tuple(norm_target))
 
-    norm_target = norm(as_of_date).replace("/", "-")
-    target_tuple = _parse_date_tuple(norm_target)
     valid_chunks = []
     for c in chunks:
+        status = str(c.get("status") or "").lower()
+        if status in ("repealed", "superseded", "obsolete"):
+            continue
+
         vf = norm(c.get("valid_from") or "").replace("/", "-")
         vt = norm(c.get("valid_to") or "").replace("/", "-")
-        vf_tuple = _parse_date_tuple(vf)
-        vt_tuple = _parse_date_tuple(vt)
-        status = str(c.get("status") or "").lower()
+        vf_tuple = _to_gregorian_tuple(_parse_date_tuple(vf))
+        vt_tuple = _to_gregorian_tuple(_parse_date_tuple(vt))
 
         # If explicit valid_from exists, target must be >= valid_from
-        if vf:
-            if target_tuple and vf_tuple:
-                if target_tuple < vf_tuple:
-                    continue
-            elif norm_target < vf:
+        if vf_tuple and target_tuple:
+            if target_tuple < vf_tuple:
                 continue
+        elif vf and norm_target < vf:
+            continue
 
         # If explicit valid_to exists, target must be <= valid_to
-        if vt:
-            if target_tuple and vt_tuple:
-                if target_tuple > vt_tuple:
-                    continue
-            elif norm_target > vt:
+        if vt_tuple and target_tuple:
+            if target_tuple > vt_tuple:
                 continue
-
-        # If status says repealed/superseded without valid_to, exclude for current queries
-        if status in ("repealed", "superseded") and not vt:
+        elif vt and norm_target > vt:
             continue
 
         valid_chunks.append(c)

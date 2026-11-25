@@ -90,7 +90,13 @@ export const AUDITED_PAGE_GROUPS: PageGroup[] = [
     name: 'Tax Compliance',
     slug: 'tax',
     isProtected: true,
-    routes: ['/app/tax', '/app/tax/electronic-books', '/app/tax/kartable', '/app/tax/wizard'],
+    routes: [
+      '/app/tax',
+      '/app/tax/electronic-books',
+      '/app/tax/kartable',
+      '/app/tax/previews',
+      '/app/tax/wizard',
+    ],
   },
   {
     name: 'Settings & Organization',

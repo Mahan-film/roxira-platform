@@ -330,13 +330,34 @@ def claude_args(cfg: dict, w: dict, prompt: str) -> list:
     return args
 
 
+def resolve_execution_env_and_limits(cfg: dict, w: dict) -> tuple[dict | None, int, int]:
+    """Return (env, max_turns, timeout_minutes) for the configured auth_mode."""
+    mode = cfg.get("auth_mode", "subscription")
+    if mode == "subscription":
+        return None, w["max_turns"], int(cfg["timeout_minutes"])
+    if mode != "api_key":
+        raise RuntimeError(f"unsupported auth_mode: {mode}")
+    key_env = str(cfg.get("api_key_env") or "ANTHROPIC_API_KEY").strip()
+    key = os.environ.get(key_env, "").strip()
+    if not key:
+        raise RuntimeError(f"auth_mode=api_key requires non-empty env {key_env}")
+    env = dict(os.environ)
+    env["ANTHROPIC_API_KEY"] = key
+    eff_turns = max(1, min(int(w["max_turns"]), int(cfg.get("api_key_max_turns", 20))))
+    eff_timeout = max(1, min(int(cfg["timeout_minutes"]), int(cfg.get("api_key_timeout_minutes", 15))))
+    return env, eff_turns, eff_timeout
+
+
 def execute_wave(cfg: dict, w: dict) -> str:
     """Run claude and return the redacted REPORT body."""
     started = time.monotonic()
     status, summary, cost, turns = "failed", "", None, None
+    eff_timeout = int(cfg["timeout_minutes"])
     try:
-        r = run_cmd(claude_args(cfg, w, build_prompt(w)),
-                    timeout=cfg["timeout_minutes"] * 60, cwd=str(cfg["workdir"]))
+        env, eff_turns, eff_timeout = resolve_execution_env_and_limits(cfg, w)
+        eff_w = {**w, "max_turns": eff_turns}
+        r = run_cmd(claude_args(cfg, eff_w, build_prompt(eff_w)),
+                    timeout=eff_timeout * 60, cwd=str(cfg["workdir"]), env=env)
         try:
             data = json.loads(r.stdout)
         except ValueError:
@@ -348,9 +369,9 @@ def execute_wave(cfg: dict, w: dict) -> str:
         turns = data.get("num_turns")
         status = "done" if r.returncode == 0 and not data.get("is_error") else "failed"
     except subprocess.TimeoutExpired:
-        status, summary = "timeout", f"killed after {cfg['timeout_minutes']} minutes"
+        status, summary = "timeout", f"killed after {eff_timeout} minutes"
     except Exception as e:  # noqa: BLE001
-        status, summary = "failed", f"bridge error: {type(e).__name__}"
+        status, summary = "failed", f"bridge error: {type(e).__name__}: {e}"
     return format_report(w["id"], status, w["lane"], time.monotonic() - started, cost, turns, summary)
 
 
@@ -449,6 +470,10 @@ DEFAULTS = {
     "max_turns_cap": 100,
     "max_task_chars": 8000,
     "allow_write": True,
+    "auth_mode": "subscription",
+    "api_key_env": "ANTHROPIC_API_KEY",
+    "api_key_max_turns": 20,
+    "api_key_timeout_minutes": 15,
 }
 
 
@@ -459,6 +484,8 @@ def load_config(path: Path) -> dict:
     cfg["workdir"] = Path(os.path.expanduser(str(cfg["workdir"])))
     if not cfg["allowed_user_ids"]:
         raise SystemExit("config: allowed_user_ids is empty (fail closed)")
+    if cfg.get("auth_mode") not in ("subscription", "api_key"):
+        raise SystemExit(f"config: invalid auth_mode {cfg.get('auth_mode')!r} (fail closed)")
     return cfg
 
 

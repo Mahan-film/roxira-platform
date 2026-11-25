@@ -42,7 +42,7 @@ After a task is accepted, taskq runs `review_hook.py` on its patch (default on; 
   free role ids, paid role ids, paid group last.
   The groups are used only when the author's model family is known.
 - A reply counts only if the model that actually served it is not in the author's family (a group can fall back to DeepSeek).
-- Checklist: `.claude/skills/review-diff/SKILL.md`; the diff is framed as untrusted data; a bad or incomplete reply is
+- Checklist: `docs/agents/REVIEW_CHECKLIST.md` (fallback: `.claude/skills/review-diff/SKILL.md`); the diff is framed as untrusted data; a bad or incomplete reply is
   `error`, never `pass`. Verdict: `tasks.review` and `reviews/<id>.json`.
 
 ## Agent sandbox additions

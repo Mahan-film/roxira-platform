@@ -204,6 +204,8 @@ async def retrieve_regulations(
     embed: Optional[EmbedFn] = None,
     search: Optional[SearchFn] = None,
     embedder_name: Optional[str] = None,
+    as_of: Optional[str] = None,
+    tz: Optional[Any] = None,
 ) -> List[Dict[str, Any]]:
     """Regulation rows for ``query`` (best effort: any failure -> []). OFF unless the flag names a collection."""
     name = collection()
@@ -229,7 +231,9 @@ async def retrieve_regulations(
         if vector is None:
             return []
         payloads = await search(vector, name, max(k * 4, 8))
-        return hits_to_rows(payloads or [], limit=k)
+        rows = hits_to_rows(payloads or [], limit=k)
+        from output_apps.generated_modules.smartjudge import abstention_gate as _ag
+        return _ag.filter_by_as_of(rows, as_of_date=as_of, tz=tz)
     except Exception as exc:  # noqa: BLE001 - regulations are an optional extra, never break the answer
         logger.warning("regulations retrieval failed: %s", exc)
         return []

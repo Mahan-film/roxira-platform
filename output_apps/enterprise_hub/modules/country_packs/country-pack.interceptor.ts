@@ -13,6 +13,9 @@ import { CountryPack } from './country-pack.types';
 /**
  * Intercepts incoming HTTP requests, resolves the organisation's CountryPack, attaches
  * it to the Request object, and scopes the downstream request execution inside `CountryPackCls`.
+ *
+ * Execution order: NestJS runs Guards (including `JwtAuthGuard`, which sets `request.user.tenantId`)
+ * before Interceptors, and `TenantsRepository.findById` executes inside `TenantScope`.
  */
 @Injectable()
 export class CountryPackInterceptor implements NestInterceptor {

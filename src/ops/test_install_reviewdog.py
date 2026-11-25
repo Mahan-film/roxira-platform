@@ -3,6 +3,8 @@
 import subprocess
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts/dev/install_reviewdog.sh"
 
@@ -20,6 +22,7 @@ def test_install_reviewdog_pinned_version_and_shas():
     assert 'SHA_DARWIN_X64="ca114007f4562062b4b54b422d8d2d21317b548ec64b7848e7e2aea52e490abd"' in content
 
 
+@pytest.mark.integration  # downloads a release binary from the network; timed out twice on main (run 45495300522)
 def test_install_reviewdog_execution(tmp_path):
     res = subprocess.run(
         ["bash", str(SCRIPT), str(tmp_path)],
