@@ -104,6 +104,8 @@ export interface StockItem {
   sku: string;
   barcode: string;
   name: string;
+  primaryUnit?: string;
+  secondaryUnit?: string | null;
   quantity: number;
   minQuantity: number;
   isLowStock: boolean;
