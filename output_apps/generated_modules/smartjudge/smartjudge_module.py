@@ -992,14 +992,21 @@ _RETRIEVAL_CACHE = _chat_fast.TTLCache(
 )
 
 
-async def aquery_knowledge_graph(query_text: str, limit: int = 3, meta_out: Optional[dict] = None):
+async def aquery_knowledge_graph(
+    query_text: str,
+    limit: int = 3,
+    meta_out: Optional[dict] = None,
+    as_of: Optional[str] = None,
+    tz: Optional[Any] = None,
+):
     """Cached (10 min) wrapper around the dual-level retrieval below.
 
     Only real corpus hits are cached (never the FALLBACK placeholder), and callers get a
     deep copy so in-place merging by the caller cannot poison the cache.
+    Applies temporal as-of validity date filter before chunks reach the caller.
     """
     import copy
-    key = (" ".join(str(query_text or "").split()), int(limit))
+    key = (" ".join(str(query_text or "").split()), int(limit), str(as_of or ""), str(tz or ""))
     hit = _RETRIEVAL_CACHE.get(key)
     if hit is not None:
         laws_c, prec_c, meta_c = copy.deepcopy(hit)
@@ -1008,6 +1015,8 @@ async def aquery_knowledge_graph(query_text: str, limit: int = 3, meta_out: Opti
         return laws_c, prec_c
     local_meta: dict = {}
     laws, precedents = await _aquery_knowledge_graph_uncached(query_text, limit=limit, meta_out=local_meta)
+    laws = _abstention_gate.filter_by_as_of(laws, as_of_date=as_of, tz=tz)
+    precedents = _abstention_gate.filter_by_as_of(precedents, as_of_date=as_of, tz=tz)
     if meta_out is not None:
         meta_out.update(local_meta)
     if _chat_safety.is_grounded(laws, precedents):
@@ -2387,10 +2396,11 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
     laws = _source_filter.filter_relevant(laws)
     precedents = _source_filter.filter_relevant(precedents)
 
-    as_of = payload.get("as_of_date") or payload.get("as_of")
-    if as_of:
-        laws = _abstention_gate.filter_by_as_of(laws, as_of)
-        precedents = _abstention_gate.filter_by_as_of(precedents, as_of)
+    req_tz = payload.get("timezone") or payload.get("tz")
+    explicit_as_of = payload.get("as_of_date") or payload.get("as_of")
+    as_of = _abstention_gate.resolve_as_of_date(explicit_as_of, tz=req_tz)
+    laws = _abstention_gate.filter_by_as_of(laws, as_of_date=as_of, tz=req_tz)
+    precedents = _abstention_gate.filter_by_as_of(precedents, as_of_date=as_of, tz=req_tz)
 
     # Abstention gate (R6 Decision 3): low score / no grounding, version conflict, out of scope, false premise, or missing as-of
     if not review_mode and not case_records:
@@ -2405,7 +2415,7 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
             user_text,
             retrieved_chunks=all_chunks,
             rerank_score=top_rerank_score,
-            as_of_date=as_of,
+            as_of_date=explicit_as_of,
             require_grounding=True,
         )
         if gate_decision.should_abstain:
@@ -6767,7 +6777,7 @@ class RulingDraftRequest(_BaseModel):
     jurisdiction: Optional[str] = _Field(None, min_length=1, max_length=_ruling_draft.MAX_NAME)
 
 
-async def _ruling_retrieve_laws(query: str) -> list:
+async def _ruling_retrieve_laws(query: str, as_of: Optional[str] = None, tz: Optional[Any] = None) -> list:
     """Qdrant retrieval (active laws only) mapped to {law_name, article_no, text}."""
     result = await _lightrag_qdrant_retrieve(
         query, limit=_RULING_RETRIEVE_LIMIT, active_only=CITATION_QDRANT_ACTIVE_ONLY
@@ -6781,9 +6791,12 @@ async def _ruling_retrieve_laws(query: str) -> list:
                 "law_name": law.get("law_name"),
                 "article_no": law.get("article_no"),
                 "text": law.get("summary") or law.get("text") or "",
+                "valid_from": law.get("valid_from"),
+                "valid_to": law.get("valid_to"),
+                "status": law.get("status"),
             }
         )
-    return rows
+    return _abstention_gate.filter_by_as_of(rows, as_of_date=as_of, tz=tz)
 
 
 async def _core_article_fetch(law_names, article_no):
@@ -6793,7 +6806,7 @@ async def _core_article_fetch(law_names, article_no):
     )
 
 
-async def _ruling_retrieve_laws_with_core(query: str, match_text: str) -> list:
+async def _ruling_retrieve_laws_with_core(query: str, match_text: str, as_of: Optional[str] = None, tz: Optional[Any] = None) -> list:
     """Vector retrieval plus the deterministic core articles for the claim type
     (config/drafting_core_articles.yaml), core first, so the prompt and the citation guard
     see them. A failed core lookup never fails the draft; a failed main retrieval still does."""
@@ -6804,8 +6817,9 @@ async def _ruling_retrieve_laws_with_core(query: str, match_text: str) -> list:
         except Exception:  # noqa: BLE001
             return []
 
-    retrieved, core = await asyncio.gather(_ruling_retrieve_laws(query), _core())
-    return _drafting_core.merge_articles(core, retrieved, _ruling_draft.MAX_PROMPT_ARTICLES)
+    retrieved, core = await asyncio.gather(_ruling_retrieve_laws(query, as_of=as_of, tz=tz), _core())
+    merged = _drafting_core.merge_articles(core, retrieved, _ruling_draft.MAX_PROMPT_ARTICLES)
+    return _abstention_gate.filter_by_as_of(merged, as_of_date=as_of, tz=tz)
 
 
 async def _ruling_complete(prompt: str) -> str:

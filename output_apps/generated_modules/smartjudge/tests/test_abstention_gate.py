@@ -28,10 +28,12 @@ def test_as_of_temporal_filter_with_valid_dates():
     assert len(res_1405) == 2  # second chunk + قانون تجارت
     assert res_1405[0]["valid_from"] == "1404-01-01"
 
-    # No date: active/unrepealed chunks
+    # No date: defaults to today, dropping chunks with valid_to in the past and repealed chunks
     res_none = filter_by_as_of(chunks, as_of_date=None)
-    assert len(res_none) == 3
-    assert all(c["status"] != "repealed" for c in res_none if "status" in c)
+    assert len(res_none) == 2
+    assert res_none[0]["valid_from"] == "1404-01-01"
+    assert res_none[1]["law_name"] == "قانون تجارت"
+    assert all(c.get("status") != "repealed" for c in res_none)
 
 
 def test_abstention_gate_low_score():

@@ -205,6 +205,8 @@ async def retrieve_rulings(
     embed: Optional[EmbedFn] = None,
     search: Optional[SearchFn] = None,
     embedder_name: Optional[str] = None,
+    as_of: Optional[str] = None,
+    tz: Optional[Any] = None,
 ) -> List[Dict[str, Any]]:
     """Ruling rows for ``query`` (best effort: any failure -> []). OFF unless the flag names a collection."""
     name = collection()
@@ -230,7 +232,9 @@ async def retrieve_rulings(
         if vector is None:
             return []
         payloads = await search(vector, name, max(k * 4, 8))
-        return hits_to_rows(payloads or [], limit=k)
+        rows = hits_to_rows(payloads or [], limit=k)
+        from output_apps.generated_modules.smartjudge import abstention_gate as _ag
+        return _ag.filter_by_as_of(rows, as_of_date=as_of, tz=tz)
     except Exception as exc:  # noqa: BLE001 - rulings are an optional extra, never break the answer
         logger.warning("rulings retrieval failed: %s", exc)
         return []
@@ -559,8 +563,7 @@ async def latest_rulings(
 
     # 5. Law validity filtering per #1348/#1374
     from output_apps.generated_modules.smartjudge import abstention_gate as _ag
-    rows = _ag.filter_by_as_of(rows, as_of_date=as_of)[:limit]
-
+    rows = _ag.filter_by_as_of(rows, as_of_date=as_of, tz=tz)[:limit]
     if rows:  # never cache an empty answer: a transient outage would hide rulings for the whole TTL
         _LATEST_CACHE[cache_key] = (now, rows)
     return rows
