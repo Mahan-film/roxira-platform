@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Money } from '../../accounting/money';
 import { CostingMethod } from '../enums/costing-method.enum';
 
 /**
@@ -42,5 +43,5 @@ export class StockItemResponseDto {
   costingMethod?: CostingMethod;
 
   @ApiPropertyOptional({ description: 'بهای تمام‌شده استاندارد برای روش STANDARD', nullable: true })
-  standardCost?: number | null;
+  standardCost?: Money | null;
 }

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
-import { fromDb, fromMinor, parseScaled, toMinor } from '../../accounting/money';
+import { fromDb, fromMinor, Money, parseScaled, toMinor } from '../../accounting/money';
 import {
   assertValidQuantityScale,
   MONEY_SCALE,
@@ -44,7 +44,7 @@ export interface InboundPersistInput {
 export interface InboundPersistResult {
   item: StockItemEntity;
   batch: FifoBatchEntity;
-  priceVariance?: number;
+  priceVariance?: Money;
 }
 
 /** ورودی پرسیستنس خروج کالا در یک Transaction. */
@@ -604,8 +604,8 @@ export class InventoryRepository {
 
         assertValidQuantityScale(input.quantity, QUANTITY_SCALE, 'مقدار ورودی کالا');
 
-        let unitCostToRecord = input.unitPurchaseCost;
-        let priceVariance: number | undefined;
+        let unitCostMinor = toMinor(input.unitPurchaseCost);
+        let priceVariance: Money | undefined;
 
         const qtyFactorNum = 10 ** QUANTITY_SCALE;
         const qtyFactorBig = 10n ** BigInt(QUANTITY_SCALE);
@@ -614,11 +614,11 @@ export class InventoryRepository {
           const stdMinor = item.standardCost !== null && item.standardCost !== undefined
             ? fromDb(item.standardCost)
             : toMinor(input.unitPurchaseCost);
-          unitCostToRecord = Number(fromMinor(stdMinor)); // money-ok: converting minor units to number for entity field
+          unitCostMinor = stdMinor;
           const inCostMinor = toMinor(input.unitPurchaseCost);
           const inQtyH = BigInt(Math.round(input.quantity * qtyFactorNum));
           const varianceMinor = ((stdMinor - inCostMinor) * inQtyH) / qtyFactorBig;
-          priceVariance = Number(fromMinor(varianceMinor)); // money-ok: converting minor units to number for DTO
+          priceVariance = fromMinor(varianceMinor);
         } else if (item.costingMethod === CostingMethod.AVCO) {
           const existingBatches = await manager
             .createQueryBuilder(FifoBatchEntity, 'batch')
@@ -645,8 +645,8 @@ export class InventoryRepository {
             ? (newTotalValueMinor * qtyFactorBig + newTotalQtyH / 2n) / newTotalQtyH
             : toMinor(input.unitPurchaseCost);
 
-          const avgCost = fromMinor(avgCostMinor) as number; // money-ok: converting minor units to number for entity field
-          unitCostToRecord = avgCost;
+          unitCostMinor = avgCostMinor;
+          const avgCost = fromMinor(avgCostMinor) as number;
 
           for (const existingBatch of existingBatches) {
             existingBatch.unitPurchaseCost = avgCost;
@@ -659,7 +659,7 @@ export class InventoryRepository {
           sku: input.sku,
           batchNumber: input.batchNumber,
           quantityRemaining: this.roundQuantity(input.quantity),
-          unitPurchaseCost: this.roundMoney(unitCostToRecord),
+          unitPurchaseCost: fromMinor(unitCostMinor) as number,
           receivedDate: input.receivedDate ?? new Date(),
           warehouseId: input.warehouseId,
         });

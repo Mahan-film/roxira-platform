@@ -4,6 +4,7 @@ import {
   Index,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { fromDb, fromMinor, minorToDecimal, Money, toMinor } from '../../accounting/money';
 import { CostingMethod } from '../enums/costing-method.enum';
 
 /**
@@ -94,9 +95,11 @@ export class StockItemEntity {
     name: 'standard_cost',
     nullable: true,
     transformer: {
-      to: (value: number | null) => value,
-      from: (value: string | null) => (value === null ? null : Number(value)),
+      to: (value: Money | null | undefined) =>
+        value === null || value === undefined ? null : minorToDecimal(toMinor(value)),
+      from: (value: string | null) =>
+        value === null ? null : fromMinor(fromDb(value)),
     },
   })
-  standardCost?: number | null;
+  standardCost?: Money | null;
 }

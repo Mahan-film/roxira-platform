@@ -6,7 +6,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
-import { parseScaled } from '../../accounting/money';
+import { fromDb, fromMinor, parseScaled, toMinor } from '../../accounting/money';
 import { doubleToHundredths } from '../../sales/sales-math';
 import { SalesAvailabilityService } from '../../sales/services/sales-availability.service';
 import {
@@ -149,7 +149,7 @@ export class InventoryService {
       costingMethod: entity.costingMethod ?? CostingMethod.FIFO,
       standardCost:
         entity.standardCost !== null && entity.standardCost !== undefined
-          ? this.roundMoney(entity.standardCost)
+          ? fromMinor(fromDb(entity.standardCost))
           : null,
     };
   }
@@ -463,7 +463,7 @@ export class InventoryService {
     }
     if (dto.standardCost !== undefined) {
       entity.standardCost =
-        dto.standardCost !== null ? this.roundMoney(dto.standardCost) : null;
+        dto.standardCost !== null ? fromMinor(toMinor(dto.standardCost)) : null;
     }
     if (
       entity.costingMethod === CostingMethod.STANDARD &&

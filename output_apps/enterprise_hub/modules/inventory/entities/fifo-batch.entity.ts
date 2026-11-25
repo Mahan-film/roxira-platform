@@ -4,6 +4,7 @@ import {
   Index,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { fromDb, fromMinor, minorToDecimal, Money, toMinor } from '../../accounting/money';
 
 /**
  * یک دسته (لایه) FIFO از موجودی کالا — نگاشت مستقیم به جدول موجود
@@ -63,8 +64,8 @@ export class FifoBatchEntity {
     scale: 2,
     name: 'unit_purchase_cost',
     transformer: {
-      to: (value: number) => value,
-      from: (value: string | null) => (value === null ? 0 : Number(value)),
+      to: (value: Money) => minorToDecimal(toMinor(value ?? 0)),
+      from: (value: string | null) => (value === null ? 0 : (fromMinor(fromDb(value)) as number)),
     },
   })
   unitPurchaseCost: number;

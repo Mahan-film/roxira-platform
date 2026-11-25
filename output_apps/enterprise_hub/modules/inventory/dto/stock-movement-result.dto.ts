@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Money } from '../../accounting/money';
 import { StockMovementType } from '../enums/stock-movement-type.enum';
 
 /**
@@ -50,7 +51,7 @@ export class StockMovementResultDto {
   processedAt: Date;
 
   @ApiPropertyOptional({ description: 'انحراف نرخ خرید (PPV) برای روش بهای استاندارد' })
-  priceVariance?: number;
+  priceVariance?: Money;
 
   @ApiPropertyOptional({ description: 'هشدار خط‌مشی (مثلاً موجودی منفی)' })
   warning?: string;
