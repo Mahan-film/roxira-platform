@@ -33,7 +33,12 @@ import { SalesReportService } from './services/sales-report.service';
 import { PurchasesReportService } from './services/purchases-report.service';
 import { GrossProfitReportService } from './services/gross-profit-report.service';
 import { VatRateResolver } from './services/vat-rate.resolver';
-import { EffectiveTaxTreatmentRegistry, VendorInvoiceGenerator } from './services/vendor-invoice.generator';
+import {
+  EffectiveTaxTreatmentRegistry,
+  GaplessNumberSequencer,
+  PostgresSequencerStore,
+  VendorInvoiceGenerator,
+} from './services/vendor-invoice.generator';
 import { InvoicePaymentLinkController } from './controllers/invoice-payment-link.controller';
 
 /**
@@ -90,6 +95,10 @@ import { InvoicePaymentLinkController } from './controllers/invoice-payment-link
     PurchasesReportService,
     GrossProfitReportService,
     EffectiveTaxTreatmentRegistry,
+    {
+      provide: GaplessNumberSequencer,
+      useFactory: () => new GaplessNumberSequencer(new PostgresSequencerStore()),
+    },
     VendorInvoiceGenerator,
   ],
   exports: [
@@ -98,6 +107,7 @@ import { InvoicePaymentLinkController } from './controllers/invoice-payment-link
     InvoicePaymentLinkService,
     InvoicePaymentLinkRepository,
     EffectiveTaxTreatmentRegistry,
+    GaplessNumberSequencer,
     VendorInvoiceGenerator,
   ],
 })
