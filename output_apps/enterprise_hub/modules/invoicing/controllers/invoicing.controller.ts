@@ -25,6 +25,7 @@ import {
 } from '../../tenants/tenant-context';
 import { CreateInvoiceDto } from '../dto/create-invoice.dto';
 import { InvoiceResponseDto } from '../dto/invoice-response.dto';
+import { PayInvoiceDto } from '../dto/pay-invoice.dto';
 import { QueryInvoiceDto } from '../dto/query-invoice.dto';
 import { UpdateInvoiceDto } from '../dto/update-invoice.dto';
 import { InvoicingService } from '../services/invoicing.service';
@@ -110,13 +111,15 @@ export class InvoicingController {
   @Patch(':id/pay')
   @ApiOperation({ summary: 'ثبت پرداخت صورتحساب' })
   @ApiResponse({ status: HttpStatus.OK, type: InvoiceResponseDto })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'کد حساب صندوق/بانک نامعتبر است' })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'صورتحساب یافت نشد' })
   @ApiResponse({ status: HttpStatus.CONFLICT, description: 'صورتحساب قبلاً پرداخت یا ابطال شده است' })
   async pay(
     @Req() request: AuthenticatedRequest,
     @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto?: PayInvoiceDto,
   ): Promise<InvoiceResponseDto> {
-    return this.invoicingService.pay(this.tenantIdOf(request), id);
+    return this.invoicingService.pay(this.tenantIdOf(request), id, dto);
   }
 
   @RequireAction(AccessAction.APPROVE)

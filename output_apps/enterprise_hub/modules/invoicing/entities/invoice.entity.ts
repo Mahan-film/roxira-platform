@@ -69,6 +69,8 @@ export interface InvoicePostingMeta {
     moved: 'IN' | 'OUT';
     warehouseId: number | null;
   }>;
+  /** Optional fund/cash/bank account code chosen by the user on PATCH invoicing/:id/pay. */
+  paymentFundAccountCode?: string;
   /**
    * مبالغ علامت‌دار سند (ریال × ۱۰۰، رشتهٔ عدد صحیح): مطالبه/بدهی، مالیات، خالص کالا و تغییر ارزش موجودی؛ ابطال
    * دقیقاً قرینهٔ همین مقادیر را ثبت می‌کند.

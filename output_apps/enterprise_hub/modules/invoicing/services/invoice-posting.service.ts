@@ -1,5 +1,6 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
+import { AccountType } from '../../accounting/enums/accounting.enum';
 import { fromDb, minorToDecimal, parseScaled, toMinor } from '../../accounting/money';
 import { decideRoleAccount } from '../../accounting/services/role-account-resolver';
 import { AccountingService } from '../../accounting/services/accounting.service';
@@ -175,10 +176,13 @@ export class InvoicePostingService {
         if (stockDocumentId !== null) {
           await manager.update('erp_stock_documents', { id: stockDocumentId, tenantId: locked.tenantId }, { journalEntryId: entry.entryId });
         }
+        const preservedMeta: InvoicePostingMeta = locked.postingMeta?.paymentFundAccountCode
+          ? { ...meta, paymentFundAccountCode: locked.postingMeta.paymentFundAccountCode }
+          : meta;
         await this.invoicingRepository.updatePosting(
           locked.tenantId,
           locked.id,
-          { journalEntryId: entry.entryId, postingError: null, postingMeta: meta },
+          { journalEntryId: entry.entryId, postingError: null, postingMeta: preservedMeta },
           manager,
         );
       }, invoice.tenantId);
@@ -217,7 +221,23 @@ export class InvoicePostingService {
 
     try {
       const plan = await this.resolveAccountMap(invoice, 'payment', false);
-      const overrides = await this.roleOverrides(invoice, 'settle', plan.codes);
+      const baseOverrides = await this.roleOverrides(invoice, 'settle', plan.codes);
+      const chosenFundCode =
+        event.fundAccountCode?.trim() ||
+        invoice.postingMeta?.paymentFundAccountCode?.trim() ||
+        undefined;
+      let overrides: RoleAccounts = baseOverrides;
+      if (chosenFundCode) {
+        const accounts = await this.accountingService.listAccounts(invoice.tenantId);
+        const fund = accounts.find((a) => a.code === chosenFundCode);
+        if (!fund) {
+          throw new Error(`Chosen fund account ${chosenFundCode} not found in chart of accounts.`);
+        }
+        if (fund.accountType !== AccountType.ASSET) {
+          throw new Error(`Chosen fund account ${chosenFundCode} is not an ASSET account.`);
+        }
+        overrides = { ...baseOverrides, cash: chosenFundCode };
+      }
       await this.invoicingRepository.transaction(async (manager) => {
         const locked = await this.invoicingRepository.findByIdForPosting(
           invoice!.tenantId,

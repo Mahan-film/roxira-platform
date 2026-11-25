@@ -177,4 +177,34 @@ describePg('role accounts on the fixture chart (PostgreSQL)', () => {
     expect(await balance('5201')).toBe(500);
     expect(await balance('2101')).toBe(-1600);
   });
+
+  it('paying with an explicit fundAccountCode posts settlement to that fund account instead of name-matched 1101 (#497 b)', async () => {
+    const sale = await make({
+      status: InvoiceStatus.DRAFT,
+      issuedAt: null,
+      totalAmount: 300,
+      totalTax: 0,
+      finalPayable: 300,
+      items: [{ description: 'خدمات مشاوره', quantity: 1, unitPrice: 300, discount: 0, vatRate: 0, tax: 0, total: 300 }] as never,
+      postingMeta: { stockValue: 0, lines: [], paymentFundAccountCode: '1102' },
+    });
+    const before1101 = await balance('1101');
+    const before1102 = await balance('1102');
+
+    // Direct DRAFT -> PAID: postIssued must preserve paymentFundAccountCode and postPaid must credit AR and debit 1102
+    await posting.postPaid({
+      tenantId: T,
+      invoiceId: sale.id,
+      status: InvoiceStatus.PAID,
+      fundAccountCode: '1102',
+    });
+
+    const refreshed = await invoicing.findById(T, sale.id);
+    expect(refreshed?.postingError).toBeNull();
+    expect(refreshed?.journalEntryId).not.toBeNull();
+    expect(refreshed?.paidJournalEntryId).not.toBeNull();
+    expect(refreshed?.postingMeta?.paymentFundAccountCode).toBe('1102');
+    expect(await balance('1101')).toBe(before1101);
+    expect(await balance('1102')).toBe(before1102 + 300);
+  });
 });
