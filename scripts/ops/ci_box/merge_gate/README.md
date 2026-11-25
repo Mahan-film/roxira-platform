@@ -11,9 +11,13 @@ A PR is squash-merged, with `sha=<head>` as guard, only when all of these hold o
 2. not a draft, base is `main`, no conflicts;
 3. every check in `required_checks` is success/skipped/neutral (missing or running = wait, failed = refuse);
 4. the latest `Cross-family review ... @ <sha>` comment (author id in `review_comment_author_ids`, else login in `review_comment_authors`) names this head
-   and has `Verdict: no blocker`, or an allowlisted human (numeric id in `approver_ids`) APPROVED this head;
+   and has `Verdict: no blocker`, or an allowlisted human (numeric id in `approver_ids`) APPROVED this head, or an id in
+   `approver_ids` / `owner_approver_ids` wrote a comment line `DESK-OVERRIDE #<PR> <head sha>: <reason>` for this exact
+   PR and head (it replaces only the review; protected paths, holds and checks still apply);
 5. no hold: no label in `block_labels` (`needs-human`, `do-not-merge`), no `[needs owner]` in the title, no unresolved
-   `BLOCKER:` comment from an allowlisted human id (cleared by a later `UNBLOCK:`);
+   `BLOCKER:` comment from an allowlisted human id (cleared by a later `UNBLOCK:`), and no unresolved `Verdict: blocker`
+   line in a comment from an id in `approver_ids` / `owner_approver_ids` posted after the head commit (cleared by a later
+   `UNBLOCK:` from those ids, or a later `OWNER-OK` / `DESK-OVERRIDE` for the exact head). Bot desk comments are rule 4;
 6. no file matches `protected_globs` (decision B7: migrations, payment, auth, Dockerfile.prod, deploy scripts,
    workflows, the gate itself), unless an owner comment line `OWNER-OK #<PR> <head sha7>` exists, written by an id in
    `owner_approver_ids` for this exact head. Without it the PR is class "owner sentence required": never merged, one
@@ -24,9 +28,14 @@ A PR is squash-merged, with `sha=<head>` as guard, only when all of these hold o
 
 Main CI guard: after a gate merge the gate waits for that commit's push CI run on main (`main_ci_workflow`) before the
 next merge. If it fails the gate pauses itself: it writes `<state_dir>/PAUSE`, sends one Telegram alert and merges
-nothing until `rm <state_dir>/PAUSE`. Review desk dispatch: a PR that passed every other rule but has no verdict for its
-head gets one `review-desk.yml` dispatch (once per head, one per tick, only when no desk run is queued or running;
-`dispatch_review_desk = false` turns it off). It is the only write done in dry-run.
+nothing until main is green again. Auto-resume (`auto_resume = true`, default): at the start of each tick, if the newest
+completed `ci.yml` push run on main is on the current main HEAD and succeeded, the gate deletes PAUSE and sends one
+Telegram notice (`merge gate resumed: main green at <sha7>`); never while `KILL` exists, and dry-run only logs.
+`rm <state_dir>/PAUSE` still resumes by hand. Review desk dispatch: a PR that passed every other rule, has every required
+check green on its head and has no desk verdict for that head gets a `review-desk.yml` dispatch (one per tick, only when
+no desk run is queued or running). If no verdict appears `desk_retry_minutes` (90) after a dispatch, the same head is
+dispatched again, at most `desk_max_dispatches_per_head` (2) times. `dispatch_review_desk = false` turns it off. It is
+the only write done in dry-run.
 
 One merge per tick (oldest PR number first). A comment is posted on the PR when it is merged, and when it is
 refused (once per head SHA and reason). Waiting states (checks running) are silent.
@@ -38,8 +47,9 @@ refused (once per head SHA and reason). Waiting states (checks running) are sile
 - Kill switch: `touch ~/.local/state/roxira-merge-gate/KILL` (remove to resume). Lock: `flock` on `lock` in the
   same dir, so overlapping ticks exit quietly. State: `state.json` (comment dedupe, dispatches, last merge), `state.dryrun.json` in dry-run (so go-live still
   posts the real comments).
-- Pause: `PAUSE` file in the state dir (written by the gate after a red main CI; remove it to resume). `KILL` stops
-  the gate and the direct-push alert; `PAUSE` stops only merges.
+- Pause: `PAUSE` file in the state dir (written by the gate after a red main CI; removed by the gate when main CI is
+  green on the main HEAD again, or remove it by hand). `KILL` stops the gate and the direct-push alert; `PAUSE` stops
+  only merges.
 - Go live at the flip: set `dry_run = false`, fill `approver_ids` / `owner_approver_ids`, and check that
   `required_checks` match the real names:
   `gh api repos/Mahan-film/roxira-platform/commits/<sha>/check-runs --jq '.check_runs[].name'`.
@@ -69,6 +79,10 @@ pointer is untouched; the first live run initialises it). Spec, comparison repor
 through the gate rules (read-only, GET only) and prints what would have been blocked and why. See the spec.
 
 ## Known limits
+- Auto-resume needs a `ci.yml` push run on the current main HEAD. If the newest push is docs-only (paths-ignored, no
+  run), the gate stays paused until the next code push to main turns green or someone removes `PAUSE`.
+- `protected_globs` in the live toml replaces the code default: the B1 core globs (decision 2026-11-25) only take effect
+  on the box once copied from `merge_gate.example.toml`.
 - `OWNER-OK` is tied to the head SHA (a later push voids it); there is no revoke command, push or add `do-not-merge`.
 - Only check-runs are read (not legacy commit statuses). Review comments from authors not in the allowlist are ignored.
 

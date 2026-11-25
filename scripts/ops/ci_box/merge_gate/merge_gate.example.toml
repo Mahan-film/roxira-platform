@@ -63,6 +63,11 @@ protected_globs = [
   "scripts/ci/merge_gate*.py",
   "src/ops/test_*merge_gate*.py",
   "docs/ops/MERGE_GATE_SPEC.md",
+  # B1 core is hub-only (decision 2026-11-25)
+  "**/country_packs/**",
+  "output_apps/enterprise_hub/modules/tax_compliance/**",
+  "output_apps/generated_modules/smartjudge/**",
+  "output_apps/nginx_config/**",
 ]
 
 # Only comments by these logins count as review-desk verdicts.
@@ -81,13 +86,24 @@ block_title_markers = ["[needs owner]"]
 require_up_to_date = false
 main_ci_workflow = "ci.yml"          # push-to-main run that must pass after each gate merge
 main_ci_grace_seconds = 300          # no run after this = paths-ignored push, counted as passed
+# Remove PAUSE by itself when the newest completed ci.yml push run on main is green AND is on the current main HEAD
+# (one Telegram notice "merge gate resumed: main green at <sha7>"). Never while KILL exists; dry-run only logs.
+auto_resume = true
 
-# Dispatch review-desk.yml for a PR that passed every other rule but has no verdict for its head (once per head,
-# one per tick, only when no desk run is queued or running). Acts even while dry_run = true.
+# Dispatch review-desk.yml for a PR that passed every other rule, has every required check green on its head and has
+# no desk verdict for that head (one per tick, only when no desk run is queued or running). If no verdict appears
+# desk_retry_minutes after a dispatch the head is dispatched again, at most desk_max_dispatches_per_head times.
+# Acts even while dry_run = true.
 dispatch_review_desk = true
 review_desk_workflow = "review-desk.yml"
+desk_retry_minutes = 90
+desk_max_dispatches_per_head = 2
 
 # Numeric GitHub user ids (gh api users/<login> --jq .id). Empty = feature off.
+# Ids in approver_ids | owner_approver_ids can also: hold a PR with a `BLOCKER:` comment or a `Verdict: blocker` line
+# posted after the head commit (cleared by a later `UNBLOCK:`, or a later OWNER-OK / DESK-OVERRIDE for the exact
+# head), and release the review rule for one exact head with a line `DESK-OVERRIDE #<PR> <head sha>: <reason>`
+# (no bypass of protected paths, holds or checks).
 approver_ids = []        # human APPROVE on the exact head counts as a review
 # Human owners whose `OWNER-OK #<PR> <sha7>` comment releases a protected-path PR. Must be accounts that no agent,
 # automation or box token can act as; empty = no protected PR is ever merged by the gate (fails closed).
