@@ -327,3 +327,17 @@ def test_answer_report_fails_when_zero_abstention_cases():
     assert rep["abstention_recall"] is None
     assert rep["thresholds"]["abstention_threshold_ok"] is False
 
+
+def test_build_parser_and_subcommand_help():
+    parser = lg.build_parser()
+    root_help = parser.format_help()
+    assert "retrieval" in root_help and "answer" in root_help
+    subparsers_actions = [a for a in parser._actions if hasattr(a, "choices") and isinstance(a.choices, dict)]
+    assert subparsers_actions
+    for name, sub in subparsers_actions[0].choices.items():
+        rendered = sub.format_help()
+        assert name in rendered
+    answer_help = subparsers_actions[0].choices["answer"].format_help()
+    assert "10%" in answer_help and "85%" in answer_help
+
+

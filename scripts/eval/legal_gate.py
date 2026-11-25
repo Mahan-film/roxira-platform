@@ -729,7 +729,7 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--max-latency-ms", type=float, default=45000.0)
     a.add_argument("--sleep", type=float, default=0.0)
     a.add_argument("--check-thresholds", action="store_true",
-                   help="enforce beta thresholds: hallucination_rate <= 10% and abstention_recall >= 85%")
+                   help="enforce beta thresholds: hallucination_rate <= 10%% and abstention_recall >= 85%%")
     a.set_defaults(fn=cmd_answer)
     c = sub.add_parser("compare", help="warn when retrieval@5 drops against a baseline")
     c.add_argument("--baseline", default=str(DEFAULT_BASELINE))
