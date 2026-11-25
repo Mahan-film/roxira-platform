@@ -29,6 +29,9 @@ from output_apps.generated_modules.smartjudge.key_rotation import (
     cooldown_for_status,
     env_slots,
 )
+from output_apps.generated_modules.smartjudge.persian_spoken_normaliser import (
+    normalize_persian_speech,
+)
 
 DEFAULT_VOICES = ("fa-IR-FaridNeural", "fa-IR-FaridNeural", "fa-IR-DilaraNeural")
 ATTEMPT_TIMEOUT_S = 20.0
@@ -38,9 +41,67 @@ AZURE_FORMAT = "audio-24khz-48kbitrate-mono-mp3"
 _REGION_RE = re.compile(r"^[a-z0-9]{2,32}$")
 _RATE_RE = re.compile(r"^[+-]\d{1,3}%$")
 
+LOCAL_TTS_ENABLED = os.environ.get("LOCAL_TTS_ENABLED", "0").lower() in ("1", "true", "yes")
+
 
 def _log(tag: str, msg: str) -> None:
     print(f"[SMARTJUDGE][{tag}] {msg}", file=sys.stderr)
+
+
+def local_sherpa_tts(text: str) -> Optional[bytes]:
+    """Local Persian speech synthesis via sherpa-onnx and MIT Piper voice (T251).
+
+    Licence: sherpa-onnx (Apache-2.0), Piper voice (MIT).
+    No GPL espeak-ng required when using tokens/lexicon.
+    Returns audio bytes or None if disabled, unavailable, or failed.
+    """
+    if not LOCAL_TTS_ENABLED:
+        return None
+    try:
+        import sherpa_onnx
+    except ImportError:
+        _log("TTS-SHERPA-IMPORT", "sherpa_onnx not installed")
+        return None
+
+    model_path = os.environ.get("SHERPA_TTS_MODEL", "models/sherpa-fa/model.onnx")
+    tokens_path = os.environ.get("SHERPA_TTS_TOKENS", "models/sherpa-fa/tokens.txt")
+    data_dir = os.environ.get("SHERPA_TTS_DATA_DIR", "")
+    if not (os.path.exists(model_path) and os.path.exists(tokens_path)):
+        _log("TTS-SHERPA-MODEL", f"missing model files: {model_path} or {tokens_path}")
+        return None
+
+    try:
+        config = sherpa_onnx.OfflineTtsConfig(
+            model=sherpa_onnx.OfflineTtsModelConfig(
+                vits=sherpa_onnx.OfflineTtsVitsModelConfig(
+                    model=model_path,
+                    tokens=tokens_path,
+                    data_dir=data_dir,
+                )
+            )
+        )
+        tts = sherpa_onnx.OfflineTts(config)
+        audio = tts.generate(text)
+        if not audio or len(audio.samples) == 0:
+            return None
+
+        import io
+        import struct
+        import wave
+
+        int16_samples = [max(-32768, min(32767, int(s * 32767))) for s in audio.samples]
+        raw_frames = struct.pack(f"<{len(int16_samples)}h", *int16_samples)
+
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(audio.sample_rate)
+            wf.writeframes(raw_frames)
+        return buf.getvalue()
+    except Exception as exc:
+        _log("TTS-SHERPA-EXC", f"{type(exc).__name__}: {exc}")
+        return None
 
 
 async def edge_mp3(text: str, voice: str, rate: str, timeout: float = ATTEMPT_TIMEOUT_S) -> bytes:
@@ -128,12 +189,21 @@ async def fallback_mp3(text: str, voice: str = DEFAULT_VOICES[0], rate: str = "+
 async def synthesize_mp3(
     text: str, voices: Sequence[str] = DEFAULT_VOICES, rate: str = "+22%"
 ) -> tuple[bytes, str]:
-    """MP3 for ``text``: edge-tts voices in order, then the Azure key slots. Never raises.
+    """MP3 for ``text``: local sherpa-onnx (if enabled), then edge-tts voices, then Azure key slots.
 
-    Returns ``(audio, provider)``; ``(b"", "")`` when every provider failed.
+    Never raises. Returns ``(audio, provider)``; ``(b"", "")`` when every provider failed.
     """
     if not text:
         return b"", ""
+    text = normalize_persian_speech(text)
+
+    # 1. Local permissive voice (sherpa-onnx + Piper) if enabled and available
+    if LOCAL_TTS_ENABLED:
+        local_audio = local_sherpa_tts(text)
+        if local_audio and len(local_audio) > MIN_AUDIO_BYTES:
+            return local_audio, "sherpa-onnx"
+
+    # 2. edge-tts fallback chain
     for voice in voices:
         try:
             audio = await edge_mp3(text, voice, rate)
