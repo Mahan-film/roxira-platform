@@ -19,9 +19,9 @@ lanes:
     enabled: true
     models: [pool/agent-strong-free, pool/agent-light-free, executor]
     timeout_secs: 900
-  # Claude Code headless sessions (owner's subscription). Hard issues and lane overflow.
+  # Claude Code headless sessions (owner's subscription). Disabled: Antigravity lanes replaced headless Claude.
   claude:
-    enabled: true
+    enabled: false
     model: sonnet
     max_turns: 40
     timeout_secs: 1500
@@ -48,10 +48,8 @@ routing:
 review:
   # Reviewer must be a different vendor family than the author (scripts/dev/check_reviewer_family.py).
   # Key-pool groups are tried in order through scripts/dev/llm_pool.py (direct provider calls);
-  # a deployment of the author's own family is skipped. Last resort: the Claude CLI (when the author
-  # was not Claude).
+  # a deployment of the author's own family is skipped.
   groups: [agent-strong-free, agent-light-free, agent-free-paid]
-  claude_model: haiku
   max_diff_chars: 18000   # free tiers cap tokens/minute (Groq 8k TPM): larger diffs are cut
   max_repairs: 1
 
