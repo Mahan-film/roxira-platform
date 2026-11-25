@@ -313,6 +313,7 @@ def test_autodeploy_proceeds_when_ci_gate_green(auto_env: dict) -> None:
                 {"name": "Secret scan (new commits only)", "status": "completed", "conclusion": "success"},
                 {"name": "Pytest (unit)", "status": "completed", "conclusion": "success"},
                 {"name": "Frontend gate", "status": "completed", "conclusion": "success"},
+                {"name": "Backend (tsc + jest + Postgres specs)", "status": "completed", "conclusion": "success"},
                 {"name": "Undefined names", "status": "completed", "conclusion": "success"},
                 {"name": "System inventory up to date", "status": "completed", "conclusion": "success"},
             ]
