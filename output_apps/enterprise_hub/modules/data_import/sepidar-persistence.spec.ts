@@ -6,6 +6,9 @@ import { AccountType } from '../accounting/enums/accounting.enum';
 import { ChartOfAccountEntity } from '../accounting/entities/chart-of-account.entity';
 import { JournalEntryEntity } from '../accounting/entities/journal-entry.entity';
 import { JournalEntryLineEntity } from '../accounting/entities/journal-entry-line.entity';
+import { PeriodLockedException } from '../accounting/exceptions/ledger.exceptions';
+import { JournalLineInput } from '../accounting/repositories/accounting.repository';
+import { AccountingService } from '../accounting/services/accounting.service';
 import { minorToDecimal, parseMinor } from '../accounting/money';
 import { ChequeEventEntity } from '../cheques/entities/cheque-event.entity';
 import { ChequeEntity } from '../cheques/entities/cheque.entity';
@@ -60,6 +63,7 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
   let idempotencyStore: ImportMappingMemoryEntity[];
 
   let mockTenantScope: Partial<TenantScope>;
+  let lockedDates: Set<string>;
 
   function buildEm(
     accounts: ChartOfAccountEntity[],
@@ -231,13 +235,95 @@ describe('Sepidar Data Persistence & Reconciliation Certificate (T88 / #774)', (
 
     mappingAdapter = new SepidarMappingAdapter();
     chequesAdapter = new SepidarChequesFifoAdapter();
+    lockedDates = new Set<string>();
     const chequesRepo = new ChequesRepository(mockTenantScope as TenantScope);
+    const mockAccountingService = {
+      persistImportedOpeningEntry: jest.fn(
+        async (
+          tId: string,
+          header: {
+            entryNumber: string;
+            date: Date;
+            description: string;
+            status: any;
+            entryType?: any;
+            idempotencyKey?: string | null;
+            idempotencyFingerprint?: string | null;
+          },
+          lineInputs: JournalLineInput[],
+          em: EntityManager,
+        ) => {
+          const iso = header.date.toISOString().slice(0, 10);
+          if (lockedDates.has(iso)) {
+            throw new PeriodLockedException(
+              `ثبت سند در دورهٔ قفل‌شده مجاز نیست: تاریخ ${iso} در دوره یا سال مالی بسته قرار دارد.`,
+            );
+          }
+          const entryRepo = em.getRepository(JournalEntryEntity);
+          const lineRepo = em.getRepository(JournalEntryLineEntity);
+          const savedEntry = await entryRepo.save(
+            entryRepo.create({
+              tenantId: tId,
+              entryNumber: header.entryNumber,
+              date: header.date,
+              description: header.description,
+              status: header.status,
+              entryType: header.entryType,
+              idempotencyKey: header.idempotencyKey ?? null,
+              idempotencyFingerprint: header.idempotencyFingerprint ?? null,
+            }),
+          );
+          const deltaByAccount = new Map<number, bigint>();
+          for (const l of lineInputs) {
+            await lineRepo.save(
+              lineRepo.create({
+                tenantId: tId,
+                journalEntryId: savedEntry.id,
+                accountId: l.accountId,
+                debit: minorToDecimal(l.debitMinor),
+                credit: minorToDecimal(l.creditMinor),
+                currency: l.currency ?? 'IRR',
+                partyCode: l.partyCode ?? null,
+                description: l.description ?? null,
+              }),
+            );
+            deltaByAccount.set(
+              l.accountId,
+              (deltaByAccount.get(l.accountId) ?? 0n) + l.debitMinor - l.creditMinor,
+            );
+          }
+          for (const [accountId, delta] of Array.from(deltaByAccount.entries()).sort(
+            ([a], [b]) => a - b,
+          )) {
+            await em.query(
+              `UPDATE "fin_chart_of_accounts" SET "balance" = "balance" + $1::numeric WHERE "id" = $2 AND "tenant_id" = $3 RETURNING "id"`,
+              [minorToDecimal(delta), accountId, tId],
+            );
+          }
+          return savedEntry;
+        },
+      ),
+    } as unknown as AccountingService;
     service = new SepidarPersistenceService(
       mappingAdapter,
       chequesAdapter,
       mockTenantScope as TenantScope,
       chequesRepo,
+      mockAccountingService,
     );
+  });
+
+  it('rejects opening voucher inside a locked period with PeriodLockedException and leaves zero rows committed', async () => {
+    lockedDates.add('2026-03-21');
+    await expect(
+      service.persistSepidarData(tenantId, {
+        useSynthetic: true,
+        openingDate: '2026-03-21',
+      }),
+    ).rejects.toBeInstanceOf(PeriodLockedException);
+    expect(accountsStore).toHaveLength(0);
+    expect(entriesStore).toHaveLength(0);
+    expect(linesStore).toHaveLength(0);
   });
 
   describe('End-to-End Sepidar Data Persistence', () => {

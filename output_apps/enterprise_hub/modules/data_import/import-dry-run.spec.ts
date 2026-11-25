@@ -14,6 +14,12 @@ import { AccessService } from '../access/services/access.service';
 import { LoginWindowService } from '../access/services/login-window.service';
 import { TenantScope } from '../access/services/tenant-scope';
 import { AccountLevel, AccountType } from '../accounting/enums/accounting.enum';
+import { JournalEntryEntity } from '../accounting/entities/journal-entry.entity';
+import { JournalEntryLineEntity } from '../accounting/entities/journal-entry-line.entity';
+import { PeriodLockedException } from '../accounting/exceptions/ledger.exceptions';
+import { minorToDecimal } from '../accounting/money';
+import { JournalLineInput } from '../accounting/repositories/accounting.repository';
+import { AccountingService } from '../accounting/services/accounting.service';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AccessStub } from '../../test/support/access-stub';
 import { ImportDryRunController } from './controllers/import-dry-run.controller';
@@ -161,10 +167,58 @@ function createMockTenantScope(initial?: Partial<MockDbState>): {
   return { scope, state: committed, wasRolledBack: () => rolledBack, getLastTxState: () => lastTxState };
 }
 
+function createMockAccountingService(lockedDates: Set<string> = new Set()): AccountingService {
+  return {
+    persistImportedOpeningEntry: jest.fn(
+      async (
+        tId: string,
+        header: { entryNumber: string; date: Date; description: string; status: any; entryType?: any },
+        lineInputs: JournalLineInput[],
+        em: EntityManager,
+      ) => {
+        const iso = header.date.toISOString().slice(0, 10);
+        if (lockedDates.has(iso)) {
+          throw new PeriodLockedException(
+            `ثبت سند در دورهٔ قفل‌شده مجاز نیست: تاریخ ${iso} در دوره یا سال مالی بسته قرار دارد.`,
+          );
+        }
+        const entryRepo = em.getRepository(JournalEntryEntity);
+        const lineRepo = em.getRepository(JournalEntryLineEntity);
+        const savedEntry = await entryRepo.save(
+          entryRepo.create({
+            tenantId: tId,
+            entryNumber: header.entryNumber,
+            date: header.date,
+            description: header.description,
+            status: header.status,
+            entryType: header.entryType,
+          }),
+        );
+        const lines = lineInputs.map((l) =>
+          lineRepo.create({
+            tenantId: tId,
+            journalEntryId: savedEntry.id,
+            accountId: l.accountId,
+            debit: minorToDecimal(l.debitMinor),
+            credit: minorToDecimal(l.creditMinor),
+            currency: l.currency ?? 'IRR',
+            partyCode: l.partyCode ?? null,
+            description: l.description ?? null,
+          }),
+        );
+        if (lines.length > 0) {
+          await lineRepo.save(lines);
+        }
+        return savedEntry;
+      },
+    ),
+  } as unknown as AccountingService;
+}
+
 describe('ImportDryRunService & ImportDryRunController (T100)', () => {
   it('runs Sepidar synthetic dry-run inside a transaction, rolls back, and returns complete report', async () => {
     const { scope, state, wasRolledBack } = createMockTenantScope();
-    const service = new ImportDryRunService(new SepidarMappingAdapter(), scope);
+    const service = new ImportDryRunService(new SepidarMappingAdapter(), scope, createMockAccountingService());
 
     const report = await service.dryRunSepidar(TENANT_ID, { useSynthetic: true });
 
@@ -202,7 +256,7 @@ describe('ImportDryRunService & ImportDryRunController (T100)', () => {
 
   it('runs Holoo synthetic dry-run inside a transaction, rolls back, and returns complete report', async () => {
     const { scope, state, wasRolledBack } = createMockTenantScope();
-    const service = new ImportDryRunService(new SepidarMappingAdapter(), scope);
+    const service = new ImportDryRunService(new SepidarMappingAdapter(), scope, createMockAccountingService());
 
     const report = await service.dryRunHoloo(TENANT_ID, { useSynthetic: true });
 
@@ -225,7 +279,7 @@ describe('ImportDryRunService & ImportDryRunController (T100)', () => {
 
   it('fails closed when useSynthetic is omitted/false with empty payload, in production, or on invalid calendar date', async () => {
     const { scope } = createMockTenantScope();
-    const service = new ImportDryRunService(new SepidarMappingAdapter(), scope);
+    const service = new ImportDryRunService(new SepidarMappingAdapter(), scope, createMockAccountingService());
 
     await expect(service.dryRunSepidar(TENANT_ID, {})).rejects.toThrow(BadRequestException);
     await expect(service.dryRunHoloo(TENANT_ID, {})).rejects.toThrow(BadRequestException);
@@ -266,7 +320,7 @@ describe('ImportDryRunService & ImportDryRunController (T100)', () => {
         },
       ],
     });
-    const service = new ImportDryRunService(new SepidarMappingAdapter(), scope);
+    const service = new ImportDryRunService(new SepidarMappingAdapter(), scope, createMockAccountingService());
 
     const report = await service.dryRunHoloo(TENANT_ID, {
       accounts: [
@@ -354,7 +408,7 @@ describe('ImportDryRunService & ImportDryRunController (T100)', () => {
 
   it('allows explicit AccountType override instead of hardcoded prefix inference', async () => {
     const { scope, state, wasRolledBack, getLastTxState } = createMockTenantScope();
-    const service = new ImportDryRunService(new SepidarMappingAdapter(), scope);
+    const service = new ImportDryRunService(new SepidarMappingAdapter(), scope, createMockAccountingService());
 
     const report = await service.dryRunSepidar(TENANT_ID, {
       useSynthetic: false,
@@ -384,7 +438,7 @@ describe('ImportDryRunService & ImportDryRunController (T100)', () => {
     delete process.env.ALLOW_SYNTHETIC_IMPORT_DRY_RUN;
     try {
       const { scope } = createMockTenantScope();
-      const service = new ImportDryRunService(new SepidarMappingAdapter(), scope);
+      const service = new ImportDryRunService(new SepidarMappingAdapter(), scope, createMockAccountingService());
       await expect(service.dryRunSepidar(TENANT_ID, { useSynthetic: true })).rejects.toThrow(
         BadRequestException,
       );
