@@ -26,6 +26,9 @@ import { PackageOcrService } from './services/package-ocr.service';
 import { PackageReconciliationService } from './services/package-reconciliation.service';
 import { DataImportBatchItemEntity } from './entities/data-import-batch-item.entity';
 import { DataImportBatchEntity } from './entities/data-import-batch.entity';
+import { CutoverEntity } from './entities/cutover.entity';
+import { CutoverRepository } from './repositories/cutover.repository';
+import { CutoverWizardService } from './services/cutover-wizard.service';
 import { PackageImportProcessor } from './processors/package-import.processor';
 import { AccountingAccountsRegistry } from './registry/accounting-accounts.registry';
 import { AccountingJournalLinesRegistry } from './registry/accounting-journal-lines.registry';
@@ -104,6 +107,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
       DataImportBatchEntity,
       DataImportBatchItemEntity,
       ImportMappingMemoryEntity,
+      CutoverEntity,
     ]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -134,6 +138,8 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     PackageAnalysisService,
     EffectiveTieOutConfigRegistry,
     ImportTieOutEngine,
+    CutoverRepository,
+    CutoverWizardService,
     PackageCommitService,
     PackageImportService,
     PackageImportProcessor,
@@ -227,6 +233,8 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     SepidarPersistenceService,
     EffectiveTieOutConfigRegistry,
     ImportTieOutEngine,
+    CutoverRepository,
+    CutoverWizardService,
   ],
 })
 export class DataImportModule {}

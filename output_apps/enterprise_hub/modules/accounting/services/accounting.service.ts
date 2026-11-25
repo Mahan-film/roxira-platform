@@ -1480,6 +1480,7 @@ export class AccountingService {
     tenantId: string,
     actor: string,
     dto: LockPeriodDto,
+    manager?: EntityManager,
   ): Promise<PeriodLockResponseDto> {
     assertNotAiIdentity(actor, 'lock an accounting period');
     const valid = (day: string): boolean =>
@@ -1490,21 +1491,28 @@ export class AccountingService {
     if (dto.periodStart > dto.periodEnd) {
       throw new BadRequestException('periodStart must not be after periodEnd.');
     }
-    const created = await this.accountingRepository.createPeriodLock(tenantId, {
-      periodStart: dto.periodStart,
-      periodEnd: dto.periodEnd,
-      reason: dto.reason?.trim() || null,
-      lockedBy: actor,
-    });
-    await this.ledgerAudit?.record({
-      kind: 'period.locked',
+    const created = await this.accountingRepository.createPeriodLock(
       tenantId,
-      actor,
-      lockId: created.id,
-      periodStart: dto.periodStart,
-      periodEnd: dto.periodEnd,
-      reason: created.reason,
-    });
+      {
+        periodStart: dto.periodStart,
+        periodEnd: dto.periodEnd,
+        reason: dto.reason?.trim() || null,
+        lockedBy: actor,
+      },
+      manager,
+    );
+    await this.ledgerAudit?.record(
+      {
+        kind: 'period.locked',
+        tenantId,
+        actor,
+        lockId: created.id,
+        periodStart: dto.periodStart,
+        periodEnd: dto.periodEnd,
+        reason: created.reason,
+      },
+      manager,
+    );
     return this.toLockDto(created);
   }
 
