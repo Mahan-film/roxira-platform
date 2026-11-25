@@ -94,6 +94,7 @@ export function toQuotationResponse(
     quoteDate: quotation.quoteDate,
     validUntil: quotation.validUntil ?? null,
     status: quotation.status,
+    convertedInvoiceId: quotation.convertedInvoiceId ?? null,
     note: quotation.note ?? null,
     totalAmount: fromMinor(fromDb(quotation.totalAmount)),
     createdBy: quotation.createdBy ?? null,
