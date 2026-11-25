@@ -15,6 +15,11 @@ import { AccountType } from '../accounting/enums/accounting.enum';
 import { ChartOfAccountEntity } from '../accounting/entities/chart-of-account.entity';
 import { JournalEntryEntity } from '../accounting/entities/journal-entry.entity';
 import { JournalEntryLineEntity } from '../accounting/entities/journal-entry-line.entity';
+import { PeriodLockEntity } from '../accounting/entities/period-lock.entity';
+import { PeriodLockedException } from '../accounting/exceptions/ledger.exceptions';
+import { AccountingRepository } from '../accounting/repositories/accounting.repository';
+import { AccountingService } from '../accounting/services/accounting.service';
+import { CurrencyService } from '../currency/services/currency.service';
 import { ChequeEventEntity } from '../cheques/entities/cheque-event.entity';
 import { ChequeEntity } from '../cheques/entities/cheque.entity';
 import { ChequesRepository } from '../cheques/repositories/cheques.repository';
@@ -38,6 +43,7 @@ const PORT = process.env.ROXIRA_TEST_PG_PORT ? Number(process.env.ROXIRA_TEST_PG
 const TENANT_A = '11111111-1111-4111-8111-111111111111';
 const TENANT_B = '22222222-2222-4222-8222-222222222222';
 const TENANT_C = '33333333-3333-4333-8333-333333333333';
+const TENANT_LOCKED = '44444444-4444-4444-8444-444444444444';
 
 const baseOptions = (database: string, username: string) => ({
   type: 'postgres' as const,
@@ -86,7 +92,7 @@ describePg('Sepidar Data Persistence on PostgreSQL (NOSUPERUSER NOBYPASSRLS)', (
     await ownerDs.initialize();
     await ownerDs.runMigrations();
 
-    for (const tid of [TENANT_A, TENANT_B, TENANT_C]) {
+    for (const tid of [TENANT_A, TENANT_B, TENANT_C, TENANT_LOCKED]) {
       await ownerDs.query(
         `INSERT INTO tenants (id, name, slug) VALUES ($1, $2, $2) ON CONFLICT DO NOTHING`,
         [tid, `sep-${tid.slice(0, 8)}`],
@@ -105,11 +111,16 @@ describePg('Sepidar Data Persistence on PostgreSQL (NOSUPERUSER NOBYPASSRLS)', (
     appDs = new DataSource(baseOptions(dbName, appRole));
     await appDs.initialize();
     scope = new TenantScope(appDs);
+    const accountingService = new AccountingService(
+      new AccountingRepository(scope),
+      {} as CurrencyService,
+    );
     service = new SepidarPersistenceService(
       new SepidarMappingAdapter(),
       new SepidarChequesFifoAdapter(),
       scope,
       new ChequesRepository(scope),
+      accountingService,
     );
   }, 180_000);
 
@@ -266,5 +277,40 @@ describePg('Sepidar Data Persistence on PostgreSQL (NOSUPERUSER NOBYPASSRLS)', (
         'pg-idem-1',
       ),
     ).rejects.toThrow(ConflictException);
+  });
+
+  it('rejects Sepidar import into a locked period with PeriodLockedException (423) and rolls back atomically', async () => {
+    await scope.run(TENANT_LOCKED, async (em) => {
+      await em.getRepository(PeriodLockEntity).save(
+        em.getRepository(PeriodLockEntity).create({
+          tenantId: TENANT_LOCKED,
+          periodStart: '2026-03-01',
+          periodEnd: '2026-03-31',
+          lockedBy: 'auditor-user',
+          reason: 'Closed fiscal period',
+        }),
+      );
+    });
+
+    await expect(
+      service.persistSepidarData(
+        TENANT_LOCKED,
+        {
+          useSynthetic: true,
+          openingDate: '2026-03-21',
+        },
+        'pg-locked-period-1',
+      ),
+    ).rejects.toBeInstanceOf(PeriodLockedException);
+
+    // Atomic rollback: zero accounts, parties, items, journal entries, lines, or cheques committed
+    await scope.run(TENANT_LOCKED, async (em) => {
+      expect(await em.getRepository(ChartOfAccountEntity).count({ where: { tenantId: TENANT_LOCKED } })).toBe(0);
+      expect(await em.getRepository(PartyEntity).count({ where: { tenantId: TENANT_LOCKED } })).toBe(0);
+      expect(await em.getRepository(StockItemEntity).count({ where: { tenantId: TENANT_LOCKED } })).toBe(0);
+      expect(await em.getRepository(JournalEntryEntity).count({ where: { tenantId: TENANT_LOCKED } })).toBe(0);
+      expect(await em.getRepository(JournalEntryLineEntity).count({ where: { tenantId: TENANT_LOCKED } })).toBe(0);
+      expect(await em.getRepository(ChequeEntity).count({ where: { tenantId: TENANT_LOCKED } })).toBe(0);
+    });
   });
 });

@@ -18,6 +18,8 @@ import { ChartOfAccountEntity } from '../../accounting/entities/chart-of-account
 import { CHART_TEMPLATES } from '../../accounting/constants/iran-chart-template';
 import { JournalEntryEntity } from '../../accounting/entities/journal-entry.entity';
 import { JournalEntryLineEntity } from '../../accounting/entities/journal-entry-line.entity';
+import { JournalLineInput } from '../../accounting/repositories/accounting.repository';
+import { AccountingService } from '../../accounting/services/accounting.service';
 import { ChequeEntity } from '../../cheques/entities/cheque.entity';
 import { ChequeStatus } from '../../cheques/enums/cheque.enum';
 import { ChequesRepository } from '../../cheques/repositories/cheques.repository';
@@ -213,6 +215,7 @@ export class SepidarPersistenceService {
     private readonly chequesAdapter: SepidarChequesFifoAdapter,
     private readonly tenantScope: TenantScope,
     private readonly chequesRepository: ChequesRepository,
+    private readonly accountingService: AccountingService,
   ) {}
 
   async persistSepidarData(
@@ -953,55 +956,32 @@ export class SepidarPersistenceService {
       }
     }
 
-    const entry = entryRepo.create({
-      tenantId,
-      entryNumber: OPENING_ENTRY_NUMBER,
-      date: openingDate,
-      description: 'سند افتتاحیه انتقال از سپیدار سیستم',
-      status: JournalEntryStatus.POSTED,
-      entryType: JournalEntryType.NORMAL,
-      idempotencyKey: idempotencyKey ?? null,
-      idempotencyFingerprint: requestFingerprint,
-    });
-    const savedEntry = await entryRepo.save(entry);
-
-    const deltaByAccount = new Map<number, bigint>();
-    for (const l of lines) {
+    const lineInputs: JournalLineInput[] = lines.map((l) => {
       const acc = accountByCode.get(l.accountCode)!;
-      const journalLine = lineRepo.create({
-        tenantId,
-        journalEntryId: savedEntry.id,
+      return {
         accountId: acc.id,
-        debit: minorToDecimal(l.debitMinor),
-        credit: minorToDecimal(l.creditMinor),
+        debitMinor: l.debitMinor,
+        creditMinor: l.creditMinor,
         currency: 'IRR',
         partyCode: l.floatingDetailCode ?? null,
         description: l.description ?? 'مانده اول دوره سپیدار',
-      });
-      await lineRepo.save(journalLine);
+      };
+    });
 
-      deltaByAccount.set(
-        acc.id,
-        (deltaByAccount.get(acc.id) ?? 0n) + l.debitMinor - l.creditMinor,
-      );
-    }
-
-    // Atomic SQL balance deltas in ascending accountId order to prevent deadlocks and lost updates
-    const sortedAccountIds = Array.from(deltaByAccount.keys()).sort((a, b) => a - b);
-    for (const accountId of sortedAccountIds) {
-      const delta = deltaByAccount.get(accountId)!;
-      const result: unknown[] = await em.query(
-        `UPDATE "fin_chart_of_accounts" SET "balance" = "balance" + $1::numeric
-          WHERE "id" = $2 AND "tenant_id" = $3 RETURNING "id"`,
-        [minorToDecimal(delta), accountId, tenantId],
-      );
-      const updated = Array.isArray(result[0]) ? result[0] : result;
-      if (updated.length !== 1) {
-        throw new BadRequestException(
-          `Account ${accountId} not found for tenant while updating opening balance.`,
-        );
-      }
-    }
+    await this.accountingService.persistImportedOpeningEntry(
+      tenantId,
+      {
+        entryNumber: OPENING_ENTRY_NUMBER,
+        date: openingDate,
+        description: 'سند افتتاحیه انتقال از سپیدار سیستم',
+        status: JournalEntryStatus.POSTED,
+        entryType: JournalEntryType.NORMAL,
+        idempotencyKey: idempotencyKey ?? null,
+        idempotencyFingerprint: requestFingerprint,
+      },
+      lineInputs,
+      em,
+    );
 
     return { created: true };
   }

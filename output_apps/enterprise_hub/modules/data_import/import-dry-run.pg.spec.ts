@@ -13,7 +13,11 @@ import { TenantScope } from '../access/services/tenant-scope';
 import { ChartOfAccountEntity } from '../accounting/entities/chart-of-account.entity';
 import { JournalEntryLineEntity } from '../accounting/entities/journal-entry-line.entity';
 import { JournalEntryEntity } from '../accounting/entities/journal-entry.entity';
+import { PeriodLockEntity } from '../accounting/entities/period-lock.entity';
 import { AccountLevel, AccountType } from '../accounting/enums/accounting.enum';
+import { AccountingRepository } from '../accounting/repositories/accounting.repository';
+import { AccountingService } from '../accounting/services/accounting.service';
+import { CurrencyService } from '../currency/services/currency.service';
 import { ChequeEventEntity } from '../cheques/entities/cheque-event.entity';
 import { ChequeEntity } from '../cheques/entities/cheque.entity';
 import { ChequeDirection, ChequeStatus } from '../cheques/enums/cheque.enum';
@@ -111,7 +115,11 @@ describePg('Import Dry-Run on PostgreSQL (NOSUPERUSER NOBYPASSRLS)', () => {
     appDs = new DataSource(baseOptions(dbName, appRole));
     await appDs.initialize();
     scope = new TenantScope(appDs);
-    service = new ImportDryRunService(new SepidarMappingAdapter(), scope);
+    const accountingService = new AccountingService(
+      new AccountingRepository(scope),
+      {} as CurrencyService,
+    );
+    service = new ImportDryRunService(new SepidarMappingAdapter(), scope, accountingService);
   }, 180_000);
 
   afterAll(async () => {
@@ -290,6 +298,40 @@ describePg('Import Dry-Run on PostgreSQL (NOSUPERUSER NOBYPASSRLS)', () => {
     });
     expect(reportB.counts.accounts.existingSkipped).toBe(0);
     expect(reportB.duplicateParties).toHaveLength(0);
+    expect(await countTenantRows(TENANT_B)).toEqual({
+      accounts: 0,
+      parties: 0,
+      items: 0,
+      entries: 0,
+      lines: 0,
+      cheques: 0,
+      chequeEvents: 0,
+    });
+  });
+
+  it('reports period-lock blocker and rolls back when dry-run openingDate is inside a locked period', async () => {
+    await scope.run(TENANT_B, async (em) => {
+      await em.getRepository(PeriodLockEntity).save(
+        em.getRepository(PeriodLockEntity).create({
+          tenantId: TENANT_B,
+          periodStart: '2026-03-01',
+          periodEnd: '2026-03-31',
+          lockedBy: 'auditor-user',
+          reason: 'Locked period for dry-run check',
+        }),
+      );
+    });
+
+    const report = await service.dryRunSepidar(TENANT_B, {
+      useSynthetic: true,
+      openingDate: '2026-03-21',
+    });
+
+    expect(report.dryRun).toBe(true);
+    expect(report.rolledBack).toBe(true);
+    expect(report.readyToCommit).toBe(false);
+    expect(report.openingTrialBalance.persistedInTx).toBe(false);
+    expect(report.blockersFa.some((msg) => msg.includes('دورهٔ قفل‌شده'))).toBe(true);
     expect(await countTenantRows(TENANT_B)).toEqual({
       accounts: 0,
       parties: 0,

@@ -26,10 +26,50 @@ const RAW_WRITE_ALLOWED = new Set([
 const PATTERNS: Array<{ name: string; regex: RegExp; allowed: Set<string> }> = [
   { name: 'persistJournalEntry(', regex: /persistJournalEntry\s*\(/, allowed: PERSIST_ALLOWED },
   { name: 'INSERT INTO fin_journal_entries', regex: /INSERT\s+INTO\s+fin_journal_entries/i, allowed: RAW_WRITE_ALLOWED },
-  { name: '.into(JournalEntryEntity)', regex: /\.into\(JournalEntryEntity\)/, allowed: RAW_WRITE_ALLOWED },
+  { name: 'UPDATE fin_journal_entries', regex: /UPDATE\s+"?fin_journal_entries"?\b/i, allowed: RAW_WRITE_ALLOWED },
+  { name: 'DELETE FROM fin_journal_entries', regex: /DELETE\s+FROM\s+"?fin_journal_entries"?\b/i, allowed: RAW_WRITE_ALLOWED },
+  { name: '.into(JournalEntryEntity)', regex: /\.into\(\s*JournalEntryEntity\s*\)/, allowed: RAW_WRITE_ALLOWED },
+  { name: '.update(JournalEntryEntity)', regex: /\.update\(\s*JournalEntryEntity\b/, allowed: RAW_WRITE_ALLOWED },
+  { name: '.delete(JournalEntryEntity)', regex: /\.delete\(\s*JournalEntryEntity\b/, allowed: RAW_WRITE_ALLOWED },
   { name: 'INSERT INTO fin_journal_entry_lines', regex: /INSERT\s+INTO\s+fin_journal_entry_lines/i, allowed: RAW_WRITE_ALLOWED },
-  { name: '.into(JournalEntryLineEntity)', regex: /\.into\(JournalEntryLineEntity\)/, allowed: RAW_WRITE_ALLOWED },
+  { name: 'UPDATE fin_journal_entry_lines', regex: /UPDATE\s+"?fin_journal_entry_lines"?\b/i, allowed: RAW_WRITE_ALLOWED },
+  { name: 'DELETE FROM fin_journal_entry_lines', regex: /DELETE\s+FROM\s+"?fin_journal_entry_lines"?\b/i, allowed: RAW_WRITE_ALLOWED },
+  { name: '.into(JournalEntryLineEntity)', regex: /\.into\(\s*JournalEntryLineEntity\s*\)/, allowed: RAW_WRITE_ALLOWED },
+  { name: '.update(JournalEntryLineEntity)', regex: /\.update\(\s*JournalEntryLineEntity\b/, allowed: RAW_WRITE_ALLOWED },
+  { name: '.delete(JournalEntryLineEntity)', regex: /\.delete\(\s*JournalEntryLineEntity\b/, allowed: RAW_WRITE_ALLOWED },
+  {
+    name: 'EntityManager write on JournalEntry(Line)Entity',
+    regex: /\.(?:save|insert|upsert|create)\s*\(\s*JournalEntry(?:Line)?Entity\b/,
+    allowed: RAW_WRITE_ALLOWED,
+  },
+  {
+    name: 'chained getRepository(JournalEntry(Line)Entity) write',
+    regex: /\.getRepository\s*\(\s*JournalEntry(?:Line)?Entity\s*\)\s*\.\s*(?:save|insert|upsert|create|update|delete)\s*\(/,
+    allowed: RAW_WRITE_ALLOWED,
+  },
 ];
+
+/**
+ * Finds local variables or injected properties bound to a TypeORM repository for
+ * `JournalEntryEntity` or `JournalEntryLineEntity` that invoke a write method
+ * (`save`, `insert`, `upsert`, `create`, `update`, `delete`).
+ */
+const findRepoWriteOffenders = (source: string): string[] => {
+  const hits: string[] = [];
+  const varRegex = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*[^;\n]*\.getRepository\s*\(\s*JournalEntry(?:Line)?Entity\s*\)/g;
+  const propRegex = /@InjectRepository\s*\(\s*JournalEntry(?:Line)?Entity\s*\)\s*(?:private|protected|public)?\s*(?:readonly\s+)?([A-Za-z_$][\w$]*)/g;
+  const names = new Set<string>();
+  for (const m of source.matchAll(varRegex)) names.add(m[1]);
+  for (const m of source.matchAll(propRegex)) names.add(m[1]);
+  for (const name of names) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const writeRe = new RegExp(`\\b${escaped}\\s*\\.\\s*(?:save|insert|upsert|create|update|delete)\\s*\\(`);
+    if (writeRe.test(source)) {
+      hits.push(name);
+    }
+  }
+  return hits;
+};
 
 /** Relative posix paths of every non-spec TypeScript file under modules/. */
 const collectSourceFiles = (dir: string, base: string, acc: string[] = []): string[] => {
@@ -61,4 +101,11 @@ describe('ledger write paths (static guard)', () => {
       expect(offenders).toEqual([]);
     });
   }
+
+  it(`keeps TypeORM repository writes to JournalEntry(Line)Entity inside: ${[...RAW_WRITE_ALLOWED].join(' + ')}`, () => {
+    const offenders = files
+      .filter((file) => !RAW_WRITE_ALLOWED.has(file))
+      .filter((file) => findRepoWriteOffenders(fs.readFileSync(path.join(MODULES_DIR, file), 'utf8')).length > 0);
+    expect(offenders).toEqual([]);
+  });
 });

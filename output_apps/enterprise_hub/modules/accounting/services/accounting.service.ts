@@ -712,6 +712,51 @@ export class AccountingService {
     return this.postEntry(tenantId, dto, { entryType }, manager);
   }
 
+  /**
+   * Persists an imported opening voucher inside an existing transaction (`manager`),
+   * routing through `AccountingRepository.persistJournalEntry` so the shared ledger
+   * advisory lock, period-lock / closed-fiscal-year assert, and atomic balance updates
+   * cannot be bypassed.
+   */
+  async persistImportedOpeningEntry(
+    tenantId: string,
+    header: {
+      entryNumber: string;
+      date: Date;
+      description: string;
+      status: JournalEntryStatus;
+      entryType?: JournalEntryType;
+      idempotencyKey?: string | null;
+      idempotencyFingerprint?: string | null;
+    },
+    lineInputs: JournalLineInput[],
+    manager: EntityManager,
+  ): Promise<JournalEntryEntity> {
+    try {
+      return await this.accountingRepository.persistJournalEntry(
+        tenantId,
+        header,
+        lineInputs,
+        manager,
+      );
+    } catch (error) {
+      if (error instanceof LockedPeriodError) {
+        throw new PeriodLockedException(this.lockedPeriodMessage(error.date));
+      }
+      if (error instanceof DuplicateEntryNumberError) {
+        throw new ConflictException(
+          `سندی با شماره ${header.entryNumber} قبلاً ثبت شده است.`,
+        );
+      }
+      if (error instanceof IdempotentReplayError) {
+        throw new ConflictException(
+          `کلید یکتایی ${header.idempotencyKey ?? ''} قبلاً برای سند دیگری ثبت شده است.`,
+        );
+      }
+      throw error;
+    }
+  }
+
   /** Exact check in integer minor units: debit equals credit and the total is above zero. */
   private assertBalanced(lines: NormalisedJournalLine[]): void {
     const bookDebit = lines.reduce((sum, l) => sum + l.bookDebitMinor, 0n);

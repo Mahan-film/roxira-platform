@@ -4,6 +4,9 @@ import { TenantScope } from '../../access/services/tenant-scope';
 import { ChartOfAccountEntity } from '../../accounting/entities/chart-of-account.entity';
 import { JournalEntryLineEntity } from '../../accounting/entities/journal-entry-line.entity';
 import { JournalEntryEntity } from '../../accounting/entities/journal-entry.entity';
+import { PeriodLockedException } from '../../accounting/exceptions/ledger.exceptions';
+import { JournalLineInput } from '../../accounting/repositories/accounting.repository';
+import { AccountingService } from '../../accounting/services/accounting.service';
 import {
   AccountLevel,
   AccountType,
@@ -308,6 +311,7 @@ export class ImportDryRunService {
   constructor(
     private readonly sepidarMappingAdapter: SepidarMappingAdapter,
     private readonly tenantScope: TenantScope,
+    private readonly accountingService: AccountingService,
   ) {}
 
   async dryRunSepidar(
@@ -898,6 +902,9 @@ export class ImportDryRunService {
             `سند افتتاحیه تراز نیست (اختلاف: ${minorToDecimal(voucherAnalysis.varianceMinor)} ریال).`,
           );
         }
+        if (voucherAnalysis.periodLockedMessage) {
+          blockersFa.push(voucherAnalysis.periodLockedMessage);
+        }
         if (batch.accountErrors && batch.accountErrors.length > 0) {
           blockersFa.push(
             `${batch.accountErrors.length} حساب دارای خطای ساختاری یا کدینگ نامعتبر است.`,
@@ -1285,6 +1292,7 @@ export class ImportDryRunService {
     unmappedLineCount: number;
     unmappedAccounts: ImportDryRunUnmappedAccount[];
     trialBalanceLines: ImportDryRunTrialBalanceLine[];
+    periodLockedMessage: string | null;
   }> {
     const accountRepo = em.getRepository(ChartOfAccountEntity);
     const dbAccounts = await accountRepo.find({ where: { tenantId } });
@@ -1412,60 +1420,49 @@ export class ImportDryRunService {
 
     let persistedInTx = false;
     let entryId: number | null = null;
+    let periodLockedMessage: string | null = null;
 
     if (batch.openingLines.length > 0 && unmappedAccounts.length === 0 && balanced) {
       const entryRepo = em.getRepository(JournalEntryEntity);
-      const lineRepo = em.getRepository(JournalEntryLineEntity);
       const entryNumber = `JV-DRYRUN-${batch.source.toUpperCase()}`;
 
       const existingEntry = await entryRepo.findOne({
         where: { tenantId, entryNumber },
       });
       if (!existingEntry) {
-        const entry = entryRepo.create({
-          tenantId,
-          entryNumber,
-          date: batch.openingDate,
-          description: `اجرای آزمایشی سند افتتاحیه ${batch.source === 'sepidar' ? 'سپیدار' : 'هلو'}`,
-          status: JournalEntryStatus.POSTED,
-          entryType: JournalEntryType.NORMAL,
-        });
-        const savedEntry = await entryRepo.save(entry);
-        entryId = savedEntry.id;
-
-        const deltaByAccount = new Map<number, bigint>();
-        const linesToSave: JournalEntryLineEntity[] = [];
-        for (const l of batch.openingLines) {
+        const lineInputs: JournalLineInput[] = batch.openingLines.map((l) => {
           const acc = dbByCode.get(l.accountCode)!;
-          const journalLine = lineRepo.create({
-            tenantId,
-            journalEntryId: savedEntry.id,
+          return {
             accountId: acc.id,
-            debit: minorToDecimal(l.debitMinor),
-            credit: minorToDecimal(l.creditMinor),
+            debitMinor: l.debitMinor,
+            creditMinor: l.creditMinor,
             currency: 'IRR',
             partyCode: l.floatingDetailCode,
             description: l.description,
-          });
-          linesToSave.push(journalLine);
-          deltaByAccount.set(
-            acc.id,
-            (deltaByAccount.get(acc.id) ?? 0n) + l.debitMinor - l.creditMinor,
+          };
+        });
+        try {
+          const savedEntry = await this.accountingService.persistImportedOpeningEntry(
+            tenantId,
+            {
+              entryNumber,
+              date: batch.openingDate,
+              description: `اجرای آزمایشی سند افتتاحیه ${batch.source === 'sepidar' ? 'سپیدار' : 'هلو'}`,
+              status: JournalEntryStatus.POSTED,
+              entryType: JournalEntryType.NORMAL,
+            },
+            lineInputs,
+            em,
           );
+          entryId = savedEntry.id;
+          persistedInTx = true;
+        } catch (err) {
+          if (err instanceof PeriodLockedException) {
+            periodLockedMessage = err.message;
+          } else {
+            throw err;
+          }
         }
-        if (linesToSave.length > 0) {
-          await lineRepo.save(linesToSave);
-        }
-
-        const sortedAccountIds = Array.from(deltaByAccount.keys()).sort((a, b) => a - b);
-        for (const accountId of sortedAccountIds) {
-          const delta = deltaByAccount.get(accountId)!;
-          await em.query(
-            `UPDATE "fin_chart_of_accounts" SET "balance" = "balance" + $1::numeric WHERE "id" = $2 AND "tenant_id" = $3`,
-            [minorToDecimal(delta), accountId, tenantId],
-          );
-        }
-        persistedInTx = true;
       }
     }
 
@@ -1479,6 +1476,7 @@ export class ImportDryRunService {
       unmappedLineCount,
       unmappedAccounts,
       trialBalanceLines,
+      periodLockedMessage,
     };
   }
 
