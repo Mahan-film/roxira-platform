@@ -45,6 +45,7 @@ import { ReceiptBotModule } from './modules/integrations/receipt_bot/receipt-bot
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { SearchModule } from './modules/search/search.module';
 import { FeatureFlagsModule } from './modules/feature_flags/feature-flags.module';
+import { OpsErrorsModule } from './modules/ops_errors/ops-errors.module';
 
 const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(process.cwd(), '.env')].filter(
   (file) => {
@@ -130,6 +131,7 @@ const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(proce
     OnboardingModule,
     SearchModule,
     FeatureFlagsModule,
+    OpsErrorsModule,
   ],
 })
 export class AppModule {}

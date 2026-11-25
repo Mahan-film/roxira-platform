@@ -24,6 +24,14 @@ app.add_middleware(
     allow_headers=CORS_HEADERS,
 )
 
+# T199: record unhandled exceptions in ops_error_events (scrubbed, never breaks a request).
+try:
+    from output_apps.generated_modules.smartjudge.error_capture import install_error_capture
+    install_error_capture(app)
+except Exception as _capture_exc:  # pragma: no cover - defensive
+    import logging
+    logging.getLogger("roxira.server").warning("Error capture disabled: %s", _capture_exc)
+
 # ============ Static assets (/static/*) ============
 STATIC_DIR = BASE_DIR / "output_apps" / "ecosystem_core" / "src" / "api" / "static"
 if STATIC_DIR.exists():
