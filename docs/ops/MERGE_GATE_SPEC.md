@@ -10,17 +10,19 @@ before it is switched on, and the go-live list. **The gate is in dry-run and mus
 ## 1. Rules: required / enforced / gap
 
 All rules are evaluated on the exact head SHA of the PR; the merge call carries `sha=<head>`, so a push after the
-evaluation makes GitHub refuse the merge. One merge per tick (every 5 min, oldest PR first).
+evaluation makes GitHub refuse the merge. One merge per tick (every 5 min, oldest PR first) in
+`queue_mode = "legacy"`; with the opt-in `queue_mode = "github"` the gate enqueues up to `max_enqueue_per_tick` (5) PRs per
+tick into GitHub's merge queue instead (section "Queue mode" below).
 
 | # | Rule | Enforced in `merge_gate.py` | Gap / note |
 |---|---|---|---|
 | 1 | The PR asks to be merged: label `merge-queue` (or auto-merge requested while `allow_auto_merge_flag = true`) | yes | the flag is for the transition only; auto-merge does not exist on private Free, so only the label counts after the flip |
 | 2 | Not a draft, base is `main`, no merge conflict | yes (`draft`, `base`, `mergeable_state == dirty`) | drafts are skipped silently |
 | 3 | Required checks green on the head: every name in `required_checks` is `success`/`skipped`/`neutral`; missing or running = wait; failed = refuse. Latest run per name wins | yes | names must equal the real check-run names; the live toml lacks `Semgrep CE (new findings)` (code default and example have it). Only check-runs are read, not legacy commit statuses |
-| 4 | Review: the latest `Cross-family review ... @ <sha>` comment names this head and says `Verdict: no blocker`, written by a review-desk account; or an allowlisted human APPROVED this head. Only the latest desk comment counts: a later "no blocker" on the same head overrides an earlier "blocker", and a later comment for another head voids it | yes | authors matched by **numeric id** when `review_comment_author_ids` is set (this PR); until it is set on the box the check falls back to the login, which can be renamed. Human approval ids (`approver_ids`) are empty on the box. The desk runs about every 2 h, so a new head waits for its review |
-| 5 | No hold: label `needs-human` or `do-not-merge`; `[needs owner]` in the title; an unresolved `BLOCKER:` comment from an allowlisted human id (cleared by a later `UNBLOCK:` from one) | yes, added in this PR (`block_labels`, `block_title_markers`, `hold_reason`) | the BLOCKER/UNBLOCK convention needs `approver_ids` or `owner_approver_ids` filled; label holds work without ids. A blocker verdict from the review desk already fails rule 4 |
+| 4 | Review: the latest `Cross-family review ... @ <sha>` comment names this head and says `Verdict: no blocker`, written by a review-desk account; or an allowlisted human APPROVED this head; or an id in `approver_ids` / `owner_approver_ids` wrote a comment line `DESK-OVERRIDE #<PR> <head sha 7-40 hex>: <reason>` (line start, reason on the same line) for this exact PR and head. The override replaces only the review: protected paths, holds and checks still apply. Only the latest desk comment counts: a later "no blocker" on the same head overrides an earlier "blocker", and a later comment for another head voids it | yes | authors matched by **numeric id** when `review_comment_author_ids` is set (this PR); until it is set on the box the check falls back to the login, which can be renamed. Human approval ids (`approver_ids`) are empty on the box. The desk runs about every 2 h, so a new head waits for its review |
+| 5 | No hold: label `needs-human` or `do-not-merge`; `[needs owner]` in the title; an unresolved `BLOCKER:` comment from an allowlisted human id (cleared by a later `UNBLOCK:` from one); an unresolved hub/owner blocker verdict: a comment from an id in `approver_ids` / `owner_approver_ids`, created after the head commit's committer date, with a line matching `^\s*\**\s*verdict\s*\**\s*:\s*\**\s*blocker\b` (case-insensitive). That verdict hold is cleared by a later `UNBLOCK:` from those ids, or by a later valid `OWNER-OK` (owner ids) or `DESK-OVERRIDE` for the exact head (the owner outranks the hub, so an owner's `OWNER-OK` clears a hub `Verdict: blocker` explicitly); an override posted before the verdict does not clear it, and neither clears a `BLOCKER:` hold | yes (`block_labels`, `block_title_markers`, `hold_reason`) | the comment conventions need `approver_ids` or `owner_approver_ids` filled; label holds work without ids. A blocker verdict from the review desk bot already fails rule 4 and is not a hold. Unknown head date or comment time = hold (fails closed); a new push makes older hub verdicts stale |
 | 6 | Protected paths (decision B7, `protected_globs`: migrations, payment and billing, auth, `Dockerfile.prod`, prod compose, deploy scripts and units, workflow files, the gate's own code, tests and spec) are class **owner sentence required**: the gate never merges such a PR without an owner marker comment `OWNER-OK #<PR> <head sha7>` from an id in `owner_approver_ids`; it reports once per head and waits. Details in section 1a | yes (`OWNER` status, `owner_ok`) | the marker is tied to the head SHA (a push voids it). `owner_approver_ids` is empty on the box, so today every protected PR waits (fails closed). The label `owner-approved` is retired and ignored |
-| 7 | Merges cleanly into the current `main` (B7-2): GitHub `mergeable` is true and the state is not `dirty` (unknown = wait one tick); the head need not be up to date. After a gate merge, no further merge until the push CI run of that merge on `main` has finished; if it failed the gate pauses itself (`PAUSE` file) and alerts | yes (`require_up_to_date`, default **false** since B7-2; `main_guard`) | `require_up_to_date = true` restores update-branch + wait (new head, new review). Section 6 has the decision and the trade-off |
+| 7 | Merges cleanly into the current `main` (B7-2): GitHub `mergeable` is true and the state is not `dirty` (unknown = wait one tick); the head need not be up to date. After a gate merge, no further merge until the push CI run of that merge on `main` has finished; if it failed the gate pauses itself (`PAUSE` file) and alerts. With `auto_resume` (default true) the gate removes `PAUSE` once the newest completed `ci.yml` push run on `main` is on the current main HEAD and succeeded (one Telegram notice; never while `KILL` exists; dry-run only logs) | yes (`require_up_to_date`, default **false** since B7-2; `main_guard`) | `require_up_to_date = true` restores update-branch + wait (new head, new review). Section 6 has the decision and the trade-off |
 | 8 | Kill switch, lock, dry-run | yes (`KILL` file, flock, `dry_run`) | |
 
 ### 1a. Rule 6 in detail: owner sentence required (decision B7)
@@ -33,7 +35,9 @@ production write). Everything else merges on "no blocker".
   `OWNER`. The list is configuration (code default and `merge_gate.example.toml` are kept equal by a test; the list in the live
   toml replaces the default, so it must be synced when the default changes). Default groups: migrations; payment, billing and
   auth; `Dockerfile.prod`, `docker-compose.prod.yml`, deploy scripts, `scripts/ops/autodeploy/**` and `deploy/**`;
-  `.github/workflows/**`; the gate's own code, config example, tests and this spec. If GitHub's file list may be truncated
+  `.github/workflows/**`; the gate's own code, config example, tests and this spec; the B1 core, hub-only by decision
+  2026-11-25 (`**/country_packs/**`, `output_apps/enterprise_hub/modules/tax_compliance/**`,
+  `output_apps/generated_modules/smartjudge/**`, `output_apps/nginx_config/**`). If GitHub's file list may be truncated
   (3000 files) the PR is also class `OWNER`.
 - **Behaviour.** The gate never merges an `OWNER` PR without the marker. Without it: one PR comment per head SHA
   (`merge-gate: not merged: owner sentence required: ...`), nothing else, then it waits. The comment never contains a line that
@@ -58,6 +62,16 @@ impersonated by anything holding that token. Without (a) or (b) chosen, protecte
 
 Not enforced and not planned here: reviewer identity beyond the id allowlist, CODEOWNERS, signed commits, "no direct push"
 (the alert below detects it, it cannot prevent it on Free).
+
+### 1b. Review desk dispatch
+
+A PR whose only failing rule is review (no "no blocker" for its head) gets a `review-desk.yml` run dispatched when:
+every required check is green on its head (no desk runs on red or pending PRs); the desk has posted no verdict for that
+head (a desk `blocker` is final for the head; a hub can answer it with `DESK-OVERRIDE`); no desk run is queued or
+running; and the head was dispatched fewer than `desk_max_dispatches_per_head` (default 2) times, the last one at
+least `desk_retry_minutes` (default 90) ago, so a desk run that produced no verdict is retried once. At most one
+dispatch per tick. Dispatches are counted per head in `dispatch_log` in the state file; a head recorded by an older gate
+version counts as one dispatch made at the first tick after the upgrade. The dispatch is the only write in dry-run.
 
 ## 2. Dry-run comparison report
 
@@ -164,8 +178,20 @@ it, all implemented in `merge_gate.py`:
    `main_ci_grace_seconds` (300) means a paths-ignored push (docs only), treated as passed. `cancelled` is not a failure.
 3. **Pause on a red main.** If that run ended `failure`, `timed_out` or `startup_failure`, the gate writes
    `<state_dir>/PAUSE`, sends one Telegram alert (`notify.env`, same path as the direct-push alert) and merges nothing
-   until a human removes the file. It does not use `KILL`, which also silences the direct-push alert.
-4. **Re-evaluation.** Every tick re-reads every labelled PR against the new `main`; nothing is cached between ticks.
+   until main is green again. It does not use `KILL`, which also silences the direct-push alert. Auto-resume
+   (`auto_resume`, default true): at the start of a tick the gate reads the newest completed `ci.yml` push run on
+   `main`; if its `head_sha` is the current main HEAD and it succeeded, the gate deletes `PAUSE`, logs it and sends one
+   Telegram notice `merge gate resumed: main green at <sha7>`. Never while `KILL` exists; in dry-run it only logs.
+   A human can still remove the file by hand. Limit: a docs-only HEAD (no `ci.yml` run) never resumes by itself.
+4. **Queue mode (`queue_mode = "github"`, opt-in; code default is `legacy`).** Main has a native merge queue (grouping ALLGREEN, build/merge 5,
+   squash). The gate does not merge: for each PR that passes every rule above it calls GraphQL `enqueuePullRequest` with
+   `expectedHeadOid` = the evaluated head, up to `max_enqueue_per_tick` per tick (oldest first), skipping PRs whose
+   `isInMergeQueue` is true (the GraphQL node id comes from the PR object or REST `pulls/<n>`; a PR without one is skipped,
+   never guessed). Rules 2 and the post-merge wait do not apply (the queue validates every group); the guard is
+   instead: nothing is enqueued while `PAUSE` exists (auto-resume unchanged) or when the newest completed `ci.yml` push run
+   on `main` is `failure`, `timed_out` or `startup_failure` AND is for the current `main` HEAD (a red run for an older sha while a newer run is pending does not hold; an unreadable HEAD holds) (one Telegram alert per red run, no PAUSE file written). An
+   unreadable main CI state holds the enqueue. `queue_mode = "legacy"` restores the serial behaviour of rules 2 and 3.
+5. **Re-evaluation.** Every tick re-reads every labelled PR against the new `main`; nothing is cached between ticks.
 
 Known residual risk: two PRs that are each green but break together can land one CI cycle apart; step 3 limits the
 damage to one merge and stops the gate. Main failures that are not gate merges (a manual push) do not pause the gate:
