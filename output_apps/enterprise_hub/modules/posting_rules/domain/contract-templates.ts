@@ -19,15 +19,17 @@ const cr = (role: TemplateLine['role'], amount: string, description: string, par
 const t = (docType: string, title: string, amounts: string[], lines: TemplateLine[]): PostingTemplate => ({ docType, title, amounts, lines });
 
 export const CONTRACT_TEMPLATES: readonly PostingTemplate[] = [
-  t('contract.statement.contractor', 'صورت وضعیت پیمانکار (فروش به کارفرما)', ['gross', 'retention', 'insurance', 'advance', 'net'], [
+  t('contract.statement.contractor', 'صورت وضعیت پیمانکار (فروش به کارفرما)', ['gross', 'vat', 'retention', 'insurance', 'advance', 'net'], [
     dr('receivable', 'net', 'طلب از کارفرما', true),
     dr('retention_receivable', 'retention', 'سپرده حسن انجام کار نزد کارفرما'),
     dr('contract_insurance_expense', 'insurance', 'کسور بیمه صورت وضعیت'),
     dr('advance_received', 'advance', 'استهلاک پیش‌دریافت'),
     cr('revenue', 'gross', 'درآمد صورت وضعیت'),
+    cr('vat_output', 'vat', 'مالیات بر ارزش افزوده صورت وضعیت'),
   ]),
-  t('contract.statement.employer', 'صورت وضعیت کارفرما (خرید از پیمانکار)', ['gross', 'retention', 'insurance', 'advance', 'net'], [
+  t('contract.statement.employer', 'صورت وضعیت کارفرما (خرید از پیمانکار)', ['gross', 'vat', 'retention', 'insurance', 'advance', 'net'], [
     dr('purchases', 'gross', 'هزینه پروژه طبق صورت وضعیت'),
+    dr('vat_input', 'vat', 'مالیات بر ارزش افزوده صورت وضعیت'),
     cr('payable', 'net', 'بدهی به پیمانکار', true),
     cr('retention_payable', 'retention', 'سپرده حسن انجام کار نگهداری‌شده'),
     cr('insurance_payable', 'insurance', 'کسور بیمه پیمانکار'),

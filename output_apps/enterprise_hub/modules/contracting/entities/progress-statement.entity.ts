@@ -30,6 +30,9 @@ export class ProgressStatementEntity {
   @Column({ type: 'numeric', precision: 18, scale: 2, name: 'period_amount' })
   periodAmount: string;
 
+  @Column({ type: 'numeric', precision: 18, scale: 2, name: 'vat_amount', default: '0' })
+  vatAmount: string;
+
   @Column({ type: 'numeric', precision: 18, scale: 2, name: 'retention_amount', default: '0' })
   retentionAmount: string;
 

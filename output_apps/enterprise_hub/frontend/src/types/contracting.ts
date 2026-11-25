@@ -48,6 +48,7 @@ export interface Statement {
   cumulativeAmount: Money;
   previousAmount: Money;
   periodAmount: Money;
+  vatAmount: Money;
   retentionAmount: Money;
   insuranceAmount: Money;
   advanceRecoveryAmount: Money;

@@ -82,7 +82,7 @@ describePg('T3 gate: contract, 3 statements, retention and release, advance and 
     }
     const scope = new TenantScope(ds);
     const accounting = {
-      listAccounts: async () => ['1201', '1250', '2250', '4101', '5250', '5201', '2101', '2260'].map((code) => ({ code, name: code })),
+      listAccounts: async () => ['1201', '1250', '1401', '2250', '2301', '4101', '5250', '5201', '2101', '2260'].map((code) => ({ code, name: code })),
       createAccount: async () => undefined,
       findJournalEntryByNumber: async () => null,
       createJournalEntry: async (tenant: string, dto: { entryNumber: string; lines: Array<{ accountCode: string; debit: string; credit: string }> }) => {
@@ -99,6 +99,7 @@ describePg('T3 gate: contract, 3 statements, retention and release, advance and 
       const map: Record<string, string> = {
         receivable: '1201', revenue: '4101', retention_receivable: '1250', contract_insurance_expense: '5250', advance_received: '2250',
         purchases: '5201', payable: '2101', retention_payable: '2260',
+        vat_output: '2301', vat_input: '1401',
       };
       for (const [role, code] of Object.entries(map)) await postingRepo.upsertMapping(t, '*', role, code);
     }
@@ -160,26 +161,27 @@ describePg('T3 gate: contract, 3 statements, retention and release, advance and 
     expect((await movements.advance(T1, sale.id, { date: '2026-11-01', amount: '100000000', requestKey: 'adv-1' })).replayed).toBe(true);
     await expect(movements.advance(T1, sale.id, { date: '2026-11-02', amount: '1' })).rejects.toThrow('مبلغ توافق‌شده');
 
-    // statement 1: cumulative 300m. period 300m; retention 10% = 30m; insurance 7% x 1.1 = 23.1m; recovery 100m x 30% = 30m; net 216.9m
-    // statement 2: cumulative 700m. period 400m; retention 40m; insurance 30.8m; recovery 70m - 30m = 40m; net 289.2m
-    // statement 3: cumulative 1,000m. period 300m; retention 30m; insurance 23.1m; recovery 100m - 70m = 30m; net 216.9m
+    // statement 1: cumulative 300m. period 300m; vat 10% = 30m; retention 10% = 30m; insurance 7% x 1.1 = 23.1m; recovery 100m x 30% = 30m; net 246.9m
+    // statement 2: cumulative 700m. period 400m; vat 40m; retention 40m; insurance 30.8m; recovery 70m - 30m = 40m; net 329.2m
+    // statement 3: cumulative 1,000m. period 300m; vat 30m; retention 30m; insurance 23.1m; recovery 100m - 70m = 30m; net 246.9m
     const expected = [
-      { cum: '300000000', date: '2026-11-10', period: 300, ret: 30, ins: 231n, rec: 30, net: 2169n },
-      { cum: '700000000', date: '2026-12-01', period: 400, ret: 40, ins: 308n, rec: 40, net: 2892n },
-      { cum: '1000000000', date: '2027-01-01', period: 300, ret: 30, ins: 231n, rec: 30, net: 2169n },
+      { cum: '300000000', date: '2026-11-10', period: 300, vat: 30, ret: 30, ins: 231n, rec: 30, net: 2469n },
+      { cum: '700000000', date: '2026-12-01', period: 400, vat: 40, ret: 40, ins: 308n, rec: 40, net: 3292n },
+      { cum: '1000000000', date: '2027-01-01', period: 300, vat: 30, ret: 30, ins: 231n, rec: 30, net: 2469n },
     ];
     for (const [i, e] of expected.entries()) {
       const created = await statements.create(T1, sale.id, { statementDate: e.date, cumulativeAmount: e.cum });
       expect(created.number).toBe(i + 1);
       const approved = await statements.approve(T1, created.id);
       expect(BigInt(Math.round(Number(approved.periodAmount) * 100))).toBe(rial(e.period));
+      expect(BigInt(Math.round(Number(approved.vatAmount) * 100))).toBe(rial(e.vat));
       expect(BigInt(Math.round(Number(approved.retentionAmount) * 100))).toBe(rial(e.ret));
       expect(BigInt(Math.round(Number(approved.insuranceAmount) * 100))).toBe(rialFrac(e.ins));
       expect(BigInt(Math.round(Number(approved.advanceRecoveryAmount) * 100))).toBe(rial(e.rec));
       expect(BigInt(Math.round(Number(approved.netPayable) * 100))).toBe(rialFrac(e.net));
       if (i === 0) {
         expect(approved.termsUsed.map((t) => [t.key, t.tenantOverride, t.legalFact])).toEqual([
-          ['contract_retention_rate', false, false], ['contract_insurance_rate_mechanical', false, false], ['contract_unemployment_addon_fraction', true, false],
+          ['vat_general_rate', false, false], ['contract_retention_rate', false, false], ['contract_insurance_rate_mechanical', false, false], ['contract_unemployment_addon_fraction', true, false],
         ]);
       }
       const posted = await statements.post(T1, created.id);
@@ -191,17 +193,17 @@ describePg('T3 gate: contract, 3 statements, retention and release, advance and 
     await movements.releaseRetention(T1, sale.id, { date: '2027-02-01', amount: '50000000', requestKey: 'rel-1' });
     await expect(movements.releaseRetention(T1, sale.id, { date: '2027-02-02', amount: '50000001' })).rejects.toThrow('بیشتر');
 
-    // employer-side contract: one statement of 400m, retention 40m kept, net 360m owed to the subcontractor
+    // employer-side contract: one statement of 400m, vat 40m, retention 40m kept, net 400m owed to the subcontractor
     const subStatement = await statements.create(T1, sub.id, { statementDate: '2026-12-15', cumulativeAmount: '400000000' });
     await statements.approve(T1, subStatement.id);
     await statements.post(T1, subStatement.id);
 
-    // ledger (net debit per account, minor units). Contractor: 1201 = 100 + 216.9 + 289.2 + 216.9 + 50 = 873.0m;
-    // 1250 = 30 + 40 + 30 - 50 = 50m; 5250 = 23.1 + 30.8 + 23.1 = 77m; 2250 = -100 + 30 + 40 + 30 = 0; 4101 = -1,000m.
-    // Employer: 5201 = 400m; 2101 = -360m; 2260 = -40m.
+    // ledger (net debit per account, minor units). Contractor: 1201 = 100 + 246.9 + 329.2 + 246.9 + 50 = 973.0m;
+    // 1250 = 30 + 40 + 30 - 50 = 50m; 5250 = 23.1 + 30.8 + 23.1 = 77m; 2250 = -100 + 30 + 40 + 30 = 0; 4101 = -1,000m; 2301 = -100m.
+    // Employer: 5201 = 400m; 1401 = 40m; 2101 = -400m; 2260 = -40m.
     expect(net(T1)).toEqual({
-      '1201': rial(873), '1250': rial(50), '5250': rial(77), '2250': 0n, '4101': -rial(1000),
-      '5201': rial(400), '2101': -rial(360), '2260': -rial(40),
+      '1201': rial(973), '1250': rial(50), '5250': rial(77), '2250': 0n, '4101': -rial(1000), '2301': -rial(100),
+      '5201': rial(400), '1401': rial(40), '2101': -rial(400), '2260': -rial(40),
     });
     expect(Object.values(net(T1)).reduce((s, v) => s + v, 0n)).toBe(0n);
 

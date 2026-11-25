@@ -94,7 +94,9 @@ export function toPayrollRates(
   const optionalMoney = (key: StatutoryKey): number | null =>
     usable(key) ? money(key) : null;
   // Contract terms share the table but are not payroll parameters.
-  const contractKeys = new Set<string>(CONTRACT_TERM_KEYS);
+  const contractKeys = new Set<string>(
+    CONTRACT_TERM_KEYS.filter((k) => k.startsWith('contract_')),
+  );
   const unverified = [...parameters.values()]
     .filter((row) => !row.verified && !contractKeys.has(row.paramKey))
     .map((row) => row.paramKey);

@@ -24,7 +24,8 @@ export const STATEMENT_DOC_TYPE: Record<ContractSide, string> = {
 const minor = (value: string): bigint => fromDb(value);
 
 export function toStatementResponse(s: ProgressStatementEntity, replayed?: boolean): StatementResponseDto {
-  const net = netPayable(minor(s.periodAmount), minor(s.retentionAmount), minor(s.insuranceAmount), minor(s.advanceRecoveryAmount));
+  const vat = minor(s.vatAmount ?? '0');
+  const net = netPayable(minor(s.periodAmount), minor(s.retentionAmount), minor(s.insuranceAmount), minor(s.advanceRecoveryAmount), vat);
   return {
     id: s.id,
     contractId: s.contractId,
@@ -33,6 +34,7 @@ export function toStatementResponse(s: ProgressStatementEntity, replayed?: boole
     cumulativeAmount: fromMinor(minor(s.cumulativeAmount)),
     previousAmount: fromMinor(minor(s.previousAmount)),
     periodAmount: fromMinor(minor(s.periodAmount)),
+    vatAmount: fromMinor(vat),
     retentionAmount: fromMinor(minor(s.retentionAmount)),
     insuranceAmount: fromMinor(minor(s.insuranceAmount)),
     advanceRecoveryAmount: fromMinor(minor(s.advanceRecoveryAmount)),
@@ -139,7 +141,7 @@ export class StatementService {
       const approved = await this.repository.approveWith(
         tenantId,
         id,
-        { retentionAmount: minorToDecimal(d.retention), insuranceAmount: minorToDecimal(d.insurance), advanceRecoveryAmount: minorToDecimal(d.advance), termsSnapshot: d.used },
+        { vatAmount: minorToDecimal(d.vat), retentionAmount: minorToDecimal(d.retention), insuranceAmount: minorToDecimal(d.insurance), advanceRecoveryAmount: minorToDecimal(d.advance), termsSnapshot: d.used },
         manager,
       );
       if (!approved) throw new ConflictException('وضعیت صورت وضعیت هم‌زمان تغییر کرد.');
@@ -162,6 +164,7 @@ export class StatementService {
       if (s.status !== StatementStatus.APPROVED) throw new ConflictException('صورت وضعیت باید ابتدا تأیید شود.');
       const contract = await this.contracts.findById(tenantId, s.contractId, manager);
       if (!contract) throw new NotFoundException(CONTRACT_NOT_FOUND);
+      const vat = minor(s.vatAmount ?? '0');
       const retention = minor(s.retentionAmount);
       const insurance = minor(s.insuranceAmount);
       const advance = minor(s.advanceRecoveryAmount);
@@ -176,7 +179,7 @@ export class StatementService {
             date: String(s.statementDate),
             description: `صورت وضعیت شماره ${s.number} قرارداد ${contract.code}`,
             partyCode: contract.partyCode,
-            amounts: { gross, retention, insurance, advance, net: netPayable(gross, retention, insurance, advance) },
+            amounts: { gross, vat, retention, insurance, advance, net: netPayable(gross, retention, insurance, advance, vat) },
           },
           manager,
         );

@@ -14,9 +14,9 @@ export function nextPeriod(previousCumulative: bigint, cumulative: bigint, contr
   return cumulative - previousCumulative;
 }
 
-/** What is payable after deductions. */
-export function netPayable(period: bigint, retention: bigint, insurance: bigint, advanceRecovery: bigint): bigint {
-  const net = period - retention - insurance - advanceRecovery;
+/** What is payable after VAT and deductions. */
+export function netPayable(period: bigint, retention: bigint, insurance: bigint, advanceRecovery: bigint, vat = 0n): bigint {
+  const net = period + vat - retention - insurance - advanceRecovery;
   if (net < 0n) throw new StatementError('DEDUCTIONS_EXCEED', 'deductions exceed the period amount');
   return net;
 }
