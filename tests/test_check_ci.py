@@ -45,6 +45,8 @@ def test_all_required_jobs_green(tmp_path: Path) -> None:
             {"name": "Secret scan (new commits only)", "status": "completed", "conclusion": "success"},
             {"name": "Pytest (unit)", "status": "completed", "conclusion": "success"},
             {"name": "Frontend gate", "status": "completed", "conclusion": "success"},
+            {"name": "Backend (tsc + jest + Postgres specs)", "status": "completed", "conclusion": "success"},
+            {"name": "Backend (tsc + jest + Postgres specs)", "status": "completed", "conclusion": "success"},
             {"name": "Undefined names", "status": "completed", "conclusion": "success"},
             {"name": "System inventory up to date", "status": "completed", "conclusion": "success"},
         ]
@@ -64,6 +66,7 @@ def test_skipped_job_is_accepted_as_green(tmp_path: Path) -> None:
             {"name": "Secret scan (new commits only)", "status": "completed", "conclusion": "success"},
             {"name": "Pytest (unit)", "status": "completed", "conclusion": "skipped"},
             {"name": "Frontend gate", "status": "completed", "conclusion": "success"},
+            {"name": "Backend (tsc + jest + Postgres specs)", "status": "completed", "conclusion": "skipped"},
             {"name": "Undefined names", "status": "completed", "conclusion": "success"},
             {"name": "System inventory up to date", "status": "completed", "conclusion": "success"},
         ]
@@ -83,6 +86,7 @@ def test_pending_required_job_returns_two(tmp_path: Path) -> None:
             {"name": "Secret scan (new commits only)", "status": "completed", "conclusion": "success"},
             {"name": "Pytest (unit)", "status": "in_progress", "conclusion": None},
             {"name": "Frontend gate", "status": "queued", "conclusion": None},
+            {"name": "Backend (tsc + jest + Postgres specs)", "status": "completed", "conclusion": "success"},
             {"name": "Undefined names", "status": "completed", "conclusion": "success"},
             {"name": "System inventory up to date", "status": "completed", "conclusion": "success"},
         ]
@@ -111,6 +115,7 @@ def test_failed_required_job_returns_one(tmp_path: Path) -> None:
             {"name": "Secret scan (new commits only)", "status": "completed", "conclusion": "success"},
             {"name": "Pytest (unit)", "status": "completed", "conclusion": "failure"},
             {"name": "Frontend gate", "status": "completed", "conclusion": "success"},
+            {"name": "Backend (tsc + jest + Postgres specs)", "status": "completed", "conclusion": "success"},
             {"name": "Undefined names", "status": "completed", "conclusion": "success"},
             {"name": "System inventory up to date", "status": "completed", "conclusion": "success"},
         ]
@@ -130,6 +135,8 @@ def test_timed_out_job_returns_one(tmp_path: Path) -> None:
             {"name": "Secret scan (new commits only)", "status": "completed", "conclusion": "timed_out"},
             {"name": "Pytest (unit)", "status": "completed", "conclusion": "success"},
             {"name": "Frontend gate", "status": "completed", "conclusion": "success"},
+            {"name": "Backend (tsc + jest + Postgres specs)", "status": "completed", "conclusion": "success"},
+            {"name": "Backend (tsc + jest + Postgres specs)", "status": "completed", "conclusion": "success"},
             {"name": "Undefined names", "status": "completed", "conclusion": "success"},
             {"name": "System inventory up to date", "status": "completed", "conclusion": "success"},
         ]
@@ -148,6 +155,8 @@ def test_report_only_failure_is_ignored(tmp_path: Path) -> None:
             {"name": "Secret scan (new commits only)", "status": "completed", "conclusion": "success"},
             {"name": "Pytest (unit)", "status": "completed", "conclusion": "success"},
             {"name": "Frontend gate", "status": "completed", "conclusion": "success"},
+            {"name": "Backend (tsc + jest + Postgres specs)", "status": "completed", "conclusion": "success"},
+            {"name": "Backend (tsc + jest + Postgres specs)", "status": "completed", "conclusion": "success"},
             {"name": "Undefined names", "status": "completed", "conclusion": "success"},
             {"name": "System inventory up to date", "status": "completed", "conclusion": "success"},
             {"name": "Ruff (non-blocking)", "status": "completed", "conclusion": "failure"},

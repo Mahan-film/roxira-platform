@@ -25,10 +25,10 @@ DEFAULT_REPO = "Mahan-film/roxira-platform"
 DEFAULT_REQUIRED_JOBS = [
     "Detect changes",
     "Secret scan (new commits only)",
-    "Pytest (unit)",
-    "Frontend gate",
     "Undefined names",
     "System inventory up to date",
+    "Frontend gate",
+    "Backend (tsc + jest + Postgres specs)",
 ]
 
 ALLOWED_CONCLUSIONS = {"success", "skipped", "neutral"}

@@ -991,3 +991,40 @@ jobs:
               exit 1
               ;;
           esac
+
+  backend-gate:
+    name: Backend gate
+    # Always runs so it can be a required check even on PRs with no backend
+    # changes, where the `backend` job is skipped.
+    needs: [pick-runner, changes, backend]
+    if: always()
+    runs-on: ${{ fromJSON(needs.pick-runner.outputs.light || '"ubuntu-latest"') }}
+    timeout-minutes: 5
+    steps:
+      - name: Verify backend result
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          BACKEND_RESULT: ${{ needs.backend.result }}
+          BACKEND_CHANGED: ${{ needs.changes.outputs.backend }}
+        run: |
+          echo "changes=$CHANGES_RESULT backend=$BACKEND_RESULT backend_changed=$BACKEND_CHANGED"
+          if [ "$CHANGES_RESULT" != "success" ]; then
+            echo "::error::Detect changes job ended as '$CHANGES_RESULT'; cannot verify backend."
+            exit 1
+          fi
+          case "$BACKEND_RESULT" in
+            success)
+              echo "Backend (tsc + jest + Postgres specs) passed."
+              ;;
+            skipped)
+              if [ "$BACKEND_CHANGED" = "true" ]; then
+                echo "::error::Backend job was skipped even though backend files changed."
+                exit 1
+              fi
+              echo "No backend files changed; backend job skipped as expected."
+              ;;
+            *)
+              echo "::error::Backend job ended as '$BACKEND_RESULT'."
+              exit 1
+              ;;
+          esac
