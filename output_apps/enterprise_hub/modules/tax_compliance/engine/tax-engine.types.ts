@@ -1,0 +1,110 @@
+export type TaxDocumentKind = 'INVOICE' | 'CREDIT_NOTE' | 'BILL';
+export type WithholdingTiming = 'INVOICE' | 'PAYMENT';
+export type WithholdingEvent = 'INVOICE' | 'BILL' | 'PAYMENT';
+
+/** STANDARD charges `rateBps`; ZERO_RATE and EXEMPT charge no tax and require `rateBps` 0 (kept distinct for return boxes). */
+export type TaxTreatment = 'STANDARD' | 'ZERO_RATE' | 'EXEMPT';
+
+/** Effective-dated tax rate rule; rates are integer basis points (19% = 1900, 10% = 1000). */
+export interface TaxRateRule {
+  code: string;
+  /** Required country (or pack) code; rules never match other countries. */
+  country: string;
+  treatment: TaxTreatment;
+  rateBps: number;
+  /** Required URL or citation for the rate; registration rejects rules without it. */
+  source: string;
+  /** Inclusive ISO date (YYYY-MM-DD). */
+  effectiveFrom: string;
+  /** Inclusive ISO date (YYYY-MM-DD), or null/undefined if open-ended. */
+  effectiveTo?: string | null;
+  reverseCharge?: boolean;
+  inputBox?: string | null;
+  outputBox?: string | null;
+  label?: string;
+}
+
+/** Withholding tax rule; rates are integer basis points (5% = 500). */
+export interface WithholdingRule {
+  code: string;
+  rateBps: number;
+  timing: WithholdingTiming;
+  certificatePrefix: string;
+}
+
+/** Persistent sequence store port for WHT certificate numbering (`PREFIX-YYYY-NNNN`). */
+export interface WhtCertificateSequenceStore {
+  next(prefix: string, year: number): Promise<number>;
+}
+
+export interface TaxPostingAccounts {
+  expenseOrRevenueAccount?: string;
+  apOrArAccount?: string;
+  inputVatAccount?: string;
+  outputVatAccount?: string;
+  outputRcVatAccount?: string;
+  bankAccount?: string;
+  whtPayableAccount?: string;
+  whtReceivableAccount?: string;
+}
+
+export interface TaxCalculationInput {
+  country: string;
+  taxCode: string;
+  netMinor: bigint;
+  /** Tax point date (YYYY-MM-DD). */
+  taxPointDate: string;
+  /** Accounting posting date (YYYY-MM-DD); defaults to `taxPointDate`. */
+  postingDate?: string;
+  /** VAT deductibility date (YYYY-MM-DD), separate from `postingDate`; defaults to `postingDate`. */
+  deductibleDate?: string | null;
+  documentKind?: TaxDocumentKind;
+  /** For credit notes: the original invoice's tax point date (YYYY-MM-DD). */
+  originalInvoiceTaxPointDate?: string | null;
+  /** Explicit rate override in bps from the original invoice, if already resolved. */
+  originalInvoiceRateBps?: number | null;
+  reverseCharge?: boolean;
+  withholdingCode?: string | null;
+  withholdingEvent?: WithholdingEvent;
+  /** Pre-allocated persistent certificate number from DB sequencer, if available. */
+  certificateNumber?: string | null;
+  accounts?: TaxPostingAccounts;
+}
+
+export interface TaxPostingLine {
+  accountCode: string;
+  debitMinor: bigint;
+  creditMinor: bigint;
+  taxBox?: string | null;
+  deductibleDate?: string | null;
+}
+
+export interface TaxCalculationResult {
+  effectiveTaxPointDate: string;
+  postingDate: string;
+  deductibleDate: string;
+  rateBps: number;
+  treatment: TaxTreatment;
+  taxMinor: bigint;
+  netTaxImpactMinor: bigint;
+  reverseCharge: boolean;
+  returnBoxes: {
+    inputBox: string | null;
+    outputBox: string | null;
+    inputMinor: bigint;
+    outputMinor: bigint;
+  };
+  withholding: {
+    applied: boolean;
+    timing: WithholdingTiming | null;
+    withheldMinor: bigint;
+    netPayableMinor: bigint;
+    certificateNumber: string | null;
+  };
+  journalLines: TaxPostingLine[];
+}
+
+export interface TaxEngine {
+  resolveRate(country: string, taxCode: string, effectiveDate: string): TaxRateRule;
+  calculate(input: TaxCalculationInput): Promise<TaxCalculationResult>;
+}
