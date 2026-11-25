@@ -29,7 +29,7 @@ import {
   CreateStaffLoanPayload,
   LoanStatus,
 } from "@/types/hr";
-import { apiRequest } from "@/lib/api/http-client";
+import { apiDownload, apiRequest } from "@/lib/api/http-client";
 import { API_PROXY_BASE_PATH, HR_RESOURCE_PATH } from "@/lib/api/config";
 
 // از پروکسی هم‌مبدأ next.config.ts (`rewrites`) عبور می‌کند تا مشکل CORS
@@ -364,5 +364,40 @@ export async function createStaffLoan(
     body: payload,
     signal,
   });
+}
+
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** دانلود PDF همه فیش‌های یک اجرای حقوق — GET /enterprise-hub/hr/payroll-runs/:id/payslips-pdf */
+export async function downloadPayrollRunPayslipsPdf(
+  runId: number,
+  signal?: AbortSignal,
+): Promise<void> {
+  const blob = await apiDownload(`${HR_ENDPOINT}/payroll-runs/${runId}/payslips-pdf`, {
+    signal,
+  });
+  triggerBlobDownload(blob, `payslips-run-${runId}.pdf`);
+}
+
+/** دانلود PDF یک فیش حقوقی — GET /enterprise-hub/hr/payroll-runs/:id/payslips/:payslipId/pdf */
+export async function downloadPayslipPdf(
+  runId: number,
+  payslipId: number,
+  signal?: AbortSignal,
+): Promise<void> {
+  const blob = await apiDownload(
+    `${HR_ENDPOINT}/payroll-runs/${runId}/payslips/${payslipId}/pdf`,
+    { signal },
+  );
+  triggerBlobDownload(blob, `payslip-${payslipId}.pdf`);
 }
 

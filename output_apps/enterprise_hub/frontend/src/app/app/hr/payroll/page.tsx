@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/table";
 import {
   createPayrollRun,
+  downloadPayrollRunPayslipsPdf,
+  downloadPayslipPdf,
   getInsuranceList,
   getPayrollRates,
   getPayrollRun,
@@ -300,6 +302,16 @@ export default function PayrollPage() {
                 سند {run.journalEntryNumber} · {formatJalaliDateTime(run.postedAt)}
               </span>
             )}
+            {run.payslips.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void downloadPayrollRunPayslipsPdf(run.id)}
+              >
+                <Download />
+                دانلود PDF همه فیش‌ها
+              </Button>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
@@ -408,6 +420,14 @@ export default function PayrollPage() {
                             <Printer />
                             چاپ
                           </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => void downloadPayslipPdf(run.id, p.id)}
+                          >
+                            <Download />
+                            دانلود PDF
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -417,7 +437,7 @@ export default function PayrollPage() {
             </div>
           </Card>
 
-          {selected && <PayslipView payslip={selected} onClose={() => setSelected(null)} />}
+          {selected && <PayslipView runId={run.id} payslip={selected} onClose={() => setSelected(null)} />}
 
           <InsuranceListCard runId={run.id} />
         </>
@@ -426,7 +446,7 @@ export default function PayrollPage() {
   );
 }
 
-function PayslipView({ payslip, onClose }: { payslip: Payslip; onClose: () => void }) {
+function PayslipView({ runId, payslip, onClose }: { runId: number; payslip: Payslip; onClose: () => void }) {
   const earnings: Array<[string, number | undefined]> = [
     ["حقوق پایه", payslip.baseSalary],
     ["پایه سنوات", payslip.seniorityAmount],
@@ -483,6 +503,10 @@ function PayslipView({ payslip, onClose }: { payslip: Payslip; onClose: () => vo
         </div>
       </CardContent>
       <CardContent className="flex gap-2 print:hidden">
+        <Button variant="outline" onClick={() => void downloadPayslipPdf(runId, payslip.id)}>
+          <Download />
+          دانلود PDF
+        </Button>
         <Button variant="outline" onClick={() => window.print()}>
           <Printer />
           چاپ
