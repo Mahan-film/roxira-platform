@@ -40,7 +40,8 @@ cd services/migration_worker && npm ci
 node cli.mjs --manifest-dir <dir> --out <dir> [--ai]            # transform + discover + stage (no database)
 node cli.mjs --print-ddl --tenant <uuid> | psql ...            # review and apply the staging DDL (reviewed PR/ops step)
 MIGRATION_PG_DSN=... node cli.mjs --manifest-dir <dir> --out <dir> --tenant <uuid> --load
-node --test                                                      # transform + certificate + discover-eval tests
+node --test                                                      # transform + certificate + discover-eval tests (pg.test.mjs skipped unless MIGRATION_TEST_PG_DSN is set)
+MIGRATION_TEST_PG_DSN=postgres://... node --test pg.test.mjs     # real-PostgreSQL DDL, COPY loader, and FORCE RLS isolation test
 ```
 `INSTALL postgres` must have been run once on the worker (it downloads the extension).
 
@@ -77,10 +78,11 @@ with `maskSample` and the runner refuses to write a phone number or e-mail.
 9 transform tests with real DuckDB: normalisation (JS and SQL agree), Jalali dates incl. leap years, manifest validation, the full
 pipeline on Holoo-like tables (Arabic letters, Persian-digit amounts, bad cells, a table only the "AI" can place with a fake
 client), tamper and row-count mismatch, 300 000 rows under `memory_limit=64MB`, AI guardrails, masking and model fallback
-order, DDL and loader dry run. Plus the replayable discover eval above.
+order, DDL and loader dry run. Plus the replayable discover eval above, and real PostgreSQL 16 tests (`pg.test.mjs`: `stagingDdl`,
+`loadToPostgres` binary COPY, `FORCE ROW LEVEL SECURITY` isolation with a `NOSUPERUSER NOBYPASSRLS` role; 300 000-row `items` fixture
+loaded into PostgreSQL in 1,713 ms).
 
 Not proven here:
-- **Load into PostgreSQL**: no Postgres on this Mac; the statements are generated and checked, not executed.
 - **50 GB**: only 300 k rows / 64 MB limit were run. DuckDB spills to `temp_directory`; run a real 5-10 GB export first.
 - **A live model on new vendor schemas**: the recordings cover the eval's synthetic tables; a real export may use
   column names none of the cases or synonyms contain. Re-run `--record` after adding cases for it.

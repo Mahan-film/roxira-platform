@@ -155,4 +155,49 @@ describePg('bulk import on PostgreSQL', () => {
     const leaked = await new TenantScope(app).run(T2, (m) => m.query(`SELECT 1 FROM bulk_import_rows WHERE job_id = $1`, [job.id]));
     expect(leaked).toHaveLength(0);
   });
+
+  it('reports stagingBytes and pauses with فضای موقت when IMPORT_STAGING_MAX_BYTES is exceeded, then resumes without duplicates', async () => {
+    const prevMax = process.env.IMPORT_STAGING_MAX_BYTES;
+    const job = await upload(T1, 'staging-cap.csv', csv(9_000));
+    try {
+      // Seed 4 000 rows so stagingBytes() is guaranteed non-zero before the runner's first check.
+      await repo.appendBatch(
+        T1,
+        job.id,
+        0,
+        1,
+        Array.from({ length: 4_000 }, (_, i) => [String(i + 1), `name ${i + 1}`, String(i * 3)]),
+        {
+          bytesRead: 0,
+          rowsStaged: 4_000,
+          tables: [{ idx: 0, name: 'staging-cap', columns: ['id', 'name', 'amount'], rows: 4_000 }],
+          checkpoint: { rows: { 'staging-cap': 4_000 } },
+        },
+      );
+      expect(await repo.stagingBytes()).toBeGreaterThan(0);
+
+      process.env.IMPORT_STAGING_MAX_BYTES = '1';
+      expect(await runner.run(T1, job.id)).toBe('skipped');
+      const stopped = (await repo.getJob(T1, job.id))!;
+      expect(stopped.status).toBe('failed');
+      expect(stopped.error).toContain('فضای موقت');
+
+      process.env.IMPORT_STAGING_MAX_BYTES = String(1 << 30);
+      await repo.transition(T1, job.id, ['failed'], { status: 'queued', error: null });
+      expect(await runner.run(T1, job.id)).toBe('ready');
+
+      const done = (await repo.getJob(T1, job.id))!;
+      expect(done.rowsStaged).toBe(9_000);
+      const counted = await new TenantScope(app).run(T1, (m) =>
+        m.query(
+          `SELECT count(*)::int AS n, count(distinct row_no)::int AS d FROM bulk_import_rows WHERE job_id = $1`,
+          [job.id],
+        ),
+      );
+      expect(counted[0]).toEqual({ n: 9_000, d: 9_000 });
+    } finally {
+      if (prevMax === undefined) delete process.env.IMPORT_STAGING_MAX_BYTES;
+      else process.env.IMPORT_STAGING_MAX_BYTES = prevMax;
+    }
+  });
 });

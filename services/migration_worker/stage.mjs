@@ -146,7 +146,17 @@ export async function loadToPostgres({ conn, tenantId, stagedDir, dsn, dryRun = 
   if (!dsn) throw new Error('MIGRATION_PG_DSN is not set');
   await conn.run('LOAD postgres');
   await conn.run(`ATTACH ${qstr(dsn)} AS pg (TYPE postgres)`);
-  for (const s of statements.slice(1)) await conn.run(s);
+  try {
+    await conn.run('BEGIN TRANSACTION');
+    await conn.run(`CALL postgres_execute('pg', ${qstr(`SET LOCAL app.tenant_id = '${tenantId}'`)})`);
+    for (const s of statements.slice(1)) await conn.run(s);
+    await conn.run('COMMIT');
+  } catch (err) {
+    await conn.run('ROLLBACK').catch(() => undefined);
+    throw err;
+  } finally {
+    await conn.run('DETACH pg').catch(() => undefined);
+  }
   return { statements };
 }
 
