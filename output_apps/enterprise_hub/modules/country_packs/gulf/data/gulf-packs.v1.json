@@ -1,0 +1,256 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "description": "Effective-dated Gulf pack configuration (SA, AE, OM, BH, QA, KW): currency exponents, working-week & holiday calendars, VAT rates/thresholds, retention, and penalties.",
+  "jurisdictions": {
+    "SA": {
+      "code": "SA",
+      "currency": "SAR",
+      "currencyDecimals": 2,
+      "weekendDays": [5, 6],
+      "holidays": ["2026-09-23", "2027-02-22"],
+      "eInvoiceIssuanceBusinessDays": null,
+      "vatRates": [
+        {
+          "code": "standard",
+          "rate": "0.15",
+          "effectiveFrom": "2020-07-01",
+          "sourceUrl": "https://zatca.gov.sa",
+          "asOf": "2026-11-21",
+          "verified": true
+        }
+      ],
+      "thresholds": [
+        {
+          "code": "fatoora_wave_25",
+          "value": 187500,
+          "unit": "SAR",
+          "effectiveFrom": "2027-02-01",
+          "sourceUrl": "https://zatca.gov.sa",
+          "asOf": "2026-07-24",
+          "verified": true
+        },
+        {
+          "code": "b2b_simplified_max",
+          "value": 1000,
+          "unit": "SAR",
+          "effectiveFrom": "2021-12-04",
+          "sourceUrl": "https://zatca.gov.sa",
+          "asOf": "2026-11-21",
+          "verified": true
+        }
+      ],
+      "retention": [
+        {
+          "code": "tax_records_default",
+          "years": 6,
+          "effectiveFrom": "2018-01-01",
+          "sourceUrl": "https://zatca.gov.sa",
+          "asOf": "2026-11-21",
+          "verified": false
+        }
+      ],
+      "penalties": [
+        {
+          "code": "phase1_not_issuing",
+          "amount": 5000,
+          "unit": "SAR",
+          "effectiveFrom": "2021-12-04",
+          "sourceUrl": "https://zatca.gov.sa",
+          "asOf": "2026-11-21",
+          "verified": true
+        },
+        {
+          "code": "phase1_deleting_or_amending",
+          "amount": 10000,
+          "unit": "SAR",
+          "effectiveFrom": "2021-12-04",
+          "sourceUrl": "https://zatca.gov.sa",
+          "asOf": "2026-11-21",
+          "verified": true
+        }
+      ]
+    },
+    "AE": {
+      "code": "AE",
+      "currency": "AED",
+      "currencyDecimals": 2,
+      "weekendDays": [6, 0],
+      "holidays": ["2026-12-02", "2026-12-03", "2027-01-01"],
+      "eInvoiceIssuanceBusinessDays": 14,
+      "vatRates": [
+        {
+          "code": "standard",
+          "rate": "0.05",
+          "effectiveFrom": "2018-01-01",
+          "sourceUrl": "https://tax.gov.ae",
+          "asOf": "2026-11-21",
+          "verified": true
+        }
+      ],
+      "thresholds": [
+        {
+          "code": "vat_mandatory_registration",
+          "value": 375000,
+          "unit": "AED",
+          "effectiveFrom": "2018-01-01",
+          "sourceUrl": "https://tax.gov.ae",
+          "asOf": "2026-11-21",
+          "verified": true
+        },
+        {
+          "code": "vat_voluntary_registration",
+          "value": 187500,
+          "unit": "AED",
+          "effectiveFrom": "2018-01-01",
+          "sourceUrl": "https://tax.gov.ae",
+          "asOf": "2026-11-21",
+          "verified": true
+        },
+        {
+          "code": "small_business_relief_cap",
+          "value": 3000000,
+          "unit": "AED",
+          "effectiveFrom": "2026-08-07",
+          "effectiveTo": "2029-12-31",
+          "sourceUrl": "https://mof.gov.ae",
+          "asOf": "2026-08-07",
+          "verified": true
+        }
+      ],
+      "retention": [
+        {
+          "code": "tax_records_default",
+          "years": 5,
+          "effectiveFrom": "2018-01-01",
+          "sourceUrl": "https://tax.gov.ae",
+          "asOf": "2026-11-21",
+          "verified": false
+        }
+      ],
+      "penalties": [
+        {
+          "code": "einvoice_late_issuance_per_doc",
+          "amount": 100,
+          "unit": "AED",
+          "effectiveFrom": "2026-10-30",
+          "sourceUrl": "https://mof.gov.ae/einvoicing",
+          "asOf": "2026-10-30",
+          "verified": false
+        },
+        {
+          "code": "einvoice_system_failure_initial",
+          "amount": 5000,
+          "unit": "AED",
+          "effectiveFrom": "2026-10-30",
+          "sourceUrl": "https://mof.gov.ae/einvoicing",
+          "asOf": "2026-10-30",
+          "verified": false
+        }
+      ]
+    },
+    "OM": {
+      "code": "OM",
+      "currency": "OMR",
+      "currencyDecimals": 3,
+      "weekendDays": [5, 6],
+      "holidays": ["2026-11-18"],
+      "eInvoiceIssuanceBusinessDays": null,
+      "vatRates": [
+        {
+          "code": "standard",
+          "rate": "0.05",
+          "effectiveFrom": "2021-04-16",
+          "sourceUrl": "https://taxoman.gov.om",
+          "asOf": "2026-11-21",
+          "verified": false
+        }
+      ],
+      "thresholds": [
+        {
+          "code": "einvoice_phase1_turnover",
+          "value": 5000000,
+          "unit": "OMR",
+          "effectiveFrom": "2027-04-01",
+          "sourceUrl": "https://taxoman.gov.om",
+          "asOf": "2026-08-09",
+          "verified": false
+        }
+      ],
+      "retention": [
+        {
+          "code": "tax_records_default",
+          "years": 10,
+          "effectiveFrom": "2021-04-16",
+          "sourceUrl": "https://taxoman.gov.om",
+          "asOf": "2026-11-21",
+          "verified": false
+        }
+      ],
+      "penalties": []
+    },
+    "BH": {
+      "code": "BH",
+      "currency": "BHD",
+      "currencyDecimals": 3,
+      "weekendDays": [5, 6],
+      "holidays": ["2026-12-16"],
+      "eInvoiceIssuanceBusinessDays": null,
+      "vatRates": [
+        {
+          "code": "standard",
+          "rate": "0.10",
+          "effectiveFrom": "2022-01-01",
+          "sourceUrl": "https://www.nbr.gov.bh",
+          "asOf": "2026-11-21",
+          "verified": false
+        }
+      ],
+      "thresholds": [],
+      "retention": [
+        {
+          "code": "tax_records_default",
+          "years": 5,
+          "effectiveFrom": "2019-01-01",
+          "sourceUrl": "https://www.nbr.gov.bh",
+          "asOf": "2026-11-21",
+          "verified": false
+        }
+      ],
+      "penalties": []
+    },
+    "QA": {
+      "code": "QA",
+      "currency": "QAR",
+      "currencyDecimals": 2,
+      "weekendDays": [5, 6],
+      "holidays": ["2026-12-18"],
+      "eInvoiceIssuanceBusinessDays": null,
+      "vatRates": [],
+      "thresholds": [],
+      "retention": [
+        {
+          "code": "tax_records_default",
+          "years": 10,
+          "effectiveFrom": "2019-01-01",
+          "sourceUrl": "https://gta.gov.qa",
+          "asOf": "2026-11-21",
+          "verified": false
+        }
+      ],
+      "penalties": []
+    },
+    "KW": {
+      "code": "KW",
+      "currency": "KWD",
+      "currencyDecimals": 3,
+      "weekendDays": [5, 6],
+      "holidays": ["2027-02-25", "2027-02-26"],
+      "eInvoiceIssuanceBusinessDays": null,
+      "vatRates": [],
+      "thresholds": [],
+      "retention": [],
+      "penalties": []
+    }
+  }
+}
