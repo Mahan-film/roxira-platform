@@ -18,13 +18,16 @@ import { isSwaggerEnabled } from './security/swagger.util';
  *   loopback/خصوصی) قابل تنظیم است.
  */
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
 
   app.set('trust proxy', process.env.TRUST_PROXY ?? 'loopback, linklocal, uniquelocal');
   app.disable('x-powered-by');
 
-  app.use(json({ limit: process.env.BODY_LIMIT ?? '10mb' }));
-  app.use(urlencoded({ extended: true, limit: process.env.BODY_LIMIT ?? '10mb' }));
+  const attachRawBody = (req: unknown, _res: unknown, buf: Buffer) => {
+    (req as { rawBody?: Buffer }).rawBody = buf;
+  };
+  app.use(json({ limit: process.env.BODY_LIMIT ?? '10mb', verify: attachRawBody }));
+  app.use(urlencoded({ extended: true, limit: process.env.BODY_LIMIT ?? '10mb', verify: attachRawBody }));
 
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
 
