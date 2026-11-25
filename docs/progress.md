@@ -126,3 +126,8 @@ Do not edit past entries — add a new one instead.
 - Why: the owner wanted the lost corpus found, maximum Antigravity load, a safe disk, and a production window at 04:07.
 - Follow-up: fix the smoke gate (#1413, owner sentence), Postgres/pgbouncer recreate after a real deploy, #1385 hub blocker, B1 reviews (#1374 #943 #1266), private flip conditions, SMS template change.
 
+
+## 2026-11-25 — hub — prod chat outage fixed, #1385 blocker closed, review-noise audit
+- What changed: #1467 (reviewdog download test marked integration, main CI green), #1469 (removed the local `_regs` import that broke Smart Judge chat since #1385), #1470 (unreviewed/OCR regulation rows never called official, exact Gregorian->Jalali dates, inactive rows skipped). #1463 closed as a duplicate. Hub notes 25b-25e on #592: audit rows, ruff inline comments off PRs, desk dispatch only by cron/hub, PR hygiene.
+- Why: chat was down about 15 h with no alarm; 57% of PR comments were non-blocking ruff noise and 94% of desk runs were manual.
+- Follow-up: Gemini full-system audit (owner runs it), safe server image/cache cleanup after the owner's yes, chat probe in deploy smoke, Pytest/m1-gate required.

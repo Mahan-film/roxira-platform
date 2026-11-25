@@ -1,6 +1,6 @@
 # Current state (read this first)
 
-> **Last update: 2026-11-24 early morning (main hub, Claude Sonnet 5.5 session on the Mac).**
+> **Last update: 2026-11-25 (main hub, Claude Opus 5.5 session on the Mac).**
 > New hub: `docs/hub/HUB_START.md` -> `docs/hub/MAIN_HUB_MASTER_BRIEF.md` -> this file. Laptop: `docs/hub/BOX_HUB_MASTER_BRIEF.md`.
 > Live GitHub data beats this file: `gh pr list`, the newest `## WAVE`, `HUB -> LANES`, `BOX:` and `HUB→BOX:` comments on #592, and `HUB-ANSWER`/`ASK-BOX` on #965.
 
@@ -30,29 +30,41 @@ The owner wants maximum pressure on Antigravity lanes and cheap agents (Haiku/So
   The other SSD partition is exFAT: not for git. Mac system disk had about 14 GiB free on 2026-11-23.
 - Owner guide: `docs/owner/ANTIGRAVITY_GUIDE_FA.md`.
 
-## WAVE 34 (2026-11-24) and what the hub did overnight
-- WAVE 34 on #592: WIP cap 8, one push per PR per round, rows per lane (L1 #1413 first, then #1403 #1388-#1391; L4 #1381-#1383 #1392 #1393; new rows #1414-#1419 for L9 L10 L11 L3 L2 L12). R36 infra research digest: #1387 (rows #1388-#1396).
-- Review desk ran 6 rounds from a background loop (every open PR had a verdict at its head at 05:00). 15 safe PRs were queued to merge (#1253 merged; check the rest). Merged by the hub: #1072 #1200 (both NOT deployed, see Production), #1347 queued earlier, #1402 (RV1-RV8, Mac L7), #1404 (Mac disk reaper), #1411.
-- Hub reviews still owed (B1 core): #1385 has a hub **blocker** (OCR/unreviewed regulation rows must not be called official; validate dates), #1374 (law validity dates), #943 (tax engine), #1266 (tenant export), #1359 and #350 (queued).
-- Mac disk: internal disk was at 2.9 GB; the hub removed 64 safe worktrees (free 34 GB) and installed the launchd job `ir.roxira.reaper` (15 min, #1404; L1 extends it in #1403). `caffeinate -dimsu` runs in a Terminal tab to keep the Mac awake.
-- Legal corpus is NOT lost: prod Qdrant has laws v6 (served, 6304), v7b (7229, not served), regulations_v3b (1322), rulings_v1 (1732), judiciary_circulars (250, no code reads it: #1382). Raw files are on the production host under data/legal. Switching the served law collection needs the owner's sentence.
+## 2026-11-25 hub session (Opus 5.5, Mac)
+- Main CI fixed (#1467). Smart Judge chat was broken about 15 h by #1385 (UnboundLocalError from a local import): fixed by #1469, deployed.
+  #1470 closed the #1385 hub blocker (unreviewed/OCR regulation rows never called official, exact Jalali dates, inactive rows skipped); deployed f010aea0, 0 chat errors.
+  #1463 closed as its duplicate. Autodeploy works again (the 2026-11-24 rollback loop is over).
+- Hub notes on #592: 25b, 25c (full audit rows: L5 import period lock, L1 m1-gate blocking, L1 chat probe in deploy smoke, L11 #230 successor, L1 opentelemetry flake),
+  25d (ruff reviewdog inline comments -> checks tab, ignore RUF001-003), 25e (lanes stop manual desk dispatch; desk one edited comment + status; prune timer 24h;
+  WIP -> draft; close stale blocker PRs and duplicates; do not merge dependabot #1450 python 3.15).
+- Measured (last 60 PRs): 435 comments, 77% bots, 57% ruff inline. Desk 595 runner-min in 2.5 days, 94/100 runs manual. 19 open PRs with newest desk blocker, 11 still CLEAN.
+  Pytest (unit) red on main (opentelemetry `_ExtendedAttributes` import) and not required. 82 open PRs.
+- Owner has a Gemini full-system audit prompt (not in the repo: public repo, it lists gaps). The Gemini report comes back to the hub: review it, turn it into rows.
+- Rule for the hub: never reply to ruff/style inline comments; act only on red required checks, desk blocker, hub BLOCKER. Once desk says no blocker and CI is green, merge.
 
-## Production (read-only facts, 2026-11-24)
-- **Autodeploy is blocked.** Since 22:26 UTC every deploy was rolled back by the smoke gate (missing SMOKE_AUTH_TOKEN, a 404 health path, a quoting bug); prod repo HEAD stays at 71c80e51. #1072 and #1200 are merged but not running (SSE keepalive code, Postgres sizing). Fix row #1413 (L1, protected path: needs an owner sentence before merge). After it deploys, recreate postgres_prod and pgbouncer_prod (owner runs the compose command) so the sizing applies.
-- Host: aarch64, 4 vCPU, **7.7 GB RAM** (5 GB used), disk 78%. Postgres 17 is tiny (137 MB, 9 connections). Qdrant v1.19.0 (upgrade row #1388). AI core image python:3.11 (#1391 matrix decides 3.14 or 3.15; #1309 held).
-- Kavenegar key was rotated (Mac env and prod .env match, containers recreated, SMS arrives). Owner is creating new SMS templates with the last line `@domain #%token` (ghazi-verify2, roxira-verify2); then the hub gives the .env template-name change.
+## Production (read-only facts, 2026-11-25)
+- Repo HEAD f010aea0 (#1470), autodeploy every 5 min with smoke + rollback. Host 7.7 GB RAM (279 MB free, swap 4/8 GB), disk 77% (disk guard at 80%).
+- Docker: rollback needs the `:prev` tags (`deploy.sh:89-101`, `rollback.sh:39-43`) so NEVER `docker image prune -a`. Several running containers use untagged images.
+  Safe to remove (owner yes pending): build cache 5 GB, old pgbouncer `<none>` 4c1ca, two `roxira-sandbox-*` images. `unclecode/crawl4ai` 8.6 GB is a stopped service
+  in `docker/research-stack/docker-compose.yml`: removal is a decision, not cleanup. Weekly prune timer `until=168h` reclaims 0 B (25e row).
+- Backups OK (DR dump + restic nightly, offsite timers). TLS until 2027-01-17/20. #1200 Postgres/PgBouncer recreate still not done.
 
 ## Waiting on the owner
-- Private flip (not done, repo still public): needs the exact `--owner-go` sentence from both owners AFTER: docker-slot proof under load (#1395/#1400), P14 (disable deploy-prod.yml at flip), billing check P13/P15 (no payment method; hosted minutes budget), P16 gate count, P2 hooks on Mac and colleague, history scan done (31 findings, 8 triaged: old OpenRouter/SMS.ir keys in history, Kavenegar rotated; owner checks the other two providers).
-- Owner sentences per protected PR: #663 (hash refresh, new head), #831 (RLS/login migration: owner logs in once after), #963 (renumber migration first), #1198 (desk blocker), #1262 #1349 #1386 #1309 #1229 #1242 #1297 #1379. L12 writes Persian owner packets (#1419).
-- Restart window of 04:07 happened for #1072/#1200 only; #663 and #831 skipped.
+- Yes/no: clean the safe server items above (~5.6 GB, rollback untouched).
+- SMOKE_AUTH_TOKEN for a real chat probe in the deploy smoke (25c row). Ruleset: add Pytest and m1-gate as required once green.
+- Private flip (repo still public): exact `--owner-go` sentence from both owners after the checklist in `docs/ops/PRIVATE_FLIP_CHECKLIST.md`.
+- Owner sentences per protected PR (#663 #831 #963 #1198 #1229 #1242 #1262 #1297 #1349 #1379 #1386 #1410); `OWNER-OK` must come from approver id 243877284.
+- Held, never touch: #1309 #943.
 
 ## Known issues
-- Review desk: 8 PRs per run; free models give false blockers; dispatch once, never while one runs (a loop script did this overnight; it lived in the old session's scratchpad).
-- #1295 hub_merge.py fail-open gaps; 164 OSV findings (#1031); CSP report-only; 21 tables without FORCE RLS (#1417 report); Ruff 14k violations (non-blocking).
+- Mac: 178 git worktrees (about 31 GB on the SSD, 14 GB on the Mac), 1,751 local branches; Mac system disk about 29 GB free. Clean per branch only, never bulk.
+- Docs sprawl: 7+ state files, 7 handoffs, prompts in 4 places. `docs/hub/memory/` duplicates the Claude memory. Consolidate after the Gemini audit.
+- #1295 hub_merge.py fail-open gaps; 164 OSV findings (#1031); CSP report-only; 21 tables without FORCE RLS (#1417); Ruff 14k violations (non-blocking).
 
 ## Next step for the new hub chat
-1. Read newest `HUB -> LANES`/WAVE 34 on #592 and #965. 2. `gh pr list`; merge queued PRs that have a no-blocker desk verdict at the current head (lesson 37); re-run the review desk once if heads changed. 3. Review #1385 again after L4 pushes, then #1374 #943 #1266. 4. Ask the owner for the single sentence on the #1413 smoke-gate fix. 5. After deploy works: Postgres recreate command, then flip readiness. Do not name the country; replies to the owner in Persian.
+1. Read #592 notes 25c, 25d, 25e and newer lane reports. 2. If the owner gives the Gemini audit report, verify its claims and post one HUB -> LANES note with rows.
+3. `gh pr list`; merge PRs with a no-blocker desk verdict at head (lesson 37); do not loop on nits. 4. #1468 (prompts v4, docs) merge after desk no blocker.
+5. Server cleanup only after the owner's yes, with the safe list above. Replies to the owner in Persian; never name the country.
 
 ## Key documents
 `docs/hub/SYSTEM_OVERVIEW.md`, `docs/hub/MAIN_HUB_MASTER_BRIEF.md`, `docs/antigravity/LANE_RULES.md`, `docs/antigravity/PROMPTS_FA.md`, `docs/ops/PRIVATE_FLIP_CHECKLIST.md`, `docs/strategy/research/R36_DIGEST.md` (issue #1387), `docs/agents/LESSONS.md`.
