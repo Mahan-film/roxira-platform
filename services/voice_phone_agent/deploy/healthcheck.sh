@@ -43,4 +43,16 @@ qual=$(docker exec "$BRIDGE" asterisk -rx 'pjsip show contacts' 2>/dev/null \
 [ -n "$qual" ] || qual=none
 [ "$qual" = Avail ] && ok "carrier contact qualify $qual" || bad "carrier contact qualify $qual"
 
+# 7-day registration stability tracking (status word and stability flag only)
+STATE_FILE=${PHONE_SIP_STATE_FILE:-/srv/data/phone/state/sip_registration_history.json}
+if [ -f "$STATE_FILE" ]; then
+  seven_d=$(grep -oE '"seven_day_stable":[[:space:]]*(true|false)' "$STATE_FILE" 2>/dev/null | cut -d: -f2 | tr -d ' ')
+  consec_days=$(grep -oE '"consecutive_registered_days":[[:space:]]*[0-9.]+' "$STATE_FILE" 2>/dev/null | cut -d: -f2 | tr -d ' ')
+  if [ "$seven_d" = "true" ]; then
+    ok "sip 7-day stability met (${consec_days:-7} days)"
+  elif [ -n "$consec_days" ]; then
+    ok "sip stability tracking (${consec_days} days registered)"
+  fi
+fi
+
 exit $fail

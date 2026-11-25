@@ -43,6 +43,61 @@ those called numbers; empty means LiveKit's default trunk (any called number). T
 `qualify_frequency=20` under `[sabanet_aor]` in the bundle's `pjsip.conf`: the OPTIONS pings keep the
 carrier's UDP path through the host firewall open, so inbound INVITEs are not dropped.
 
+## SIP Trunk NAT Traversal & 7-Day Registration Runbook (#1115 / T292)
+
+LiveKit SIP does not send SIP `REGISTER` requests to telecom providers; it acts as an inbound trunk listener
+and outbound gateway. The SIP registration with the carrier lives entirely inside the Asterisk bridge container
+(`lk-sabanet-bridge`).
+
+### Why SIP shows "Unregistered" behind NAT
+1. **Unroutable Contact Header**: When Asterisk runs inside a Docker bridge network (`172.18.0.0/16`) behind
+   a host NAT, it advertises its private internal IP in `Via` and `Contact` headers unless RFC 1918 subnets are
+   declared in `local_net`. The carrier's registrar replies to the unroutable private address.
+2. **NAT Conntrack Expiration**: Outbound SIP REGISTER over UDP opens a stateful tracking entry in the router
+   and host `ufw`. Without bidirectional traffic, the state entry expires in 30–60 seconds, causing incoming calls
+   and renewal responses to be dropped. `qualify_frequency=20` sends periodic SIP OPTIONS to keep the port open.
+3. **Premature Retry Termination**: By default, Asterisk stops attempting registration after 10 failed attempts
+   (`max_retries=10`) and permanently gives up on HTTP 403 Forbidden (`forbidden_retry_interval=0`). Any transient
+   network blip or carrier reload leaves Asterisk permanently stuck in `Unregistered` or `Rejected`.
+4. **Symmetric RTP & Port Mismatches**: Carrier NAT routers rewrite the source port. Without `rtp_symmetric=yes`
+   and `force_rport=yes`, media and signaling responses are directed to the wrong port, resulting in silent drops.
+
+### Automated NAT Configuration in `pjsip.conf`
+`05_root_phone_stack.sh` invokes `pjsip_nat_config.py` to idempotently configure:
+- **`[transport-...]`**: `local_net=127.0.0.1/32`, `local_net=10.0.0.0/8`, `local_net=172.16.0.0/12`, `local_net=192.168.0.0/16`.
+- **`[..._endpoint]`**: `rtp_symmetric=yes`, `force_rport=yes`, `rewrite_contact=yes`, `direct_media=no`.
+- **`[..._reg]`**: `max_retries=10000`, `retry_interval=60`, `forbidden_retry_interval=300`, `fatal_retry_interval=300`.
+- **`[..._aor]`**: `qualify_frequency=20`.
+
+### Diagnostic Commands (Safe, Non-Destructive)
+```bash
+# Verify current registration and carrier qualify
+sudo phone-stack sip-check
+
+# Check or tune pjsip.conf NAT compliance
+sudo phone-stack nat-check
+sudo phone-stack nat-tune
+
+# Asterisk CLI inspection inside the container
+docker exec lk-sabanet-bridge asterisk -rx "pjsip show registrations"
+docker exec lk-sabanet-bridge asterisk -rx "pjsip show contacts"
+
+# Live SIP packet tracing (does not restart Asterisk)
+docker exec lk-sabanet-bridge asterisk -rx "pjsip set logger on"
+# (disable after inspection):
+docker exec lk-sabanet-bridge asterisk -rx "pjsip set logger off"
+
+# Reload pjsip configuration without dropping active calls
+docker exec lk-sabanet-bridge asterisk -rx "pjsip reload"
+```
+
+### 7-Day Registration Stability Goal
+A nightly cron runs `/usr/local/lib/phone-stack/check_sip_registration.py --alert`.
+- Status is recorded in `/srv/data/phone/state/sip_registration_history.json`.
+- Alerts are dispatched immediately if state changes away from `Registered`.
+- Goal: `pjsip show registrations` maintains continuous `Registered` state for `>= 7.0` days (168 hours).
+Full runbook: `docs/ops/SIP_NAT_TRUNK_RUNBOOK.md`.
+
 Open: a pinned-digest compose file in git that mounts the bundle's configs (after the first run shows
 the bundle's images and service names).
 

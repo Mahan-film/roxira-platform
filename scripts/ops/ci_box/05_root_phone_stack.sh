@@ -54,14 +54,14 @@ else
   echo "no bundle at ~$U (already extracted?)"; [ -d $STACK ] || { echo "and $STACK missing"; exit 1; }
 fi
 
-echo "== 1b. carrier qualify in the bundle's pjsip.conf"
+echo "== 1b. carrier NAT and qualify in the bundle's pjsip.conf"
 # Carrier INVITEs come back over the UDP conntrack/NAT entry the REGISTER opened; ufw input is DROP,
 # so once that entry expires inbound calls are dropped (pjsip keep_alive_interval covers TCP only).
 # qualify_frequency=20 makes Asterisk send OPTIONS to the carrier every 20 s, keeping the path open.
-# Written in place with `cat tmp > file`: the live file is a single-file bind mount, where sed -i
+# Behind NAT, transport needs local_net and endpoints need rtp_symmetric/force_rport/rewrite_contact.
+# Registration resilience: max_retries=10000, forbidden_retry_interval=300 (stops permanent 'Unregistered').
+# Written in place with atomic copy: the live file is a single-file bind mount, where sed -i
 # (rename) fails with "Resource busy". Never print the file: it holds the carrier password.
-# ensure_qualify <file> <aor>: exactly one qualify_frequency=20 right under [<aor>].
-# Returns 0 = changed, 1 = already so, 2 = could not edit (the file is left untouched).
 ensure_qualify() {
   local f=$1 aor=$2 t rc=1
   t=$(mktemp) || return 2
@@ -83,14 +83,22 @@ AOR=${PHONE_SIP_AOR:-sabanet_aor}
 # grep exits 1 for a pjsip.conf without the section; `|| true` keeps set -e/pipefail from aborting here.
 PJSIP=$(find $STACK -maxdepth 4 -type f -name pjsip.conf -exec grep -lE "^[[:space:]]*\[$AOR\]" {} + 2>/dev/null | head -1 || true)
 if [ -z "$PJSIP" ]; then
-  echo "WARN: no pjsip.conf with [$AOR] in the bundle; carrier qualify not set"
+  echo "WARN: no pjsip.conf with [$AOR] in the bundle; carrier NAT/qualify not set"
 else
-  qrc=0; ensure_qualify "$PJSIP" "$AOR" || qrc=$?
-  case $qrc in
-    0) echo "qualify_frequency=20 set under [$AOR] in ${PJSIP#$STACK/} (applies when the bridge container restarts)" ;;
-    1) echo "qualify_frequency=20 already under [$AOR] in ${PJSIP#$STACK/}" ;;
-    *) echo "WARN: could not edit ${PJSIP#$STACK/}; left unchanged, carrier qualify not set" ;;
-  esac
+  tuned=0
+  if [ -f "$REPO/scripts/ops/ci_box/pjsip_nat_config.py" ]; then
+    python3 "$REPO/scripts/ops/ci_box/pjsip_nat_config.py" --apply "$PJSIP" --aor "$AOR" || tuned=$?
+  else
+    tuned=2
+  fi
+  if [ "$tuned" -ne 0 ]; then
+    qrc=0; ensure_qualify "$PJSIP" "$AOR" || qrc=$?
+    case $qrc in
+      0) echo "qualify_frequency=20 set under [$AOR] in ${PJSIP#$STACK/} (applies when the bridge container restarts)" ;;
+      1) echo "qualify_frequency=20 already under [$AOR] in ${PJSIP#$STACK/}" ;;
+      *) echo "WARN: could not edit ${PJSIP#$STACK/}; left unchanged, carrier qualify not set" ;;
+    esac
+  fi
 fi
 COMPOSE=""
 for f in docker-compose.yml docker-compose.yaml compose.yaml compose.yml; do
@@ -152,7 +160,9 @@ echo "== 5. phone-stack wrapper"
 install -d -m 755 -o root -g root /usr/local/lib/phone-stack
 T=$(mktemp); from_main healthcheck.sh > "$T"; install -m 755 -o root -g root "$T" /usr/local/lib/phone-stack/healthcheck.sh; rm -f "$T"
 T=$(mktemp); from_main livekit_keys.sh > "$T"; install -m 755 -o root -g root "$T" /usr/local/lib/phone-stack/livekit_keys.sh; rm -f "$T"
-printf 'COMPOSE=%q\nSTACK=%q\nAGENT_ENV=%q\nAGENT_USER=%q\n' "$COMPOSE" "$STACK" "$AGENT/.env" "$U" > /usr/local/lib/phone-stack/phone-stack.conf
+T=$(mktemp); from_main check_sip_registration.py > "$T"; install -m 755 -o root -g root "$T" /usr/local/lib/phone-stack/check_sip_registration.py; rm -f "$T"
+T=$(mktemp); from_main pjsip_nat_config.py > "$T"; install -m 755 -o root -g root "$T" /usr/local/lib/phone-stack/pjsip_nat_config.py; rm -f "$T"
+printf 'COMPOSE=%q\nSTACK=%q\nAGENT_ENV=%q\nAGENT_USER=%q\nPJSIP=%q\n' "$COMPOSE" "$STACK" "$AGENT/.env" "$U" "${PJSIP:-}" > /usr/local/lib/phone-stack/phone-stack.conf
 chmod 644 /usr/local/lib/phone-stack/phone-stack.conf
 # Model registry for the agent (MODELS_YAML in voice-ai-agent.service); the agent copy has no repo tree.
 git -c safe.directory="$REPO" -C "$REPO" show origin/main:config/models.yaml > /usr/local/lib/phone-stack/models.yaml
@@ -160,11 +170,11 @@ chown root:root /usr/local/lib/phone-stack/models.yaml; chmod 644 /usr/local/lib
 TMP_BIN=$(mktemp)
 cat > "$TMP_BIN" <<'WRAPPER'
 #!/bin/bash
-# phone-stack up|down|status|logs [lines]  (root-owned; run with sudo)
+# phone-stack up|down|status|keys|sip-check|nat-check|nat-tune|logs [lines]  (root-owned; run with sudo)
 set -euo pipefail
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 . /usr/local/lib/phone-stack/phone-stack.conf
-export STACK AGENT_ENV AGENT_USER
+export STACK AGENT_ENV AGENT_USER PJSIP
 KEYS=/usr/local/lib/phone-stack/livekit_keys.sh
 DC=(docker compose -f "$COMPOSE" --project-directory "$(dirname "$COMPOSE")")
 # Logs never show secrets, env lines, phone numbers or IP addresses.
@@ -202,12 +212,29 @@ case "${1:-status}" in
   status)
     /usr/local/lib/phone-stack/healthcheck.sh
     ;;
+  sip-check)
+    python3 /usr/local/lib/phone-stack/check_sip_registration.py "${@:2}"
+    ;;
+  nat-check)
+    if [ -n "${PJSIP:-}" ] && [ -f "$PJSIP" ]; then
+      python3 /usr/local/lib/phone-stack/pjsip_nat_config.py --check "$PJSIP" "${@:2}"
+    else
+      echo "no pjsip.conf configured in phone-stack.conf"
+    fi
+    ;;
+  nat-tune)
+    if [ -n "${PJSIP:-}" ] && [ -f "$PJSIP" ]; then
+      python3 /usr/local/lib/phone-stack/pjsip_nat_config.py --apply "$PJSIP" "${@:2}"
+    else
+      echo "no pjsip.conf configured in phone-stack.conf"
+    fi
+    ;;
   logs)
     n=${2:-100}; [[ "$n" =~ ^[0-9]{1,4}$ ]] || n=100
     echo "== containers"; "${DC[@]}" logs --no-color --tail "$n" 2>&1 | scrub
     echo "== units"; journalctl -u voice-ai-tts -u voice-ai-agent -n "$n" -o cat --no-pager 2>&1 | scrub
     ;;
-  *) echo "usage: phone-stack up|down|status|keys|logs [lines]" >&2; exit 2 ;;
+  *) echo "usage: phone-stack up|down|status|keys|sip-check|nat-check|nat-tune|logs [lines]" >&2; exit 2 ;;
 esac
 WRAPPER
 install -m 0755 -o root -g root "$TMP_BIN" /usr/local/bin/phone-stack
