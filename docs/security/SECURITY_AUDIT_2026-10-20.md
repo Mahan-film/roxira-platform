@@ -10,7 +10,7 @@ Fix status: **FIXED-IN-REPO** = changed in this branch, takes effect on next dep
 
 | # | Severity | Finding | Status |
 |---|----------|---------|--------|
-| 1 | High | No off-site backup copy from the server: restic repo not configured, local sets only (Mac pull is the only second copy), backup disk 83% used, 12 GB free | OWNER |
+| 1 | High | No off-site backup copy from the server: restic repo not configured, local sets only (Mac pull is the only second copy), backup disk 83% used, 12 GB free | OWNER (code delivered in `scripts/ops/backup/` & `docs/ops/OFFSITE_BACKUP.md`; rollout, Object Lock bucket, and reconciliation tracked in `docs/ops/DR_EVIDENCE_PACK.md`) |
 | 2 | Medium | Most containers run as root / without `no-new-privileges` / without `cap_drop` (app, nginx, mail, postgres, redis, qdrant, pgbouncer, embeddings, twenty_*) | FIXED-IN-REPO (partly), rest OWNER |
 | 3 | Medium | `roxira-docker-firewall.service` is in `failed` state since 2026-10-13 (script `/usr/local/sbin/roxira-docker-firewall.sh` does not exist, and is not in the repo) | OWNER |
 | 4 | Medium | Several proxied locations had no rate limit (`/api/backend/`, `/enterprise-hub/`, `/crm-service/`, `/api/judge/`) | FIXED-IN-REPO |

@@ -148,7 +148,10 @@ URGENT_COOLDOWN_S = 3600          # one Telegram message per problem per hour
 URGENT_DOWN_S = 15 * 60           # a site down this long in a row is urgent
 DIGEST_MIN_GAP_S = 6 * 3600       # never send two digests closer than this (unless --force)
 TEHRAN = timezone(timedelta(hours=3, minutes=30))  # no DST since 2022
-_URGENT_KEY = re.compile(r"^(site:|judge-health$)")
+# `chat` is the real Smart Judge answer probe (synthetic_check.check_chat). It was missing here,
+# so a 15 h chat outage on 2026-11-24 only reached the 12 h email digest.
+# `chat_p95` (slowness) stays digest-only.
+_URGENT_KEY = re.compile(r"^(site:|judge-health$|chat$)")
 _DOWN_MIN = re.compile(r"\(down (\d+) min\)")
 
 SCHEMA = """

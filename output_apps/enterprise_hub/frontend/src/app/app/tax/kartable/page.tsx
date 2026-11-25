@@ -37,7 +37,7 @@ import type {
 } from "@/types/kartable-reconciliation";
 
 const selectClass =
-  "h-9 rounded-md border border-input bg-background px-3 text-sm";
+  "h-11 min-h-[44px] rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 function bucketBadgeVariant(
   bucket: KartableBucket,
@@ -134,20 +134,25 @@ export default function KartableReconciliationPage() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-4">
-                <label className="space-y-1.5 text-sm">
+                <label htmlFor="kartable-year-input" className="space-y-1.5 text-sm">
                   <span className="font-medium">سال شمسی</span>
                   <Input
+                    id="kartable-year-input"
+                    aria-label="سال شمسی"
                     type="number"
                     min={1300}
                     max={1600}
+                    className="h-11 min-h-[44px]"
                     value={yearInput}
                     onChange={(e) => setYearInput(e.target.value)}
                   />
                 </label>
 
-                <label className="space-y-1.5 text-sm">
+                <label htmlFor="kartable-quarter-select" className="space-y-1.5 text-sm">
                   <span className="font-medium">فصل مالیاتی</span>
                   <select
+                    id="kartable-quarter-select"
+                    aria-label="فصل مالیاتی"
                     className={`${selectClass} w-full`}
                     value={quarter}
                     onChange={(e) => setQuarter(Number(e.target.value))}
@@ -160,10 +165,13 @@ export default function KartableReconciliationPage() {
                   </select>
                 </label>
 
-                <label className="space-y-1.5 text-sm">
+                <label htmlFor="kartable-sales-file" className="space-y-1.5 text-sm">
                   <span className="font-medium">فایل فروش کارپوشه (CSV / XLSX)</span>
                   <Input
+                    id="kartable-sales-file"
+                    aria-label="فایل فروش کارپوشه (CSV / XLSX)"
                     type="file"
+                    className="min-h-[44px]"
                     accept=".csv,.xlsx,.xls"
                     onChange={(e) => setSalesFile(e.target.files?.[0] ?? null)}
                   />
@@ -174,10 +182,13 @@ export default function KartableReconciliationPage() {
                   )}
                 </label>
 
-                <label className="space-y-1.5 text-sm">
+                <label htmlFor="kartable-purchases-file" className="space-y-1.5 text-sm">
                   <span className="font-medium">فایل خرید کارپوشه (CSV / XLSX)</span>
                   <Input
+                    id="kartable-purchases-file"
+                    aria-label="فایل خرید کارپوشه (CSV / XLSX)"
                     type="file"
+                    className="min-h-[44px]"
                     accept=".csv,.xlsx,.xls"
                     onChange={(e) => setPurchasesFile(e.target.files?.[0] ?? null)}
                   />
@@ -189,13 +200,14 @@ export default function KartableReconciliationPage() {
                 </label>
 
                 <div className="flex items-center gap-3 md:col-span-4">
-                  <Button type="submit" disabled={busy}>
+                  <Button type="submit" disabled={busy} className="min-h-[44px]">
                     <RefreshCw className={`me-2 h-4 w-4 ${busy ? "animate-spin" : ""}`} />
                     {busy ? "در حال تطبیق…" : "شروع تطبیق کارپوشه"}
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
+                    className="min-h-[44px]"
                     disabled={busy}
                     onClick={() => {
                       setSalesFile(null);
@@ -328,13 +340,13 @@ export default function KartableReconciliationPage() {
                     <div>فاکتورهای ما در فصل: {formatNumber(sec.data.ourInvoiceCount)}</div>
                     <div>ردیف‌های کارپوشه در فصل: {formatNumber(sec.data.kartableRowCount)}</div>
                     {sec.data.outOfPeriodSkippedCount > 0 && (
-                      <div className="col-span-2 text-amber-600">
+                      <div className="col-span-2 text-amber-700 dark:text-amber-400 font-medium">
                         ردیف‌های خارج از فصل انتخاب‌شده (صرف‌نظر شد):{" "}
                         {formatNumber(sec.data.outOfPeriodSkippedCount)}
                       </div>
                     )}
                     {sec.data.undatedSkippedCount > 0 && (
-                      <div className="col-span-2 text-amber-600">
+                      <div className="col-span-2 text-amber-700 dark:text-amber-400 font-medium">
                         ردیف‌های بدون تاریخ معتبر در کارپوشه (در جمع محاسبه نشد):{" "}
                         {formatNumber(sec.data.undatedSkippedCount)}
                       </div>
@@ -352,7 +364,7 @@ export default function KartableReconciliationPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
                     type="button"
-                    size="sm"
+                    className="min-h-[44px] px-3.5"
                     variant={bucketFilter === "all" ? "default" : "outline"}
                     onClick={() => setBucketFilter("all")}
                   >
@@ -371,7 +383,7 @@ export default function KartableReconciliationPage() {
                       <Button
                         key={bucket}
                         type="button"
-                        size="sm"
+                        className="min-h-[44px] px-3.5"
                         variant={bucketFilter === bucket ? "default" : "outline"}
                         onClick={() => setBucketFilter(bucket)}
                       >
@@ -381,8 +393,9 @@ export default function KartableReconciliationPage() {
                   })}
 
                   <select
+                    id="kartable-section-filter"
                     aria-label="فیلتر بخش"
-                    className={selectClass}
+                    className={`${selectClass} min-h-[44px]`}
                     value={sectionFilter}
                     onChange={(e) => setSectionFilter(e.target.value as ReconSectionFilter)}
                   >
@@ -392,9 +405,11 @@ export default function KartableReconciliationPage() {
                   </select>
 
                   <div className="relative min-w-[220px] flex-1">
-                    <Search className="pointer-events-none absolute end-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Search className="pointer-events-none absolute end-2.5 top-3.5 h-4 w-4 text-muted-foreground" />
                     <Input
-                      className="pe-8"
+                      id="kartable-search-query"
+                      aria-label="جست‌وجو بر اساس شماره مالیاتی، فاکتور یا طرف حساب"
+                      className="h-11 min-h-[44px] pe-8"
                       placeholder="جست‌وجو بر اساس شماره مالیاتی، فاکتور یا طرف حساب…"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
