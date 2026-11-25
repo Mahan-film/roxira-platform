@@ -142,10 +142,12 @@ def _snapshot_file() -> str:
 def _redis():
     url = os.environ.get("REDIS_URL", "").strip()
     if not url:
-        host = os.environ.get("REDIS_HOST", "").strip()
+        host = os.environ.get("REDIS_CACHE_HOST", "").strip() or os.environ.get("REDIS_HOST", "").strip()
         if not host:
             return None
-        url = f"redis://{host}:{os.environ.get('REDIS_PORT', '6379').strip()}/0"
+        port = os.environ.get("REDIS_CACHE_PORT", "").strip() or os.environ.get("REDIS_PORT", "6379").strip()
+        db = os.environ.get("REDIS_CACHE_DB", "1").strip()
+        url = f"redis://{host}:{port}/{db}"
     try:
         import redis  # type: ignore
 

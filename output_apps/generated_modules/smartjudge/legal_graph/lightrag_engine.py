@@ -821,10 +821,12 @@ def _embed_redis_url() -> str:
     url = os.environ.get("REDIS_URL", "").strip()
     if url:
         return url
-    host = os.environ.get("REDIS_HOST", "").strip()
+    host = os.environ.get("REDIS_CACHE_HOST", "").strip() or os.environ.get("REDIS_HOST", "").strip()
     if not host:
         return ""
-    return f"redis://{host}:{os.environ.get('REDIS_PORT', '6379').strip()}/0"
+    port = os.environ.get("REDIS_CACHE_PORT", "").strip() or os.environ.get("REDIS_PORT", "6379").strip()
+    db = os.environ.get("REDIS_CACHE_DB", "1").strip()
+    return f"redis://{host}:{port}/{db}"
 
 
 def _get_embed_redis() -> Any:

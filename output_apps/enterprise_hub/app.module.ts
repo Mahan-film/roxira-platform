@@ -87,8 +87,9 @@ const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(proce
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         connection: {
-          host: config.get<string>('REDIS_HOST', '127.0.0.1'),
-          port: config.get<number>('REDIS_PORT', 6379),
+          host: config.get<string>('REDIS_QUEUE_HOST') || config.get<string>('REDIS_HOST', '127.0.0.1'),
+          port: Number(config.get<number | string>('REDIS_QUEUE_PORT')) || Number(config.get<number | string>('REDIS_PORT', 6379)) || 6379,
+          db: Number(config.get<number | string>('REDIS_QUEUE_DB', 0)) || 0,
         },
       }),
     }),
