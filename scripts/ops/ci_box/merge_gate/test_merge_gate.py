@@ -864,3 +864,45 @@ def test_legacy_mode_unchanged_one_merge_per_tick_and_waits(tmp_path):
 
 def test_code_default_is_legacy_queue_mode():
     assert mg.DEFAULTS["queue_mode"] == "legacy" and mg.DEFAULTS["max_enqueue_per_tick"] == 5
+
+
+def test_github_mode_red_run_for_older_sha_does_not_hold(tmp_path):
+    red_old = [{"status": "completed", "conclusion": "failure", "id": 5, "head_sha": "d" * 40,
+                "created_at": "2026-11-26T10:00:00Z"}]
+    g, api = gh_mode(tmp_path, n_prs=2, main_runs=red_old)  # main HEAD is "e" * 40
+    assert g.tick() == "1,2"
+
+
+def test_github_mode_unreadable_main_head_fails_closed(tmp_path):
+    red = [{"status": "completed", "conclusion": "failure", "id": 5, "head_sha": "e" * 40,
+            "created_at": "2026-11-26T10:00:00Z"}]
+    g, api = gh_mode(tmp_path, n_prs=2, main_runs=red, main_sha="")
+    assert g.tick() is None and enqueues(api) == []
+
+
+def test_github_mode_missing_node_id_fetched_from_rest_else_skipped(tmp_path):
+    a, b = pr(n=1), pr(n=2)
+    del a["node_id"], b["node_id"]
+    g, api = make(tmp_path, cfg_over={"queue_mode": "github"}, prs=[a, b])
+    orig = api.__call__
+
+    def call(method, path, fields=None, paginate=False):
+        res = orig(method, path, fields, paginate)
+        if method == "GET" and path.endswith("/pulls/1"):
+            return {**res, "node_id": "REAL1"}
+        return res
+
+    g.api = call
+    assert g.tick() == "1"
+    ids = [c[2]["id"] for c in api.calls if c[1] == "graphql"]
+    assert ids and set(ids) == {"REAL1"} and not any(i.startswith("PR_") for i in ids)
+
+
+def test_legacy_dispatch_entry_counts_once_but_undispatched_head_is_not_counted(tmp_path):
+    g, api, clock = desk_clock(tmp_path, "a", comments=[])
+    g.tick()  # never dispatched before: dispatched now, count 1, retry still available
+    assert len(dispatches(api)) == 1
+    assert g.state.dispatch_entry(f"7:{HEAD}")["count"] == 1
+    clock["t"] += 91 * 60
+    g.tick()
+    assert len(dispatches(api)) == 2

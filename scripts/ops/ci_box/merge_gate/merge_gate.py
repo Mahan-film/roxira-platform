@@ -370,7 +370,10 @@ class Gate:
         return user.get("login") in set(self.cfg["review_comment_authors"])
 
     def hold_reason(self, pr: dict, labels: set[str]) -> str:
-        """Explicit human holds: labels, title marker, unresolved BLOCKER: comment from an allowlisted id."""
+        """Explicit human holds: labels, title marker, unresolved BLOCKER: comment (allowlisted id).
+
+        A hub `Verdict: blocker` hold is cleared by a later UNBLOCK:, a later DESK-OVERRIDE, or a
+        later OWNER-OK from an owner id for the exact head: the owner outranks the hub."""
         hit = sorted(labels & set(self.cfg["block_labels"]))
         if hit:
             return "label " + ", ".join(f"`{x}`" for x in hit)
@@ -603,13 +606,17 @@ class Gate:
     def queue_github(self) -> bool:
         return str(self.cfg.get("queue_mode", "legacy")).lower() == "github"
 
-    @staticmethod
-    def node_id(pr: dict) -> str:
-        return str(pr.get("node_id") or f"PR_{pr['number']}")
+    def node_id(self, pr: dict) -> str:
+        """GraphQL node id: from the object, else REST pulls/<n>; "" when unknown (never guessed)."""
+        nid = pr.get("node_id")
+        if not nid:
+            full = self.api("GET", self.p(f"pulls/{pr['number']}"))
+            nid = (full or {}).get("node_id") if isinstance(full, dict) else None
+        return str(nid or "")
 
-    def in_merge_queue(self, pr: dict) -> bool:
+    def in_merge_queue(self, pr: dict, nid: str) -> bool:
         """True when the PR already sits in the merge queue (GraphQL isInMergeQueue)."""
-        res = self.api("POST", "graphql", {"query": QUEUED_QUERY, "id": self.node_id(pr)})
+        res = self.api("POST", "graphql", {"query": QUEUED_QUERY, "id": nid})
         data = (res or {}).get("data") if isinstance(res, dict) else None
         node = (data or {}).get("node") or {}
         return bool(node.get("isInMergeQueue"))
@@ -631,7 +638,12 @@ class Gate:
             if len(done) >= budget:
                 break
             try:
-                if self.in_merge_queue(pr):
+                nid = self.node_id(pr)
+                if not nid:
+                    log.error("#%s has no GraphQL node id, skipped (not guessed)", pr["number"])
+                    continue
+                pr["node_id"] = nid
+                if self.in_merge_queue(pr, nid):
                     log.info("#%s already in the merge queue, skipped", pr["number"])
                     continue
             except GhError as e:
@@ -647,7 +659,7 @@ class Gate:
             log.info("[dry-run] would enqueue #%s at %s", n, head[:7])
             return False
         try:
-            fields = {"query": ENQUEUE_MUTATION, "id": self.node_id(pr), "oid": head}
+            fields = {"query": ENQUEUE_MUTATION, "id": pr["node_id"], "oid": head}
             self.api("POST", "graphql", fields)
         except GhError as e:
             log.error("enqueue of #%s refused by GitHub: %s", n, e)
@@ -659,11 +671,15 @@ class Gate:
         return True
 
     def main_red_guard(self) -> tuple[bool, str]:
-        """False while the newest completed main CI run is red (one alert per run)."""
+        """False while the newest completed main CI run is red AND is for the current base HEAD.
+
+        A red run for an older sha (a newer run still pending) does not hold. An unreadable run
+        list or HEAD holds (fail closed). One alert per red run."""
         base, wf = self.cfg["base"], self.cfg["main_ci_workflow"]
         try:
             q = f"branch={base}&event=push&status=completed&per_page=20"
             res = self.api("GET", self.p(f"actions/workflows/{wf}/runs?{q}"))
+            ref = self.api("GET", self.p(f"commits/{base}"))
         except GhError as e:
             return False, f"cannot read main CI: {e}"
         runs = [r for r in ((res or {}).get("workflow_runs", []) if isinstance(res, dict) else [])
@@ -672,6 +688,13 @@ class Gate:
             return True, ""
         newest = max(runs, key=lambda r: (r.get("created_at") or "", r.get("id") or 0))
         if newest.get("conclusion") not in FAILED_RUN:
+            return True, ""
+        main_sha = str((ref or {}).get("sha") or "") if isinstance(ref, dict) else ""
+        if not main_sha:
+            return False, "cannot read the main HEAD"
+        if str(newest.get("head_sha") or "") != main_sha:
+            log.info("newest completed main CI run is red but for an older sha %s: not holding",
+                     str(newest.get("head_sha") or "")[:7])
             return True, ""
         key = f"main-red:{newest.get('id')}"
         if not self.state.seen(key):
