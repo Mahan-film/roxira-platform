@@ -4,6 +4,8 @@ import {
   Index,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { fromDb, fromMinor, minorToDecimal, Money, toMinor } from '../../accounting/money';
+import { CostingMethod } from '../enums/costing-method.enum';
 
 /**
  * موجودیت کالای انبار (Stock Item) — نگاشت مستقیم به جدول موجود
@@ -74,7 +76,30 @@ export class StockItemEntity {
   })
   unitRatio?: number | null;
 
-  /** Item attributes up to 10 key-value pairs (e.g. size, colour) */
+  /** Attributes captured for this batch (up to 10 pairs) */
   @Column({ type: 'jsonb', nullable: true })
   attributes?: Record<string, string> | null;
+
+  @Column({
+    type: 'varchar',
+    length: 16,
+    name: 'costing_method',
+    default: CostingMethod.FIFO,
+  })
+  costingMethod: CostingMethod;
+
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    name: 'standard_cost',
+    nullable: true,
+    transformer: {
+      to: (value: Money | null | undefined) =>
+        value === null || value === undefined ? null : minorToDecimal(toMinor(value)),
+      from: (value: string | null) =>
+        value === null ? null : fromMinor(fromDb(value)),
+    },
+  })
+  standardCost?: Money | null;
 }

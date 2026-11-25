@@ -6,7 +6,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
-import { parseScaled } from '../../accounting/money';
+import { fromDb, fromMinor, parseScaled, toMinor } from '../../accounting/money';
 import { doubleToHundredths } from '../../sales/sales-math';
 import { SalesAvailabilityService } from '../../sales/services/sales-availability.service';
 import {
@@ -17,6 +17,7 @@ import {
 export { assertValidQuantityScale };
 import { CreateStockItemDto } from '../dto/create-stock-item.dto';
 import { CreateWarehouseDto, UpdateWarehouseDto } from '../dto/create-warehouse.dto';
+import { CostingMethod } from '../enums/costing-method.enum';
 import { FifoBatchResponseDto } from '../dto/fifo-batch-response.dto';
 import {
   FifoValuationResponseDto,
@@ -145,6 +146,11 @@ export class InventoryService {
       isLowStock: this.isLowStock(Number(available) / 100, Number(entity.minQuantity)),
       batchNumber: entity.batchNumber,
       fifoValuation: this.roundMoney(fifoValuation),
+      costingMethod: entity.costingMethod ?? CostingMethod.FIFO,
+      standardCost:
+        entity.standardCost !== null && entity.standardCost !== undefined
+          ? fromMinor(fromDb(entity.standardCost))
+          : null,
     };
   }
 
@@ -298,6 +304,17 @@ export class InventoryService {
       );
     }
 
+    const costingMethod = dto.costingMethod ?? CostingMethod.FIFO;
+    const standardCost = dto.standardCost !== undefined ? dto.standardCost : null;
+    if (
+      costingMethod === CostingMethod.STANDARD &&
+      (standardCost === null || standardCost === undefined)
+    ) {
+      throw new BadRequestException(
+        'برای روش قیمت‌گذاری استاندارد، تعیین بهای تمام‌شده استاندارد الزامی است.',
+      );
+    }
+
     const created = await this.inventoryRepository.createStockItem(tenantId, {
       sku: dto.sku,
       barcode: dto.barcode,
@@ -305,6 +322,8 @@ export class InventoryService {
       quantity: this.roundQuantity(dto.quantity ?? 0),
       minQuantity: this.roundQuantity(dto.minQuantity ?? 0),
       batchNumber: dto.batchNumber ?? null,
+      costingMethod,
+      standardCost,
     });
 
     return this.toStockItemResponse(created, 0);
@@ -438,6 +457,21 @@ export class InventoryService {
     if (dto.minQuantity !== undefined) {
       assertValidQuantityScale(dto.minQuantity, QUANTITY_SCALE, 'حداقل موجودی');
       entity.minQuantity = this.roundQuantity(dto.minQuantity);
+    }
+    if (dto.costingMethod !== undefined) {
+      entity.costingMethod = dto.costingMethod;
+    }
+    if (dto.standardCost !== undefined) {
+      entity.standardCost =
+        dto.standardCost !== null ? fromMinor(toMinor(dto.standardCost)) : null;
+    }
+    if (
+      entity.costingMethod === CostingMethod.STANDARD &&
+      (entity.standardCost === null || entity.standardCost === undefined)
+    ) {
+      throw new BadRequestException(
+        'برای روش قیمت‌گذاری استاندارد، تعیین بهای تمام‌شده استاندارد الزامی است.',
+      );
     }
 
     const saved = await this.inventoryRepository.saveStockItem(tenantId, entity);
@@ -606,6 +640,7 @@ export class InventoryService {
         totalCost: layer.value,
         layers: [layer],
         processedAt: new Date(),
+        priceVariance: result.priceVariance,
       };
     } catch (error) {
       this.rethrowDomainError(error);
@@ -630,8 +665,8 @@ export class InventoryService {
         batchId: layer.batchId,
         batchNumber: layer.batchNumber,
         quantity: this.roundQuantity(layer.quantity),
-        unitPurchaseCost: this.roundMoney(layer.unitPurchaseCost),
-        value: this.roundMoney(layer.quantity * layer.unitPurchaseCost),
+        unitPurchaseCost: this.roundMoney(Number(layer.unitPurchaseCost)), // money-ok: legacy DTO number response boundary
+        value: this.roundMoney(layer.quantity * Number(layer.unitPurchaseCost)), // money-ok: legacy DTO number response boundary
         warehouseId: layer.warehouseId,
       }));
 

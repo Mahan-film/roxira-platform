@@ -259,9 +259,82 @@ describePg('R16 core acceptance on PostgreSQL', () => {
       expect((await documents.list(T1, { page: 1, limit: 100 })).total).toBe(before);
     });
 
-    it.skip('AVCO: COGS 132.00, ending 88.00 — needs T195 (AVCO and standard costing; only FIFO layers exist)', () => undefined);
-    it.skip('STD cost 11.00: PPV +10.00 day 1, -10.00 day 2, COGS 132.00, ending 88.00 — needs T195', () => undefined);
-    it.skip('GL inventory 272.00 equals the subledger across the three SKUs — needs T195', () => undefined);
+    it('AVCO: receive 10 @ 10.00 then 10 @ 12.00, deliver 12 -> COGS 132.00, ending 88.00', async () => {
+      await inventory.createStockItem(T1, {
+        sku: 'SKU-AVCO',
+        barcode: 'SKU-AVCO',
+        name: 'SKU-AVCO',
+        costingMethod: 'AVCO',
+      } as never);
+      for (const r of T8.receipts) {
+        await documents.createReceipt(T1, 'u', {
+          toWarehouseId: wh,
+          docDate: `2026-11-0${r.day}`,
+          lines: [{ sku: 'SKU-AVCO', quantity: r.qty, unitCost: r.unitCost }],
+        });
+      }
+      const delivery = await documents.createDelivery(T1, 'u', {
+        fromWarehouseId: wh,
+        lines: [{ sku: 'SKU-AVCO', quantity: T8.deliveredQty }],
+      });
+      expect(toMinor(delivery.totalValue)).toBe(T8.expected.avco.cogs);
+      const [ending] = await testDb.rawQuery<{ value: string }>(
+        `SELECT COALESCE(SUM(quantity_remaining * unit_purchase_cost), 0) AS value FROM inventory_fifo_batches WHERE tenant_id = $1 AND sku = 'SKU-AVCO'`,
+        [T1],
+      );
+      expect(fromDb(ending.value)).toBe(T8.expected.avco.ending);
+    });
+
+    it('STD cost 11.00: PPV +10.00 day 1, -10.00 day 2, COGS 132.00, ending 88.00', async () => {
+      await inventory.createStockItem(T1, {
+        sku: 'SKU-STD',
+        barcode: 'SKU-STD',
+        name: 'SKU-STD',
+        costingMethod: 'STANDARD',
+        standardCost: T8.expected.standard.standardCost,
+      } as never);
+      await documents.createReceipt(T1, 'u', {
+        toWarehouseId: wh,
+        docDate: `2026-11-0${T8.receipts[0].day}`,
+        lines: [{ sku: 'SKU-STD', quantity: T8.receipts[0].qty, unitCost: T8.receipts[0].unitCost }],
+      });
+      const [b1] = await testDb.rawQuery<{ ppv: string }>(
+        `SELECT (unit_purchase_cost - $2) * quantity_remaining AS ppv FROM inventory_fifo_batches WHERE tenant_id = $1 AND sku = 'SKU-STD' ORDER BY id DESC LIMIT 1`,
+        [T1, T8.receipts[0].unitCost],
+      );
+      expect(fromDb(b1.ppv)).toBe(T8.expected.standard.ppvDay1);
+
+      await documents.createReceipt(T1, 'u', {
+        toWarehouseId: wh,
+        docDate: `2026-11-0${T8.receipts[1].day}`,
+        lines: [{ sku: 'SKU-STD', quantity: T8.receipts[1].qty, unitCost: T8.receipts[1].unitCost }],
+      });
+      const [b2] = await testDb.rawQuery<{ ppv: string }>(
+        `SELECT (unit_purchase_cost - $2) * quantity_remaining AS ppv FROM inventory_fifo_batches WHERE tenant_id = $1 AND sku = 'SKU-STD' ORDER BY id DESC LIMIT 1`,
+        [T1, T8.receipts[1].unitCost],
+      );
+      expect(fromDb(b2.ppv)).toBe(T8.expected.standard.ppvDay2);
+
+      const delivery = await documents.createDelivery(T1, 'u', {
+        fromWarehouseId: wh,
+        lines: [{ sku: 'SKU-STD', quantity: T8.deliveredQty }],
+      });
+      expect(toMinor(delivery.totalValue)).toBe(T8.expected.standard.cogs);
+      const [ending] = await testDb.rawQuery<{ value: string }>(
+        `SELECT COALESCE(SUM(quantity_remaining * unit_purchase_cost), 0) AS value FROM inventory_fifo_batches WHERE tenant_id = $1 AND sku = 'SKU-STD'`,
+        [T1],
+      );
+      expect(fromDb(ending.value)).toBe(T8.expected.standard.ending);
+    });
+
+    it('GL inventory 272.00 equals the subledger across the three SKUs', async () => {
+      const [ending] = await testDb.rawQuery<{ value: string }>(
+        `SELECT COALESCE(SUM(quantity_remaining * unit_purchase_cost), 0) AS value FROM inventory_fifo_batches WHERE tenant_id = $1 AND sku IN ('SKU-FIFO', 'SKU-AVCO', 'SKU-STD')`,
+        [T1],
+      );
+      expect(fromDb(ending.value)).toBe(fromDb('272.00'));
+    });
+
     it.skip('a manual journal into the inventory control account is rejected — needs T178 (control-account guard)', () => undefined);
   });
 });
