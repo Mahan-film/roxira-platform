@@ -2,7 +2,7 @@
 
 منبع: وکیل دادگستری، برگهٔ ۳۰ پرسشی دقت (پرسش‌ها از `data/eval/chat_golden/legal_gate_2026-10-12.json` و
 `docs/legal/LAWYER_REVIEW_GATE_FA.md`). شماره‌گذاری ۱ تا ۳۰ مالک در مخزن نیست؛ نگاشت زیر بر اساس موضوع است.
-دورهای قبل: `docs/LAWYER_ANSWERS_2026-09-30.md` (دور ۱) و بند‌های ۴ تا ۶ گیت در `smartjudge/legal_notes.py` (۲۰۲۶-۱۰-۱۳).
+دورهای قبل: `archive/docs/LAWYER_ANSWERS_2026-09-30.md` (دور ۱) و بند‌های ۴ تا ۶ گیت در `smartjudge/legal_notes.py` (۲۰۲۶-۱۰-۱۳).
 سازوکار اعمال همان دور قبل است: ماژول `output_apps/generated_modules/smartjudge/legal_notes.py` (افزودهٔ پرامپت + یادداشت ثابت
 انتهای پاسخ)، انتظارات گیت طلایی، راهنماها.
 
