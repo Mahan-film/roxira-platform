@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import { Currency } from '../../currency/enums/currency.enum';
 import { InvoiceDirection } from '../enums/invoice-kind.enum';
 import { InvoiceStatus } from '../enums/invoice-status.enum';
@@ -57,4 +57,15 @@ export class QueryInvoiceDto {
   @IsOptional()
   @IsUUID()
   branchId?: string;
+
+  @ApiPropertyOptional({ description: 'فیلتر صورتحساب‌های سررسید گذشته' })
+  @IsOptional()
+  @Transform(({ obj, key }) => {
+    const raw = obj?.[key];
+    if (raw === 'true' || raw === true) return true;
+    if (raw === 'false' || raw === false) return false;
+    return raw;
+  })
+  @IsBoolean()
+  overdue?: boolean;
 }

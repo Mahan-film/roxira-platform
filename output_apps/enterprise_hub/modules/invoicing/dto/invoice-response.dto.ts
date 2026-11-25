@@ -140,6 +140,15 @@ export class InvoiceResponseDto {
   @ApiProperty({ description: 'متن خطای سامانه مودیان (در صورت عدم موفقیت)', nullable: true })
   moadianErrorText?: string | null;
 
+  @ApiProperty({ description: 'تاریخ سررسید (YYYY-MM-DD)', nullable: true })
+  dueDate?: string | null;
+
+  @ApiProperty({ description: 'آیا صورتحساب سررسید گذشته است (صادرشده و سررسید قبل از امروز تهران)' })
+  isOverdue?: boolean;
+
+  @ApiProperty({ description: 'مبلغ مانده قابل پرداخت (در صورت پرداخت کامل: ۰)' })
+  outstandingAmount?: number;
+
   @ApiProperty({ description: 'کد مالیاتی ۲۲ رقمی سامانه مودیان', nullable: true })
   moadianTaxId?: string | null;
 }
