@@ -16,7 +16,7 @@ export interface PostingRequest {
   sourceId: string;
   /** ISO 8601 date of the document (never the clock). */
   date: string;
-  amounts?: Amounts;
+  amounts: Amounts;
   variableLines?: readonly VariableLineInput[];
   description: string;
   partyCode?: string;
@@ -104,7 +104,7 @@ export class PostingRulesService {
     const mapping = await this.mappingFor(tenantId, request.docType, manager);
     const proposal = buildProposal({
       docType: request.docType,
-      amounts: request.amounts,
+      amounts: request.amounts ?? {},
       variableLines: request.variableLines,
       mapping,
       overrides: request.overrides,

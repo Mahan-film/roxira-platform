@@ -34,7 +34,7 @@ export interface VariableLineInput {
 
 export interface BuildInput {
   docType: string;
-  amounts?: Amounts;
+  amounts: Amounts;
   /** Variable/repeated lines for documents whose lines cannot be predicted by a fixed template schema. */
   variableLines?: readonly VariableLineInput[];
   /** Tenant mapping for this doc type (already merged with the tenant-wide mapping). */
