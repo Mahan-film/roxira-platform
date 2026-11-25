@@ -216,6 +216,8 @@ describePg('WooCommerce Integration on PostgreSQL (NOSUPERUSER NOBYPASSRLS) (T85
     const qr = testDb.owner.createQueryRunner();
 
     try {
+      await expect(migration.down(qr)).rejects.toThrow(/Cannot drop/);
+      await qr.query(`TRUNCATE TABLE "woocommerce_sync_logs", "woocommerce_configs"`);
       await migration.down(qr);
       const tablesDown = await qr.query(`
         SELECT table_name FROM information_schema.tables
