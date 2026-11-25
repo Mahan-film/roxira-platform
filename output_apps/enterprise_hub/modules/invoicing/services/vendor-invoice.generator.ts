@@ -431,7 +431,11 @@ export class PostgresSequencerStore implements SequencerStore {
        RETURNING "last_number"`,
       [k.tenantId, k.documentType ?? 'INVOICE', k.channel ?? 'DEFAULT', k.fiscalYear ?? 0, k.series.trim()],
     );
-    return Number(rows[0].last_number);
+    const parsed = Number(rows[0].last_number);
+    if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+      throw new BadRequestException('Document counter overflow.');
+    }
+    return parsed;
   }
 }
 
@@ -456,6 +460,9 @@ export class GaplessNumberSequencer {
   async nextNumberAsync(keyOrSeries: string | DocumentCounterKey, manager?: any): Promise<{ sequenceNumber: number; documentNumber: string }> {
     if (typeof keyOrSeries === 'string' && this.store instanceof PostgresSequencerStore) {
       throw new BadRequestException('PostgresSequencerStore requires full DocumentCounterKey with tenantId, not a bare series string.');
+    }
+    if (this.store instanceof PostgresSequencerStore && !manager) {
+      throw new BadRequestException('PostgresSequencerStore requires a transactional manager.');
     }
     const key = typeof keyOrSeries === 'string' ? { series: keyOrSeries } : keyOrSeries;
     const res = await this.store.nextNumber(key, manager);
@@ -534,6 +541,9 @@ export class VendorInvoiceGenerator {
   ): VendorInvoiceDocument {
     assertValidIsoDate(request.issueDate, 'issueDate');
     let seq = sequenceNumber;
+    if (seq !== undefined && (!Number.isInteger(seq) || seq <= 0)) {
+      throw new BadRequestException('sequenceNumber must be a positive integer.');
+    }
     if (seq === undefined) {
       if (!this.sequencer) {
         throw new BadRequestException(
