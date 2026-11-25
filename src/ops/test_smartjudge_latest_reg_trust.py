@@ -1,5 +1,5 @@
-"""Latest-regulation answers must not present unreviewed/OCR rows as official, and untrusted dates must not
-win 'latest' (HUB re-review blocker on #1385). Offline: only light modules are imported."""
+"""Latest-regulation answers must not present unreviewed/OCR rows as official, and untrusted
+dates must not win 'latest' (HUB re-review blocker on #1385). Offline: light modules only."""
 
 import asyncio
 import datetime as dt
@@ -51,7 +51,8 @@ def test_existing_order_kept_for_valid_dates():
         {"approval_date": "1403-05-04", "number": "20"},
         {"approval_date": "1401-01-01", "number": "999"},
     ]
-    assert [r["number"] for r in rr.parse_and_sort(items, today=_today())] == ["20", "10", "50", "999"]
+    numbers = [r["number"] for r in rr.parse_and_sort(items, today=_today())]
+    assert numbers == ["20", "10", "50", "999"]
 
 
 def test_official_copy_preferred_on_same_date_and_inactive_dropped():
@@ -80,11 +81,13 @@ def test_official_reviewed_row_keeps_official_wording():
 
 def test_latest_rulings_regulations_dedupes_and_filters(monkeypatch, tmp_path):
     payloads = [
-        {"number": "7", "date": "1405-03-01", "source_tier": "unofficial", "needs_review": True, "status": "proposed"},
-        {"number": "7", "date": "1405-03-01", "source_tier": "official", "needs_review": False, "status": "VALID"},
+        {"number": "7", "date": "1405-03-01", "source_tier": "unofficial", "needs_review": True,
+         "status": "proposed"},
+        {"number": "7", "date": "1405-03-01", "source_tier": "official", "needs_review": False,
+         "status": "VALID"},
         {"number": "8", "date": "1405-04-01", "status": "repealed", "source_tier": "official"},
     ]
-    import output_apps.generated_modules.smartjudge.legal_graph.lightrag_engine as eng  # noqa: F401  (patched below)
+    import output_apps.generated_modules.smartjudge.legal_graph.lightrag_engine as eng
 
     class _Resp:
         status_code = 200
