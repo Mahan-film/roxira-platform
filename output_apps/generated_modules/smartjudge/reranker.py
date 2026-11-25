@@ -55,6 +55,47 @@ def enabled() -> bool:
     return os.getenv("SMARTJUDGE_RERANKER", "off").strip().lower() == "local"
 
 
+def reranker_mode() -> str:
+    """Return active reranker mode: ``cross_encoder`` (default) or ``colbert_maxsim``."""
+    mode = os.getenv("SMARTJUDGE_RERANKER_MODE", "cross_encoder").strip().lower()
+    return mode if mode in {"cross_encoder", "colbert_maxsim"} else "cross_encoder"
+
+
+def colbert_maxsim_score(
+    query_multivec: Sequence[Sequence[float]],
+    doc_multivec: Sequence[Sequence[float]],
+) -> float:
+    """Compute ColBERT MaxSim score: sum_{q in Q} max_{d in D} dot(q, d)."""
+    if not query_multivec or not doc_multivec:
+        return 0.0
+    total = 0.0
+    for q_vec in query_multivec:
+        best = max(sum(qi * di for qi, di in zip(q_vec, d_vec)) for d_vec in doc_multivec)
+        total += best
+    return total
+
+
+def rerank_colbert_maxsim(
+    query_multivec: Sequence[Sequence[float]],
+    rows: Sequence[Dict[str, Any]],
+    top_k: Optional[int] = None,
+    multivec_key: str = "colbert_multivec",
+) -> List[Dict[str, Any]]:
+    """Reorder ``rows`` by pre-computed BGE-M3 ColBERT MaxSim; never raises."""
+    rows = list(rows)
+    cut = len(rows) if top_k is None else max(0, int(top_k))
+    if len(rows) < 2 or not query_multivec:
+        return rows[:cut]
+    pinned = [r for r in rows if r.get("match_level") in _PIN_LEVELS]
+    rest = [r for r in rows if r.get("match_level") not in _PIN_LEVELS]
+    pool, tail = rest[: top_n()], rest[top_n():]
+    if len(pool) < 2 or not all(r.get(multivec_key) for r in pool):
+        return rows[:cut]
+    scores = [colbert_maxsim_score(query_multivec, r[multivec_key]) for r in pool]
+    order = sorted(range(len(pool)), key=lambda i: (-scores[i], i))
+    return (pinned + [pool[i] for i in order] + tail)[:cut]
+
+
 def top_n() -> int:
     return _int_env("SMARTJUDGE_RERANKER_TOP_N", 20, 1, 100)
 
