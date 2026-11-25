@@ -4,5 +4,5 @@
 migrations | TypeORM bookkeeping table, no tenant data
 tenants | the tenant registry itself (keyed by id), read before any tenant context exists
 auth_passkey_credentials | per-user login credentials keyed by user_id, read at login before the tenant is known (LESSONS 7)
-user_totp | per-user 2FA secrets keyed by user_id, read at login before the tenant is known (LESSONS 7)
+user_totp | per-user 2FA secrets keyed by user_id; ENABLE + FORCE RLS via app.user_id
 receipt_bot_processed_updates | Telegram update dedupe keyed by bot_id, written before a tenant is resolved (has ENABLE RLS but not FORCE; needs its own design)
