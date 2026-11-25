@@ -73,10 +73,66 @@ def json_dumps_compact(data: Any) -> str:
     return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 
 
+SSE_PING_INTERVAL_S = 12.0
+
+
 def sse_frame(event: str, data: Any) -> str:
     """One Server-Sent-Events frame. JSON is single-line (ensure_ascii=False keeps Persian compact)."""
     payload = json_dumps_compact(data)
     return f"event: {event}\ndata: {payload}\n\n"
+
+
+def sse_ping_frame() -> str:
+    """SSE keepalive comment frame emitted during silent intervals."""
+    return ": ping\n\n"
+
+
+async def iter_sse_queue_with_keepalive(
+    task: asyncio.Task,
+    q: asyncio.Queue,
+    *,
+    ping_interval_s: float = SSE_PING_INTERVAL_S,
+) -> AsyncIterator[str]:
+    """Yield ``delta`` SSE frames from ``q`` while ``task`` runs, emitting ``: ping`` on silence.
+
+    Reuses the pending ``q.get()`` task across keepalive timeouts so no queued token is lost.
+    """
+    interval = max(0.001, float(ping_interval_s))
+    getter: Optional[asyncio.Task] = None
+    try:
+        while True:
+            if getter is None:
+                getter = asyncio.create_task(q.get())
+            fin, _ = await asyncio.wait(
+                {task, getter},
+                timeout=interval,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if not fin:
+                yield sse_ping_frame()
+                continue
+            if getter in fin:
+                piece = getter.result()
+                getter = None
+                yield sse_frame("delta", {"content": piece})
+                continue
+            # ``task`` finished; cancel the pending getter and drain remaining tokens.
+            getter.cancel()
+            try:
+                await getter
+            except asyncio.CancelledError:
+                pass
+            getter = None
+            while not q.empty():
+                yield sse_frame("delta", {"content": q.get_nowait()})
+            break
+    finally:
+        if getter is not None and not getter.done():
+            getter.cancel()
+            try:
+                await getter
+            except asyncio.CancelledError:
+                pass
 
 
 # ---------------------------------------------------------------------------

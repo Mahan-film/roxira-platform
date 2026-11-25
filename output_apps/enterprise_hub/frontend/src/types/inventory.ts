@@ -276,3 +276,68 @@ export interface OpeningLine {
   quantity: number;
   unitCost: number;
 }
+
+export interface CardexQueryDto {
+  sku: string;
+  warehouseId?: number;
+  from?: string;
+  to?: string;
+  format?: "xlsx" | "pdf";
+}
+
+export interface CardexMovementRow {
+  date: string;
+  document: string;
+  inQty: string;
+  outQty: string;
+  unitCost: string;
+  runningQty: string;
+  runningValue: string;
+}
+
+export interface CardexReportResponse {
+  sku: string;
+  itemName: string;
+  warehouseId: number | null;
+  from: string | null;
+  to: string | null;
+  opening: { quantity: string; value: string };
+  rows: CardexMovementRow[];
+  closing: { quantity: string; value: string };
+  shortageQty: string;
+}
+
+export interface StockBalanceQueryDto {
+  asOf?: string;
+  view?: "balance" | "reorder";
+  format?: "xlsx" | "pdf";
+}
+
+export interface StockBalanceLine {
+  itemId: string;
+  warehouseId: string;
+  quantity: string;
+  value: string;
+  shortageQty: string;
+}
+
+export interface StockBalanceItem {
+  itemId: string;
+  quantity: string;
+  value: string;
+  shortageQty: string;
+}
+
+export interface ReorderAlert {
+  itemId: string;
+  quantity: string;
+  reorderPoint: string;
+  shortfall: string;
+}
+
+export interface StockBalanceReportResponse {
+  asOf: string;
+  lines: StockBalanceLine[];
+  items: StockBalanceItem[];
+  alerts: ReorderAlert[];
+}

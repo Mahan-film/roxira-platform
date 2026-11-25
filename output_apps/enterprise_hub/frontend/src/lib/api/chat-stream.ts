@@ -24,7 +24,10 @@ import {
 } from "./judge-chat-client";
 
 /** No byte from the stream within this time => give up on streaming and use /chat. */
-export const STREAM_FIRST_BYTE_TIMEOUT_MS = 60_000;
+export const STREAM_FIRST_BYTE_TIMEOUT_MS = 120_000;
+
+/** Idle timeout between stream chunks (reset on every chunk including `: ping` keepalives). */
+export const STREAM_IDLE_TIMEOUT_MS = 120_000;
 
 export interface ChatDoneBody {
   status?: string;
@@ -198,14 +201,12 @@ async function streamChatOnce(opts: StreamChatOptions): Promise<ChatDoneBody> {
     for (;;) {
       const { value, done: finished } = await reader.read();
       if (finished) break;
-      if (!gotByte) {
-        gotByte = true;
-        window.clearTimeout(timer);
-        timer = window.setTimeout(() => {
-          timedOut = true;
-          controller.abort();
-        }, CHAT_TIMEOUT_MS);
-      }
+      gotByte = true;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, STREAM_IDLE_TIMEOUT_MS);
       for (const ev of parse(decoder.decode(value, { stream: true }))) {
         const data = ev.data as Record<string, unknown>;
         if (ev.event === "delta" && typeof data.content === "string") opts.onDelta(data.content);

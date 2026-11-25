@@ -2282,9 +2282,19 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
         detected_domains = _prompt_library.detect_domains(user_text)
         competence_queries = list(_prompt_library.expand_competence_queries(user_text))
 
+    as_of = payload.get("as_of_date") or payload.get("as_of")
     main_task = aquery_knowledge_graph(retrieval_query, limit=5)
+    extra_cat_kw = {}
+    if cat_intent and cat_intent.get("issuer"):
+        extra_cat_kw["issuer"] = cat_intent["issuer"]
+    if as_of:
+        extra_cat_kw["as_of"] = as_of
     cat_task = (
-        _rulings.latest_rulings(limit=5, sub_collection=(cat_intent.get("sub_collection") or "unity_rulings"))
+        _rulings.latest_rulings(
+            limit=5,
+            sub_collection=(cat_intent.get("sub_collection") or "unity_rulings"),
+            **extra_cat_kw,
+        )
         if cat_intent
         else None
     )
@@ -2334,6 +2344,11 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
                 spoken_reply=clean_spoken_text(direct_ans) if is_voice else None,
             )
         cat_context_str = _catalog_intent.build_catalog_context(cat_rows, target=target)
+        if cat_rows:
+            if target == "regulation":
+                precedents = _regs.merge_regulations(precedents, cat_rows)
+            else:
+                precedents = _rulings.merge_rulings(precedents, cat_rows)
 
     # Default ON (SMARTJUDGE_PROMPT_LIBRARY=0 disables): competence questions get up to 3 extra
     # targeted retrieval queries, merged and de-duplicated by title.
@@ -2726,18 +2741,12 @@ async def judge_chat_stream(request: Request, payload: dict = Body(...),
     async def _events():
         yield _chat_fast.sse_frame("meta", {"replay": False})
         sent_delta = False
-        while True:
-            getter = asyncio.create_task(q.get())
-            fin, _ = await asyncio.wait({task, getter}, return_when=asyncio.FIRST_COMPLETED)
-            if getter in fin:
+        async for frame in _chat_fast.iter_sse_queue_with_keepalive(
+            task, q, ping_interval_s=_chat_fast.SSE_PING_INTERVAL_S
+        ):
+            if frame.startswith("event: delta\n"):
                 sent_delta = True
-                yield _chat_fast.sse_frame("delta", {"content": getter.result()})
-                continue
-            getter.cancel()
-            while not q.empty():
-                sent_delta = True
-                yield _chat_fast.sse_frame("delta", {"content": q.get_nowait()})
-            break
+            yield frame
         try:
             result = task.result()
         except Exception as exc:  # noqa: BLE001
@@ -2771,7 +2780,11 @@ async def judge_chat_stream(request: Request, payload: dict = Body(...),
     return StreamingResponse(_events(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
 
-_SSE_HEADERS = {"Cache-Control": "no-store", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
+_SSE_HEADERS = {
+    "Cache-Control": "no-cache, no-transform",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",
+}
 
 
 # W24: this used to default to OPENROUTER_TIERS["VIP"]["primary_model"], which
@@ -4251,7 +4264,6 @@ async def generate_speech(request: Request, payload: dict = Body(...),
     if len(text) > chat_auth.MAX_SPEAK_CHARS:
         return chat_auth.error_json(413, chat_auth.MSG_SPEAK_TOO_LONG, code="PAYLOAD_TOO_LARGE")
 
-    import re
     # تمیزسازی متن از کاراکترهای مارک‌داون
     clean_text = re.sub(r"[*#_`>\[\]\(\)\n]", " ", text).strip()
     clean_text = " ".join(clean_text.split())[:1200]
@@ -4613,7 +4625,6 @@ async def _start_cache_priming() -> None:
         print("[SMARTJUDGE][CACHE-PRIME] disabled or no API key; skipping.", file=sys.stderr)
         return
     _CACHE_PRIME_STARTED = True
-    import asyncio
     asyncio.create_task(_cache_prime_loop())
     print(f"[SMARTJUDGE][CACHE-PRIME] background primer started "
           f"(interval={_CACHE_PRIME_INTERVAL}s, prefix_chars={len(_system_prefix_text())}, "

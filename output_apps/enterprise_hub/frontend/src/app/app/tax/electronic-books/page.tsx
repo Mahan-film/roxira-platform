@@ -152,7 +152,7 @@ export default function ElectronicBooksPage() {
 
   return (
     <EnterpriseRouteGuard>
-      <div className="space-y-6 p-6" dir="rtl">
+      <div className="space-y-6 p-3 sm:p-6" dir="rtl">
         <PageHeader
           title="دفاتر تجاری الکترونیکی"
           description="خروجی دفاتر روزنامه و کل منطبق با قالب نمونه سازمان امور مالیاتی (وضعیت تأیید درگاه: unverified) با تبدیل اعشار دقیق و کنترل تکرار دوره."
@@ -170,11 +170,13 @@ export default function ElectronicBooksPage() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                <label htmlFor="eb-year-select" className="mb-1 block text-xs font-medium text-muted-foreground">
                   سال مالی (شمسی)
                 </label>
                 <select
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                  id="eb-year-select"
+                  aria-label="سال مالی (شمسی)"
+                  className="w-full min-h-[44px] rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   value={year}
                   onChange={(e) => {
                     setYear(Number(e.target.value));
@@ -190,11 +192,13 @@ export default function ElectronicBooksPage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                <label htmlFor="eb-unit-select" className="mb-1 block text-xs font-medium text-muted-foreground">
                   واحد مبلغ
                 </label>
                 <select
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                  id="eb-unit-select"
+                  aria-label="واحد مبلغ"
+                  className="w-full min-h-[44px] rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   value={unit}
                   onChange={(e) => setUnit(e.target.value as ElectronicBooksUnit)}
                 >
@@ -204,11 +208,13 @@ export default function ElectronicBooksPage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                <label htmlFor="eb-scope-select" className="mb-1 block text-xs font-medium text-muted-foreground">
                   دامنه اسناد (فایل جداگانه)
                 </label>
                 <select
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                  id="eb-scope-select"
+                  aria-label="دامنه اسناد (فایل جداگانه)"
+                  className="w-full min-h-[44px] rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   value={voucherScope}
                   onChange={(e) => setVoucherScope(e.target.value as ElectronicBooksVoucherScope)}
                 >
@@ -235,7 +241,7 @@ export default function ElectronicBooksPage() {
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
-                  size="sm"
+                  className="min-h-[44px] px-3.5"
                   variant={selectedPresetKey === "FULL_YEAR" ? "default" : "outline"}
                   onClick={() => setSelectedPresetKey("FULL_YEAR")}
                 >
@@ -245,10 +251,9 @@ export default function ElectronicBooksPage() {
                   <Button
                     key={preset.key}
                     type="button"
-                    size="sm"
+                    className="min-h-[44px] gap-2 px-3.5"
                     variant={selectedPresetKey === preset.key ? "default" : "outline"}
                     onClick={() => setSelectedPresetKey(preset.key)}
-                    className="gap-2"
                   >
                     <span>{preset.label}</span>
                     {preset.alreadyExported && (
@@ -261,9 +266,11 @@ export default function ElectronicBooksPage() {
               </div>
             </div>
 
-            <label className="flex items-center gap-2 text-sm">
+            <label htmlFor="eb-monthly-aggregate" className="flex items-center gap-2.5 text-sm min-h-[44px] cursor-pointer">
               <input
+                id="eb-monthly-aggregate"
                 type="checkbox"
+                className="size-4 rounded border-input"
                 checked={monthlyAggregate}
                 onChange={(e) => setMonthlyAggregate(e.target.checked)}
               />
@@ -281,7 +288,7 @@ export default function ElectronicBooksPage() {
                   <AlertTriangle className="h-4 w-4" />
                   <AlertTitle>هشدار پیش از دریافت فایل دفاتر تجاری</AlertTitle>
                   <AlertDescription>
-                    <ul className="list-disc space-y-1 pr-4 text-sm">
+                    <ul className="list-disc space-y-1 ps-5 text-sm">
                       {preview.warnings.map((w, idx) => (
                         <li key={idx}>{w}</li>
                       ))}
@@ -291,7 +298,7 @@ export default function ElectronicBooksPage() {
               )}
 
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between gap-2">
+                <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="space-y-1">
                     <CardTitle className="text-base">
                       پیش‌نمایش خروجی ({preview.bounds.label} — {formatNumber(preview.rowCount)} ردیف)
@@ -306,7 +313,7 @@ export default function ElectronicBooksPage() {
                     <Button
                       onClick={() => void handleDownload()}
                       disabled={downloading}
-                      className="gap-2"
+                      className="min-h-[44px] gap-2"
                     >
                       <Download className="h-4 w-4" />
                       دانلود خودکار ({preview.recommendedFormat.toUpperCase()})
@@ -315,6 +322,7 @@ export default function ElectronicBooksPage() {
                       variant="outline"
                       onClick={() => void handleDownload("xlsx")}
                       disabled={downloading}
+                      className="min-h-[44px] min-w-[44px]"
                     >
                       XLSX
                     </Button>
@@ -322,6 +330,7 @@ export default function ElectronicBooksPage() {
                       variant="outline"
                       onClick={() => void handleDownload("csv")}
                       disabled={downloading}
+                      className="min-h-[44px] min-w-[44px]"
                     >
                       CSV
                     </Button>
@@ -333,7 +342,7 @@ export default function ElectronicBooksPage() {
                       <TableHeader>
                         <TableRow>
                           {preview.headers.map((h) => (
-                            <TableHead key={h} className="whitespace-nowrap text-right">
+                            <TableHead key={h} className="whitespace-nowrap text-start">
                               {h}
                             </TableHead>
                           ))}

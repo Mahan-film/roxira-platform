@@ -103,16 +103,25 @@ export function parseNumber(value: string): number | null {
 /**
  * تبدیل مبلغ («۱۲٬۵۰۰٬۰۰۰ ریال» یا «۲٬۵۰۰٬۰۰۰ تومان») به عدد صحیح ریال.
  * تومان با ضریب ۱۰ به ریال تبدیل می‌شود.
+ * مقادیر غیرعددی یا مخدوش (مانند «۱۲abc» یا «ریال» بدون رقم) `null` برمی‌گردانند.
  */
 export function parseMoneyRials(value: string): number | null {
   const fixed = fixPersianChars(toAsciiDigits(value)).trim();
   if (!fixed) {
     return null;
   }
-  const isToman = /تومان/.test(fixed);
-  const isRial = /ریال/.test(fixed);
-  const numeric = fixed.replace(/[^\d.\-]/g, '');
-  if (!numeric || numeric === '-' || numeric === '.') {
+  const isToman = /تومان|toman|irt/i.test(fixed);
+  const isRial = /ریال|rial|irr/i.test(fixed);
+  const cleaned = fixed
+    .replace(/٫/g, '.')
+    .replace(/[\u200c\u200e\u200f٬,\s]/g, '')
+    .replace(/(تومان|ریال|irr|irt|rial|toman)/gi, '');
+  if (!cleaned) {
+    return null;
+  }
+  const isParenNegative = /^\((.+)\)$/.test(cleaned);
+  const numeric = isParenNegative ? `-${cleaned.slice(1, -1)}` : cleaned;
+  if (!/^-?\d+(?:\.\d+)?$/.test(numeric)) {
     return null;
   }
   const amount = Number(numeric);
