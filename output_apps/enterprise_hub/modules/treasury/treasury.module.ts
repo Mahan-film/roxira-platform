@@ -15,8 +15,8 @@ import { TreasuryDocumentLineEntity } from './entities/treasury-document-line.en
 import { TreasuryDocumentEntity } from './entities/treasury-document.entity';
 import { TreasurySettingsEntity } from './entities/treasury-settings.entity';
 import { TreasurySmsDraftEntity } from './entities/treasury-sms-draft.entity';
-import { TreasuryLedgerPostingAdapter } from './posting/treasury-ledger-posting.adapter';
 import { TREASURY_POSTING } from './posting/treasury-posting.port';
+import { TreasuryPostingRulesAdapter } from './posting/treasury-posting-rules.adapter';
 import { BankStatementRepository } from './repositories/bank-statement.repository';
 import { TreasuryRepository } from './repositories/treasury.repository';
 import { TreasurySmsRepository } from './repositories/treasury-sms.repository';
@@ -54,7 +54,7 @@ import { TreasurySmsService } from './services/treasury-sms.service';
     BankStatementService,
     BankStatementRepository,
     TenantScope,
-    { provide: TREASURY_POSTING, useClass: TreasuryLedgerPostingAdapter },
+    { provide: TREASURY_POSTING, useClass: TreasuryPostingRulesAdapter },
     // Ageing and the party statement settle invoices by these allocations (#237).
     { provide: AGEING_ALLOCATIONS, useExisting: TreasuryService },
   ],

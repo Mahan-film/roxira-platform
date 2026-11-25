@@ -3,7 +3,7 @@ import { EntityManager } from 'typeorm';
 import { AccountLevel } from '../../accounting/enums/accounting.enum';
 import { AccountingService } from '../../accounting/services/accounting.service';
 import { ALL_DOC_TYPES, DEFAULT_ROLE_ACCOUNTS, isPostingRole, POSTING_ROLES, PostingRole } from '../constants/posting-roles';
-import { Amounts, buildProposal, requireTemplate, resolveRole, RoleAccounts, toJournalLines, VoucherProposal } from '../domain/posting-engine';
+import { Amounts, buildProposal, requireTemplate, resolveRole, RoleAccounts, toJournalLines, VariableLineInput, VoucherProposal } from '../domain/posting-engine';
 import { PostingRuleError } from '../domain/posting-error';
 import { POSTING_TEMPLATES } from '../domain/posting-templates';
 import { PostingSourceEntity } from '../entities/posting-source.entity';
@@ -17,6 +17,7 @@ export interface PostingRequest {
   /** ISO 8601 date of the document (never the clock). */
   date: string;
   amounts: Amounts;
+  variableLines?: readonly VariableLineInput[];
   description: string;
   partyCode?: string;
   /** Voucher number; defaults to `<sourceType>-<sourceId>`. */
@@ -103,7 +104,8 @@ export class PostingRulesService {
     const mapping = await this.mappingFor(tenantId, request.docType, manager);
     const proposal = buildProposal({
       docType: request.docType,
-      amounts: request.amounts,
+      amounts: request.amounts ?? {},
+      variableLines: request.variableLines,
       mapping,
       overrides: request.overrides,
       partyCode: request.partyCode,

@@ -22,6 +22,8 @@ export interface PostingTemplate {
   lines: readonly TemplateLine[];
   /** Role defaults that replace the global ones for this template (what the module posted before). */
   defaults?: Readonly<Partial<Record<PostingRole, string>>>;
+  /** Whether this template accepts variable lines in addition to or instead of fixed lines. */
+  variableLines?: boolean;
 }
 
 const dr = (role: PostingRole, amount: string, description: string, party = false): TemplateLine => ({ role, side: 'debit', amount, description, party });
@@ -305,13 +307,24 @@ export const POSTING_TEMPLATES: readonly PostingTemplate[] = [
     docType: 'bank.receipt',
     title: 'دریافت وجه به حساب بانکی',
     amounts: ['amount'],
-    lines: [dr('bank', 'amount', 'دریافت وجه'), cr('counter', 'amount', 'حساب مقابل', true)],
+    lines: [dr('bank', 'amount', ''), cr('counter', 'amount', '', true)],
+    defaults: { writeoff_receipt: '4030', customer_advances: '2070' },
+    variableLines: true,
   },
   {
     docType: 'bank.payment',
     title: 'پرداخت وجه از حساب بانکی',
     amounts: ['amount'],
-    lines: [dr('counter', 'amount', 'حساب مقابل', true), cr('bank', 'amount', 'پرداخت وجه')],
+    lines: [dr('counter', 'amount', '', true), cr('bank', 'amount', '')],
+    defaults: { writeoff_payment: '4090', supplier_advances: '1040' },
+    variableLines: true,
+  },
+  {
+    docType: 'pettycash.settle',
+    title: 'تسویه تنخواه',
+    amounts: ['amount'],
+    lines: [dr('counter', 'amount', ''), cr('petty_cash', 'amount', '')],
+    variableLines: true,
   },
   {
     docType: 'pettycash.charge',
