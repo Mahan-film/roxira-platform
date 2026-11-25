@@ -65,10 +65,10 @@ export class FifoBatchEntity {
     name: 'unit_purchase_cost',
     transformer: {
       to: (value: Money) => minorToDecimal(toMinor(value ?? 0)),
-      from: (value: string | null) => (value === null ? 0 : (fromMinor(fromDb(value)) as number)),
+      from: (value: string | null) => (value === null ? 0n : fromMinor(fromDb(value))),
     },
   })
-  unitPurchaseCost: number;
+  unitPurchaseCost: Money;
 
   @Index()
   @Column({

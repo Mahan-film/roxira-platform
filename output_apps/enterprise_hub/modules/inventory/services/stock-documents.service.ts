@@ -176,7 +176,7 @@ export class StockDocumentsService {
           { sku, quantity, fromWarehouseId: dto.fromWarehouseId, toWarehouseId: dto.toWarehouseId },
           manager,
         );
-        const value = this.money(moved.reduce((sum, layer) => sum + layer.quantity * layer.unitCost, 0));
+        const value = this.money(moved.reduce((sum, layer) => sum + layer.quantity * Number(layer.unitCost), 0)); // money-ok: legacy DTO number response boundary
         lines.push({ itemId: null, sku, quantity, unitCost: this.money(value / quantity), value, batchNumber: null });
       }
       return this.save(tenantId, userId, manager, {

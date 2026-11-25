@@ -98,12 +98,12 @@ describe('Inventory Costing Methods (T195: FIFO, AVCO, STANDARD)', () => {
       warehouseId: 1,
     });
 
-    const cogs = outbound.layers.reduce((sum, l) => sum + l.quantity * l.unitPurchaseCost, 0);
+    const cogs = outbound.layers.reduce((sum, l) => sum + l.quantity * Number(l.unitPurchaseCost), 0); // money-ok: test assertion on small integer unit costs
     expect(cogs).toBe(124);
 
     const ending = batches
       .filter((b) => b.sku === 'SKU-FIFO')
-      .reduce((sum, b) => sum + b.quantityRemaining * b.unitPurchaseCost, 0);
+      .reduce((sum, b) => sum + b.quantityRemaining * Number(b.unitPurchaseCost), 0); // money-ok: test assertion on small integer unit costs
     expect(ending).toBe(96);
   });
 
@@ -150,12 +150,12 @@ describe('Inventory Costing Methods (T195: FIFO, AVCO, STANDARD)', () => {
       warehouseId: 1,
     });
 
-    const cogs = outbound.layers.reduce((sum, l) => sum + l.quantity * l.unitPurchaseCost, 0);
+    const cogs = outbound.layers.reduce((sum, l) => sum + l.quantity * Number(l.unitPurchaseCost), 0); // money-ok: test assertion on small integer unit costs
     expect(cogs).toBe(132);
 
     const ending = batches
       .filter((b) => b.sku === 'SKU-AVCO')
-      .reduce((sum, b) => sum + b.quantityRemaining * b.unitPurchaseCost, 0);
+      .reduce((sum, b) => sum + b.quantityRemaining * Number(b.unitPurchaseCost), 0); // money-ok: test assertion on small integer unit costs
     expect(ending).toBe(88);
   });
 
@@ -202,12 +202,12 @@ describe('Inventory Costing Methods (T195: FIFO, AVCO, STANDARD)', () => {
       warehouseId: 1,
     });
 
-    const cogs = outbound.layers.reduce((sum, l) => sum + l.quantity * l.unitPurchaseCost, 0);
+    const cogs = outbound.layers.reduce((sum, l) => sum + l.quantity * Number(l.unitPurchaseCost), 0); // money-ok: test assertion on small integer unit costs
     expect(cogs).toBe(132);
 
     const ending = batches
       .filter((b) => b.sku === 'SKU-STD')
-      .reduce((sum, b) => sum + b.quantityRemaining * b.unitPurchaseCost, 0);
+      .reduce((sum, b) => sum + b.quantityRemaining * Number(b.unitPurchaseCost), 0); // money-ok: test assertion on small integer unit costs
     expect(ending).toBe(88);
   });
 });

@@ -665,8 +665,8 @@ export class InventoryService {
         batchId: layer.batchId,
         batchNumber: layer.batchNumber,
         quantity: this.roundQuantity(layer.quantity),
-        unitPurchaseCost: this.roundMoney(layer.unitPurchaseCost),
-        value: this.roundMoney(layer.quantity * layer.unitPurchaseCost),
+        unitPurchaseCost: this.roundMoney(Number(layer.unitPurchaseCost)), // money-ok: legacy DTO number response boundary
+        value: this.roundMoney(layer.quantity * Number(layer.unitPurchaseCost)), // money-ok: legacy DTO number response boundary
         warehouseId: layer.warehouseId,
       }));
 

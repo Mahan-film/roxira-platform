@@ -16,9 +16,11 @@ import {
   WarehouseMissingError,
 } from '../errors/inventory.errors';
 
+import type { Money } from '../../accounting/money';
+
 export interface MovedLayer {
   quantity: number;
-  unitCost: number;
+  unitCost: Money;
 }
 
 export interface DocumentFilter {

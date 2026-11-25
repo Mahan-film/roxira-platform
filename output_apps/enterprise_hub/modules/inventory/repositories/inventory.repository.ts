@@ -59,7 +59,7 @@ export interface ConsumedLayer {
   batchId: number;
   batchNumber: string;
   quantity: number;
-  unitPurchaseCost: number;
+  unitPurchaseCost: Money;
   warehouseId: number | null;
 }
 
@@ -646,7 +646,7 @@ export class InventoryRepository {
             : toMinor(input.unitPurchaseCost);
 
           unitCostMinor = avgCostMinor;
-          const avgCost = fromMinor(avgCostMinor) as number;
+          const avgCost = fromMinor(avgCostMinor);
 
           for (const existingBatch of existingBatches) {
             existingBatch.unitPurchaseCost = avgCost;
@@ -659,7 +659,7 @@ export class InventoryRepository {
           sku: input.sku,
           batchNumber: input.batchNumber,
           quantityRemaining: this.roundQuantity(input.quantity),
-          unitPurchaseCost: fromMinor(unitCostMinor) as number,
+          unitPurchaseCost: fromMinor(unitCostMinor),
           receivedDate: input.receivedDate ?? new Date(),
           warehouseId: input.warehouseId,
         });
