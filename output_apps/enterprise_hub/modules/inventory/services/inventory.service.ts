@@ -304,6 +304,17 @@ export class InventoryService {
       );
     }
 
+    const costingMethod = dto.costingMethod ?? CostingMethod.FIFO;
+    const standardCost = dto.standardCost !== undefined ? dto.standardCost : null;
+    if (
+      costingMethod === CostingMethod.STANDARD &&
+      (standardCost === null || standardCost === undefined)
+    ) {
+      throw new BadRequestException(
+        'برای روش قیمت‌گذاری استاندارد، تعیین بهای تمام‌شده استاندارد الزامی است.',
+      );
+    }
+
     const created = await this.inventoryRepository.createStockItem(tenantId, {
       sku: dto.sku,
       barcode: dto.barcode,
@@ -311,8 +322,8 @@ export class InventoryService {
       quantity: this.roundQuantity(dto.quantity ?? 0),
       minQuantity: this.roundQuantity(dto.minQuantity ?? 0),
       batchNumber: dto.batchNumber ?? null,
-      costingMethod: dto.costingMethod ?? CostingMethod.FIFO,
-      standardCost: dto.standardCost !== undefined ? dto.standardCost : null,
+      costingMethod,
+      standardCost,
     });
 
     return this.toStockItemResponse(created, 0);

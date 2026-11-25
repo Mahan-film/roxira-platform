@@ -607,14 +607,17 @@ export class InventoryRepository {
         let unitCostToRecord = input.unitPurchaseCost;
         let priceVariance: number | undefined;
 
+        const qtyFactorNum = 10 ** QUANTITY_SCALE;
+        const qtyFactorBig = 10n ** BigInt(QUANTITY_SCALE);
+
         if (item.costingMethod === CostingMethod.STANDARD) {
           const stdMinor = item.standardCost !== null && item.standardCost !== undefined
             ? fromDb(item.standardCost)
             : toMinor(input.unitPurchaseCost);
           unitCostToRecord = Number(fromMinor(stdMinor)); // money-ok: converting minor units to number for entity field
           const inCostMinor = toMinor(input.unitPurchaseCost);
-          const inQtyH = BigInt(Math.round(input.quantity * 100));
-          const varianceMinor = ((stdMinor - inCostMinor) * inQtyH) / 100n;
+          const inQtyH = BigInt(Math.round(input.quantity * qtyFactorNum));
+          const varianceMinor = ((stdMinor - inCostMinor) * inQtyH) / qtyFactorBig;
           priceVariance = Number(fromMinor(varianceMinor)); // money-ok: converting minor units to number for DTO
         } else if (item.costingMethod === CostingMethod.AVCO) {
           const existingBatches = await manager
@@ -625,21 +628,21 @@ export class InventoryRepository {
             .andWhere('batch.quantityRemaining > 0')
             .getMany();
 
-          const inQtyH = BigInt(Math.round(input.quantity * 100));
-          const inValueMinor = (inQtyH * toMinor(input.unitPurchaseCost)) / 100n;
+          const inQtyH = BigInt(Math.round(input.quantity * qtyFactorNum));
+          const inValueMinor = (inQtyH * toMinor(input.unitPurchaseCost)) / qtyFactorBig;
 
           let currentQtyH = 0n;
           let currentValueMinor = 0n;
           for (const b of existingBatches) {
-            const bQtyH = BigInt(Math.round(Number(b.quantityRemaining) * 100)); // money-ok: quantity remaining is a count
+            const bQtyH = BigInt(Math.round(Number(b.quantityRemaining) * qtyFactorNum)); // money-ok: quantity remaining is a count
             currentQtyH += bQtyH;
-            currentValueMinor += (bQtyH * fromDb(b.unitPurchaseCost)) / 100n;
+            currentValueMinor += (bQtyH * fromDb(b.unitPurchaseCost)) / qtyFactorBig;
           }
 
           const newTotalQtyH = currentQtyH + inQtyH;
           const newTotalValueMinor = currentValueMinor + inValueMinor;
           const avgCostMinor = newTotalQtyH > 0n
-            ? (newTotalValueMinor * 100n + newTotalQtyH / 2n) / newTotalQtyH
+            ? (newTotalValueMinor * qtyFactorBig + newTotalQtyH / 2n) / newTotalQtyH
             : toMinor(input.unitPurchaseCost);
 
           const avgCost = fromMinor(avgCostMinor) as number; // money-ok: converting minor units to number for entity field
