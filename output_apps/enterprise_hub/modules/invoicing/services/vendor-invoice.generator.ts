@@ -403,10 +403,22 @@ export class PostgresSequencerStore implements SequencerStore {
    * numbers, ensuring strict gapless integrity.
    */
   async nextNumber(k: DocumentCounterKey, manager: any): Promise<number> {
-    if (!k.tenantId || k.tenantId.trim() === '' || k.tenantId === '00000000-0000-0000-0000-000000000000') {
+    if (
+      !k.tenantId ||
+      k.tenantId.trim() === '' ||
+      k.tenantId === '00000000-0000-0000-0000-000000000000' ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k.tenantId)
+    ) {
       throw new BadRequestException('Valid tenantId is required for persistent document numbering.');
     }
+    if (!k.series || k.series.trim() === '') {
+      throw new BadRequestException('Series is required for persistent document numbering.');
+    }
     if (!manager?.query) throw new BadRequestException('EntityManager query runner required for Postgres sequencer.');
+    const boundTenant = manager.queryRunner?.data?.appTenantId;
+    if (typeof boundTenant === 'string' && boundTenant !== k.tenantId) {
+      throw new BadRequestException('Tenant mismatch between active TenantScope and DocumentCounterKey.');
+    }
     // Ensure tenant session configuration is set for tenant-isolated table under FORCE RLS
     // tenant-scope-ok: sets app.tenant_id for FORCE RLS before atomic counter increment
     await manager.query(`SELECT set_config('app.tenant_id', $1, true)`, [k.tenantId]);
@@ -417,7 +429,7 @@ export class PostgresSequencerStore implements SequencerStore {
        ON CONFLICT ("tenant_id", "document_type", "channel", "fiscal_year", "series")
        DO UPDATE SET "last_number" = "fin_document_counters"."last_number" + 1, "updated_at" = now()
        RETURNING "last_number"`,
-      [k.tenantId, k.documentType ?? 'INVOICE', k.channel ?? 'DEFAULT', k.fiscalYear ?? 0, k.series],
+      [k.tenantId, k.documentType ?? 'INVOICE', k.channel ?? 'DEFAULT', k.fiscalYear ?? 0, k.series.trim()],
     );
     return Number(rows[0].last_number);
   }

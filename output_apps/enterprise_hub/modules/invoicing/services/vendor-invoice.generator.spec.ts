@@ -287,6 +287,30 @@ describe('VendorInvoiceGenerator (T321 / R31)', () => {
           mockManager,
         ),
       ).rejects.toThrow('Valid tenantId is required');
+
+      await expect(
+        pgStore.nextNumber(
+          { tenantId: 'not-a-uuid', series: 'INV-2026' },
+          mockManager,
+        ),
+      ).rejects.toThrow('Valid tenantId is required');
+
+      await expect(
+        pgStore.nextNumber(
+          { tenantId: '11111111-1111-4111-8111-111111111111', series: '   ' },
+          mockManager,
+        ),
+      ).rejects.toThrow('Series is required');
+
+      await expect(
+        pgStore.nextNumber(
+          { tenantId: '11111111-1111-4111-8111-111111111111', series: 'INV-2026' },
+          {
+            query: jest.fn(),
+            queryRunner: { data: { appTenantId: '22222222-2222-4222-8222-222222222222' } },
+          },
+        ),
+      ).rejects.toThrow('Tenant mismatch');
     });
 
     it('increments sequence atomically in Postgres using manager query', async () => {
