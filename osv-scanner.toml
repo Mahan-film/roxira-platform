@@ -326,3 +326,255 @@ id = "GHSA-x746-7m8f-x49c"
 ignoreUntil = 2027-01-01
 reason = "not shipped in any production image, dev/test or sandbox only; revisit if the path becomes deployable"
 
+
+# --- Wave 38 (#1031) baseline triage: make osv-scanner blocking ---
+
+[[IgnoredVulns]]
+id = "GHSA-268h-hp4c-crq3"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for nodemailer@7.0.13: Nodemailer: CRLF injection in Nodemailer List-* header comments allows arbitrary message header inje. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-27r3-jxmh-p828"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for body-parser@2.3.0: body-parser vulnerable to Denial of Service via trailing bytes after a compressed request body. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-2x7j-588g-ccc2"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for nodemailer@7.0.13: Nodemailer: Quadratic (O(n²)) time complexity in addressparser allows remote denial of service via a. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-333x-w4r6-6crp"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for fast-uri@3.1.7: fast-uri vulnerable to scheme injection via an unescaped first-segment colon in suffix references. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-36xv-jgw5-4q75"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for @nestjs/core@10.4.22: @nestjs/core Improperly Neutralizes Special Elements in Output Used by a Downstream Component ('Inje. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-39m8-27wv-hr27"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for nodemailer@7.0.13: Nodemailer: Quadratic (O(n^2)) DKIM header unfolding lets a large folded header cause remote denial . Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-3gg2-335m-rxc6"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for hono@4.13.13: Hono: `css` helper does not escape a closing tag split between the template and an interpolated valu. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-46wx-v44x-9hh2"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for hono@4.13.13: Hono: `csrf()` does not check requests sent by hyperlink auditing (`text/ping`). Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-4ffr-jq9g-5ffx"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for nodemailer@7.0.13: Nodemailer: Quadratic backtracking in SMTP AUTH mechanism detection regexes allows pre-auth remote d. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-4g23-2xm8-66gc"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for nodemailer@7.0.13: Nodemailer: Quadratic (O(n^2)) SMTP client reply parsing lets a malicious server or MITM cause a pre. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-4h7h-rv7c-7m2v"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for hono@4.13.13: Hono: `validator('form')` skips validation for `multipart/form-data` requests with extra parameters. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-4m76-xfj5-7975"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for hono@4.13.13: Hono: `mount()` and `app.mount()` can forward a path that bypasses middleware scoped inside the moun. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-4mjr-xmp4-gh2g"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for qs@6.14.2: qs: Denial of Service via Attacker Controlled isBuffer. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-5v7r-6r5c-r473"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for file-type@20.4.1: file-type affected by infinite loop in ASF parser on malformed input with zero-size sub-header. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-67mh-4wv8-2f99"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for esbuild@0.18.20: esbuild enables any website to send any requests to the development server and read the response. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-6j4f-fj2g-mc7p"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for brace-expansion@1.1.18: brace-expansion: DoS via uncontrolled recursion in parseCommaParts causing stack exhaustion. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-6pq8-jhm2-2vcw"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for qs@6.14.2: qs : qs.stringify with arrayFormat 'comma' throws an uncaught TypeError on array elements carrying a. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-6vj9-mwq6-2f5v"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for nodemailer@7.0.13: Nodemailer: Process-global DNS cache reuses TLS `servername` across transports, enabling cross-tenan. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-85x2-q946-cp5h"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for nodemailer@7.0.13: Nodemailer: A '>' inside a quoted local part ends an angle-addr early in addressparser, delivering t. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-8c8m-p3m8-cjg8"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for nodemailer@7.0.13: Nodemailer: A nested comment ends early in addressparser, releasing the rest of the comment as a rec. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-8m3c-c648-2xjj"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for nodemailer@7.0.13: Nodemailer: resolveContent() on a MailMessage bypasses disableFileAccess/disableUrlAccess when calle. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-8vvx-rff5-p5rq"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for nodemailer@7.0.13: Nodemailer: Nested structured recipient arrays bypass the parser depth limit and cause stack exhaust. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-c7w3-x93f-qmm8"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for nodemailer@7.0.13: Nodemailer has SMTP command injection due to unsanitized `envelope.size` parameter. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-cc9r-2j5m-2m83"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for nodemailer@7.0.13: Nodemailer: Recipient-domain validation bypass via RFC 5322 comment mis-parsing leads to email deliv. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-g73g-hqqh-jr95"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for nodemailer@7.0.13: Nodemailer: RFC 5322 comment inside an angle-bracket address is never stripped. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-h7mg-cq63-vhpq"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for hono@4.13.13: Hono: RegExpRouter skips wildcard middleware for some route sets and for paths with an encoded line . Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-hrr3-gc8f-f4qj"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for fast-uri@3.1.7: fast-uri vulnerable to inconsistent host case normalization via percent-encoded octets. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-j47w-4g3g-c36v"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for file-type@20.4.1: file-type: ZIP Decompression Bomb DoS via [Content_Types].xml entry. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-jpvv-r467-5p4w"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for @hono/node-server@2.1.5: @hono/node-server: Backslash in the request path is parsed as a path separator, bypassing path-based. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-m943-m63m-w62w"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for nodemailer@7.0.13: Nodemailer: A ';' inside a quoted string or comment ends an address group early in addressparser, tu. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-mfr8-8qww-v76h"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for next@16.4.2: Next.js: Information disclosure across root params when a 'use cache' function is called through uns. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-p6gq-j5cr-w38f"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for nodemailer@7.0.13: Nodemailer: Message-level raw option bypasses disableFileAccess/disableUrlAccess, enabling arbitrary. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-q2hr-2g5m-vwhr"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for brace-expansion@1.1.18: brace-expansion: Quadratic-time expansion of the `{a},b}` rewrite causes CPU denial of service. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-q7qp-rjg7-q26m"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for multer@2.4.0: multer vulnerable to Denial of Service via a pending asynchronous fileFilter after request teardown. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-q8mj-m7cp-5q26"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for qs@6.14.2: qs has a remotely triggerable DoS: qs.stringify crashes with TypeError on null/undefined entries in . Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-qhr7-859c-m2p7"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for brace-expansion@1.1.18: brace-expansion: DoS via uncontrolled recursion on nested brace groups causing stack exhaustion. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-qv5m-9pm6-hqp3"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for @hono/node-server@2.1.5: @hono/node-server: Unhandled `ECONNRESET` on the socket during an asynchronous WebSocket upgrade cra. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-r7g4-qg5f-qqm2"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for nodemailer@7.0.13: Nodemailer: Improper TLS Certificate Validation in OAuth2 Token Fetch Enables Credential Interceptio. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-rhh4-g77r-r9qj"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for next@16.4.2: Next.js: Cross-user cache disclosure and poisoning in Next.js use cache with binary arguments. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-v53p-9fqp-m79j"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for nodemailer@7.0.13: Nodemailer: Quadratic backtracking in the addressparser free-text fallback allows remote denial of s. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-vc7v-qv4w-wrv8"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for next@16.4.2: Next.js: Cache leak across root param values in nested 'use cache' functions via delayed inner strea. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-vvgp-ww4w-46vf"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for next@16.4.2: Next.js: Cache poisoning of shared fallback shells in Cache Components via request-supplied placehol. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-vvjj-xcjg-gr5g"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for nodemailer@7.0.13: Nodemailer Vulnerable to SMTP Command Injection via CRLF in Transport name Option (EHLO/HELO) . Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-w5hq-g745-h8pq"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for uuid@9.0.1: uuid: Missing buffer bounds check in v3/v5/v6 when buf is provided. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-w74x-v6f9-j3xg"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for fast-uri@3.1.7: fast-uri vulnerable to URI scheme spoofing via percent-encoded scheme decoding. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-wjr9-j795-jxcr"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for fast-uri@3.1.7: fast-uri vulnerable to host confusion via unchecked WHATWG host canonicalization. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-wmmp-3585-3rmp"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for nodemailer@7.0.13: Nodemailer: IDN/Punycode domain allow-list bypass leads to email delivery to an attacker-controlled . Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-wqvq-jvpq-h66f"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for nodemailer@7.0.13: Nodemailer jsonTransport bypasses disableFileAccess and disableUrlAccess during message normalizatio. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-x5fp-wj9c-mxmx"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for qs@6.14.2: qs array-limit bypass via bracket-key comma parsing. Scheduled for dependency upgrade."
+
+[[IgnoredVulns]]
+id = "GHSA-xhq7-xmqj-769h"
+ignoreUntil = 2027-02-01
+reason = "Baseline triage (#1031) for fast-uri@3.1.7: fast-uri vulnerable to improper path equivalence in relative reference normalization. Scheduled for dependency upgrade."
