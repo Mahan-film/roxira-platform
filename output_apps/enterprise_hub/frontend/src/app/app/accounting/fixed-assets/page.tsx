@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Building2 } from "lucide-react";
+import { Building2, CalendarClock, Download, FileSpreadsheet } from "lucide-react";
 
 import { ErrorNotice, PageHeader, loadErrorMessage } from "@/components/app/app-ui";
 import { EnterpriseRouteGuard } from "@/components/auth/enterprise-route-guard";
@@ -17,20 +17,29 @@ import {
   CASH_ACCOUNT_ROLES,
   createFixedAsset,
   disposeFixedAsset,
+  downloadFixedAssetRegister,
+  downloadFixedAssetSchedule,
+  getFixedAssetRegister,
+  getFixedAssetSchedule,
   listFixedAssets,
+  runMonthlyDepreciation,
   type CashAccountRole,
+  type DepreciationRunResult,
+  type DepreciationScheduleResult,
   type FixedAsset,
   type FixedAssetDisposalResult,
   type FixedAssetMethod,
-  type FixedAssetStatus,
+  type FixedAssetRegisterResult,
 } from "@/lib/api/fixed-assets-client";
-import { formatJalaliDate, formatReportMoney } from "@/lib/fa-format";
-
-const STATUS_LABELS: Record<FixedAssetStatus, string> = {
-  ACTIVE: "فعال",
-  FULLY_DEPRECIATED: "کاملاً مستهلک",
-  DISPOSED: "فروش‌رفته",
-};
+import { formatJalaliDate, formatMoneyRial, formatNumber } from "@/lib/fa-format";
+import {
+  FIXED_ASSET_METHOD_LABELS,
+  FIXED_ASSET_STATUS_LABELS,
+  JALALI_MONTH_NAMES,
+  SKIPPED_REASON_LABELS,
+  formatDepreciationRunSummary,
+  isValidJalaliPeriod,
+} from "@/lib/fixed-assets-ui";
 
 /** گزینهٔ «حساب دیگر» در انتخاب محل تسویه؛ کد حساب دستی گرفته می‌شود. */
 const SETTLEMENT_CUSTOM = "custom";
@@ -90,18 +99,31 @@ const emptyDispose = (): DisposeDraft => ({
 
 export default function FixedAssetsPage() {
   const [assets, setAssets] = useState<FixedAsset[]>([]);
+  const [registerSummary, setRegisterSummary] = useState<FixedAssetRegisterResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [disposal, setDisposal] = useState<FixedAssetDisposalResult | null>(null);
+  const [runResult, setRunResult] = useState<DepreciationRunResult | null>(null);
+  const [runYear, setRunYear] = useState("1405");
+  const [runMonth, setRunMonth] = useState(1);
+  const [schedule, setSchedule] = useState<DepreciationScheduleResult | null>(null);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleCode, setScheduleCode] = useState<string | null>(null);
   const [register, setRegister] = useState<RegisterDraft>(emptyRegister);
   const [disposeFor, setDisposeFor] = useState<FixedAsset | null>(null);
   const [dispose, setDispose] = useState<DisposeDraft>(emptyDispose);
 
   useEffect(() => {
     const controller = new AbortController();
-    listFixedAssets(controller.signal)
-      .then(setAssets)
+    Promise.all([
+      listFixedAssets(controller.signal),
+      getFixedAssetRegister(controller.signal),
+    ])
+      .then(([items, reg]) => {
+        setAssets(items);
+        setRegisterSummary(reg);
+      })
       .catch((err: unknown) => {
         if (!(err instanceof DOMException && err.name === "AbortError")) setError(loadErrorMessage(err));
       });
@@ -109,7 +131,9 @@ export default function FixedAssetsPage() {
   }, []);
 
   const reload = async () => {
-    setAssets(await listFixedAssets());
+    const [items, reg] = await Promise.all([listFixedAssets(), getFixedAssetRegister()]);
+    setAssets(items);
+    setRegisterSummary(reg);
   };
 
   const run = async (action: () => Promise<void>) => {
@@ -190,12 +214,50 @@ export default function FixedAssetsPage() {
       await reload();
     });
 
+  const openSchedule = async (asset: FixedAsset) => {
+    setScheduleCode(asset.code);
+    setSchedule(null);
+    setScheduleLoading(true);
+    setError(null);
+    try {
+      const data = await getFixedAssetSchedule(asset.code);
+      setSchedule(data);
+    } catch (err) {
+      setError(loadErrorMessage(err));
+      setScheduleCode(null);
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
+  const submitDepreciationRun = () =>
+    run(async () => {
+      if (!isValidJalaliPeriod(runYear, runMonth)) return;
+      const result = await runMonthlyDepreciation({
+        year: Number(runYear),
+        month: runMonth,
+      });
+      setRunResult(result);
+      setNotice(formatDepreciationRunSummary(result));
+      await reload();
+    });
+
+  const exportRegister = (format: "xlsx" | "pdf") =>
+    run(async () => {
+      await downloadFixedAssetRegister(format);
+    });
+
+  const exportSchedule = (code: string, format: "xlsx" | "pdf") =>
+    run(async () => {
+      await downloadFixedAssetSchedule(code, format);
+    });
+
   return (
     <EnterpriseRouteGuard>
       <PageHeader
         title="دارایی‌های ثابت"
-        description="ثبت دارایی، استهلاک انباشته، ارزش دفتری و فروش دارایی با سند سود یا زیان"
-        icon={<Building2 className="size-6 text-indigo-500" />}
+        description="ثبت دارایی، دفتر دارایی ثابت، استهلاک ماهانه، جدول استهلاک و فروش دارایی"
+        icon={<Building2 className="size-6 text-primary" />}
       />
       <ErrorNotice title="انجام نشد" message={error} />
       {notice && <p role="status" className="text-sm text-emerald-600">{notice}</p>}
@@ -208,14 +270,124 @@ export default function FixedAssetsPage() {
             </p>
             <p className="tabular-nums">
               {disposal.gain !== "0.00"
-                ? `سود فروش: ${formatReportMoney(disposal.gain)} ریال`
+                ? `سود فروش: ${formatMoneyRial(disposal.gain)}`
                 : disposal.loss !== "0.00"
-                  ? `زیان فروش: ${formatReportMoney(disposal.loss)} ریال`
+                  ? `زیان فروش: ${formatMoneyRial(disposal.loss)}`
                   : "سود و زیانی نداشت."}
             </p>
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
+          <CardTitle>دفتر دارایی‌های ثابت</CardTitle>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => exportRegister("xlsx")}
+            >
+              <FileSpreadsheet className="me-1.5 size-4" />
+              خروجی اکسل (XLSX)
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => exportRegister("pdf")}
+            >
+              <Download className="me-1.5 size-4" />
+              خروجی PDF
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-4">
+          <div className="rounded-lg border p-3">
+            <p className="text-xs text-muted-foreground">تعداد دارایی‌ها</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums">
+              {formatNumber(registerSummary?.rows.length ?? assets.length)}
+            </p>
+          </div>
+          <div className="rounded-lg border p-3">
+            <p className="text-xs text-muted-foreground">جمع بهای تمام‌شده</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums">
+              {formatMoneyRial(registerSummary?.totals.costMinor ?? "0")}
+            </p>
+          </div>
+          <div className="rounded-lg border p-3">
+            <p className="text-xs text-muted-foreground">جمع استهلاک انباشته</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums">
+              {formatMoneyRial(registerSummary?.totals.accumulatedMinor ?? "0")}
+            </p>
+          </div>
+          <div className="rounded-lg border p-3">
+            <p className="text-xs text-muted-foreground">جمع ارزش دفتری</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums">
+              {formatMoneyRial(registerSummary?.totals.bookValueMinor ?? "0")}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CalendarClock className="size-5 text-primary" />
+            ثبت استهلاک ماهانه
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="grid gap-1">
+              <Label htmlFor="dep-year">سال شمسی</Label>
+              <Input
+                id="dep-year"
+                dir="ltr"
+                inputMode="numeric"
+                className="w-24"
+                value={runYear}
+                onChange={(e) => setRunYear(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1">
+              <Label htmlFor="dep-month">ماه شمسی</Label>
+              <select
+                id="dep-month"
+                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                value={runMonth}
+                onChange={(e) => setRunMonth(Number(e.target.value))}
+              >
+                {JALALI_MONTH_NAMES.map((item) => (
+                  <option key={item.month} value={item.month}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <Button
+              disabled={busy || !isValidJalaliPeriod(runYear, runMonth)}
+              onClick={submitDepreciationRun}
+            >
+              ثبت سند استهلاک ماهانه
+            </Button>
+          </div>
+          {runResult && (
+            <div className="rounded-md border p-3 text-sm" role="status">
+              <p>{formatDepreciationRunSummary(runResult)}</p>
+              {runResult.skipped.length > 0 && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  ردشده:{" "}
+                  {runResult.skipped
+                    .map((item) => `${item.code} (${SKIPPED_REASON_LABELS[item.reason]})`)
+                    .join("، ")}
+                </p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -318,18 +490,25 @@ export default function FixedAssetsPage() {
                     <TableCell>{asset.name}</TableCell>
                     <TableCell>{asset.category}</TableCell>
                     <TableCell className="whitespace-nowrap">{formatJalaliDate(asset.acquisitionDate)}</TableCell>
-                    <TableCell className="text-left tabular-nums">{formatReportMoney(asset.cost)}</TableCell>
-                    <TableCell className="text-left tabular-nums">{formatReportMoney(asset.accumulatedDepreciation)}</TableCell>
-                    <TableCell className="text-left tabular-nums">{formatReportMoney(asset.netBookValue)}</TableCell>
+                    <TableCell className="text-end tabular-nums">{formatMoneyRial(asset.cost)}</TableCell>
+                    <TableCell className="text-end tabular-nums">{formatMoneyRial(asset.accumulatedDepreciation)}</TableCell>
+                    <TableCell className="text-end tabular-nums">{formatMoneyRial(asset.netBookValue)}</TableCell>
                     <TableCell>
-                      <Badge variant={asset.status === "DISPOSED" ? "outline" : "secondary"}>{STATUS_LABELS[asset.status]}</Badge>
+                      <Badge variant={asset.status === "DISPOSED" ? "outline" : "secondary"}>
+                        {FIXED_ASSET_STATUS_LABELS[asset.status]}
+                      </Badge>
                     </TableCell>
-                    <TableCell className="text-left">
-                      {asset.status !== "DISPOSED" && (
-                        <Button variant="ghost" size="sm" disabled={busy} onClick={() => openDispose(asset)}>
-                          فروش دارایی
+                    <TableCell className="text-end">
+                      <div className="flex flex-wrap justify-end gap-1">
+                        <Button variant="ghost" size="sm" disabled={busy} onClick={() => openSchedule(asset)}>
+                          جدول استهلاک
                         </Button>
-                      )}
+                        {asset.status !== "DISPOSED" && (
+                          <Button variant="ghost" size="sm" disabled={busy} onClick={() => openDispose(asset)}>
+                            فروش دارایی
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -356,9 +535,9 @@ export default function FixedAssetsPage() {
         <div className="grid gap-4">
           {disposeFor && (
             <p className="text-sm text-muted-foreground">
-              {disposeFor.name} — بها {formatReportMoney(disposeFor.cost)} ریال، استهلاک انباشته{" "}
-              {formatReportMoney(disposeFor.accumulatedDepreciation)} ریال، ارزش دفتری{" "}
-              {formatReportMoney(disposeFor.netBookValue)} ریال.
+              {disposeFor.name} — بها {formatMoneyRial(disposeFor.cost)}، استهلاک انباشته{" "}
+              {formatMoneyRial(disposeFor.accumulatedDepreciation)}، ارزش دفتری{" "}
+              {formatMoneyRial(disposeFor.netBookValue)}.
             </p>
           )}
           <div className="grid gap-1">
@@ -412,6 +591,84 @@ export default function FixedAssetsPage() {
             ثبت فروش
           </Button>
         </div>
+      </Drawer>
+
+      <Drawer
+        open={scheduleCode !== null}
+        title={schedule ? `جدول استهلاک ${schedule.assetCode}` : `جدول استهلاک ${scheduleCode ?? ""}`}
+        description={
+          schedule
+            ? `${schedule.assetName} — روش ${FIXED_ASSET_METHOD_LABELS[schedule.method]}`
+            : "در حال بارگذاری جدول استهلاک..."
+        }
+        size="lg"
+        onClose={() => {
+          setScheduleCode(null);
+          setSchedule(null);
+        }}
+      >
+        {scheduleLoading && <p className="text-sm text-muted-foreground">در حال بارگذاری...</p>}
+        {schedule && (
+          <div className="grid gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="text-xs text-muted-foreground">
+                استهلاک انباشته آغاز دوره: {formatMoneyRial(schedule.openingAccumulatedMinor)} | ارزش دفتری پایان دوره:{" "}
+                {formatMoneyRial(schedule.closingBookValueMinor)}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => exportSchedule(schedule.assetCode, "xlsx")}
+                >
+                  <FileSpreadsheet className="me-1.5 size-4" />
+                  خروجی اکسل
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => exportSchedule(schedule.assetCode, "pdf")}
+                >
+                  <Download className="me-1.5 size-4" />
+                  خروجی PDF
+                </Button>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>دوره</TableHead>
+                    <TableHead>تاریخ</TableHead>
+                    <TableHead className="text-end">هزینه استهلاک</TableHead>
+                    <TableHead className="text-end">استهلاک انباشته</TableHead>
+                    <TableHead className="text-end">ارزش دفتری</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {schedule.rows.map((row) => (
+                    <TableRow key={row.period}>
+                      <TableCell className="tabular-nums">{formatNumber(row.period)}</TableCell>
+                      <TableCell className="whitespace-nowrap">{formatJalaliDate(row.day)}</TableCell>
+                      <TableCell className="text-end tabular-nums">{formatMoneyRial(row.chargeMinor)}</TableCell>
+                      <TableCell className="text-end tabular-nums">{formatMoneyRial(row.accumulatedMinor)}</TableCell>
+                      <TableCell className="text-end tabular-nums">{formatMoneyRial(row.bookValueMinor)}</TableCell>
+                    </TableRow>
+                  ))}
+                  {schedule.rows.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-sm text-muted-foreground">
+                        دورهٔ استهلاک باقی‌مانده‌ای برای این دارایی وجود ندارد.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        )}
       </Drawer>
     </EnterpriseRouteGuard>
   );
