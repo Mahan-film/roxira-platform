@@ -10,7 +10,9 @@ before it is switched on, and the go-live list. **The gate is in dry-run and mus
 ## 1. Rules: required / enforced / gap
 
 All rules are evaluated on the exact head SHA of the PR; the merge call carries `sha=<head>`, so a push after the
-evaluation makes GitHub refuse the merge. One merge per tick (every 5 min, oldest PR first).
+evaluation makes GitHub refuse the merge. One merge per tick (every 5 min, oldest PR first) in
+`queue_mode = "legacy"`; in the default `queue_mode = "github"` the gate enqueues up to `max_enqueue_per_tick` (5) PRs per
+tick into GitHub's merge queue instead (section "Queue mode" below).
 
 | # | Rule | Enforced in `merge_gate.py` | Gap / note |
 |---|---|---|---|
@@ -181,7 +183,14 @@ it, all implemented in `merge_gate.py`:
    `main`; if its `head_sha` is the current main HEAD and it succeeded, the gate deletes `PAUSE`, logs it and sends one
    Telegram notice `merge gate resumed: main green at <sha7>`. Never while `KILL` exists; in dry-run it only logs.
    A human can still remove the file by hand. Limit: a docs-only HEAD (no `ci.yml` run) never resumes by itself.
-4. **Re-evaluation.** Every tick re-reads every labelled PR against the new `main`; nothing is cached between ticks.
+4. **Queue mode (`queue_mode = "github"`, default).** Main has a native merge queue (grouping ALLGREEN, build/merge 5,
+   squash). The gate does not merge: for each PR that passes every rule above it calls GraphQL `enqueuePullRequest` with
+   `expectedHeadOid` = the evaluated head, up to `max_enqueue_per_tick` per tick (oldest first), skipping PRs whose
+   `isInMergeQueue` is true. Rules 2 and the post-merge wait do not apply (the queue validates every group); the guard is
+   instead: nothing is enqueued while `PAUSE` exists (auto-resume unchanged) or when the newest completed `ci.yml` push run
+   on `main` is `failure`, `timed_out` or `startup_failure` (one Telegram alert per red run, no PAUSE file written). An
+   unreadable main CI state holds the enqueue. `queue_mode = "legacy"` restores the serial behaviour of rules 2 and 3.
+5. **Re-evaluation.** Every tick re-reads every labelled PR against the new `main`; nothing is cached between ticks.
 
 Known residual risk: two PRs that are each green but break together can land one CI cycle apart; step 3 limits the
 damage to one merge and stops the gate. Main failures that are not gate merges (a manual push) do not pause the gate:

@@ -28,9 +28,14 @@ class FakeApi:
         self.main_sha = kw.get("main_sha", "e" * 40)
         self.runs_by_sha = kw.get("runs_by_sha", {})
         self.head_date = kw.get("head_date", HEAD_DATE)
+        self.queued = set(kw.get("queued", []))
 
     def __call__(self, method, path, fields=None, paginate=False):
         self.calls.append((method, path, fields))
+        if path == "graphql":
+            if "enqueuePullRequest" in fields["query"]:
+                return {"data": {"enqueuePullRequest": {"mergeQueueEntry": {"id": "E"}}}}
+            return {"data": {"node": {"isInMergeQueue": fields["id"] in self.queued}}}
         if path.endswith("/merge"):
             if self.fail_merge:
                 raise mg.GhError("405 not mergeable")
@@ -64,7 +69,8 @@ class FakeApi:
         if "/pulls?state=open" in path:
             return list(self.prs)
         if "/pulls/" in path:
-            return self.prs[0]
+            num = path.split("/pulls/", 1)[1].split("/", 1)[0].split("?", 1)[0]
+            return next((x for x in self.prs if str(x["number"]) == num), self.prs[0])
         raise AssertionError(path)
 
     def did(self, method, suffix):
@@ -72,7 +78,7 @@ class FakeApi:
 
 
 def pr(n=7, labels=("merge-queue",), draft=False, head=HEAD, state="clean", auto=None, **extra):
-    return {**extra, 
+    return {**extra, "node_id": f"N{n}",
         "number": n, "draft": draft, "labels": [{"name": x} for x in labels],
         "head": {"sha": head}, "base": {"ref": "main"}, "mergeable_state": state,
         "auto_merge": auto,
@@ -90,7 +96,7 @@ def review(verdict, sha=HEAD[:12], author=BOT):
 
 def make(tmp_path, dry=False, cfg_over=None, notify=None, now=None, **kw):
     cfg = dict(mg.DEFAULTS, required_checks=CHECKS, approver_ids=[42], owner_approver_ids=[1],
-               state_dir=str(tmp_path), dispatch_review_desk=False)
+               state_dir=str(tmp_path), dispatch_review_desk=False, queue_mode="legacy")
     cfg.update(cfg_over or {})
     api = FakeApi(**kw)
     extra = {"now": now} if now else {}
@@ -766,3 +772,91 @@ def test_dispatch_log_survives_save_and_reload(tmp_path):
     g.tick()
     g.state.save()
     assert mg.State(str(tmp_path / "a")).dispatch_entry(f"7:{HEAD}") == {"count": 1, "at": 1000.0}
+
+
+# ---- GitHub merge queue mode ------------------------------------------------
+def enqueues(api):
+    return [c[2]["id"] for c in api.calls
+            if c[1] == "graphql" and "enqueuePullRequest" in c[2]["query"]]
+
+
+def gh_mode(tmp_path, n_prs=8, **kw):
+    prs = [pr(n=i) for i in range(1, n_prs + 1)]
+    return make(tmp_path, cfg_over={"queue_mode": "github", **kw.pop("cfg", {})}, prs=prs, **kw)
+
+
+def test_github_mode_enqueues_up_to_max_per_tick_without_rest_merge(tmp_path):
+    g, api = gh_mode(tmp_path)
+    assert g.tick() == "1,2,3,4,5"
+    assert enqueues(api) == ["N1", "N2", "N3", "N4", "N5"]
+    assert not api.did("PUT", "/merge")
+    assert g.state.data["last_merge"] is None
+    assert [c[2]["oid"] for c in api.calls if c[1] == "graphql" and "oid" in c[2]] == [HEAD] * 5
+
+
+def test_github_mode_max_enqueue_is_configurable(tmp_path):
+    g, api = gh_mode(tmp_path, cfg={"max_enqueue_per_tick": 2})
+    assert g.tick() == "1,2"
+    assert len(enqueues(api)) == 2
+
+
+def test_github_mode_does_not_wait_for_main_ci_of_previous_enqueue(tmp_path):
+    g, api = gh_mode(tmp_path, n_prs=2)
+    g.state.data["last_merge"] = {"pr": 9, "sha": "d" * 40, "at": g.now(), "done": False}
+    assert g.tick() == "1,2"
+
+
+def test_github_mode_skips_prs_already_in_queue_and_they_do_not_use_budget(tmp_path):
+    g, api = gh_mode(tmp_path, cfg={"max_enqueue_per_tick": 2}, queued={"N1", "N2"})
+    assert g.tick() == "3,4"
+    assert enqueues(api) == ["N3", "N4"]
+
+
+def test_github_mode_all_queued_enqueues_nothing(tmp_path):
+    g, api = gh_mode(tmp_path, n_prs=2, queued={"N1", "N2"})
+    assert g.tick() is None and enqueues(api) == []
+
+
+def test_github_mode_no_enqueue_when_main_red_and_alerts_once(tmp_path):
+    sent = []
+    red = [{"status": "completed", "conclusion": "failure", "id": 5, "head_sha": "e" * 40,
+            "created_at": "2026-11-26T10:00:00Z"},
+           {"status": "completed", "conclusion": "success", "id": 4,
+            "created_at": "2026-11-26T09:00:00Z"}]
+    g, api = gh_mode(tmp_path, n_prs=3, main_runs=red, notify=lambda t: sent.append(t) or True)
+    assert g.tick() is None and g.tick() is None
+    assert enqueues(api) == [] and len(sent) == 1
+
+
+def test_github_mode_older_red_run_does_not_hold(tmp_path):
+    runs = [{"status": "completed", "conclusion": "failure", "id": 4,
+             "created_at": "2026-11-26T09:00:00Z"},
+            {"status": "completed", "conclusion": "success", "id": 5,
+             "created_at": "2026-11-26T10:00:00Z"}]
+    g, api = gh_mode(tmp_path, n_prs=2, main_runs=runs)
+    assert g.tick() == "1,2"
+
+
+def test_github_mode_no_enqueue_while_paused(tmp_path):
+    g, api = gh_mode(tmp_path, n_prs=2)
+    (tmp_path / "PAUSE").write_text("x")
+    assert g.tick() is None and enqueues(api) == []
+
+
+def test_github_mode_dry_run_enqueues_nothing(tmp_path):
+    g, api = gh_mode(tmp_path, n_prs=2, dry=True)
+    assert g.tick() is None and enqueues(api) == []
+
+
+def test_github_mode_ineligible_prs_never_enqueued(tmp_path):
+    g, api = make(tmp_path, cfg_over={"queue_mode": "github"},
+                  prs=[pr(n=1, draft=True), pr(n=2, labels=()),
+                       pr(n=3, labels=("merge-queue", "do-not-merge")), pr(n=4)])
+    assert g.tick() == "4"
+
+
+def test_legacy_mode_unchanged_one_merge_per_tick_and_waits(tmp_path):
+    g, api = make(tmp_path, cfg_over={"queue_mode": "legacy"}, prs=[pr(n=1), pr(n=2)])
+    assert g.tick() == "1"
+    assert len(api.did("PUT", "/merge")) == 1 and enqueues(api) == []
+    assert g.tick() is None  # main CI of the last merge not started yet

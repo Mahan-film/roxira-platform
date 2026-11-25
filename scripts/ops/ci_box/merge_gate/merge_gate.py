@@ -126,6 +126,13 @@ DEFAULTS = {
     "main_ci_grace_seconds": 300,
     # Remove PAUSE by itself once the newest completed main CI push run is green on main HEAD.
     "auto_resume": True,
+    # How a ready PR reaches the base. "github" = GitHub's native merge queue: the gate only
+    # ENQUEUES (GraphQL enqueuePullRequest, bound to the head SHA), up to max_enqueue_per_tick
+    # per tick, and does not wait for the main push CI of each merge (the queue validates every
+    # group). Guard: nothing is enqueued while PAUSE exists or the newest completed main CI push
+    # run is red. "legacy" = one squash merge per tick via REST, then wait for that main CI run.
+    "queue_mode": "github",
+    "max_enqueue_per_tick": 5,
     # Review desk dispatch (see module docstring). Acts even when dry_run = true.
     "dispatch_review_desk": True,
     "review_desk_workflow": "review-desk.yml",
@@ -311,6 +318,11 @@ def load_notify() -> Callable[[str], bool]:
     return lambda text: False
 
 
+QUEUED_QUERY = "query($id: ID!) { node(id: $id) { ... on PullRequest { isInMergeQueue } } }"
+ENQUEUE_MUTATION = (
+    "mutation($id: ID!, $oid: GitObjectID!) { enqueuePullRequest(input: "
+    "{pullRequestId: $id, expectedHeadOid: $oid}) { mergeQueueEntry { id } } }"
+)
 FAILED_RUN = {"failure", "timed_out", "startup_failure"}
 
 
@@ -545,6 +557,7 @@ class Gate:
         prs = self.api("GET", self.p("pulls?state=open&per_page=100"), paginate=True)
         prs.sort(key=lambda p: p["number"])
         to_merge, to_update, to_review = None, None, None
+        ready: list[dict] = []
         self.auto_resume()
         guard_ok, guard_why = self.main_guard()
         if not guard_ok:
@@ -562,8 +575,9 @@ class Gate:
             log.info("#%s %s: %s", n, status, why)
             if status in (REFUSE, OWNER):
                 self.comment(n, head, code, f"not merged: {why}")
-            elif status == MERGE and to_merge is None:
-                to_merge = pr
+            elif status == MERGE:
+                ready.append(pr)
+                to_merge = to_merge or pr
             elif status == BEHIND and to_update is None:
                 to_update = pr
             if code == "review" and to_review is None:
@@ -574,6 +588,8 @@ class Gate:
                     log.error("#%s desk eligibility check failed: %s", n, e)
         if to_review:
             self.dispatch_review(to_review)
+        if self.queue_github():
+            return self.enqueue_ready(ready, guard_ok, guard_why)
         if to_merge and not guard_ok:
             log.info("[hold] would merge #%s but %s", to_merge["number"], guard_why)
             return None
@@ -582,6 +598,88 @@ class Gate:
         if to_update:
             self.update_branch(to_update)
         return None
+
+    # ---- GitHub merge queue mode ------------------------------------------------
+    def queue_github(self) -> bool:
+        return str(self.cfg.get("queue_mode", "github")).lower() == "github"
+
+    @staticmethod
+    def node_id(pr: dict) -> str:
+        return str(pr.get("node_id") or f"PR_{pr['number']}")
+
+    def in_merge_queue(self, pr: dict) -> bool:
+        """True when the PR already sits in the merge queue (GraphQL isInMergeQueue)."""
+        res = self.api("POST", "graphql", {"query": QUEUED_QUERY, "id": self.node_id(pr)})
+        data = (res or {}).get("data") if isinstance(res, dict) else None
+        node = (data or {}).get("node") or {}
+        return bool(node.get("isInMergeQueue"))
+
+    def enqueue_ready(self, ready: list[dict], guard_ok: bool, guard_why: str) -> str | None:
+        """Enqueue up to max_enqueue_per_tick ready PRs (oldest first); queued ones are skipped."""
+        if not ready:
+            return None
+        ok, why = (True, "") if not guard_ok else self.main_red_guard()
+        if not guard_ok:
+            ok, why = False, guard_why
+        if not ok:
+            names = ", ".join(f"#{p['number']}" for p in ready)
+            log.info("[hold] would enqueue %s but %s", names, why)
+            return None
+        budget = max(0, int(self.cfg.get("max_enqueue_per_tick", 5)))
+        done: list[str] = []
+        for pr in ready:
+            if len(done) >= budget:
+                break
+            try:
+                if self.in_merge_queue(pr):
+                    log.info("#%s already in the merge queue, skipped", pr["number"])
+                    continue
+            except GhError as e:
+                log.error("#%s merge queue state unreadable: %s", pr["number"], e)
+                continue
+            if self.enqueue(pr):
+                done.append(str(pr["number"]))
+        return ",".join(done) or None
+
+    def enqueue(self, pr: dict) -> bool:
+        n, head = pr["number"], pr["head"]["sha"]
+        if self.dry:
+            log.info("[dry-run] would enqueue #%s at %s", n, head[:7])
+            return False
+        try:
+            fields = {"query": ENQUEUE_MUTATION, "id": self.node_id(pr), "oid": head}
+            self.api("POST", "graphql", fields)
+        except GhError as e:
+            log.error("enqueue of #%s refused by GitHub: %s", n, e)
+            self.comment(n, head, "merge-error", f"enqueue was refused by GitHub: {e}")
+            return False
+        self.state.data["merged"][str(n)] = head
+        self.comment(n, head, "enqueued", f"added to the merge queue at {head[:7]}")
+        log.info("enqueued #%s", n)
+        return True
+
+    def main_red_guard(self) -> tuple[bool, str]:
+        """False while the newest completed main CI run is red (one alert per run)."""
+        base, wf = self.cfg["base"], self.cfg["main_ci_workflow"]
+        try:
+            q = f"branch={base}&event=push&status=completed&per_page=20"
+            res = self.api("GET", self.p(f"actions/workflows/{wf}/runs?{q}"))
+        except GhError as e:
+            return False, f"cannot read main CI: {e}"
+        runs = [r for r in ((res or {}).get("workflow_runs", []) if isinstance(res, dict) else [])
+                if r.get("status") == "completed"]
+        if not runs:
+            return True, ""
+        newest = max(runs, key=lambda r: (r.get("created_at") or "", r.get("id") or 0))
+        if newest.get("conclusion") not in FAILED_RUN:
+            return True, ""
+        key = f"main-red:{newest.get('id')}"
+        if not self.state.seen(key):
+            self.state.mark(key)
+            sha7 = str(newest.get("head_sha") or "")[:7]
+            self.alert(f"[ALERT] merge gate holds the queue: newest main CI run is "
+                       f"{newest.get('conclusion')} at {sha7}. No enqueue until main is green.")
+        return False, f"newest main CI run is {newest.get('conclusion')}"
 
     # ---- main CI guard (decision B7-2) -------------------------------------
     def killed(self) -> bool:
@@ -646,7 +744,7 @@ class Gate:
         if self.pause_file.exists():
             return False, f"gate paused ({self.pause_file.name} present): main CI failed after a gate merge"
         lm = self.state.data.get("last_merge")
-        if not lm or lm.get("done"):
+        if self.queue_github() or not lm or lm.get("done"):
             return True, ""
         sha, n = lm["sha"], lm["pr"]
         wf = self.cfg["main_ci_workflow"]

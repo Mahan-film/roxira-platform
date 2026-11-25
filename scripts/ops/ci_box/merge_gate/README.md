@@ -37,7 +37,14 @@ no desk run is queued or running). If no verdict appears `desk_retry_minutes` (9
 dispatched again, at most `desk_max_dispatches_per_head` (2) times. `dispatch_review_desk = false` turns it off. It is
 the only write done in dry-run.
 
-One merge per tick (oldest PR number first). A comment is posted on the PR when it is merged, and when it is
+`queue_mode = "github"` (default): main uses GitHub's native merge queue, so the gate only ENQUEUES PRs
+(GraphQL `enqueuePullRequest` bound to the head SHA; the queue then runs CI per merge group and merges). Per tick it
+enqueues up to `max_enqueue_per_tick` (default 5) eligible PRs, oldest first, skipping PRs already in the queue
+(`isInMergeQueue`), and does not wait for the main push CI of each merge. It enqueues nothing while `PAUSE` exists
+or the newest completed `ci.yml` push run on main is red (one Telegram alert per red run). `queue_mode = "legacy"`:
+one REST squash merge per tick, then wait for that merge's main CI run (rule below).
+
+Legacy: one merge per tick (oldest PR number first). A comment is posted on the PR when it is merged, and when it is
 refused (once per head SHA and reason). Waiting states (checks running) are silent.
 
 ## Operate

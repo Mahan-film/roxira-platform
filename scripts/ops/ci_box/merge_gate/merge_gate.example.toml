@@ -90,6 +90,12 @@ main_ci_grace_seconds = 300          # no run after this = paths-ignored push, c
 # (one Telegram notice "merge gate resumed: main green at <sha7>"). Never while KILL exists; dry-run only logs.
 auto_resume = true
 
+# How ready PRs reach main. "github" (default) = only enqueue into GitHub's merge queue: up to max_enqueue_per_tick PRs
+# per tick, PRs already queued are skipped, no wait for each merge's main CI; nothing is enqueued while PAUSE exists or
+# the newest completed ci.yml push run on main is red. "legacy" = one REST squash merge per tick, then wait for main CI.
+queue_mode = "github"
+max_enqueue_per_tick = 5
+
 # Dispatch review-desk.yml for a PR that passed every other rule, has every required check green on its head and has
 # no desk verdict for that head (one per tick, only when no desk run is queued or running). If no verdict appears
 # desk_retry_minutes after a dispatch the head is dispatched again, at most desk_max_dispatches_per_head times.
