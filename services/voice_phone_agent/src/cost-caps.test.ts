@@ -123,6 +123,28 @@ test('calculateCallCost accurately models carrier rounding and LiveKit Scale fee
   assert.equal(cost.totalCostCents, 3);
 });
 
+test('calculateCallCost uses outbound_landline and outbound_mobile rates when direction is specified', () => {
+  const config = loadPricingConfig();
+  const carrier = config.carriers.telnyx;
+  const landline = calculateCallCost({
+    durationSeconds: 60,
+    direction: 'outbound_landline',
+    carrierKey: 'telnyx',
+    planKey: 'self_hosted',
+  }, config);
+  const mobile = calculateCallCost({
+    durationSeconds: 60,
+    direction: 'outbound_mobile',
+    carrierKey: 'telnyx',
+    planKey: 'self_hosted',
+  }, config);
+
+  const expectedLandlineMicro = Math.round((carrier.outbound_landline_per_minute_usd_cents + (carrier.voice_api_fee_per_minute_usd_cents || 0)) * 1_000_000);
+  const expectedMobileMicro = Math.round((carrier.outbound_mobile_per_minute_usd_cents + (carrier.voice_api_fee_per_minute_usd_cents || 0)) * 1_000_000);
+  assert.equal(landline.carrierCostMicroCents, expectedLandlineMicro);
+  assert.equal(mobile.carrierCostMicroCents, expectedMobileMicro);
+});
+
 test('PhoneCostTracker accumulates micro-cents without sub-cent rounding loss and buckets empty callerId', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'phone-test-'));
   const statePath = path.join(tmpDir, 'usage.json');

@@ -267,8 +267,11 @@ export function calculateLiveKitBillableSeconds(durationSeconds: number, plan: P
   return Math.max(durationSeconds, plan.minimum_duration_seconds || 0);
 }
 
+export type CallDirection = 'inbound' | 'outbound_landline' | 'outbound_mobile';
+
 export interface CostCalculationParams {
   durationSeconds: number;
+  direction?: CallDirection;
   carrierKey?: string;
   planKey?: string;
   sttKey?: string;
@@ -300,9 +303,19 @@ export function calculateCallCost(
   const livekitBillableSeconds = calculateLiveKitBillableSeconds(durationSeconds, plan);
 
   // Carrier cost in integer micro-cents (1 cent = 1,000,000 micro-cents)
-  const inboundMicro = rateCentsToMicroCents(carrier.inbound_per_minute_usd_cents);
+  const direction: CallDirection = params.direction ?? 'inbound';
+  const directionRateMap: Record<CallDirection, number | undefined> = {
+    inbound: carrier.inbound_per_minute_usd_cents,
+    outbound_landline: carrier.outbound_landline_per_minute_usd_cents,
+    outbound_mobile: carrier.outbound_mobile_per_minute_usd_cents,
+  };
+  const directionRate = directionRateMap[direction];
+  if (directionRate === undefined || directionRate === null) {
+    throw new Error(`Missing rate for direction "${direction}" on carrier "${carrierKey}"`);
+  }
+  const carrierRateMicro = rateCentsToMicroCents(directionRate);
   const voiceApiMicro = rateCentsToMicroCents(carrier.voice_api_fee_per_minute_usd_cents || 0);
-  const carrierCostMicroBig = prorateMicroCents(carrierBillableSeconds, inboundMicro + voiceApiMicro, 60n);
+  const carrierCostMicroBig = prorateMicroCents(carrierBillableSeconds, carrierRateMicro + voiceApiMicro, 60n);
 
   // LiveKit cost in integer micro-cents
   const agentMicro = rateCentsToMicroCents(plan.agent_minute_usd_cents);
