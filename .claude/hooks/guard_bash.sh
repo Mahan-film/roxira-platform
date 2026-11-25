@@ -62,7 +62,9 @@ def segments(text: str):
         lex.commenters = "#"
         seg = []
         for tok in lex:
-            if tok in SEPARATORS:
+            # shlex glues adjacent punctuation (";(" or "|&"), so any token made
+            # only of ;&|() separates commands.
+            if tok in SEPARATORS or re.fullmatch(r"[;&|()]+", tok):
                 if seg:
                     yield seg
                 seg = []
@@ -113,7 +115,29 @@ def is_specific(path: str) -> bool:
     return path.endswith(".py") or "::" in path
 
 
+def strip_redirects(args):
+    """Drop redirections ("2>&1", "> out.txt", "2>/dev/null") so they are not read as paths.
+    shlex splits "2>&1" into "2", ">&", "1" and "2>/dev/null" into "2", ">", "/dev/null"."""
+    out, i = [], 0
+    while i < len(args):
+        tok = args[i]
+        if re.fullmatch(r"[<>&]+", tok) and re.search(r"[<>]", tok):
+            if out and out[-1].isdigit():
+                out.pop()
+            i += 2
+            continue
+        out.append(tok)
+        i += 1
+    return out
+
+
+INFO_ONLY = {"--version", "-V", "--help", "-h"}  # print and exit; no collection
+
+
 def check_pytest(args):
+    args = strip_redirects(args)
+    if any(tok in INFO_ONLY for tok in args):
+        return None
     paths, collect, skip = [], False, False
     for tok in args:
         if skip:

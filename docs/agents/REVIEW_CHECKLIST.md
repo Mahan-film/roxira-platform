@@ -10,9 +10,9 @@ This is the one review checklist for this repo. The Claude skill
    `scripts/dev/check_reviewer_family.py`). The `reviewer` role in
    `config/models.yaml` lists the choices. If you wrote the diff, stop and say so.
 2. **Scope.** Read the diff against the PR's base branch and the CI test
-   output only. Locally, run only the tests CI runs
-   (`pytest -m "not integration"`), or the specific test files the diff
-   touches. Never run `pytest` over `src/` or the repo root (see `CLAUDE.md`).
+   output only. Locally, run only the specific test files the diff adds or
+   touches (`pytest -q <file> -p no:cacheprovider`). Never run `pytest` with
+   no path or over `src/` or the repo root (see `CLAUDE.md`).
    Do not read unrelated files.
 3. **Checklist.** Flag anything the diff touches:
    - **Secrets**: no real or default key, token or password is added.

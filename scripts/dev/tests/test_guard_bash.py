@@ -47,6 +47,10 @@ def guard(command: str) -> subprocess.CompletedProcess:
     "git push --no-verify origin HEAD",
     "git commit -n -m wip",
     "echo hi; git push --no-verify",
+    "pytest -q 2>&1 | tail -5",
+    "pytest > out.txt",
+    "python -m pytest 2>/dev/null",
+    "echo hi;(pytest src)",
 ])
 def test_blocks(command):
     res = guard(command)
@@ -66,6 +70,9 @@ def test_blocks(command):
     "ls -la",
     "git log -n 5",
     "echo pytest src",
+    "pytest -q tests/test_check_ci.py 2>&1 | tail -5",
+    "pytest --version",
+    "python3 -m pytest --help",
 ])
 def test_allows(command):
     res = guard(command)
