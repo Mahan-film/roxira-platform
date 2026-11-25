@@ -109,3 +109,10 @@ def test_taskq_runs_review_after_done(env, monkeypatch, tmp_path):  # noqa: F811
     assert res["author_model"] == "deepseek/deepseek-v4.1-flash" and not res["reviewer"].startswith("deepseek/")
     lanes = [r[0] for r in taskq.connect().execute("SELECT lane FROM attempts ORDER BY ts")]
     assert lanes == ["be", "review"]
+
+
+def test_checklist_source_is_the_shared_doc_with_skill_fallback():
+    assert review_hook.SKILL == review_hook.CHECKLIST
+    assert review_hook.CHECKLIST.name == "REVIEW_CHECKLIST.md"
+    legacy = review_hook.checklist(review_hook.LEGACY_SKILL)
+    assert "name: review-diff" not in legacy and "REVIEW_CHECKLIST.md" in legacy

@@ -5,8 +5,9 @@ with a model from a DIFFERENT family than the author.
   review_hook.py (--diff-file PATCH | --base REF --head REF [--repo DIR]) --author-model ID
                  [--checks-file JSON] [--public] [--out FILE.json] [--model-cmd CMD] [--dry-run]
 
-- Checklist: .claude/skills/review-diff/SKILL.md (the skill's front matter is stripped), so the hook and
-  the skill never drift apart.
+- Checklist: docs/agents/REVIEW_CHECKLIST.md, the single model-neutral source that the
+  review-diff skills also point to (fallback: .claude/skills/review-diff/SKILL.md with its
+  front matter stripped).
 - Reviewer model: `reviewer` role of config/models.yaml (via model_registry.py), file order (free first), skipping
   entries of the author's family (families from scripts/dev/check_reviewer_family.py). `public_code_only` entries are
   used only with --public. Role ids go to OpenRouter by id; the key-pool gateway serves GROUP names only, so it is
@@ -34,7 +35,9 @@ ROOT = HERE.parents[2]
 sys.path.insert(0, str(HERE))
 import llm_client  # noqa: E402
 
-SKILL = ROOT / ".claude" / "skills" / "review-diff" / "SKILL.md"
+CHECKLIST = ROOT / "docs" / "agents" / "REVIEW_CHECKLIST.md"
+LEGACY_SKILL = ROOT / ".claude" / "skills" / "review-diff" / "SKILL.md"
+SKILL = CHECKLIST if CHECKLIST.is_file() else LEGACY_SKILL
 MAX_DIFF_CHARS = 60000
 PAID_GROUP = "agent-free-paid"  # key-pool group: GLM-5.3 Flash then DeepSeek Flash; the family check rejects the DeepSeek fallback
 FREE_GROUP = "agent-strong-free"  # key-pool group of free strong models (config/key_pool.yaml); may_log: public code only
@@ -137,8 +140,8 @@ def build_prompt(diff: str, checks: str, skill_text: str) -> str:
         diff = diff[:MAX_DIFF_CHARS] + f"\n[... diff truncated at {MAX_DIFF_CHARS} chars ...]"
     keys = ", ".join(ITEMS)
     return (
-        "Review checklist (from .claude/skills/review-diff/SKILL.md; ignore its step 1, the model split is "
-        "already enforced):\n\n" + skill_text + "\n\n"
+        "Review checklist (from docs/agents/REVIEW_CHECKLIST.md; ignore its step 1, "
+        "the model split is already enforced):\n\n" + skill_text + "\n\n"
         f"Answer with one JSON object: {{\"items\": [{{\"name\": one of [{keys}], \"status\": \"pass\"|\"fail\"|"
         "\"uncertain\", \"note\": short reason}], \"verdict\": \"pass\"|\"fail\"}. One item per name. "
         "`tests_and_gates` fails when the gate output below shows a failure or the diff changes behaviour "
