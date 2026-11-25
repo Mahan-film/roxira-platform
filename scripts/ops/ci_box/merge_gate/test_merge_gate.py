@@ -96,7 +96,7 @@ def review(verdict, sha=HEAD[:12], author=BOT):
 
 def make(tmp_path, dry=False, cfg_over=None, notify=None, now=None, **kw):
     cfg = dict(mg.DEFAULTS, required_checks=CHECKS, approver_ids=[42], owner_approver_ids=[1],
-               state_dir=str(tmp_path), dispatch_review_desk=False, queue_mode="legacy")
+               state_dir=str(tmp_path), dispatch_review_desk=False)
     cfg.update(cfg_over or {})
     api = FakeApi(**kw)
     extra = {"now": now} if now else {}
@@ -860,3 +860,7 @@ def test_legacy_mode_unchanged_one_merge_per_tick_and_waits(tmp_path):
     assert g.tick() == "1"
     assert len(api.did("PUT", "/merge")) == 1 and enqueues(api) == []
     assert g.tick() is None  # main CI of the last merge not started yet
+
+
+def test_code_default_is_legacy_queue_mode():
+    assert mg.DEFAULTS["queue_mode"] == "legacy" and mg.DEFAULTS["max_enqueue_per_tick"] == 5

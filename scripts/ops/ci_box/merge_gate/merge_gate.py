@@ -131,7 +131,7 @@ DEFAULTS = {
     # per tick, and does not wait for the main push CI of each merge (the queue validates every
     # group). Guard: nothing is enqueued while PAUSE exists or the newest completed main CI push
     # run is red. "legacy" = one squash merge per tick via REST, then wait for that main CI run.
-    "queue_mode": "github",
+    "queue_mode": "legacy",
     "max_enqueue_per_tick": 5,
     # Review desk dispatch (see module docstring). Acts even when dry_run = true.
     "dispatch_review_desk": True,
@@ -601,7 +601,7 @@ class Gate:
 
     # ---- GitHub merge queue mode ------------------------------------------------
     def queue_github(self) -> bool:
-        return str(self.cfg.get("queue_mode", "github")).lower() == "github"
+        return str(self.cfg.get("queue_mode", "legacy")).lower() == "github"
 
     @staticmethod
     def node_id(pr: dict) -> str:

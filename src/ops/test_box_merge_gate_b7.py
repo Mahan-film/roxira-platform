@@ -188,7 +188,7 @@ class TickBehaviour(unittest.TestCase):
                 return pr()
             return orig(method, path, fields, paginate)
 
-        return mg.Gate(dict(cfg(), queue_mode="legacy"), call, mg.State(os.devnull), dry), api
+        return mg.Gate(cfg(), call, mg.State(os.devnull), dry), api
 
     def test_owner_class_never_merges_and_is_reported_once_per_head(self):
         api = FakeApi(["scripts/ops/deploy.sh"], [review()])

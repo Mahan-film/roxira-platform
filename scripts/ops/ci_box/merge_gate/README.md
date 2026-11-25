@@ -37,7 +37,7 @@ no desk run is queued or running). If no verdict appears `desk_retry_minutes` (9
 dispatched again, at most `desk_max_dispatches_per_head` (2) times. `dispatch_review_desk = false` turns it off. It is
 the only write done in dry-run.
 
-`queue_mode = "github"` (default): main uses GitHub's native merge queue, so the gate only ENQUEUES PRs
+`queue_mode = "github"` (opt-in; the code default is `"legacy"`): main uses GitHub's native merge queue, so the gate only ENQUEUES PRs
 (GraphQL `enqueuePullRequest` bound to the head SHA; the queue then runs CI per merge group and merges). Per tick it
 enqueues up to `max_enqueue_per_tick` (default 5) eligible PRs, oldest first, skipping PRs already in the queue
 (`isInMergeQueue`), and does not wait for the main push CI of each merge. It enqueues nothing while `PAUSE` exists
