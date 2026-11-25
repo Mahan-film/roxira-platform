@@ -118,21 +118,33 @@ def test_errors_are_not_cached(client, monkeypatch):
 
 def test_in_progress_request_is_awaited_not_recomputed(monkeypatch):
     calls = {"n": 0}
-
-    async def slow(payload, request, user):
-        calls["n"] += 1
-        await asyncio.sleep(0.2)
-        return {"status": "SUCCESS", "reply": "slow-answer"}
-
-    monkeypatch.setattr(mod, "_consult_core", slow)
     req = SimpleNamespace(headers={}, client=SimpleNamespace(host="203.0.113.7"))
 
     async def run():
+        first_in_flight = asyncio.Event()
+        second_saw_lock = asyncio.Event()
+        real_claim = chat_auth.idem_claim
+
+        def synced_claim(lock_key):
+            claimed = real_claim(lock_key)
+            if not claimed:
+                second_saw_lock.set()
+            return claimed
+
+        async def slow(payload, request, user):
+            calls["n"] += 1
+            first_in_flight.set()
+            await asyncio.wait_for(second_saw_lock.wait(), timeout=5.0)
+            return {"status": "SUCCESS", "reply": "slow-answer"}
+
+        monkeypatch.setattr(chat_auth, "idem_claim", synced_claim)
+        monkeypatch.setattr(mod, "_consult_core", slow)
         payload = {"message": "q", "request_id": RID}
-        return await asyncio.gather(
-            mod.interactive_consult(dict(payload), req, chat_auth.ANONYMOUS),
-            mod.interactive_consult(dict(payload), req, chat_auth.ANONYMOUS),
-        )
+
+        task1 = asyncio.create_task(mod.interactive_consult(dict(payload), req, chat_auth.ANONYMOUS))
+        await asyncio.wait_for(first_in_flight.wait(), timeout=5.0)
+        task2 = asyncio.create_task(mod.interactive_consult(dict(payload), req, chat_auth.ANONYMOUS))
+        return await asyncio.gather(task1, task2)
 
     results = asyncio.run(run())
     assert calls["n"] == 1
