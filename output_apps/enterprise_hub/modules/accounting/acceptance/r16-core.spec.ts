@@ -37,11 +37,84 @@ import { denied } from '../../access/access-errors';
 import { AccountantFirmService } from '../../access/services/accountant-firm.service';
 import { AccountingRepository } from '../repositories/accounting.repository';
 import { AccountingService } from '../services/accounting.service';
+import { IntercompanyService } from '../intercompany/intercompany.service';
+import {
+  ConsolidationGroupConfig,
+  EntityFinancialProfile,
+} from '../intercompany/intercompany.types';
 
 /** amount (2 decimals) x rate (6 decimals), half up to 2 decimals. */
 const convert = (amountMinor: bigint, rateScaled: bigint): bigint => roundMinorHalfUp(amountMinor * rateScaled, 1_000_000n);
 
 describe('R16 T1 multi-entity consolidation (T182)', () => {
+  const intercompanyService = new IntercompanyService();
+
+  const groupConfig: ConsolidationGroupConfig = {
+    groupId: 'group-c',
+    groupName: 'Group C',
+    reportingCurrency: 'EUR',
+    parentEntityId: 'parent-p',
+    subsidiaries: [
+      {
+        subsidiaryEntityId: 'sub-s',
+        ownershipRatioScaled6: BigInt(T1.parentOwnershipPercent) * 10_000n, // 800_000n = 80%
+        acquisitionEquityMinor: T1.subsidiaryEquityAtAcquisition,
+        investmentAccountCode: '1500',
+        subsidiaryEquityAccountCode: '3000',
+        nciEquityAccountCode: '3500',
+        intercompanyReceivableCode: '1150',
+        intercompanyPayableCode: '2150',
+        intercompanyRevenueCode: '4100',
+        intercompanyExpenseCode: '6100',
+      },
+    ],
+  };
+
+  const entityProfiles: EntityFinancialProfile[] = [
+    {
+      entityId: 'parent-p',
+      entityName: 'Parent P',
+      currency: 'EUR',
+      balances: [
+        // Standalone external profit = 90,000.00 (Sales 190,000, Expenses 100,000)
+        { accountCode: '4000', accountName: 'External Sales', category: 'REVENUE', debitMinor: 0n, creditMinor: m('190000.00') },
+        { accountCode: '5000', accountName: 'External Expenses', category: 'EXPENSE', debitMinor: m('100000.00'), creditMinor: 0n },
+        // IC Revenue = 10,000.00
+        { accountCode: '4100', accountName: 'IC Revenue', category: 'REVENUE', debitMinor: 0n, creditMinor: T1.intercompanyFee },
+        // IC Receivable = 10,000.00
+        { accountCode: '1150', accountName: 'IC Receivable', category: 'ASSET', debitMinor: T1.intercompanyFee, creditMinor: 0n },
+        // Investment in S = 40,000.00
+        { accountCode: '1500', accountName: 'Investment in Subsidiary', category: 'ASSET', debitMinor: T1.investmentInSubsidiary, creditMinor: 0n },
+        // Cash/External Assets: 150,000.00
+        { accountCode: '1000', accountName: 'Cash and Bank', category: 'ASSET', debitMinor: m('150000.00'), creditMinor: 0n },
+        // External Liabilities: 20,000.00
+        { accountCode: '2000', accountName: 'Accounts Payable', category: 'LIABILITY', debitMinor: 0n, creditMinor: m('20000.00') },
+        // Share Capital: 80,000.00
+        { accountCode: '3000', accountName: 'Share Capital', category: 'EQUITY', debitMinor: 0n, creditMinor: m('80000.00') },
+      ],
+    },
+    {
+      entityId: 'sub-s',
+      entityName: 'Subsidiary S',
+      currency: 'EUR',
+      balances: [
+        // S external sales 120,000.00, external expenses 60,000.00
+        { accountCode: '4000', accountName: 'External Sales', category: 'REVENUE', debitMinor: 0n, creditMinor: T1.subsidiaryExternalSales },
+        { accountCode: '5000', accountName: 'External Expenses', category: 'EXPENSE', debitMinor: T1.subsidiaryExternalExpenses, creditMinor: 0n },
+        // IC Expense = 10,000.00
+        { accountCode: '6100', accountName: 'IC Expense', category: 'EXPENSE', debitMinor: T1.intercompanyFee, creditMinor: 0n },
+        // IC Payable = 10,000.00
+        { accountCode: '2150', accountName: 'IC Payable', category: 'LIABILITY', debitMinor: 0n, creditMinor: T1.intercompanyFee },
+        // Cash/Assets in S: 120,000.00
+        { accountCode: '1000', accountName: 'Cash and Bank', category: 'ASSET', debitMinor: m('120000.00'), creditMinor: 0n },
+        // External Liabilities: 10,000.00
+        { accountCode: '2000', accountName: 'Accounts Payable', category: 'LIABILITY', debitMinor: 0n, creditMinor: m('10000.00') },
+        // Equity at acquisition: 50,000.00
+        { accountCode: '3000', accountName: 'Share Capital S', category: 'EQUITY', debitMinor: 0n, creditMinor: T1.subsidiaryEquityAtAcquisition },
+      ],
+    },
+  ];
+
   it('fixture numbers agree with each other (NCI 20% of 50,000, group profit 150,000)', () => {
     const subProfit = T1.subsidiaryExternalSales - T1.subsidiaryExternalExpenses;
     const group = T1.parentStandaloneExternalProfit + subProfit;
@@ -49,9 +122,78 @@ describe('R16 T1 multi-entity consolidation (T182)', () => {
     expect(T1.subsidiaryEquityAtAcquisition - T1.investmentInSubsidiary).toBe(T1.expected.nciEquityAtAcquisition);
     expect(group - T1.expected.nci).toBe(T1.expected.controllingNetIncome);
   });
-  it.skip('posts the IC invoice in P and the mirror bill in S — needs T182 (intercompany)', () => undefined);
-  it.skip('consolidates into group C with IC eliminations, investment elimination and NCI — needs T182', () => undefined);
-  it.skip('consolidated balance sheet balances after eliminations — needs T182', () => undefined);
+
+  it('posts the IC invoice in P and the mirror bill in S — needs T182 (intercompany)', () => {
+    const pair = intercompanyService.createIntercompanyPair({
+      invoiceNumber: 'INV-IC-101',
+      date: '2026-10-15',
+      sellerEntityId: 'parent-p',
+      buyerEntityId: 'sub-s',
+      currency: 'EUR',
+      amountMinor: T1.intercompanyFee,
+      description: 'Management Fee',
+    });
+
+    // P invoice: Dr IC Receivable 10,000 / Cr IC Revenue 10,000
+    expect(pair.sellerInvoiceEntry.entityId).toBe('parent-p');
+    expect(pair.sellerInvoiceEntry.lines[0].accountCode).toBe('1150');
+    expect(pair.sellerInvoiceEntry.lines[0].debitMinor).toBe(T1.intercompanyFee);
+    expect(pair.sellerInvoiceEntry.lines[1].accountCode).toBe('4100');
+    expect(pair.sellerInvoiceEntry.lines[1].creditMinor).toBe(T1.intercompanyFee);
+
+    // S mirror bill: Dr IC Expense 10,000 / Cr IC Payable 10,000
+    expect(pair.buyerMirrorBillEntry.entityId).toBe('sub-s');
+    expect(pair.buyerMirrorBillEntry.lines[0].accountCode).toBe('6100');
+    expect(pair.buyerMirrorBillEntry.lines[0].debitMinor).toBe(T1.intercompanyFee);
+    expect(pair.buyerMirrorBillEntry.lines[1].accountCode).toBe('2150');
+    expect(pair.buyerMirrorBillEntry.lines[1].creditMinor).toBe(T1.intercompanyFee);
+  });
+
+  it('consolidates into group C with IC eliminations, investment elimination and NCI — needs T182', () => {
+    const result = intercompanyService.consolidateGroup(groupConfig, entityProfiles);
+
+    // Eliminations: Dr IC revenue 10,000 / Cr IC expense 10,000
+    const plElim = result.eliminations.find((e) => e.type === 'INTERCOMPANY_PL')!;
+    expect(plElim.lines[0].accountCode).toBe('4100');
+    expect(plElim.lines[0].debitMinor).toBe(T1.intercompanyFee);
+    expect(plElim.lines[1].accountCode).toBe('6100');
+    expect(plElim.lines[1].creditMinor).toBe(T1.intercompanyFee);
+
+    // Eliminations: Dr IC payable 10,000 / Cr IC receivable 10,000
+    const bsElim = result.eliminations.find((e) => e.type === 'INTERCOMPANY_BS')!;
+    expect(bsElim.lines[0].accountCode).toBe('2150');
+    expect(bsElim.lines[0].debitMinor).toBe(T1.intercompanyFee);
+    expect(bsElim.lines[1].accountCode).toBe('1150');
+    expect(bsElim.lines[1].creditMinor).toBe(T1.intercompanyFee);
+
+    // Investment elimination: Dr S equity 50,000 / Cr investment 40,000 / Cr NCI equity 10,000
+    const invElim = result.eliminations.find((e) => e.type === 'INVESTMENT_EQUITY')!;
+    expect(invElim.lines[0].accountCode).toBe('3000');
+    expect(invElim.lines[0].debitMinor).toBe(T1.subsidiaryEquityAtAcquisition);
+    expect(invElim.lines[1].accountCode).toBe('1500');
+    expect(invElim.lines[1].creditMinor).toBe(T1.investmentInSubsidiary);
+    expect(invElim.lines[2].accountCode).toBe('3500');
+    expect(invElim.lines[2].creditMinor).toBe(T1.expected.nciEquityAtAcquisition);
+
+    // Group Profit
+    expect(result.incomeStatement.consolidatedNetIncomeBeforeNciMinor).toBe(T1.expected.consolidatedNetIncomeBeforeNci);
+    expect(result.incomeStatement.nciShareMinor).toBe(T1.expected.nci);
+    expect(result.incomeStatement.controllingNetIncomeMinor).toBe(T1.expected.controllingNetIncome);
+  });
+
+  it('consolidated balance sheet balances after eliminations — needs T182', () => {
+    const result = intercompanyService.consolidateGroup(groupConfig, entityProfiles);
+
+    expect(result.balanceSheet.totalAssetsMinor).toBe(m('270000.00'));
+    expect(result.balanceSheet.totalLiabilitiesMinor).toBe(m('30000.00'));
+    expect(result.balanceSheet.controllingEquityMinor).toBe(m('220000.00')); // 80,000 capital + 140,000 controlling profit
+    expect(result.balanceSheet.nciEquityMinor).toBe(m('20000.00')); // 10,000 acquisition + 10,000 profit share
+    expect(result.balanceSheet.totalEquityMinor).toBe(m('240000.00'));
+    expect(result.balanceSheet.isBalanced).toBe(true);
+    expect(result.balanceSheet.totalAssetsMinor).toBe(
+      result.balanceSheet.totalLiabilitiesMinor + result.balanceSheet.totalEquityMinor,
+    );
+  });
 });
 
 describe('R16 T2 three currencies, rounding, settlement', () => {
