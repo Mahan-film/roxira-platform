@@ -102,6 +102,17 @@ class ReaperSafetyTest(unittest.TestCase):
         self.assertTrue(reaper.inside("/wt/a/b", "/wt/a"))
         self.assertFalse(reaper.inside("/wt/ab", "/wt/a"))
 
+    def test_other_device_worktree_is_kept(self):
+        wt = self.wt("ssd-wt")
+        git(self.repo, "push", "-q", "origin", "ssd-wt")
+        git(self.repo, "fetch", "-q", "origin")
+        same_dev = os.stat(wt["worktree"]).st_dev
+        ok, why = reaper.is_safe(wt, 0, [], [], target_dev=same_dev)
+        self.assertTrue(ok, why)
+        ok2, why2 = reaper.is_safe(wt, 0, [], [], target_dev=same_dev + 1)
+        self.assertFalse(ok2)
+        self.assertEqual(why2, "other-device")
+
 
 if __name__ == "__main__":
     unittest.main()
