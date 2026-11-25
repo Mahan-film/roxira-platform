@@ -89,8 +89,9 @@ function setup(output: string = goodModelOutput()) {
     }),
     transcribe: jest.fn(),
   };
-  const service = new CaptureService(repo as never, llm as never, accounting as never);
-  return { repo, accounting, llm, service, journal };
+  const entitlements = { consume: jest.fn(), release: jest.fn() };
+  const service = new CaptureService(repo as never, llm as never, accounting as never, entitlements as never);
+  return { repo, accounting, llm, service, journal, entitlements };
 }
 
 const text = { text: 'فاکتور ۱۲۳۴ شرکت پخش البرز ...' };
@@ -268,5 +269,13 @@ describe('CaptureService', () => {
     const view = await service.create(TENANT_A, 'user-1', undefined, text);
     expect(view.aiGenerated).toBe(false);
     expect(view.aiLabel).toBeUndefined();
+  });
+
+  it('releases consumed ocr_pages quota if extraction fails', async () => {
+    const { service, llm, entitlements } = setup();
+    llm.extract.mockRejectedValueOnce(new Error('LLM extraction network failure'));
+    await expect(service.create(TENANT_A, 'user-1', undefined, text)).rejects.toThrow('LLM extraction network failure');
+    expect(entitlements.consume).toHaveBeenCalledWith(TENANT_A, 'ocr_pages', 1);
+    expect(entitlements.release).toHaveBeenCalledWith(TENANT_A, 'ocr_pages', 1);
   });
 });

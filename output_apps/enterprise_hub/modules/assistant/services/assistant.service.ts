@@ -1,5 +1,6 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { createHash } from 'crypto';
+import { EntitlementService } from '../../access/services/entitlement.service';
 import { AuthenticatedRequest } from '../../auth/guards/jwt-auth.guard';
 import { requireTenantId } from '../../tenants/tenant-context';
 import {
@@ -95,7 +96,8 @@ export class AssistantService {
     private readonly llm: AssistantLlmService,
     private readonly tools: AssistantToolsService,
     private readonly rateLimiter: AssistantRateLimiterService,
-    @Optional() private readonly interactionRepo?: AiInteractionRepository,
+    @Optional() private readonly interactionRepo: AiInteractionRepository | undefined,
+    private readonly entitlements: EntitlementService,
   ) {}
 
   async chat(
@@ -106,182 +108,192 @@ export class AssistantService {
     const startTime = Date.now();
     const tenantId = requireTenantId(request);
     await this.rateLimiter.consume(tenantId);
-
-    const rawMessage = dto.message ?? '';
-    const sanitizedUserMessage = sanitizeAssistantInput(rawMessage).slice(
-      0,
-      ASSISTANT_MAX_MESSAGE_CHARS,
-    );
-    const questionHash = createHash('sha256').update(sanitizedUserMessage).digest('hex');
-
-    const messages: LlmMessage[] = [
-      { role: 'system', content: buildSystemPrompt(now) },
-      ...(dto.history ?? []).slice(-ASSISTANT_MAX_HISTORY).map(
-        (entry): LlmMessage => ({
-          role: entry.role === 'assistant' ? 'assistant' : 'user',
-          content: sanitizeAssistantInput(String(entry.content ?? '')).slice(
-            0,
-            ASSISTANT_MAX_MESSAGE_CHARS,
-          ),
-        }),
-      ),
-      {
-        role: 'user',
-        content: sanitizedUserMessage,
-      },
-    ];
-
-    const used: AssistantToolCallDto[] = [];
-    /** نتیجهٔ موفق ابزارها در این نوبت: تنها شاهد مجاز برای عددهای پاسخ. */
-    const evidence: unknown[] = [];
-    const userTexts = [sanitizedUserMessage];
-    let model: string | null = null;
-    let promptTokens = 0;
-    let completionTokens = 0;
-    let totalTokens = 0;
-    let customerDataFallback = false;
-
-    const deadlineAt = Date.now() + ASSISTANT_TOTAL_TIMEOUT_MS;
+    await this.entitlements.consume(tenantId, 'ai_messages', 1, now);
 
     try {
-      for (let round = 0; round < ASSISTANT_MAX_ROUNDS; round++) {
-        // دور آخر بدون ابزار تا مدل حتماً پاسخ متنی بدهد.
-        const allowTools =
-          round < ASSISTANT_MAX_ROUNDS - 1 && used.length < ASSISTANT_MAX_TOOL_CALLS;
+      const rawMessage = dto.message ?? '';
+      const sanitizedUserMessage = sanitizeAssistantInput(rawMessage).slice(
+        0,
+        ASSISTANT_MAX_MESSAGE_CHARS,
+      );
+      const questionHash = createHash('sha256').update(sanitizedUserMessage).digest('hex');
 
-        const turn = await this.llm.complete(
-          messages,
-          this.tools.definitions(),
-          allowTools ? 'auto' : 'none',
-          deadlineAt,
-        );
+      const messages: LlmMessage[] = [
+        { role: 'system', content: buildSystemPrompt(now) },
+        ...(dto.history ?? []).slice(-ASSISTANT_MAX_HISTORY).map(
+          (entry): LlmMessage => ({
+            role: entry.role === 'assistant' ? 'assistant' : 'user',
+            content: sanitizeAssistantInput(String(entry.content ?? '')).slice(
+              0,
+              ASSISTANT_MAX_MESSAGE_CHARS,
+            ),
+          }),
+        ),
+        {
+          role: 'user',
+          content: sanitizedUserMessage,
+        },
+      ];
 
-        model = turn.model;
-        promptTokens += turn.promptTokens ?? 0;
-        completionTokens += turn.completionTokens ?? 0;
-        totalTokens += turn.totalTokens ?? 0;
-        if (turn.customerDataFallback) {
-          customerDataFallback = true;
-        }
+      const used: AssistantToolCallDto[] = [];
+      /** نتیجهٔ موفق ابزارها در این نوبت: تنها شاهد مجاز برای عددهای پاسخ. */
+      const evidence: unknown[] = [];
+      const userTexts = [sanitizedUserMessage];
+      let model: string | null = null;
+      let promptTokens = 0;
+      let completionTokens = 0;
+      let totalTokens = 0;
+      let customerDataFallback = false;
 
-        if (turn.toolCalls.length === 0 || !allowTools) {
-          const verifiedOutcome = await this.verified({
-            draft: turn.content ?? 'پاسخی دریافت نشد.',
+      const deadlineAt = Date.now() + ASSISTANT_TOTAL_TIMEOUT_MS;
+
+      try {
+        for (let round = 0; round < ASSISTANT_MAX_ROUNDS; round++) {
+          // دور آخر بدون ابزار تا مدل حتماً پاسخ متنی بدهد.
+          const allowTools =
+            round < ASSISTANT_MAX_ROUNDS - 1 && used.length < ASSISTANT_MAX_TOOL_CALLS;
+
+          const turn = await this.llm.complete(
             messages,
-            evidence,
-            userTexts,
-            used,
-            model,
-            now,
+            this.tools.definitions(),
+            allowTools ? 'auto' : 'none',
             deadlineAt,
+          );
+
+          model = turn.model;
+          promptTokens += turn.promptTokens ?? 0;
+          completionTokens += turn.completionTokens ?? 0;
+          totalTokens += turn.totalTokens ?? 0;
+          if (turn.customerDataFallback) {
+            customerDataFallback = true;
+          }
+
+          if (turn.toolCalls.length === 0 || !allowTools) {
+            const verifiedOutcome = await this.verified({
+              draft: turn.content ?? 'پاسخی دریافت نشد.',
+              messages,
+              evidence,
+              userTexts,
+              used,
+              model,
+              now,
+              deadlineAt,
+            });
+
+            await this.recordAudit({
+              tenantId,
+              request,
+              questionHash,
+              used,
+              model: model ?? 'unknown',
+              promptTokens,
+              completionTokens,
+              totalTokens,
+              latencyMs: Date.now() - startTime,
+              validatorVerdict: verifiedOutcome.abstained
+                ? evidence.length > 0
+                  ? 'table_fallback'
+                  : 'abstained'
+                : 'verified',
+              customerDataFallback,
+            });
+
+            return verifiedOutcome;
+          }
+
+          messages.push({
+            role: 'assistant',
+            content: turn.content,
+            tool_calls: turn.toolCalls,
           });
+
+          for (const call of turn.toolCalls) {
+            const name = call.function?.name ?? '';
+            const args = parseArguments(call.function?.arguments);
+            let content: string;
+            if (used.length >= ASSISTANT_MAX_TOOL_CALLS) {
+              content = serializeToolResult({ error: 'سقف فراخوانی ابزار پر شد.' });
+              used.push({ name, arguments: args, ok: false, error: 'limit' });
+            } else {
+              const outcome = await this.tools.run(request, name, args);
+              const error =
+                !outcome.ok &&
+                outcome.result &&
+                typeof outcome.result === 'object' &&
+                'error' in outcome.result
+                  ? String((outcome.result as { error: unknown }).error)
+                  : null;
+              used.push({ name, arguments: args, ok: outcome.ok, error });
+              if (outcome.ok) {
+                evidence.push(outcome.result);
+              }
+              content = serializeToolResult(outcome.result);
+            }
+            messages.push({ role: 'tool', tool_call_id: call.id, content });
+          }
+        }
+      } catch (error) {
+        if (error instanceof CustomerDataDegradedException) {
+          // تنزل به خروجی قطعی جدول بدون استفاده از LLM
+          const fallbackTable =
+            evidence.length > 0 ? renderVerifiedTable(evidence) : ABSTAIN_MESSAGE_FA;
 
           await this.recordAudit({
             tenantId,
             request,
             questionHash,
             used,
-            model: model ?? 'unknown',
-            promptTokens,
-            completionTokens,
-            totalTokens,
+            model: 'degraded',
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0,
             latencyMs: Date.now() - startTime,
-            validatorVerdict: verifiedOutcome.abstained
-              ? evidence.length > 0
-                ? 'table_fallback'
-                : 'abstained'
-              : 'verified',
-            customerDataFallback,
+            validatorVerdict: 'table_fallback',
+            customerDataFallback: false,
           });
 
-          return verifiedOutcome;
+          return {
+            answer: fallbackTable,
+            toolCalls: used,
+            model: 'degraded',
+            abstained: true,
+            unverifiedNumbers: [],
+          };
         }
-
-        messages.push({
-          role: 'assistant',
-          content: turn.content,
-          tool_calls: turn.toolCalls,
-        });
-
-        for (const call of turn.toolCalls) {
-          const name = call.function?.name ?? '';
-          const args = parseArguments(call.function?.arguments);
-          let content: string;
-          if (used.length >= ASSISTANT_MAX_TOOL_CALLS) {
-            content = serializeToolResult({ error: 'سقف فراخوانی ابزار پر شد.' });
-            used.push({ name, arguments: args, ok: false, error: 'limit' });
-          } else {
-            const outcome = await this.tools.run(request, name, args);
-            const error =
-              !outcome.ok &&
-              outcome.result &&
-              typeof outcome.result === 'object' &&
-              'error' in outcome.result
-                ? String((outcome.result as { error: unknown }).error)
-                : null;
-            used.push({ name, arguments: args, ok: outcome.ok, error });
-            if (outcome.ok) {
-              evidence.push(outcome.result);
-            }
-            content = serializeToolResult(outcome.result);
-          }
-          messages.push({ role: 'tool', tool_call_id: call.id, content });
-        }
+        throw error;
       }
+
+      const unreachedOutcome: AssistantChatResponseDto = {
+        answer: 'پاسخ کامل در تعداد مراحل مجاز به دست نیامد. پرسش را ساده‌تر کنید.',
+        toolCalls: used,
+        model,
+        abstained: false,
+        unverifiedNumbers: [],
+      };
+
+      await this.recordAudit({
+        tenantId,
+        request,
+        questionHash,
+        used,
+        model: model ?? 'unknown',
+        promptTokens,
+        completionTokens,
+        totalTokens,
+        latencyMs: Date.now() - startTime,
+        validatorVerdict: 'incomplete_steps',
+        customerDataFallback,
+      });
+
+      return unreachedOutcome;
     } catch (error) {
-      if (error instanceof CustomerDataDegradedException) {
-        // تنزل به خروجی قطعی جدول بدون استفاده از LLM
-        const fallbackTable =
-          evidence.length > 0 ? renderVerifiedTable(evidence) : ABSTAIN_MESSAGE_FA;
-
-        await this.recordAudit({
-          tenantId,
-          request,
-          questionHash,
-          used,
-          model: 'degraded',
-          promptTokens: 0,
-          completionTokens: 0,
-          totalTokens: 0,
-          latencyMs: Date.now() - startTime,
-          validatorVerdict: 'table_fallback',
-          customerDataFallback: false,
-        });
-
-        return {
-          answer: fallbackTable,
-          toolCalls: used,
-          model: 'degraded',
-          abstained: true,
-          unverifiedNumbers: [],
-        };
+      try {
+        await this.entitlements.release(tenantId, 'ai_messages', 1, now);
+      } catch {
+        // ignore rollback errors so original failure is propagated
       }
       throw error;
     }
-
-    const unreachedOutcome: AssistantChatResponseDto = {
-      answer: 'پاسخ کامل در تعداد مراحل مجاز به دست نیامد. پرسش را ساده‌تر کنید.',
-      toolCalls: used,
-      model,
-      abstained: false,
-      unverifiedNumbers: [],
-    };
-
-    await this.recordAudit({
-      tenantId,
-      request,
-      questionHash,
-      used,
-      model: model ?? 'unknown',
-      promptTokens,
-      completionTokens,
-      totalTokens,
-      latencyMs: Date.now() - startTime,
-      validatorVerdict: 'incomplete_steps',
-      customerDataFallback,
-    });
-
-    return unreachedOutcome;
   }
 
   /**

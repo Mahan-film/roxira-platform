@@ -40,12 +40,13 @@ describe('AssistantService (tool-calling loop, model mocked)', () => {
     run: jest.fn(),
   };
   let rateLimiter: AssistantRateLimiterService;
+  const entitlements = { consume: jest.fn(), release: jest.fn() };
   let service: AssistantService;
 
   beforeEach(() => {
     jest.clearAllMocks();
     rateLimiter = new AssistantRateLimiterService();
-    service = new AssistantService(llm as never, tools as never, rateLimiter);
+    service = new AssistantService(llm as never, tools as never, rateLimiter, undefined, entitlements as never);
   });
 
   it('runs the requested tool with the caller request and returns answer + calls', async () => {
@@ -145,7 +146,7 @@ describe('AssistantService (tool-calling loop, model mocked)', () => {
     const limited = new AssistantRateLimiterService({
       get: () => '1',
     } as never);
-    service = new AssistantService(llm as never, tools as never, limited);
+    service = new AssistantService(llm as never, tools as never, limited, undefined, entitlements as never);
     llm.complete.mockResolvedValue(textTurn('ok'));
 
     await service.chat(owner, { message: 'a' });
@@ -164,6 +165,15 @@ describe('AssistantService (tool-calling loop, model mocked)', () => {
       service.chat(requestWith({ role: UserRole.USER }), { message: 'x' }),
     ).rejects.toThrow();
     expect(llm.complete).not.toHaveBeenCalled();
+  });
+
+  it('releases consumed ai_messages unit when LLM call fails', async () => {
+    const now = new Date('2026-11-25T10:00:00Z');
+    llm.complete.mockRejectedValueOnce(new Error('provider down'));
+
+    await expect(service.chat(owner, { message: 'سلام' }, now)).rejects.toThrow('provider down');
+    expect(entitlements.consume).toHaveBeenCalledWith('tenant-a', 'ai_messages', 1, now);
+    expect(entitlements.release).toHaveBeenCalledWith('tenant-a', 'ai_messages', 1, now);
   });
 });
 
@@ -292,11 +302,12 @@ describe('Jalali periods', () => {
       definitions: jest.fn(() => [{ type: 'function', function: { name: 't' } }]),
       run: jest.fn(),
     };
+    const entitlements = { consume: jest.fn(), release: jest.fn() };
     let service: AssistantService;
     beforeEach(() => {
       jest.resetAllMocks();
       tools.definitions.mockReturnValue([{ type: 'function', function: { name: 't' } }]);
-      service = new AssistantService(llm as never, tools as never, new AssistantRateLimiterService());
+      service = new AssistantService(llm as never, tools as never, new AssistantRateLimiterService(), undefined, entitlements as never);
     });
     const ask = () => service.chat(owner, { message: 'موجودی صندوق چقدر است؟' });
 

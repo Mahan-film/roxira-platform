@@ -4,6 +4,7 @@ import { BranchEntity } from '../entities/branch.entity';
 import { DepartmentEntity } from '../entities/department.entity';
 import { StructureRepository } from '../repositories/structure.repository';
 import { AuditService } from './audit.service';
+import { EntitlementService } from './entitlement.service';
 
 type Req = Parameters<AuditService['record']>[0]['request'];
 
@@ -12,6 +13,7 @@ export class StructureService {
   constructor(
     private readonly repo: StructureRepository,
     private readonly audit: AuditService,
+    private readonly entitlements: EntitlementService,
   ) {}
 
   listBranches(ctx: AccessContext): Promise<BranchEntity[]> {
@@ -22,10 +24,16 @@ export class StructureService {
   }
 
   async createBranch(ctx: AccessContext, dto: { name: string; code?: string; parentId?: string }, request?: Req): Promise<BranchEntity> {
-    if (dto.parentId && !(await this.repo.findBranch(ctx.tenantId, dto.parentId))) {
-      throw new BadRequestException('Parent branch does not belong to this organisation.');
-    }
-    const b = await this.repo.createBranch({ tenantId: ctx.tenantId, name: dto.name.trim(), code: dto.code ?? null, parentId: dto.parentId ?? null });
+    const b = await this.repo.transaction(ctx.tenantId, async (manager) => {
+      if (dto.parentId && !(await this.repo.findBranch(ctx.tenantId, dto.parentId, manager))) {
+        throw new BadRequestException('Parent branch does not belong to this organisation.');
+      }
+      await this.entitlements.consume(ctx.tenantId, 'branches', 1, new Date(), manager);
+      return this.repo.createBranch(
+        { tenantId: ctx.tenantId, name: dto.name.trim(), code: dto.code ?? null, parentId: dto.parentId ?? null },
+        manager,
+      );
+    });
     await this.audit.record({ tenantId: ctx.tenantId, actorUserId: ctx.userId, action: 'branch.create', resourceType: 'branch', resourceId: b.id, request });
     return b;
   }
@@ -41,8 +49,13 @@ export class StructureService {
   }
 
   async deleteBranch(ctx: AccessContext, id: string, request?: Req): Promise<void> {
-    if (!(await this.repo.findBranch(ctx.tenantId, id))) throw new NotFoundException('Branch not found.');
-    await this.repo.deleteBranch(ctx.tenantId, id);
+    await this.repo.transaction(ctx.tenantId, async (manager) => {
+      if (!(await this.repo.findBranch(ctx.tenantId, id, manager))) {
+        throw new NotFoundException('Branch not found.');
+      }
+      await this.repo.deleteBranch(ctx.tenantId, id, manager);
+      await this.entitlements.release(ctx.tenantId, 'branches', 1, new Date(), manager);
+    });
     await this.audit.record({ tenantId: ctx.tenantId, actorUserId: ctx.userId, action: 'branch.delete', resourceType: 'branch', resourceId: id, request });
   }
 
