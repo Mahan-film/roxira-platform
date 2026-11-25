@@ -71,16 +71,23 @@ const ENV_FILES = [path.resolve('/opt/roxira_platform/.env'), path.resolve(proce
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        type: 'postgres',
-        host: config.get<string>('DATABASE_HOST', '127.0.0.1'),
-        port: config.get<number>('DATABASE_PORT', 5432),
-        username: config.get<string>('DATABASE_USER', 'enterprise_admin'),
-        password: config.getOrThrow<string>('DATABASE_PASSWORD'),
-        database: config.get<string>('DATABASE_NAME', 'enterprise_db'),
-        autoLoadEntities: true,
-        synchronize: false,
-      }),
+      useFactory: (config: ConfigService) => {
+        const appDbUser = config.get<string>('APP_DB_USER')?.trim();
+        const appDbPassword = config.get<string>('APP_DB_PASSWORD');
+        if (Boolean(appDbUser) !== Boolean(appDbPassword)) {
+          throw new Error('APP_DB_USER and APP_DB_PASSWORD must both be set together');
+        }
+        return {
+          type: 'postgres',
+          host: config.get<string>('DATABASE_HOST', '127.0.0.1'),
+          port: config.get<number>('DATABASE_PORT', 5432),
+          username: appDbUser || config.get<string>('DATABASE_USER', 'enterprise_admin'),
+          password: appDbPassword || config.getOrThrow<string>('DATABASE_PASSWORD'),
+          database: config.get<string>('DATABASE_NAME', 'enterprise_db'),
+          autoLoadEntities: true,
+          synchronize: false,
+        };
+      },
     }),
     BullModule.forRootAsync({
       imports: [ConfigModule],
