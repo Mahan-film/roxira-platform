@@ -111,6 +111,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         module: "inventory",
         keywords: ["کاردکس", "گزارش انبار", "موجودی کالا", "نقطه سفارش", "کسری"],
       },
+      {
+        href: "/app/purchasing",
+        label: "چرخه خرید",
+        icon: "ShoppingBag",
+        module: "inventory",
+        keywords: ["purchasing", "سفارش خرید", "خرید", "رسید کالا", "فاکتور خرید", "سربار"],
+      },
     ],
   },
   {
