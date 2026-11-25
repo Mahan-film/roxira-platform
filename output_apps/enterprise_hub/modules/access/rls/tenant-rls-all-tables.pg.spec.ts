@@ -38,49 +38,14 @@ import { TaxComplianceRepository } from '../../tax_compliance/repositories/tax-c
 import { TenantScope } from '../services/tenant-scope';
 
 /**
- * Explicit allow-list of public tables with `tenant_id` that do not yet have
- * `ENABLE + FORCE ROW LEVEL SECURITY` (all 8 pre-tenant tables now have FORCE RLS):
- * - module tables scheduled for the next per-module RLS PRs (CRM, Capture, Banking, Data Import, Inventory)
+ * All 34 business tables across CRM (#620), Invoice Capture (#622), Bank Reconciliation (#624),
+ * Data Import & Damages (#626), Inventory (#628), and all 8 pre-tenant tables (#685) have been
+ * successfully migrated onto TenantScope + FORCE ROW LEVEL SECURITY (#475 / T192).
  *
- * Any newly added table with `tenant_id` outside this list will immediately fail the audit spec unless
- * its migration enables FORCE RLS.
+ * This allowlist is now completely empty: 100% of tables in `public` with a `tenant_id`
+ * column must have `relrowsecurity = true`, `relforcerowsecurity = true`, and at least 1 policy.
  */
-export const RLS_PENDING_ALLOWLIST = new Set<string>([
-  // Module 2: CRM
-  'crm_activities',
-  'crm_leads',
-  // Module 3: Invoice Capture
-  'capture_audit',
-  'capture_documents',
-  'capture_files',
-  'capture_settings',
-  'capture_vendor_rules',
-  'capture_vendors',
-  // Module 4: Bank Reconciliation & Bank Accounts
-  'fin_bank_accounts',
-  'fin_bank_recon_attachments',
-  'fin_bank_recon_audit',
-  'fin_bank_recon_drafts',
-  'fin_bank_recon_items',
-  'fin_bank_recon_matches',
-  'fin_bank_recon_reports',
-  'fin_bank_recon_rules',
-  'fin_bank_recon_sessions',
-  'fin_bank_recon_settings',
-  'fin_bank_statement_lines',
-  // Module 5: Data Import & Damages
-  'damage_calculations',
-  'data_import_batch_items',
-  'data_import_batches',
-  'data_import_mapping_memory',
-  // Module 6: Inventory / ERP Stock
-  'erp_stock_document_lines',
-  'erp_stock_documents',
-  'erp_stock_items',
-  'erp_stores',
-  'erp_warehouses',
-  'inventory_fifo_batches',
-]);
+export const RLS_PENDING_ALLOWLIST = new Set<string>([]);
 
 const HOST = process.env.ROXIRA_TEST_PG_HOST;
 const describePg = HOST ? describe : describe.skip;
