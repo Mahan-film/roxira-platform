@@ -1,6 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
 import { TenantScope } from '../../access/services/tenant-scope';
+import {
+  BudgetEncumbranceDecision,
+  evaluateBudgetEncumbrance,
+} from '../domain/budget-encumbrance';
 import { fromDb, fromMinor } from '../money';
 import { PolicyService } from '../../tenants/policy/policy.service';
 
@@ -15,6 +19,17 @@ export interface BudgetCheckResult {
   warning?: string;
   actualSpendMinor: bigint;
   budgetMinor: bigint;
+}
+
+export interface PoBudgetCheckInput {
+  accountCode: string;
+  costCenterCode?: string | null;
+  periodKey: string;
+  sourceId: string;
+  sourceType?: string;
+  amountMinor: bigint;
+  warnAtPercent?: number;
+  blockAtPercent?: number;
 }
 
 /**
@@ -151,6 +166,166 @@ export class BudgetControlService {
         actualSpendMinor,
         budgetMinor,
       };
+    });
+  }
+
+  /**
+   * Checks a purchase order (or commitment) against the account + cost-centre budget,
+   * including existing posted spend and open encumbrances. Warns at 80% (default), blocks above 100%,
+   * and records/updates the OPEN encumbrance when allowed.
+   */
+  async checkAndEncumberPo(
+    tenantId: string,
+    input: PoBudgetCheckInput,
+    manager?: EntityManager,
+  ): Promise<BudgetEncumbranceDecision> {
+    const sourceType = input.sourceType ?? 'purchase_order';
+    const costCenterKey = input.costCenterCode?.trim() || '';
+
+    if (!/^\d{4}-\d{2}/.test(input.periodKey)) {
+      throw new BadRequestException({
+        code: 'INVALID_PERIOD_KEY',
+        message: `فرمت کلید دوره ${input.periodKey} نامعتبر است؛ باید با YYYY-MM شروع شود.`,
+      });
+    }
+
+    return this.scope.within(tenantId, manager, async (m) => {
+      // Serialise check-and-write per (tenant, account, cost centre) so concurrent
+      // postings cannot both pass the check and overspend the annual budget. Released at transaction end.
+      await m.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [
+        `budget-encumbrance|${tenantId}|${input.accountCode}|${costCenterKey}`,
+      ]);
+      const budgetRows = (await m.query(
+        `SELECT b."budget_amount", fy."id" AS fiscal_year_id, fy."start_date", fy."end_date"
+         FROM "fin_account_budgets" b
+         JOIN "fin_fiscal_years" fy ON fy."id" = b."fiscal_year_id" AND fy."tenant_id" = b."tenant_id"
+         LEFT JOIN "fin_dimensions" cc ON cc."id" = b."cost_center_id" AND cc."tenant_id" = b."tenant_id"
+         WHERE b."tenant_id" = $1
+           AND b."account_code" = $2
+           AND (($3 = '' AND b."cost_center_id" IS NULL) OR cc."code" = $3)
+           AND to_date(substring($4 from 1 for 7), 'YYYY-MM') BETWEEN fy."start_date" AND fy."end_date"
+         ORDER BY b."updated_at" DESC
+         LIMIT 1`,
+        [tenantId, input.accountCode, costCenterKey, input.periodKey],
+      )) as Array<{
+        budget_amount: string | number;
+        fiscal_year_id: number;
+        start_date: string | Date;
+        end_date: string | Date;
+      }>;
+
+      const budgetMinor =
+        budgetRows.length > 0 ? fromDb(budgetRows[0].budget_amount) : 0n;
+
+      if (budgetMinor <= 0n) {
+        // Fail closed: a missing budget must not read as unlimited.
+        throw new BadRequestException({
+          code: 'BUDGET_MISSING',
+          message: `برای حساب ${input.accountCode} در دوره ${input.periodKey} بودجه‌ای تعریف نشده است؛ ثبت تعهد مجاز نیست.`,
+        });
+      }
+
+      const fyStart = budgetRows[0].start_date;
+      const fyEnd = budgetRows[0].end_date;
+
+      // Sum year-to-date posted spend within the same fiscal year
+      const spendRows = (await m.query(
+        `SELECT COALESCE(SUM(l."debit" - l."credit"), 0) AS spend
+         FROM "fin_journal_entry_lines" l
+         JOIN "fin_journal_entries" e ON e."id" = l."journal_entry_id" AND e."tenant_id" = l."tenant_id"
+         JOIN "fin_chart_of_accounts" a ON a."id" = l."account_id" AND a."tenant_id" = l."tenant_id"
+         LEFT JOIN "fin_dimensions" cc ON cc."id" = l."cost_center_id" AND cc."tenant_id" = l."tenant_id"
+         WHERE l."tenant_id" = $1
+           AND a."code" = $2
+           AND e."status" = 'POSTED'
+           AND e."date" >= $3
+           AND e."date" <= $4
+           AND (($5 = '' AND l."cost_center_id" IS NULL) OR cc."code" = $5)`,
+        [tenantId, input.accountCode, fyStart, fyEnd, costCenterKey],
+      )) as Array<{ spend: string | number }>;
+
+      const actualSpendMinor = fromDb(spendRows[0]?.spend ?? 0);
+
+      // Sum open commitments for the account and cost centre within the same fiscal year
+      const committedRows = (await m.query(
+        `SELECT COALESCE(SUM("amount_minor"), 0) AS committed
+         FROM "fin_budget_encumbrances"
+         WHERE "tenant_id" = $1
+           AND "account_code" = $2
+           AND "cost_center_code" = $3
+           AND to_date(substring("period_key" from 1 for 7), 'YYYY-MM') BETWEEN $4 AND $5
+           AND "status" = 'OPEN'
+           AND NOT ("source_type" = $6 AND "source_id" = $7)`,
+        [tenantId, input.accountCode, costCenterKey, fyStart, fyEnd, sourceType, input.sourceId],
+      )) as Array<{ committed: string | number }>;
+
+      const committedMinor = BigInt(committedRows[0]?.committed ?? 0);
+
+      const decision = evaluateBudgetEncumbrance({
+        budgetMinor,
+        actualSpendMinor,
+        committedMinor,
+        newAmountMinor: input.amountMinor,
+        warnAtPercent: input.warnAtPercent,
+        blockAtPercent: input.blockAtPercent,
+      });
+
+      if (decision.status === 'BLOCK') {
+        throw new BadRequestException({
+          code: 'BUDGET_EXCEEDED',
+          message: `مبلغ سفارش خرید از سقف بودجه حساب ${input.accountCode} فراتر است (${decision.utilizationPercent}% از سقف ${fromMinor(budgetMinor)}).`,
+          utilizationPercent: decision.utilizationPercent,
+          budgetMinor: budgetMinor.toString(),
+          projectedMinor: decision.projectedMinor.toString(),
+        });
+      }
+
+      await m.query(
+        `INSERT INTO "fin_budget_encumbrances"
+           ("tenant_id", "account_code", "cost_center_code", "period_key", "source_type", "source_id", "amount_minor", "status")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'OPEN')
+         ON CONFLICT ("tenant_id", "source_type", "source_id")
+         DO UPDATE SET
+           "account_code" = EXCLUDED."account_code",
+           "cost_center_code" = EXCLUDED."cost_center_code",
+           "period_key" = EXCLUDED."period_key",
+           "amount_minor" = EXCLUDED."amount_minor",
+           "status" = 'OPEN',
+           "updated_at" = now()`,
+        [
+          tenantId,
+          input.accountCode,
+          costCenterKey,
+          input.periodKey,
+          sourceType,
+          input.sourceId,
+          input.amountMinor.toString(),
+        ],
+      );
+
+      return decision;
+    });
+  }
+
+  /**
+   * Releases an open encumbrance (e.g. when a PO is cancelled, closed, or fully received).
+   */
+  async releaseEncumbrance(
+    tenantId: string,
+    sourceType: string,
+    sourceId: string,
+    manager?: EntityManager,
+  ): Promise<void> {
+    await this.scope.within(tenantId, manager, async (m) => {
+      await m.query(
+        `UPDATE "fin_budget_encumbrances"
+         SET "status" = 'RELEASED', "updated_at" = now()
+         WHERE "tenant_id" = $1
+           AND "source_type" = $2
+           AND "source_id" = $3
+           AND "status" = 'OPEN'`,
+        [tenantId, sourceType, sourceId],
+      );
     });
   }
 }

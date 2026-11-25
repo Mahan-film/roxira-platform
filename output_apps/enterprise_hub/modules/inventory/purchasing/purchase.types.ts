@@ -60,6 +60,8 @@ export interface PurchaseOrder {
   lines: PurchaseOrderLine[];
   requestId: string | null;
   orderDate: string;
+  accountCode?: string | null;
+  costCenterCode?: string | null;
   approvedBy: string | null;
   approvedAt: Date | null;
   createdAt: Date;
