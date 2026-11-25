@@ -219,3 +219,65 @@ export interface ReconApplyResult {
   skippedAmbiguous: number;
   failed: number;
 }
+
+export interface ChequeMaturityItem {
+  id: number;
+  chequeNumber: string;
+  sayadNumber: string | null;
+  sayadRegistrationStatus: SayadRegistrationStatus;
+  direction: ChequeDirection;
+  status: ChequeStatus;
+  bankName: string | null;
+  partyName: string;
+  partyCode: string | null;
+  /** Minor units (hundredths of a rial). */
+  amountMinor: string;
+  dueDate: string;
+  issueDate: string;
+  daysToDue: number;
+}
+
+export interface ChequeMaturityBucket {
+  bucketKey: string;
+  labelFa: string;
+  minDays?: number;
+  maxDays?: number;
+  count: number;
+  /** Minor units (hundredths of a rial). */
+  totalAmountMinor: string;
+  items: ChequeMaturityItem[];
+}
+
+export interface BankChequeMaturity {
+  bankName: string;
+  count: number;
+  totalAmountMinor: string;
+}
+
+export interface PartyChequeMaturity {
+  partyName: string;
+  partyCode: string | null;
+  count: number;
+  totalAmountMinor: string;
+}
+
+export interface ChequeMaturityReport {
+  asOfDate: string;
+  direction: ChequeDirection | "all";
+  currency: "IRR";
+  summary: {
+    totalCount: number;
+    totalAmountMinor: string;
+    overdueCount: number;
+    overdueAmountMinor: string;
+    todayCount: number;
+    todayAmountMinor: string;
+    upcomingCount: number;
+    upcomingAmountMinor: string;
+    weightedAverageDays: number;
+  };
+  buckets: Record<string, ChequeMaturityBucket>;
+  byBank: BankChequeMaturity[];
+  topParties: PartyChequeMaturity[];
+  bySayadStatus: Record<string, { count: number; totalAmountMinor: string }>;
+}

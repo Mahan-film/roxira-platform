@@ -269,6 +269,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         keywords: ["سود ناخالص", "حاشیه سود", "بهای تمام شده", "gross profit", "cogs"],
       },
       {
+        href: "/app/reports/cheques",
+        label: "گزارش چک‌ها",
+        icon: "Banknote",
+        module: "cheques",
+        keywords: ["چک", "پرتفوی چک", "چک برگشتی", "سررسید چک", "بانک"],
+      },
+      {
         href: "/app/accounting/report-builder",
         label: "گزارش‌ساز",
         icon: "FileSpreadsheet",
