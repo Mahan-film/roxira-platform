@@ -373,7 +373,8 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
-      pull-requests: write
+      checks: write
+      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
@@ -396,7 +397,7 @@ jobs:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ruff check . --output-format=rdjson > "$RUNNER_TEMP/ruff.rdjson" || true
-          reviewdog -f=rdjson -name="ruff" -reporter=github-pr-review -filter-mode=added < "$RUNNER_TEMP/ruff.rdjson" || true
+          reviewdog -f=rdjson -name="ruff" -reporter=github-pr-check -filter-mode=added < "$RUNNER_TEMP/ruff.rdjson" || true
       - name: ruff check
         id: ruff
         # Thousands of pre-existing violations: report, do not block. Flip to blocking once the count reaches 0.
@@ -416,23 +417,6 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit $code
-      - name: Report count on the PR
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
-          COUNT: ${{ steps.ruff.outputs.count }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          body="<!-- ci-ruff-count -->
-          **Ruff:** ${COUNT} violations (non-blocking). [Details]($RUN_URL)"
-          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
-            -q '.[] | select(.body | startswith("<!-- ci-ruff-count -->")) | .id' | head -1)
-          if [ -n "$id" ]; then
-            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -f body="$body" > /dev/null
-          else
-            gh pr comment "$PR" --body "$body"
-          fi
 
   undefined-names:
     name: Undefined names
