@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { BadRequestException, ForbiddenException, HttpException, HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { EntityManager } from 'typeorm';
 import { TenantScope } from './tenant-scope';
 
 export const USAGE_METERS = [
@@ -136,18 +137,50 @@ export class EntitlementService implements OnModuleInit {
     });
   }
 
+  private async liveBranchCount(manager: EntityManager, tenantId: string): Promise<number> {
+    const branchCountRows = (await manager.query(
+      `SELECT COUNT(*)::bigint AS used FROM tenant_branches WHERE tenant_id = $1`,
+      [tenantId],
+    )) as Array<{ used: string | number }>;
+    return branchCountRows[0] ? Number(branchCountRows[0].used) : 0;
+  }
+
+  private async seedUsageCounter(
+    manager: EntityManager,
+    tenantId: string,
+    meter: UsageMeter,
+    periodKey: string,
+  ): Promise<void> {
+    if (meter === 'branches') {
+      await manager.query(
+        `INSERT INTO usage_counters (tenant_id, meter, period_key, used)
+         VALUES ($1, $2, $3, (SELECT COUNT(*)::bigint FROM tenant_branches WHERE tenant_id = $1))
+         ON CONFLICT (tenant_id, meter, period_key) DO NOTHING`,
+        [tenantId, meter, periodKey],
+      );
+      return;
+    }
+    await manager.query(
+      `INSERT INTO usage_counters (tenant_id, meter, period_key, used)
+       VALUES ($1, $2, $3, 0)
+       ON CONFLICT (tenant_id, meter, period_key) DO NOTHING`,
+      [tenantId, meter, periodKey],
+    );
+  }
+
   async check(
     tenantId: string,
     meter: UsageMeter,
     n = 1,
     now: Date = new Date(),
+    callerManager?: EntityManager,
   ): Promise<EntitlementCheckResult> {
     this.assertMeter(meter);
     if (!Number.isInteger(n) || n < 0) {
       throw new BadRequestException('Usage check quantity must be a non-negative integer.');
     }
 
-    return this.scope.within(tenantId, undefined, async (manager) => {
+    return this.scope.within(tenantId, callerManager, async (manager) => {
       const planRows = (await manager.query(
         `SELECT plan_key, limits, rollover_day FROM tenant_plans WHERE tenant_id = $1 LIMIT 1`,
         [tenantId],
@@ -169,11 +202,7 @@ export class EntitlementService implements OnModuleInit {
 
       let used = counterRows[0] ? Number(counterRows[0].used) : 0;
       if (!counterRows[0] && meter === 'branches') {
-        const branchCountRows = (await manager.query(
-          `SELECT COUNT(*)::bigint AS used FROM tenant_branches WHERE tenant_id = $1`,
-          [tenantId],
-        )) as Array<{ used: string | number }>;
-        used = branchCountRows[0] ? Number(branchCountRows[0].used) : 0;
+        used = await this.liveBranchCount(manager, tenantId);
       }
       const allowed = used + n <= limit;
       return {
@@ -192,15 +221,16 @@ export class EntitlementService implements OnModuleInit {
     meter: UsageMeter,
     n = 1,
     now: Date = new Date(),
+    callerManager?: EntityManager,
   ): Promise<EntitlementConsumeResult> {
     this.assertMeter(meter);
     if (!Number.isInteger(n) || n < 1) {
       throw new BadRequestException('Usage consume quantity must be a positive integer.');
     }
 
-    return this.scope.within(tenantId, undefined, async (manager) => {
+    return this.scope.within(tenantId, callerManager, async (manager) => {
       const planRows = (await manager.query(
-        `SELECT plan_key, limits, rollover_day FROM tenant_plans WHERE tenant_id = $1 LIMIT 1`,
+        `SELECT plan_key, limits, rollover_day FROM tenant_plans WHERE tenant_id = $1 FOR UPDATE`,
         [tenantId],
       )) as Array<{ plan_key: string; limits: Record<string, unknown>; rollover_day: number }>;
 
@@ -213,21 +243,7 @@ export class EntitlementService implements OnModuleInit {
       const limit = this.resolveLimit(planKey, overrides, meter);
       const periodKey = computePeriodKey(meter, now, rolloverDay);
 
-      if (meter === 'branches') {
-        await manager.query(
-          `INSERT INTO usage_counters (tenant_id, meter, period_key, used)
-           VALUES ($1, $2, $3, (SELECT COUNT(*)::bigint FROM tenant_branches WHERE tenant_id = $1))
-           ON CONFLICT (tenant_id, meter, period_key) DO NOTHING`,
-          [tenantId, meter, periodKey],
-        );
-      } else {
-        await manager.query(
-          `INSERT INTO usage_counters (tenant_id, meter, period_key, used)
-           VALUES ($1, $2, $3, 0)
-           ON CONFLICT (tenant_id, meter, period_key) DO NOTHING`,
-          [tenantId, meter, periodKey],
-        );
-      }
+      await this.seedUsageCounter(manager, tenantId, meter, periodKey);
 
       const rawUpdate = await manager.query(
         `UPDATE usage_counters
@@ -264,15 +280,16 @@ export class EntitlementService implements OnModuleInit {
     meter: UsageMeter,
     n = 1,
     now: Date = new Date(),
+    callerManager?: EntityManager,
   ): Promise<void> {
     this.assertMeter(meter);
     if (!Number.isInteger(n) || n < 1) {
       throw new BadRequestException('Usage release quantity must be a positive integer.');
     }
 
-    await this.scope.within(tenantId, undefined, async (manager) => {
+    await this.scope.within(tenantId, callerManager, async (manager) => {
       const planRows = (await manager.query(
-        `SELECT rollover_day FROM tenant_plans WHERE tenant_id = $1 LIMIT 1`,
+        `SELECT rollover_day FROM tenant_plans WHERE tenant_id = $1 FOR UPDATE`,
         [tenantId],
       )) as Array<{ rollover_day: number }>;
       const periodKey = computePeriodKey(meter, now, planRows[0]?.rollover_day ?? 1);
@@ -290,12 +307,7 @@ export class EntitlementService implements OnModuleInit {
         if (meter === 'branches') {
           // If no counter row existed yet (e.g. deleting a pre-existing branch),
           // seed directly from the post-delete live count without subtracting n again.
-          await manager.query(
-            `INSERT INTO usage_counters (tenant_id, meter, period_key, used)
-             VALUES ($1, $2, $3, (SELECT COUNT(*)::bigint FROM tenant_branches WHERE tenant_id = $1))
-             ON CONFLICT (tenant_id, meter, period_key) DO NOTHING`,
-            [tenantId, meter, periodKey],
-          );
+          await this.seedUsageCounter(manager, tenantId, meter, periodKey);
         } else {
           this.logger.warn(`release(${meter}) for tenant ${tenantId} period ${periodKey} affected 0 usage_counters rows`);
         }

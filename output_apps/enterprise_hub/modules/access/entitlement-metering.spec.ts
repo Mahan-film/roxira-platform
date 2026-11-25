@@ -96,22 +96,31 @@ describe('EntitlementService & Metering Wiring (T145)', () => {
     await expect(service.consume(T1, 'ai_messages', 1)).rejects.toThrow(/limit reached/i);
   });
 
-  it('wires branch creation through EntitlementService.consume', async () => {
+  it('wires branch creation through EntitlementService.consume inside repository transaction', async () => {
     const entitlements = { consume: jest.fn().mockRejectedValue(new HttpException('Usage limit reached for branches (limit: 2).', 429)) } as unknown as EntitlementService;
-    const repo = { findBranch: jest.fn(), createBranch: jest.fn() } as any;
+    const mockManager = {} as any;
+    const repo = {
+      transaction: jest.fn(async (_t: string, fn: (m: unknown) => Promise<unknown>) => fn(mockManager)),
+      findBranch: jest.fn(),
+      createBranch: jest.fn(),
+    } as any;
     const audit = { record: jest.fn() } as any;
     const structure = new StructureService(repo, audit, entitlements);
 
     await expect(structure.createBranch({ tenantId: T1, userId: 'u1' } as any, { name: 'شعبه ۲' })).rejects.toThrow(/limit reached/i);
+    expect(repo.transaction).toHaveBeenCalledWith(T1, expect.any(Function));
+    expect(entitlements.consume).toHaveBeenCalledWith(T1, 'branches', 1, expect.any(Date), mockManager);
     expect(repo.createBranch).not.toHaveBeenCalled();
   });
 
-  it('releases consumed branch slot when repo.createBranch throws', async () => {
+  it('propagates repo.createBranch failure out of the shared transaction without auditing', async () => {
     const entitlements = {
       consume: jest.fn().mockResolvedValue({ allowed: true, meter: 'branches', periodKey: 'current', limit: 2, used: 1, remaining: 1 }),
       release: jest.fn().mockResolvedValue(undefined),
     } as unknown as EntitlementService;
+    const mockManager = {} as any;
     const repo = {
+      transaction: jest.fn(async (_t: string, fn: (m: unknown) => Promise<unknown>) => fn(mockManager)),
       findBranch: jest.fn(),
       createBranch: jest.fn().mockRejectedValue(new Error('DB constraint error')),
     } as any;
@@ -119,13 +128,19 @@ describe('EntitlementService & Metering Wiring (T145)', () => {
     const structure = new StructureService(repo, audit, entitlements);
 
     await expect(structure.createBranch({ tenantId: T1, userId: 'u1' } as any, { name: 'شعبه ۲' })).rejects.toThrow('DB constraint error');
-    expect(entitlements.release).toHaveBeenCalledWith(T1, 'branches', 1);
+    expect(entitlements.consume).toHaveBeenCalledWith(T1, 'branches', 1, expect.any(Date), mockManager);
+    expect(repo.createBranch).toHaveBeenCalledWith(expect.objectContaining({ tenantId: T1 }), mockManager);
+    expect(audit.record).not.toHaveBeenCalled();
   });
 
-  it('wires assistant chat through EntitlementService.consume(ai_messages)', async () => {
-    const entitlements = { consume: jest.fn().mockRejectedValue(new HttpException('Usage limit reached for ai_messages.', 429)) } as unknown as EntitlementService;
-    const llm = { complete: jest.fn() } as any;
-    const tools = { definitions: jest.fn() } as any;
+  it('wires assistant chat through EntitlementService.consume(ai_messages) and releases on failure', async () => {
+    const entitlements = {
+      consume: jest.fn().mockRejectedValueOnce(new HttpException('Usage limit reached for ai_messages.', 429))
+        .mockResolvedValueOnce({ meter: 'ai_messages', periodKey: '2026-11', used: 1, limit: 5, remaining: 4 }),
+      release: jest.fn().mockResolvedValue(undefined),
+    } as unknown as EntitlementService;
+    const llm = { complete: jest.fn().mockRejectedValue(new Error('LLM timeout')) } as any;
+    const tools = { definitions: jest.fn(() => []) } as any;
     const rateLimiter = { consume: jest.fn().mockResolvedValue(undefined) } as any;
     const assistant = new AssistantService(llm, tools, rateLimiter, undefined, entitlements);
 
@@ -133,6 +148,13 @@ describe('EntitlementService & Metering Wiring (T145)', () => {
       assistant.chat({ user: { tenantId: T1, sub: 'u1' } } as any, { message: 'سلام' }),
     ).rejects.toThrow(/limit reached/i);
     expect(llm.complete).not.toHaveBeenCalled();
+    expect(entitlements.release).not.toHaveBeenCalled();
+
+    const now = new Date('2026-11-25T10:00:00Z');
+    await expect(
+      assistant.chat({ user: { tenantId: T1, sub: 'u1' } } as any, { message: 'سلام' }, now),
+    ).rejects.toThrow('LLM timeout');
+    expect(entitlements.release).toHaveBeenCalledWith(T1, 'ai_messages', 1, now);
   });
 
   it('wires OCR invoice capture through EntitlementService.consume(ocr_pages)', async () => {

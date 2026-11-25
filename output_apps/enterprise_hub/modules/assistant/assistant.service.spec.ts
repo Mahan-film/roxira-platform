@@ -166,6 +166,15 @@ describe('AssistantService (tool-calling loop, model mocked)', () => {
     ).rejects.toThrow();
     expect(llm.complete).not.toHaveBeenCalled();
   });
+
+  it('releases consumed ai_messages unit when LLM call fails', async () => {
+    const now = new Date('2026-11-25T10:00:00Z');
+    llm.complete.mockRejectedValueOnce(new Error('provider down'));
+
+    await expect(service.chat(owner, { message: 'سلام' }, now)).rejects.toThrow('provider down');
+    expect(entitlements.consume).toHaveBeenCalledWith('tenant-a', 'ai_messages', 1, now);
+    expect(entitlements.release).toHaveBeenCalledWith('tenant-a', 'ai_messages', 1, now);
+  });
 });
 
 describe('AssistantRateLimiterService', () => {
