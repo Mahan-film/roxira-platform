@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "source": {
+    "kind": "extractor",
+    "sqlMajor": 9,
+    "databaseName": "HolooSample",
+    "collation": "Persian_100_CI_AS",
+    "createdAt": "2026-11-25T00:00:00.000Z"
+  },
+  "tables": [
+    {
+      "schema": "dbo",
+      "name": "Kala",
+      "rows": 2,
+      "file": "t1.ndjson.gz",
+      "sha256": "569f66fad64495aba502d0201f0f2cd6a29d0d715f98ce35e5db110b8e728ce9",
+      "columns": [
+        {
+          "name": "code",
+          "type": "nvarchar"
+        },
+        {
+          "name": "name",
+          "type": "nvarchar"
+        },
+        {
+          "name": "unit",
+          "type": "nvarchar"
+        },
+        {
+          "name": "price",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "schema": "dbo",
+      "name": "Ashkhas",
+      "rows": 2,
+      "file": "t2.ndjson.gz",
+      "sha256": "253ee814817050cb6e330ca0776db7f594789f2dd1e0474ec414c1071b0f3c9a",
+      "columns": [
+        {
+          "name": "party_code",
+          "type": "nvarchar"
+        },
+        {
+          "name": "party_name",
+          "type": "nvarchar"
+        },
+        {
+          "name": "notes",
+          "type": "nvarchar"
+        },
+        {
+          "name": "credit_limit",
+          "type": "money"
+        }
+      ]
+    },
+    {
+      "schema": "dbo",
+      "name": "Sanad",
+      "rows": 2,
+      "file": "t3.ndjson.gz",
+      "sha256": "d5a45d6bf14c54cff6cfde052c71ab834f67661f09e659db38b39e10ffa9c22b",
+      "columns": [
+        {
+          "name": "doc_no",
+          "type": "nvarchar"
+        },
+        {
+          "name": "account_code",
+          "type": "nvarchar"
+        },
+        {
+          "name": "debit",
+          "type": "decimal"
+        },
+        {
+          "name": "credit",
+          "type": "numeric"
+        },
+        {
+          "name": "description",
+          "type": "nvarchar"
+        }
+      ]
+    }
+  ]
+}
