@@ -193,4 +193,26 @@ describe('Dimensions v2 Unit Suite (T181)', () => {
       expect(sheet.equity.lines.some((l) => l.line === 'INTER_DIMENSION_CLEARING')).toBe(true);
     });
   });
+
+  describe('Extensible dimension kinds in DimensionRepository.balances', () => {
+    it('accepts custom kinds matching ^[A-Z0-9_]{2,32}$ and rejects invalid kinds', async () => {
+      const query = jest.fn().mockResolvedValue([]);
+      const fakeDataSource = {
+        transaction: jest.fn(async (cb: (m: any) => Promise<any>) => cb({ query })),
+      };
+      const repo = new DimensionRepository(fakeDataSource as any);
+
+      await repo.balances('T1', 'CUSTOM_KIND', '2026-01-01', '2026-12-31');
+      expect(query).toHaveBeenCalledWith(expect.stringContaining('l.dimensions->>$2 = d.code'), [
+        'T1',
+        'CUSTOM_KIND',
+        '2026-01-01',
+        '2026-12-31',
+      ]);
+
+      await expect(repo.balances('T1', 'bad kind!', '2026-01-01', '2026-12-31')).rejects.toThrow(
+        /Invalid dimension kind/,
+      );
+    });
+  });
 });

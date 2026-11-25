@@ -180,8 +180,8 @@ export class DimensionRepository {
 
   /** Debit, credit and balance per dimension over POSTED normal and opening lines in the range. */
   async balances(tenantId: string, kind: DimensionKind | string, from: string, to: string): Promise<DimensionBalanceRow[]> {
-    const allowedKinds = new Set<string>(Object.values(DimensionKind));
-    if (!allowedKinds.has(kind as string)) {
+    const normalizedKind = String(kind ?? '').trim().toUpperCase();
+    if (!/^[A-Z0-9_]{2,32}$/.test(normalizedKind)) {
       throw new BadRequestException(`Invalid dimension kind: ${String(kind)}`);
     }
     const columnMap: Record<string, string> = {
@@ -189,7 +189,7 @@ export class DimensionRepository {
       COST_CENTER: 'cost_center_id',
       PROJECT: 'project_id',
     };
-    const column = columnMap[kind as string];
+    const column = columnMap[normalizedKind];
 
     const joinClause = column
       ? `LEFT JOIN fin_journal_entry_lines l ON l.${column} = d.id AND l.tenant_id = d.tenant_id`
@@ -198,7 +198,7 @@ export class DimensionRepository {
            AND l.tenant_id = d.tenant_id
          )`;
 
-    const effectiveLabels = await this.getEffectiveLabelsForKind(tenantId, kind, to);
+    const effectiveLabels = await this.getEffectiveLabelsForKind(tenantId, normalizedKind, to);
 
     const rows: Array<{ id: number; code: string; name: string; debit: string; credit: string; balance: string }> =
       await this.scoped(tenantId, (m) =>
@@ -216,7 +216,7 @@ export class DimensionRepository {
             WHERE d.tenant_id = $1 AND d.kind = $2
             GROUP BY d.id, d.code, d.name
             ORDER BY d.code`,
-          [tenantId, kind, from, to],
+          [tenantId, normalizedKind, from, to],
         ),
       );
 
