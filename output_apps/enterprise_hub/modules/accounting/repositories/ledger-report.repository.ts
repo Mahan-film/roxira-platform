@@ -75,7 +75,17 @@ export class LedgerReportRepository {
    */
   async accountBuckets(
     tenantId: string,
-    range: { yearStart: string; from: string; to: string; byParty?: boolean; byCostCenter?: boolean; branchId?: string },
+    range: {
+      yearStart: string;
+      from: string;
+      to: string;
+      byParty?: boolean;
+      byCostCenter?: boolean;
+      branchId?: string;
+      costCenterCode?: string;
+      dimensionCode?: string;
+      dimensionKind?: string;
+    },
     manager?: EntityManager,
   ): Promise<AccountBucketRow[]> {
     const party = range.byParty ? `, l.party_code` : range.byCostCenter ? `, l.cost_center_id` : '';
@@ -84,10 +94,26 @@ export class LedgerReportRepository {
       : range.byCostCenter
         ? `, l.cost_center_id AS "costCenterId"`
         : '';
-    const branchFilter = range.branchId ? ` AND l.branch_id = $5` : '';
+    let filterClause = '';
     const params: unknown[] = [tenantId, range.yearStart, range.from, range.to];
     if (range.branchId) {
       params.push(range.branchId);
+      filterClause += ` AND l.branch_id = $${params.length}`;
+    }
+    if (range.costCenterCode) {
+      params.push(range.costCenterCode);
+      filterClause += ` AND l.cost_center_id = (SELECT id FROM fin_dimensions WHERE tenant_id = $1 AND kind = 'COST_CENTER' AND code = $${params.length})`;
+    } else if (range.dimensionCode) {
+      const kind = (range.dimensionKind || 'COST_CENTER').toUpperCase();
+      params.push(range.dimensionCode);
+      if (kind === 'COST_CENTER') {
+        filterClause += ` AND l.cost_center_id = (SELECT id FROM fin_dimensions WHERE tenant_id = $1 AND kind = 'COST_CENTER' AND code = $${params.length})`;
+      } else if (kind === 'PROJECT') {
+        filterClause += ` AND l.project_id = (SELECT id FROM fin_dimensions WHERE tenant_id = $1 AND kind = 'PROJECT' AND code = $${params.length})`;
+      } else {
+        params.push(kind);
+        filterClause += ` AND (l.dimensions->>$${params.length} = $${params.length - 1})`;
+      }
     }
     const sum = (column: string, condition: string): string =>
       `COALESCE(SUM(l.${column}) FILTER (WHERE ${condition}), 0)`;
@@ -104,7 +130,7 @@ export class LedgerReportRepository {
          FROM fin_journal_entry_lines l
          JOIN fin_journal_entries e ON e.id = l.journal_entry_id AND e.tenant_id = l.tenant_id
          JOIN fin_chart_of_accounts a ON a.id = l.account_id AND a.tenant_id = l.tenant_id
-        WHERE l.tenant_id = $1 AND e.status = 'POSTED' AND ${NOT_PAIR}${branchFilter}
+        WHERE l.tenant_id = $1 AND e.status = 'POSTED' AND ${NOT_PAIR}${filterClause}
         GROUP BY a.id, a.code${party}
         ORDER BY a.code${party}`,
       params,

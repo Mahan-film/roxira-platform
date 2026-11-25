@@ -48,11 +48,23 @@ export class CostCentreReportService {
     const period = await this.reports.resolvePeriod(tenantId, query);
     const [accounts, buckets, centres] = await Promise.all([
       this.reports.accounts(tenantId),
-      this.ledger.accountBuckets(tenantId, { ...period, byCostCenter: true }),
+      this.ledger.accountBuckets(tenantId, { ...period, byCostCenter: true, costCenterCode: undefined }),
       this.dimensions.list(tenantId, DimensionKind.COST_CENTER),
     ]);
+    const effectiveLabels =
+      typeof this.dimensions.getEffectiveLabelsForKind === 'function'
+        ? await this.dimensions.getEffectiveLabelsForKind(tenantId, DimensionKind.COST_CENTER, period.to)
+        : new Map<number, { code: string; name: string }>();
     const tree = costCentreTree(
-      centres.map(({ id, code, name, parentId }) => ({ id, code, name, parentId: parentId ?? null })),
+      centres.map(({ id, code, name, parentId }) => {
+        const hist = effectiveLabels.get(id);
+        return {
+          id,
+          code: hist ? hist.code : code,
+          name: hist ? hist.name : name,
+          parentId: parentId ?? null,
+        };
+      }),
       query.costCenterCode,
     );
     if (!tree) {

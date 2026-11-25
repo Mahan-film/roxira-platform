@@ -41,3 +41,52 @@ export class DimensionBalancesQueryDto {
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   to: string;
 }
+
+export class CreateDimensionRuleDto {
+  @ApiProperty({ example: 'Project required when CostCenter is CC-RND' })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  name: string;
+
+  @ApiPropertyOptional({ example: 'EXPENSE' })
+  @IsOptional()
+  @IsString()
+  accountType?: string;
+
+  @ApiPropertyOptional({ example: '5020' })
+  @IsOptional()
+  @IsString()
+  accountCode?: string;
+
+  @ApiPropertyOptional({ enum: DimensionKind, example: DimensionKind.COST_CENTER })
+  @IsOptional()
+  @IsEnum(DimensionKind)
+  whenDimensionKind?: DimensionKind;
+
+  @ApiPropertyOptional({ example: 'CC-RND' })
+  @IsOptional()
+  @IsString()
+  whenDimensionCode?: string;
+
+  @ApiProperty({ enum: DimensionKind, example: DimensionKind.PROJECT })
+  @IsEnum(DimensionKind)
+  requiresDimensionKind: DimensionKind;
+}
+
+export class RenameDimensionDto {
+  @ApiProperty({ example: 'CC-EMEA-SALES' })
+  @IsString()
+  @Matches(/^[A-Za-z0-9._-]{1,32}$/)
+  newCode: string;
+
+  @ApiProperty({ example: 'EMEA Sales' })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  newName: string;
+
+  @ApiProperty({ example: '2026-11-01' })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  effectiveFrom: string;
+}

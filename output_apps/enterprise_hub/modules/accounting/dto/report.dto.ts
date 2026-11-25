@@ -28,6 +28,23 @@ export class ReportPeriodDto {
   @IsOptional()
   @IsUUID()
   branchId?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by cost centre code', example: 'CC-100' })
+  @IsOptional()
+  @IsString()
+  @Matches(/^[A-Za-z0-9._-]{1,32}$/)
+  costCenterCode?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by dimension code', example: 'PRJ-ALPHA' })
+  @IsOptional()
+  @IsString()
+  @Matches(/^[A-Za-z0-9._-]{1,32}$/)
+  dimensionCode?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by dimension kind', example: 'COST_CENTER' })
+  @IsOptional()
+  @IsString()
+  dimensionKind?: string;
 }
 
 export class TrialBalanceQueryDto extends ReportPeriodDto {

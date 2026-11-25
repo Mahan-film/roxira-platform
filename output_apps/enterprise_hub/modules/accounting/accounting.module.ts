@@ -10,6 +10,8 @@ import { ModuleRef } from '@nestjs/core';
 import { PostingRulesService } from '../posting_rules/services/posting-rules.service';
 import { DimensionController } from './controllers/dimension.controller';
 import { DimensionEntity } from './entities/dimension.entity';
+import { DimensionRuleEntity } from './entities/dimension-rule.entity';
+import { DimensionLabelHistoryEntity } from './entities/dimension-label-history.entity';
 import { DimensionRepository } from './repositories/dimension.repository';
 import { DimensionService } from './services/dimension.service';
 import { RecurringVoucherController } from './controllers/recurring-voucher.controller';
@@ -81,6 +83,8 @@ import { IntercompanyService } from './intercompany/intercompany.service';
       PeriodLockEntity,
       FiscalYearEntity,
       DimensionEntity,
+      DimensionRuleEntity,
+      DimensionLabelHistoryEntity,
       FixedAssetEntity,
       DepreciationLineEntity,
       PettyCashFundEntity,

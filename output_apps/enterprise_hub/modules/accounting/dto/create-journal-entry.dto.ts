@@ -100,6 +100,28 @@ export class JournalEntryLineDto {
   @MaxLength(32)
   projectCode?: string;
 
+  @ApiPropertyOptional({ description: 'کد خط محصول', example: 'PL-ALPHA' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  productLineCode?: string;
+
+  @ApiPropertyOptional({ description: 'کد منطقه جغرافیایی', example: 'REG-NORTH' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  regionCode?: string;
+
+  @ApiPropertyOptional({ description: 'کد گرنت یا بودجه ویژه', example: 'GRANT-EU' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  grantCode?: string;
+
+  @ApiPropertyOptional({ description: 'ابعاد پویا (T181)', example: { PRODUCT_LINE: 'PL-ALPHA', REGION: 'REG-NORTH' } })
+  @IsOptional()
+  dimensions?: Record<string, string>;
+
   @ApiPropertyOptional({ description: 'شرح سطر', example: 'دریافت نقدی بابت فروش' })
   @IsOptional()
   @IsString()

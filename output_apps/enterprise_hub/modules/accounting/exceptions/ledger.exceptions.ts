@@ -49,3 +49,18 @@ export class VoucherVersionConflictError extends Error {
     super(`Voucher ${entryId} was changed by another user.`);
   }
 }
+
+/** 422 Unprocessable Entity: a line violates configured dimension rules (T181). */
+export class DimensionRuleViolationException extends HttpException {
+  constructor(message = 'DIMENSION_RULE_VIOLATION') {
+    super(
+      {
+        statusCode: 422,
+        code: 'DIMENSION_RULE_VIOLATION',
+        message,
+        error: 'Unprocessable Entity',
+      },
+      422,
+    );
+  }
+}

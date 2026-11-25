@@ -141,6 +141,10 @@ export enum DimensionKind {
   DETAIL = 'DETAIL',
   COST_CENTER = 'COST_CENTER',
   PROJECT = 'PROJECT',
+  PRODUCT_LINE = 'PRODUCT_LINE',
+  REGION = 'REGION',
+  GRANT = 'GRANT',
+  BRANCH = 'BRANCH',
 }
 
 /** Type of exchange rate: spot market rate, official tax authority rate, or month/year-end closing rate. */
