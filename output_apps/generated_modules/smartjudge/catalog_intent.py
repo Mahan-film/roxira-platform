@@ -5,11 +5,9 @@ and provides deterministic, hallucination-free catalog retrieval.
 """
 from __future__ import annotations
 
-import logging
 import re
 from typing import Any, Dict, List, Optional
 
-logger = logging.getLogger("smartjudge.catalog_intent")
 # Safe: rulings_retrieval never imports catalog_intent.
 from output_apps.generated_modules.smartjudge.rulings_retrieval import is_trusted
 
@@ -71,9 +69,6 @@ def detect_issuer(text: str) -> Optional[str]:
 def detect(user_text: str) -> Optional[Dict[str, Any]]:
     """Detect meta-queries for latest rulings/regulations."""
     if not user_text:
-        return None
-    if len(user_text.strip()) > 300:
-        logger.debug("catalog_intent: query length %d exceeds threshold, skipping meta detection", len(user_text))
         return None
 
     norm_text = _norm(user_text)
@@ -166,7 +161,7 @@ def format_deterministic_answer(
     top = catalog_rows[0]
     num = top.get("number") or ""
     date = top.get("date") or ""
-    body = top.get("issuer") or top.get("issuing_body") or ("مرجع رسمی" if target == "regulation" else "دیوان عالی کشور")
+    body = top.get("issuer") or top.get("issuing_body") or ("" if target == "regulation" else "دیوان عالی کشور")
     subject = (top.get("subject") or top.get("summary") or "").strip()
     if len(subject) > 200:
         subject = subject[:197] + "…"

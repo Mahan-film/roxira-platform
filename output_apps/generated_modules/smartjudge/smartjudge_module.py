@@ -2125,11 +2125,7 @@ async def _consult_core(payload: dict, request, user: chat_auth.CurrentUser, str
             return chat_auth.error_json(404, chat_auth.MSG_NOT_FOUND, code="NOT_FOUND", label="ERROR")
         conv_id = parsed_conv
     tier = user.tier
-
-    if chat_auth.is_phone_gateway(user):
-        selected_tier = "VIP"
-    else:
-        selected_tier = "VIP" if tier == "VIP" else "FREE"
+    selected_tier = "VIP" if (tier == "VIP" or chat_auth.user_level(user) == "vip") else "FREE"
     cfg = OPENROUTER_TIERS[selected_tier]
 
     # پرونده‌های بارگذاری‌شده: فقط متعلق به همین کاربر (در غیر این صورت 404 یکسان)

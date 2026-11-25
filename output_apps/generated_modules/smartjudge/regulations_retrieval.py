@@ -16,16 +16,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import re
-import time
-from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Sequence
 
 logger = logging.getLogger(__name__)
-
-try:
-    from output_apps.generated_modules.smartjudge.legal_graph import lightrag_engine as _eng
-except Exception:  # noqa: BLE001
-    _eng = None
 
 ENV_COLLECTION = "SMARTJUDGE_REGULATIONS_COLLECTION"
 ENV_MIN_SCORE = "SMARTJUDGE_REGULATIONS_MIN_SCORE"

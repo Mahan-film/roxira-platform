@@ -438,7 +438,7 @@ def phone_gateway_user(headers: Optional[Mapping[str, str]], env_key: Optional[s
         return None
     if not hmac.compare_digest(str(value).strip(), key):
         return _INVALID
-    return CurrentUser(phone=PHONE_GATEWAY_ID, tier="VIP", authenticated=True, plan_level="free")
+    return CurrentUser(phone=PHONE_GATEWAY_ID, tier="VIP", authenticated=True, plan_level="pro")
 
 
 def is_phone_gateway(user: "CurrentUser") -> bool:

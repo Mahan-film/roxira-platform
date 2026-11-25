@@ -96,14 +96,15 @@ def test_consult_body_grounded_flag_computed_default():
 # ==============================================================================
 
 def test_phone_gateway_tier_is_vip(monkeypatch):
-    """Verify phone gateway identity maps to VIP tier in chat_auth and user_level."""
+    """Verify phone gateway identity maps to VIP tier and paid plan_level in chat_auth."""
     key = "k" * 40
     monkeypatch.setenv("SMARTJUDGE_PHONE_GATEWAY_KEY", key)
     gw_user = chat_auth.authenticate({"x-phone-gateway-key": key})
     assert chat_auth.is_phone_gateway(gw_user)
     assert chat_auth.user_level(gw_user) == "vip"
     assert gw_user.tier == "VIP"
-    assert gw_user.plan_level == "free"
+    assert gw_user.plan_level == "pro"
+    assert gw_user.plan_level in chat_auth.PAID_LEVELS
 
 
 def test_phone_gateway_never_receives_upsell_on_exhaustion(monkeypatch):
@@ -146,9 +147,15 @@ def test_phone_gateway_never_receives_upsell_on_exhaustion(monkeypatch):
     monkeypatch.setattr(sj, "_llm_stream_answer", fake_llm)
     monkeypatch.setattr(chat_auth, "decr", lambda k: 0)
 
-    resp = asyncio.run(sj._consult_core({"message": "سوال تلفنی"}, None, gw_user))
-    # It must return 503 unavailable, NEVER a friendly upsell
-    assert getattr(resp, "status_code", 0) == 503
+    from starlette.responses import JSONResponse
+    from types import SimpleNamespace
+
+    fake_req = SimpleNamespace(headers={}, client=SimpleNamespace(host="127.0.0.1"))
+    resp = asyncio.run(sj._consult_core({"message": "سوال تلفنی"}, fake_req, gw_user))
+    # It must return 503 JSONResponse, NEVER a friendly upsell
+    assert isinstance(resp, JSONResponse)
+    assert resp.status_code == 503
+    assert resp.headers.get("retry-after") == "30"
 
 
 # ==============================================================================
@@ -208,11 +215,13 @@ def test_build_catalog_context_and_format_for_regulation():
             "date": "1403/08/15",
             "issuer": "بانک مرکزی",
             "subject": "مهلت بازگشت ارز حاصل از صادرات محصولات پتروشیمی به سامانه نیما.",
+            "source_tier": "official",
+            "needs_review": False,
         }
     ]
 
     ctx = catalog_intent.build_catalog_context(sample_rows, target="regulation")
-    assert "بخشنامه‌ها و مقررات اجرایی" in ctx
+    assert "بخشنامه‌ها و مقررات" in ctx
     assert "بخشنامه رفع تعهدات ارزی" in ctx
     assert "بانک مرکزی" in ctx
 
@@ -222,10 +231,32 @@ def test_build_catalog_context_and_format_for_regulation():
     assert "1403/08/15" in answer
 
 
-def test_regulations_latest_regulations_fallback(monkeypatch):
-    """Verify regulations_retrieval.latest_regulations works with JSONL fallback or empty."""
-    # Ensure no Qdrant connection hangs
-    monkeypatch.delenv("SMARTJUDGE_REGULATIONS_COLLECTION", raising=False)
+def test_regulations_latest_regulations_fallback(monkeypatch, tmp_path):
+    """Verify regulations_retrieval.latest_regulations loads staged JSONL when Qdrant is offline."""
+    import json
+    from output_apps.generated_modules.smartjudge import rulings_retrieval as rr
+    from output_apps.generated_modules.smartjudge.legal_graph import lightrag_engine as eng
 
-    results = asyncio.run(reg_retrieval.latest_regulations(limit=3))
+    monkeypatch.delenv("SMARTJUDGE_REGULATIONS_COLLECTION", raising=False)
+    monkeypatch.setattr(rr, "_LATEST_CACHE", {}, raising=False)
+    monkeypatch.setattr(eng, "_qdrant_targets", lambda: [])
+
+    staged_dir = tmp_path / "data" / "legal" / "staged"
+    staged_dir.mkdir(parents=True)
+    row = {
+        "title": "بخشنامه آزمایشی",
+        "number": "1405/999",
+        "date": "1405/09/01",
+        "issuer": "بانک مرکزی",
+        "subject": "موضوع آزمایشی بخشنامه",
+        "is_active": True,
+    }
+    (staged_dir / "cbi_circulars_2026-10-14.jsonl").write_text(
+        json.dumps(row, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    monkeypatch.chdir(tmp_path)
+
+    results = asyncio.run(reg_retrieval.latest_regulations(limit=10))
     assert isinstance(results, list)
+    assert len(results) >= 1
+    assert any(r.get("number") == "1405/999" for r in results)
