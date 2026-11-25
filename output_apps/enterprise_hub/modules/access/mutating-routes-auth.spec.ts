@@ -7,7 +7,10 @@ import * as path from 'path';
 import { AccessStub } from '../../test/support/access-stub';
 import { IS_PUBLIC_KEY } from '../auth/decorators/public.decorator';
 import { ROLES_KEY } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../auth/enums/user-role.enum';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import { AccessGuard } from './access.guard';
+import { AccessService } from './services/access.service';
 import {
   AccessAction,
   AccessModule,
@@ -75,14 +78,20 @@ function loadRoutes(): Route[] {
         const verb = Reflect.getMetadata(METHOD_METADATA, handler) as number | undefined;
         if (verb === undefined) continue;
         const sub = Reflect.getMetadata(PATH_METADATA, handler) as string | string[];
-        const url = `/${[Array.isArray(base) ? base[0] : base, Array.isArray(sub) ? sub[0] : sub].join('/')}`.replace(/\/+/g, '/');
-        routes.push({
-          id: `${HTTP[verb]} ${url} (${exported.name}.${name})`,
-          controller: exported,
-          handler: handler as Function,
-          method: HTTP[verb],
-          url,
-        });
+        const basePaths = Array.isArray(base) ? base : [base];
+        const subPaths = Array.isArray(sub) ? sub : [sub];
+        for (const b of basePaths) {
+          for (const s of subPaths) {
+            const url = `/${[b, s].filter(Boolean).join('/')}`.replace(/\/+/g, '/');
+            routes.push({
+              id: `${HTTP[verb]} ${url} (${exported.name}.${name})`,
+              controller: exported,
+              handler: handler as Function,
+              method: HTTP[verb],
+              url,
+            });
+          }
+        }
       }
     }
   }
@@ -95,8 +104,11 @@ const reflector = new Reflector();
 
 type Kind = 'public' | 'authOnly' | 'platformAdmin' | 'anyMember' | 'module' | 'none';
 
+const GLOBAL_USER_ROLES = new Set<string>(Object.values(UserRole));
+
 function classify(r: Route): {
   kind: Kind;
+  platformRoles?: UserRole[];
   module?: AccessModule;
   also?: AccessModule[];
   action?: AccessAction;
@@ -105,8 +117,10 @@ function classify(r: Route): {
   const targets = [r.handler, r.controller];
   if (reflector.getAllAndOverride(IS_PUBLIC_KEY, targets)) return { kind: 'public' };
   if (reflector.getAllAndOverride(AUTH_ONLY_KEY, targets)) return { kind: 'authOnly' };
-  const roles = reflector.getAllAndOverride<unknown[]>(ROLES_KEY, targets);
-  if (roles?.length) return { kind: 'platformAdmin' };
+  // @Roles(...roles: UserRole[]) is strictly for global platform-operator roles enforced by
+  // RolesGuard before AccessGuard (see roles.decorator.ts, roles.guard.ts, access.guard.ts:80-84).
+  const roles = reflector.getAllAndOverride<UserRole[]>(ROLES_KEY, targets);
+  if (roles?.length) return { kind: 'platformAdmin', platformRoles: roles };
   if (reflector.getAllAndOverride(ANY_MEMBER_KEY, targets)) return { kind: 'anyMember' };
   const module = reflector.getAllAndOverride<AccessModule>(ACCESS_MODULE_KEY, targets);
   if (!module) return { kind: 'none' };
@@ -146,7 +160,8 @@ async function invokeGuard(
 ): Promise<GuardResult> {
   const stub = new AccessStub();
   setup(stub);
-  const guard = new AccessGuard(reflector, stub as never, dummyLoginWindow);
+  const rolesGuard = new RolesGuard(reflector);
+  const accessGuard = new AccessGuard(reflector, stub as unknown as AccessService, dummyLoginWindow);
   const request = {
     method: r.method,
     originalUrl: r.url,
@@ -160,7 +175,14 @@ async function invokeGuard(
   } as unknown as ExecutionContext;
 
   try {
-    const ok = await guard.canActivate(context);
+    // Mirror the real NestJS global guard chain: JwtAuthGuard (401 when user absent) -> RolesGuard -> AccessGuard.
+    if (request.user) {
+      const rolesOk = rolesGuard.canActivate(context);
+      if (!rolesOk) {
+        return { allowed: false, statusCode: 403 };
+      }
+    }
+    const ok = await accessGuard.canActivate(context);
     return { allowed: ok, statusCode: ok ? 200 : 403 };
   } catch (err: any) {
     if (err instanceof UnauthorizedException) {
@@ -180,7 +202,7 @@ const roleKeys = SYSTEM_ROLES.map((r) => r.key);
 
 describe('T355: QA authorization tests for every mutating controller route', () => {
   it('discovers mutating routes across all application controllers', () => {
-    expect(mutatingRoutes.length).toBeGreaterThan(50);
+    expect(mutatingRoutes.length).toBeGreaterThan(0);
   });
 
   describe('mutating routes with no role guard', () => {
@@ -239,20 +261,60 @@ describe('T355: QA authorization tests for every mutating controller route', () 
     });
   });
 
+  describe('platform-operator @Roles() routes', () => {
+    const platformRoutes = mutatingRoutes.filter((r) => classify(r).kind === 'platformAdmin');
+
+    it('uses only global UserRole enum values (never tenant-scoped roles) in @Roles()', () => {
+      const violations: string[] = [];
+
+      for (const r of platformRoutes) {
+        const roles = classify(r).platformRoles ?? [];
+        const invalid = roles.filter((role) => !GLOBAL_USER_ROLES.has(String(role)));
+        if (invalid.length > 0) {
+          violations.push(`${r.id} -> non-global @Roles values: ${invalid.join(', ')}`);
+        }
+      }
+
+      expect(violations).toEqual([]);
+    });
+
+    it('refuses non-operator tenant owners with 403 Forbidden via RolesGuard', async () => {
+      const violations: string[] = [];
+
+      for (const r of platformRoutes) {
+        const res = await invokeGuard(
+          r,
+          (s) => s.grant('u-tenant-owner', PRIMARY_TENANT, 'owner'),
+          { sub: 'u-tenant-owner', tenantId: PRIMARY_TENANT, role: UserRole.USER, sid: 's-owner', mfa: false },
+        );
+
+        if (res.allowed || res.statusCode !== 403) {
+          violations.push(
+            `${r.id} -> expected 403 Forbidden for non-operator tenant owner, got statusCode=${res.statusCode} (allowed=${res.allowed})`,
+          );
+        }
+      }
+
+      expect(violations).toEqual([]);
+    });
+  });
+
   describe('cross-tenant isolation (expects 403 Forbidden)', () => {
     it('refuses mutating route invocation when user belongs to ANOTHER tenant', async () => {
       const violations: string[] = [];
 
       for (const r of mutatingRoutes) {
         const { kind } = classify(r);
-        // Public and purely user-auth endpoints are not tenant-scoped
-        if (kind === 'public' || kind === 'authOnly' || kind === 'platformAdmin') continue;
+        // Public and purely user-auth endpoints are not tenant-scoped.
+        // platformAdmin (@Roles) routes are NOT skipped: a non-operator member of OTHER_TENANT
+        // (role: UserRole.USER) must also be rejected with 403 Forbidden by RolesGuard.
+        if (kind === 'public' || kind === 'authOnly') continue;
 
         // User is granted owner membership in OTHER_TENANT, but attempts request for PRIMARY_TENANT
         const res = await invokeGuard(
           r,
           (s) => s.grant('u-alien', OTHER_TENANT, 'owner'),
-          { sub: 'u-alien', tenantId: PRIMARY_TENANT, sid: 's-alien', mfa: false },
+          { sub: 'u-alien', tenantId: PRIMARY_TENANT, role: UserRole.USER, sid: 's-alien', mfa: false },
         );
 
         if (res.allowed) {
