@@ -717,7 +717,7 @@ export class VendorInvoiceGenerator {
       const intPart = l.unitPriceMinor / factor;
       const fracPart = l.unitPriceMinor % factor;
       const unitPrice = exp === 0
-        ? Number(l.unitPriceMinor) // money-ok: exp === 0 has no float division and value is guarded <= 2^53 - 1
+        ? Number(intPart) // money-ok: exp === 0 means factor=1n so intPart equals unitPriceMinor, guarded <= 2^53 - 1
         : Number(intPart) + Number(fracPart) / Number(factor); // money-ok: bounded fractional remainder conversion for wire DTO
 
       return {
