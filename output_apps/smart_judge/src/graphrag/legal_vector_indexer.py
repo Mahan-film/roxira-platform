@@ -22,7 +22,10 @@ class LegalVectorIndexer:
         )
 
         self.model = SentenceTransformer(
-            "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+            "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+            revision="e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+            trust_remote_code=False,
+            model_kwargs={"use_safetensors": True},
         )
 
 

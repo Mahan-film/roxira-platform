@@ -95,8 +95,11 @@ def test_default_embed_without_url_uses_sentence_transformers(monkeypatch):
     fake = types.ModuleType("sentence_transformers")
 
     class FakeST:
-        def __init__(self, name):
+        def __init__(self, name, **kwargs):
             self.name = name
+            assert kwargs.get("revision")
+            assert kwargs.get("trust_remote_code") is False
+            assert (kwargs.get("model_kwargs") or {}).get("use_safetensors") is True
 
         def encode(self, texts, normalize_embeddings=True):
             assert normalize_embeddings is True

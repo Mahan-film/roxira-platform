@@ -378,7 +378,16 @@ def default_embed(texts: list[str]) -> list[list[float]]:
         raise Refusal(
             "sentence_transformers is not installed; install it or inject an embed function"
         ) from exc
-    model = SentenceTransformer(os.environ.get(EMBED_MODEL_ENV, DEFAULT_EMBED_MODEL))
+    revision = (
+        os.environ.get("EMBED_MODEL_REVISION", "5617a9f61b028005a4858fdac845db406aefb181").strip()
+        or "5617a9f61b028005a4858fdac845db406aefb181"
+    )
+    model = SentenceTransformer(
+        os.environ.get(EMBED_MODEL_ENV, DEFAULT_EMBED_MODEL),
+        revision=revision,
+        trust_remote_code=False,
+        model_kwargs={"use_safetensors": True},
+    )
     return [[float(x) for x in v] for v in model.encode(texts, normalize_embeddings=True)]
 
 

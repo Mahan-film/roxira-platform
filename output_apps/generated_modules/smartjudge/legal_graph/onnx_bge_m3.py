@@ -188,7 +188,11 @@ class OnnxBgeM3Encoder:
             if self._tokenizer is None:
                 from transformers import AutoTokenizer  # type: ignore
 
-                self._tokenizer = AutoTokenizer.from_pretrained(str(self.tokenizer_dir))
+                self._tokenizer = AutoTokenizer.from_pretrained(
+                    str(self.tokenizer_dir),
+                    trust_remote_code=False,
+                    local_files_only=True,
+                )
 
     def _tokenize(self, text: str) -> Dict[str, Any]:
         encoded = self._tokenizer(

@@ -90,7 +90,16 @@ def default_embed_hakim(texts: list[str], model_name: str = DEFAULT_HAKIM_MODEL)
         raise Refusal(
             "sentence_transformers is not installed; install it or pass an injectable embed function"
         ) from exc
-    model = SentenceTransformer(model_name)
+    revision = (
+        os.environ.get("EMBED_MODEL_REVISION", "5617a9f61b028005a4858fdac845db406aefb181").strip()
+        or "5617a9f61b028005a4858fdac845db406aefb181"
+    )
+    model = SentenceTransformer(
+        model_name,
+        revision=revision,
+        trust_remote_code=False,
+        model_kwargs={"use_safetensors": True},
+    )
     vectors = model.encode(texts, normalize_embeddings=True)
     return [[float(x) for x in v] for v in vectors]
 
