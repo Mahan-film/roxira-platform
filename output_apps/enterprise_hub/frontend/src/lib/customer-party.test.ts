@@ -1,14 +1,18 @@
 import assert from "node:assert/strict";
+import * as fs from "node:fs";
 import { test } from "node:test";
 
 import type { Cheque } from "../types/cheques.ts";
 import type { InvoiceResponseDto } from "../types/invoicing.ts";
 import {
+  PARTY_TAB_LABELS,
+  PARTY_TAB_ORDER,
   partyOpenBalance,
   partyReceipts,
   partyReceivedCheques,
   partySaleInvoices,
 } from "./customer-party.ts";
+import { MENU_GROUPS } from "./nav-menu.ts";
 
 function inv(over: Partial<InvoiceResponseDto>): InvoiceResponseDto {
   return {
@@ -58,4 +62,37 @@ test("received cheques match the customer's person or company name only", () => 
   const ids = partyReceivedCheques(cheques, { fullName: "علی رضایی", company: "شرکت پارس" }).map((c) => c.id);
   assert.deepEqual(ids, [1, 2]);
   assert.deepEqual(partyReceivedCheques(cheques, { fullName: " ", company: null }), []);
+});
+
+test("customer drawer exposes invoices, receipts, balance, and cheques tabs and updated module label", () => {
+  assert.deepEqual(PARTY_TAB_ORDER, ["invoices", "receipts", "balance", "cheques"]);
+  assert.deepEqual(PARTY_TAB_LABELS, {
+    invoices: "فاکتورها",
+    receipts: "دریافت‌ها",
+    balance: "مانده",
+    cheques: "چک‌ها",
+  });
+
+  const tabsSrc = fs.readFileSync(
+    new URL("../components/crm/customer-party-tabs.tsx", import.meta.url),
+    "utf8",
+  );
+  const drawerSrc = fs.readFileSync(
+    new URL("../components/crm/lead-detail-panel.tsx", import.meta.url),
+    "utf8",
+  );
+  const pageSrc = fs.readFileSync(
+    new URL("../app/app/crm/page.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.ok(drawerSrc.includes("<CustomerPartyTabs"), "lead-detail-panel must render CustomerPartyTabs");
+  assert.ok(tabsSrc.includes('tab === "invoices"') && tabsSrc.includes('tab === "receipts"') && tabsSrc.includes('tab === "balance"'));
+  assert.ok(tabsSrc.includes("partyReceivedCheques("));
+  assert.ok(!tabsSrc.includes("Number(c.amount)"), "cheque amount must not be coerced with Number()");
+  assert.ok(tabsSrc.includes("min-h-11 sm:min-h-8"), "tab buttons must meet 44px touch target on mobile");
+
+  assert.ok(pageSrc.includes('title="مشتریان و سرنخ‌ها"'));
+  const crmMenu = MENU_GROUPS.flatMap((g) => g.items).find((item) => item.href === "/app/crm");
+  assert.equal(crmMenu?.label, "مشتریان و سرنخ‌ها");
 });

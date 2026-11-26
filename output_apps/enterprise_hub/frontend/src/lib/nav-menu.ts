@@ -78,7 +78,7 @@ export const MENU_GROUPS: MenuGroup[] = [
       },
       {
         href: "/app/crm",
-        label: "مشتریان و طرف‌حساب‌ها",
+        label: "مشتریان و سرنخ‌ها",
         icon: "Contact",
         module: "crm",
         keywords: ["customer", "lead", "مشتری", "سرنخ", "crm"],
