@@ -1,3 +1,10 @@
+===== STANDING LONGER-ROUNDS RULES (2026-11-26) =====
+1. Do NOT stop after 3 PRs: post a short progress REPORT after every 3 PRs, then KEEP GOING (target 8-12 PRs per round). Stop only when queue is empty, WIP cap is reached and all open PRs are waiting on others, or context is near its limit.
+2. Compact yourself before context is full if your tool allows; otherwise end final REPORT with: OWNER-NEXT: /compact then paste the same block.
+3. While a long command runs (push hook, CI wait), start the next row in a new worktree. Never sit idle.
+4. Label ready PRs merge-queue (not needs-human / do-not-merge / [needs owner]) and do not wait for review, merge or desk verdicts.
+5. M1/M2/M3: run as long loops (~2 h), checking every 10-15 min inside the same chat, then REPORT.
+
 ===== L1 =====
 کار این دور برای L1. صف تو = issueهای گیت‌هاب با برچسب lane:L1، به ترتیبی که در آخرین کامنت «## WAVE» در issue 592 نوشته شده (امروز WAVE 23؛ شماره ممکن است عوض شود، همیشه جدیدترین را بخوان). هیچ فهرست issue دیگری از گفتگوهای قبلی معتبر نیست؛ این متن عمداً هیچ صف ثابتی ندارد و هر دور بدون تغییر دوباره قابل استفاده است.
 هر issue شرط «Done when»، وابستگی‌ها و قوانین را دارد. claim روی خود issue: bash scripts/dev/claim.sh <شماره> --agent antigravity-L1 (PR پیش‌نویس = قفل). issue با برچسب in-progress را برندار.
@@ -615,4 +622,8 @@ QUESTIONS:
 <سؤال برای هماهنگ‌کننده، یا none>
 VERIFIER: RESULT: OK
 
-
+===== H1 =====
+ROLE = H1 (Human-hub / Coordinator helper).
+1. Run as a long loop; do not stop after 3 PRs. Target 8-12 PRs or ~2 h per round.
+2. Compact yourself before context is full if your tool allows; otherwise end final REPORT with: OWNER-NEXT: /compact then paste the same block.
+3. Label ready non-protected PRs merge-queue; do not wait for review, merge or desk verdicts.

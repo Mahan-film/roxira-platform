@@ -22,8 +22,8 @@ Queue = the newest comment on issue 592 whose first line starts with "## WAVE", 
 Order: 1) your own open PRs (red CI, desk blocker, conflict, hub notes); 2) "Fix queue" items for L1; 3) new rows in listed order; 4) when all of that is done, unclaimed "Fix queue" items in your area from any lane. Claim each with a comment "taking ... (L1)" before touching it.
 Area: Infra, disk, CI, hooks, scripts, dependency updates (only where the queue row names them).
 Never merge, never print secrets or env values, never touch production, never edit another lane's PR without claiming it, never name a country (say current pack or default pack).
-REPORT on issue 592 in the LANE_RULES format after every 3 PRs and at the end.
-Stop when the queue is empty or credit/context is low; then say so and wait for the same prompt again.
+Do NOT stop after 3 PRs: post a short progress REPORT on issue 592 in the LANE_RULES format after every 3 PRs, then KEEP GOING (target 8-12 PRs per round). While a long command runs (push hook, CI wait), start the next row in a new worktree. Label ready PRs merge-queue (not needs-human / do-not-merge / [needs owner]) and do not wait for review, merge or desk verdicts.
+Stop only when the queue is empty, your WIP cap is reached and every open PR is waiting on others, or context is near its limit. Compact yourself if your tool allows; otherwise end the final REPORT with: OWNER-NEXT: /compact then paste the same block.
 Allowed slash commands: /compact. No /swarm, /boost, /teamwork, /schedule, automation.
 ```
 
@@ -39,8 +39,8 @@ Queue = the newest comment on issue 592 whose first line starts with "## WAVE", 
 Order: 1) your own open PRs (red CI, desk blocker, conflict, hub notes); 2) "Fix queue" items for L2; 3) new rows in listed order; 4) when all of that is done, unclaimed "Fix queue" items in your area from any lane. Claim each with a comment "taking ... (L2)" before touching it.
 Area: Invoicing, import and export flows (backend and their tests).
 Never merge, never print secrets or env values, never touch production, never edit another lane's PR without claiming it, never name a country (say current pack or default pack).
-REPORT on issue 592 in the LANE_RULES format after every 3 PRs and at the end.
-Stop when the queue is empty or credit/context is low; then say so and wait for the same prompt again.
+Do NOT stop after 3 PRs: post a short progress REPORT on issue 592 in the LANE_RULES format after every 3 PRs, then KEEP GOING (target 8-12 PRs per round). While a long command runs (push hook, CI wait), start the next row in a new worktree. Label ready PRs merge-queue (not needs-human / do-not-merge / [needs owner]) and do not wait for review, merge or desk verdicts.
+Stop only when the queue is empty, your WIP cap is reached and every open PR is waiting on others, or context is near its limit. Compact yourself if your tool allows; otherwise end the final REPORT with: OWNER-NEXT: /compact then paste the same block.
 Allowed slash commands: /compact. No /swarm, /boost, /teamwork, /schedule, automation.
 ```
 
@@ -56,8 +56,8 @@ Queue = the newest comment on issue 592 whose first line starts with "## WAVE", 
 Order: 1) your own open PRs (red CI, desk blocker, conflict, hub notes); 2) "Fix queue" items for L3; 3) new rows in listed order; 4) when all of that is done, unclaimed "Fix queue" items in your area from any lane. Claim each with a comment "taking ... (L3)" before touching it.
 Area: Security, tenant isolation and RLS, migrations (new number above newest main and all open PRs), access checks in repositories.
 Never merge, never print secrets or env values, never touch production, never edit another lane's PR without claiming it, never name a country (say current pack or default pack).
-REPORT on issue 592 in the LANE_RULES format after every 3 PRs and at the end.
-Stop when the queue is empty or credit/context is low; then say so and wait for the same prompt again.
+Do NOT stop after 3 PRs: post a short progress REPORT on issue 592 in the LANE_RULES format after every 3 PRs, then KEEP GOING (target 8-12 PRs per round). While a long command runs (push hook, CI wait), start the next row in a new worktree. Label ready PRs merge-queue (not needs-human / do-not-merge / [needs owner]) and do not wait for review, merge or desk verdicts.
+Stop only when the queue is empty, your WIP cap is reached and every open PR is waiting on others, or context is near its limit. Compact yourself if your tool allows; otherwise end the final REPORT with: OWNER-NEXT: /compact then paste the same block.
 Allowed slash commands: /compact ; /plan (only for a big row) ; /boost only for one hard bug. No /swarm, /teamwork, /schedule, automation.
 ```
 
@@ -73,8 +73,8 @@ Queue = the newest comment on issue 592 whose first line starts with "## WAVE", 
 Order: 1) your own open PRs (red CI, desk blocker, conflict, hub notes); 2) "Fix queue" items for L4; 3) new rows in listed order; 4) when all of that is done, unclaimed "Fix queue" items in your area from any lane. Claim each with a comment "taking ... (L4)" before touching it.
 Area: output_apps/generated_modules/smartjudge and its tests, legal retrieval, citation checks.
 Never merge, never print secrets or env values, never touch production, never edit another lane's PR without claiming it, never name a country (say current pack or default pack).
-REPORT on issue 592 in the LANE_RULES format after every 3 PRs and at the end.
-Stop when the queue is empty or credit/context is low; then say so and wait for the same prompt again.
+Do NOT stop after 3 PRs: post a short progress REPORT on issue 592 in the LANE_RULES format after every 3 PRs, then KEEP GOING (target 8-12 PRs per round). While a long command runs (push hook, CI wait), start the next row in a new worktree. Label ready PRs merge-queue (not needs-human / do-not-merge / [needs owner]) and do not wait for review, merge or desk verdicts.
+Stop only when the queue is empty, your WIP cap is reached and every open PR is waiting on others, or context is near its limit. Compact yourself if your tool allows; otherwise end the final REPORT with: OWNER-NEXT: /compact then paste the same block.
 Allowed slash commands: /compact. No /swarm, /boost, /teamwork, /schedule, automation.
 ```
 
@@ -90,8 +90,8 @@ Queue = the newest comment on issue 592 whose first line starts with "## WAVE", 
 Order: 1) your own open PRs (red CI, desk blocker, conflict, hub notes); 2) "Fix queue" items for L5; 3) new rows in listed order; 4) when all of that is done, unclaimed "Fix queue" items in your area from any lane. Claim each with a comment "taking ... (L5)" before touching it.
 Area: Accounting core: ledger, journals, periods, reports backend and tests.
 Never merge, never print secrets or env values, never touch production, never edit another lane's PR without claiming it, never name a country (say current pack or default pack).
-REPORT on issue 592 in the LANE_RULES format after every 3 PRs and at the end.
-Stop when the queue is empty or credit/context is low; then say so and wait for the same prompt again.
+Do NOT stop after 3 PRs: post a short progress REPORT on issue 592 in the LANE_RULES format after every 3 PRs, then KEEP GOING (target 8-12 PRs per round). While a long command runs (push hook, CI wait), start the next row in a new worktree. Label ready PRs merge-queue (not needs-human / do-not-merge / [needs owner]) and do not wait for review, merge or desk verdicts.
+Stop only when the queue is empty, your WIP cap is reached and every open PR is waiting on others, or context is near its limit. Compact yourself if your tool allows; otherwise end the final REPORT with: OWNER-NEXT: /compact then paste the same block.
 Allowed slash commands: /compact ; /plan (only for a big row) ; /boost only for one hard bug. No /swarm, /teamwork, /schedule, automation.
 ```
 
@@ -107,8 +107,8 @@ Queue = the newest comment on issue 592 whose first line starts with "## WAVE", 
 Order: 1) your own open PRs (red CI, desk blocker, conflict, hub notes); 2) "Fix queue" items for L6; 3) new rows in listed order; 4) when all of that is done, unclaimed "Fix queue" items in your area from any lane. Claim each with a comment "taking ... (L6)" before touching it.
 Area: Country packs: rules, tax tables, currency precision; refer to them only as current pack or default pack.
 Never merge, never print secrets or env values, never touch production, never edit another lane's PR without claiming it, never name a country (say current pack or default pack).
-REPORT on issue 592 in the LANE_RULES format after every 3 PRs and at the end.
-Stop when the queue is empty or credit/context is low; then say so and wait for the same prompt again.
+Do NOT stop after 3 PRs: post a short progress REPORT on issue 592 in the LANE_RULES format after every 3 PRs, then KEEP GOING (target 8-12 PRs per round). While a long command runs (push hook, CI wait), start the next row in a new worktree. Label ready PRs merge-queue (not needs-human / do-not-merge / [needs owner]) and do not wait for review, merge or desk verdicts.
+Stop only when the queue is empty, your WIP cap is reached and every open PR is waiting on others, or context is near its limit. Compact yourself if your tool allows; otherwise end the final REPORT with: OWNER-NEXT: /compact then paste the same block.
 Allowed slash commands: /compact. No /swarm, /boost, /teamwork, /schedule, automation.
 ```
 
@@ -124,8 +124,8 @@ Queue = the newest comment on issue 592 whose first line starts with "## WAVE", 
 Order: 1) your own open PRs (red CI, desk blocker, conflict, hub notes); 2) "Fix queue" items for L7; 3) new rows in listed order; 4) when all of that is done, unclaimed "Fix queue" items in your area from any lane. Claim each with a comment "taking ... (L7)" before touching it.
 Area: Box and phone WORK PRODUCTS written in the repo: scripts/ops/ci_box/, phone and voice kit code, docs/ops/ for the laptop, merge gate, runner pool, tests for them. This chat runs on the Mac and only edits repository files and runs offline unit tests; the laptop's own OpenCode lane and the box hub apply and verify changes on the laptop.
 Never SSH to or run anything on the Linux laptop or on production, never run root/sudo steps, never print secrets or env values, never merge, never edit another lane's PR without claiming it, never name a country (say current pack or default pack). Rows that need a measurement on the laptop: write the script and the doc skeleton, then post "NEEDS BOX RUN: <exact command>" on issue 592 for the laptop lane.
-REPORT on issue 592 in the LANE_RULES format after every 3 PRs and at the end.
-Stop when the queue is empty or credit/context is low; then say so and wait for the same prompt again.
+Do NOT stop after 3 PRs: post a short progress REPORT on issue 592 in the LANE_RULES format after every 3 PRs, then KEEP GOING (target 8-12 PRs per round). While a long command runs (push hook, CI wait), start the next row in a new worktree. Label ready PRs merge-queue (not needs-human / do-not-merge / [needs owner]) and do not wait for review, merge or desk verdicts.
+Stop only when the queue is empty, your WIP cap is reached and every open PR is waiting on others, or context is near its limit. Compact yourself if your tool allows; otherwise end the final REPORT with: OWNER-NEXT: /compact then paste the same block.
 Allowed slash commands: /compact. No /swarm, /boost, /teamwork, /schedule, automation.
 ```
 
@@ -141,8 +141,8 @@ Queue = the newest comment on issue 592 whose first line starts with "## WAVE", 
 Order: 1) your own open PRs (red CI, desk blocker, conflict, hub notes); 2) "Fix queue" items for L8; 3) new rows in listed order; 4) when all of that is done, unclaimed "Fix queue" items in your area from any lane. Claim each with a comment "taking ... (L8)" before touching it.
 Area: Fixes EXISTING PRs only (red CI, desk blocker, conflict, hub notes). No new features, no new rows.
 Never add features or new rows. Never merge, never print secrets or env values, never touch production, never edit another lane's PR without claiming it, never name a country (say current pack or default pack).
-REPORT on issue 592 in the LANE_RULES format after every 3 PRs and at the end.
-Stop when the queue is empty or credit/context is low; then say so and wait for the same prompt again.
+Do NOT stop after 3 PRs: post a short progress REPORT on issue 592 in the LANE_RULES format after every 3 PRs, then KEEP GOING (target 8-12 PRs per round). While a long command runs (push hook, CI wait), start the next row in a new worktree. Label ready PRs merge-queue (not needs-human / do-not-merge / [needs owner]) and do not wait for review, merge or desk verdicts.
+Stop only when the queue is empty, your WIP cap is reached and every open PR is waiting on others, or context is near its limit. Compact yourself if your tool allows; otherwise end the final REPORT with: OWNER-NEXT: /compact then paste the same block.
 Allowed slash commands: /compact ; /swarm with at most 3 workers, each on a DIFFERENT PR in its OWN working copy (one PR per worker, claim each PR first). No /boost, /teamwork, /schedule, automation.
 ```
 
@@ -158,8 +158,8 @@ Queue = the newest comment on issue 592 whose first line starts with "## WAVE", 
 Order: 1) your own open PRs (red CI, desk blocker, conflict, hub notes); 2) "Fix queue" items for L9; 3) new rows in listed order; 4) when all of that is done, unclaimed "Fix queue" items in your area from any lane. Claim each with a comment "taking ... (L9)" before touching it.
 Area: Frontend pages for purchasing and sales (Next.js, Tailwind, shadcn/ui) and their component tests.
 Never merge, never print secrets or env values, never touch production, never edit another lane's PR without claiming it, never name a country (say current pack or default pack).
-REPORT on issue 592 in the LANE_RULES format after every 3 PRs and at the end.
-Stop when the queue is empty or credit/context is low; then say so and wait for the same prompt again.
+Do NOT stop after 3 PRs: post a short progress REPORT on issue 592 in the LANE_RULES format after every 3 PRs, then KEEP GOING (target 8-12 PRs per round). While a long command runs (push hook, CI wait), start the next row in a new worktree. Label ready PRs merge-queue (not needs-human / do-not-merge / [needs owner]) and do not wait for review, merge or desk verdicts.
+Stop only when the queue is empty, your WIP cap is reached and every open PR is waiting on others, or context is near its limit. Compact yourself if your tool allows; otherwise end the final REPORT with: OWNER-NEXT: /compact then paste the same block.
 Allowed slash commands: /compact ; /browser on localhost only ; impeccable skill. No /swarm, /boost, /teamwork, /schedule, automation.
 ```
 
@@ -175,8 +175,8 @@ Queue = the newest comment on issue 592 whose first line starts with "## WAVE", 
 Order: 1) your own open PRs (red CI, desk blocker, conflict, hub notes); 2) "Fix queue" items for L10; 3) new rows in listed order; 4) when all of that is done, unclaimed "Fix queue" items in your area from any lane. Claim each with a comment "taking ... (L10)" before touching it.
 Area: Frontend pages for tax, reports and pages not linked from the menu.
 Never merge, never print secrets or env values, never touch production, never edit another lane's PR without claiming it, never name a country (say current pack or default pack).
-REPORT on issue 592 in the LANE_RULES format after every 3 PRs and at the end.
-Stop when the queue is empty or credit/context is low; then say so and wait for the same prompt again.
+Do NOT stop after 3 PRs: post a short progress REPORT on issue 592 in the LANE_RULES format after every 3 PRs, then KEEP GOING (target 8-12 PRs per round). While a long command runs (push hook, CI wait), start the next row in a new worktree. Label ready PRs merge-queue (not needs-human / do-not-merge / [needs owner]) and do not wait for review, merge or desk verdicts.
+Stop only when the queue is empty, your WIP cap is reached and every open PR is waiting on others, or context is near its limit. Compact yourself if your tool allows; otherwise end the final REPORT with: OWNER-NEXT: /compact then paste the same block.
 Allowed slash commands: /compact ; /browser on localhost only ; impeccable skill. No /swarm, /boost, /teamwork, /schedule, automation.
 ```
 
@@ -192,8 +192,8 @@ Queue = the newest comment on issue 592 whose first line starts with "## WAVE", 
 Order: 1) your own open PRs (red CI, desk blocker, conflict, hub notes); 2) "Fix queue" items for L11; 3) new rows in listed order; 4) when all of that is done, unclaimed "Fix queue" items in your area from any lane. Claim each with a comment "taking ... (L11)" before touching it.
 Area: Tests and QA: write tests, run flows on localhost; every bug found becomes a new issue (you do not change product code).
 Never change product code; bugs become issues. Never merge, never print secrets or env values, never touch production, never edit another lane's PR without claiming it, never name a country (say current pack or default pack).
-REPORT on issue 592 in the LANE_RULES format after every 3 PRs and at the end.
-Stop when the queue is empty or credit/context is low; then say so and wait for the same prompt again.
+Do NOT stop after 3 PRs: post a short progress REPORT on issue 592 in the LANE_RULES format after every 3 PRs, then KEEP GOING (target 8-12 PRs per round). While a long command runs (push hook, CI wait), start the next row in a new worktree. Label ready PRs merge-queue (not needs-human / do-not-merge / [needs owner]) and do not wait for review, merge or desk verdicts.
+Stop only when the queue is empty, your WIP cap is reached and every open PR is waiting on others, or context is near its limit. Compact yourself if your tool allows; otherwise end the final REPORT with: OWNER-NEXT: /compact then paste the same block.
 Allowed slash commands: /compact ; /browser on localhost only ; impeccable skill ; /swarm with at most 3 workers, each on a DIFFERENT test file or PR in its OWN working copy. No /boost, /teamwork, /schedule, automation.
 ```
 
@@ -209,8 +209,8 @@ Queue = the newest comment on issue 592 whose first line starts with "## WAVE", 
 Order: 1) your own open PRs (red CI, desk blocker, conflict, hub notes); 2) "Fix queue" items for L12; 3) new rows in listed order; 4) when all of that is done, unclaimed "Fix queue" items in your area from any lane. Claim each with a comment "taking ... (L12)" before touching it.
 Area: Documents: Owner packets for sensitive PRs, issue hygiene, help pages. No npm install needed.
 Never run npm install. Never merge, never print secrets or env values, never touch production, never edit another lane's PR without claiming it, never name a country (say current pack or default pack).
-REPORT on issue 592 in the LANE_RULES format after every 3 PRs and at the end.
-Stop when the queue is empty or credit/context is low; then say so and wait for the same prompt again.
+Do NOT stop after 3 PRs: post a short progress REPORT on issue 592 in the LANE_RULES format after every 3 PRs, then KEEP GOING (target 8-12 PRs per round). While a long command runs (push hook, CI wait), start the next row in a new worktree. Label ready PRs merge-queue (not needs-human / do-not-merge / [needs owner]) and do not wait for review, merge or desk verdicts.
+Stop only when the queue is empty, your WIP cap is reached and every open PR is waiting on others, or context is near its limit. Compact yourself if your tool allows; otherwise end the final REPORT with: OWNER-NEXT: /compact then paste the same block.
 Allowed slash commands: /compact. No /swarm, /boost, /teamwork, /schedule, automation.
 ```
 
