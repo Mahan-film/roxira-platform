@@ -85,8 +85,10 @@ run_light() {
     --cap-drop ALL --security-opt no-new-privileges \
     --tmpfs /tmp:rw,exec,size=2g \
     --cpu-shares 512 \
-    -v "roxira-jit-toolcache-$inst:/opt/hostedtoolcache" \
+    -v "roxira-jit-toolcache-$inst:/opt/hostedtoolcache:ro" \
     -e RUNNER_TOOL_CACHE=/opt/hostedtoolcache \
+    -e BASH_ENV=/usr/local/share/roxira-pip-venv.sh \
+    -e PIP_CACHE_DIR=/tmp/pip-cache \
     --env-file "$envf" \
     --label roxira.jit.slot=light --label "roxira.jit.instance=$inst" \
     "$image" /home/runner/actions-runner/run.sh)" || { rm -f "$envf"; return 1; }

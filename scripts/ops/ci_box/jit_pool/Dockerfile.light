@@ -20,7 +20,25 @@ RUN apt-get update \
 RUN if id ubuntu >/dev/null 2>&1; then userdel -r ubuntu; fi \
  && useradd -m -u 1000 -s /bin/bash runner \
  && mkdir -p /opt/hostedtoolcache \
- && chown runner:runner /opt/hostedtoolcache
+ && chown runner:runner /opt/hostedtoolcache \
+ && printf '%s\n' \
+      '# Isolate per-job pip installs into $RUNNER_TEMP/venv when /opt/hostedtoolcache is read-only.' \
+      'if [ -n "${RUNNER_TEMP:-}" ] && [ -d "$RUNNER_TEMP" ]; then' \
+      '  _rx_venv="$RUNNER_TEMP/venv"' \
+      '  _rx_py="$(command -v python3 2>/dev/null || true)"' \
+      '  if [ -n "$_rx_py" ] && [ "$_rx_py" != "$_rx_venv/bin/python3" ]; then' \
+      '    _rx_prev="$(cat "$_rx_venv/.py_base" 2>/dev/null || true)"' \
+      '    if [ ! -x "$_rx_venv/bin/python3" ] || [ "$_rx_prev" != "$_rx_py" ]; then' \
+      '      rm -rf "$_rx_venv" && "$_rx_py" -m venv --system-site-packages "$_rx_venv" >/dev/null 2>&1 && printf "%s\n" "$_rx_py" > "$_rx_venv/.py_base" || true' \
+      '    fi' \
+      '  fi' \
+      '  if [ -x "$_rx_venv/bin/python3" ]; then' \
+      '    export VIRTUAL_ENV="$_rx_venv"' \
+      '    case ":$PATH:" in *":$_rx_venv/bin:"*) ;; *) export PATH="$_rx_venv/bin:$PATH" ;; esac' \
+      '  fi' \
+      '  unset _rx_venv _rx_py _rx_prev' \
+      'fi' > /usr/local/share/roxira-pip-venv.sh \
+ && chmod 0644 /usr/local/share/roxira-pip-venv.sh
 
 COPY --chown=runner:runner . /home/runner/actions-runner
 USER runner
