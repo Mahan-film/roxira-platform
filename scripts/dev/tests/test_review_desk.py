@@ -514,3 +514,63 @@ def test_verdict_inferred_only_from_a_complete_answer():
     )
     with pytest.raises(ValueError):
         rd.parse_review("**Blocker**\n- none\n**Major**\n- none")
+
+
+def test_system_prompt_covers_pytest_fixtures_and_truncation():
+    for name in ("monkeypatch", "tmp_path", "caplog", "capsys", "request"):
+        assert name in rd.SYSTEM_PROMPT
+    assert "truncated" in rd.SYSTEM_PROMPT.lower()
+    assert "major" in rd.SYSTEM_PROMPT.lower()
+
+
+def test_upsert_desk_comment_edits_existing_and_falls_back_to_post():
+    calls = []
+    comments = [
+        [
+            {"id": 10, "user": {"login": "other"}, "body": "lgtm"},
+            {"id": 22, "user": {"login": "github-actions[bot]"}, "body": "Cross-family review (x) @ oldsha\nVerdict: blocker"},
+        ]
+    ]
+
+    def fake_gh(args):
+        calls.append(args)
+        if args[0] == "api" and args[1] == "--paginate":
+            import json
+            return json.dumps(comments)
+        if "PATCH" in args:
+            return '{"html_url": "https://example/c/22"}'
+        return '{"html_url": "https://example/c/99"}'
+
+    action, url = rd.upsert_desk_comment(55, f"Cross-family review (x) @ {HEAD}\nVerdict: no blocker", repo="o/r", gh=fake_gh)
+    assert action == "edited"
+    assert url == "https://example/c/22"
+    assert any("issues/comments/22" in a for c in calls for a in c)
+
+    # No existing desk comment -> POST new comment
+    comments[0].clear()
+    action2, url2 = rd.upsert_desk_comment(55, f"Cross-family review (x) @ {HEAD}\nVerdict: no blocker", repo="o/r", gh=fake_gh)
+    assert action2 == "posted"
+    assert url2 == "https://example/c/99"
+
+
+def test_set_commit_status_maps_verdict_and_workflow_has_statuses_write():
+    import yaml
+
+    sent = []
+
+    def fake_gh(args):
+        sent.append(args)
+        return "{}"
+
+    rd.set_commit_status(HEAD, "no blocker", repo="o/r", target_url="https://example/c/1", gh=fake_gh)
+    rd.set_commit_status(HEAD, "blocker", repo="o/r", gh=fake_gh)
+    assert f"repos/o/r/statuses/{HEAD}" in sent[0]
+    assert "state=success" in sent[0]
+    assert "context=review-desk" in sent[0]
+    assert "target_url=https://example/c/1" in sent[0]
+    assert "state=failure" in sent[1]
+
+    wf = yaml.safe_load(
+        (pathlib.Path(__file__).resolve().parents[3] / ".github/workflows/review-desk.yml").read_text(encoding="utf-8")
+    )
+    assert wf["jobs"]["desk"]["permissions"]["statuses"] == "write"
