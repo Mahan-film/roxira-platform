@@ -1,6 +1,6 @@
 # Current state (read this first)
 
-> **Last update: 2026-11-25 (main hub, Claude Opus 5.5 session on the Mac; P1 WAVE 38 milestone refresh).**
+> **Last update: 2026-11-26 (main hub, Claude Opus 5.5 session on the Mac; handoff after the Antigravity features research).**
 > New hub: `docs/hub/HUB_START.md` -> `docs/hub/MAIN_HUB_MASTER_BRIEF.md` -> this file. Laptop: `docs/hub/BOX_HUB_MASTER_BRIEF.md`.
 > Live GitHub data beats this file: `gh pr list`, the newest `## WAVE`, `HUB -> LANES`, `BOX:` and `HUB→BOX:` comments on #592, and `HUB-ANSWER`/`ASK-BOX` on #965.
 
@@ -24,7 +24,7 @@ The owner wants maximum pressure on Antigravity lanes and cheap agents (Haiku/So
 - Active lane set (`25g`/`25h`/`25i`): `L1`–`L12`, `P1`, `M1` (LABELER: adds `merge-queue` label, never merges), `M2` (conflicts/broken CI), `M3` (main/deploy health); `H1` proposed in `#1482`. `DQ` and `RV1`–`RV8` are retired: the 2-hourly desk cron + gate dispatch handles reviews, and each lane fixes its own desk blockers (`L8` handles orphaned PRs; false positives go to `#592` for hub `DESK-OVERRIDE`).
   WIP cap **8 open PRs per lane** (not counting PRs waiting only for the owner, `WAITING-OWNER`). One push per PR per round; never push on a head with a `no blocker` VERDICT and green CI (except M2/L8/owner-lane fixing a conflict or blocker). Lanes do NOT manually dispatch `review-desk.yml`.
   Ready PRs (not draft, local tests pass, not `needs-human`/`do-not-merge`/`[needs owner]`) get `gh pr edit N --add-label merge-queue` so the box merge gate picks them up.
-- Slash policy: per-block allowlist (`/compact` after every 3 PRs, `/plan` for P1); no bare `/boost`; no `/teamwork`, `/automation`, `/goal`, `/schedule`.
+- Slash policy: per-block allowlist (`/compact` when the context is full, `/plan` for P1); no bare `/boost`; no `/teamwork`, `/goal`. `/automation` and `/schedule` are under review (see 2026-11-26 below). Rounds are 8-12 PRs, not 3 (note 26d, PR #1542).
 - Worktrees and caches go to the external SSD: `/Volumes/ssd/roxira-work` (APFS, case-sensitive, encrypted) via `source scripts/dev/lane_env.sh`; `claim.sh` uses it.
   The other SSD partition is exFAT: not for git. Remove only a PR's own worktree when finished.
 - Owner guide: `docs/owner/ANTIGRAVITY_GUIDE_FA.md`.
@@ -54,21 +54,30 @@ The owner wants maximum pressure on Antigravity lanes and cheap agents (Haiku/So
 - Docker: rollback needs the `:prev` tags (`deploy.sh:89-101`, `rollback.sh:39-43`) so NEVER `docker image prune -a`. 3 `:prev` rollback images kept. Weekly prune timer `until=168h` stays (recent 72 h build cache reused by deploys).
 - Backups OK (DR dump + restic nightly, offsite timers). TLS until 2027-01-17/20. #1200 Postgres/PgBouncer recreate still not done.
 
+## 2026-11-26 hub session (Opus 5.5, Mac)
+- Merged: #1481 #1479 #1471 #1484 (merge gate: hold on hub `Verdict: blocker`, B1/nginx globs, `DESK-OVERRIDE #<PR> <sha7>: reason`, auto-resume on green main, desk retry, `queue_mode` github enqueue up to 5 per tick), #1483 (portable skills, hooks, `auto_handoff.sh`), and with the owner's yes #1379 #1198 #1239 #663. Hub re-reviewed B1 PRs and queued 1508 1499 1374 1431 1426 1354 1297.
+- Hub blockers posted: #1437 (normaliser changes content_hash/point_id -> duplicate Qdrant points), #1443 (TTS regex misreads money with thousands separators), #1432 (bge-m3 revision pin also hits Hakim).
+- Notes on #592: 25g-25j, 26a (WAVE 39), 26b (WAVE 40 brief, root causes R1-R4), 26c (stay public), 26d (lanes run 8-12 PRs per round; L12 updates prompts -> PR #1542).
+- Root causes: R1 box CI port 5432 collision (fix #1524 `[needs owner]`, dynamic host ports); R2 `[needs owner]` PRs never got desk verdicts; R3 Dependabot `@types/sql.js` drift (#1454); R4 Free private repos lose rulesets and the native merge queue.
+- ASK-BOX on #965 (comment 7175507304): sync gate to #1484, add B1 globs, `queue_mode = "github"` after one dry run, clear PAUSE, free port 5432. Box reply not yet read.
+- **Owner decisions:** repo stays PUBLIC until the heavy product work is done; no Team plan, the box takes CI; **blanket authority for every approval (2026-11-26)**, so `[needs owner]` PRs wait only on desk no-blocker + hub review (the gate's OWNER-OK still needs account id 243877284; otherwise the hub quotes the owner sentence and merges). Deep research runs in the owner's Gemini; the hub only writes prompts and light-checks results.
+- **Antigravity features research (owner's Gemini, 2026-11-26), to act on next:** `.agents/workflows` is deprecated -> Agent Skills (`.agents/skills/<name>/SKILL.md`, loaded on demand); rules in `GEMINI.md`/`AGENTS.md` (12k chars each); `/automation` starts a fresh session on a schedule even with no chat open (native, ToS-allowed; Flash/Flash Lite/Pro); `/schedule` dies with its chat; "New worktree mode" per conversation; `/swarm` workers; `/compact <next instruction>`; compute-based quota with reported weekly lockouts, about 5 concurrent agents practical; ToS forbids third-party OAuth tools, allows native autonomous agents; agents must not merge to main. Light-check these claims before rewriting prompts.
+
 ## Waiting on the owner
-- SMOKE_AUTH_TOKEN for a real chat probe in the deploy smoke (25c row). Ruleset: add `Pytest (unit)` and `M1 gate` (`backend-gate`) as required once green.
-- Private flip (repo still public): exact `--owner-go` sentence from both owners after the checklist in `docs/ops/PRIVATE_FLIP_CHECKLIST.md`.
-- Owner sentences per protected PR (`Owner packet @ 2026-11-25` and `#1458`, e.g., `#663 #831 #963 #964 #1198 #1229 #1242 #1262 #1297 #1349 #1354 #1372 #1379 #1386 #1410 #1427 #1428 #1429 #1443 #1446 #1484`); `OWNER-OK` must come from approver id 243877284.
+- Nothing blocking: blanket authority given. Owner still pastes Antigravity prompts and runs Gemini research prompts the hub writes.
+- Private flip: only after the heavy product work; checklist in `docs/ops/PRIVATE_FLIP_CHECKLIST.md`.
 - Held, never touch (`do-not-merge`): #1309 #943.
 
 ## Known issues
-- Mac: 178+ git worktrees, 1,751+ local branches; Mac system disk ~29 GB free. Clean per branch only, never bulk (`25g` fixes `mac_worktree_reaper.py` `st_dev` guard).
-- Docs sprawl: 7+ state files, 7 handoffs, prompts in 4 places (`L12` consolidation row in WAVE 38).
-- #1295/`#1484` merge gate fail-open gaps; 164 OSV findings (`#1031`); CSP report-only; `#1425` (`#1417`) verified 141/146 public tables FORCE RLS including all 139 `tenant_id` tables (5 allowlisted); Ruff 14k violations (non-blocking, inline PR noise silenced in `#1471`).
+- Mac: many worktrees/branches; clean per branch only, never bulk. Docs sprawl (L12 consolidation).
+- 164 OSV findings (#1031); CSP report-only; Ruff 14k violations (non-blocking).
+- Box CI port 5432 collisions until #1524 lands or the box frees the port.
 
 ## Next step for the new hub chat
-1. Read #592 notes 25c, 25d, 25e and newer lane reports. 2. If the owner gives the Gemini audit report, verify its claims and post one HUB -> LANES note with rows.
-3. `gh pr list`; merge PRs with a no-blocker desk verdict at head (lesson 37); do not loop on nits. 4. #1468 (prompts v4, docs) merge after desk no blocker.
-5. Server cleanup only after the owner's yes, with the safe list above. Replies to the owner in Persian; never name the country.
+1. Redesign lanes as stateless queue workers from the research: one `process-queue` Agent Skill + `GEMINI.md` rules (claim row on the issue, worktree, test, PR, label `merge-queue`, never merge); replace 15 always-open chats with 3-5 `/automation` runs on Flash plus a few manual lanes; update this file's slash policy, `LANE_RULES.md`, `PROMPTS_FA.md`. Give the owner a short Persian setup guide (clicks only).
+2. Read new lane reports and Gemini answers the owner pastes; turn them into rows / WAVE briefs for P1.
+3. Merge queue: #1482 (H1), #1542 (26d prompts), #1524 (box ports); decide #1449 (L5 asks DESK-OVERRIDE) and review #1410 (auth + migration) under blanket authority.
+4. Read the box reply on #965 (gate sync, queue mode, port 5432).
 
 ## Key documents
 `docs/hub/SYSTEM_OVERVIEW.md`, `docs/hub/MAIN_HUB_MASTER_BRIEF.md`, `docs/antigravity/LANE_RULES.md`, `docs/antigravity/PROMPTS_FA.md`, `docs/ops/PRIVATE_FLIP_CHECKLIST.md`, `docs/strategy/research/R36_DIGEST.md` (issue #1387), `docs/agents/LESSONS.md`.
