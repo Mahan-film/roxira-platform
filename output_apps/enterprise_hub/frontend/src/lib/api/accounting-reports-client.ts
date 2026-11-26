@@ -12,6 +12,8 @@ import type {
   IncomeStatementReport,
   LedgerReport,
   Money,
+  PartyStatementReport,
+  PartyStatementSide,
   PettyCashFund,
   PettyCashStatement,
   ReportQuery,
@@ -57,6 +59,10 @@ export const getLedgerReport = (
   query: ReportQuery & { accountCode: string; partyCode?: string },
   signal?: AbortSignal,
 ) => report<LedgerReport>("ledger", { ...query }, signal);
+export const getPartyStatement = (
+  query: ReportQuery & { partyCode: string; side?: PartyStatementSide; accountCode?: string },
+  signal?: AbortSignal,
+) => report<PartyStatementReport>("party-statement", { ...query }, signal);
 export const getBalanceSheet = (query: ReportQuery, signal?: AbortSignal) =>
   report<BalanceSheetReport>("balance-sheet", params(query), signal);
 export const getIncomeStatement = (query: ReportQuery, signal?: AbortSignal) =>

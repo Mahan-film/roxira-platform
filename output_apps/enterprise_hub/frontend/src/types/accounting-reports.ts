@@ -265,3 +265,29 @@ export interface ConsolidatedReportResponse {
   grandNetBalance: Money;
 }
 
+export type PartyStatementSide = "receivable" | "payable";
+
+export interface AgeingPartyRow {
+  partyCode: string;
+  partyName?: string;
+  buckets: Money[];
+  total: Money;
+}
+
+export interface AgeingReport {
+  side: PartyStatementSide;
+  to: string;
+  edges: number[];
+  labels: string[];
+  rows: AgeingPartyRow[];
+  totals: Money[];
+  grandTotal: Money;
+}
+
+export interface PartyStatementReport {
+  side: PartyStatementSide;
+  accountCodes: string[];
+  ledger: LedgerReport;
+  ageing: AgeingReport;
+}
+

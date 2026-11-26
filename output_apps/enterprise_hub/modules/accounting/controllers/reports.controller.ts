@@ -10,6 +10,7 @@ import {
   ExportableReport,
   ExportReportQueryDto,
   LedgerQueryDto,
+  PartyStatementQueryDto,
   ReportPeriodDto,
   SubsidiaryQueryDto,
   TrialBalanceQueryDto,
@@ -62,6 +63,13 @@ export class ReportsController {
   @ApiResponse({ status: HttpStatus.OK })
   async ledger(@Req() request: AuthenticatedRequest, @Query() query: LedgerQueryDto) {
     return moneyJson(await this.reports.accountLedger(requireTenantId(request), query));
+  }
+
+  @Get('party-statement')
+  @ApiOperation({ summary: 'صورت‌حساب طرف حساب با مانده در لحظه و جدول سنی' })
+  @ApiResponse({ status: HttpStatus.OK })
+  async partyStatement(@Req() request: AuthenticatedRequest, @Query() query: PartyStatementQueryDto) {
+    return moneyJson(await this.reports.partyStatement(requireTenantId(request), query));
   }
 
   @Get('balance-sheet')
