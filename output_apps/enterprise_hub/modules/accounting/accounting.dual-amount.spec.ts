@@ -326,30 +326,35 @@ describe('AccountingService - Dual-Amount Ledger & FX Rates (T138)', () => {
 
     it('allows multi-currency entries when transaction currencies differ but book currency balances', async () => {
       // Line 1 in USD, Line 2 in EUR - book currency balances in IRR
-      const entry = await service.createJournalEntry(tenantId, {
-        entryNumber: 'MULTI-TX-001',
-        description: 'سند تسعیر چندارزی',
-        lines: [
-          {
-            accountCode: '1010',
-            txCurrencyCode: 'USD',
-            txDebit: 100,
-            txCredit: 0,
-            bookDebit: 92000000,
-            bookCredit: 0,
-            fxRateApplied: 920000,
-          },
-          {
-            accountCode: '1020',
-            txCurrencyCode: 'EUR',
-            txDebit: 0,
-            txCredit: 92,
-            bookDebit: 0,
-            bookCredit: 92000000,
-            fxRateApplied: 1000000,
-          },
-        ],
-      });
+      const entry = await service.createJournalEntry(
+        tenantId,
+        {
+          entryNumber: 'MULTI-TX-001',
+          description: 'سند تسعیر چندارزی',
+          lines: [
+            {
+              accountCode: '1010',
+              txCurrencyCode: 'USD',
+              txDebit: 100,
+              txCredit: 0,
+              bookDebit: 92000000,
+              bookCredit: 0,
+              fxRateApplied: 920000,
+            },
+            {
+              accountCode: '1020',
+              txCurrencyCode: 'EUR',
+              txDebit: 0,
+              txCredit: 92,
+              bookDebit: 0,
+              bookCredit: 92000000,
+              fxRateApplied: 1000000,
+            },
+          ],
+        },
+        undefined,
+        { isSystem: true },
+      );
 
       expect(entry.id).toBeDefined();
       expect(entry.totalDebit).toBe(92000000);

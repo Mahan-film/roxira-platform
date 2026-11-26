@@ -146,16 +146,21 @@ describePg('Ledger property tests on PostgreSQL', () => {
     };
     for (let i = 0; i < vouchers.length; i++) {
       const v = vouchers[i];
-      const created = await accounting.createJournalEntry(tenant, {
-        entryNumber: `V-${i}`,
-        date: isoDay(v.day),
-        description: 'property',
-        status: v.status as JournalEntryStatus,
-        lines: v.lines.map((l) => ({
-          accountCode: l.code,
-          ...(l.debit > 0n ? { debit: minorToDecimal(l.debit) } : { credit: minorToDecimal(l.credit) }),
-        })),
-      } as never);
+      const created = await accounting.createJournalEntry(
+        tenant,
+        {
+          entryNumber: `V-${i}`,
+          date: isoDay(v.day),
+          description: 'property',
+          status: v.status as JournalEntryStatus,
+          lines: v.lines.map((l) => ({
+            accountCode: l.code,
+            ...(l.debit > 0n ? { debit: minorToDecimal(l.debit) } : { credit: minorToDecimal(l.credit) }),
+          })),
+        } as never,
+        undefined,
+        { isSystem: true },
+      );
       if (v.status === 'POSTED') add(v.lines, false);
       if (v.reverseOn !== null) {
         if (v.status === 'POSTED') {

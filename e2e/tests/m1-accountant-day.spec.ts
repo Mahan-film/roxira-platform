@@ -235,6 +235,7 @@ test.describe('Accountant day · go-live gate on the local stack', () => {
     fiscalYearId: 0,
     nextFiscalYearId: 0,
     stockItemId: 0,
+    salesInvoiceId: '',
     lockId: 0,
     chequeId: 0,
   };
@@ -471,7 +472,25 @@ test.describe('Accountant day · go-live gate on the local stack', () => {
   });
 
   test('03 opening balances: post the opening voucher and verify the ledger [T91]', async ({ page }) => {
+    // T226: inventory control account 1030 is system-posted only outside an open adjustment period.
+    await postApi(page, `accounting/fiscal-years/${state.fiscalYearId}/adjustment-period`, { open: true }, 200);
     await postVoucher(page, OPENING_VOUCHER);
+    await postApi(page, `accounting/fiscal-years/${state.fiscalYearId}/adjustment-period`, { open: false }, 200);
+
+    // Once the adjustment period is closed, a manual journal touching 1030 must be refused (422).
+    const blocked = await page.request.post('/api/backend/enterprise-hub/accounting/journal-entries', {
+      headers: headers(),
+      data: {
+        entryNumber: 'CTRL-BLOCK-1030',
+        date: `${OPENING_VOUCHER.date}T12:00:00.000Z`,
+        description: 'تلاش ثبت دستی روی موجودی کالا',
+        lines: [
+          { accountCode: '1030', debit: '1000.00', credit: '0.00' },
+          { accountCode: '3010', debit: '0.00', credit: '1000.00' },
+        ],
+      },
+    });
+    expect(blocked.status()).toBe(422);
 
     const tb = await trialBalance(page);
     expect(tb.balanced).toBe(true);
@@ -630,6 +649,7 @@ test.describe('Accountant day · go-live gate on the local stack', () => {
     );
     expect(draft.status).toBe('DRAFT');
     expect(draft.journalEntryId).toBeNull();
+    state.salesInvoiceId = draft.id;
     expect(rials(draft.totalAmount)).toBe(SALES_INVOICE.net);
     expect(rials(draft.totalTax)).toBe(SALES_INVOICE.vat);
     expect(rials(draft.finalPayable)).toBe(SALES_INVOICE.payable);
@@ -647,7 +667,63 @@ test.describe('Accountant day · go-live gate on the local stack', () => {
   });
 
   test('06 receipt: partial bank settlement of the receivable and party sub-ledger update [T91+T99]', async ({ page }) => {
-    await postVoucher(page, RECEIPT_VOUCHER);
+    // T226: manual journal posting to AR control account 1020 is refused (422); receipts go via treasury.
+    const manualBlocked = await page.request.post('/api/backend/enterprise-hub/accounting/journal-entries', {
+      headers: headers(),
+      data: {
+        entryNumber: 'CTRL-BLOCK-1020',
+        date: `${RECEIPT_VOUCHER.date}T12:00:00.000Z`,
+        description: 'تلاش ثبت دستی روی حساب دریافتنی',
+        lines: [
+          { accountCode: '1012', debit: '1000.00', credit: '0.00' },
+          { accountCode: '1020', debit: '0.00', credit: '1000.00', partyCode: CUSTOMER.code },
+        ],
+      },
+    });
+    expect(manualBlocked.status()).toBe(422);
+
+    const accounts = await getApi<Array<{ id: number; code: string }>>(page, 'accounting/accounts');
+    const bankLedger = accounts.find((a) => a.code === '1012');
+    expect(bankLedger, 'bank ledger account 1012 exists').toBeDefined();
+
+    const bank = await postApi<{ id: number }>(
+      page,
+      'banking/accounts',
+      {
+        name: 'بانک ملت مرکزی',
+        accountNumber: '1234567890',
+        ledgerAccountId: bankLedger!.id,
+      },
+      201,
+    );
+
+    await postApi(
+      page,
+      'treasury/documents',
+      {
+        kind: 'receipt',
+        partyType: 'customer',
+        partyCode: CUSTOMER.code,
+        partyName: CUSTOMER.name,
+        docDate: RECEIPT_VOUCHER.date,
+        methods: [
+          {
+            method: 'bank_transfer',
+            amount: dec(60_000_000n),
+            bankAccountId: bank.id,
+          },
+        ],
+        allocations: [
+          {
+            invoiceId: state.salesInvoiceId,
+            amount: dec(60_000_000n),
+          },
+        ],
+        description: RECEIPT_VOUCHER.description,
+      },
+      201,
+    );
+
     const custLedger = await partyLedger(page, '1020', CUSTOMER.code);
     expect(rials(custLedger.totalDebit)).toBe(SALES_INVOICE.payable);
     expect(rials(custLedger.totalCredit)).toBe(60_000_000n);

@@ -25,7 +25,7 @@ export class FiscalYearEntity {
   @Column({ type: 'varchar', length: 8, default: FiscalYearStatus.OPEN })
   status: FiscalYearStatus;
 
-  /** When true, partner advisors and authorized finance roles may post adjustment journals. */
+  /** When true, partner advisors and authorized finance roles may post manual adjustment journals on control accounts (T226). */
   @Column({ type: 'boolean', name: 'adjustment_period_open', default: false })
   adjustmentPeriodOpen: boolean;
 

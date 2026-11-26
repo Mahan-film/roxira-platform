@@ -63,6 +63,7 @@ export class TreasuryLedgerPostingAdapter implements TreasuryPostingPort {
         })),
       },
       manager,
+      { isSystem: true },
     );
     return entry.id;
   }

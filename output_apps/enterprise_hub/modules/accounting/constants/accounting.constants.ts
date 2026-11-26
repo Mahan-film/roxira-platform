@@ -1,4 +1,4 @@
-import { AccountType } from '../enums/accounting.enum';
+import { AccountType, ReportLine } from '../enums/accounting.enum';
 
 /** حداکثر تعداد سطرهای مجاز در یک سند حسابداری دوطرفه */
 export const MAX_JOURNAL_LINES = 500;
@@ -31,18 +31,26 @@ export const DEFAULT_CHART_OF_ACCOUNTS: ReadonlyArray<{
   code: string;
   name: string;
   accountType: AccountType;
+  reportLine?: ReportLine;
 }> = [
   { code: '1010', name: 'موجودی نقد و بانک', accountType: AccountType.ASSET },
   {
     code: '1020',
     name: 'حساب‌های دریافتنی تجاری',
     accountType: AccountType.ASSET,
+    reportLine: ReportLine.RECEIVABLE,
   },
-  { code: '1030', name: 'موجودی کالا', accountType: AccountType.ASSET },
+  {
+    code: '1030',
+    name: 'موجودی کالا',
+    accountType: AccountType.ASSET,
+    reportLine: ReportLine.INVENTORY,
+  },
   {
     code: '2010',
     name: 'حساب‌های پرداختنی تجاری',
     accountType: AccountType.LIABILITY,
+    reportLine: ReportLine.PAYABLE,
   },
   {
     code: '2020',

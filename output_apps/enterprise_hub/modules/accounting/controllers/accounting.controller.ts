@@ -92,7 +92,6 @@ export class AccountingController {
       | undefined;
     return access?.userId ?? request.user?.sub ?? null;
   }
-
   @Get('accounts')
   @ApiOperation({ summary: 'فهرست حساب‌های دفتر کل (Chart of Accounts)' })
   @ApiResponse({ status: HttpStatus.OK, type: [AccountResponseDto] })
@@ -143,6 +142,7 @@ export class AccountingController {
       {
         actorRole: this.actorRoleOf(request),
         actorUserId: this.actorUserIdOf(request),
+        isSystem: false,
       },
     );
   }
@@ -190,6 +190,10 @@ export class AccountingController {
       this.tenantIdOf(request),
       id,
       dto,
+      {
+        actorRole: this.actorRoleOf(request) ?? undefined,
+        actorUserId: this.actorUserIdOf(request) ?? undefined,
+      },
     );
   }
 

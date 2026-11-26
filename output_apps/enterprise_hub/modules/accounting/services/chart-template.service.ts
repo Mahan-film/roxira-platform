@@ -43,7 +43,7 @@ export class ChartTemplateService {
       await this.accountingRepository.insertMissingAccounts(
         tenantId,
         // standardKolCode and contra are template metadata only; the account row has no column for them.
-        missing.map(({ code, name, accountType, level, parentCode, reportLine }) => ({
+        missing.map(({ code, name, accountType, level, parentCode, reportLine, systemPostedOnly }) => ({
           code,
           name,
           accountType,
@@ -52,6 +52,7 @@ export class ChartTemplateService {
           reportLine,
           currency: Currency.IRR,
           balance: '0',
+          systemPostedOnly: systemPostedOnly ?? false,
         })),
         manager,
       );
@@ -69,6 +70,7 @@ export class ChartTemplateService {
             level: account.level,
             parentCode: account.parentCode,
             reportLine: current.reportLine ?? account.reportLine,
+            systemPostedOnly: current.systemPostedOnly || (account.systemPostedOnly ?? false),
           },
           manager,
         );

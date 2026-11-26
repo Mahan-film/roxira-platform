@@ -3335,6 +3335,18 @@
     "partner_advisor": true,
     "legacy_member": false
   },
+  "POST /enterprise-hub/accounting/fiscal-years/:id/adjustment-period (FiscalYearController.setAdjustmentPeriod)": {
+    "policy": "accounting:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "partner_advisor": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/accounting/fiscal-years/:id/close (FiscalYearController.close)": {
     "policy": "accounting:approve",
     "owner": true,

@@ -867,6 +867,7 @@ export class ReconService {
           ],
         },
         manager,
+        { isSystem: true },
       );
       const bankLine = entry.lines.find((line) => line.accountId === account.ledgerAccountId);
       if (!bankLine) {

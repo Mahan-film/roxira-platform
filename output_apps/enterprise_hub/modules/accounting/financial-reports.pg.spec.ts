@@ -36,7 +36,7 @@ describePg('Financial reports on PostgreSQL', () => {
   let yearId: number;
 
   const post = (tenant: string, entryNumber: string, date: string, lines: object[]) =>
-    accounting.createJournalEntry(tenant, { entryNumber, date, description: entryNumber, lines } as never);
+    accounting.createJournalEntry(tenant, { entryNumber, date, description: entryNumber, lines } as never, undefined, { isSystem: true });
   const pair = (tenant: string, n: string, date: string, debit: string, credit: string, amount: string, partyCode?: string) =>
     post(tenant, n, date, [
       { accountCode: debit, debit: amount, partyCode },

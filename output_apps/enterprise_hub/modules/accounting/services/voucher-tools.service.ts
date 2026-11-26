@@ -6,7 +6,7 @@ import { JournalEntryEntity } from '../entities/journal-entry.entity';
 import { JournalEntryStatus } from '../enums/accounting.enum';
 import { fromDb, minorToDecimal } from '../money';
 import { AccountingRepository } from '../repositories/accounting.repository';
-import { AccountingService } from './accounting.service';
+import { AccountingService, PostEntryOptions } from './accounting.service';
 
 /**
  * Voucher tools that sit next to the ledger but do not belong to the posting state machine.
@@ -29,6 +29,7 @@ export class VoucherToolsService {
     tenantId: string,
     id: number,
     dto: CopyJournalEntryDto,
+    options?: PostEntryOptions,
   ): Promise<JournalEntryResponseDto> {
     // TenantScope + RLS: a source of another tenant is simply not found (404).
     const source = await this.accountingRepository.findEntryById(tenantId, id);
@@ -71,7 +72,7 @@ export class VoucherToolsService {
         projectCode:
           line.projectId != null ? dimensionCodes.get(line.projectId) : undefined,
       })),
-    });
+    }, undefined, options);
   }
 
   /** `<number>-COPY` when it fits and is free, else `COPY-<id>` (then a unique suffix). */

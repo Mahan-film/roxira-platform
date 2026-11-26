@@ -322,6 +322,7 @@ export class BankStatementService {
           ],
         } as never,
         manager,
+        { isSystem: true },
       );
 
       const allocations = plan.allocations.map((a) => ({

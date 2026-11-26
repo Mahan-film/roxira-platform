@@ -96,11 +96,16 @@ describe('Ledger integrity — balanced entries and decimal money', () => {
     expect(sumMinor([0.1, 0.2])).toBe(sumMinor([0.3]));
     const { service } = build();
     await expect(
-      service.createJournalEntry('t1', entry('J1', [
-        { accountCode: '1010', debit: 0.1 },
-        { accountCode: '1020', debit: 0.2 },
-        { accountCode: '4010', credit: 0.3 },
-      ])),
+      service.createJournalEntry(
+        't1',
+        entry('J1', [
+          { accountCode: '1010', debit: 0.1 },
+          { accountCode: '1020', debit: 0.2 },
+          { accountCode: '4010', credit: 0.3 },
+        ]),
+        undefined,
+        { isSystem: true },
+      ),
     ).resolves.toBeDefined();
   });
 

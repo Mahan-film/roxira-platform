@@ -135,15 +135,20 @@ describePg('R16 core acceptance on PostgreSQL', () => {
     const amount = decimal(T4.journal.rent);
 
     it('posts J-42 (Dr rent 2,500.00 / Cr AP 2,500.00)', async () => {
-      const entry = await accounting.createJournalEntry(T1, {
-        entryNumber: 'J-42',
-        date: noon('2026-11-10'),
-        description: 'rent',
-        lines: [
-          { accountCode: '5020', debit: amount },
-          { accountCode: '2010', credit: amount },
-        ],
-      } as never);
+      const entry = await accounting.createJournalEntry(
+        T1,
+        {
+          entryNumber: 'J-42',
+          date: noon('2026-11-10'),
+          description: 'rent',
+          lines: [
+            { accountCode: '5020', debit: amount },
+            { accountCode: '2010', credit: amount },
+          ],
+        } as never,
+        undefined,
+        { isSystem: true },
+      );
       journalId = entry.id;
       expect(entry.status).toBe('POSTED');
     });
@@ -194,16 +199,21 @@ describePg('R16 core acceptance on PostgreSQL', () => {
     it('posts BILL-55 split 600.00 CC-RND / 400.00 CC-SALES and the cost-centre trial balance balances', async () => {
       await dims.create(T1, { kind: DimensionKind.COST_CENTER, code: 'CC-RND', name: 'R&D' });
       await dims.create(T1, { kind: DimensionKind.COST_CENTER, code: 'CC-SALES', name: 'Sales' });
-      await accounting.createJournalEntry(T1, {
-        entryNumber: T5.bill.id,
-        date: noon('2026-10-12'),
-        description: 'BILL-55',
-        lines: [
-          { accountCode: '5020', debit: decimal(T5.bill.splits['CC-RND']), costCenterCode: 'CC-RND' },
-          { accountCode: '5020', debit: decimal(T5.bill.splits['CC-SALES']), costCenterCode: 'CC-SALES' },
-          { accountCode: '2010', credit: decimal(T5.bill.total) },
-        ],
-      } as never);
+      await accounting.createJournalEntry(
+        T1,
+        {
+          entryNumber: T5.bill.id,
+          date: noon('2026-10-12'),
+          description: 'BILL-55',
+          lines: [
+            { accountCode: '5020', debit: decimal(T5.bill.splits['CC-RND']), costCenterCode: 'CC-RND' },
+            { accountCode: '5020', debit: decimal(T5.bill.splits['CC-SALES']), costCenterCode: 'CC-SALES' },
+            { accountCode: '2010', credit: decimal(T5.bill.total) },
+          ],
+        } as never,
+        undefined,
+        { isSystem: true },
+      );
       const report = await costCentres.trialBalance(T1, { from: '2026-10-01', to: '2026-10-31' });
       const debit = (code: string) => report.centres.find((c) => c.code === code)!.totals.periodDebit;
       expect(debit('CC-RND')).toBe(fromDb(decimal(T5.bill.splits['CC-RND'])));

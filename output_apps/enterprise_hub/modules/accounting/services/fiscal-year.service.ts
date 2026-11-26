@@ -87,6 +87,7 @@ export class FiscalYearService {
       startDate: entity.startDate,
       endDate: entity.endDate,
       status: entity.status,
+      adjustmentPeriodOpen: entity.adjustmentPeriodOpen ?? false,
       closedAt: entity.closedAt,
       closedBy: entity.closedBy,
       periods,
@@ -113,6 +114,38 @@ export class FiscalYearService {
       return this.insertYear(tenantId, dto, manager);
     });
     return this.toDto(year);
+  }
+
+  /**
+   * Opens or closes the server-side adjustment period on an OPEN fiscal year (T226).
+   * Only when `adjustmentPeriodOpen === true` may authorized finance roles post manual adjustment
+   * journals touching `system_posted_only` control accounts.
+   */
+  async setAdjustmentPeriod(
+    tenantId: string,
+    actor: string,
+    id: number,
+    open: boolean,
+  ): Promise<FiscalYearResponseDto> {
+    assertNotAiIdentity(actor, 'toggle fiscal year adjustment period');
+    const saved = await this.accountingRepository.transaction(tenantId, async (manager) => {
+      await this.accountingRepository.lockLedgerExclusive(tenantId, manager);
+      const year = await this.fiscalYears.find(tenantId, id, manager);
+      if (!year) {
+        throw new NotFoundException(`سال مالی با شناسه ${id} یافت نشد.`);
+      }
+      if (year.status === FiscalYearStatus.CLOSED) {
+        throw new ConflictException(
+          `سال مالی ${year.name} بسته شده است؛ امکان تغییر دورهٔ تعدیلات وجود ندارد.`,
+        );
+      }
+      return this.fiscalYears.save(
+        tenantId,
+        { ...year, adjustmentPeriodOpen: open },
+        manager,
+      );
+    });
+    return this.toDto(saved);
   }
 
   /** Validates dates and overlap. Runs under the exclusive ledger lock. */
@@ -252,6 +285,7 @@ export class FiscalYearService {
         {
           ...year,
           status: FiscalYearStatus.CLOSED,
+          adjustmentPeriodOpen: false,
           closeSeq: seq,
           closedAt: new Date(),
           closedBy: actor,

@@ -138,6 +138,7 @@ export class PostingRulesService {
           lines: toJournalLines(proposal),
         },
         m,
+        { isSystem: true },
       );
       await this.repository.attachEntry(tenantId, request.sourceType, request.sourceId, request.docType, entry.id, entry.entryNumber, m);
       return { entryId: entry.id, entryNumber: entry.entryNumber, replayed: false };

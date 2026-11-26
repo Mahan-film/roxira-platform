@@ -33,4 +33,7 @@ export class AccountResponseDto {
 
   @ApiPropertyOptional({ enum: ReportLine, nullable: true, description: 'ردیف صورت‌های مالی' })
   reportLine?: ReportLine | null;
+
+  @ApiPropertyOptional({ description: 'فقط قابل ثبت توسط زیرسیستم‌ها (اسناد دستی مسدود است)' })
+  systemPostedOnly?: boolean;
 }

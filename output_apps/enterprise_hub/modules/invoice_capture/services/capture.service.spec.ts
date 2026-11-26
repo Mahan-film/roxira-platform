@@ -74,6 +74,16 @@ function setup(output: string = goodModelOutput()) {
   const journal: Array<{ tenantId: string; dto: { entryNumber: string; lines: Array<{ debit: string; credit: string }> } }> = [];
   const accounting = {
     listAccounts: jest.fn(async () => CHART.map((code) => ({ code }))),
+    findAccountByCode: jest.fn(async (_t: string, code: string) => ({
+      code,
+      systemPostedOnly: ['1020', '2010', '1030', '1110', '1120'].includes(code),
+    })),
+    findAccountsByCodes: jest.fn(async (_t: string, codes: string[]) =>
+      codes.map((code) => ({
+        code,
+        systemPostedOnly: ['1020', '2010', '1030', '1110', '1120'].includes(code),
+      })),
+    ),
     isPeriodLocked: jest.fn(async () => false),
     createJournalEntry: jest.fn(async (tenantId: string, dto: never) => {
       journal.push({ tenantId, dto });
@@ -268,5 +278,20 @@ describe('CaptureService', () => {
     const view = await service.create(TENANT_A, 'user-1', undefined, text);
     expect(view.aiGenerated).toBe(false);
     expect(view.aiLabel).toBeUndefined();
+  });
+
+  it('refuses to post a draft whose item touches a control account (T226)', async () => {
+    const { service } = setup(goodModelOutput({
+      items: [{ description: 'کالای بازرگانی', quantity: 1, unitPrice: 3000000, total: 3000000, accountCode: '1030' }],
+    }));
+    const view = await service.create(TENANT_A, 'user-1', undefined, text);
+    await expect(service.post(TENANT_A, 'user-1', view.id)).rejects.toMatchObject({
+      status: 422,
+      response: expect.objectContaining({
+        findings: expect.arrayContaining([
+          expect.objectContaining({ code: 'CONTROL_ACCOUNT_NOT_ALLOWED' }),
+        ]),
+      }),
+    });
   });
 });

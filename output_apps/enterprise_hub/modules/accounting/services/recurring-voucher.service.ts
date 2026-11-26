@@ -291,6 +291,7 @@ export class RecurringVoucherService implements OnModuleInit {
             status: postNow ? JournalEntryStatus.POSTED : JournalEntryStatus.DRAFT,
           },
           manager,
+          { isSystem: true },
         );
         const reversalDate = template.autoReverse ? firstDayOfNextJalaliMonth(runDate) : null;
         await this.repo.attachRunEntry(tenantId, runId, entry.id, reversalDate, manager);

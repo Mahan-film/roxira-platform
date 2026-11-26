@@ -425,23 +425,55 @@ export class CaptureService {
     if (errors.length > 0) {
       throw new ConflictException({ message: 'سند خطا دارد و ثبت نشد.', findings: errors });
     }
+
+    // T226: Control accounts (AR, AP, inventory, fixed assets) are system-posted only.
+    // User or LLM invoice items must never touch control accounts.
+    // Batch lookup with findAccountsByCodes to prevent N+1 queries across line items.
+    const itemCodes = Array.from(
+      new Set(
+        enriched.draft.items
+          .map((item) => item.accountCode?.trim())
+          .filter((code): code is string => Boolean(code)),
+      ),
+    );
+    if (itemCodes.length > 0) {
+      const accounts = await this.accounting.findAccountsByCodes(tenantId, itemCodes);
+      const systemPosted = accounts.filter((acc) => acc.systemPostedOnly);
+      if (systemPosted.length > 0) {
+        throw new UnprocessableEntityException({
+          statusCode: 422,
+          message: 'سند خطا دارد و ثبت نشد.',
+          findings: systemPosted.map((acc) => ({
+            severity: 'error',
+            code: 'CONTROL_ACCOUNT_NOT_ALLOWED',
+            message: `ثبت ردیف فاکتور روی حساب کنترلی مجاز نیست: ${acc.code}`,
+          })),
+        });
+      }
+    }
+
     const voucher = buildVoucher(enriched.draft, CAPTURE_ACCOUNTS.defaultExpense);
     const entryNumber = `${CAPTURE_ENTRY_PREFIX}-${voucher.date.replace(/-/g, '')}-${doc.id.slice(0, 8)}`;
 
     let journalId: number;
     try {
-      const entry = await this.accounting.createJournalEntry(tenantId, {
-        entryNumber,
-        date: `${voucher.date}T00:00:00.000Z`,
-        description: voucher.description,
-        lines: voucher.lines.map((l) => ({
-          accountCode: l.accountCode,
-          debit: l.debit,
-          credit: l.credit,
-          description: l.description,
-          partyCode: l.partyCode,
-        })),
-      });
+      const entry = await this.accounting.createJournalEntry(
+        tenantId,
+        {
+          entryNumber,
+          date: `${voucher.date}T00:00:00.000Z`,
+          description: voucher.description,
+          lines: voucher.lines.map((l) => ({
+            accountCode: l.accountCode,
+            debit: l.debit,
+            credit: l.credit,
+            description: l.description,
+            partyCode: l.partyCode,
+          })),
+        },
+        undefined,
+        { isSystem: true },
+      );
       journalId = entry.id;
     } catch (error) {
       if (!(error instanceof ConflictException)) {
