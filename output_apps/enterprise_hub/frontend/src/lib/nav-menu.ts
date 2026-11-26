@@ -77,6 +77,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         keywords: ["pos", "صندوق", "فروش سریع", "آفلاین"],
       },
       {
+        href: "/app/invoicing/pos/day-end",
+        label: "پایان روز صندوق",
+        icon: "Calculator",
+        module: "invoicing",
+        keywords: ["پایان روز", "صندوق", "گزارش روزانه", "pos", "day-end"],
+      },
+      {
         href: "/app/crm",
         label: "مشتریان و طرف‌حساب‌ها",
         icon: "Contact",
