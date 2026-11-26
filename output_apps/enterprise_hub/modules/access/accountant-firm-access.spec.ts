@@ -185,6 +185,9 @@ describe('T196 Accountant-firm access (R16 Test 12)', () => {
       const controller = new AccountingController(
         { createJournalEntry: createMock } as unknown as AccountingService,
         {} as unknown as VoucherToolsService,
+        {} as never,
+        {} as never,
+        {} as never,
       );
 
       await controller.createJournalEntry(

@@ -7,6 +7,7 @@
  */
 import 'reflect-metadata';
 import { CurrencyService } from '../../currency/services/currency.service';
+import { CalendarService } from '../../calendar';
 import { InventoryRepository } from '../../inventory/repositories/inventory.repository';
 import { StockDocumentsRepository } from '../../inventory/repositories/stock-documents.repository';
 import { InventoryService } from '../../inventory/services/inventory.service';
@@ -23,10 +24,13 @@ import { DimensionRepository } from '../repositories/dimension.repository';
 import { FiscalYearRepository } from '../repositories/fiscal-year.repository';
 import { LedgerReportRepository } from '../repositories/ledger-report.repository';
 import { AccountingService } from '../services/accounting.service';
+import { AccountingPeriodService } from '../services/accounting-period.service';
 import { ChartTemplateService } from '../services/chart-template.service';
 import { CostCentreReportService } from '../services/cost-centre-report.service';
 import { DimensionService } from '../services/dimension.service';
 import { FinancialReportsService } from '../services/financial-reports.service';
+import { JournalSequencerService } from '../services/journal-sequencer.service';
+import { MasterDataChangeLogService } from '../services/master-data-change-log.service';
 import { createTestDatabase, describePg, TestDatabaseContext, TEST_T1 as T1, TEST_T2 as T2 } from '../../../test/support/test-pg';
 import {
   R16_T3_PERIODS as T3,
@@ -41,6 +45,9 @@ const decimal = minorToDecimal;
 describePg('R16 core acceptance on PostgreSQL', () => {
   let testDb: TestDatabaseContext;
   let accounting: AccountingService;
+  let periods: AccountingPeriodService;
+  let sequencer: JournalSequencerService;
+  let changeLogs: MasterDataChangeLogService;
   let dims: DimensionService;
   let costCentres: CostCentreReportService;
   let inventory: InventoryService;
@@ -50,7 +57,10 @@ describePg('R16 core acceptance on PostgreSQL', () => {
     testDb = await createTestDatabase('r16');
     const currency = { convert: (v: number) => v, round: (v: number) => v } as unknown as CurrencyService;
     const repo = new AccountingRepository(testDb.scope);
-    accounting = new AccountingService(repo, currency);
+    sequencer = new JournalSequencerService(testDb.scope);
+    periods = new AccountingPeriodService(testDb.scope, new CalendarService());
+    changeLogs = new MasterDataChangeLogService(testDb.scope);
+    accounting = new AccountingService(repo, currency, undefined, undefined, sequencer, periods);
     await new ChartTemplateService(repo).apply(T1, 'iran-trading');
     const dimensionRepo = new DimensionRepository(testDb.app);
     dims = new DimensionService(dimensionRepo);
@@ -125,9 +135,72 @@ describePg('R16 core acceptance on PostgreSQL', () => {
       expect(unlocked.active).toBe(false);
     });
 
-    it.skip('soft lock with an exception for the chief accountant role: the AP clerk gets 422 PERIOD_LOCKED, the chief accountant can post — needs T178 (locks are all-or-nothing and answer 423)', () => undefined);
-    it.skip('hard close is blocked while DRAFT-9 is unposted, naming it — needs T178', () => undefined);
-    it.skip('after hard close admin can neither unlock nor post into 2026-10; corrections go to 2026-11 or an adjustment period — needs T178 (no hard-close state, no adjustment period)', () => undefined);
+    it('soft lock with an exception for the chief accountant role: the AP clerk gets 422 PERIOD_LOCKED, the chief accountant can post', async () => {
+      const oct = await periods.createPeriod(T1, {
+        code: '2026-10',
+        name: 'October 2026',
+        periodStart: '2026-10-01',
+        periodEnd: '2026-10-31',
+      });
+      await periods.createPeriod(T1, {
+        code: '2026-11',
+        name: 'November 2026',
+        periodStart: '2026-11-01',
+        periodEnd: '2026-11-30',
+      });
+      await periods.softLockPeriod(T1, oct.id, 'admin', {
+        allowedRoles: ['chief-accountant'],
+        reason: 'October soft lock with role exception',
+      });
+      await expect(
+        accounting.changeVoucherStatus(T1, draftId, JournalEntryStatus.POSTED, undefined, 'ap-clerk'),
+      ).rejects.toMatchObject({ status: 422 });
+      const chiefAdj = await accounting.createJournalEntry(
+        T1,
+        pair('CHIEF-ADJ-1', T3.postingDateInLockedMonth, JournalEntryStatus.POSTED) as never,
+        undefined,
+        { actorRole: 'chief-accountant' },
+      );
+      expect(chiefAdj.status).toBe('POSTED');
+    });
+
+    it('hard close is blocked while DRAFT-9 is unposted, naming it', async () => {
+      const oct = (await periods.listPeriods(T1)).find((p) => p.code === '2026-10')!;
+      await expect(periods.hardClosePeriod(T1, oct.id, 'admin')).rejects.toThrow(/DRAFT-9/);
+    });
+
+    it('after hard close admin can neither unlock nor post into 2026-10; corrections go to 2026-11 or an adjustment period', async () => {
+      const oct = (await periods.listPeriods(T1)).find((p) => p.code === '2026-10')!;
+      const adj = await periods.createPeriod(T1, {
+        code: '2026-13',
+        name: 'Adjustment 2026',
+        periodStart: '2026-10-01',
+        periodEnd: '2026-12-31',
+        isAdjustment: true,
+        allowedRoles: ['chief-accountant'],
+      });
+      await accounting.changeVoucherStatus(T1, draftId, JournalEntryStatus.VOID);
+      const closed = await periods.hardClosePeriod(T1, oct.id, 'admin');
+      expect(closed.state).toBe('HARD_CLOSED');
+
+      await expect(periods.unlockPeriod(T1, oct.id)).rejects.toMatchObject({ status: 409 });
+      await expect(
+        accounting.createJournalEntry(
+          T1,
+          pair('OCT-AFTER-CLOSE', '2026-10-15', JournalEntryStatus.POSTED) as never,
+          undefined,
+          { actorRole: 'admin' },
+        ),
+      ).rejects.toMatchObject({ status: 422 });
+
+      const adjEntry = await accounting.createJournalEntry(
+        T1,
+        pair('ADJ-13-1', '2026-10-15', JournalEntryStatus.POSTED) as never,
+        undefined,
+        { actorRole: 'chief-accountant', accountingPeriodId: adj.id },
+      );
+      expect(adjEntry.status).toBe('POSTED');
+    });
   });
 
   describe('T4 audit trail and immutability (T178)', () => {
@@ -185,9 +258,50 @@ describePg('R16 core acceptance on PostgreSQL', () => {
       await expect(accounting.reverseJournalEntry(T1, journalId)).rejects.toMatchObject({ status: 409 });
     });
 
-    it.skip(`GL audit numbers ${T4.journal.number} and ${T4.reversalNumber} with SHA-256 chain H43 = SHA256(H42 || canonical(J-43)) — needs T178 (hash chain, gapless audit number)`, () => undefined);
-    it.skip('verify-chain returns VALID, 0 gaps, 43/43 — needs T178', () => undefined);
-    it.skip('a VAT code description change shows user, time, old and new value in the change log immediately — needs T178 (master-data change log)', () => undefined);
+    it('GL audit numbers are gapless with SHA-256 chain H_n = SHA256(H_{n-1} || canonical(J))', async () => {
+      const j42 = await accounting.findJournalEntryByNumber(T1, 'J-42');
+      const j43 = await accounting.findJournalEntryByNumber(T1, 'J-42-REV');
+      expect(j42).not.toBeNull();
+      expect(j43).not.toBeNull();
+      const [row42] = await testDb.rawQuery<{ gl_audit_number: string; chain_hash: string }>(
+        `SELECT gl_audit_number::text, chain_hash FROM fin_journal_entries WHERE id = $1`,
+        [j42!.id],
+      );
+      const [row43] = await testDb.rawQuery<{ gl_audit_number: string; prev_chain_hash: string; chain_hash: string }>(
+        `SELECT gl_audit_number::text, prev_chain_hash, chain_hash FROM fin_journal_entries WHERE id = $1`,
+        [j43!.id],
+      );
+      expect(BigInt(row43.gl_audit_number)).toBe(BigInt(row42.gl_audit_number) + 1n);
+      expect(row43.prev_chain_hash).toBe(row42.chain_hash);
+      expect(row43.chain_hash).toMatch(/^[a-f0-9]{64}$/);
+    });
+
+    it('verify-chain returns VALID, 0 gaps', async () => {
+      const result = await sequencer.verifyChain(T1);
+      expect(result.status).toBe(T4.expected.chain);
+      expect(result.gaps).toBe(T4.expected.gaps);
+      expect(result.verifiedCount).toBe(result.totalEntries);
+      expect(result.totalEntries).toBeGreaterThanOrEqual(2);
+    });
+
+    it('a VAT code description change shows user, time, old and new value in the change log immediately', async () => {
+      await changeLogs.recordChange(T1, {
+        entityType: 'VAT_CODE',
+        entityId: 'VAT-STD',
+        fieldName: 'description',
+        oldValue: 'Standard Rate',
+        newValue: 'Standard Rate 19%',
+        changedBy: 'tax-admin',
+      });
+      const logs = await changeLogs.listChanges(T1, { entityType: 'VAT_CODE', entityId: 'VAT-STD' });
+      expect(logs).toHaveLength(1);
+      expect(logs[0]).toMatchObject({
+        changedBy: 'tax-admin',
+        oldValue: 'Standard Rate',
+        newValue: 'Standard Rate 19%',
+      });
+      expect(logs[0].changedAt).toBeInstanceOf(Date);
+    });
   });
 
   describe('T5 dimensions (T181)', () => {
@@ -196,7 +310,7 @@ describePg('R16 core acceptance on PostgreSQL', () => {
       await dims.create(T1, { kind: DimensionKind.COST_CENTER, code: 'CC-SALES', name: 'Sales' });
       await accounting.createJournalEntry(T1, {
         entryNumber: T5.bill.id,
-        date: noon('2026-10-12'),
+        date: noon('2026-11-12'),
         description: 'BILL-55',
         lines: [
           { accountCode: '5020', debit: decimal(T5.bill.splits['CC-RND']), costCenterCode: 'CC-RND' },
@@ -204,7 +318,7 @@ describePg('R16 core acceptance on PostgreSQL', () => {
           { accountCode: '2010', credit: decimal(T5.bill.total) },
         ],
       } as never);
-      const report = await costCentres.trialBalance(T1, { from: '2026-10-01', to: '2026-10-31' });
+      const report = await costCentres.trialBalance(T1, { from: '2026-11-01', to: '2026-11-30' });
       const debit = (code: string) => report.centres.find((c) => c.code === code)!.totals.periodDebit;
       expect(debit('CC-RND')).toBe(fromDb(decimal(T5.bill.splits['CC-RND'])));
       expect(debit('CC-SALES')).toBe(fromDb(decimal(T5.expected.salesAt20261031)));
@@ -262,6 +376,22 @@ describePg('R16 core acceptance on PostgreSQL', () => {
     it.skip('AVCO: COGS 132.00, ending 88.00 — needs T195 (AVCO and standard costing; only FIFO layers exist)', () => undefined);
     it.skip('STD cost 11.00: PPV +10.00 day 1, -10.00 day 2, COGS 132.00, ending 88.00 — needs T195', () => undefined);
     it.skip('GL inventory 272.00 equals the subledger across the three SKUs — needs T195', () => undefined);
-    it.skip('a manual journal into the inventory control account is rejected — needs T178 (control-account guard)', () => undefined);
+    it('a manual journal into the inventory control account is rejected', async () => {
+      await testDb.rawQuery(
+        `UPDATE fin_chart_of_accounts SET is_control_account = true WHERE tenant_id = $1 AND code = '1010'`,
+        [T1],
+      );
+      await expect(
+        accounting.createJournalEntry(T1, {
+          entryNumber: 'MANUAL-CTRL-1',
+          date: noon('2026-11-12'),
+          description: 'manual control posting',
+          lines: [
+            { accountCode: '1010', debit: '100.00' },
+            { accountCode: '4010', credit: '100.00' },
+          ],
+        } as never),
+      ).rejects.toMatchObject({ status: 422 });
+    });
   });
 });

@@ -45,6 +45,14 @@ import {
 import { TrialBalanceResponseDto } from '../dto/trial-balance-response.dto';
 import { AccountingService } from '../services/accounting.service';
 import { VoucherToolsService } from '../services/voucher-tools.service';
+import {
+  CreateAccountingPeriodDto,
+  HardClosePeriodDto,
+  SoftLockPeriodDto,
+} from '../dto/accounting-period.dto';
+import { AccountingPeriodService } from '../services/accounting-period.service';
+import { JournalSequencerService, VerifyChainResult } from '../services/journal-sequencer.service';
+import { MasterDataChangeLogService } from '../services/master-data-change-log.service';
 
 /**
  * کنترلر دفتر کل و حسابداری دوطرفه.
@@ -63,6 +71,9 @@ export class AccountingController {
   constructor(
     private readonly accountingService: AccountingService,
     private readonly voucherToolsService: VoucherToolsService,
+    private readonly sequencer: JournalSequencerService,
+    private readonly periodService: AccountingPeriodService,
+    private readonly masterDataChanges: MasterDataChangeLogService,
   ) {}
 
   /** استخراج شناسه مستأجر و بررسی دسترسی مدیریتی از کاربر تأییدشده. */
@@ -370,5 +381,91 @@ export class AccountingController {
       code,
       query,
     );
+  }
+
+  @RequireAction(AccessAction.READ)
+  @Get('ledger/verify-chain')
+  @ApiOperation({ summary: 'تأیید زنجیره هش و شماره‌های ممیزی دفتر کل (T178)' })
+  async verifyChain(
+    @Req() request: AuthenticatedRequest,
+  ): Promise<VerifyChainResult> {
+    return this.sequencer.verifyChain(this.tenantIdOf(request));
+  }
+
+  @RequireAction(AccessAction.READ)
+  @Get('accounting-periods')
+  @ApiOperation({ summary: 'فهرست دوره‌های حسابداری و وضعیت آن‌ها' })
+  async listAccountingPeriods(@Req() request: AuthenticatedRequest) {
+    return this.periodService.listPeriods(this.tenantIdOf(request));
+  }
+
+  @RequireAction(AccessAction.ADMIN)
+  @Post('accounting-periods')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'ایجاد دوره حسابداری یا دوره تعدیل' })
+  async createAccountingPeriod(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: CreateAccountingPeriodDto,
+  ) {
+    return this.periodService.createPeriod(this.tenantIdOf(request), dto);
+  }
+
+  @RequireAction(AccessAction.POST)
+  @Post('accounting-periods/:id/soft-lock')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'قفل نرم دوره با استثنای نقش‌ها' })
+  async softLockAccountingPeriod(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: SoftLockPeriodDto,
+  ) {
+    return this.periodService.softLockPeriod(
+      this.tenantIdOf(request),
+      id,
+      this.actorOf(request),
+      dto,
+    );
+  }
+
+  @RequireAction(AccessAction.ADMIN)
+  @Post('accounting-periods/:id/hard-close')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'بستن قطعی و برگشت‌ناپذیر دوره حسابداری' })
+  async hardCloseAccountingPeriod(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: HardClosePeriodDto,
+  ) {
+    return this.periodService.hardClosePeriod(
+      this.tenantIdOf(request),
+      id,
+      this.actorOf(request),
+      dto,
+    );
+  }
+
+  @RequireAction(AccessAction.ADMIN)
+  @Post('accounting-periods/:id/unlock')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'بازگشایی قفل نرم دوره حسابداری' })
+  async unlockAccountingPeriod(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.periodService.unlockPeriod(this.tenantIdOf(request), id);
+  }
+
+  @RequireAction(AccessAction.READ)
+  @Get('master-data-changes')
+  @ApiOperation({ summary: 'فهرست تاریخچه تغییرات داده‌های پایه (T178)' })
+  async listMasterDataChanges(
+    @Req() request: AuthenticatedRequest,
+    @Query('entityType') entityType?: string,
+    @Query('entityId') entityId?: string,
+  ) {
+    return this.masterDataChanges.listChanges(this.tenantIdOf(request), {
+      entityType,
+      entityId,
+    });
   }
 }

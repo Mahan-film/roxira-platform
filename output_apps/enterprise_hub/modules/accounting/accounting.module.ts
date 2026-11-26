@@ -38,6 +38,12 @@ import { JournalEntryAttachmentEntity } from './entities/journal-entry-attachmen
 import { JournalEntryEntity } from './entities/journal-entry.entity';
 import { FxRateEntity } from './entities/fx-rate.entity';
 import { PeriodLockEntity } from './entities/period-lock.entity';
+import { AccountingPeriodEntity } from './entities/accounting-period.entity';
+import { GlSequencerEntity } from './entities/gl-sequencer.entity';
+import { MasterDataChangeLogEntity } from './entities/master-data-change-log.entity';
+import { AccountingPeriodService } from './services/accounting-period.service';
+import { JournalSequencerService } from './services/journal-sequencer.service';
+import { MasterDataChangeLogService } from './services/master-data-change-log.service';
 import { PettyCashFundEntity, PettyCashTransactionEntity } from './entities/petty-cash.entity';
 import { AccountingRepository } from './repositories/accounting.repository';
 import { FiscalYearRepository } from './repositories/fiscal-year.repository';
@@ -90,6 +96,9 @@ import { IntercompanyService } from './intercompany/intercompany.service';
       JournalEntryAttachmentEntity,
       AccountBudgetEntity,
       FxRateEntity,
+      AccountingPeriodEntity,
+      GlSequencerEntity,
+      MasterDataChangeLogEntity,
     ]),
     CurrencyModule,
     CalendarModule,
@@ -143,8 +152,11 @@ import { IntercompanyService } from './intercompany/intercompany.service';
     VoucherToolsService,
     BudgetControlService,
     ConsolidatedReportService,
+    AccountingPeriodService,
+    JournalSequencerService,
+    MasterDataChangeLogService,
     IntercompanyService,
   ],
-  exports: [AccountingService, FinancialReportsService, ReportExportService, CostCentreReportService, BudgetVsActualService, BudgetControlService, ConsolidatedReportService, IntercompanyService],
+  exports: [AccountingService, FinancialReportsService, ReportExportService, CostCentreReportService, BudgetVsActualService, BudgetControlService, ConsolidatedReportService, AccountingPeriodService, JournalSequencerService, MasterDataChangeLogService, IntercompanyService],
 })
 export class AccountingModule {}

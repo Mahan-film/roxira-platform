@@ -432,7 +432,13 @@ describe('AccountingService — cross-tenant isolation', () => {
 describe('AccountingController — tenant access rules', () => {
   const setup = async () => {
     const { service } = buildService();
-    const controller = new AccountingController(service, {} as VoucherToolsService);
+    const controller = new AccountingController(
+      service,
+      {} as VoucherToolsService,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
     const created = await service.createJournalEntry(
       'tenant-a',
       buildDto('JV-A'),

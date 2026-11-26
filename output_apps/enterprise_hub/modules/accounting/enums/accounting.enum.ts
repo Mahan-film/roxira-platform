@@ -149,3 +149,17 @@ export enum FxRateType {
   TAX_OFFICIAL = 'TAX_OFFICIAL',
   CLOSING = 'CLOSING',
 }
+
+/** Lifecycle states of an accounting period (T178). */
+export enum AccountingPeriodState {
+  OPEN = 'OPEN',
+  SOFT_LOCKED = 'SOFT_LOCKED',
+  ADJUSTMENT = 'ADJUSTMENT',
+  HARD_CLOSED = 'HARD_CLOSED',
+}
+
+/** Calendar system used to compute period boundaries. */
+export enum PeriodCalendarType {
+  GREGORIAN = 'GREGORIAN',
+  JALALI = 'JALALI',
+}

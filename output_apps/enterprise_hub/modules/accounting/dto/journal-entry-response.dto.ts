@@ -103,6 +103,21 @@ export class JournalEntryResponseDto {
   })
   permanentFiscalYearId: number | null;
 
+  @ApiPropertyOptional({ description: 'شماره ممیزی بدون شکاف دفتر کل', nullable: true })
+  glAuditNumber?: string | null;
+
+  @ApiPropertyOptional({ description: 'هش زنجیره قبلی SHA-256', nullable: true })
+  prevChainHash?: string | null;
+
+  @ApiPropertyOptional({ description: 'هش زنجیره فعلی SHA-256', nullable: true })
+  chainHash?: string | null;
+
+  @ApiPropertyOptional({ description: 'زمان دقیق قطعی‌شدن به UTC', nullable: true })
+  postedAtUtc?: Date | null;
+
+  @ApiPropertyOptional({ description: 'شناسه دوره حسابداری', nullable: true })
+  accountingPeriodId?: number | null;
+
   @ApiProperty({ description: 'تاریخ سند' })
   date: Date;
 
