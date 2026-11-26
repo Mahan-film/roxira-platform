@@ -92,10 +92,10 @@ _LAW_REPEAL_RE = re.compile(
 
 
 def normalize_text(value: str) -> str:
-    """Normalise digits/whitespace so hashing and matching are stable."""
-    text = unicodedata.normalize("NFC", str(value or "")).translate(_DIGIT_MAP)
-    text = text.replace("\u200c", " ").replace("\u00a0", " ")
-    return re.sub(r"\s+", " ", text).strip()
+    """Normalise digits/letters/bidi/whitespace via shared ``persian_norm`` so hashing and matching are stable."""
+    from output_apps.generated_modules.smartjudge.persian_norm import normalize_persian_search
+
+    return normalize_persian_search(value).replace("\u200c", " ").lower()
 
 
 def _to_int(value: str) -> int:

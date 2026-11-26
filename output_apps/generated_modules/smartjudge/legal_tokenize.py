@@ -20,45 +20,17 @@ from __future__ import annotations
 
 import hashlib
 import re
-import unicodedata
 
-_LETTERS = str.maketrans(
-    {
-        "\u064a": "\u06cc",  # Arabic yeh -> Persian yeh
-        "\u0649": "\u06cc",  # alef maksura -> Persian yeh
-        "\u0626": "\u06cc",  # yeh with hamza -> Persian yeh
-        "\u0643": "\u06a9",  # Arabic kaf -> Persian keheh
-        "\u0629": "\u0647",  # teh marbuta -> heh
-        "\u06c0": "\u0647",  # heh with yeh -> heh
-        "\u0623": "\u0627",  # hamza forms -> alef
-        "\u0625": "\u0627",
-        "\u0671": "\u0627",
-        "\u0622": "\u0627",
-        "\u0624": "\u0648",  # waw with hamza -> waw
-    }
-)
-_DIGITS = str.maketrans(
-    "\u06f0\u06f1\u06f2\u06f3\u06f4\u06f5\u06f6\u06f7\u06f8\u06f9"
-    "\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669",
-    "01234567890123456789",
-)
-# harakat / tanwin / superscript alef / tatweel
-_DIACRITICS = re.compile("[\u064b-\u0652\u0653-\u0655\u0670\u0640]")
-# ZWNJ, ZWJ, LRM, RLM, soft hyphen, bidi isolates
-_INVISIBLE = "\u200c\u200d\u200e\u200f\u00ad\u2066\u2067\u2068\u2069"
+from output_apps.generated_modules.smartjudge.persian_norm import normalize_persian_search
+
 _TOKEN_RE = re.compile(r"[0-9a-z\u0600-\u06ff]+", re.UNICODE)
 # Qdrant sparse indices are unsigned 32-bit; stay in the positive 31-bit range and skip 0.
 _INDEX_MOD = (1 << 31) - 1
 
 
 def normalize(text: object) -> str:
-    """Normalise Persian/Arabic text for tokenization (see module docstring)."""
-    value = unicodedata.normalize("NFC", str(text or ""))
-    value = value.translate(_LETTERS).translate(_DIGITS)
-    value = _DIACRITICS.sub("", value)
-    for mark in _INVISIBLE:
-        value = value.replace(mark, " ")
-    return value.lower()
+    """Normalise Persian/Arabic text for tokenization via shared ``persian_norm`` (ZWNJ -> space)."""
+    return normalize_persian_search(text).replace("\u200c", " ").lower()
 
 
 def tokenize(text: object) -> list[str]:

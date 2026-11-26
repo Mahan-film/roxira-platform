@@ -103,3 +103,32 @@ def test_backfill_compute_payload_update():
     }
     already_done = {**legacy, **patch}
     assert compute_payload_update(already_done) is None
+
+
+@pytest.mark.parametrize(
+    "indexed,query",
+    [
+        # Arabic yeh/kaf, Persian/Arabic-Indic/ASCII digits
+        ("مادّة ۵۲۲ آیین دادرسی مدني", "ماده 522 ایین دادرسی مدنی"),
+        ("كتاب قانون كار ماده ١٠", "کتاب قانون کار ماده 10"),
+        # RTL/bidi marks U+200F, U+202B, U+202C, BOM
+        ("\u200f\u202bماده\u202c ۱۰۸۲ قانون مدنی", "ماده 1082 قانون مدنی"),
+        # Phone spelling / hamza / decomposed hamza variants (تأمین / تامین، رئیس / رییس)
+        ("تأمین خواسته در دادگاه", "تامین خواسته در دادگاه"),
+        ("تا\u0654مین اجتماعی", "تامین اجتماعی"),
+        ("رئیس قوه قضائیه", "رییس قوه قضاییه"),
+        # Heh goal / heh doachashmee variants
+        ("تبصرہ ۱ مادھ ۱۰", "تبصره 1 ماده 10"),
+        # ZWNJ vs OCR split spaces in sparse tokenization
+        ("پرداخت خسارت می\u200cشود", "پرداخت خسارت می شود"),
+        # NBSP and multiple whitespace runs + ASCII case parity
+        ("ماده\u00a0\u00a0ABC123  قانون", "ماده abc123 قانون"),
+    ],
+)
+def test_index_and_query_paths_map_all_variants_identically(indexed: str, query: str):
+    from output_apps.generated_modules.smartjudge import legal_tokenize
+    from output_apps.generated_modules.smartjudge.legal_graph import law_ingester_pipeline
+
+    assert legal_tokenize.normalize(indexed) == legal_tokenize.normalize(query)
+    assert legal_tokenize.sparse_vector(indexed) == legal_tokenize.sparse_vector(query)
+    assert law_ingester_pipeline.normalize_text(indexed) == legal_tokenize.normalize(query)

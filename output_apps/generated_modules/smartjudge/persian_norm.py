@@ -20,6 +20,8 @@ _CHAR_MAP = str.maketrans(
         "\u0643": "\u06a9",  # Arabic kaf (ك) -> Persian keheh (ک)
         "\u0629": "\u0647",  # teh marbuta (ة) -> heh (ه)
         "\u06c0": "\u0647",  # heh with yeh above (ۀ) -> heh (ه)
+        "\u06c1": "\u0647",  # heh goal (ہ) -> heh (ه)
+        "\u06be": "\u0647",  # heh doachashmee (ھ) -> heh (ه)
         "\u0623": "\u0627",  # alef with hamza above (أ) -> alef (ا)
         "\u0625": "\u0627",  # alef with hamza below (إ) -> alef (ا)
         "\u0622": "\u0627",  # alef with madda (آ) -> alef (ا)
