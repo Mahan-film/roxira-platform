@@ -33,6 +33,12 @@ function quantityLabel(value: number): string {
   return value.toLocaleString("fa-IR", { maximumFractionDigits: 2 });
 }
 
+function unitLabel(unit?: string | null): string {
+  const trimmed = unit?.trim();
+  if (!trimmed || trimmed.toLowerCase() === "piece") return "عدد";
+  return trimmed;
+}
+
 /**
  * جدول کالاهای موجود انبار با نمایش هشدار کسری و ارزش FIFO هر کالا.
  * انتخاب هر ردیف، لایه‌های FIFO آن کالا را باز می‌کند.
@@ -73,6 +79,7 @@ export function StockItemsTable({
             <TableRow>
               <TableHead className="w-36">شناسه کالا</TableHead>
               <TableHead className="min-w-48">نام کالا</TableHead>
+              <TableHead className="w-24">واحد</TableHead>
               <TableHead className="w-28">موجودی</TableHead>
               <TableHead className="w-36">حداقل موجودی</TableHead>
               <TableHead className="w-36">ارزش (FIFO)</TableHead>
@@ -86,7 +93,7 @@ export function StockItemsTable({
             {isLoading ? (
               Array.from({ length: 6 }).map((_, index) => (
                 <TableRow key={`skeleton-${index}`}>
-                  {Array.from({ length: 7 }).map((__, cellIndex) => (
+                  {Array.from({ length: 8 }).map((__, cellIndex) => (
                     <TableCell key={cellIndex}>
                       <Skeleton className="h-4 w-full" />
                     </TableCell>
@@ -113,6 +120,9 @@ export function StockItemsTable({
                         {item.barcode}
                       </div>
                     )}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {unitLabel(item.primaryUnit)}
                   </TableCell>
                   <TableCell
                     className={
@@ -159,7 +169,7 @@ export function StockItemsTable({
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={7}>
+                <TableCell colSpan={8}>
                   <div className="flex flex-col items-center gap-2 py-10 text-muted-foreground">
                     <PackageSearch className="size-8" />
                     <span>کالایی در فهرست انبار ثبت نشده است.</span>

@@ -29,7 +29,7 @@ export default function SuiteImportPage() {
   return (
     <>
       <PageHeader
-        title="ورود اطلاعات"
+        title="ورود از اکسل"
         description="خروجی نرم‌افزار قبلی، فایل اکسل یا CSV، PDF، عکس، SQL یا ZIP را رها کنید یا کل دیتابیس را یک‌جا منتقل کنید؛ مشتریان، کارکنان، کالاها و حساب‌ها خودکار ثبت می‌شوند"
         icon={<FileUp className="size-6 text-indigo-500" />}
       />
