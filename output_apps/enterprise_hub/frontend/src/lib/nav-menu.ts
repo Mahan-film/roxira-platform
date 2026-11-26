@@ -269,6 +269,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         keywords: ["سود ناخالص", "حاشیه سود", "بهای تمام شده", "gross profit", "cogs"],
       },
       {
+        href: "/app/reports/purchases",
+        label: "گزارش خرید",
+        icon: "ShoppingCart",
+        module: "invoicing",
+        keywords: ["خرید", "تأمین‌کننده", "گزارش خرید", "purchases"],
+      },
+      {
         href: "/app/accounting/report-builder",
         label: "گزارش‌ساز",
         icon: "FileSpreadsheet",

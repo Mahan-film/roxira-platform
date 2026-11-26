@@ -161,3 +161,36 @@ export async function getGrossProfitReport(
     signal,
   });
 }
+
+export interface PurchasesReportRow {
+  key: string;
+  label: string;
+  quantity?: string | number;
+  netAmount: string;
+  vatAmount: string;
+  totalAmount: string;
+}
+
+export interface PurchasesReportResponse {
+  groupBy: "item" | "supplier" | "invoice";
+  rows: PurchasesReportRow[];
+  totalNet: string;
+  totalVat: string;
+  totalAmount: string;
+}
+
+/** دریافت گزارش خرید به تفکیک کالا، تأمین‌کننده یا فاکتور — GET /enterprise-hub/invoicing/reports/purchases */
+export async function getPurchasesReport(
+  query: { groupBy: "item" | "supplier" | "invoice"; from?: string; to?: string },
+  signal?: AbortSignal,
+): Promise<PurchasesReportResponse> {
+  return apiRequest<PurchasesReportResponse>(`${INVOICING_ENDPOINT}/reports/purchases`, {
+    method: "GET",
+    searchParams: {
+      groupBy: query.groupBy,
+      from: query.from,
+      to: query.to,
+    },
+    signal,
+  });
+}
