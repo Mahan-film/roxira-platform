@@ -81,4 +81,19 @@ test.describe('import formats and sizes (#277)', () => {
     test.setTimeout(180_000);
     await pickOnFileTab(page, fixturePath());
   });
+
+  test('S2: dry-run preview of small parties CSV reaches review without committing', async ({ page }) => {
+    test.setTimeout(120_000);
+    const file = path.join(dir, 'parties-s2-dryrun.csv');
+    fs.writeFileSync(
+      file,
+      'code,name,phone,city,note\nP900001,مشتری آزمون S2,09120000001,تهران,پیش‌نمایش بدون ثبت\n',
+    );
+    await openApp(page, '/app/import');
+    await page.locator('#import-file').setInputFiles(file);
+    const bulkReview = page.getByRole('button', { name: 'بازبینی و ثبت' });
+    const packageReview = page.getByRole('button', { name: /تأیید و انتقال/ });
+    await expect(bulkReview.or(packageReview).first()).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText('ورود حجیم انجام نشد')).toHaveCount(0);
+  });
 });
