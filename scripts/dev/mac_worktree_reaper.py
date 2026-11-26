@@ -97,11 +97,13 @@ def activity_age_h(path):
     return (time.time() - max(times or [0])) / 3600
 
 
-def is_safe(wt, idle_h, cwds, keep):
+def is_safe(wt, idle_h, cwds, keep, target_dev=None):
     p = wt["worktree"]
     rp = os.path.realpath(p)
     if rp == os.path.realpath(REPO) or not os.path.isdir(p):
         return False, "main/missing"
+    if target_dev is not None and os.stat(rp).st_dev != target_dev:
+        return False, "other-device"
     if "locked" in wt:
         return False, "locked"
     if any(inside(rp, k) or inside(k, rp) for k in keep):
@@ -132,12 +134,13 @@ def main():
     run(["git", "fetch", "-q", "origin"], REPO)
     keep = [os.path.realpath(x) for x in os.environ.get("REAPER_KEEP", "").split(":") if x]
     cwds = live_cwds()
+    target_dev = os.stat("/").st_dev
     removed = skipped = 0
     reasons = {}
     for wt in list(worktrees()):
         if a.force_tier is None and free_gb() >= TARGET_GB:
             break
-        ok, why = is_safe(wt, idle, cwds, keep)
+        ok, why = is_safe(wt, idle, cwds, keep, target_dev=target_dev)
         if not ok:
             skipped += 1
             reasons[why] = reasons.get(why, 0) + 1
