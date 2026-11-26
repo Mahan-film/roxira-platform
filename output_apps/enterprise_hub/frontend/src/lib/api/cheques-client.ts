@@ -4,6 +4,7 @@ import type {
   BouncedCheques,
   Cheque,
   ChequeDetail,
+  ChequeMaturityReport,
   ChequeRecon,
   ChequeDirection,
   ChequeStatus,
@@ -70,6 +71,18 @@ export function listBouncedCheques(
   signal?: AbortSignal,
 ): Promise<BouncedCheques> {
   return apiRequest<BouncedCheques>(`${CHEQUES_ENDPOINT}/bounced`, { method: "GET", searchParams: params, signal });
+}
+
+/** GET /enterprise-hub/cheques/maturity-report */
+export function getChequeMaturityReport(
+  params: { direction?: ChequeDirection | "all"; asOfDate?: string; bankName?: string } = {},
+  signal?: AbortSignal,
+): Promise<ChequeMaturityReport> {
+  return apiRequest<ChequeMaturityReport>(`${CHEQUES_ENDPOINT}/maturity-report`, {
+    method: "GET",
+    searchParams: params,
+    signal,
+  });
 }
 
 /** GET /enterprise-hub/cheques/reconciliation */

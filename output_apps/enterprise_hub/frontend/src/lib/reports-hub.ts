@@ -47,6 +47,7 @@ export const REPORT_GROUPS: ReportGroup[] = [
     reports: [
       { key: "gross-profit", title: "سود ناخالص", description: "تحلیل درآمد، بهای تمام‌شده و حاشیه سود به تفکیک فاکتور، کالا یا مشتری" },
       { key: "inventory-cardex", title: "کاردکس و موجودی انبار", description: "کاردکس گردش کالا، ارزش ریالی موجودی و هشدارهای نقطه سفارش" },
+      { key: "cheques-portfolio", title: "پرتفوی و گزارش چک‌ها", description: "تحلیل سررسید، چک‌های برگشتی، تفکیک بانک و وضعیت چک‌ها" },
     ],
   },
 ];
@@ -56,6 +57,7 @@ export const ALL_REPORT_KEYS: string[] = REPORT_GROUPS.flatMap((g) => g.reports.
 export function reportHref(key: string): string {
   if (key === "gross-profit") return "/app/reports/gross-profit";
   if (key === "inventory-cardex") return "/app/inventory/reports";
+  if (key === "cheques-portfolio") return "/app/reports/cheques";
   return `/app/accounting/reports?tab=${key}`;
 }
 
