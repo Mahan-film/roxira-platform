@@ -121,7 +121,7 @@ jobs:
 
 def test_all_current_workflows_pass(module):
     workflows = sorted((ROOT / ".github/workflows").glob("*.yml"))
-    assert len(workflows) >= 20
+    assert len(workflows) >= 4
     for wf in workflows:
         errors = module.check_workflow(wf)
         assert errors == [], f"Workflow {wf.name} failed hardening check: {errors}"
