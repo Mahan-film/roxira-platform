@@ -205,6 +205,42 @@ jobs:
           echo "Scanning $RANGE"
           gitleaks git --config .gitleaks.toml --log-opts="$RANGE" --redact --no-banner --verbose .
 
+  gitleaks-full-history:
+    name: Secret scan (P17 full history, report-only)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Cache gitleaks binary
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/roxira/gitleaks-*
+          key: gitleaks-${{ runner.os }}-${{ hashFiles('scripts/dev/install_gitleaks.sh') }}
+      - name: Install gitleaks (pinned, SHA-256 verified)
+        run: |
+          dir="$(dirname "$(bash scripts/dev/install_gitleaks.sh)")"
+          echo "$dir" >> "$GITHUB_PATH"
+          "$dir/gitleaks" version
+      - name: Full-history secret scan (counts only, never prints values)
+        run: |
+          set +e
+          gitleaks git --config .gitleaks.toml --log-opts="--all" --redact --no-banner \
+            --report-format json --report-path "$RUNNER_TEMP/gitleaks-full.json" . >/dev/null 2>&1
+          rc=$?
+          count="$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))))' "$RUNNER_TEMP/gitleaks-full.json" 2>/dev/null || echo unknown)"
+          rm -f "$RUNNER_TEMP/gitleaks-full.json"
+          {
+            echo "### P17 Full-History Secret Scan (report-only)"
+            echo "Exit code: $rc | leaks found: **$count** (details suppressed on public repo)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+
   trivy-fs:
     name: Trivy filesystem scan (report-only)
     needs: pick-runner
@@ -397,7 +433,7 @@ jobs:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ruff check . --output-format=rdjson > "$RUNNER_TEMP/ruff.rdjson" || true
-          reviewdog -f=rdjson -name="ruff" -reporter=github-pr-check -filter-mode=added < "$RUNNER_TEMP/ruff.rdjson" || true
+          reviewdog -f=rdjson -name="ruff" -reporter=github-pr-check -filter-mode=added -fail-level=none < "$RUNNER_TEMP/ruff.rdjson" || true
       - name: ruff check
         id: ruff
         # Thousands of pre-existing violations: report, do not block. Flip to blocking once the count reaches 0.
@@ -595,7 +631,8 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-      pull-requests: write
+      checks: write
+      pull-requests: read
     defaults:
       run:
         working-directory: output_apps/enterprise_hub/frontend
@@ -623,7 +660,7 @@ jobs:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm run lint -- --format compact > "$RUNNER_TEMP/eslint-compact.txt" || true
-          reviewdog -f=eslint-compact -name="eslint" -reporter=github-pr-review -filter-mode=added < "$RUNNER_TEMP/eslint-compact.txt" || true
+          reviewdog -f=eslint-compact -name="eslint" -reporter=github-pr-check -filter-mode=added -fail-level=none < "$RUNNER_TEMP/eslint-compact.txt" || true
       - name: oxlint (T202, runs before ESLint)
         # Pre-existing findings (same class as the ESLint ones): report, do not block. Flip to blocking once clean.
         continue-on-error: true
@@ -764,14 +801,12 @@ jobs:
           exit 0
 
   m1-gate:
-    # Issue #116 / docs/testing/M1_GATE.md. REPORT-ONLY: continue-on-error, and it is not a required check.
-    # Make it required (branch protection) only after the laptop developer says the gate is stable.
+    # Issue #116 / docs/testing/M1_GATE.md. Runs on backend/frontend/e2e changes without continue-on-error.
     name: M1 gate (Playwright)
     needs: [pick-runner, changes]
-    if: needs.changes.outputs.e2e == 'true'
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
     runs-on: ${{ fromJSON(needs.pick-runner.outputs.docker || '"ubuntu-latest"') }}
     timeout-minutes: 30
-    continue-on-error: true
     services:
       postgres:
         image: ${{ needs.pick-runner.outputs.image_registry || vars.CI_IMAGE_REGISTRY || 'mirror.gcr.io/library' }}/postgres:17
