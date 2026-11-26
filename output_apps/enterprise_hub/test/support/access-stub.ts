@@ -42,6 +42,8 @@ export class AccessStub {
       branchId: m.branchId ?? null,
       branchScoped: m.branchScoped ?? false,
       require2fa: m.require2fa ?? false,
+      tenantStatus: m.tenantStatus ?? 'active',
+      deleteAfter: m.deleteAfter ?? null,
     };
   };
 

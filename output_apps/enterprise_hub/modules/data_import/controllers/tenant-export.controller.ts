@@ -1,8 +1,24 @@
-import { Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import {
+  Body,
+  Controller,
+  Get,
+  Optional,
+  Post,
+  Query,
+  Req,
+  Res,
+  ServiceUnavailableException,
+  StreamableFile,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Queue } from 'bullmq';
 import { AccessAction, AccessModule } from '../../access/catalogue';
 import { ModuleAccess, RequireAction } from '../../access/decorators';
 import { AuthenticatedRequest, JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { AllowDuringCancellation } from '../../tenants/decorators/allow-during-cancellation.decorator';
+import { TENANT_EXPORT_QUEUE } from '../../tenants/services/tenant-cancellation.service';
 import { requireTenantId } from '../../tenants/tenant-context';
 import {
   TenantExportService,
@@ -27,6 +43,7 @@ export class TenantExportController {
   constructor(
     private readonly exportService: TenantExportService,
     private readonly restoreService: TenantRestoreService,
+    @Optional() @InjectQueue(TENANT_EXPORT_QUEUE) private readonly exportQueue?: Queue,
   ) {}
 
   @Get('json')
@@ -78,5 +95,48 @@ export class TenantExportController {
       dryRun,
       allowNonEmptyTenant,
     });
+  }
+
+  @Get('full-archive')
+  @AllowDuringCancellation()
+  @RequireAction(AccessAction.EXPORT)
+  @ApiOperation({ summary: 'دانلود آرشیو کامل داده‌های کلیه جداول مستأجر به صورت فایل فشرده ZIP' })
+  @ApiResponse({ status: 200, description: 'فایل ZIP حاوی فایل‌های CSV و JSON و متادیتا' })
+  async downloadFullArchive(
+    @Req() req: AuthenticatedRequest,
+    @Res({ passthrough: true }) res: any,
+  ): Promise<StreamableFile> {
+    const tenantId = requireTenantId(req);
+    const { buffer, filename } = await this.exportService.generateFullExportZip(tenantId);
+    res.set({
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+    return new StreamableFile(buffer);
+  }
+
+  @Post('full-archive')
+  @AllowDuringCancellation()
+  @RequireAction(AccessAction.EXPORT)
+  @ApiOperation({ summary: 'شروع یا بررسی درخواست پردازش استخراج کامل داده‌ها (BullMQ job)' })
+  @ApiResponse({ status: 200, description: 'شناسه پردازش صف استخراج کامل' })
+  async queueFullExport(
+    @Req() req: AuthenticatedRequest,
+  ): Promise<{ enqueued: boolean; jobId: string; tenantId: string; message: string }> {
+    const tenantId = requireTenantId(req);
+    if (!this.exportQueue) {
+      throw new ServiceUnavailableException('صف استخراج کامل در دسترس نیست.');
+    }
+    const job = await this.exportQueue.add('tenant-full-export', {
+      tenantId,
+      requestedAt: new Date().toISOString(),
+    });
+    return {
+      enqueued: true,
+      jobId: String(job?.id ?? ''),
+      tenantId,
+      message: 'Full export job enqueued successfully.',
+    };
   }
 }

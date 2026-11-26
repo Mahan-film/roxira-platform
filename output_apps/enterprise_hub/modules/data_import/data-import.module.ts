@@ -75,6 +75,8 @@ import { BULK_QUEUE_NAME, localStorageRoot, storageDriver } from './bulk/bulk.co
 import { LocalObjectStore } from './bulk/storage/local-object-store';
 import { OBJECT_STORE } from './bulk/storage/object-store';
 import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store';
+import { TenantsModule } from '../tenants/tenants.module';
+import { TenantFullExportProcessor } from './processors/tenant-full-export.processor';
 
 /**
  * ماژول ورود داده با کمک هوش مصنوعی (AI-assisted data import).
@@ -99,7 +101,11 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     BankingModule,
     PartiesModule,
     ChequesModule,
-    BullModule.registerQueue({ name: PACKAGE_QUEUE_NAME }, { name: BULK_QUEUE_NAME }),
+    TenantsModule,
+    BullModule.registerQueue(
+      { name: PACKAGE_QUEUE_NAME },
+      { name: BULK_QUEUE_NAME },
+    ),
     TypeOrmModule.forFeature([
       DataImportBatchEntity,
       DataImportBatchItemEntity,
@@ -206,6 +212,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     TenantRestoreRepository,
     TenantExportService,
     TenantRestoreService,
+    TenantFullExportProcessor,
     ImportDryRunService,
     {
       provide: OBJECT_STORE,
@@ -221,6 +228,7 @@ import { S3ObjectStore, s3SettingsFromEnv } from './bulk/storage/s3-object-store
     TenantRestoreRepository,
     TenantExportService,
     TenantRestoreService,
+    TenantFullExportProcessor,
     ImportDryRunService, // Re-exported for external module injection (single provider instance registered above)
     SepidarMappingAdapter,
     HolooMappingAdapter,

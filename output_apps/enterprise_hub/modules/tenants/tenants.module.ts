@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -11,9 +12,16 @@ import { TenantsController } from './controllers/tenants.controller';
 import { LegalEntityEntity } from './entities/legal-entity.entity';
 import { TenantEntity } from './entities/tenant.entity';
 import { EmployeeTelemetryGuard } from './guards/employee-telemetry.guard';
+import { CancelledReadonlyGuard } from './guards/cancelled-readonly.guard';
+import { TenantPurgeProcessor } from './processors/tenant-purge.processor';
 import { LegalEntitiesRepository } from './repositories/legal-entities.repository';
 import { TenantsRepository } from './repositories/tenants.repository';
 import { LegalEntitiesService } from './services/legal-entities.service';
+import {
+  TENANT_EXPORT_QUEUE,
+  TENANT_PURGE_QUEUE,
+  TenantCancellationService,
+} from './services/tenant-cancellation.service';
 import { TenantsService } from './services/tenants.service';
 
 /**
@@ -34,6 +42,10 @@ import { TenantsService } from './services/tenants.service';
 @Module({
   imports: [
     TypeOrmModule.forFeature([TenantEntity, LegalEntityEntity, UserEntity]),
+    BullModule.registerQueue(
+      { name: TENANT_EXPORT_QUEUE },
+      { name: TENANT_PURGE_QUEUE },
+    ),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -49,7 +61,26 @@ import { TenantsService } from './services/tenants.service';
     }),
   ],
   controllers: [TenantsController],
-  providers: [TenantsService, TenantsRepository, LegalEntitiesService, LegalEntitiesRepository, TenantScope, AuthRepository, JwtAuthGuard, EmployeeTelemetryGuard],
-  exports: [TenantsService, TenantsRepository, LegalEntitiesService, EmployeeTelemetryGuard],
+  providers: [
+    TenantsService,
+    TenantsRepository,
+    LegalEntitiesService,
+    LegalEntitiesRepository,
+    TenantScope,
+    AuthRepository,
+    JwtAuthGuard,
+    EmployeeTelemetryGuard,
+    TenantCancellationService,
+    TenantPurgeProcessor,
+    CancelledReadonlyGuard,
+  ],
+  exports: [
+    TenantsService,
+    TenantsRepository,
+    LegalEntitiesService,
+    EmployeeTelemetryGuard,
+    TenantCancellationService,
+    CancelledReadonlyGuard,
+  ],
 })
 export class TenantsModule {}

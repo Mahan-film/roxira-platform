@@ -1307,6 +1307,18 @@
     "partner_advisor": false,
     "legacy_member": false
   },
+  "GET /enterprise-hub/data-import/export/full-archive (TenantExportController.downloadFullArchive)": {
+    "policy": "data_import:export",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "partner_advisor": false,
+    "legacy_member": false
+  },
   "GET /enterprise-hub/data-import/export/gobd-z3 (TenantExportController.exportGoBDZ3)": {
     "policy": "data_import:export",
     "owner": true,
@@ -2942,6 +2954,18 @@
     "partner_advisor": true,
     "legacy_member": true
   },
+  "GET /tenants/me/cancellation-status (TenantsController.getCancellationStatus)": {
+    "policy": "anyMember",
+    "owner": true,
+    "admin": true,
+    "accountant": true,
+    "sales": true,
+    "cheque_reviewer": true,
+    "hr": true,
+    "read_only": true,
+    "partner_advisor": true,
+    "legacy_member": true
+  },
   "GET /tenants/me/onboarding/ (OnboardingController.get)": {
     "policy": "anyMember",
     "owner": true,
@@ -4394,6 +4418,18 @@
     "partner_advisor": false,
     "legacy_member": false
   },
+  "POST /enterprise-hub/data-import/export/full-archive (TenantExportController.queueFullExport)": {
+    "policy": "data_import:export",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "partner_advisor": false,
+    "legacy_member": false
+  },
   "POST /enterprise-hub/data-import/export/restore (TenantExportController.restoreTenant)": {
     "policy": "data_import:create",
     "owner": true,
@@ -5634,6 +5670,18 @@
     "hr": false,
     "read_only": false,
     "partner_advisor": true,
+    "legacy_member": false
+  },
+  "POST /tenants/me/cancel (TenantsController.cancelTenant)": {
+    "policy": "members:admin",
+    "owner": true,
+    "admin": true,
+    "accountant": false,
+    "sales": false,
+    "cheque_reviewer": false,
+    "hr": false,
+    "read_only": false,
+    "partner_advisor": false,
     "legacy_member": false
   },
   "PUT /admin/entitlements/:tenantId (EntitlementsAdminController.set)": {

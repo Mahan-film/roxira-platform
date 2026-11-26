@@ -5,6 +5,7 @@ import {
   Index,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { TenantStatus } from '../enums/tenant-status.enum';
 
 /**
  * موجودیت سازمان (مستأجر) — نگاشت مستقیم به جدول `tenants`.
@@ -85,6 +86,30 @@ export class TenantEntity {
    */
   @Column({ type: 'boolean', default: false, name: 'no_employee_telemetry' })
   noEmployeeTelemetry: boolean;
+
+  /** Lifecycle status of the organisation (Task T148). */
+  @Column({
+    type: 'varchar',
+    length: 32,
+    default: TenantStatus.ACTIVE,
+  })
+  status: TenantStatus;
+
+  /** Timestamp after which tenant data can be permanently purged. */
+  @Column({ type: 'timestamptz', name: 'delete_after', nullable: true })
+  deleteAfter: Date | null;
+
+  /** Timestamp when cancellation was requested. */
+  @Column({ type: 'timestamptz', name: 'cancelled_at', nullable: true })
+  cancelledAt: Date | null;
+
+  /** Optional cancellation reason provided by tenant owner. */
+  @Column({ type: 'text', name: 'cancellation_reason', nullable: true })
+  cancellationReason: string | null;
+
+  /** Timestamp when tenant data was permanently purged. */
+  @Column({ type: 'timestamptz', name: 'purged_at', nullable: true })
+  purgedAt: Date | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
