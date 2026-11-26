@@ -308,12 +308,11 @@ jobs:
   # R20-1: OSV-Scanner (Apache-2.0) over every tracked lockfile. REPORT-ONLY until the current
   # findings are triaged (see the follow-up issue); flip by removing continue-on-error.
   osv-scanner:
-    name: OSV-Scanner (report-only)
+    name: OSV-Scanner
     if: github.event_name == 'pull_request'
     needs: pick-runner
     runs-on: ${{ fromJSON(needs.pick-runner.outputs.light || '"ubuntu-latest"') }}
     timeout-minutes: 10
-    continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Cache osv-scanner binary
