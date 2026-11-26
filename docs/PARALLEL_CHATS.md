@@ -1,17 +1,21 @@
 # Running several chats in parallel
 
-Goal: the most work per Claude plan limit. Expensive models decide, cheap ones execute.
+Goal: the most work per plan limit. Expensive models decide, cheap ones execute. Claude is optional: the hub is a role (`docs/hub/HUB_ROLE.md`).
 
 ## Lanes
 
 | Lane | Where | Model | Max at once | Uses Claude plan quota? |
 | --- | --- | --- | --- | --- |
-| **Hub** | 1 Claude Code chat | Opus 5.5 | 1 | yes |
+| **Hub** | 1 chat in any tool: Claude Code, Antigravity (lane `H1`) or OpenCode | Opus 5.5 or any strong model | 1 | only if run in Claude Code |
 | **Workstream** | Claude Code chats, one per W-row | **Sonnet 5** (Medium effort) | 2 | yes, ~1/5 of Opus per token |
 | **Subagents** | inside any chat (`.claude/agents/`) | `tester` = Haiku, `implementer` = Sonnet, `reviewer` = Opus | ad hoc | yes (Haiku is cheapest) |
 | **Cheap agents** | GitHub issues labelled `agent` | DeepSeek V4.1 Flash via OpenRouter | many (queued) | **no**: OpenRouter key, daily $ cap |
+| **Antigravity lanes** | Antigravity chats, prompts in `docs/antigravity/PROMPTS_FA.md` (L1-L12, RV1-RV8, H1) | Gemini | 8 on the Mac | **no** |
+| **OpenCode** | OpenCode sessions (Mac or box lanes) | models from `config/models.yaml`, free first | per WAVE | **no** |
 
-The hub plans, reviews and merges, and runs server steps only after the owner says yes in chat. The hub does not type code.
+The hub plans and reviews, and runs server steps only after the owner says yes in chat. The hub does not type code.
+The merge gate merges on a desk no-blocker at the PR head. B1 core (label `needs-human`) needs the hub review; protected paths need `OWNER-OK #<PR> <sha7>` from the owner approver account.
+The reviewer of a PR must be a different model family from its author.
 
 A workstream chat does one W-row, in its own worktree, and ends with a PR.
 

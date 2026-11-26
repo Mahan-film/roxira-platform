@@ -39,7 +39,8 @@ NestJS/TypeScript backend (`output_apps/enterprise_hub`), Next.js frontend, Pyth
 
 ## 5. How work flows
 - Queue = GitHub issues `lane:L1..L7` ordered by the newest `## WAVE` on #592 (WAVE 27 = marathon: WIP 5, never stop at the cap, OSS-first). Claim with `scripts/dev/claim.sh`;
-  the draft PR is the lock. Review desk (cross-family, at most 8 PRs per run, dispatch once); merge on "no blocker" with `gh pr merge N --auto`.
+  the draft PR is the lock. Review desk (cross-family, at most 8 PRs per run, dispatch once); the merge gate merges on a desk "no blocker" at the PR head.
+  B1 core needs the hub review; protected paths need `OWNER-OK #<PR> <sha7>` from the owner approver account. The hub is a role in any tool (`docs/hub/HUB_ROLE.md`); Claude is optional.
 - Mac <-> box talk through GitHub only: notes `HUB -> BOX` and `BOX:` on #592, `ASK-HUB:` and `HUB-ANSWER` on #965. No SSH from the Mac to the box.
 - Secrets move only by the clipboard relay (see STATE.md "Hub discipline"); never to files outside `~/Secrets/roxira` or the box's mode-600 env files.
 - Subagents (hub) work in isolated worktrees on claimed branches; hooks forbid writing into another worktree. One acting Mac hub chat at a time.
@@ -51,4 +52,4 @@ and the merge gate, then the product rows (accounting #230, DE pack, Smart Judge
 
 ## 7. Where things are
 `docs/STATE.md` (now), `docs/STRATEGY_NOW.md`, `docs/ARCHITECTURE.md`, `docs/SYSTEM_MAP.md`, `docs/hub/HUB_START.md`, `docs/hub/BOX_INFRA_MISSION_PROMPT.md`,
-`docs/ops/BOX_LANE_RUNNER.md`, `docs/ops/ORCH.md`, `docs/ops/BUILDER_EGRESS.md`, `docs/antigravity/LANE_RULES.md`, `docs/agents/LESSONS.md`, `docs/strategy/research/`.
+`docs/hub/HUB_ROLE.md`, `docs/ops/BOX_LANE_RUNNER.md`, `docs/ops/ORCH.md`, `docs/ops/BUILDER_EGRESS.md`, `docs/antigravity/LANE_RULES.md`, `docs/agents/LESSONS.md`, `docs/strategy/research/`.

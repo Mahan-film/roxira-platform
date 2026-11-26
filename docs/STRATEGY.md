@@ -4,12 +4,14 @@ Single source of truth for every Claude Code session. Read this first, then work
 
 ## Role rule (hard rule, 2026-09-28)
 
-Claude Opus 5.5 is strategist and architect only: plans, specs, reviews, merge and deploy decisions. It never implements.
+The hub is a role, not a tool (`docs/hub/HUB_ROLE.md`). Any strong model may act as hub: Claude Code, Antigravity (Gemini) or OpenCode. Claude is optional.
+The hub is strategist and architect only: plans, specs, reviews, merge and deploy decisions. It never implements.
+The reviewer of a PR must be a different model family from its author; the review desk enforces it.
 
 Implementation lanes, in order:
 1. **GitHub agent issues** — OpenCode + DeepSeek V4.1 Flash via OpenRouter, reviewed by `agent-review`.
 2. **Local OpenCode** on the owner's Mac via the `rx` helper and the LiteLLM key pool at `127.0.0.1:4000` (`codestral` = Mistral ×4, `qwen` = Groq ×3, `dsflash` = DeepSeek via OpenRouter, `glm`/`dspro` = SiliconFlow ×3 needs credit).
-3. **Claude Sonnet** only as a last resort, one at a time, with owner approval.
+3. **Claude Sonnet** (optional) only as a last resort, one at a time, with owner approval.
 
 ## 1. What we are building
 
@@ -35,10 +37,10 @@ Rules:
 
 ## 3. Model & cost strategy
 
-### 3a. Claude Code (building the product)
+### 3a. Building the product (Claude Code is optional)
 | Task | Model |
 | --- | --- |
-| Strategy, architecture, security review (this hub chat) | Opus |
+| Strategy, architecture, security review (the hub role, any tool) | Opus, or any strong model in Antigravity/OpenCode (`docs/hub/HUB_ROLE.md`) |
 | Normal implementation chats (one per workstream) | **Sonnet 5**, the default |
 | Mechanical edits, renames, formatting | Haiku |
 

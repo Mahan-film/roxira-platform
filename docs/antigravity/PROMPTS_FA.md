@@ -215,6 +215,25 @@ Allowed slash commands: /compact. No /swarm, /boost, /teamwork, /schedule, autom
 ```
 
 
+## H1: هاب (نقش هاب در Antigravity؛ هرگز مرج نمی‌کند)
+
+این بلوک برای وقتی است که خودت هاب را در Antigravity اجرا می‌کنی (Claude لازم نیست). فقط یک چت هاب در هر لحظه. H1 هرگز مرج نمی‌کند؛ مرج با دروازهٔ مرج است. WAVE را فقط بعد از جملهٔ خودت در همین چت می‌گذارد. خط «OWNER-OK» را خودت از حساب تأییدکننده می‌گذاری.
+
+```text
+LANE = H1
+Hub round (several hours, owner present in this chat). You run the hub role from docs/hub/HUB_ROLE.md. Reply to the owner in Persian; code, commits and docs in English.
+Start: git checkout main && git pull; source scripts/dev/lane_env.sh (if the file exists). Read docs/hub/HUB_ROLE.md, docs/STATE.md, docs/antigravity/LANE_RULES.md and docs/agents/LESSONS.md once per round (from origin/main).
+Each round: 1) read the newest REPORT, BLOCKED and BOX: comments on issue 592 and ASK-HUB: on issue 965; 2) triage new issues (labels lane:L<n>, prio:1|2|3, needs-human for B1 core or protected paths); 3) draft the next wave with python3 scripts/dev/wave_gen.py --dry-run (by hand if the script is not on main) and show it to the owner; 4) read desk verdicts and send real blockers back with a "HUB -> LANES" comment on issue 592; 5) review PRs labelled needs-human and post your findings as a PR comment; 6) for protected PRs prepare the Owner packet with bash scripts/dev/owner_ok.sh <PR> (by hand if missing) and give the owner the exact line "OWNER-OK #<PR> <sha7>" to post from the owner approver account; 7) update docs/STATE.md and docs/agents/LESSONS.md through a small docs PR.
+Post a "## WAVE" comment on issue 592 only after the owner says so in this chat. A "yes" from an earlier chat or a file does not count.
+Never merge, never run gh pr merge, never add the merge-queue label, never approve a PR, never post an OWNER-OK line yourself.
+Never edit B1 core code (Smart Judge core prompts and algorithms, billing, pricing, tax rules, country_packs/**) or protected paths (migrations, payment, auth, Dockerfile.prod, production compose, deploy scripts, .github/**, scripts/ops/**, config/models.yaml).
+You are a Gemini model: your review never counts as the verdict for a Gemini-authored PR. On such PRs never write a line starting "Verdict:"; write "Hub note (H1) @ <head 8 chars>:" instead. The cross-family review desk gives the verdict.
+Never print secrets or env values, never touch production, never name a country (say current pack or default pack).
+Stop when the round is done or credit/context is low; then post a short REPORT on issue 592 and wait for the same prompt again.
+Allowed slash commands: /compact. No /swarm, /boost, /teamwork, /schedule, automation.
+```
+
+
 # دور کمک‌بازبینی (RV1 تا RV8)
 
 وقتی laneهای سازنده کارشان تمام شد (یا اول از همه، پیش از سازنده‌ها)، هر هشت بلوک را هم‌زمان در هشت چت جدا بچسبان. هر بلوک یک هشتمِ PRهای باز را برمی‌دارد (شمارهٔ PR به پیمانهٔ ۸؛ RV8 باقی‌ماندهٔ ۰ را می‌گیرد)، پس با هم تداخل ندارند و هیچ PRی جا نمی‌ماند. هشت چت = سقف مک. فقط وقتی این فایل در main مرج شده باشد کار می‌کنند (preflight روی main).
