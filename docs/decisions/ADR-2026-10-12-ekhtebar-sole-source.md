@@ -7,7 +7,7 @@ Deciders: owner (decision given 2026-10-12); lawyer acknowledged 2026-10-13
 ## Context
 
 The product answers legal questions from a corpus of Iranian statutes. The lawyer's answers of
-2026-09-30 (docs/LAWYER_ANSWERS_2026-09-30.md, rule R-B) say: serve only official sources, the
+2026-09-30 (archive/docs/LAWYER_ANSWERS_2026-09-30.md, rule R-B) say: serve only official sources, the
 Official Gazette (rrk.ir) and the Parliament Research Center (rc.majlis.ir); `source_tier` must be
 `official` for anything served; ekhtebar.ir is a locator only.
 

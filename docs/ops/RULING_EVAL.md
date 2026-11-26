@@ -5,7 +5,7 @@ drafts. No claim that a draft is "good" is allowed without running it here and
 showing the citation-validity, recall and refusal numbers. Drafts are advisory
 only: every draft must carry the explicit non-binding banner and must never look
 like an official court document (owner decision in
-`docs/research/PLATFORM_CAPABILITY_ASSESSMENT_2026-10.md`).
+`archive/docs/research/PLATFORM_CAPABILITY_ASSESSMENT_2026-10.md`).
 
 The script is read-only. It reads a labelled case file and the tracked corpus,
 prints a table, and with `--out` writes the full JSON report. It never touches

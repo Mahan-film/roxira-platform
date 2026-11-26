@@ -1,7 +1,7 @@
 # Disaster recovery, backups and server migration
 
 Status: designed and delivered as code; **not yet rolled out** (the hub applies it after review, see "Rollout").
-Inventory basis: `docs/infra/INFRA_MAP_2026-10-09.md`, `docs/research/BEST_PRACTICE_CHECK_2026-10-09.md`.
+Inventory basis: `docs/infra/INFRA_MAP_2026-10-09.md`, `archive/docs/research/BEST_PRACTICE_CHECK_2026-10-09.md`.
 
 ## 1. Targets
 

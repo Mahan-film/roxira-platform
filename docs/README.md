@@ -43,7 +43,7 @@ Never read `repomix-output.xml`, `database_snapshots/`, `*.sql` or `*.tar.gz`.
 | [strategy/MASTER_PLAN_2026-10-31.md](strategy/MASTER_PLAN_2026-10-31.md), [first-pack roadmap 2026-10-31](strategy/IRAN_FIRST_ROADMAP_2026-10-31.md), [ACCOUNTING_PRODUCT_2026-10-30.md](strategy/ACCOUNTING_PRODUCT_2026-10-30.md), [MASTER_STRATEGY_2026-10-30.md](strategy/MASTER_STRATEGY_2026-10-30.md), [FACTORY_GAP_AUDIT_2026-10-30.md](strategy/FACTORY_GAP_AUDIT_2026-10-30.md), [TEAM_WORKFLOW_2026-11-03.md](strategy/TEAM_WORKFLOW_2026-11-03.md) | Late-October to early-November plans; still referenced by the 2026-11-16 plan, so not archive candidates yet |
 | [strategy/MASTER_PLAN_2026-10-16.md](strategy/MASTER_PLAN_2026-10-16.md), [MODEL_ROUTING_DECISION_2026-10-17.md](strategy/MODEL_ROUTING_DECISION_2026-10-17.md) | **archive candidate**: replaced by the 2026-11-16 plan and `config/models.yaml` |
 | [strategy/LEAN_ARCHITECTURE_2026-10-22.md](strategy/LEAN_ARCHITECTURE_2026-10-22.md), [FACTORY_V2_2026-10-22.md](strategy/FACTORY_V2_2026-10-22.md), [SUITE_V2_COMPOSABLE_2026-10-22.md](strategy/SUITE_V2_COMPOSABLE_2026-10-22.md), [ROXIRA_BUSINESS_SUITE_2026-10-22.md](strategy/ROXIRA_BUSINESS_SUITE_2026-10-22.md), [QUALITY_SYSTEM_2026-10-22.md](strategy/QUALITY_SYSTEM_2026-10-22.md), [ECOSYSTEM_REVIEW_2026-10-22.md](strategy/ECOSYSTEM_REVIEW_2026-10-22.md) | 2026-10-22 designs; become archive candidates after 2026-11-21 if nothing links them |
-| [STRATEGY_GAP_2026-10-12.md](STRATEGY_GAP_2026-10-12.md), [STRATEGY_STATUS_2026-10-14.md](STRATEGY_STATUS_2026-10-14.md), [plan.md](plan.md) | **archive candidate**: October status snapshots |
+| [STRATEGY_GAP_2026-10-12.md](../archive/docs/STRATEGY_GAP_2026-10-12.md), [STRATEGY_STATUS_2026-10-14.md](../archive/docs/STRATEGY_STATUS_2026-10-14.md), [plan.md](plan.md) | **archive candidate**: October status snapshots |
 
 ## Research digests (`strategy/research/`)
 | File | What it is |
@@ -104,7 +104,7 @@ Never read `repomix-output.xml`, `database_snapshots/`, `*.sql` or `*.tar.gz`.
 | [owner/MAIL_DNS_RECORDS.md](owner/MAIL_DNS_RECORDS.md), [AGC_PERMISSION_REQUEST_DRAFT.md](owner/AGC_PERMISSION_REQUEST_DRAFT.md) | Mail records; permission request draft |
 | [OWNER_GUIDE_FA.md](OWNER_GUIDE_FA.md), [OWNER_MASTER_OVERVIEW_FA.md](OWNER_MASTER_OVERVIEW_FA.md) | Owner guides (Persian) |
 | [LAWYER_QUESTIONS_FA.md](LAWYER_QUESTIONS_FA.md), [LAWYER_QUESTIONS_ROUND2_FA.md](LAWYER_QUESTIONS_ROUND2_FA.md), [LAWYER_ANSWERS_2026-10-21.md](LAWYER_ANSWERS_2026-10-21.md) | Lawyer Q and A |
-| [LAWYER_ANSWERS_2026-09-30.md](LAWYER_ANSWERS_2026-09-30.md) | **archive candidate**: replaced by the 2026-10-21 answers |
+| [LAWYER_ANSWERS_2026-09-30.md](../archive/docs/LAWYER_ANSWERS_2026-09-30.md) | **archive candidate**: replaced by the 2026-10-21 answers |
 | [legal_customer/](legal_customer/) | Customer-facing terms, privacy, DPA, subprocessors (drafts) |
 | [legal/](legal/), [legal_sources/](legal_sources/), [LEGAL_COVERAGE_MANIFEST.md](LEGAL_COVERAGE_MANIFEST.md), [LEGAL_COVERAGE_ROADMAP.md](LEGAL_COVERAGE_ROADMAP.md) | Legal corpus builds, sources and coverage |
 | [marketing/](marketing/) | Marketing setup and sources |
@@ -126,8 +126,8 @@ Never read `repomix-output.xml`, `database_snapshots/`, `*.sql` or `*.tar.gz`.
 | File | What it is |
 |---|---|
 | [progress.md](progress.md) | Running progress log |
-| [HANDOFF_2026-11-17.md](HANDOFF_2026-11-17.md), [HANDOFF_2026-11-12.md](HANDOFF_2026-11-12.md), [HANDOFF_2026-11-11.md](HANDOFF_2026-11-11.md), [HANDOFF_2026-11-05.md](HANDOFF_2026-11-05.md) | Recent hub handoffs (superseded by STATE.md as time passes) |
-| [HANDOFF_2026-10-15.md](HANDOFF_2026-10-15.md), [HANDOFF_2026-10-04.md](HANDOFF_2026-10-04.md) | **archive candidate** |
+| [HANDOFF_2026-11-17.md](../archive/docs/HANDOFF_2026-11-17.md), [HANDOFF_2026-11-12.md](../archive/docs/HANDOFF_2026-11-12.md), [HANDOFF_2026-11-11.md](../archive/docs/HANDOFF_2026-11-11.md), [HANDOFF_2026-11-05.md](../archive/docs/HANDOFF_2026-11-05.md) | Recent hub handoffs (superseded by STATE.md as time passes) |
+| [HANDOFF_2026-10-15.md](../archive/docs/HANDOFF_2026-10-15.md), [HANDOFF_2026-10-04.md](../archive/docs/HANDOFF_2026-10-04.md) | **archive candidate** |
 | [W6_legal_corpus_diagnosis.md](W6_legal_corpus_diagnosis.md), [W7_voice_latency.md](W7_voice_latency.md), [W15_stt_plan.md](W15_stt_plan.md), [W17_payment_audit.md](W17_payment_audit.md), [W17_payment_fix.md](W17_payment_fix.md), [W20_realtime_voice.md](W20_realtime_voice.md), [W25_phase1_acquisition.md](W25_phase1_acquisition.md) | **archive candidate**: workstream reports of 2026-09 and 2026-10 |
 | [SECURITY_daemon_worker_review.md](SECURITY_daemon_worker_review.md), [HISTORY_REWRITE.md](HISTORY_REWRITE.md) | **archive candidate**: one-off reviews of 2026-09; the history rewrite is done |
 | [BULK_IMPORT.md](BULK_IMPORT.md), [IMPORT_SUPPORT.md](IMPORT_SUPPORT.md), [IMPORT_SOURCE_PRODUCTS.md](IMPORT_SOURCE_PRODUCTS.md) | Import design notes (current) |
