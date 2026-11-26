@@ -311,3 +311,43 @@ def test_one_free_429_plus_one_other_failure_does_not_reach_paid(monkeypatch, tm
     called = _lane_env(monkeypatch, tmp_path, {"pool/a": "429 Too Many Requests", "pool/b": "segfault"})
     status, _ = fleet.lane_opencode(JOB, tmp_path, tmp_path / "log", _cfg(["pool/a", "pool/b", "executor"]))
     assert status == "none" and called == ["pool/a", "pool/b"]
+
+
+def test_fleet_yaml_disables_claude_and_drops_dead_review_model():
+    assert CFG["lanes"]["claude"]["enabled"] is False
+    assert "claude_model" not in CFG["review"]
+
+
+def test_missing_executable_returns_config_without_paid_escalation(monkeypatch, tmp_path):
+    monkeypatch.setattr(fleet, "HOME", tmp_path)
+    monkeypatch.setattr(fleet, "dirty", lambda wt: False)
+    monkeypatch.setattr(fleet, "worker_model", lambda lc, alias: alias)
+
+    def missing_run(*a, **k):
+        raise FileNotFoundError(2, "No such file or directory", "opencode")
+
+    monkeypatch.setattr(fleet.subprocess, "run", missing_run)
+    status, _ = fleet.lane_opencode(JOB, tmp_path, tmp_path / "log", _cfg(["pool/a", "executor"]))
+    assert status == "config"
+    assert fleet.paid_spent_today(tmp_path) == 0.0
+
+
+def test_lane_claude_catches_missing_binary_and_auth_error_as_config(monkeypatch, tmp_path):
+    cfg = dict(CFG)
+    cfg["lanes"] = {"claude": {"model": "sonnet", "timeout_secs": 5}}
+    monkeypatch.setattr(fleet, "dirty", lambda wt: False)
+    monkeypatch.setattr(fleet, "run_logged", lambda *a, **k: (_ for _ in ()).throw(FileNotFoundError("claude")))
+    status, _ = fleet.lane_claude(JOB, tmp_path, tmp_path / "log", cfg)
+    assert status == "config"
+
+    monkeypatch.setattr(fleet, "run_logged", lambda *a, **k: (1, "Error: unauthorized 401"))
+    status, _ = fleet.lane_claude(JOB, tmp_path, tmp_path / "log", cfg)
+    assert status == "config"
+
+
+def test_pr_body_uses_real_lane_and_model():
+    body = fleet.pr_body(123, "opencode", "openrouter/qwen/qwen3-coder:free")
+    assert "Closes #123" in body
+    assert "opencode" in body
+    assert "openrouter/qwen/qwen3-coder:free" in body
+    assert "Generated with [Claude Code]" not in body
