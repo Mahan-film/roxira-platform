@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { ShieldCheck } from "lucide-react";
+import Link from "next/link";
+import { KeyRound, ShieldCheck } from "lucide-react";
 
 import { useAction, useLoad } from "@/components/access/access-ui";
 import { useAccess } from "@/components/app/access-provider";
 import { PageHeader } from "@/components/app/app-ui";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -137,11 +138,37 @@ function PolicyCard() {
 export default function SecuritySettingsPage() {
   return (
     <>
-      <PageHeader title="امنیت حساب" description="ورود دومرحله‌ای، دستگاه‌ها و سیاست امنیتی سازمان." icon={<ShieldCheck className="size-6 text-indigo-500" />} />
+      <PageHeader
+        title="امنیت حساب"
+        description="ورود دومرحله‌ای، دستگاه‌ها و سیاست امنیتی سازمان."
+        icon={<ShieldCheck className="size-6 text-indigo-500" />}
+      />
       <div className="grid gap-4 lg:grid-cols-2">
         <TotpCard />
         <SessionsCard />
         <PolicyCard />
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <KeyRound className="size-5 text-primary" />
+              <CardTitle className="text-base">کلیدهای دسترسی وب‌سرویس (API)</CardTitle>
+            </div>
+            <CardDescription className="text-xs">
+              مدیریت توکن‌های اتصال برنامه‌نویسی و وب‌سرویس سازمان
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <p className="text-xs text-muted-foreground">
+              برای ساخت، مدیریت دسترسی‌ها و ابطال کلیدهای API سازمان به صفحه اختصاصی کلیدها مراجعه کنید.
+            </p>
+            <Link
+              href="/app/settings/api-tokens"
+              className={buttonVariants({ variant: "outline", size: "sm", className: "w-fit text-xs gap-1.5" })}
+            >
+              مدیریت کلیدهای دسترسی وب‌سرویس
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     </>
   );

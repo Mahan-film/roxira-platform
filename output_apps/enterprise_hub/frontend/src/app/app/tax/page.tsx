@@ -225,13 +225,22 @@ function MoadianCard() {
           <span className="flex items-center gap-2">
             <Send className="size-4" /> اتصال به سامانه مودیان
           </span>
-          <Link
-            href="/app/tax/wizard"
-            className={buttonVariants({ variant: "outline", size: "sm", className: "gap-1.5 text-xs min-h-[44px] min-w-[44px]" })}
-          >
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
-            ویزارد راه‌اندازی مودیان
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/app/tax/kartable"
+              className={buttonVariants({ variant: "outline", size: "sm", className: "gap-1.5 text-xs min-h-[44px] min-w-[44px]" })}
+            >
+              <FileText className="h-3.5 w-3.5 text-primary" />
+              مغایرت‌گیری کارپوشه
+            </Link>
+            <Link
+              href="/app/tax/wizard"
+              className={buttonVariants({ variant: "outline", size: "sm", className: "gap-1.5 text-xs min-h-[44px] min-w-[44px]" })}
+            >
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              ویزارد راه‌اندازی مودیان
+            </Link>
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">

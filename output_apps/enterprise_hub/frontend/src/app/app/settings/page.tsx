@@ -79,6 +79,13 @@ const SETTING_TABS: SettingTab[] = [
     icon: Bot,
   },
   {
+    id: "api-tokens",
+    label: "کلیدهای دسترسی وب‌سرویس",
+    description: "مدیریت کلیدهای اتصال نرم‌افزارهای خارجی، فروشگاه و تعیین دسترسی‌های برنامه‌نویسی",
+    href: "/app/settings/api-tokens",
+    icon: KeyRound,
+  },
+  {
     id: "audit",
     label: "گزارش رخدادها",
     description: "مشاهده لاگ ورودها، تغییرات اسناد، حذف‌ها و رخدادهای امنیتی سازمان",

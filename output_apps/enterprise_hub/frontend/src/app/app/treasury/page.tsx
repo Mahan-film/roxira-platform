@@ -246,6 +246,10 @@ export default function TreasurySettlementPage() {
         icon={<Receipt className="size-6 text-blue-600" />}
         actions={
           <div className="flex items-center gap-2">
+            <Link href="/app/treasury/sms" className={buttonVariants({ variant: "outline", size: "sm" })}>
+              <FileText className="size-4 ml-1.5" />
+              پیامک‌های بانکی
+            </Link>
             <Link href="/app/money" className={buttonVariants({ variant: "outline", size: "sm" })}>
               <Landmark className="size-4 ml-1.5" />
               مرکز نقد و بانک
