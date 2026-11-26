@@ -186,6 +186,7 @@ export default function ApiTokensPage() {
     try {
       await navigator.clipboard.writeText(raw);
       rawTokenRef.current = null;
+      setNewlyCreatedToken((prev) => (prev ? { ...prev, token: "••••" } : null));
       setCopied(true);
       setTimeout(() => setCopied(false), 3000);
     } catch {
