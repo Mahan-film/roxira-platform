@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { Drawer } from "@/components/ui/drawer";
 import { Label } from "@/components/ui/label";
+import { buildInvoiceFromDeliveryUrl } from "@/lib/sales-cycle-ui";
 import { formatSalesMoney, formatSalesQuantity } from "./sales-format";
 import type { SalesDelivery } from "@/types/sales";
 
@@ -67,6 +69,17 @@ export function DeliveryDetailDrawer({
               {delivery.journalEntryId ? `#${delivery.journalEntryId}` : "ثبت نشده"}
             </span>
           </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Link
+            href={buildInvoiceFromDeliveryUrl(delivery)}
+            data-testid="create-invoice-from-delivery-btn"
+            className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-xs font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+          >
+            صدور فاکتور فروش از حواله
+          </Link>
         </div>
 
         {/* Lines Table */}
