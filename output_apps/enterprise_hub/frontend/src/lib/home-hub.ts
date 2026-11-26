@@ -1,4 +1,4 @@
-import { formatMoneyRial } from "./fa-format.ts";
+import { formatMoneyRial, type MoneyUnit } from "./fa-format.ts";
 
 export interface HomeAlertItem {
   id: string;
@@ -38,14 +38,14 @@ export function computeCashNow(
   bank: string | number | null | undefined,
 ): string {
   const parseSafe = (v: string | number | null | undefined): bigint => {
-    if (v === null || v === undefined) return 0n;
+    if (v === null || v === undefined) return BigInt(0);
     const str = String(v).trim();
-    if (!str) return 0n;
+    if (!str) return BigInt(0);
     const intPart = str.includes(".") ? str.split(".")[0] : str;
     try {
       return BigInt(intPart || "0");
     } catch {
-      return 0n;
+      return BigInt(0);
     }
   };
   return (parseSafe(cash) + parseSafe(bank)).toString();
@@ -63,15 +63,16 @@ export function isProfitVisibleForUser(
 }
 
 /**
- * Formats a KPI amount in Iranian Rial with tabular numbers formatting.
+ * Formats a KPI amount in the selected display unit (rial/toman/million) with Persian digits.
  */
 export function formatKpiDisplay(
   value: string | number | null | undefined,
   isConfidential = false,
+  unit: MoneyUnit = "rial",
 ): string {
   if (isConfidential) return "محرمانه";
-  if (value === null || value === undefined) return "۰ ریال";
-  return formatMoneyRial(value);
+  if (value === null || value === undefined) return formatMoneyRial(0, unit);
+  return formatMoneyRial(value, unit);
 }
 
 /**

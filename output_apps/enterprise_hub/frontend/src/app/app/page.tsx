@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   BookOpen,
@@ -29,193 +29,155 @@ import {
 import {
   ErrorNotice,
   PageHeader,
-  StatCard,
   loadErrorMessage,
 } from "@/components/app/app-ui";
 import { useAccess } from "@/components/app/access-provider";
-import { PasswordSettingsCard } from "@/components/auth/password-settings-card";
+import { ReportNotes } from "@/components/accounting/reports/report-views";
+import { HomeAssistantInput, HomeKpiTiles } from "@/components/home";
 import { OnboardingBanner } from "@/components/onboarding/onboarding-banner";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  HomeAlertsFeed,
-  HomeAssistantInput,
-  HomeKpiTiles,
-} from "@/components/home";
-import { getTrialBalance } from "@/lib/api/accounting-client";
+import { Card, CardContent } from "@/components/ui/card";
+import { JalaliDateInput } from "@/components/ui/jalali-date-input";
+import { Label } from "@/components/ui/label";
+import { MoneyUnitSwitch } from "@/components/ui/money-unit-switch";
 import { getDashboard } from "@/lib/api/accounting-reports-client";
-import { listSessions } from "@/lib/api/bank-recon-client";
-import { listDueCheques } from "@/lib/api/cheques-client";
-import { getLeadStats } from "@/lib/api/crm-client";
-import { getHrStats } from "@/lib/api/hr-client";
-import { getFifoValuation } from "@/lib/api/inventory-client";
-import { formatMoneyRial, formatNumber } from "@/lib/fa-format";
-import {
-  buildHomeAlerts,
-  computeCashNow,
-  isProfitVisibleForUser,
-} from "@/lib/home-hub";
-import { getRoleQuickActionDefs, isSalaryVisibleForRole } from "@/lib/role-home";
+import { formatJalaliDate } from "@/lib/fa-format";
+import { computeCashNow, isProfitVisibleForUser } from "@/lib/home-hub";
+import { jalaliPresets, todayJalaliIso } from "@/lib/jalali-date-input";
+import { useMoneyUnit } from "@/lib/money-unit";
+import { getRoleQuickActionDefs } from "@/lib/role-home";
 import { SYSTEM_ROLE_LABELS } from "@/types/access";
-import type { TrialBalanceResponse } from "@/types/accounting";
-import type { DashboardReport } from "@/types/accounting-reports";
-import type { ReconSession } from "@/lib/api/bank-recon-client";
-import type { DueCheques } from "@/types/cheques";
-import type { LeadStats } from "@/types/crm";
-import type { HrStats } from "@/types/hr";
-import type { FifoValuationResponse } from "@/types/inventory";
+import type { DashboardReport, ReportQuery } from "@/types/accounting-reports";
 
-/** One module's slice of the dashboard; each loads (and fails) independently. */
-interface Slice<T> {
-  data: T | null;
+interface DashboardState {
+  data: DashboardReport | null;
   error: string | null;
   loading: boolean;
 }
 
-function emptySlice<T>(): Slice<T> {
-  return { data: null, error: null, loading: true };
-}
+function useDashboardSummary(query: ReportQuery, enabled: boolean): DashboardState {
+  const [state, setState] = useState<DashboardState>({
+    data: null,
+    error: null,
+    loading: enabled,
+  });
 
-function useSlice<T>(load: (signal: AbortSignal) => Promise<T>, enabled = true): Slice<T> {
-  const [slice, setSlice] = useState<Slice<T>>(emptySlice<T>());
   useEffect(() => {
-    // A module the organisation lacks (or the role cannot read) is neither fetched nor shown.
-    if (!enabled) return;
+    if (!enabled) {
+      setState({ data: null, error: null, loading: false });
+      return;
+    }
     const controller = new AbortController();
-    load(controller.signal)
-      .then((data) => setSlice({ data, error: null, loading: false }))
+    setState((prev) => ({ ...prev, loading: true, error: null }));
+    getDashboard(query, controller.signal)
+      .then((data) => {
+        if (!controller.signal.aborted) {
+          setState({ data, error: null, loading: false });
+        }
+      })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
-        setSlice({ data: null, error: loadErrorMessage(error), loading: false });
+        setState({ data: null, error: loadErrorMessage(error), loading: false });
       });
     return () => controller.abort();
-    // `load` is a stable module-level function in every call site below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled]);
-  return slice;
-}
+  }, [enabled, query]);
 
-const fetchDashboard = (signal: AbortSignal) => getDashboard({}, signal);
-const fetchDueCheques = (signal: AbortSignal) => listDueCheques(7, signal);
-const fetchBankSessions = () => listSessions();
-
-function Section({
-  title,
-  slice,
-  children,
-}: {
-  title: string;
-  slice: Slice<unknown>;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-sm font-bold text-muted-foreground">{title}</h2>
-      {slice.loading ? (
-        <Skeleton className="h-20 w-full" />
-      ) : slice.error ? (
-        <ErrorNotice title={`خطا در دریافت ${title}`} message={slice.error} />
-      ) : (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{children}</div>
-      )}
-    </section>
-  );
+  return state;
 }
 
 function renderActionIcon(iconName: string) {
   switch (iconName) {
     case "PlusCircle":
-      return <PlusCircle className="size-4" />;
+      return <PlusCircle className="size-4" aria-hidden="true" />;
     case "BookOpen":
-      return <BookOpen className="size-4" />;
+      return <BookOpen className="size-4" aria-hidden="true" />;
     case "FileBarChart":
-      return <FileBarChart className="size-4" />;
+      return <FileBarChart className="size-4" aria-hidden="true" />;
     case "Receipt":
-      return <Receipt className="size-4" />;
+      return <Receipt className="size-4" aria-hidden="true" />;
     case "CreditCard":
-      return <CreditCard className="size-4" />;
+      return <CreditCard className="size-4" aria-hidden="true" />;
     case "Landmark":
-      return <Landmark className="size-4" />;
+      return <Landmark className="size-4" aria-hidden="true" />;
     case "UserPlus":
-      return <UserPlus className="size-4" />;
+      return <UserPlus className="size-4" aria-hidden="true" />;
     case "Kanban":
-      return <Kanban className="size-4" />;
+      return <Kanban className="size-4" aria-hidden="true" />;
     case "Boxes":
-      return <Boxes className="size-4" />;
+      return <Boxes className="size-4" aria-hidden="true" />;
     case "CheckCheck":
-      return <CheckCheck className="size-4" />;
+      return <CheckCheck className="size-4" aria-hidden="true" />;
     case "CalendarClock":
-      return <CalendarClock className="size-4" />;
+      return <CalendarClock className="size-4" aria-hidden="true" />;
     case "Scale":
-      return <Scale className="size-4" />;
+      return <Scale className="size-4" aria-hidden="true" />;
     case "Users":
-      return <Users className="size-4" />;
+      return <Users className="size-4" aria-hidden="true" />;
     case "Calculator":
-      return <Calculator className="size-4" />;
+      return <Calculator className="size-4" aria-hidden="true" />;
     case "FileText":
-      return <FileText className="size-4" />;
+      return <FileText className="size-4" aria-hidden="true" />;
     case "ShieldCheck":
-      return <ShieldCheck className="size-4" />;
+      return <ShieldCheck className="size-4" aria-hidden="true" />;
     case "FileSpreadsheet":
-      return <FileSpreadsheet className="size-4" />;
+      return <FileSpreadsheet className="size-4" aria-hidden="true" />;
     case "FileUp":
-      return <FileUp className="size-4" />;
+      return <FileUp className="size-4" aria-hidden="true" />;
     case "History":
-      return <History className="size-4" />;
+      return <History className="size-4" aria-hidden="true" />;
     default:
-      return <BookOpen className="size-4" />;
+      return <BookOpen className="size-4" aria-hidden="true" />;
   }
 }
 
 export default function SuiteDashboardPage() {
   const { can, org } = useAccess();
+  const [unit] = useMoneyUnit();
   const roleKey = org?.roleKey ?? "owner";
   const quickActions = getRoleQuickActionDefs(roleKey);
-  const showSalary = isSalaryVisibleForRole(roleKey);
 
-  const showCrm = can("crm", "read");
-  const showHr = can("hr", "read");
-  const showInventory = can("inventory", "read");
   const showAccounting = can("accounting", "read");
-  const showCheques = can("cheques", "read");
-  const showBanking = can("banking", "read");
+  const showAssistant = can("assistant", "read");
 
-  const crm = useSlice<LeadStats>(getLeadStats, showCrm);
-  const hr = useSlice<HrStats>(getHrStats, showHr);
-  const inventory = useSlice<FifoValuationResponse>(getFifoValuation, showInventory);
-  const accounting = useSlice<TrialBalanceResponse>(getTrialBalance, showAccounting);
-  const dashboard = useSlice<DashboardReport>(fetchDashboard, showAccounting);
-  const dueCheques = useSlice<DueCheques>(fetchDueCheques, showCheques);
-  const bankSessions = useSlice<ReconSession[]>(fetchBankSessions, showBanking);
+  const presets = useMemo(() => jalaliPresets(todayJalaliIso()), []);
+  const [presetKey, setPresetKey] = useState<string>("default");
+  const [query, setQuery] = useState<ReportQuery>({});
+
+  const dashboard = useDashboardSummary(query, showAccounting);
 
   const cashNow = computeCashNow(dashboard.data?.cash, dashboard.data?.bank);
-  const salesToday = dashboard.data?.sales ?? 0;
-  const profitThisMonth = dashboard.data?.netProfit ?? 0;
-  const overdueReceivables = dashboard.data?.receivables ?? 0;
+  const sales = dashboard.data?.sales ?? null;
+  const profit = dashboard.data?.netProfit ?? null;
+  const receivables = dashboard.data?.receivables ?? null;
+  const payables = dashboard.data?.payables ?? null;
+  const taxDue = dashboard.data?.taxDue ?? null;
+  const inventory = dashboard.data?.inventory ?? null;
+
   const hasMarginPermission = Boolean(org?.fieldVisibility?.margin);
   const isProfitConfidential = !isProfitVisibleForUser(hasMarginPermission, roleKey);
 
-  const homeAlerts = buildHomeAlerts({
-    chequesDueCount: dueCheques.data?.items?.length ?? 0,
-    chequesDueAmount: dueCheques.data?.issuedTotal ?? 0,
-    unmatchedBankLinesCount: bankSessions.data?.filter((s) => s.status !== "COMMITTED")?.length ?? 0,
-    lowStockCount: inventory.data?.lowStockCount ?? 0,
-    pendingApprovalsCount: 0,
-    importExceptionsCount: 0,
-  });
-
-  const alertsLoading = dueCheques.loading && bankSessions.loading && inventory.loading;
+  function handlePresetChange(nextKey: string) {
+    setPresetKey(nextKey);
+    if (nextKey === "default") {
+      setQuery({});
+      return;
+    }
+    const found = presets.find((p) => p.key === nextKey);
+    if (found) {
+      setQuery({ from: found.from, to: found.to });
+    }
+  }
 
   return (
-    <>
+    <div className="flex min-w-0 flex-col gap-6">
       <PageHeader
-        title="خانه و دیده‌بان کسب‌وکار"
-        description="خلاصهٔ وضعیت مالی، شاخص‌های کلیدی، خوراک هشدارها و دسترسی سریع."
-        icon={<LayoutDashboard className="size-6 text-primary" />}
+        title="داشبورد مالی و دیده‌بان کسب‌وکار"
+        description="خلاصهٔ وضعیت نقدینگی، فروش، سود، مطالبات، بدهی‌ها و مالیات بر مبنای اسناد دفتر کل."
+        icon={<LayoutDashboard className="size-6 text-primary" aria-hidden="true" />}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline" className="gap-1 px-3 py-1 text-xs">
-              <Shield className="size-3 text-muted-foreground" />
+              <Shield className="size-3 text-muted-foreground" aria-hidden="true" />
               <span>نقش شما:</span>
               <strong className="font-bold">
                 {SYSTEM_ROLE_LABELS[roleKey] ?? roleKey}
@@ -232,197 +194,143 @@ export default function SuiteDashboardPage() {
 
       <OnboardingBanner />
 
-      {/* Hero Assistant Input */}
-      <HomeAssistantInput />
+      {showAssistant && <HomeAssistantInput />}
 
-      {/* 4 KPI Tiles */}
-      <HomeKpiTiles
-        cashNow={cashNow}
-        salesToday={salesToday}
-        profitThisMonth={profitThisMonth}
-        overdueReceivables={overdueReceivables}
-        isProfitConfidential={isProfitConfidential}
-        loading={dashboard.loading}
-      />
-
-      {/* Alerts Feed and Quick Actions */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <HomeAlertsFeed alerts={homeAlerts} loading={alertsLoading} />
-        </div>
-
-        <div className="flex flex-col gap-3">
-          <h2 className="text-sm font-bold text-muted-foreground">دسترسی سریع</h2>
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-1">
-            {quickActions.map((action) => (
-              <Link
-                key={action.href + action.title}
-                href={action.href}
-                className="group flex items-start gap-3 rounded-xl border border-border/70 bg-card p-3 transition-colors hover:border-primary/40 hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-primary"
-              >
-                <div className="mt-0.5 rounded-lg bg-primary/10 p-2 text-primary">
-                  {renderActionIcon(action.iconName)}
+      {showAccounting ? (
+        <section aria-label="تنظیمات دوره و واحد مبلغ" className="flex flex-col gap-4">
+          <Card className="border border-border bg-card">
+            <CardContent className="flex flex-col gap-4 p-4 lg:flex-row lg:items-end lg:justify-between">
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="grid min-w-0 gap-1 sm:w-44">
+                  <Label htmlFor="home-period-preset">بازه گزارش</Label>
+                  <select
+                    id="home-period-preset"
+                    value={presetKey}
+                    onChange={(event) => handlePresetChange(event.target.value)}
+                    className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="default">سال مالی جاری (تا امروز)</option>
+                    {presets.map((preset) => (
+                      <option key={preset.key} value={preset.key}>
+                        {preset.label}
+                      </option>
+                    ))}
+                    <option value="custom">بازه دلخواه</option>
+                  </select>
                 </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-sm font-semibold group-hover:text-primary transition-colors">
-                    {action.title}
-                  </span>
+
+                <div className="grid w-full gap-1 sm:w-36">
+                  <Label htmlFor="home-period-from">از تاریخ</Label>
+                  <JalaliDateInput
+                    id="home-period-from"
+                    value={query.from ?? ""}
+                    onChange={(from) => {
+                      setPresetKey("custom");
+                      setQuery((prev) => ({ ...prev, from: from || undefined }));
+                    }}
+                  />
+                </div>
+
+                <div className="grid w-full gap-1 sm:w-36">
+                  <Label htmlFor="home-period-to">تا تاریخ</Label>
+                  <JalaliDateInput
+                    id="home-period-to"
+                    value={query.to ?? ""}
+                    onChange={(to) => {
+                      setPresetKey("custom");
+                      setQuery((prev) => ({ ...prev, to: to || undefined }));
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                {dashboard.data?.period && (
                   <span className="text-xs text-muted-foreground">
-                    {action.description}
+                    دوره فعال:{" "}
+                    <strong className="font-medium text-foreground">
+                      {formatJalaliDate(dashboard.data.period.from)} تا{" "}
+                      {formatJalaliDate(dashboard.data.period.to)}
+                    </strong>
                   </span>
-                </div>
-              </Link>
-            ))}
-          </div>
+                )}
+                <MoneyUnitSwitch />
+              </div>
+            </CardContent>
+          </Card>
+
+          <ErrorNotice title="خطا در دریافت خلاصه مالی" message={dashboard.error} />
+
+          <HomeKpiTiles
+            cashNow={cashNow}
+            salesToday={sales}
+            profitThisMonth={profit}
+            overdueReceivables={receivables}
+            payables={payables}
+            taxDue={taxDue}
+            inventory={inventory}
+            periodTo={dashboard.data?.period.to ?? null}
+            unit={unit}
+            isProfitConfidential={isProfitConfidential}
+            loading={dashboard.loading}
+          />
+
+          {dashboard.data && dashboard.data.inferredAccounts.length > 0 && (
+            <ReportNotes inferred={dashboard.data.inferredAccounts} />
+          )}
+        </section>
+      ) : (
+        <Card className="border border-border bg-card">
+          <CardContent className="p-4 text-sm text-muted-foreground">
+            نمایش شاخص‌های خلاصه مالی نیازمند دسترسی مشاهده حسابداری است. از بخش دسترسی سریع زیر برای ورود به صفحات مجاز خود استفاده کنید.
+          </CardContent>
+        </Card>
+      )}
+
+      <section aria-label="دسترسی سریع" className="flex flex-col gap-3">
+        <h2 className="text-sm font-bold text-foreground">دسترسی سریع</h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {quickActions.map((action) => (
+            <Link
+              key={action.href + action.title}
+              href={action.href}
+              className="group flex min-w-0 items-start gap-3 rounded-xl border border-border bg-card p-3.5 transition-colors hover:border-primary/40 hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              <div className="mt-0.5 shrink-0 rounded-lg bg-primary/10 p-2 text-primary">
+                {renderActionIcon(action.iconName)}
+              </div>
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <span className="truncate text-sm font-semibold text-foreground transition-colors group-hover:text-primary">
+                  {action.title}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {action.description}
+                </span>
+              </div>
+            </Link>
+          ))}
         </div>
-      </div>
+      </section>
 
       {can("data_import", "create") && (
         <Link
           href="/app/import"
-          className="flex items-center gap-4 rounded-2xl border-2 border-dashed border-primary/30 bg-primary/5 p-4 transition-colors hover:border-primary/50 hover:bg-primary/10"
+          className="flex flex-wrap items-center gap-4 rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-4 transition-colors hover:border-primary/60 hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-primary"
         >
-          <div className="rounded-xl bg-primary/10 p-3 text-primary">
-            <FileSpreadsheet className="size-6" />
+          <div className="shrink-0 rounded-xl bg-primary/10 p-3 text-primary">
+            <FileSpreadsheet className="size-6" aria-hidden="true" />
           </div>
-          <div className="flex flex-col gap-0.5 text-sm">
+          <div className="flex min-w-0 flex-col gap-0.5 text-sm">
             <span className="font-bold text-foreground">
               ورود سریع اطلاعات از نرم‌افزارهای قبلی (سپیدار، همکاران، هلو و اکسل)
             </span>
             <span className="text-xs text-muted-foreground">
               فایل اکسل مشتریان، کارکنان، کالاها یا سرفصل حساب‌های قبلی‌تان را
-              اینجا رها کنید؛ بقیه کار با ماست.
+              اینجا بارگذاری کنید؛ بقیه کار با ماست.
             </span>
           </div>
         </Link>
       )}
-
-      {showCrm && (
-        <Section title="مشتریان (CRM)" slice={crm}>
-          <StatCard
-            label="کل سرنخ‌ها"
-            value={formatNumber(crm.data?.totalLeads)}
-            href="/app/crm"
-            hint="فهرست همه سرنخ‌ها"
-          />
-          <StatCard
-            label="سرنخ‌های باز"
-            value={formatNumber(crm.data?.openLeads)}
-            href="/app/crm?view=board"
-            hint="پایپ‌لاین مراحل باز"
-          />
-          <StatCard
-            label="ارزش فرصت‌های باز"
-            value={formatMoneyRial(crm.data?.openPipelineValue)}
-            href="/app/crm?view=board"
-            hint="ارزش هر مرحله در پایپ‌لاین"
-          />
-          <StatCard
-            label="درآمد تحقق‌یافته"
-            value={formatMoneyRial(crm.data?.wonRevenue)}
-            href="/app/crm?stage=WON"
-            hint="سرنخ‌های برنده‌شده"
-          />
-        </Section>
-      )}
-
-      {showHr && (
-        <Section title="کارکنان (HR)" slice={hr}>
-          <StatCard
-            label="کل کارکنان"
-            value={formatNumber(hr.data?.totalEmployees)}
-            href="/app/hr"
-            hint="فهرست کارکنان"
-          />
-          <StatCard
-            label="فعال"
-            value={formatNumber(hr.data?.activeEmployees)}
-            href="/app/hr?status=ACTIVE"
-            hint="فقط کارکنان شاغل"
-          />
-          <StatCard
-            label="قراردادهای فعال"
-            value={formatNumber(hr.data?.activeContracts)}
-            href="/app/hr#contracts"
-            hint="قراردادهای حقوقی"
-          />
-          {showSalary ? (
-            <StatCard
-              label="جمع حقوق پایه"
-              value={formatMoneyRial(hr.data?.totalBaseSalary)}
-              href="/app/hr/payroll"
-              hint="محاسبه حقوق ماهانه"
-            />
-          ) : (
-            <StatCard
-              label="احکام پرسنلی"
-              value={formatNumber(hr.data?.activeContracts)}
-              href="/app/hr"
-              hint="سوابق کارگزینی"
-            />
-          )}
-        </Section>
-      )}
-
-      {showInventory && (
-        <Section title="کالا و انبار" slice={inventory}>
-          <StatCard
-            label="تعداد کالا"
-            value={formatNumber(inventory.data?.itemCount)}
-            href="/app/inventory"
-            hint="فهرست کالاها"
-          />
-          <StatCard
-            label="کالاهای زیر حد کسری"
-            value={formatNumber(inventory.data?.lowStockCount)}
-            href="/app/inventory"
-            hint="کالاهای رو به اتمام در انبار"
-          />
-          <StatCard
-            label="ارزش موجودی (FIFO)"
-            value={formatMoneyRial(inventory.data?.totalInventoryValue)}
-            href="/app/inventory"
-            hint="ارزش‌گذاری موجودی"
-          />
-          <StatCard
-            label="دسته‌های باز"
-            value={formatNumber(inventory.data?.totalOpenBatches)}
-            href="/app/inventory"
-            hint="دسته‌های خرید باقی‌مانده"
-          />
-        </Section>
-      )}
-
-      {showAccounting && (
-        <Section title="حساب‌ها" slice={accounting}>
-          <StatCard
-            label="حساب‌های دارای گردش"
-            value={formatNumber(accounting.data?.rows?.length)}
-            href="/app/accounting"
-            hint="درخت حساب‌ها"
-          />
-          <StatCard
-            label="جمع بدهکار"
-            value={formatMoneyRial(accounting.data?.totalDebit)}
-            href="/app/accounting/reports"
-            hint="تراز آزمایشی"
-          />
-          <StatCard
-            label="جمع بستانکار"
-            value={formatMoneyRial(accounting.data?.totalCredit)}
-            href="/app/accounting/reports"
-            hint="تراز آزمایشی"
-          />
-          <StatCard
-            label="وضعیت تراز"
-            value={accounting.data?.balanced ? "تراز است" : "تراز نیست"}
-            href="/app/accounting/reports"
-            hint="بررسی تراز در گزارش‌ها"
-          />
-        </Section>
-      )}
-
-      <PasswordSettingsCard locale="fa" />
-    </>
+    </div>
   );
 }

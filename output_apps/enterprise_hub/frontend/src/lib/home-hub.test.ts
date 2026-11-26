@@ -27,11 +27,15 @@ test("isProfitVisibleForUser checks role and explicit permission", () => {
   assert.equal(isProfitVisibleForUser(true, "sales"), true);
 });
 
-test("formatKpiDisplay returns confidential mask or formatted Rial", () => {
+test("formatKpiDisplay returns confidential mask or formatted Rial/Toman/Million", () => {
   assert.equal(formatKpiDisplay("1000000", true), "محرمانه");
+  assert.equal(formatKpiDisplay("1000000", true, "toman"), "محرمانه");
   assert.equal(formatKpiDisplay(null, false), "۰ ریال");
-  const formatted = formatKpiDisplay("1000000", false);
-  assert.ok(formatted.includes("۱٬۰۰۰٬۰۰۰") || formatted.includes("1,000,000") || formatted.includes("ریال"));
+  assert.equal(formatKpiDisplay(null, false, "toman"), "۰ تومان");
+  assert.equal(formatKpiDisplay(null, false, "million"), "۰ میلیون ریال");
+  assert.equal(formatKpiDisplay("1000000", false, "rial"), "۱٬۰۰۰٬۰۰۰ ریال");
+  assert.equal(formatKpiDisplay("1000000", false, "toman"), "۱۰۰٬۰۰۰ تومان");
+  assert.equal(formatKpiDisplay("50000000", false, "million"), "۵۰ میلیون ریال");
 });
 
 test("buildHomeAlerts generates structured alerts only for non-zero metrics", () => {
