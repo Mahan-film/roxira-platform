@@ -250,6 +250,14 @@ export class CreateInvoiceDto {
   @Min(1)
   customerId?: number;
 
+  @ApiPropertyOptional({
+    description: 'شناسه کاربر فروشنده/مسئول فروش در همان سازمان',
+    example: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+  })
+  @IsOptional()
+  @IsUUID()
+  salespersonId?: string | null;
+
   @ApiProperty({ type: [InvoiceItemDto], description: 'اقلام کالا/خدمت صورتحساب' })
   @IsArray()
   @ArrayMinSize(1)

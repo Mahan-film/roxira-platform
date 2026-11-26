@@ -19,7 +19,7 @@ export class SalesReportController {
   ) {}
 
   @Get()
-  @ApiOperation({ summary: 'گزارش فروش به تفکیک کالا یا مشتری (JSON، یا فایل با format)' })
+  @ApiOperation({ summary: 'گزارش فروش به تفکیک کالا، مشتری یا فروشنده (JSON، یا فایل با format)' })
   @ApiResponse({ status: HttpStatus.OK })
   async report(
     @Req() request: AuthenticatedRequest,

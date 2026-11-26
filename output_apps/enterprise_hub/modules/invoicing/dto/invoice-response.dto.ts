@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Currency } from '../../currency/enums/currency.enum';
 import {
   InvoiceItem,
@@ -24,6 +24,9 @@ export class InvoiceResponseDto {
 
   @ApiProperty({ description: 'شناسه سرنخ/مشتری CRM', nullable: true })
   customerId: number | null;
+
+  @ApiPropertyOptional({ description: 'شناسه کاربر فروشنده/مسئول فروش', nullable: true })
+  salespersonId?: string | null;
 
   @ApiProperty({ description: 'اطلاعات فروشنده', type: Object })
   sellerInfo: InvoicePartyInfo;
