@@ -269,6 +269,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         keywords: ["سود ناخالص", "حاشیه سود", "بهای تمام شده", "gross profit", "cogs"],
       },
       {
+        href: "/app/reports/party-statement",
+        label: "صورت‌حساب طرف حساب",
+        icon: "Users",
+        module: "accounting",
+        keywords: ["صورت‌حساب", "طرف حساب", "بدهکار", "بستانکار", "party statement", "ageing"],
+      },
+      {
         href: "/app/accounting/report-builder",
         label: "گزارش‌ساز",
         icon: "FileSpreadsheet",
