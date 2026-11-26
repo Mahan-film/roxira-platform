@@ -165,4 +165,25 @@ test.describe('T96 · new company onboarding wizard', () => {
     await openApp(page, '/app');
     await expect(page.getByTestId('onboarding-banner')).toHaveCount(0);
   });
+
+  test('10 S1: cross-tenant isolation rejects foreign X-Tenant-Id', async ({ page }) => {
+    await loginAsTestTenant(page, '/app');
+    const token = await page.evaluate((key) => {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) return '';
+      try {
+        return JSON.parse(raw).accessToken ?? '';
+      } catch {
+        return '';
+      }
+    }, SESSION_STORAGE_KEY);
+    expect(token, 'session accessToken present').not.toBe('');
+    const res = await page.request.get('/api/backend/enterprise-hub/accounts', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'X-Tenant-Id': '00000000-0000-0000-0000-000000000000',
+      },
+    });
+    expect([400, 403, 404]).toContain(res.status());
+  });
 });
