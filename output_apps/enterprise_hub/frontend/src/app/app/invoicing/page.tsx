@@ -212,10 +212,11 @@ function InvoicingPage() {
                   <Plus />
                   فروش سریع
                 </Button>
-                <Link href="/app/invoicing/pos">
-                  <Button variant="outline">
-                    پایانه فروش (POS)
-                  </Button>
+                <Link
+                  href="/app/invoicing/pos"
+                  className={buttonVariants({ variant: "outline" })}
+                >
+                  پایانه فروش (POS)
                 </Link>
               </>
             )}
@@ -318,7 +319,11 @@ function InvoicingPage() {
                 <Input
                   value={searchInput}
                   onChange={(event) => setSearchInput(event.target.value)}
-                  placeholder="جست‌وجوی شماره صورتحساب یا نام خریدار"
+                  placeholder={
+                    direction === InvoiceDirection.PURCHASE
+                      ? "جست‌وجوی شماره صورتحساب یا نام تأمین‌کننده"
+                      : "جست‌وجوی شماره صورتحساب یا نام خریدار"
+                  }
                   className="ps-8"
                   aria-label="جست‌وجوی صورتحساب"
                 />
@@ -330,7 +335,7 @@ function InvoicingPage() {
                   setPage(1);
                 }}
                 aria-label="فیلتر وضعیت"
-                className="h-8 rounded-lg border border-input bg-background px-2 text-sm"
+                className="h-11 sm:h-9 rounded-lg border border-input bg-background px-2 text-sm"
               >
                 <option value="">همه وضعیت‌ها</option>
                 <option value={InvoiceStatus.DRAFT}>
@@ -382,6 +387,7 @@ function InvoicingPage() {
                   <Button
                     variant="outline"
                     size="sm"
+                    className="min-h-11 sm:min-h-8"
                     disabled={page <= 1}
                     onClick={() => setPage((current) => Math.max(1, current - 1))}
                   >
@@ -390,6 +396,7 @@ function InvoicingPage() {
                   <Button
                     variant="outline"
                     size="sm"
+                    className="min-h-11 sm:min-h-8"
                     disabled={page >= pageCount}
                     onClick={() => setPage((current) => current + 1)}
                   >

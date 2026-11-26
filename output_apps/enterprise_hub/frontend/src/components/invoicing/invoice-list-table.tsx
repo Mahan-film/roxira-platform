@@ -103,19 +103,19 @@ export function MoadianStatusBadge({
     className: "bg-muted text-foreground border-border",
   };
   return (
-    <div className="flex flex-col gap-0.5 max-w-[14rem]">
+    <span className="inline-flex flex-col gap-0.5 max-w-[14rem]">
       <span
         title={taxId ? `شناسه یکتا مالیاتی: ${taxId}` : undefined}
-        className={`inline-flex items-center w-fit rounded px-1.5 py-0.5 text-[11px] font-medium border ${conf.className}`}
+        className={`inline-flex items-center w-fit rounded px-1.5 py-0.5 text-xs font-medium border ${conf.className}`}
       >
         {conf.label}
       </span>
       {errorText && (
-        <span className="text-[11px] text-destructive truncate leading-tight" title={errorText}>
+        <span className="text-xs text-red-700 dark:text-red-300 truncate leading-tight" title={errorText}>
           {errorText}
         </span>
       )}
-    </div>
+    </span>
   );
 }
 
@@ -243,7 +243,7 @@ export function InvoiceListTable({ invoices, loading, busyId, selected, onToggle
 
   return (
     <>
-      <div className="hidden sm:block">
+      <div className="hidden overflow-x-auto sm:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -323,6 +323,8 @@ export function InvoiceListTable({ invoices, loading, busyId, selected, onToggle
       <ul className="flex flex-col divide-y divide-border sm:hidden">
         {invoices.map((invoice) => {
           const row = rows.get(invoice.id)!;
+          const party = invoiceParty(invoice);
+          const outstanding = invoiceOutstanding(row);
           return (
             <li key={invoice.id} className="flex items-start gap-3 p-3">
               <span className="flex min-h-11 items-center">
@@ -339,7 +341,7 @@ export function InvoiceListTable({ invoices, loading, busyId, selected, onToggle
               >
                 <span className="flex w-full items-center justify-between gap-2">
                   <span className="font-mono text-xs">{invoice.taxInvoiceNumber}</span>
-                  <div className="flex items-center gap-1.5">
+                  <span className="flex items-center gap-1.5">
                     <StatusBadge status={invoice.status} />
                     {invoice.moadianStatus && (
                       <MoadianStatusBadge
@@ -348,13 +350,20 @@ export function InvoiceListTable({ invoices, loading, busyId, selected, onToggle
                         taxId={invoice.moadianTaxId}
                       />
                     )}
-                  </div>
+                  </span>
                 </span>
-                <span className="text-sm font-medium">{invoiceParty(invoice).name ?? "نام ثبت نشده"}</span>
+                <span className="text-sm font-medium">
+                  {party.name ?? (party.hint ? faDigits(party.hint) : "نام ثبت نشده")}
+                </span>
                 <span className="flex w-full items-center justify-between gap-2 text-sm">
                   <InvoiceDate invoice={invoice} />
                   <Amount invoice={invoice} row={row} />
                 </span>
+                {outstanding !== null && invoice.status === InvoiceStatus.ISSUED && (
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    مانده: {formatMoneyRial(outstanding)}
+                  </span>
+                )}
               </button>
               <span className="flex min-h-11 items-center">{menu(invoice)}</span>
             </li>
