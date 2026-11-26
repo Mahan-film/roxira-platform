@@ -1,14 +1,20 @@
 <#
- STUB (issue #353). Untested on Windows. Spec: tools/windows-extractor/README.md
- Usage:  .\Extract-RoxiraTables.ps1 -Server "localhost\HOLOO" -Database "Holoo1" -OutDir "C:\RoxiraExport"
+ STUB (issue #353 / #395). Untested on Windows. Spec: tools/windows-extractor/README.md
+ Usage:  .\Extract-RoxiraTables.ps1 -Server "localhost\HOLOO" -Database "Holoo1" -OutDir "C:\RoxiraExport" [-ApiBaseUrl "https://app.roxira.ir/api/backend" -UploadCode "<code-from-portal>"]
  Read-only: only SELECT statements are issued. Amounts leave as strings, never as doubles.
+ Never logs or echoes -SqlPassword or -UploadCode.
 #>
 param(
   [Parameter(Mandatory)] [string] $Server,
   [Parameter(Mandatory)] [string] $Database,
   [Parameter(Mandatory)] [string] $OutDir,
   [string] $SqlUser,
-  [string] $SqlPassword  # prefer Windows authentication; never log this value
+  [string] $SqlPassword,  # prefer Windows authentication; never log this value
+  [string] $ApiBaseUrl,
+  [string] $UploadCode,   # one-time upload token from the portal; never log this value
+  [string] $ResumeJobId,
+  [int] $MaxRetries = 6,
+  [int] $FallbackAfter = 3
 )
 $ErrorActionPreference = 'Stop'
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
@@ -55,5 +61,197 @@ foreach ($t in $names) {
 $manifest = @{ version = 1; source = @{ kind = 'extractor'; sqlMajor = $major; databaseName = $Database; collation = $collation; createdAt = (Get-Date).ToUniversalTime().ToString('o') }; tables = $tables }
 $manifest | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 (Join-Path $OutDir 'manifest.json')
 $conn.Close()
-# TODO(#353): upload $OutDir with the resumable part protocol (/enterprise-hub/data-import/bulk/uploads, upload code from the portal).
-Write-Host "Done. Upload is not implemented in this stub."
+
+function Invoke-RoxiraApi {
+  param(
+    [string] $Method,
+    [string] $Uri,
+    [string] $Token,
+    [object] $Body
+  )
+  $headers = @{ Authorization = "Bearer $Token"; Accept = 'application/json' }
+  $params = @{ Method = $Method; Uri = $Uri; Headers = $headers; UseBasicParsing = $true }
+  if ($null -ne $Body) {
+    $params.ContentType = 'application/json; charset=utf-8'
+    $params.Body = ($Body | ConvertTo-Json -Compress -Depth 6)
+  }
+  Invoke-RestMethod @params
+}
+
+function Get-PartSha256Base64 {
+  param([byte[]] $Buffer, [int] $Count)
+  $sha256 = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    $hash = $sha256.ComputeHash($Buffer, 0, $Count)
+    return [Convert]::ToBase64String($hash)
+  } finally {
+    $sha256.Dispose()
+  }
+}
+
+function Send-ResumableBundle {
+  param(
+    [string] $ArchivePath,
+    [string] $BaseUrl,
+    [string] $Token,
+    [string] $ExistingJobId,
+    [int] $Retries,
+    [int] $DirectFallbackThreshold
+  )
+  $root = $BaseUrl.TrimEnd('/')
+  $uploadsBase = "$root/enterprise-hub/data-import/bulk/uploads"
+  $configUrl = "$root/enterprise-hub/data-import/bulk/config"
+  $fileInfo = Get-Item -LiteralPath $ArchivePath
+  $fileSize = [long]$fileInfo.Length
+
+  if ($ExistingJobId) {
+    $jobId = $ExistingJobId
+    $partsResp = Invoke-RoxiraApi -Method 'GET' -Uri "$uploadsBase/$jobId/parts" -Token $Token -Body $null
+    $cfgResp = Invoke-RoxiraApi -Method 'GET' -Uri $configUrl -Token $Token -Body $null
+    $partBytes = [long]$partsResp.partBytes
+    $totalParts = [int]$partsResp.totalParts
+    $direct = [bool]$cfgResp.direct
+    $proxyParts = [bool]$cfgResp.proxyParts
+    $checksumsEnabled = [bool]$cfgResp.checksums
+  } else {
+    $startResp = Invoke-RoxiraApi -Method 'POST' -Uri $uploadsBase -Token $Token -Body @{
+      fileName = $fileInfo.Name
+      size = $fileSize
+    }
+    $jobId = [string]$startResp.jobId
+    $partBytes = [long]$startResp.partBytes
+    $totalParts = [int]$startResp.totalParts
+    $direct = [bool]$startResp.direct
+    $proxyParts = [bool]$startResp.proxyParts
+    $checksumsEnabled = [bool]$startResp.checksums
+    $partsResp = Invoke-RoxiraApi -Method 'GET' -Uri "$uploadsBase/$jobId/parts" -Token $Token -Body $null
+  }
+
+  $have = @{}
+  foreach ($p in $partsResp.uploaded) {
+    $have[[int]$p.partNumber] = [long]$p.size
+  }
+
+  $useApi = (-not $direct) -and $proxyParts
+  if ((-not $direct) -and (-not $proxyParts)) {
+    throw 'Server has neither direct storage upload nor API part relay enabled.'
+  }
+
+  $networkFailures = 0
+  $stream = [System.IO.File]::OpenRead($ArchivePath)
+  $http = New-Object System.Net.Http.HttpClient
+  $http.Timeout = [TimeSpan]::FromMinutes(10)
+  try {
+    for ($partNumber = 1; $partNumber -le $totalParts; $partNumber++) {
+      $expectedSize = if ($partNumber -lt $totalParts) { $partBytes } else { $fileSize - ($partBytes * ($totalParts - 1)) }
+      if ($have.ContainsKey($partNumber) -and $have[$partNumber] -eq $expectedSize) {
+        Write-Host "Part $partNumber/$totalParts already uploaded (resumed)"
+        continue
+      }
+
+      $offset = ($partNumber - 1) * $partBytes
+      [void]$stream.Seek($offset, [System.IO.SeekOrigin]::Begin)
+      $buffer = New-Object byte[] $expectedSize
+      $readTotal = 0
+      while ($readTotal -lt $expectedSize) {
+        $readNow = $stream.Read($buffer, $readTotal, [int]($expectedSize - $readTotal))
+        if ($readNow -le 0) { throw "Unexpected EOF reading part $partNumber" }
+        $readTotal += $readNow
+      }
+
+      $checksumMap = @{}
+      $checksumB64 = $null
+      if ($checksumsEnabled) {
+        $checksumB64 = Get-PartSha256Base64 -Buffer $buffer -Count $readTotal
+        $checksumMap["$partNumber"] = $checksumB64
+      }
+
+      $uploaded = $false
+      for ($attempt = 0; $attempt -le $Retries; $attempt++) {
+        try {
+          if (-not $useApi) {
+            $signResp = Invoke-RoxiraApi -Method 'POST' -Uri "$uploadsBase/$jobId/sign" -Token $Token -Body @{
+              partNumbers = @($partNumber)
+              checksums = $checksumMap
+            }
+            $putUrl = [string]$signResp.urls."$partNumber"
+            $req = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Put, $putUrl)
+            $req.Content = New-Object System.Net.Http.ByteArrayContent($buffer, 0, $readTotal)
+            if ($signResp.headers -and $signResp.headers."$partNumber") {
+              foreach ($prop in $signResp.headers."$partNumber".PSObject.Properties) {
+                if ($prop.Name -ieq 'Content-Type') {
+                  $req.Content.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse([string]$prop.Value)
+                } else {
+                  [void]$req.Headers.TryAddWithoutValidation($prop.Name, [string]$prop.Value)
+                }
+              }
+            }
+            $res = $http.SendAsync($req).GetAwaiter().GetResult()
+            if (-not $res.IsSuccessStatusCode) {
+              throw "Direct PUT failed with HTTP $([int]$res.StatusCode)"
+            }
+            $networkFailures = 0
+            $uploaded = $true
+            break
+          } else {
+            $proxyUrl = "$uploadsBase/$jobId/parts/$partNumber"
+            $req = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Put, $proxyUrl)
+            [void]$req.Headers.TryAddWithoutValidation('Authorization', "Bearer $Token")
+            if ($checksumB64) {
+              [void]$req.Headers.TryAddWithoutValidation('x-amz-checksum-sha256', $checksumB64)
+            }
+            $req.Content = New-Object System.Net.Http.ByteArrayContent($buffer, 0, $readTotal)
+            $req.Content.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse('application/octet-stream')
+            $res = $http.SendAsync($req).GetAwaiter().GetResult()
+            if (-not $res.IsSuccessStatusCode) {
+              throw "Proxy PUT failed with HTTP $([int]$res.StatusCode)"
+            }
+            $uploaded = $true
+            break
+          }
+        } catch {
+          if (-not $useApi -and $proxyParts) {
+            $networkFailures++
+            if ($networkFailures -ge $DirectFallbackThreshold) {
+              Write-Host "Switching part upload to API relay after $networkFailures direct failures."
+              $useApi = $true
+              continue
+            }
+          }
+          if ($attempt -ge $Retries) {
+            throw
+          }
+          Start-Sleep -Seconds ([Math]::Min(30, [Math]::Pow(2, $attempt)))
+        }
+      }
+      if (-not $uploaded) {
+        throw "Failed uploading part $partNumber"
+      }
+      Write-Host "Uploaded part $partNumber/$totalParts"
+    }
+  } finally {
+    $stream.Dispose()
+    $http.Dispose()
+  }
+
+  [void](Invoke-RoxiraApi -Method 'POST' -Uri "$uploadsBase/$jobId/complete" -Token $Token -Body @{})
+  Write-Host "Upload complete. Job ID: $jobId"
+}
+
+if ($UploadCode) {
+  if (-not $ApiBaseUrl) {
+    throw '-ApiBaseUrl is required when -UploadCode is provided.'
+  }
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  $bundlePath = Join-Path ([System.IO.Path]::GetTempPath()) ("roxira-export-" + [Guid]::NewGuid().ToString('N') + '.zip')
+  try {
+    [System.IO.Compression.ZipFile]::CreateFromDirectory($OutDir, $bundlePath, [System.IO.Compression.CompressionLevel]::NoCompression, $false)
+    Send-ResumableBundle -ArchivePath $bundlePath -BaseUrl $ApiBaseUrl -Token $UploadCode -ExistingJobId $ResumeJobId -Retries $MaxRetries -DirectFallbackThreshold $FallbackAfter
+  } finally {
+    if (Test-Path -LiteralPath $bundlePath) {
+      Remove-Item -LiteralPath $bundlePath -Force -ErrorAction SilentlyContinue
+    }
+  }
+} else {
+  Write-Host "Export written to $OutDir. Pass -ApiBaseUrl and -UploadCode to upload."
+}
