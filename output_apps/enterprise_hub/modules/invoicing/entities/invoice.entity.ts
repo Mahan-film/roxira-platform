@@ -291,6 +291,9 @@ export class InvoiceEntity {
   @Column({ type: 'jsonb', nullable: true })
   payments: Array<{ method: string; amount: number }> | null;
 
+  @Column({ type: 'date', name: 'due_date', nullable: true })
+  dueDate: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 }

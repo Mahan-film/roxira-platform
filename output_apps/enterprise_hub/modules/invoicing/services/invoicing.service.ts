@@ -581,6 +581,19 @@ export class InvoicingService {
     );
   }
 
+  static getTehranToday(now: Date = new Date()): string {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tehran' }).format(now);
+  }
+
+  static isInvoiceOverdue(
+    status: InvoiceStatus,
+    dueDate: string | null | undefined,
+    now: Date = new Date(),
+  ): boolean {
+    if (status !== InvoiceStatus.ISSUED || !dueDate) return false;
+    return dueDate < InvoicingService.getTehranToday(now);
+  }
+
   private toResponseDto(entity: InvoiceEntity): InvoiceResponseDto {
     return {
       id: entity.id,
@@ -623,6 +636,10 @@ export class InvoicingService {
       relatedInvoiceId: entity.relatedInvoiceId ?? null,
       warehouseId: entity.warehouseId ?? null,
       branchId: entity.branchId ?? null,
+      dueDate: entity.dueDate ?? null,
+      isOverdue: InvoicingService.isInvoiceOverdue(entity.status, entity.dueDate ?? null),
+      outstandingAmount:
+        entity.status === InvoiceStatus.PAID ? 0 : Number(entity.finalPayable),
     };
   }
 

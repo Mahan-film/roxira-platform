@@ -4,6 +4,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsDateString,
   IsEnum,
   IsIn,
   IsInt,
@@ -249,6 +250,15 @@ export class CreateInvoiceDto {
   @IsInt()
   @Min(1)
   customerId?: number;
+
+  @ApiPropertyOptional({
+    description: 'تاریخ سررسید صورتحساب (YYYY-MM-DD)',
+    example: '2026-12-15',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsDateString()
+  dueDate?: string | null;
 
   @ApiProperty({ type: [InvoiceItemDto], description: 'اقلام کالا/خدمت صورتحساب' })
   @IsArray()
